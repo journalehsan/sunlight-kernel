@@ -37,6 +37,15 @@ pub fn monotonic_ms() -> u64 {
     global_ticks().saturating_mul(1000) / TICK_HZ
 }
 
+/// Canonical cross-core monotonic timestamp in nanoseconds.  This is derived
+/// from the BSP-only timekeeper rather than the per-core TSC so public clock
+/// reads remain ordered across task migration even on hardware without a
+/// synchronized TSC.  Its resolution is one timer tick (currently 10 ms).
+#[inline]
+pub fn monotonic_ns() -> u64 {
+    global_ticks().saturating_mul(NS_PER_TICK)
+}
+
 #[inline]
 pub fn last_tick_monotonic_ns() -> u64 {
     LAST_TICK_MONOTONIC_NS.load(Ordering::Relaxed)
@@ -60,7 +69,24 @@ pub fn advance_global_tick(cpu_id: usize, monotonic_ns: u64) -> u64 {
     debug_assert_eq!(cpu_id, TIMEKEEPER_CORE_ID);
 
     LAST_TICK_MONOTONIC_NS.store(monotonic_ns, Ordering::Relaxed);
-    let ticks = GLOBAL_TIMEKEEPER_TICKS.fetch_add(1, Ordering::Relaxed) + 1;
+    // Do not let the exported monotonic counter wrap.  Reaching u64::MAX is
+    // not operationally realistic, but wrapping would violate the ABI's
+    // non-decreasing guarantee.
+    let ticks = loop {
+        let current = GLOBAL_TIMEKEEPER_TICKS.load(Ordering::Relaxed);
+        if current == u64::MAX {
+            break current;
+        }
+        match GLOBAL_TIMEKEEPER_TICKS.compare_exchange_weak(
+            current,
+            current + 1,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => break current + 1,
+            Err(_) => continue,
+        }
+    };
 
     let tick_ns = ticks.saturating_mul(NS_PER_TICK);
     if tick_ns > monotonic_ns.saturating_add(DRIFT_WARNING_NS) {

@@ -85,9 +85,17 @@ mod sunlightos_impl {
     struct OsTimeProvider;
     impl TimeProvider for OsTimeProvider {
         fn current_time(&self) -> Option<UnixTime> {
-            Some(UnixTime::since_unix_epoch(Duration::from_secs(
-                get_time_utc(),
-            )))
+            let secs = get_time_utc();
+            // The native raw syscall uses u64::MAX as its generic failure
+            // sentinel.  A zero epoch is not a valid initialized RTC value in
+            // the current kernel (which accepts 2024..2040 and otherwise uses
+            // a documented 2026 fallback), so fail closed instead of treating
+            // unavailable time as 1970 during certificate validation.
+            if secs == 0 || secs == u64::MAX {
+                None
+            } else {
+                Some(UnixTime::since_unix_epoch(Duration::from_secs(secs)))
+            }
         }
     }
 

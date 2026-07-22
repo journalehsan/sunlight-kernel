@@ -4945,10 +4945,19 @@ fn sys_clock_gettime(frame: &mut SyscallFrame) -> u64 {
     let values = match clockid {
         0 => {
             let sec = crate::arch::x86_64::rtc::unix_time();
+            // The public C ABI uses signed `time_t`/`tv_sec`; do not encode a
+            // value that libc would interpret as negative.
+            if sec > i64::MAX as u64 {
+                return u64::MAX;
+            }
             [sec, 0]
         }
         1 => {
-            let ns = crate::arch::x86_64::interrupts::now_ns();
+            // Public monotonic time must be consistent across CPU migration.
+            // The BSP timekeeper is canonical; raw TSC remains an internal
+            // scheduler-accounting source only because its cross-core sync is
+            // not established by this kernel.
+            let ns = crate::timekeeping::monotonic_ns();
             let sec = ns / 1_000_000_000;
             let nsec = ns % 1_000_000_000;
             [sec, nsec]

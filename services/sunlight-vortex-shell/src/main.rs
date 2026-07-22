@@ -53,6 +53,7 @@
 
 extern crate alloc;
 
+mod calendar_math;
 mod start_menu;
 
 use alloc::{string::String, vec::Vec};
@@ -3950,8 +3951,7 @@ fn format_center_datetime(y: u16, mon: u8, d: u8, h: u8, mi: u8, loc: &str) -> S
     let is_en = loc.to_ascii_lowercase().starts_with("en_us")
         || loc.to_ascii_lowercase().starts_with("en-us");
     if is_en {
-        // short names (weekday_name with 0 falls back inside helper)
-        let wd = sunlight_locale::weekday_name(0, false, loc);
+        let wd = sunlight_locale::weekday_name(calendar_math::weekday_iso(y, mon, d), false, loc);
         let mon_s = sunlight_locale::month_name(mon, false, loc);
         let mut hh = h % 12;
         if hh == 0 {
@@ -3984,13 +3984,7 @@ fn cal_days_in_month(year: u16, month: u8) -> u8 {
 }
 
 fn cal_weekday_sun0(year: u16, month: u8, day: u8) -> usize {
-    let t = [0i32, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-    let mut y = year as i32;
-    let m = month as i32;
-    if m < 3 {
-        y -= 1;
-    }
-    ((y + y / 4 - y / 100 + y / 400 + t[(m - 1) as usize] + day as i32) % 7) as usize
+    calendar_math::weekday_sun0(year, month, day)
 }
 
 fn format_cal_date(year: u16, month: u8, day: u8) -> String {
@@ -5753,7 +5747,11 @@ impl VortexShell {
             hour: self.status_hour,
             minute: self.status_min,
             second: self.status_sec,
-            weekday_iso: 0,
+            weekday_iso: calendar_math::weekday_iso(
+                self.status_year,
+                self.status_month,
+                self.status_day,
+            ),
         };
         let long_date = sunlight_locale::format_long_date(&dt, loc_str);
         let long_time = alloc::format!(

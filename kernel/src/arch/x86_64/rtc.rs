@@ -174,7 +174,11 @@ pub fn unix_time() -> u64 {
     if boot_time != 0 {
         let elapsed_ticks =
             crate::timekeeping::global_ticks().saturating_sub(BOOT_TICKS.load(Ordering::Relaxed));
-        return boot_time + elapsed_ticks / crate::timekeeping::TICK_HZ;
+        // The native syscall ABI reserves u64::MAX as generic failure; never
+        // silently wrap or clamp a calendar timestamp into a different date.
+        return boot_time
+            .checked_add(elapsed_ticks / crate::timekeeping::TICK_HZ)
+            .unwrap_or(u64::MAX);
     }
 
     let (year, month, day, hour, min, sec) = read_cmos_clock();

@@ -2786,7 +2786,9 @@ pub fn ipc_call_timeout(
     msg: IpcMsg,
     timeout_ms: u64,
 ) -> Result<IpcMsg, IpcCallError> {
-    let deadline = monotonic_millis().saturating_add(timeout_ms);
+    let Some(deadline) = monotonic_millis().checked_add(timeout_ms) else {
+        return Err(IpcCallError::Timeout);
+    };
     // SAFETY: IpcSetDeadline takes one absolute monotonic millisecond value.
     let (arm_ret, _) =
         unsafe { raw_syscall(SunlightSyscall::IpcSetDeadline, deadline, 0, 0, 0, 0, 0, 0) };
@@ -2846,7 +2848,7 @@ pub fn ipc_recv(ep: EndpointId) -> IpcMsg {
 ///
 /// Returns `None` if no message arrives before `timeout_ms` elapses.
 pub fn ipc_recv_timeout(ep: EndpointId, timeout_ms: u64) -> Option<IpcMsg> {
-    let deadline = monotonic_millis().saturating_add(timeout_ms);
+    let deadline = monotonic_millis().checked_add(timeout_ms)?;
     // SAFETY: IpcSetDeadline takes one absolute monotonic millisecond value.
     let (arm_ret, _) =
         unsafe { raw_syscall(SunlightSyscall::IpcSetDeadline, deadline, 0, 0, 0, 0, 0, 0) };

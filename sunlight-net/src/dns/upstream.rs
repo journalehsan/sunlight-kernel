@@ -107,11 +107,14 @@ fn run_query<D: Device>(
             .map_err(|_| DnsError::QueryFailed)?;
     }
 
-    // Real-time deadline (1 s resolution — coarse but sufficient for a UDP DNS
-    // round trip). `tick` is a separate monotonic counter feeding smoltcp's
-    // Instant; the UDP socket has no timers so its only requirement is that it
-    // not go backwards within the call.
-    let deadline = sunlight_ipc::get_time_utc().wrapping_add(DNS_TIMEOUT_SECS);
+    // Relative network timeouts are monotonic: an RTC correction must not make
+    // an in-flight DNS query expire early or wait indefinitely.
+    let timeout_ms = DNS_TIMEOUT_SECS
+        .checked_mul(1_000)
+        .ok_or(DnsError::Timeout)?;
+    let deadline = sunlight_ipc::monotonic_millis()
+        .checked_add(timeout_ms)
+        .ok_or(DnsError::Timeout)?;
     let mut tick: i64 = 0;
 
     loop {
@@ -138,7 +141,7 @@ fn run_query<D: Device>(
             }
         }
 
-        if sunlight_ipc::get_time_utc() >= deadline {
+        if sunlight_ipc::monotonic_millis() >= deadline {
             return Err(DnsError::Timeout);
         }
 
