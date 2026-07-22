@@ -379,6 +379,17 @@ pub fn run_mm2d_munmap_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
     let process = unsafe { crate::process::Process::new(0xB2D0, 0, "mm2d-munmap", pmm, hhdm) };
     let mut sched = crate::sched::Scheduler::new();
     sched.processes.push(process);
+    if crate::memory::zram::policy().is_none() {
+        let (total_pages, _) = pmm.stats();
+        let online = crate::sched::ONLINE_CORES.load(Ordering::Acquire).max(1) as u32;
+        let policy = sunlight_ipc::swap_policy::calculate(total_pages as u64 * PAGE_SIZE, online)
+            .expect("MM-2D swap policy calculation failed");
+        crate::memory::zram::configure(policy, 0xB2D0, 0).expect("MM-2D swap policy setup failed");
+    }
+    assert!(
+        crate::memory::zram::policy().is_some(),
+        "MM-2D requires configured swap backing"
+    );
 
     // Full, prefix, suffix, and middle removal share one P1 table so PMM
     // deltas reflect exactly the released anonymous data frames.
@@ -1092,11 +1103,25 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     let process = unsafe { crate::process::Process::new(0xB2E0, 0, "mm2e-mprotect", pmm, hhdm) };
     let mut sched = crate::sched::Scheduler::new();
     sched.processes.push(process);
+    crate::serial_println!("[MM-2E] begin");
+    if crate::memory::zram::policy().is_none() {
+        let (total_pages, _) = pmm.stats();
+        let online = crate::sched::ONLINE_CORES.load(Ordering::Acquire).max(1) as u32;
+        let policy = sunlight_ipc::swap_policy::calculate(total_pages as u64 * PAGE_SIZE, online)
+            .expect("MM-2E swap policy calculation failed");
+        crate::memory::zram::configure(policy, 0xB2E0, 0).expect("MM-2E swap policy setup failed");
+    }
+    assert!(
+        crate::memory::zram::policy().is_some(),
+        "MM-2E requires configured swap backing"
+    );
+    crate::serial_println!("[MM-2E] swap backing ready");
 
     // All supported R/RW/RX transitions, same-protection no-op, content/frame
     // preservation, and MM-1 copy permission integration.
     let transitions = BASE;
     map_fixed(&mut sched, pmm, transitions, 2, PROT_READ | PROT_WRITE);
+    crate::serial_println!("[MM-2E] mapping ready");
     let free_before = pmm.free_page_count();
     let original_frame = assert_protection(&sched, transitions, hhdm, true, false);
     crate::memory::user::copy_to_process_bytes(
@@ -1192,7 +1217,10 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
         sched.current_process().address_space.region_count(),
         region_count - 2
     );
-    assert_eq!(protect(&mut sched, pmm, splits, 5, PROT_WRITE), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, splits, 5, PROT_READ | PROT_WRITE),
+        Ok(())
+    );
     let merged = sched
         .current_process()
         .address_space
@@ -1205,6 +1233,7 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
 
     // Holes, protected kinds, invalid flags, PROT_NONE, zero length, and
     // ledger-capacity exhaustion all reject before PTE mutation.
+    crate::serial_println!("[MM-2E] policy/atomicity phase: begin");
     let hole = BASE + 2 * STRIDE;
     map_fixed(&mut sched, pmm, hole, 1, PROT_READ | PROT_WRITE);
     map_fixed(
@@ -1220,7 +1249,9 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
         Err(MmapError::NoMemory)
     );
     assert_eq!(entry(&sched, hole, hhdm), hole_before);
+    crate::serial_println!("[MM-2E] hole coverage rejection complete");
 
+    crate::serial_println!("[MM-2E] protected-region rejection checks: begin");
     for (index, kind) in [
         MappingKind::ElfSegment,
         MappingKind::UserStack,
@@ -1279,6 +1310,7 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
         crate::process::mmap::sys_munmap(protected - PAGE_SIZE, PAGE_SIZE, pmm, &mut sched)
             .unwrap();
     }
+    crate::serial_println!("[MM-2E] protected-region rejection checks complete");
     assert_eq!(
         protect(&mut sched, pmm, transitions, 1, PROT_WRITE | PROT_EXEC),
         Err(MmapError::PermissionDenied)
@@ -1321,6 +1353,7 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     );
 
     let capacity = BASE + 0x80_0000;
+    crate::serial_println!("[MM-2E] capacity rejection check: begin");
     map_fixed(&mut sched, pmm, capacity, 3, PROT_READ | PROT_WRITE);
     let capacity_before = entry(&sched, capacity + PAGE_SIZE, hhdm);
     let mut fillers = alloc::vec::Vec::new();
@@ -1365,6 +1398,7 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
 
     // Present-only policy rejects a swapped marker without swap-in.
     let swapped = BASE + 0x90_0000;
+    crate::serial_println!("[MM-2E] swapped-page rejection check: begin");
     map_fixed(&mut sched, pmm, swapped, 1, PROT_READ | PROT_WRITE);
     let swapped_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(swapped)).unwrap();
     let swapped_frame = entry(&sched, swapped, hhdm).0;
@@ -1384,11 +1418,13 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     );
     assert!(crate::memory::zram::block_exists(block_id));
     crate::process::mmap::sys_munmap(swapped, PAGE_SIZE, pmm, &mut sched).unwrap();
+    assert!(!crate::memory::zram::block_exists(block_id));
     crate::serial_println!("[MM-2E] swapped anonymous page rejected without swap-in: OK");
 
     // Four active CPUs pre-touch the mapping. Each protection reduction and
     // increase must synchronously run the MM-2B remote invalidation handler.
     let remote = BASE + 0xA0_0000;
+    crate::serial_println!("[MM-2E] permission shootdown phase: begin");
     map_fixed(&mut sched, pmm, remote, 1, PROT_READ | PROT_WRITE);
     let remote_frame = entry(&sched, remote, hhdm).0;
     unsafe {
@@ -1434,6 +1470,7 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     // MM-2D remains composable after protection fragmentation, and fixed
     // remapping followed by protection works again.
     let remap = BASE + 0xB0_0000;
+    crate::serial_println!("[MM-2E] cleanup composition phase: begin");
     map_fixed(&mut sched, pmm, remap, 4, PROT_READ | PROT_WRITE);
     protect(&mut sched, pmm, remap + PAGE_SIZE, 2, PROT_READ).unwrap();
     crate::process::mmap::sys_munmap(remap, 4 * PAGE_SIZE, pmm, &mut sched).unwrap();

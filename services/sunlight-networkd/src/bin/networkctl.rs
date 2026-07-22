@@ -5,33 +5,12 @@
 
 extern crate alloc;
 
-struct BumpAllocator;
-
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 64 * 1024] = [0; 64 * 1024];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
-
 use core::fmt::Write;
 use sunlight_ipc::{
     ipc_call, nameserver_lookup, pack_ipv4, pack_short_name, AdminState, DnsSource, InterfaceKind,
     IpConfigMode, IpcMsg, LinkState, NetworkdMsg, ResolvedMsg,
 };
+use sunlight_networkd::NetworkClient;
 
 const MAX_ARGS: usize = 16;
 
@@ -168,64 +147,55 @@ unsafe fn collect_args(argc: u64, argv: *const *const u8, out: &mut [&str]) -> u
     n
 }
 
-fn print_list(cap: sunlight_ipc::CapabilityToken) {
+fn print_list(_cap: sunlight_ipc::CapabilityToken) {
     println!("IFACE  KIND        ADMIN    LINK      MODE   ADDRESS         GATEWAY     PRIO  DEF");
-    let mut idx = 0u64;
-    loop {
-        let reply = ipc_call(
-            cap,
-            IpcMsg::with_label(NetworkdMsg::LIST_INTERFACES).word(0, idx),
-        );
-        let Some(s) = sunlight_ipc::unpack_iface_summary(&reply) else {
-            break;
-        };
+    let Ok(snapshot) = NetworkClient::new().snapshot() else {
+        return;
+    };
+    for s in snapshot.interfaces {
         let kind_s = s.kind.label();
-        let admin_s = if matches!(s.admin, AdminState::Enabled) {
+        let admin_s = if matches!(s.administrative_state, AdminState::Enabled) {
             "enabled"
         } else {
             "disabled"
         };
-        let link_s = match s.link {
+        let link_s = match s.operational_state {
             LinkState::Up | LinkState::Carrier => "carrier",
             LinkState::Down => "down",
             LinkState::NoCarrier => "nocarrier",
             _ => "unknown",
         };
-        let mode_s = match s.mode {
+        let mode_s = match s.configuration_mode {
             IpConfigMode::Dhcp => "dhcp",
             IpConfigMode::Static => "static",
             _ => "none",
         };
         let mut addr_buf = heapless::String::<32>::new();
-        if s.addr == [0, 0, 0, 0] {
-            let _ = addr_buf.push_str("-");
-        } else {
+        if let Some((address, prefix)) = s.ipv4_address {
             let _ = write!(
                 &mut addr_buf,
                 "{}.{}.{}.{}/{}",
-                s.addr[0], s.addr[1], s.addr[2], s.addr[3], s.prefix
+                address[0], address[1], address[2], address[3], prefix
             );
+        } else {
+            let _ = addr_buf.push_str("-");
         }
         let mut gw_buf = heapless::String::<32>::new();
-        if s.gw == [0, 0, 0, 0] {
-            let _ = gw_buf.push_str("-");
-        } else {
+        if let Some(gateway) = s.gateway {
             let _ = write!(
                 &mut gw_buf,
                 "{}.{}.{}.{}",
-                s.gw[0], s.gw[1], s.gw[2], s.gw[3]
+                gateway[0], gateway[1], gateway[2], gateway[3]
             );
+        } else {
+            let _ = gw_buf.push_str("-");
         }
-        let name = name_from_packed(s.name);
+        let name = s.name();
         let def = if s.is_default { "yes" } else { "no" };
         println!(
             "{:<6} {:<10} {:<8} {:<9} {:<6} {:<15} {:<11} {:>4}  {}",
             name, kind_s, admin_s, link_s, mode_s, addr_buf, gw_buf, s.priority, def
         );
-        idx += 1;
-        if idx as u16 >= s.total && s.total > 0 {
-            break;
-        }
     }
 }
 

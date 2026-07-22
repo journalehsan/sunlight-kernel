@@ -1,6 +1,7 @@
 pub mod button;
 pub mod calendar;
 pub mod checkbox;
+pub mod disclosure;
 pub mod document_canvas;
 pub mod drive_card;
 pub mod label;
@@ -23,6 +24,9 @@ pub use calendar::{
     FormFieldStyle, StatusTextKind,
 };
 pub use checkbox::Checkbox;
+pub use disclosure::{
+    DisclosureEvent, DisclosureGroup, DisclosureState, PropertyGrid, PropertyRow,
+};
 pub use document_canvas::{
     byte_at_x_on_line, byte_offset_at_x, caret_x_at_byte, caret_x_on_line, click_to_line_and_byte,
     diff_scenes, find_line_index, layout_text_lines, line_end_byte, line_home_byte,

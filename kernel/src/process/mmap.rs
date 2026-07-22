@@ -175,11 +175,11 @@ fn normalize_protection(prot: u32) -> Result<RegionProtection, MmapError> {
     if prot == PROT_NONE {
         return Err(MmapError::Unsupported);
     }
-    if prot & PROT_READ == 0 {
-        return Err(MmapError::InvalidProt);
-    }
     if prot & PROT_WRITE != 0 && prot & PROT_EXEC != 0 {
         return Err(MmapError::PermissionDenied);
+    }
+    if prot & PROT_READ == 0 {
+        return Err(MmapError::InvalidProt);
     }
     let protection = if prot & PROT_EXEC != 0 {
         RegionProtection::READ_EXECUTE

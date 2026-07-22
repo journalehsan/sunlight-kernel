@@ -1,5 +1,6 @@
 //! Panel, ProgressBar, Histogram, StatusBadge widgets.
 
+use crate::font::VecText;
 use crate::geom::Rect;
 use crate::paint::Canvas;
 use crate::theme::{Color, Theme};
@@ -214,6 +215,7 @@ pub struct StatusBadge<'a> {
     pub y: i32,
     pub kind: BadgeKind,
     pub label: Option<&'a str>,
+    pub font: Option<&'a dyn VecText>,
 }
 
 impl<'a> StatusBadge<'a> {
@@ -223,11 +225,24 @@ impl<'a> StatusBadge<'a> {
             y,
             kind,
             label: None,
+            font: None,
         }
     }
 
     pub fn with_label(mut self, label: &'a str) -> Self {
         self.label = Some(label);
+        self
+    }
+
+    /// Render the optional label with a Sunlight vector font.
+    pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
+        self.font = Some(font);
+        self
+    }
+
+    /// Forward an optional inherited font without forcing callers to branch.
+    pub fn with_font_if(mut self, font: Option<&'a dyn VecText>) -> Self {
+        self.font = font;
         self
     }
 
@@ -244,7 +259,11 @@ impl<'a> StatusBadge<'a> {
         canvas.fill_rect(Rect::new(self.x, self.y + 2, 6, 6), dot_color);
 
         if let Some(label) = self.label {
-            canvas.draw_text(self.x + 9, self.y, label, theme.text_dim);
+            if let Some(font) = self.font {
+                font.draw_vcenter(canvas, label, self.x + 9, self.y, 12, theme.text_dim);
+            } else {
+                canvas.draw_text(self.x + 9, self.y, label, theme.text_dim);
+            }
         }
     }
 }

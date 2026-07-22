@@ -20,10 +20,10 @@ extern crate alloc;
 
 mod about;
 mod clipboard;
+mod network;
 mod sysinfo;
 
 use alloc::vec::Vec;
-use core::alloc::GlobalAlloc;
 use core::cmp;
 use sun_font::{self, FontRole, TextStyle, Typography};
 use sunlight_ipc::{
@@ -50,6 +50,7 @@ use sunlight_wallpaper::{
 };
 
 use about::{AboutAction, AboutPageState};
+use network::{NetworkAction, NetworkPageState};
 use sysinfo::{FixedStr, SystemInfoSnapshot};
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,8 @@ static ICON_SYM_NOTIFICATIONS_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/notifications.tga"));
 static ICON_SUNLIGHT_LOGO_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/sunlightos-logo.tga"));
+static ICON_NETWORK_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/network-card.tga");
 
 const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO_RAW);
 
@@ -108,6 +111,7 @@ enum Page {
     Notifications,
     AboutComputer,
     AboutOs,
+    Network,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -332,6 +336,7 @@ struct ControlPanelApp {
     icon_computer: Option<TgaImage>,
     icon_about_os: Option<TgaImage>,
     icon_logo: Option<TgaImage>,
+    icon_network: Option<TgaImage>,
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
@@ -345,6 +350,7 @@ struct ControlPanelApp {
     display_transaction: Option<DisplayModeTransaction>,
     display_previous_mode: Option<DisplayMode>,
     display_error: FixedStr<96>,
+    network: NetworkPageState,
 }
 
 impl ControlPanelApp {
@@ -385,6 +391,7 @@ impl ControlPanelApp {
             icon_computer: TgaImage::parse(ICON_COMPUTER_TGA).ok(),
             icon_about_os: TgaImage::parse(ICON_ABOUT_OS_TGA).ok(),
             icon_logo: TgaImage::parse(ICON_SUNLIGHT_LOGO_TGA).ok(),
+            icon_network: TgaImage::parse(ICON_NETWORK_TGA).ok(),
             wallpaper_items,
             wallpaper_config,
             wallpaper_selected,
@@ -398,6 +405,7 @@ impl ControlPanelApp {
             display_transaction: None,
             display_previous_mode: None,
             display_error: FixedStr::empty(),
+            network: NetworkPageState::new(),
         }
     }
 
@@ -594,13 +602,14 @@ impl ControlPanelApp {
     // Grid page
     // -----------------------------------------------------------------------
 
-    fn card_rects(&self) -> [Rect; 6] {
+    fn card_rects(&self) -> [Rect; 7] {
         let card_w = 136u32;
         let card_h = 110u32;
         let gap = 14i32;
         let start_x = (WIN_W as i32 - (card_w * 3) as i32 - gap * 2) / 2;
         let card_y = 52i32;
         let row2_y = card_y + card_h as i32 + 12;
+        let row3_y = row2_y + card_h as i32 + 12;
         [
             Rect::new(start_x, card_y, card_w, card_h),
             Rect::new(start_x + card_w as i32 + gap, card_y, card_w, card_h),
@@ -608,6 +617,7 @@ impl ControlPanelApp {
             Rect::new(start_x, row2_y, card_w, card_h),
             Rect::new(start_x + card_w as i32 + gap, row2_y, card_w, card_h),
             Rect::new(start_x + (card_w as i32 + gap) * 2, row2_y, card_w, card_h),
+            Rect::new(start_x, row3_y, card_w, card_h),
         ]
     }
 
@@ -724,6 +734,15 @@ impl ControlPanelApp {
             "OS, kernel, and build",
             self.icon_about_os.or(self.icon_logo),
         );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[6],
+            theme.accent,
+            "Network",
+            "Ethernet & Loopback",
+            self.icon_network,
+        );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
@@ -761,6 +780,10 @@ impl ControlPanelApp {
                 self.about = AboutPageState::new();
                 self.refresh_sysinfo();
                 return true;
+            }
+            if cards[6].contains(pt) {
+                self.page = Page::Network;
+                return self.network.refresh();
             }
         }
         false
@@ -849,6 +872,22 @@ impl ControlPanelApp {
             return false;
         }
         self.handle_about_action(action, false)
+    }
+
+    fn update_network_page(&mut self, event: Event) -> bool {
+        if matches!(event, Event::Tick) {
+            return self.network.refresh_due() && self.network.refresh();
+        }
+        match self.network.update(event, WIN_W, WIN_H) {
+            NetworkAction::None => true,
+            NetworkAction::Back => {
+                self.page = Page::Grid;
+                // Release the bounded snapshot immediately instead of retaining
+                // page-local state while the user works elsewhere.
+                self.network = NetworkPageState::new();
+                true
+            }
+        }
     }
 
     fn notification_back_rect() -> Rect {
@@ -1443,6 +1482,7 @@ impl App for ControlPanelApp {
                 &self.about,
                 self.icon_logo.or(self.icon_about_os),
             ),
+            Page::Network => self.network.draw(canvas, theme, WIN_W, WIN_H),
         }
     }
 
@@ -1465,6 +1505,7 @@ impl App for ControlPanelApp {
             Page::Notifications => self.update_notifications_page(event),
             Page::AboutComputer => self.update_about_computer_page(event),
             Page::AboutOs => self.update_about_os_page(event),
+            Page::Network => self.update_network_page(event),
         }
     }
 
@@ -1472,6 +1513,9 @@ impl App for ControlPanelApp {
         if self.page == Page::Monitor {
             self.refresh_display_modes();
             return true;
+        }
+        if self.page == Page::Network {
+            return self.network.refresh();
         }
         false
     }
@@ -1664,28 +1708,6 @@ fn fit_image_rect(img_w: u32, img_h: u32, bounds: Rect) -> Rect {
     )
 }
 
-// ---------------------------------------------------------------------------
-// Allocator + panic
-// ---------------------------------------------------------------------------
-
-struct BumpAllocator;
-unsafe impl GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 8 * 1024 * 1024] = [0; 8 * 1024 * 1024];
-        static mut NEXT: usize = 0;
-        let aligned = (NEXT + layout.align() - 1) & !(layout.align() - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
-}
-#[global_allocator]
-static ALLOC: BumpAllocator = BumpAllocator;
-
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[CONTROL-PANEL] panic\n");
@@ -1760,6 +1782,7 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
                 b"wallpaper" => return Page::Wallpaper,
                 b"about-computer" | b"computer" => return Page::AboutComputer,
                 b"about-os" | b"about-sunlightos" | b"about" => return Page::AboutOs,
+                b"network" => return Page::Network,
                 _ => {}
             }
             i += 2;
