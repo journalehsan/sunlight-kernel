@@ -1093,7 +1093,7 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     let mut sched = crate::sched::Scheduler::new();
     sched.processes.push(process);
 
-    // All six real transitions, same-protection no-op, content/frame
+    // All supported R/RW/RX transitions, same-protection no-op, content/frame
     // preservation, and MM-1 copy permission integration.
     let transitions = BASE;
     map_fixed(&mut sched, pmm, transitions, 2, PROT_READ | PROT_WRITE);
@@ -1132,19 +1132,28 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     let before_noop = entry(&sched, transitions, hhdm);
     assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_READ), Ok(()));
     assert_eq!(entry(&sched, transitions, hhdm), before_noop);
-    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_WRITE), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_READ | PROT_WRITE),
+        Ok(())
+    );
     assert_eq!(
         original_frame,
         assert_protection(&sched, transitions, hhdm, true, false)
     );
     crate::memory::user::copy_to_process_bytes(sched.current_process(), hhdm, transitions, b"y")
         .unwrap();
-    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_EXEC), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_READ | PROT_EXEC),
+        Ok(())
+    );
     assert_eq!(
         original_frame,
         assert_protection(&sched, transitions, hhdm, false, true)
     );
-    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_WRITE), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_READ | PROT_WRITE),
+        Ok(())
+    );
     assert_eq!(
         original_frame,
         assert_protection(&sched, transitions, hhdm, true, false)
@@ -1159,7 +1168,10 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
         protect(&mut sched, pmm, transitions, 1, PROT_READ | PROT_EXEC),
         Ok(())
     );
-    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_WRITE), Ok(()));
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_READ | PROT_WRITE),
+        Ok(())
+    );
     assert_eq!(pmm.free_page_count(), free_before);
     crate::serial_println!("[MM-2E] R/RW/RX transitions, frames, contents, and MM-1 copies: OK");
 
@@ -1270,6 +1282,14 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     assert_eq!(
         protect(&mut sched, pmm, transitions, 1, PROT_WRITE | PROT_EXEC),
         Err(MmapError::PermissionDenied)
+    );
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_WRITE),
+        Err(MmapError::InvalidProt)
+    );
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_EXEC),
+        Err(MmapError::InvalidProt)
     );
     assert_eq!(
         protect(&mut sched, pmm, transitions, 1, PROT_NONE),
@@ -1441,6 +1461,81 @@ fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm
     use x86_64::structures::paging::{Page, PhysFrame, Size4KiB};
 
     let free_before = pmm.free_page_count();
+
+    // The native mmap ABI must reject unsupported semantics before it reserves
+    // a range, allocates a frame, or advances the anonymous cursor.
+    let validation_process =
+        unsafe { crate::process::Process::new(0xB300, 0, "mm2a-mmap-validation", pmm, hhdm) };
+    let mut validation_sched = crate::sched::Scheduler::new();
+    validation_sched.processes.push(validation_process);
+    let validation_free_before = pmm.free_page_count();
+    for (address, prot, flags, fd, offset, expected) in [
+        (
+            0,
+            crate::process::mmap::PROT_READ | crate::process::mmap::PROT_WRITE,
+            crate::process::mmap::MAP_ANONYMOUS,
+            -1,
+            0,
+            crate::process::mmap::MmapError::InvalidFlags,
+        ),
+        (
+            0,
+            crate::process::mmap::PROT_READ,
+            crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+            3,
+            0,
+            crate::process::mmap::MmapError::InvalidFlags,
+        ),
+        (
+            0,
+            crate::process::mmap::PROT_READ,
+            crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+            -1,
+            4096,
+            crate::process::mmap::MmapError::InvalidFlags,
+        ),
+        (
+            0,
+            crate::process::mmap::PROT_WRITE,
+            crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+            -1,
+            0,
+            crate::process::mmap::MmapError::InvalidProt,
+        ),
+        (
+            0x0000_0010_0000_0000,
+            crate::process::mmap::PROT_READ,
+            crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+            -1,
+            0,
+            crate::process::mmap::MmapError::InvalidAddress,
+        ),
+    ] {
+        assert_eq!(
+            crate::process::mmap::sys_mmap(
+                address,
+                4096,
+                prot,
+                flags,
+                fd,
+                offset,
+                pmm,
+                &mut validation_sched,
+            ),
+            Err(expected)
+        );
+    }
+    assert_eq!(validation_sched.current_process().mmap_next, 0);
+    assert_eq!(pmm.free_page_count(), validation_free_before);
+    unsafe {
+        validation_sched
+            .current_process_mut()
+            .address_space
+            .reclaim_user_space(pmm, hhdm, true);
+    }
+    assert_eq!(pmm.free_page_count(), free_before);
+    crate::serial_println!("[MM-2A] anonymous mmap contract rejects unsupported semantics: OK");
+
     let mut collision_process =
         unsafe { crate::process::Process::new(0xB301, 0, "mm2a-map", pmm, hhdm) };
     let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(0x0000_0002_2000_0000))

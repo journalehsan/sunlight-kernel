@@ -3590,7 +3590,11 @@ pub fn shm_alloc() -> Result<(*mut u8, CapabilityToken), ShmError> {
 pub fn shm_create(size: usize, flags: u64) -> Result<(*mut u8, CapabilityToken), ShmError> {
     let (ret, msg) =
         unsafe { raw_syscall(SunlightSyscall::ShmAlloc, size as u64, flags, 0, 0, 0, 0, 0) };
-    if ret == u64::MAX || msg.caps[0] == CapabilityToken::INVALID {
+    if ret == 0
+        || ret == u64::MAX
+        || ret & (SHM_PAGE as u64 - 1) != 0
+        || msg.caps[0] == CapabilityToken::INVALID
+    {
         return Err(ShmError::OutOfMemory);
     }
     Ok((ret as *mut u8, msg.caps[0]))
@@ -3599,7 +3603,7 @@ pub fn shm_create(size: usize, flags: u64) -> Result<(*mut u8, CapabilityToken),
 /// Map a shared region (any size) into the caller's AS using a received token. Returns base ptr.
 pub fn shm_map(token: CapabilityToken) -> Result<*mut u8, ShmError> {
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ShmMap, token.0, 0, 0, 0, 0, 0, 0) };
-    if ret == u64::MAX {
+    if ret == 0 || ret == u64::MAX || ret & (SHM_PAGE as u64 - 1) != 0 {
         return Err(ShmError::InvalidToken);
     }
     Ok(ret as *mut u8)
@@ -3641,11 +3645,17 @@ pub struct FramebufferInfo {
 fn decode_framebuffer_info(msg: &IpcMsg) -> Option<FramebufferInfo> {
     let packed = msg.words[0];
     let format = msg.badge;
+    // The kernel packs exactly seven one-byte fields (memory model plus six
+    // mask fields). Reject a widened or malformed register response instead
+    // of silently narrowing it before display-side bounds checks run.
+    if format & !0x00ff_ffff_ffff_ffff != 0 {
+        return None;
+    }
     let info = FramebufferInfo {
         width: packed as u32,
         height: (packed >> 32) as u32,
-        pitch_bytes: msg.words[1] as u32,
-        bits_per_pixel: msg.words[2] as u32,
+        pitch_bytes: u32::try_from(msg.words[1]).ok()?,
+        bits_per_pixel: u32::try_from(msg.words[2]).ok()?,
         mapped_len: msg.words[3],
         memory_model: format as u8,
         red_mask_size: (format >> 8) as u8,
@@ -3655,10 +3665,48 @@ fn decode_framebuffer_info(msg: &IpcMsg) -> Option<FramebufferInfo> {
         blue_mask_size: (format >> 40) as u8,
         blue_mask_shift: (format >> 48) as u8,
     };
-    if info.width == 0 || info.height == 0 || info.pitch_bytes == 0 || info.mapped_len == 0 {
+    let visible_len = u64::from(info.pitch_bytes).checked_mul(u64::from(info.height))?;
+    if info.width == 0
+        || info.height == 0
+        || info.pitch_bytes == 0
+        || info.mapped_len == 0
+        || info.mapped_len < visible_len
+    {
         None
     } else {
         Some(info)
+    }
+}
+
+#[cfg(test)]
+mod framebuffer_info_tests {
+    use super::*;
+
+    fn valid_message() -> IpcMsg {
+        let mut msg = IpcMsg::empty();
+        msg.words[0] = 640 | (480u64 << 32);
+        msg.words[1] = 640 * 4;
+        msg.words[2] = 32;
+        msg.words[3] = 640 * 4 * 480;
+        msg.badge = 1 | (8 << 8) | (16 << 16) | (8 << 24) | (8 << 32) | (8 << 40);
+        msg
+    }
+
+    #[test]
+    fn framebuffer_reply_requires_representable_complete_geometry() {
+        assert!(decode_framebuffer_info(&valid_message()).is_some());
+
+        let mut truncated = valid_message();
+        truncated.words[1] = u64::from(u32::MAX) + 1;
+        assert!(decode_framebuffer_info(&truncated).is_none());
+
+        let mut short = valid_message();
+        short.words[3] -= 1;
+        assert!(decode_framebuffer_info(&short).is_none());
+
+        let mut malformed_format = valid_message();
+        malformed_format.badge |= 1u64 << 60;
+        assert!(decode_framebuffer_info(&malformed_format).is_none());
     }
 }
 
@@ -3674,7 +3722,7 @@ pub fn framebuffer_info() -> Option<FramebufferInfo> {
 fn map_framebuffer_backend(selector: u64) -> Option<(*mut u8, FramebufferInfo)> {
     let (va, msg) =
         unsafe { raw_syscall(SunlightSyscall::MapFramebuffer, selector, 0, 0, 0, 0, 0, 0) };
-    if va == 0 {
+    if va == 0 || va == u64::MAX {
         return None;
     }
     Some((va as *mut u8, decode_framebuffer_info(&msg)?))

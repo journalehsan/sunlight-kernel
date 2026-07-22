@@ -164,15 +164,19 @@ pub fn diagnostic_report() {
     );
 }
 
-/// Normalize the ABI protection request to what ordinary x86_64 page tables
-/// can enforce without protection keys. Write-only becomes RW and
-/// execute-only becomes RX; PROT_NONE remains unsupported in MM-2E.
+/// Validate the ABI protection request against the permissions this kernel
+/// can represent exactly.  x86_64 page tables cannot enforce write-only or
+/// execute-only user mappings, so those requests are rejected rather than
+/// silently widened to RW or RX. PROT_NONE remains unsupported in MM-2E.
 fn normalize_protection(prot: u32) -> Result<RegionProtection, MmapError> {
     if prot & !(PROT_READ | PROT_WRITE | PROT_EXEC) != 0 {
         return Err(MmapError::InvalidProt);
     }
     if prot == PROT_NONE {
         return Err(MmapError::Unsupported);
+    }
+    if prot & PROT_READ == 0 {
+        return Err(MmapError::InvalidProt);
     }
     if prot & PROT_WRITE != 0 && prot & PROT_EXEC != 0 {
         return Err(MmapError::PermissionDenied);
@@ -200,11 +204,16 @@ pub fn sys_mmap(
     length: u64,
     prot: u32,
     flags: u32,
-    _fd: i32,
-    _offset: u64,
+    fd: i32,
+    offset: u64,
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
 ) -> Result<u64, MmapError> {
+    // Backed mappings are not implemented.  Reject descriptor/offset use so
+    // no caller can mistake this for a file or device mapping interface.
+    if fd != -1 || offset != 0 {
+        return Err(MmapError::InvalidFlags);
+    }
     map_anonymous_kind(
         addr,
         length,
@@ -254,12 +263,14 @@ fn map_anonymous_kind(
         return Err(MmapError::InvalidFlags);
     }
 
-    // Only support anonymous mappings for now
-    if (flags & MAP_ANONYMOUS) == 0 {
+    // The current native surface is deliberately limited to private,
+    // anonymous mappings.  Require both bits instead of accepting an
+    // incomplete request as private anonymous memory.
+    if flags & (MAP_PRIVATE | MAP_ANONYMOUS) != (MAP_PRIVATE | MAP_ANONYMOUS) {
         return Err(MmapError::InvalidFlags);
     }
 
-    // Base of the anonymous mmap region for hint-less / hinted mappings.
+    // Base of the anonymous mmap region for hint-less mappings.
     const MMAP_REGION_BASE: u64 = 0x10_0000_0000u64;
 
     let (page_count, span) = checked_page_layout(length).map_err(|_| MmapError::InvalidAddress)?;
@@ -272,6 +283,12 @@ fn map_anonymous_kind(
     let deferred_cursor = if (flags & MAP_FIXED) != 0 {
         None
     } else {
+        // The native mapper has no safe hint-placement policy. Reject a
+        // non-zero hint instead of ignoring it and returning an unrelated
+        // range; MAP_FIXED below retains exact no-replacement semantics.
+        if addr != 0 {
+            return Err(MmapError::InvalidAddress);
+        }
         Some(
             DeferredCursor::new(sched.current_process().mmap_next, MMAP_REGION_BASE, span)
                 .map_err(|_| MmapError::InvalidAddress)?,

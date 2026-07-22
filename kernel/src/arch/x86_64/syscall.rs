@@ -2748,27 +2748,10 @@ fn sys_linux_tkill(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_mmap(frame: &mut SyscallFrame) -> u64 {
-    const LINUX_MAP_SHARED: u64 = 0x01;
-    const LINUX_MAP_PRIVATE: u64 = 0x02;
-    const LINUX_MAP_FIXED: u64 = 0x10;
-    const LINUX_MAP_ANONYMOUS: u64 = 0x20;
-
-    let mut flags = frame.r10;
-    let fd = frame.r8 as i32;
-
-    // Keep only the subset understood by the native mmap implementation.
-    // Linux-only flags such as MAP_DENYWRITE, MAP_EXECUTABLE, MAP_GROWSDOWN,
-    // MAP_NORESERVE, and MAP_STACK are advisory for this early compat layer.
-    flags &= LINUX_MAP_SHARED | LINUX_MAP_PRIVATE | LINUX_MAP_FIXED | LINUX_MAP_ANONYMOUS;
-
-    if flags & LINUX_MAP_ANONYMOUS == 0 && fd < 0 {
-        flags |= LINUX_MAP_ANONYMOUS;
-    }
-    if flags & (LINUX_MAP_SHARED | LINUX_MAP_PRIVATE) == 0 {
-        flags |= LINUX_MAP_PRIVATE;
-    }
-
-    frame.r10 = flags;
+    // Do not erase Linux flags or synthesize anonymous/private semantics.
+    // `sys_mmap` validates the same intentionally small mapping contract as
+    // native callers and returns EINVAL for unsupported file/shared/hint
+    // requests through the normal Linux error path.
     sys_mmap(frame)
 }
 

@@ -1403,6 +1403,11 @@ struct VortexShell {
     events_dropped: u64,
     ipc_timeouts: u64,
     last_wrong_window_replies: u64,
+    last_display_polls: u64,
+    last_events_available: u64,
+    last_events_dequeued: u64,
+    last_local_ticks: u64,
+    last_interleaved_polls: u64,
     /// Next launch trace id assigned by this shell process.
     next_launch_id: u64,
     /// Dark Start Menu overlay — search, pinned/all-apps/recent sections,
@@ -1420,6 +1425,8 @@ struct VortexShell {
     recent_apps: Vec<AppId>,
     #[cfg(feature = "stress")]
     stress_cycles: u64,
+    #[cfg(feature = "stress")]
+    stress_recovery_failures: u64,
 }
 
 impl VortexShell {
@@ -1563,6 +1570,11 @@ impl VortexShell {
             events_dropped: 0,
             ipc_timeouts: 0,
             last_wrong_window_replies: 0,
+            last_display_polls: 0,
+            last_events_available: 0,
+            last_events_dequeued: 0,
+            last_local_ticks: 0,
+            last_interleaved_polls: 0,
             next_launch_id: 1,
             start_menu: start_menu::StartMenuState::new(),
             show_system_menu: false,
@@ -1571,6 +1583,8 @@ impl VortexShell {
             recent_apps: Vec::new(),
             #[cfg(feature = "stress")]
             stress_cycles: 0,
+            #[cfg(feature = "stress")]
+            stress_recovery_failures: 0,
         };
         shell.reload_desktop_icons();
         shell
@@ -2302,18 +2316,18 @@ impl VortexShell {
     }
 
     fn note_event_progress(&mut self, event: Event) {
-        self.event_loop_iterations = self.event_loop_iterations.wrapping_add(1);
+        self.event_loop_iterations = self.event_loop_iterations.saturating_add(1);
         self.last_successful_event_ms = monotonic_millis();
         match event {
-            Event::Tick => self.tick_events = self.tick_events.wrapping_add(1),
+            Event::Tick => self.tick_events = self.tick_events.saturating_add(1),
             Event::Click { .. }
             | Event::MouseDown { .. }
             | Event::MouseUp { .. }
             | Event::MouseMove { .. }
             | Event::Key(_)
             | Event::KeyPress { .. }
-            | Event::FocusChanged { .. } => self.input_events = self.input_events.wrapping_add(1),
-            _ => self.other_events = self.other_events.wrapping_add(1),
+            | Event::FocusChanged { .. } => self.input_events = self.input_events.saturating_add(1),
+            _ => self.other_events = self.other_events.saturating_add(1),
         }
     }
 
@@ -2338,6 +2352,16 @@ impl VortexShell {
         debug_log_u64(self.events_dropped);
         debug_log(" ipc_timeout=");
         debug_log_u64(self.ipc_timeouts);
+        debug_log(" route(poll/available/dequeued/local/interleaved)=");
+        debug_log_u64(self.last_display_polls);
+        debug_log("/");
+        debug_log_u64(self.last_events_available);
+        debug_log("/");
+        debug_log_u64(self.last_events_dequeued);
+        debug_log("/");
+        debug_log_u64(self.last_local_ticks);
+        debug_log("/");
+        debug_log_u64(self.last_interleaved_polls);
         debug_log(" heap(cap/backing/request/free/largest)=");
         debug_log_u64(heap.heap_capacity as u64);
         debug_log("/");
@@ -2388,6 +2412,14 @@ impl VortexShell {
     fn run_stress_cycle(&mut self) {
         const STRESS_CYCLES_PER_TICK: usize = 64;
         const STRESS_TEMP_ENTRIES: usize = 24;
+        // Fill the bounded MRU vector before the measurement.  The workload
+        // below then exercises only transient allocation/reallocation paths,
+        // rather than reporting its intentional one-time MRU growth as a leak.
+        for app_id in DOCK_PINNED {
+            self.note_recent_app(app_id);
+        }
+        let baseline = libc::alloc::heap_stats();
+
         for _ in 0..STRESS_CYCLES_PER_TICK {
             let mut temporary = Vec::with_capacity(STRESS_TEMP_ENTRIES);
             let mut transient_windows = Vec::with_capacity(STRESS_TEMP_ENTRIES);
@@ -2458,11 +2490,21 @@ impl VortexShell {
             temporary.clear();
 
             self.note_recent_app(DOCK_PINNED[(self.stress_cycles as usize) % DOCK_PINNED_COUNT]);
-            self.stress_cycles = self.stress_cycles.wrapping_add(1);
+            self.stress_cycles = self.stress_cycles.saturating_add(1);
+        }
+        let recovered = libc::alloc::heap_stats();
+        if recovered.requested_user_bytes != baseline.requested_user_bytes
+            || recovered.live_allocation_count != baseline.live_allocation_count
+            || recovered.allocated_backing_bytes != baseline.allocated_backing_bytes
+        {
+            self.stress_recovery_failures = self.stress_recovery_failures.saturating_add(1);
+            debug_log("[VORTEX][stress] transient allocation recovery mismatch\n");
         }
         if self.stress_cycles % (STRESS_CYCLES_PER_TICK as u64 * 4) == 0 {
             debug_log("[VORTEX][stress] completed cycles=");
             debug_log_u64(self.stress_cycles);
+            debug_log(" recovery_failures=");
+            debug_log_u64(self.stress_recovery_failures);
             debug_log("\n");
         }
     }
@@ -4538,7 +4580,14 @@ fn read_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {
         };
         let n = match libc::read(fd, chunk) {
             Ok(n) => n,
-            Err(libc::sys::Errno::Again) => continue,
+            // This is a regular-file loader, not an event source.  Retrying
+            // EAGAIN here used to spin the shell main thread indefinitely;
+            // close the consumed descriptor once and let the caller retain
+            // its already-valid wallpaper/fallback instead.
+            Err(libc::sys::Errno::Again) => {
+                let _ = libc::close(fd);
+                return None;
+            }
             Err(_) => {
                 let _ = libc::close(fd);
                 return None;
@@ -4547,7 +4596,9 @@ fn read_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {
         if n == 0 {
             break;
         }
-        len = len.saturating_add(n);
+        // `sunlight-libc::read` rejects impossible counts, and `take` is at
+        // most the remaining static-buffer capacity.
+        len += n;
     }
     let _ = libc::close(fd);
     Some(unsafe {
@@ -4561,11 +4612,19 @@ fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {
         .ok()
         .map(|stat| (stat.size as usize).min(limit))
         .unwrap_or(0);
-    let mut out = Vec::with_capacity(reserve);
+    let mut out = Vec::new();
+    if out.try_reserve_exact(reserve).is_err() {
+        let _ = libc::close(fd);
+        return None;
+    }
     let mut buf = [0u8; 128];
     loop {
         let n = match libc::read(fd, &mut buf) {
             Ok(n) => n,
+            // The current raw-descriptor ABI distinguishes only EAGAIN and a
+            // generic failure.  This synchronous loader has no readiness
+            // notification to wait on, so both are handled as one bounded
+            // failed load rather than a retry loop.
             Err(_) => {
                 let _ = libc::close(fd);
                 return None;
@@ -7209,7 +7268,12 @@ impl App for VortexShell {
             .wrong_window_replies
             .wrapping_sub(self.last_wrong_window_replies);
         self.last_wrong_window_replies = counters.wrong_window_replies;
-        self.events_dropped = self.events_dropped.wrapping_add(wrong_window_delta);
+        self.events_dropped = self.events_dropped.saturating_add(wrong_window_delta);
+        self.last_display_polls = counters.display_polls;
+        self.last_events_available = counters.events_available;
+        self.last_events_dequeued = counters.events_dequeued;
+        self.last_local_ticks = counters.local_ticks;
+        self.last_interleaved_polls = counters.interleaved_polls;
         let mut dirty = false;
         if (1..=4).contains(&counters.active_workspace_id)
             && self.current_workspace != counters.active_workspace_id
