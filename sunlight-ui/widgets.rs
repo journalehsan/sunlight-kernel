@@ -17,6 +17,7 @@ pub mod text_input;
 pub mod text_view;
 pub mod toolbar;
 pub mod tree_view;
+pub mod workspace_switcher;
 
 // Re-export the most-used types at the widgets level
 pub use button::{Button, ButtonState};
@@ -58,4 +59,9 @@ pub use toolbar::{Toolbar, ToolbarItem};
 pub use tree_view::{
     TreeHitTarget, TreeItem, TreeModel, TreeView, TreeViewAction, TreeViewHit, TreeViewRow,
     TreeViewState,
+};
+pub use workspace_switcher::{
+    draw_panel_ambient_shadow, AppIconStack, BoundedOverflowBadge, WorkspaceCard,
+    WorkspaceCardState, WorkspaceCardView, WorkspaceSwitcherLayout, WorkspaceSwitcherPanel,
+    WORKSPACE_CARD_COUNT, WORKSPACE_ICON_SLOTS,
 };

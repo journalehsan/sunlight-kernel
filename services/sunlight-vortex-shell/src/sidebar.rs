@@ -104,7 +104,7 @@ pub(crate) const NEWS_PREVIEW: [NewsArticleViewData; 3] = [
 
 /// Sanitized telemetry values already expressed in the system's established
 /// aggregate-per-core-normalized basis-point semantics.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct SystemMonitorViewData {
     pub cpu_bp: u16,
     pub ram_bp: u16,

@@ -48,14 +48,15 @@
 //!   fake battery behavior: static icon (BAT_ROWS), no queries
 //!   TODOs: see TODO(battery) marker above.
 
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
 
 mod calendar_math;
 mod sidebar;
 mod start_menu;
+mod workspace_switcher;
 
 use alloc::{string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
@@ -460,7 +461,7 @@ impl SymbolTheme {
 /// Pinned dock apps are listed in [`DOCK_PINNED`] (Files first, then Terminal,
 /// Calendar, Calculator, Edit, Writer, Rappid Rabbit). Everything else is
 /// Start-Menu / running-strip only but shares the same launch registry.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum AppId {
     Terminal,
     Chronos,
@@ -512,8 +513,8 @@ pub(crate) struct DockAppState {
     pub(crate) app_id: AppId,
     pub(crate) display_name: &'static str,
     icon: AppId,
-    pid: Option<u64>,
-    main_window_id: Option<u64>,
+    pub(crate) pid: Option<u64>,
+    pub(crate) main_window_id: Option<u64>,
     pub(crate) state: AppLaunchState,
     last_launch_id: u64,
     last_launch_source: LaunchSource,
@@ -563,7 +564,7 @@ impl DockAppState {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-enum ShellWindowState {
+pub(crate) enum ShellWindowState {
     Normal = 0,
     Minimized = 1,
     Maximized = 2,
@@ -583,7 +584,7 @@ impl ShellWindowState {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-enum ShellWindowType {
+pub(crate) enum ShellWindowType {
     Normal = 0,
     Dialog = 1,
     Desktop = 2,
@@ -614,15 +615,15 @@ impl PanelPresentation {
 }
 
 #[derive(Clone, Copy)]
-struct WindowSnapshot {
-    id: u64,
-    owner_pid: u64,
-    state: ShellWindowState,
-    window_type: ShellWindowType,
-    workspace_id: u64,
-    hidden: bool,
-    rolled_up: bool,
-    title: [u8; 16],
+pub(crate) struct WindowSnapshot {
+    pub(crate) id: u64,
+    pub(crate) owner_pid: u64,
+    pub(crate) state: ShellWindowState,
+    pub(crate) window_type: ShellWindowType,
+    pub(crate) workspace_id: u64,
+    pub(crate) hidden: bool,
+    pub(crate) rolled_up: bool,
+    pub(crate) title: [u8; 16],
 }
 
 impl WindowSnapshot {
@@ -1315,6 +1316,8 @@ struct VortexShell {
     settings_zone: Rect,
     /// Bounds of the Sidebar button in the left cluster.
     sidebar_zone: Rect,
+    /// Bounds of the Overview / Workspace Switcher button in the left cluster.
+    overview_zone: Rect,
     /// Bounds of the dock's grid icon — toggles the Start Menu.
     launcher_zone: Rect,
     /// TGA icon theme for desktop shortcuts.
@@ -1397,6 +1400,9 @@ struct VortexShell {
     /// System Sidebar overlay. It is rendered inside the desktop shell window,
     /// so it is never a normal application window or task-list entry.
     sidebar: sidebar::SidebarState,
+    /// Compact Workspace Switcher overlay (four existing workspaces).
+    /// In-shell system overlay: no dock entry, no Alt+Tab, no Solar Focus Glow.
+    workspace_switcher: workspace_switcher::WorkspaceSwitcherState,
     /// Retry cadence if telemetry was unavailable during shell startup.
     next_sidebar_telemetry_retry_ms: u64,
     /// Next monotonic deadline for app/window registry polling.
@@ -1507,6 +1513,7 @@ impl VortexShell {
             brand_zone: Rect::new(0, 0, 0, 0),
             settings_zone: Rect::new(0, 0, 0, 0),
             sidebar_zone: Rect::new(0, 0, 0, 0),
+            overview_zone: Rect::new(0, 0, 0, 0),
             launcher_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
             dock_theme,
@@ -1574,6 +1581,7 @@ impl VortexShell {
             running_hover_since: None,
             telemetry,
             sidebar: sidebar::SidebarState::new(),
+            workspace_switcher: workspace_switcher::WorkspaceSwitcherState::new(),
             next_sidebar_telemetry_retry_ms: 0,
             next_app_poll_ms: 0,
             next_diagnostic_ms: 0,
@@ -2201,6 +2209,7 @@ impl VortexShell {
         if self.start_menu.is_open() {
             self.start_menu.close();
         }
+        let _ = self.workspace_switcher.close();
         self.show_system_menu = !self.show_system_menu;
         self.system_menu_hover = None;
         true
@@ -2695,6 +2704,17 @@ impl VortexShell {
             }
         }
 
+        // Keep Workspace Switcher cards live while open (counts/icons update as
+        // windows appear and disappear). No polling timer of its own — driven
+        // by the existing app-state refresh cadence.
+        if self.workspace_switcher.is_open() {
+            let summaries =
+                workspace_switcher::build_workspace_summaries(&windows, &self.apps);
+            if self.workspace_switcher.observe_summaries(summaries) {
+                dirty = true;
+            }
+        }
+
         windows.clear();
         self.window_snapshots = windows;
 
@@ -3064,6 +3084,7 @@ impl VortexShell {
             return self.sidebar.close();
         }
         self.start_menu.close();
+        let _ = self.workspace_switcher.close();
         self.show_system_menu = false;
         self.system_menu_hover = None;
         self.show_calendar_popover = false;
@@ -3075,6 +3096,110 @@ impl VortexShell {
         // "Telemetry unavailable" until the next Event::Tick.
         let _ = self.refresh_sidebar_telemetry(now);
         true
+    }
+
+    /// Toggle the compact Workspace Switcher from the bottom-left Overview button.
+    fn toggle_workspace_switcher(&mut self) -> bool {
+        if self.workspace_switcher.is_open() {
+            return self.workspace_switcher.close();
+        }
+        self.start_menu.close();
+        let _ = self.sidebar.close();
+        self.show_system_menu = false;
+        self.system_menu_hover = None;
+        self.show_calendar_popover = false;
+        self.show_notif_panel = false;
+        self.show_datetime_tooltip = false;
+        self.context_menu = None;
+        self.refresh_workspace_switcher_cards();
+        self.workspace_switcher.open(self.current_workspace);
+        true
+    }
+
+    /// Rebuild the four workspace card summaries from the latest window list.
+    fn refresh_workspace_switcher_cards(&mut self) -> bool {
+        // Always take a fresh LIST_WINDOWS snapshot so open reflects current
+        // ownership; closed windows must not linger as stale icons/counts.
+        let _ = self.refresh_window_snapshots();
+        let summaries = workspace_switcher::build_workspace_summaries(
+            &self.window_snapshots,
+            &self.apps,
+        );
+        self.workspace_switcher.observe_summaries(summaries)
+    }
+
+    fn apply_workspace_switcher_action(
+        &mut self,
+        action: workspace_switcher::WorkspaceSwitcherAction,
+    ) -> bool {
+        use workspace_switcher::WorkspaceSwitcherAction;
+        match action {
+            WorkspaceSwitcherAction::None => false,
+            WorkspaceSwitcherAction::Close => self.workspace_switcher.close(),
+            WorkspaceSwitcherAction::Activate(ws) => {
+                if !(1..=WS_INDICATOR_COUNT as u8).contains(&ws) {
+                    self.workspace_switcher.set_status("Invalid workspace");
+                    return true;
+                }
+                // Selecting the already-active workspace still closes safely.
+                if ws == self.current_workspace {
+                    let _ = self.workspace_switcher.close();
+                    return true;
+                }
+                if self.switch_workspace(ws) {
+                    let _ = self.workspace_switcher.close();
+                    true
+                } else {
+                    // Keep the overlay usable; do not leave the shell without
+                    // an active workspace.
+                    self.workspace_switcher.set_status("Switch failed");
+                    true
+                }
+            }
+        }
+    }
+
+    /// Resolve bounded icon images for the four switcher cards (no unbounded cache).
+    fn workspace_switcher_icon_images(&self) -> [[Option<TgaImage>; 3]; 4] {
+        use workspace_switcher::WorkspaceAppIcon;
+        let mut out = [[None; 3]; 4];
+        for (ci, summary) in self.workspace_switcher.cards().iter().enumerate() {
+            for si in 0..summary.icon_len as usize {
+                if si >= 3 {
+                    break;
+                }
+                out[ci][si] = match summary.icons[si] {
+                    Some(WorkspaceAppIcon::App(app_id)) => self.icon_tga_for_app(app_id),
+                    Some(WorkspaceAppIcon::Generic) | None => {
+                        TgaImage::parse(ICON_GENERIC_APP_TGA).ok()
+                    }
+                };
+            }
+        }
+        out
+    }
+
+    fn icon_tga_for_app(&self, app_id: AppId) -> Option<TgaImage> {
+        if let Some(img) = self.dock_theme.icon_for_app(app_id) {
+            return Some(img);
+        }
+        let bytes = match app_id {
+            AppId::Terminal | AppId::Chronos => Some(ICON_TERMINAL_TGA),
+            AppId::Calculator => Some(ICON_CALC_TGA),
+            AppId::Files => Some(ICON_FILES_TGA),
+            AppId::Settings => Some(ICON_SETTINGS_TGA),
+            AppId::Tasks => Some(ICON_TASKS_TGA),
+            AppId::Bench => Some(ICON_BENCH_TGA),
+            AppId::TextEditor => Some(ICON_TEXT_EDITOR_TGA),
+            AppId::Writer => Some(ICON_WRITER_TGA),
+            AppId::Calendar => Some(ICON_CALENDAR_TGA),
+            AppId::Devices => Some(ICON_DEVICES_TGA),
+            AppId::RappidRabbit => Some(ICON_RABBIT_TGA),
+            AppId::ApiLab => Some(ICON_API_LAB_TGA),
+            AppId::Mines => Some(ICON_GENERIC_APP_TGA),
+            AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_TGA),
+        };
+        bytes.and_then(|b| TgaImage::parse(b).ok())
     }
 
     fn sidebar_telemetry_view(&self) -> Option<sidebar::SystemMonitorViewData> {
@@ -5755,14 +5880,15 @@ fn dock_cluster_width(count: usize) -> u32 {
 /// Click zones for the independent controls in the bottom-left cluster.
 #[derive(Clone, Copy)]
 struct BottomLeftZones {
+    overview: Rect,
     sidebar: Rect,
     settings: Rect,
 }
 
 /// Draw the bottom-left cluster: overview | sidebar | settings.
 ///
-/// Overview remains a separate control; the Sidebar zone is surfaced without
-/// coupling either control to the other.
+/// Overview toggles the compact Workspace Switcher; Sidebar and Settings are
+/// independent controls with mutual-exclusion handled in the shell.
 fn draw_bot_left(
     canvas: &mut Canvas,
     theme: &Theme,
@@ -5771,6 +5897,7 @@ fn draw_bot_left(
     settings_app: &DockAppState,
     settings_hover: bool,
     sidebar_open: bool,
+    overview_open: bool,
     now: u64,
 ) -> BottomLeftZones {
     let icons: &[&[u16; 16]] = &[&OVERVIEW_ROWS, &SIDEBAR_ROWS, &SETTINGS_ROWS];
@@ -5779,6 +5906,7 @@ fn draw_bot_left(
     draw_dock_surface(canvas, theme, cluster, RADIUS);
 
     let mut cx = cluster.x + CLUSTER_PAD;
+    let mut overview_cell = Rect::new(0, 0, 0, 0);
     let mut sidebar_cell = Rect::new(0, 0, 0, 0);
     let mut settings_cell = Rect::new(0, 0, 0, 0);
     for (i, rows) in icons.iter().enumerate() {
@@ -5802,14 +5930,23 @@ fn draw_bot_left(
                 now,
             );
         } else {
-            if i == 1 {
+            if i == 0 {
+                overview_cell = cell;
+                // Restrained open/active state while the Workspace Switcher is visible.
+                if overview_open {
+                    canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
+                    canvas.stroke_rounded_rect(cell, 5, 1, theme.accent);
+                }
+                draw_icon_btn(canvas, cell, rows, theme, overview_open, false);
+            } else {
                 sidebar_cell = cell;
+                draw_icon_btn(canvas, cell, rows, theme, sidebar_open, false);
             }
-            draw_icon_btn(canvas, cell, rows, theme, i == 1 && sidebar_open, false);
         }
         cx += ICON_BTN as i32 + ICON_GAP;
     }
     BottomLeftZones {
+        overview: overview_cell,
         sidebar: sidebar_cell,
         settings: settings_cell,
     }
@@ -6790,8 +6927,10 @@ impl App for VortexShell {
             &settings_app,
             self.settings_hover,
             self.sidebar.is_open(),
+            self.workspace_switcher.is_open(),
             now,
         );
+        self.overview_zone = bottom_left.overview;
         self.sidebar_zone = bottom_left.sidebar;
         self.settings_zone = bottom_left.settings;
         self.running_zones.clear();
@@ -6835,6 +6974,27 @@ impl App for VortexShell {
         self.start_menu
             .view(canvas, theme, cw, ch, &self.apps, &self.recent_apps, now);
 
+        // Workspace Switcher: system overlay above desktop content and Start
+        // menu chrome order still keeps panels on top for persistent shell UI.
+        // Drawn after Start so the compact panel is the top large overlay when
+        // mutual-exclusion correctly left only one open.
+        if self.workspace_switcher.is_open() {
+            let icon_images = self.workspace_switcher_icon_images();
+            let generic = TgaImage::parse(ICON_GENERIC_APP_TGA).ok();
+            let top_inset = top_bar_rect(cw, self.top_panel_presentation).bottom() + 8;
+            self.workspace_switcher.view(
+                canvas,
+                theme,
+                cw,
+                ch,
+                top_inset,
+                by,
+                &icon_images,
+                generic,
+                self.current_workspace,
+            );
+        }
+
         if let Some(menu) = &self.context_menu {
             draw_context_menu(canvas, theme, menu);
         }
@@ -6844,6 +7004,56 @@ impl App for VortexShell {
         self.note_event_progress(event);
         let sidebar_top = top_bar_rect(self.screen_w, self.top_panel_presentation).bottom() + 8;
         let sidebar_bottom = bot_y(self.screen_h) - 8;
+        let switcher_top = sidebar_top;
+        let switcher_dock_top = bot_y(self.screen_h);
+        if self.workspace_switcher.is_open() {
+            match event {
+                Event::Click { .. }
+                | Event::MouseMove { .. }
+                | Event::Key(_)
+                | Event::KeyPress { .. } => {
+                    let (dirty, action) = self.workspace_switcher.handle_event(
+                        event,
+                        self.screen_w,
+                        self.screen_h,
+                        switcher_top,
+                        switcher_dock_top,
+                    );
+                    let acted = self.apply_workspace_switcher_action(action);
+                    return dirty || acted;
+                }
+                Event::MouseDown { x, y, .. } | Event::MouseUp { x, y, .. } => {
+                    let point = Point::new(x, y);
+                    if self.workspace_switcher.contains(
+                        point,
+                        self.screen_w,
+                        self.screen_h,
+                        switcher_top,
+                        switcher_dock_top,
+                    ) || self.overview_zone.contains(point)
+                    {
+                        // Keep the overview button press for toggle-on-click.
+                        if self.overview_zone.contains(point) {
+                            return true;
+                        }
+                        let (dirty, action) = self.workspace_switcher.handle_event(
+                            event,
+                            self.screen_w,
+                            self.screen_h,
+                            switcher_top,
+                            switcher_dock_top,
+                        );
+                        let acted = self.apply_workspace_switcher_action(action);
+                        return dirty || acted;
+                    }
+                    // Outside: close without click-through on the same press.
+                    let _ = self.workspace_switcher.close();
+                    self.suppress_next_click = true;
+                    return true;
+                }
+                _ => {}
+            }
+        }
         if self.sidebar.is_open() {
             match event {
                 Event::Click { .. }
@@ -7168,9 +7378,13 @@ impl App for VortexShell {
                         self.start_menu.close();
                     } else {
                         self.sidebar.close();
+                        let _ = self.workspace_switcher.close();
                         self.start_menu.open_menu();
                     }
                     return true;
+                }
+                if self.overview_zone.contains(point) {
+                    return self.toggle_workspace_switcher();
                 }
                 if self.sidebar_zone.contains(point) {
                     return self.toggle_sidebar(monotonic_millis());
@@ -7230,6 +7444,9 @@ impl App for VortexShell {
                     return true;
                 }
                 self.set_top_panel_focus(None);
+                if self.overview_zone.contains(point) {
+                    return true;
+                }
                 if self.sidebar_zone.contains(point) {
                     return true;
                 }
@@ -7340,6 +7557,9 @@ impl App for VortexShell {
                 }
                 if self.show_logout_confirm {
                     self.show_logout_confirm = false;
+                    did = true;
+                }
+                if self.workspace_switcher.close() {
                     did = true;
                 }
                 if self.sidebar.close() {
@@ -7551,6 +7771,7 @@ impl App for VortexShell {
 // Entry point
 // ---------------------------------------------------------------------------
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     debug_log("[VORTEX] starting\n");
@@ -7707,6 +7928,7 @@ fn launch_error_text(err: sun_exec::LaunchError) -> &'static str {
     }
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     debug_log("[VORTEX] panic");
