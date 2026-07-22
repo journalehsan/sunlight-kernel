@@ -7,6 +7,7 @@
 use crate::font::ui_symbols;
 use crate::font::UiSymbol;
 use crate::geom::Rect;
+use crate::material::Material;
 use crate::theme::Color;
 
 /// A mutable view over a region of a framebuffer.
@@ -69,6 +70,110 @@ impl<'fb> Canvas<'fb> {
                 self.pixels[idx] = color.blend_over(Color(self.pixels[idx])).0;
             }
         }
+    }
+
+    /// Fill `rect` with a reusable [`Material`] (solid / tinted / glass).
+    ///
+    /// Glass uses the static noise tile; no per-frame allocation. Fully opaque
+    /// solids take the fast `fill_rect` path. Noise is skipped when strength is 0.
+    pub fn fill_material(&mut self, rect: Rect, material: Material) {
+        let m = material.clamp();
+        let radius = m.radius;
+        match m.kind {
+            crate::material::MaterialKind::Solid if radius == 0 => {
+                self.fill_rect(rect, m.tint);
+            }
+            crate::material::MaterialKind::Solid => {
+                self.fill_rounded_rect(rect, radius, m.tint);
+            }
+            crate::material::MaterialKind::Tinted if m.opacity == 255 && m.noise_strength == 0 => {
+                if radius == 0 {
+                    self.fill_rect(rect, m.tint);
+                } else {
+                    self.fill_rounded_rect(rect, radius, m.tint);
+                }
+            }
+            _ => {
+                // Per-pixel sample for glass / partial opacity / noise.
+                let x0 = rect.x.max(0);
+                let y0 = rect.y.max(0);
+                let x1 = rect.right().min(self.width as i32).max(0);
+                let y1 = rect.bottom().min(self.height as i32).max(0);
+                if x0 >= x1 || y0 >= y1 {
+                    // still may draw border below
+                } else if radius == 0 {
+                    for y in y0..y1 {
+                        let row_start = y as usize * self.stride as usize;
+                        for x in x0..x1 {
+                            let idx = row_start + x as usize;
+                            if idx >= self.pixels.len() {
+                                continue;
+                            }
+                            let src = m.sample_color(x, y);
+                            self.pixels[idx] = src.blend_over(Color(self.pixels[idx])).0;
+                        }
+                    }
+                } else {
+                    // Rounded: sample only inside the rounded shape via coverage-ish
+                    // fill by reusing rounded fill with a solid then noise is hard;
+                    // approximate with blend_rounded for the base tint, then light
+                    // noise pass inset by 1.
+                    let base = Color::rgba(m.tint.r(), m.tint.g(), m.tint.b(), m.opacity);
+                    self.blend_rounded_rect(rect, radius, base);
+                    if matches!(m.kind, crate::material::MaterialKind::Glass)
+                        && m.noise_strength > 0
+                    {
+                        let inset = rect.inset(1);
+                        let ix0 = inset.x.max(0);
+                        let iy0 = inset.y.max(0);
+                        let ix1 = inset.right().min(self.width as i32).max(0);
+                        let iy1 = inset.bottom().min(self.height as i32).max(0);
+                        for y in iy0..iy1 {
+                            let row_start = y as usize * self.stride as usize;
+                            for x in ix0..ix1 {
+                                let idx = row_start + x as usize;
+                                if idx >= self.pixels.len() {
+                                    continue;
+                                }
+                                // Apply only the noise delta as a faint overlay.
+                                let n = crate::material::noise_sample(x, y);
+                                let delta = ((n as i16 - 128) * m.noise_strength as i16) / 255;
+                                if delta == 0 {
+                                    continue;
+                                }
+                                let dst = Color(self.pixels[idx]);
+                                let r = (dst.r() as i16 + delta).clamp(0, 255) as u8;
+                                let g = (dst.g() as i16 + delta).clamp(0, 255) as u8;
+                                let b = (dst.b() as i16 + delta).clamp(0, 255) as u8;
+                                self.pixels[idx] = Color::rgb(r, g, b).0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(border) = m.border {
+            if radius == 0 {
+                self.draw_rect(rect, border);
+            } else {
+                self.stroke_rounded_rect(rect, radius, 1, border);
+            }
+        }
+    }
+
+    /// Draw text with an optional 1-px ambient shadow (glass readability only).
+    pub fn draw_text_on_material(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: &str,
+        color: Color,
+        material: Material,
+    ) -> i32 {
+        if material.wants_text_ambient_shadow() {
+            self.draw_text(x + 1, y + 1, text, Color::rgba(0, 0, 0, 140));
+        }
+        self.draw_text(x, y, text, color)
     }
 
     /// Draw a 1-pixel border around `rect`.

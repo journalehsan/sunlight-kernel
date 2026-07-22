@@ -32,8 +32,10 @@ pub mod draw;
 pub mod event;
 pub mod font;
 pub mod geom;
+pub mod horizon;
 pub mod image;
 pub mod layout;
+pub mod material;
 pub mod paint;
 pub mod theme;
 pub mod widgets;
@@ -46,7 +48,11 @@ pub mod app;
 pub use event::Event;
 pub use font::{UiGlyph, UiSymbol, VecText};
 pub use geom::{Point, Rect, Size};
+pub use horizon::{
+    HorizonControl, HorizonControlState, HorizonLayout, HorizonMetrics, HorizonPalette,
+};
 pub use layout::{GridColIter, GridRow, HBox, VBox};
+pub use material::{Material, MaterialKind, SurfaceRole};
 pub use paint::Canvas;
 pub use theme::{Color, Theme};
 

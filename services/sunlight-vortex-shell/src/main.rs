@@ -3133,6 +3133,14 @@ fn draw_panel(canvas: &mut Canvas, rect: Rect, fill: Color, border: Color, radiu
     canvas.stroke_rounded_rect(rect, radius, 1, border);
 }
 
+/// Dock / bottom cluster chrome using the reusable dock material.
+fn draw_dock_surface(canvas: &mut Canvas, theme: &Theme, rect: Rect, radius: u32) {
+    canvas.fill_material(
+        rect,
+        sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Dock, theme).with_radius(radius),
+    );
+}
+
 fn draw_top_panel_container(
     canvas: &mut Canvas,
     theme: &Theme,
@@ -3140,10 +3148,14 @@ fn draw_top_panel_container(
     presentation: PanelPresentation,
 ) {
     let radius = if presentation.integrated() { 0 } else { RADIUS };
-    canvas.fill_rounded_rect(rect, radius, theme.panel);
-    if !presentation.integrated() {
-        canvas.stroke_rounded_rect(rect, radius, 1, theme.border);
+    // High-opacity panel material (~94%) shared via sunlight-ui.
+    let mut mat = sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Panel, theme)
+        .with_radius(radius);
+    if presentation.integrated() {
+        mat.border = None;
+        mat.radius = 0;
     }
+    canvas.fill_material(rect, mat);
 }
 
 fn draw_top_panel_item_bg(
@@ -5065,8 +5077,10 @@ fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMen
 }
 
 fn draw_context_menu(canvas: &mut Canvas, theme: &Theme, menu: &ContextMenuState) {
-    canvas.fill_rounded_rect(menu.rect, 8, theme.panel);
-    canvas.stroke_rounded_rect(menu.rect, 8, 1, theme.border);
+    canvas.fill_material(
+        menu.rect,
+        sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme).with_radius(8),
+    );
     for (i, (label, _)) in MENU_LABELS.iter().enumerate() {
         let item = menu.items[i].rect;
         canvas.fill_rect(Rect::new(item.x, item.y, item.w, item.h), theme.panel_alt);
@@ -5120,8 +5134,11 @@ fn system_menu_action_at(menu: Rect, point: Point) -> Option<SystemMenuAction> {
 }
 
 fn draw_system_menu(canvas: &mut Canvas, theme: &Theme, menu: Rect, hovered: Option<usize>) {
-    canvas.fill_rounded_rect(menu, 10, theme.panel);
-    canvas.stroke_rounded_rect(menu, 10, 1, theme.border);
+    canvas.fill_material(
+        menu,
+        sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme)
+            .with_radius(10),
+    );
     draw_text_vcenter(
         canvas,
         "SunlightOS",
@@ -5609,7 +5626,7 @@ fn draw_bot_left(
     let icons: &[&[u16; 16]] = &[&OVERVIEW_ROWS, &SIDEBAR_ROWS, &SETTINGS_ROWS];
     let cluster_w = dock_cluster_width(icons.len());
     let cluster = Rect::new(TOP_PAD, by, cluster_w, BOT_H);
-    draw_panel(canvas, cluster, theme.panel, theme.border, RADIUS);
+    draw_dock_surface(canvas, theme, cluster, RADIUS);
 
     let mut cx = cluster.x + CLUSTER_PAD;
     let mut settings_cell = Rect::new(0, 0, 0, 0);
@@ -5692,7 +5709,7 @@ fn draw_bot_center(
     let max_x = screen_w as i32 - TOP_PAD - SEARCH_W as i32 - 8 - total_w as i32;
     let cx_start = ((screen_w as i32 - total_w as i32) / 2).clamp(min_x, max_x.max(min_x));
     let cluster = Rect::new(cx_start, by, total_w, BOT_H);
-    draw_panel(canvas, cluster, theme.panel, theme.border, RADIUS);
+    draw_dock_surface(canvas, theme, cluster, RADIUS);
 
     let mut x = cluster.x + CLUSTER_PAD;
     let mut clickable = [Rect::new(0, 0, 0, 0); DOCK_PINNED_COUNT];
@@ -5838,8 +5855,10 @@ impl VortexShell {
         let y = self.datetime_zone.bottom() + 4;
 
         let r = Rect::new(x, y, w, h as u32);
-        canvas.fill_rounded_rect(r, 6, theme.panel);
-        canvas.stroke_rounded_rect(r, 6, 1, theme.border);
+        canvas.fill_material(
+            r,
+            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Tooltip, theme).with_radius(6),
+        );
 
         let mut ty = y + 6;
         for &ln in &lines {
@@ -5888,8 +5907,10 @@ impl VortexShell {
         }
 
         let r = Rect::new(x, y, w as u32, h);
-        canvas.fill_rounded_rect(r, 2, Color::rgb(0x2a, 0x2a, 0x2a));
-        canvas.stroke_rounded_rect(r, 2, 1, theme.border);
+        canvas.fill_material(
+            r,
+            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Tooltip, theme).with_radius(2),
+        );
         draw_text_vcenter(
             canvas,
             title,
@@ -5906,8 +5927,11 @@ impl VortexShell {
         let x = panel.x;
         let y = panel.y;
         let pw = panel.w;
-        canvas.fill_rounded_rect(panel, 8, theme.panel);
-        canvas.stroke_rounded_rect(panel, 8, 1, theme.border);
+        canvas.fill_material(
+            panel,
+            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme)
+                .with_radius(8),
+        );
 
         let mon_name = sunlight_locale::month_name(self.cal_view_month, true, "en_US.UTF-8");
         let header = alloc::format!("{} {}", mon_name, self.cal_view_year);

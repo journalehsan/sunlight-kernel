@@ -117,8 +117,7 @@ fn info_card(
     title: &str,
     lines: &[(&str, &str)],
 ) {
-    canvas.fill_rounded_rect(rect, 8, theme.panel);
-    canvas.stroke_rounded_rect(rect, 8, 1, theme.border);
+    canvas.fill_material(rect, sunlight_ui::Material::card(theme));
     draw_text(
         canvas,
         rect.x + 10,

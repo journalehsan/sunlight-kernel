@@ -3,6 +3,7 @@
 //! They deliberately accept only presentation data.  Callers own domain
 //! state, formatting, IPC, focus traversal, and lifecycle.
 
+use crate::material::Material;
 use crate::{font::VecText, Canvas, Event, Point, Rect, Theme};
 
 use super::{BadgeKind, StatusBadge};
@@ -105,10 +106,8 @@ impl<'a> DisclosureGroup<'a> {
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rounded_rect(self.rect, 8, theme.panel);
-        // Keep every card outlined, including the focused one. Focus is a
-        // restrained leading accent rather than a bright full-card glow.
-        canvas.stroke_rounded_rect(self.rect, 8, 1, theme.border);
+        // Reusable card material (tinted + optional noise) — shared with control-panel.
+        canvas.fill_material(self.rect, Material::card(theme));
         let header = self.header_rect();
         canvas.fill_rect(header, theme.panel_alt);
         if self.state.focused {

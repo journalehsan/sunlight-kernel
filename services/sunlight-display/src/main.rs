@@ -22,7 +22,7 @@ use sunlight_ipc::{
     DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
 };
 use sunlight_ui::image::TgaImage;
-use sunlight_ui::{Canvas, Color, Point, Rect, UiSymbol};
+use sunlight_ui::{Canvas, Color, Point, Rect};
 
 /// Wallpaper asset staged at /var/sunlightos/wallpapers/wallpaper.tga.
 /// Embedded directly so the compositor can decode without a VFS read at startup.
@@ -58,6 +58,9 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
+#[cfg(not(test))]
+// Host unit tests use the standard allocator. The freestanding bump heap is
+// only for the Sunlight userspace binary (where std is unavailable).
 #[cfg(not(test))]
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
@@ -287,7 +290,7 @@ impl WindowDecoration {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
 enum ZIndexType {
     Normal = 0,
@@ -1075,6 +1078,8 @@ struct CompositorState {
     /// Future user preference placeholder. Existing shade behavior stays wired.
     #[allow(dead_code)]
     titlebar_double_click_action: TitlebarDoubleClickAction,
+    /// Last titlebar control under the pointer (for hover damage).
+    last_chrome_hover: Option<(u64, HitZone)>,
     /// Application lifecycle tracker: maps pid -> AppInstance, enforces
     /// termination policy on last-window-close, and periodically sweeps
     /// zombie processes.
@@ -1509,6 +1514,50 @@ const fn mouse_requires_scene_redraw(
     now_dragging: bool,
 ) -> bool {
     scene_changed || had_active_drag || now_dragging
+}
+
+fn is_titlebar_control_zone(zone: HitZone) -> bool {
+    matches!(
+        zone,
+        HitZone::CloseBtn
+            | HitZone::MaximizeBtn
+            | HitZone::MinimizeBtn
+            | HitZone::KeepOnTopBtn
+    )
+}
+
+/// Current chrome control under the pointer, if any.
+fn chrome_hover_at(state: &CompositorState, cx: u32, cy: u32) -> Option<(u64, HitZone)> {
+    let idx = topmost_window_idx_at(state, cx, cy)?;
+    let win = &state.windows[idx];
+    let zone = hit_test_window(win, cx, cy, state.fb_width, state.fb_height);
+    if is_titlebar_control_zone(zone) {
+        Some((win.id, zone))
+    } else {
+        None
+    }
+}
+
+/// Damage only the control button rects involved in a hover transition.
+fn mark_chrome_hover_dirty(state: &mut CompositorState, hover: Option<(u64, HitZone)>) {
+    let Some((win_id, zone)) = hover else {
+        return;
+    };
+    let Some(win) = state.windows.iter().find(|w| w.id == win_id) else {
+        return;
+    };
+    let (wx, wy, chrome_w, _) = win.chrome_rect(state.fb_width, state.fb_height);
+    let kind = match zone {
+        HitZone::CloseBtn => WindowControlKind::Close,
+        HitZone::MaximizeBtn => WindowControlKind::Maximize,
+        HitZone::MinimizeBtn => WindowControlKind::Minimize,
+        HitZone::KeepOnTopBtn => WindowControlKind::Pin,
+        _ => return,
+    };
+    if let Some(rect) = control_rect_for_kind(win, wx, wy, chrome_w, kind) {
+        // Include a 1-px border pad so hover backplate edges refresh cleanly.
+        mark_dirty_rect(state, rect.inset(-1));
+    }
 }
 
 fn raise_window_by_id(state: &mut CompositorState, id: u64) {
@@ -2072,22 +2121,28 @@ fn activate_window(state: &mut CompositorState, win_id: u64) -> bool {
 // ---------------------------------------------------------------------------
 
 const DESKTOP_COLOR: u32 = 0x00121214; // Deep dark gray/black
-const TITLEBAR_H: u32 = 32; // Taller for Chrome-tab style
+const TITLEBAR_H: u32 = 32; // Balanced height; not oversized
 const COMPACT_TITLEBAR_H: u32 = 24;
 const TITLEBAR_COLOR: u32 = 0x002B2B36; // inactive titlebar (dark slate)
 const TITLEBAR_ACTIVE: u32 = 0x001E1E26; // active window titlebar (darker base)
-const TITLEBAR_ACCENT: u32 = 0x00FF7A00; // Warm/Orange accent line
-const TITLE_TEXT_COLOR: u32 = 0x00E0E0E0; // Off-white
+const TITLEBAR_ACCENT: u32 = 0x00FF7A00; // Warm/Orange accent (edge, not full fill)
+const TITLE_TEXT_COLOR: u32 = 0x00E8E8EE; // Active title
+const TITLE_TEXT_INACTIVE: u32 = 0x009A9AAA; // Reduced contrast when inactive
 const BORDER_W: u32 = 1;
-const BORDER_COLOR: u32 = 0x00FF7A00; // Active window border glow
-const BORDER_INACTIVE: u32 = 0x002B2B36; // Inactive window border
-const BTN_HOVER_BG: u32 = 0x003A3A4A; // Hover state background for buttons
-const BTN_ICON_COLOR: u32 = 0x00B0B0C0; // Icon color
-const BTN_ICON_ACTIVE: u32 = 0x00FFFFFF; // Icon color when active/focused
+const BORDER_COLOR: u32 = 0x00FF7A00; // Active window orange accent border
+const BORDER_INACTIVE: u32 = 0x00353840; // Inactive neutral border
 const BTN_SIZE: u32 = 20; // Size of control buttons
 const BTN_SPACING: u32 = 4;
+const PIN_GAP: u32 = 8; // Separation between Pin and the standard three
 const CHROME_RADIUS: u32 = 10;
-const CONTROL_RADIUS: u32 = 6;
+const CONTROL_RADIUS: u32 = 5;
+// Sunlight Horizon metrics (must match sunlight_ui::horizon::HorizonMetrics defaults)
+const HORIZON_METRICS: sunlight_ui::HorizonMetrics = sunlight_ui::HorizonMetrics {
+    button_size: BTN_SIZE,
+    button_spacing: BTN_SPACING,
+    pin_gap: PIN_GAP,
+    radius: CONTROL_RADIUS,
+};
 const RESIZE_BORDER: u32 = 6; // effective hit-test width for edges/corners
 const MIN_WIN_W: u32 = 200;
 const MIN_WIN_H: u32 = 100;
@@ -2131,15 +2186,61 @@ enum WindowControlLayout {
 }
 
 impl WindowControlKind {
-    fn symbol(self) -> UiSymbol {
+    fn to_horizon(self) -> Option<sunlight_ui::HorizonControl> {
         match self {
-            WindowControlKind::Help => UiSymbol::Help,
-            WindowControlKind::Pin => UiSymbol::Pin,
-            WindowControlKind::Minimize => UiSymbol::Minimize,
-            WindowControlKind::Maximize => UiSymbol::Maximize,
-            WindowControlKind::Restore => UiSymbol::Restore,
-            WindowControlKind::Close => UiSymbol::Close,
+            WindowControlKind::Pin => Some(sunlight_ui::HorizonControl::Pin),
+            WindowControlKind::Minimize => Some(sunlight_ui::HorizonControl::Minimize),
+            WindowControlKind::Maximize => Some(sunlight_ui::HorizonControl::Maximize),
+            WindowControlKind::Restore => Some(sunlight_ui::HorizonControl::Restore),
+            WindowControlKind::Close => Some(sunlight_ui::HorizonControl::Close),
+            WindowControlKind::Help => None,
         }
+    }
+}
+
+/// Internal surface-role classification for chrome policy.
+///
+/// Mapped only from explicit window type / decoration flags — never from
+/// process names, binary paths, or window titles. Public IPC is unchanged;
+/// protocol-level role bits are deferred.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SurfaceRole {
+    ApplicationWindow,
+    Panel,
+    Dock,
+    PopupOrMenu,
+    Tooltip,
+    SystemOverlay,
+}
+
+fn surface_role_for_window(win: &Window) -> SurfaceRole {
+    match win.config.window_type {
+        WindowType::Desktop => SurfaceRole::Panel,
+        WindowType::Widget => SurfaceRole::SystemOverlay,
+        WindowType::Dialog => SurfaceRole::PopupOrMenu,
+        WindowType::Normal => match win.decoration() {
+            WindowDecoration::HiddenOverlay => SurfaceRole::SystemOverlay,
+            WindowDecoration::CompactClose | WindowDecoration::CompactCloseMinimize => {
+                SurfaceRole::PopupOrMenu
+            }
+            WindowDecoration::Normal => SurfaceRole::ApplicationWindow,
+        },
+    }
+}
+
+/// Fallback when a future protocol role field is absent: conservative mapping.
+fn surface_role_fallback(window_type: WindowType, decoration: WindowDecoration) -> SurfaceRole {
+    match window_type {
+        WindowType::Desktop => SurfaceRole::Panel,
+        WindowType::Widget => SurfaceRole::SystemOverlay,
+        WindowType::Dialog => SurfaceRole::PopupOrMenu,
+        WindowType::Normal => match decoration {
+            WindowDecoration::HiddenOverlay => SurfaceRole::SystemOverlay,
+            WindowDecoration::CompactClose | WindowDecoration::CompactCloseMinimize => {
+                SurfaceRole::PopupOrMenu
+            }
+            WindowDecoration::Normal => SurfaceRole::ApplicationWindow,
+        },
     }
 }
 
@@ -2368,7 +2469,15 @@ fn title_len(title: &[u8; 64]) -> usize {
     title.iter().position(|&b| b == 0).unwrap_or(title.len())
 }
 
-fn control_rect(wx: u32, wy: u32, chrome_w: u32, titlebar_h: u32, slot_from_right: u32) -> Rect {
+/// Compact layouts (close-only / close+minimize): pack from the physical right
+/// without a pin gap.
+fn control_rect_compact(
+    wx: u32,
+    wy: u32,
+    chrome_w: u32,
+    titlebar_h: u32,
+    slot_from_right: u32,
+) -> Rect {
     let x = wx + chrome_w.saturating_sub((BTN_SIZE + BTN_SPACING) * (slot_from_right + 1));
     let y = wy as i32 + (titlebar_h.saturating_sub(BTN_SIZE)) as i32 / 2;
     Rect::new(x as i32, y, BTN_SIZE, BTN_SIZE)
@@ -2382,14 +2491,38 @@ fn control_rect_for_kind(
     control: WindowControlKind,
 ) -> Option<Rect> {
     let titlebar_h = win.titlebar_height();
-    let controls = win.control_buttons();
-    controls
-        .iter()
-        .position(|kind| *kind == control)
-        .map(|index| {
-            let slot_from_right = controls.len().saturating_sub(1).saturating_sub(index) as u32;
-            control_rect(wx, wy, chrome_w, titlebar_h, slot_from_right)
-        })
+    let maximized = win.config.state == WindowState::Maximized;
+    match win.control_layout() {
+        WindowControlLayout::Normal => {
+            let layout = sunlight_ui::horizon::layout_controls(
+                wx as i32,
+                wy as i32,
+                chrome_w,
+                titlebar_h,
+                HORIZON_METRICS,
+                maximized,
+                false, // RTL must not reverse physical control placement
+            );
+            match control {
+                WindowControlKind::Pin => Some(layout.pin),
+                WindowControlKind::Minimize => Some(layout.minimize),
+                WindowControlKind::Maximize | WindowControlKind::Restore => Some(layout.maximize),
+                WindowControlKind::Close => Some(layout.close),
+                WindowControlKind::Help => None,
+            }
+        }
+        WindowControlLayout::CloseOnly | WindowControlLayout::CloseMinimize => {
+            let controls = win.control_buttons();
+            controls
+                .iter()
+                .position(|kind| *kind == control)
+                .map(|index| {
+                    let slot_from_right =
+                        controls.len().saturating_sub(1).saturating_sub(index) as u32;
+                    control_rect_compact(wx, wy, chrome_w, titlebar_h, slot_from_right)
+                })
+        }
+    }
 }
 
 fn draw_title(canvas: &mut Canvas<'_>, title: &[u8; 64], rect: Rect, color: Color) {
@@ -2402,35 +2535,68 @@ fn draw_title(canvas: &mut Canvas<'_>, title: &[u8; 64], rect: Rect, color: Colo
     sun_font::draw_text_vcenter(canvas, s, rect.x + 4, rect.y, rect.h, &style);
 }
 
+fn horizon_palette() -> sunlight_ui::HorizonPalette {
+    sunlight_ui::HorizonPalette::from_theme(&sunlight_ui::Theme::sunlight_dark())
+}
+
 fn draw_window_control(
     canvas: &mut Canvas<'_>,
     rect: Rect,
     control: WindowControlKind,
-    icon_color: Color,
-    chrome_fill: Color,
+    window_active: bool,
     hovered: bool,
+    pressed: bool,
     accent_active: bool,
 ) {
-    let fill = if hovered && control == WindowControlKind::Close {
-        Color(BORDER_COLOR).darken(24)
+    let Some(h_control) = control.to_horizon() else {
+        return;
+    };
+    let palette = horizon_palette();
+    let state = if pressed {
+        sunlight_ui::HorizonControlState::Pressed
     } else if hovered {
-        Color(BTN_HOVER_BG)
-    } else if accent_active {
-        chrome_fill.lighten(10)
+        sunlight_ui::HorizonControlState::Hover
     } else {
-        chrome_fill
+        sunlight_ui::HorizonControlState::Rest
     };
+    sunlight_ui::horizon::draw_control(
+        canvas,
+        rect,
+        h_control,
+        state,
+        window_active,
+        accent_active,
+        &palette,
+        CONTROL_RADIUS,
+    );
+}
 
-    let border = if hovered {
-        Color(TITLEBAR_ACCENT)
-    } else if accent_active {
-        chrome_fill.lighten(24)
-    } else {
-        Color(BORDER_INACTIVE)
-    };
-
-    canvas.fill_rounded_rect_with_border(rect, CONTROL_RADIUS, fill, border, 1);
-    canvas.draw_ui_symbol_centered(rect, control.symbol(), icon_color);
+/// Titlebar control strip left edge (for title clipping and drag exclusion).
+fn control_strip_left(win: &Window, wx: u32, wy: u32, chrome_w: u32) -> i32 {
+    let titlebar_h = win.titlebar_height();
+    match win.control_layout() {
+        WindowControlLayout::Normal => {
+            let layout = sunlight_ui::horizon::layout_controls(
+                wx as i32,
+                wy as i32,
+                chrome_w,
+                titlebar_h,
+                HORIZON_METRICS,
+                win.config.state == WindowState::Maximized,
+                false,
+            );
+            layout.strip_left()
+        }
+        other => {
+            let n = match other {
+                WindowControlLayout::CloseOnly => 1u32,
+                WindowControlLayout::CloseMinimize => 2,
+                WindowControlLayout::Normal => 4,
+            };
+            (wx + chrome_w) as i32
+                - ((BTN_SIZE + BTN_SPACING) * n + BTN_SPACING) as i32
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2732,10 +2898,10 @@ fn composite_window(
         } else {
             BORDER_INACTIVE
         };
-        let icon_col = if is_focused {
-            BTN_ICON_ACTIVE
+        let title_color = if is_focused {
+            TITLE_TEXT_COLOR
         } else {
-            BTN_ICON_COLOR
+            TITLE_TEXT_INACTIVE
         };
         let hover_zone = hit_test_window(
             win,
@@ -2744,6 +2910,7 @@ fn composite_window(
             state.fb_width,
             state.fb_height,
         );
+        let left_down = (state.prev_buttons & 1) != 0;
         let outer = Rect::new(wx as i32, wy as i32, chrome_w, chrome_h);
         let inner = outer.inset(BORDER_W as i32);
         let outer_radius = if maximized { 0 } else { CHROME_RADIUS };
@@ -2764,21 +2931,22 @@ fn composite_window(
             }),
         );
         let controls = win.control_buttons();
-        let control_strip_w = if controls.is_empty() {
-            0
-        } else {
-            (BTN_SIZE + BTN_SPACING) * controls.len() as u32
-        };
+        let strip_left = control_strip_left(win, wx, wy, chrome_w);
         let title_rect = Rect::new(
             wx as i32 + 12,
             wy as i32 + 1,
-            chrome_w.saturating_sub(control_strip_w + 24),
+            (strip_left - (wx as i32 + 12)).max(0) as u32,
             titlebar_h.saturating_sub(2),
         );
+        // Application content stays opaque: content_backdrop is solid, then
+        // the client buffer is blitted without alpha fade.
+        let _role = surface_role_for_window(win);
 
         {
             let mut canvas = back_buffer_canvas(state, back_buffer);
+            // Border as restrained orange accent (active) or neutral (inactive).
             canvas.fill_top_rounded_rect(outer, outer_radius, Color(bd_color));
+            // Titlebar base — dark solid; orange is accent only, not a full fill.
             canvas.fill_top_rounded_rect(
                 inner,
                 inner_radius,
@@ -2788,50 +2956,105 @@ fn composite_window(
                     0xFF1A1A20
                 }),
             );
+            // Opaque content backdrop (never 65% transparent application glass).
             canvas.fill_rect(content_backdrop, Color(0xFF1A1A20));
             if win.decorations_visible() {
-                for control in controls {
-                    let Some(rect) = control_rect_for_kind(win, wx, wy, chrome_w, *control) else {
-                        continue;
-                    };
-                    let (zone, accent_active, draw_kind) = match control {
-                        WindowControlKind::Pin => (
-                            HitZone::KeepOnTopBtn,
-                            win.config.z_index_type == ZIndexType::OnTop,
-                            *control,
-                        ),
-                        WindowControlKind::Minimize => {
-                            (HitZone::MinimizeBtn, false, WindowControlKind::Minimize)
-                        }
-                        WindowControlKind::Maximize | WindowControlKind::Restore => (
-                            HitZone::MaximizeBtn,
-                            maximized,
-                            if maximized {
-                                WindowControlKind::Restore
-                            } else {
-                                WindowControlKind::Maximize
-                            },
-                        ),
-                        WindowControlKind::Close => {
-                            (HitZone::CloseBtn, is_focused, WindowControlKind::Close)
-                        }
-                        WindowControlKind::Help => continue,
-                    };
-                    draw_window_control(
-                        &mut canvas,
-                        rect,
-                        draw_kind,
-                        Color(icon_col),
-                        Color(tb_color),
-                        hover_zone == zone,
-                        accent_active,
+                // Subtle separation from application content.
+                canvas.hline(
+                    inner.x,
+                    inner.y + titlebar_h as i32 - 1,
+                    inner.w,
+                    Color(if is_focused {
+                        0x00353840
+                    } else {
+                        0x00282830
+                    }),
+                );
+                // Active-window orange accent line under the top edge (not full fill).
+                if is_focused {
+                    canvas.hline(inner.x + 1, inner.y, inner.w.saturating_sub(2), Color(TITLEBAR_ACCENT));
+                }
+
+                // Normal layout: pin divider via Horizon strip; compact: per-button.
+                if win.control_layout() == WindowControlLayout::Normal {
+                    let layout = sunlight_ui::horizon::layout_controls(
+                        wx as i32,
+                        wy as i32,
+                        chrome_w,
+                        titlebar_h,
+                        HORIZON_METRICS,
+                        maximized,
+                        false,
                     );
+                    let palette = horizon_palette();
+                    let hover = match hover_zone {
+                        HitZone::CloseBtn => Some(sunlight_ui::HorizonControl::Close),
+                        HitZone::MaximizeBtn => Some(if maximized {
+                            sunlight_ui::HorizonControl::Restore
+                        } else {
+                            sunlight_ui::HorizonControl::Maximize
+                        }),
+                        HitZone::MinimizeBtn => Some(sunlight_ui::HorizonControl::Minimize),
+                        HitZone::KeepOnTopBtn => Some(sunlight_ui::HorizonControl::Pin),
+                        _ => None,
+                    };
+                    let pressed = if left_down { hover } else { None };
+                    sunlight_ui::horizon::draw_control_strip(
+                        &mut canvas,
+                        &layout,
+                        &palette,
+                        is_focused,
+                        win.config.z_index_type == ZIndexType::OnTop,
+                        hover,
+                        pressed,
+                        None,
+                    );
+                } else {
+                    for control in controls {
+                        let Some(rect) = control_rect_for_kind(win, wx, wy, chrome_w, *control)
+                        else {
+                            continue;
+                        };
+                        let (zone, accent_active, draw_kind) = match control {
+                            WindowControlKind::Pin => (
+                                HitZone::KeepOnTopBtn,
+                                win.config.z_index_type == ZIndexType::OnTop,
+                                *control,
+                            ),
+                            WindowControlKind::Minimize => {
+                                (HitZone::MinimizeBtn, false, WindowControlKind::Minimize)
+                            }
+                            WindowControlKind::Maximize | WindowControlKind::Restore => (
+                                HitZone::MaximizeBtn,
+                                maximized,
+                                if maximized {
+                                    WindowControlKind::Restore
+                                } else {
+                                    WindowControlKind::Maximize
+                                },
+                            ),
+                            WindowControlKind::Close => {
+                                (HitZone::CloseBtn, false, WindowControlKind::Close)
+                            }
+                            WindowControlKind::Help => continue,
+                        };
+                        let hovered = hover_zone == zone;
+                        draw_window_control(
+                            &mut canvas,
+                            rect,
+                            draw_kind,
+                            is_focused,
+                            hovered,
+                            left_down && hovered,
+                            accent_active,
+                        );
+                    }
                 }
                 draw_title(
                     &mut canvas,
                     &win.config.title,
                     title_rect,
-                    Color(TITLE_TEXT_COLOR),
+                    Color(title_color),
                 );
             }
         }
@@ -4271,6 +4494,7 @@ mod tests {
             last_titlebar_click_win_id: 0,
             last_titlebar_click_ms: 0,
             titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
+            last_chrome_hover: None,
             app_tracker: app_lifecycle::AppTracker::new(),
             mode_transaction: None,
         }
@@ -4582,7 +4806,7 @@ mod tests {
             HitZone::CloseBtn
         );
 
-        let normal_min_slot = control_rect(wx, wy, chrome_w, win.titlebar_height(), 2);
+        let normal_min_slot = control_rect_compact(wx, wy, chrome_w, win.titlebar_height(), 2);
         let min_pt = sunlight_ui::Point::new(normal_min_slot.x + 2, normal_min_slot.y + 2);
         assert_eq!(
             hit_test_window(&win, min_pt.x as u32, min_pt.y as u32, 800, 600),
@@ -4613,12 +4837,197 @@ mod tests {
             HitZone::MinimizeBtn
         );
 
-        let normal_max_slot = control_rect(wx, wy, chrome_w, win.titlebar_height(), 1);
+        let normal_max_slot = control_rect_compact(wx, wy, chrome_w, win.titlebar_height(), 1);
         let max_pt = sunlight_ui::Point::new(normal_max_slot.x + 2, normal_max_slot.y + 2);
         assert_eq!(
             hit_test_window(&win, max_pt.x as u32, max_pt.y as u32, 800, 600),
             HitZone::TitleBar
         );
+    }
+
+    #[test]
+    fn horizon_control_order_pin_min_max_close_from_left() {
+        let win = test_window(
+            1,
+            40,
+            40,
+            400,
+            200,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
+        let pin = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Pin).unwrap();
+        let min = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Minimize).unwrap();
+        let max = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Maximize).unwrap();
+        let close = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Close).unwrap();
+        assert!(pin.x < min.x && min.x < max.x && max.x < close.x);
+        let pin_gap = min.x - pin.right();
+        let std_gap = max.x - min.right();
+        assert!(pin_gap > std_gap);
+    }
+
+    #[test]
+    fn horizon_rtl_does_not_reverse_physical_controls() {
+        let win = test_window(
+            1,
+            10,
+            50,
+            360,
+            180,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
+        let ltr = sunlight_ui::horizon::layout_controls(
+            wx as i32,
+            wy as i32,
+            chrome_w,
+            win.titlebar_height(),
+            HORIZON_METRICS,
+            false,
+            false,
+        );
+        let rtl = sunlight_ui::horizon::layout_controls(
+            wx as i32,
+            wy as i32,
+            chrome_w,
+            win.titlebar_height(),
+            HORIZON_METRICS,
+            false,
+            true,
+        );
+        assert_eq!(ltr.close.x, rtl.close.x);
+        assert_eq!(ltr.pin.x, rtl.pin.x);
+    }
+
+    #[test]
+    fn maximize_vs_restore_hit_zone_same_rect() {
+        let mut win = test_window(
+            1,
+            40,
+            40,
+            300,
+            200,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
+        let normal_rect =
+            control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Maximize).unwrap();
+        win.config.state = WindowState::Maximized;
+        let restored_rect =
+            control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Maximize).unwrap();
+        assert_eq!(normal_rect, restored_rect);
+        let pt = sunlight_ui::Point::new(normal_rect.x + 2, normal_rect.y + 2);
+        assert_eq!(
+            hit_test_window(&win, pt.x as u32, pt.y as u32, 800, 600),
+            HitZone::MaximizeBtn
+        );
+    }
+
+    #[test]
+    fn pin_active_hit_zone_and_separation() {
+        let mut win = test_window(
+            1,
+            40,
+            40,
+            400,
+            200,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        win.config.z_index_type = ZIndexType::OnTop;
+        let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
+        let pin = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Pin).unwrap();
+        let pt = sunlight_ui::Point::new(pin.x + 1, pin.y + 1);
+        assert_eq!(
+            hit_test_window(&win, pt.x as u32, pt.y as u32, 800, 600),
+            HitZone::KeepOnTopBtn
+        );
+        assert_eq!(win.config.z_index_type, ZIndexType::OnTop);
+    }
+
+    #[test]
+    fn drag_region_excludes_control_hit_areas() {
+        let win = test_window(
+            1,
+            40,
+            40,
+            400,
+            200,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        let (wx, wy, chrome_w, _) = win.chrome_rect(800, 600);
+        let close = control_rect_for_kind(&win, wx, wy, chrome_w, WindowControlKind::Close).unwrap();
+        assert_ne!(
+            hit_test_window(&win, close.x as u32 + 2, close.y as u32 + 2, 800, 600),
+            HitZone::TitleBar
+        );
+        // Unused titlebar area left of controls is TitleBar (drag).
+        let title_x = wx + 20;
+        let title_y = wy + 8;
+        assert_eq!(
+            hit_test_window(&win, title_x, title_y, 800, 600),
+            HitZone::TitleBar
+        );
+    }
+
+    #[test]
+    fn surface_role_fallback_never_uses_process_identity() {
+        assert_eq!(
+            surface_role_fallback(WindowType::Normal, WindowDecoration::Normal),
+            SurfaceRole::ApplicationWindow
+        );
+        assert_eq!(
+            surface_role_fallback(WindowType::Desktop, WindowDecoration::Normal),
+            SurfaceRole::Panel
+        );
+        assert_eq!(
+            surface_role_fallback(WindowType::Dialog, WindowDecoration::Normal),
+            SurfaceRole::PopupOrMenu
+        );
+        assert_eq!(
+            surface_role_fallback(WindowType::Widget, WindowDecoration::Normal),
+            SurfaceRole::SystemOverlay
+        );
+        assert_eq!(
+            surface_role_fallback(WindowType::Normal, WindowDecoration::HiddenOverlay),
+            SurfaceRole::SystemOverlay
+        );
+    }
+
+    #[test]
+    fn application_content_blit_path_is_opaque_xrgb() {
+        // Client buffers are copied with copy_nonoverlapping / coverage blend
+        // that forces XRGB high byte — never 65% window transparency.
+        let src = 0x0012_3456u32;
+        let dst = 0x00AB_CDEF;
+        let out = blend::blend_xrgb_with_coverage(src, dst, 255);
+        assert_eq!(out & 0xFF00_0000, 0xFF00_0000);
+        assert_eq!(out & 0x00FF_FFFF, src & 0x00FF_FFFF);
+    }
+
+    #[test]
+    fn chrome_hover_idle_does_not_require_scene_redraw() {
+        // No geometry change, no drag → idle; hover handling is edge-triggered.
+        assert!(!mouse_requires_scene_redraw(false, false, false));
+        assert!(mouse_requires_scene_redraw(true, false, false));
+    }
+
+    #[test]
+    fn active_inactive_decoration_colors_differ() {
+        assert_ne!(TITLEBAR_ACTIVE, TITLEBAR_COLOR);
+        assert_ne!(TITLE_TEXT_COLOR, TITLE_TEXT_INACTIVE);
+        assert_ne!(BORDER_COLOR, BORDER_INACTIVE);
+        // Active uses orange accent; inactive is neutral.
+        assert_eq!(TITLEBAR_ACCENT, 0x00FF7A00);
     }
 
     #[test]
@@ -5145,6 +5554,7 @@ pub extern "C" fn _start() -> ! {
         last_titlebar_click_win_id: 0,
         last_titlebar_click_ms: 0,
         titlebar_double_click_action: TitlebarDoubleClickAction::WindowShade,
+        last_chrome_hover: None,
         app_tracker: app_lifecycle::AppTracker::new(),
         mode_transaction: None,
     };
@@ -6181,6 +6591,8 @@ pub extern "C" fn _start() -> ! {
                     left_down && !was_left_down,
                 );
                 let mut scene_changed = overlay_changed;
+                // Geometry / stacking change that needs a full present (vs chrome hover).
+                let mut full_geometry_dirty = overlay_changed;
 
                 // Capture any client-area drag at the generic compositor
                 // boundary. Chronos applies its stricter graphics-viewport
@@ -6224,7 +6636,9 @@ pub extern "C" fn _start() -> ! {
                         let win_type = state.windows[hit_idx].config.window_type;
                         if win_type != WindowType::Desktop && win_type != WindowType::Widget {
                             raise_window_by_id(&mut state, id);
-                            scene_changed |= focused_before != Some(id);
+                            let focus_changed = focused_before != Some(id);
+                            scene_changed |= focus_changed;
+                            full_geometry_dirty |= focus_changed;
                         }
                         if let Some(win) = state.windows.iter_mut().find(|win| win.id == id) {
                             win.focus_press_pending = true;
@@ -6257,6 +6671,7 @@ pub extern "C" fn _start() -> ! {
                                     state.last_titlebar_click_win_id = 0;
                                     state.last_titlebar_click_ms = 0;
                                     scene_changed = true;
+                                    full_geometry_dirty = true;
                                 } else {
                                     // First click of a potential double-click: record it and
                                     // start a pending drag (drag only fires if cursor moves
@@ -6270,6 +6685,7 @@ pub extern "C" fn _start() -> ! {
                                 let _ = close_window(&mut state, id, None);
                                 state.active_drag = ActiveDrag::None;
                                 scene_changed = true;
+                                full_geometry_dirty = true;
                             }
                             HitZone::MaximizeBtn => {
                                 let mut state_changed = false;
@@ -6300,6 +6716,7 @@ pub extern "C" fn _start() -> ! {
                                 }
                                 state.active_drag = ActiveDrag::None;
                                 scene_changed = true;
+                                full_geometry_dirty = true;
                             }
                             HitZone::MinimizeBtn => {
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
@@ -6307,6 +6724,7 @@ pub extern "C" fn _start() -> ! {
                                 }
                                 state.active_drag = ActiveDrag::None;
                                 scene_changed = true;
+                                full_geometry_dirty = true;
                             }
                             HitZone::KeepOnTopBtn => {
                                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == id) {
@@ -6320,6 +6738,7 @@ pub extern "C" fn _start() -> ! {
                                 // Sorting logic is handled on next click, but we could enforce it here too
                                 state.active_drag = ActiveDrag::None;
                                 scene_changed = true;
+                                full_geometry_dirty = true;
                             }
                             edge @ (HitZone::EdgeLeft
                             | HitZone::EdgeRight
@@ -6397,6 +6816,7 @@ pub extern "C" fn _start() -> ! {
                                         .max(FLOATING_PANEL_RESERVED_H as i32)
                                         as u32;
                                     scene_changed = true;
+                                    full_geometry_dirty = true;
                                 }
                             }
                         }
@@ -6448,6 +6868,7 @@ pub extern "C" fn _start() -> ! {
                                         }
                                     }
                                     scene_changed = true;
+                                    full_geometry_dirty = true;
                                 }
                             }
                         }
@@ -6474,6 +6895,25 @@ pub extern "C" fn _start() -> ! {
 
                 let new_cx = state.mouse_x as u32;
                 let new_cy = state.mouse_y as u32;
+                // Hover/press chrome controls: recompose only when the hovered
+                // control changes (or button edge on a control). Idle desktop
+                // does not repaint continuously.
+                let new_chrome_hover = chrome_hover_at(&state, new_cx, new_cy);
+                let chrome_hover_changed = new_chrome_hover != state.last_chrome_hover;
+                let chrome_press_edge = is_titlebar_control_zone(
+                    new_chrome_hover
+                        .map(|(_, z)| z)
+                        .or(state.last_chrome_hover.map(|(_, z)| z))
+                        .unwrap_or(HitZone::Miss),
+                ) && (left_down != was_left_down);
+                if chrome_hover_changed || chrome_press_edge {
+                    let prev_hover = state.last_chrome_hover;
+                    mark_chrome_hover_dirty(&mut state, prev_hover);
+                    mark_chrome_hover_dirty(&mut state, new_chrome_hover);
+                    scene_changed = true;
+                }
+                state.last_chrome_hover = new_chrome_hover;
+
                 let now_dragging = !matches!(state.active_drag, ActiveDrag::None);
                 let window_changed =
                     mouse_requires_scene_redraw(scene_changed, had_active_drag, now_dragging);
@@ -6509,8 +6949,8 @@ pub extern "C" fn _start() -> ! {
                         redraw_scene(&mut state);
                     }
                 } else {
-                    // Window geometry changed or mixed hw/sw state: full dirty-rect path.
-                    if window_changed {
+                    // Geometry changes present fully; chrome hover keeps button dirty rects.
+                    if window_changed && full_geometry_dirty {
                         mark_dirty_full(&mut state);
                     }
                     if window_changed

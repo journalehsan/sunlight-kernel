@@ -1301,8 +1301,11 @@ impl StartMenuState {
             self.all_apps_page,
         );
 
-        canvas.fill_rounded_rect(layout.panel, 12, theme.panel);
-        canvas.stroke_rounded_rect(layout.panel, 12, 1, theme.border);
+        canvas.fill_material(
+            layout.panel,
+            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme)
+                .with_radius(12),
+        );
 
         canvas.fill_rounded_rect(layout.close_btn, 6, theme.panel_alt);
         draw_text_centered(
