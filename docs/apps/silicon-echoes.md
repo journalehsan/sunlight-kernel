@@ -39,10 +39,12 @@ embedded as `/bin/silicon-echoes`.
   naturally uses `Box`, `Vec`, `String`, `format!`, and ordered maps.
 - Narrative scenes share an explicit presentation lifecycle: entrance, Unicode
   scalar-safe typewriter reveal, post-reveal pause, player choice, and a
-  single transition. The default rhythm is 320 ms entrance, 32 ms ordinary
-  text, 90 ms clause, 180 ms sentence, 280 ms paragraph, and 340 ms before
-  choices; an internal instant-text profile is available for deterministic
-  tests.
+  single transition. The default Normal rhythm is 420 ms entrance, 50 ms
+  ordinary text, 150 ms clause (comma/semicolon/colon), 320 ms sentence,
+  420 ms paragraph, and 520 ms before choices. Bounded profiles also include
+  Slow, Fast, and Instant; Instant is used by deterministic tests. Space or
+  Enter during reveal completes prose only and never activates a choice in the
+  same input.
 - Choices show `[A]` through `[Z]` in their visible order. Arrow keys,
   left/right, Tab/Shift+Tab, Enter, and Space support focus-first play; Space
   or Enter while prose is revealing only completes the reveal. Bedroom

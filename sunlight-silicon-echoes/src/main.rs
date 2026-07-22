@@ -15,10 +15,12 @@ use sunlight_ipc::{
 };
 use sunlight_libc::{self as libc, rand::getrandom, GRND_NONCRYPTO};
 use sunlight_silicon_echoes::{
-    decode_save, echo_object_is_active, echo_objects, encode_save, hotspot, node,
-    presentation_narration, run_deterministic_stress, validate_graph, ChoiceId, EchoLayer,
-    GameState, HotspotId, NarrativePresentation, PresentationConfig, SaveError, SaveStage, SceneId,
-    ScenePresentation, ShortcutGate, StoryNodeId, Transition,
+    chapter_two_consequence_summary, chapter_two_turning_point_layout, choice_row_height,
+    decode_save, echo_object_is_active, echo_objects, encode_save, hotspot, layout_choice_rows,
+    node, presentation_narration, run_deterministic_stress, validate_graph, ChoiceId,
+    EchoLayer, GameState, HotspotId, NarrativePresentation, PresentationConfig, SaveError,
+    SaveStage, SceneId, ScenePresentation, ShortcutGate, StoryNodeId, Transition,
+    CHOICE_LINE_HEIGHT, CHOICE_TEXT_INSET_LEFT, CHOICE_TEXT_INSET_RIGHT,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, Canvas, Color, CursorShape, Event, Point, Rect, Theme,
@@ -38,6 +40,8 @@ const KEY_TAB: u8 = 0x0F;
 const OBSIDIAN: Color = Color::rgb(0x0A, 0x0A, 0x0C);
 const BONE: Color = Color::rgb(0xED, 0xE6, 0xD8);
 const SUNLIGHT: Color = Color::rgb(0xFF, 0x98, 0x00);
+const NARRATIVE_LINE_HEIGHT: i32 = 24;
+const NARRATIVE_TEXT_TOP: i32 = 38;
 const SAVE_SLOT_A_KEY: &str = "games/silicon-echoes/save.a";
 const SAVE_SLOT_B_KEY: &str = "games/silicon-echoes/save.b";
 const KV_REPLY: u64 = 0x4BFF;
@@ -523,7 +527,7 @@ impl SiliconEchoesApp {
             Mode::Ending => {
                 if self.game.chapter == 1 && self.layout.continue_chapter_two.contains(point) {
                     Hover::ContinueChapterTwo
-                } else if self.layout.return_title.contains(point) {
+                } else if self.ending_return_rect().contains(point) {
                     Hover::ReturnTitle
                 } else {
                     Hover::None
@@ -628,14 +632,89 @@ impl SiliconEchoesApp {
             .unwrap_or(false)
     }
 
-    fn choice_rect(&self, visible_index: usize) -> Rect {
-        let height = 38u32;
-        Rect::new(
-            self.layout.choices.x,
-            self.layout.choices.y + visible_index as i32 * 46,
-            self.layout.choices.w,
-            height,
+    fn window_size(&self) -> (u32, u32) {
+        (
+            self.layout.frame.w.saturating_add(44),
+            self.layout.frame.h.saturating_add(40),
         )
+    }
+
+    fn ending_return_rect(&self) -> Rect {
+        if self.game.chapter == 2 {
+            let (win_w, win_h) = self.window_size();
+            let tp = chapter_two_turning_point_layout(win_w, win_h);
+            Rect::new(
+                tp.return_button.0,
+                tp.return_button.1,
+                tp.return_button.2 as u32,
+                tp.return_button.3 as u32,
+            )
+        } else {
+            self.layout.return_title
+        }
+    }
+
+    fn choice_text_width(&self) -> i32 {
+        (self.layout.choices.w as i32 - CHOICE_TEXT_INSET_LEFT - CHOICE_TEXT_INSET_RIGHT).max(40)
+    }
+
+    fn choice_line_count(&self, text: &str) -> usize {
+        let lines = prepare_text_lines(text, self.choice_text_width(), FontRole::UiRegular);
+        let count = lines
+            .iter()
+            .filter(|line| line.end > line.start)
+            .count();
+        count.max(1)
+    }
+
+    fn visible_choice_texts(&self) -> Vec<&'static str> {
+        let available = self.available_choice_indices();
+        if self.current_node_is_uncontrolled() {
+            return vec!["LET THE ROOM MOVE ON"];
+        }
+        if available.is_empty() {
+            return self
+                .available_hotspots()
+                .iter()
+                .map(|hotspot| hotspot_label(*hotspot))
+                .collect();
+        }
+        available
+            .iter()
+            .filter_map(|index| self.choices().get(*index).map(|choice| choice.text))
+            .collect()
+    }
+
+    fn choice_rects(&self) -> Vec<Rect> {
+        let texts = self.visible_choice_texts();
+        let line_counts: Vec<usize> = texts
+            .iter()
+            .map(|text| self.choice_line_count(text))
+            .collect();
+        layout_choice_rows(
+            &line_counts,
+            self.layout.choices.x,
+            self.layout.choices.y,
+            self.layout.choices.w,
+            self.layout.choices.h as i32,
+        )
+        .into_iter()
+        .map(|(x, y, w, h)| Rect::new(x, y, w, h))
+        .collect()
+    }
+
+    fn choice_rect(&self, visible_index: usize) -> Rect {
+        self.choice_rects()
+            .get(visible_index)
+            .copied()
+            .unwrap_or_else(|| {
+                Rect::new(
+                    self.layout.choices.x,
+                    self.layout.choices.y + visible_index as i32 * choice_row_height(1),
+                    self.layout.choices.w,
+                    choice_row_height(1) as u32,
+                )
+            })
     }
 
     fn activate_hover(&mut self, hover: Hover) {
@@ -764,11 +843,16 @@ impl SiliconEchoesApp {
     }
 
     fn ensure_narrative_layout(&mut self) {
-        let width = self.layout.narrative.w as i32 * 51 / 100;
+        // Keep prose near 55–80 characters at the default window width by using
+        // just over half the narrative band; choices occupy the remaining side.
+        let width = self.layout.narrative.w as i32 * 50 / 100;
         let Some(cache) = self.scene_cache.as_mut() else {
             return;
         };
-        if cache.node != self.game.current_node || cache.wrap_width == width {
+        if cache.node != self.game.current_node {
+            return;
+        }
+        if cache.wrap_width == width && !cache.lines.is_empty() {
             return;
         }
         cache.lines = prepare_text_lines(&cache.narration, width, FontRole::SerifRegular);
@@ -1236,12 +1320,23 @@ impl SiliconEchoesApp {
                     );
                 }
                 if scene_id == "c2-turning-point" {
+                    // On the ending screen the primary artifact carries the
+                    // reply; keep only a low-contrast machine whisper here.
+                    let color = if self.mode == Mode::Ending {
+                        Color::rgba(0xFF, 0x98, 0x00, 48)
+                    } else {
+                        SUNLIGHT
+                    };
                     draw_center(
                         canvas,
                         projector,
-                        "I REMEMBER YOU\nDIFFERENTLY",
+                        if self.mode == Mode::Ending {
+                            "REVISION / 7"
+                        } else {
+                            "I REMEMBER YOU\nDIFFERENTLY"
+                        },
                         FontRole::MonoRegular,
-                        SUNLIGHT,
+                        color,
                     );
                 }
             }
@@ -1818,12 +1913,17 @@ impl SiliconEchoesApp {
             Rect::new(rect.x + 18, rect.y + 18, rect.w - 36, 30),
             Color::rgba(0x0A, 0x0A, 0x0C, 120),
         );
+        let label_color = if self.mode == Mode::Ending {
+            Color::rgba(0xFF, 0x98, 0x00, 70)
+        } else {
+            SUNLIGHT
+        };
         draw_text(
             canvas,
             label,
             rect.x + 32,
             rect.y + 38,
-            &TextStyle::new(FontRole::MonoRegular, SUNLIGHT),
+            &TextStyle::new(FontRole::MonoRegular, label_color),
         );
         canvas.draw_rect(rect, Color::rgba(0xED, 0xE6, 0xD8, 160));
     }
@@ -1954,20 +2054,21 @@ impl SiliconEchoesApp {
                 &cache.narration,
                 &cache.lines,
                 self.presentation.visible_byte_end(),
-                self.layout.narrative.x + 12,
-                self.layout.narrative.y + 34,
+                self.layout.narrative.x + 14,
+                self.layout.narrative.y + NARRATIVE_TEXT_TOP,
                 FontRole::SerifRegular,
                 BONE,
-                22,
+                NARRATIVE_LINE_HEIGHT,
             );
         }
         if self.presentation.is_revealing() {
+            // Park the caret in the margin rather than over the final glyph.
             draw_text(
                 canvas,
                 "_",
-                self.layout.narrative.x + 12,
-                self.layout.narrative.bottom() - 22,
-                &TextStyle::new(FontRole::MonoRegular, SUNLIGHT),
+                self.layout.choices.x - 28,
+                self.layout.narrative.y + NARRATIVE_TEXT_TOP,
+                &TextStyle::new(FontRole::MonoRegular, Color::rgba(0xFF, 0x98, 0x00, 160)),
             );
         }
         if self.game.flags.get("signal_arrived") {
@@ -2012,9 +2113,11 @@ impl SiliconEchoesApp {
             );
         }
         if self.presentation_accepts_input() && self.current_node_is_uncontrolled() {
+            let rects = self.choice_rects();
+            let rect = rects.first().copied().unwrap_or_else(|| self.choice_rect(0));
             self.draw_action(
                 canvas,
-                self.choice_rect(0),
+                rect,
                 "LET THE ROOM MOVE ON",
                 self.hover == Hover::Choice(0),
             );
@@ -2022,16 +2125,21 @@ impl SiliconEchoesApp {
                 canvas,
                 "There is no choice here.",
                 self.layout.choices.x,
-                self.choice_rect(0).bottom() + 12,
+                rect.bottom() + 12,
                 &TextStyle::new(FontRole::UiSmall, Color::rgba(0xED, 0xE6, 0xD8, 140)),
             );
         } else if self.presentation_accepts_input() {
             let available = self.available_choice_indices();
+            let rects = self.choice_rects();
             if available.is_empty() {
                 for (visible_index, hotspot) in self.available_hotspots().iter().enumerate() {
+                    let rect = rects
+                        .get(visible_index)
+                        .copied()
+                        .unwrap_or_else(|| self.choice_rect(visible_index));
                     self.draw_choice(
                         canvas,
-                        self.choice_rect(visible_index),
+                        rect,
                         hotspot_label(*hotspot),
                         self.hover == Hover::Object(SceneObjectTarget::Hotspot(*hotspot)),
                         self.focused && self.selected_hotspot == visible_index,
@@ -2043,9 +2151,13 @@ impl SiliconEchoesApp {
                 let choice = self.choices()[*choice_index];
                 let hovered = self.hover == Hover::Choice(*choice_index);
                 let focused = self.focused && self.selected_choice == *choice_index;
+                let rect = rects
+                    .get(visible_index)
+                    .copied()
+                    .unwrap_or_else(|| self.choice_rect(visible_index));
                 self.draw_choice(
                     canvas,
-                    self.choice_rect(visible_index),
+                    rect,
                     choice.text,
                     hovered,
                     focused,
@@ -2068,7 +2180,87 @@ impl SiliconEchoesApp {
 
     fn draw_ending(&self, canvas: &mut Canvas) {
         self.draw_room(canvas);
-        canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 194));
+        // Stronger dim so background terminal machinery stays quiet.
+        canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 214));
+        if self.game.chapter == 2 {
+            let (win_w, win_h) = self.window_size();
+            let tp = chapter_two_turning_point_layout(win_w, win_h);
+            let artifact = Rect::new(
+                tp.artifact.0,
+                tp.artifact.1,
+                tp.artifact.2 as u32,
+                tp.artifact.3 as u32,
+            );
+            // Quiet background terminal silhouette under the primary artifact.
+            let terminal = Rect::new(
+                self.layout.image.x + self.layout.image.w as i32 * 38 / 100,
+                self.layout.image.y + 72,
+                280,
+                self.layout.image.h * 48 / 100,
+            );
+            canvas.blend_rect(terminal, Color::rgba(0xED, 0xE6, 0xD8, 18));
+            canvas.draw_rect(terminal, Color::rgba(0xED, 0xE6, 0xD8, 40));
+            draw_text(
+                canvas,
+                "ECHO / REVISION",
+                terminal.x + 16,
+                terminal.y + 28,
+                &TextStyle::new(FontRole::MonoRegular, Color::rgba(0xFF, 0x98, 0x00, 55)),
+            );
+            canvas.fill_rect(artifact, BONE);
+            canvas.draw_rect(artifact, SUNLIGHT);
+            draw_center(
+                canvas,
+                artifact,
+                "2013 / I REMEMBER YOU DIFFERENTLY",
+                FontRole::MonoRegular,
+                OBSIDIAN,
+            );
+            let chapter_title = Rect::new(
+                tp.chapter_title.0,
+                tp.chapter_title.1,
+                tp.chapter_title.2 as u32,
+                tp.chapter_title.3 as u32,
+            );
+            draw_center(
+                canvas,
+                chapter_title,
+                "CHAPTER TWO TURNING POINT",
+                FontRole::UiTitle,
+                BONE,
+            );
+            let theme = Rect::new(
+                tp.theme_line.0,
+                tp.theme_line.1,
+                tp.theme_line.2 as u32,
+                tp.theme_line.3 as u32,
+            );
+            draw_center(
+                canvas,
+                theme,
+                "A reply exists. Its author remains uncertain.",
+                FontRole::SerifRegular,
+                Color::rgba(0xFF, 0x98, 0x00, 210),
+            );
+            self.draw_action(
+                canvas,
+                self.ending_return_rect(),
+                "RETURN TO TITLE",
+                self.hover == Hover::ReturnTitle,
+            );
+            let summary = chapter_two_consequence_summary();
+            draw_wrapped(
+                canvas,
+                &summary,
+                tp.summary.0,
+                tp.summary.1,
+                tp.summary.2,
+                FontRole::SerifRegular,
+                BONE,
+                NARRATIVE_LINE_HEIGHT,
+            );
+            return;
+        }
         let card_y = self.layout.image.y + 36;
         let artifact = Rect::new(
             self.layout.image.x + self.layout.image.w as i32 / 2 - 154,
@@ -2081,11 +2273,7 @@ impl SiliconEchoesApp {
         draw_center(
             canvas,
             artifact,
-            if self.game.chapter == 1 {
-                "REVISION 7  /  SUNSET LOT 17"
-            } else {
-                "2013 / I REMEMBER YOU DIFFERENTLY"
-            },
+            "REVISION 7  /  SUNSET LOT 17",
             FontRole::MonoRegular,
             OBSIDIAN,
         );
@@ -2093,11 +2281,7 @@ impl SiliconEchoesApp {
         draw_center(
             canvas,
             Rect::new(self.layout.image.x, title_y, self.layout.image.w, 28),
-            if self.game.chapter == 1 {
-                "CHAPTER ONE COMPLETE"
-            } else {
-                "CHAPTER TWO TURNING POINT"
-            },
+            "CHAPTER ONE COMPLETE",
             FontRole::UiTitle,
             BONE,
         );
@@ -2105,22 +2289,16 @@ impl SiliconEchoesApp {
         draw_center(
             canvas,
             Rect::new(self.layout.image.x, theme_y, self.layout.image.w, 20),
-            if self.game.chapter == 1 {
-                "The address waits beyond the year."
-            } else {
-                "A reply exists. Its author remains uncertain."
-            },
+            "The address waits beyond the year.",
             FontRole::SerifRegular,
             SUNLIGHT,
         );
-        if self.game.chapter == 1 {
-            self.draw_action(
-                canvas,
-                self.layout.continue_chapter_two,
-                "CONTINUE TO CHAPTER TWO",
-                self.hover == Hover::ContinueChapterTwo,
-            );
-        }
+        self.draw_action(
+            canvas,
+            self.layout.continue_chapter_two,
+            "CONTINUE TO CHAPTER TWO",
+            self.hover == Hover::ContinueChapterTwo,
+        );
         self.draw_action(
             canvas,
             self.layout.return_title,
@@ -2129,17 +2307,13 @@ impl SiliconEchoesApp {
         );
         draw_wrapped(
             canvas,
-            if self.game.chapter == 1 {
-                "You have not found an answer. You have learned that ECHO can be a record, a prediction, or a witness\u{2014}and that someone already chose to close the door behind you."
-            } else {
-                "Mara has not won or lost anything. Riley has a copy. Lio has closed a channel. Elias remembers a room the city denies. The response may be from 2013, or from ECHO's need to be believed."
-            },
+            "You have not found an answer. You have learned that ECHO can be a record, a prediction, or a witness\u{2014}and that someone already chose to close the door behind you.",
             self.layout.narrative.x + 12,
             self.layout.narrative.y + 18,
             self.layout.narrative.w as i32 - 24,
             FontRole::SerifRegular,
             BONE,
-            22,
+            NARRATIVE_LINE_HEIGHT,
         );
     }
 
@@ -2165,22 +2339,24 @@ impl SiliconEchoesApp {
         canvas.blend_rounded_rect(rect, 6, fill);
         canvas.stroke_rounded_rect(rect, 6, if focused { 2 } else { 1 }, border);
         let shortcut = shortcut_label(visible_index);
+        // Shortcut stays on the first line; wrapped prose indents past it.
         draw_text(
             canvas,
             shortcut,
             rect.x + 10,
-            rect.y + 11,
+            rect.y + 10,
             &TextStyle::new(FontRole::UiMedium, SUNLIGHT),
         );
+        let text_width = (rect.w as i32 - CHOICE_TEXT_INSET_LEFT - CHOICE_TEXT_INSET_RIGHT).max(24);
         draw_wrapped(
             canvas,
             text,
-            rect.x + 40,
-            rect.y + 9,
-            rect.w as i32 - 48,
+            rect.x + CHOICE_TEXT_INSET_LEFT,
+            rect.y + 8,
+            text_width,
             FontRole::UiRegular,
             BONE,
-            16,
+            CHOICE_LINE_HEIGHT,
         );
     }
 

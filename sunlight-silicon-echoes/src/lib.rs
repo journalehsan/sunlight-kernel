@@ -52,19 +52,73 @@ pub struct PresentationConfig {
     pub instant_text: bool,
 }
 
+/// Bounded presentation profiles.  [`PresentationProfile::Normal`] is the
+/// default readable pacing; [`PresentationProfile::Instant`] is for tests.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PresentationProfile {
+    Slow,
+    Normal,
+    Fast,
+    Instant,
+}
+
 impl Default for PresentationConfig {
     fn default() -> Self {
-        Self {
-            entrance_pause_ms: 320,
-            grapheme_delay_ms: 32,
-            clause_pause_ms: 90,
-            sentence_pause_ms: 180,
-            paragraph_pause_ms: 280,
-            post_reveal_pause_ms: 340,
-            instant_text: false,
+        PresentationProfile::Normal.config()
+    }
+}
+
+impl PresentationProfile {
+    pub fn config(self) -> PresentationConfig {
+        match self {
+            PresentationProfile::Slow => PresentationConfig {
+                entrance_pause_ms: 500,
+                grapheme_delay_ms: 55,
+                clause_pause_ms: 180,
+                sentence_pause_ms: 380,
+                paragraph_pause_ms: 500,
+                post_reveal_pause_ms: 650,
+                instant_text: false,
+            },
+            PresentationProfile::Normal => PresentationConfig {
+                entrance_pause_ms: 420,
+                grapheme_delay_ms: 50,
+                clause_pause_ms: 150,
+                sentence_pause_ms: 320,
+                paragraph_pause_ms: 420,
+                post_reveal_pause_ms: 520,
+                instant_text: false,
+            },
+            PresentationProfile::Fast => PresentationConfig {
+                entrance_pause_ms: 220,
+                grapheme_delay_ms: 28,
+                clause_pause_ms: 80,
+                sentence_pause_ms: 160,
+                paragraph_pause_ms: 240,
+                post_reveal_pause_ms: 280,
+                instant_text: false,
+            },
+            PresentationProfile::Instant => PresentationConfig {
+                entrance_pause_ms: 0,
+                grapheme_delay_ms: 0,
+                clause_pause_ms: 0,
+                sentence_pause_ms: 0,
+                paragraph_pause_ms: 0,
+                post_reveal_pause_ms: 0,
+                instant_text: true,
+            },
         }
     }
 }
+
+/// Maximum graphemes advanced in a single [`NarrativePresentation::tick`].
+/// Catches up after a delayed frame without stalling the renderer on long
+/// punctuation-free runs.
+pub const MAX_REVEALS_PER_TICK: usize = 48;
+
+/// Previous Normal defaults (pre typography-polish).  Kept for regression tests.
+pub const LEGACY_NORMAL_GRAPHEME_DELAY_MS: u64 = 32;
+pub const LEGACY_NORMAL_SENTENCE_PAUSE_MS: u64 = 180;
 
 /// A small timeline driven by the caller's monotonic clock.  `boundaries`
 /// contains Unicode scalar boundaries (the strongest portable boundary in this
@@ -145,11 +199,16 @@ impl NarrativePresentation {
 
     /// Advance through any elapsed deadlines.  Catching up happens in this one
     /// bounded loop, rather than by posting one timer event per character.
+    ///
+    /// When a frame is delayed, every elapsed deadline is honoured so
+    /// punctuation pauses are never skipped, but the number of graphemes
+    /// revealed in a single call is capped to keep rendering responsive.
     pub fn tick(&mut self, now_ms: u64) -> bool {
         if self.config.instant_text || self.state == ScenePresentation::Transitioning {
             return false;
         }
         let before = (self.state, self.revealed, self.deadline_ms);
+        let mut reveals = 0usize;
         loop {
             if now_ms < self.deadline_ms {
                 break;
@@ -162,8 +221,12 @@ impl NarrativePresentation {
                         .saturating_add(self.config.grapheme_delay_ms);
                 }
                 ScenePresentation::Revealing => {
+                    if reveals >= MAX_REVEALS_PER_TICK {
+                        break;
+                    }
                     if self.revealed < self.boundaries.len() {
                         self.revealed += 1;
+                        reveals += 1;
                         self.deadline_ms = self.deadline_ms.saturating_add(self.reveal_delay());
                     }
                     if self.revealed == self.boundaries.len() {
@@ -193,17 +256,31 @@ impl NarrativePresentation {
         true
     }
 
+    /// Delay applied after the most recently revealed scalar.  Spaces keep the
+    /// ordinary base delay (no extra pause); punctuation and paragraph breaks
+    /// lengthen the rhythm so the final sentence can land before choices.
+    pub fn reveal_delay_after_visible(&self) -> u64 {
+        self.reveal_delay()
+    }
+
     fn reveal_delay(&self) -> u64 {
         let end = self.visible_byte_end();
+        if end == 0 {
+            return self.config.grapheme_delay_ms;
+        }
         let prefix = &self.text[..end];
         if prefix.ends_with("\n\n") {
-            self.config.paragraph_pause_ms
-        } else if matches!(prefix.chars().last(), Some('.') | Some('!') | Some('?')) {
-            self.config.sentence_pause_ms
-        } else if matches!(prefix.chars().last(), Some(',') | Some(';') | Some(':')) {
-            self.config.clause_pause_ms
-        } else {
-            self.config.grapheme_delay_ms
+            return self.config.paragraph_pause_ms;
+        }
+        match prefix.chars().last() {
+            Some('.') | Some('!') | Some('?') | Some('\u{2026}') => self.config.sentence_pause_ms,
+            Some(',') | Some(';') | Some(':') | Some('\u{2014}') | Some('\u{2013}') => {
+                self.config.clause_pause_ms
+            }
+            // Spaces and ordinary glyphs share the base delay so word gaps do
+            // not stretch the typewriter into a sluggish staccato.
+            Some(ch) if ch.is_whitespace() => self.config.grapheme_delay_ms,
+            _ => self.config.grapheme_delay_ms,
         }
     }
 }
@@ -3025,75 +3102,343 @@ impl Default for WorldState {
     }
 }
 
+/// Append a prose fragment so sentences never glue as `anything.Riley`.
+///
+/// Leading/trailing whitespace on the fragment is normalised.  An explicit
+/// separator is inserted when the base ends with sentence punctuation (or any
+/// non-whitespace) and the fragment begins with a letter or digit.  Machine
+/// syntax such as `ECHO / REVISION` should be authored as a single fragment.
+pub fn append_prose(base: &mut String, fragment: &str) {
+    let fragment = fragment.trim();
+    if fragment.is_empty() {
+        return;
+    }
+    if base.is_empty() {
+        base.push_str(fragment);
+        return;
+    }
+    let base_trimmed_end = base.trim_end();
+    if base_trimmed_end.len() != base.len() {
+        base.truncate(base_trimmed_end.len());
+    }
+    let needs_space = match (base.chars().last(), fragment.chars().next()) {
+        (Some(left), Some(right)) => {
+            !left.is_whitespace()
+                && !matches!(right, ',' | ';' | ':' | '.' | '!' | '?' | ')' | ']' | '}')
+                && (right.is_alphanumeric()
+                    || left == '.'
+                    || left == '!'
+                    || left == '?'
+                    || left == ','
+                    || left == ';'
+                    || left == ':'
+                    || left == '\u{2026}')
+        }
+        _ => false,
+    };
+    if needs_space {
+        base.push(' ');
+    }
+    base.push_str(fragment);
+}
+
+/// Join prose fragments with safe separators.  Empty fragments are skipped.
+pub fn join_prose(fragments: &[&str]) -> String {
+    let mut out = String::new();
+    for fragment in fragments {
+        append_prose(&mut out, fragment);
+    }
+    out
+}
+
+/// True when a human-facing prose string contains a suspicious join such as
+/// `anything.Riley`.  Intentional machine tokens (`ECHO/REVISION`, IDs, paths)
+/// should not be passed here, or should use [`is_machine_syntax`].
+pub fn has_suspicious_punctuation_letter_join(text: &str) -> bool {
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if matches!(ch, '.' | '!' | '?') {
+            if let Some(next) = chars.peek().copied() {
+                if next.is_ascii_alphabetic() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Short machine-facing labels that intentionally pack punctuation.
+pub fn is_machine_syntax(text: &str) -> bool {
+    if text.len() > 48 {
+        return false;
+    }
+    if text.contains(" / ") || text.contains("<>") {
+        return true;
+    }
+    let has_machine_sep = text.contains('/') || text.contains('_');
+    has_machine_sep
+        && text.chars().all(|ch| {
+            ch.is_ascii_alphanumeric()
+                || matches!(ch, ' ' | '/' | '_' | '-' | '.' | ':' | '<' | '>' | ',')
+        })
+}
+
+/// Chapter Two ending summary, composed so sentence boundaries keep a space.
+pub fn chapter_two_consequence_summary() -> String {
+    join_prose(&[
+        "Mara has not won or lost anything.",
+        "Riley has a copy.",
+        "Lio has closed a channel.",
+        "Elias remembers a room the city denies.",
+        "The response may be from 2013, or from ECHO's need to be believed.",
+    ])
+}
+
 pub fn presentation_narration(world: &WorldState, story_node: &StoryNode) -> String {
     let mut text = String::from(story_node.narration);
     match story_node.id.0 {
         "chapter.diner" if world.flags.get("vale_vouched") => {
-            text.push_str(" Mrs. Vale has phoned ahead: \"Tell Riley I saw you leave.\"");
+            append_prose(
+                &mut text,
+                "Mrs. Vale has phoned ahead: \"Tell Riley I saw you leave.\"",
+            );
         }
         "chapter.diner" if world.observations.contains("riley_waited") => {
-            text.push_str(" A second coffee has gone cold beside Riley's hand.");
+            append_prose(
+                &mut text,
+                "A second coffee has gone cold beside Riley's hand.",
+            );
         }
         "chapter.diner" if world.relationship(RILEY) < 0 => {
-            text.push_str(" Riley keeps one hand on the exit side of the booth.");
+            append_prose(
+                &mut text,
+                "Riley keeps one hand on the exit side of the booth.",
+            );
         }
         "chapter.repair-shop" if world.relationship(LIO) > 0 => {
-            text.push_str(" Lio hears the phrasing you wrote down and unlocks the back cabinet without being asked.");
+            append_prose(
+                &mut text,
+                "Lio hears the phrasing you wrote down and unlocks the back cabinet without being asked.",
+            );
         }
         "chapter.archive-lobby" if world.flags.get("has_archive_card") => {
-            text.push_str(
-                " The card's ink has bled into an address the clerk refuses to read aloud.",
+            append_prose(
+                &mut text,
+                "The card's ink has bled into an address the clerk refuses to read aloud.",
             );
         }
         "chapter.turning-point" if world.relationship(RILEY) > 0 => {
-            text.push_str(" Riley says they will meet you at sunrise, not because they understand, but because they chose to stay.");
+            append_prose(
+                &mut text,
+                "Riley says they will meet you at sunrise, not because they understand, but because they chose to stay.",
+            );
         }
         "chapter-two.contact" if world.memories.contains("trusted_riley") => {
-            text.push_str(" Riley comes close enough to share the pager's light.");
+            append_prose(
+                &mut text,
+                "Riley comes close enough to share the pager's light.",
+            );
         }
         "chapter-two.contact" if world.memories.contains("tested_riley") => {
-            text.push_str(" Riley leaves the diner first, then waits across the street where they can deny following.");
+            append_prose(
+                &mut text,
+                "Riley leaves the diner first, then waits across the street where they can deny following.",
+            );
         }
         "chapter-two.frequency" if world.observations.contains("caller_message") => {
-            text.push_str(" Your transcript gives the pulse a phrase to answer.");
+            append_prose(
+                &mut text,
+                "Your transcript gives the pulse a phrase to answer.",
+            );
         }
         "chapter-two.frequency" if world.facts.contains("pager_frequency_is_archival") => {
-            text.push_str(" The manual's margin treats 88.3 as an index, not a station.");
+            append_prose(
+                &mut text,
+                "The manual's margin treats 88.3 as an index, not a station.",
+            );
         }
         "chapter-two.route" if world.memories.contains("waited_for_route") => {
-            text.push_str(
-                " You recognize the old instruction to wait, and its power over the morning.",
+            append_prose(
+                &mut text,
+                "You recognize the old instruction to wait, and its power over the morning.",
             );
         }
         "chapter-two.route" if world.memories.contains("walked_for_route") => {
-            text.push_str(" The cut through the yards feels like refusing the route before it can refuse you.");
+            append_prose(
+                &mut text,
+                "The cut through the yards feels like refusing the route before it can refuse you.",
+            );
         }
         "chapter-two.exterior" if world.flags.get("riley_followed_address") => {
-            text.push_str(
-                " Riley is already at the gate, which is not the same as arriving with you.",
+            append_prose(
+                &mut text,
+                "Riley is already at the gate, which is not the same as arriving with you.",
             );
         }
         "chapter-two.caretaker" if world.observations.contains("riley_arrived_before_mara") => {
-            text.push_str(
-                " Elias has already spoken to Riley; their versions of the fire do not match.",
+            append_prose(
+                &mut text,
+                "Elias has already spoken to Riley; their versions of the fire do not match.",
             );
         }
         "chapter-two.caretaker" if world.observations.contains("mara_arrived_before_riley") => {
-            text.push_str(" Elias studies you before Riley reaches the lot.");
+            append_prose(
+                &mut text,
+                "Elias studies you before Riley reaches the lot.",
+            );
         }
         "chapter-two.chamber" if world.flags.get("riley_copied_card") => {
-            text.push_str(
-                " The card stack is lighter. Riley has taken one version of the record with them.",
+            append_prose(
+                &mut text,
+                "The card stack is lighter. Riley has taken one version of the record with them.",
             );
         }
         "chapter-two.consequence" if world.flags.get("lio_closed_channel") => {
-            text.push_str(
-                " The pager is quiet in the particular way of a line someone else chose to cut.",
+            append_prose(
+                &mut text,
+                "The pager is quiet in the particular way of a line someone else chose to cut.",
             );
         }
         _ => {}
     }
     text
+}
+
+/// Geometry constants for dynamic choice rows.  Pure so layout can be tested
+/// without a renderer.
+pub const CHOICE_TEXT_INSET_LEFT: i32 = 40;
+pub const CHOICE_TEXT_INSET_RIGHT: i32 = 10;
+pub const CHOICE_PAD_TOP: i32 = 7;
+pub const CHOICE_PAD_BOTTOM: i32 = 7;
+pub const CHOICE_LINE_HEIGHT: i32 = 17;
+pub const CHOICE_GAP_DEFAULT: i32 = 8;
+pub const CHOICE_GAP_MIN: i32 = 4;
+pub const CHOICE_MIN_HEIGHT: i32 = 34;
+pub const CHOICE_BORDER: i32 = 2;
+
+/// Height of one choice row from its wrapped line count.
+pub fn choice_row_height(line_count: usize) -> i32 {
+    let lines = line_count.max(1) as i32;
+    let content = lines * CHOICE_LINE_HEIGHT;
+    let height = CHOICE_PAD_TOP + content + CHOICE_PAD_BOTTOM + CHOICE_BORDER;
+    height.max(CHOICE_MIN_HEIGHT)
+}
+
+/// Stack choice rows inside a panel.  Gap shrinks toward [`CHOICE_GAP_MIN`]
+/// (and to zero if still required) when the rows would otherwise overflow.
+pub fn layout_choice_rows(
+    line_counts: &[usize],
+    panel_x: i32,
+    panel_y: i32,
+    panel_w: u32,
+    panel_h: i32,
+) -> alloc::vec::Vec<(i32, i32, u32, u32)> {
+    let mut gap = CHOICE_GAP_DEFAULT;
+    let heights: alloc::vec::Vec<i32> = line_counts
+        .iter()
+        .map(|count| choice_row_height(*count))
+        .collect();
+    let total_content: i32 = heights.iter().sum();
+    if line_counts.len() > 1 {
+        let gaps = (line_counts.len() - 1) as i32;
+        let needed = total_content + gaps * gap;
+        if needed > panel_h {
+            let spare = panel_h - total_content;
+            if spare <= 0 {
+                gap = 0;
+            } else {
+                gap = (spare / gaps).clamp(0, CHOICE_GAP_DEFAULT);
+            }
+        }
+    }
+    let mut rows = alloc::vec::Vec::with_capacity(line_counts.len());
+    let mut y = panel_y;
+    for height in heights {
+        rows.push((panel_x, y, panel_w, height as u32));
+        y += height + gap;
+    }
+    rows
+}
+
+/// Axis-aligned rectangles used by the Chapter Two turning-point ending at a
+/// given window size.  Pure geometry for overlap audits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TurningPointLayout {
+    pub artifact: (i32, i32, i32, i32),
+    pub chapter_title: (i32, i32, i32, i32),
+    pub theme_line: (i32, i32, i32, i32),
+    pub return_button: (i32, i32, i32, i32),
+    pub summary: (i32, i32, i32, i32),
+}
+
+fn rect_intersects(a: (i32, i32, i32, i32), b: (i32, i32, i32, i32)) -> bool {
+    let (ax, ay, aw, ah) = a;
+    let (bx, by, bw, bh) = b;
+    ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
+}
+
+/// Compute the contemplative ending hierarchy for Chapter Two.
+pub fn chapter_two_turning_point_layout(width: u32, height: u32) -> TurningPointLayout {
+    let frame_x = 22i32;
+    let frame_y = 20i32;
+    let frame_w = width.saturating_sub(44) as i32;
+    let frame_h = height.saturating_sub(40) as i32;
+    let image_x = frame_x + 18;
+    let image_y = frame_y + 18;
+    let image_w = frame_w - 36;
+    let image_h = (frame_h * 57 / 100).max(260);
+    let narrative_y = image_y + image_h + 16;
+    let narrative_h = (frame_y + frame_h - narrative_y - 18).max(80);
+    let artifact_w = 340i32;
+    let artifact_h = 52i32;
+    let artifact = (
+        image_x + image_w / 2 - artifact_w / 2,
+        image_y + 48,
+        artifact_w,
+        artifact_h,
+    );
+    let chapter_title = (image_x + 40, artifact.1 + artifact.3 + 28, image_w - 80, 28);
+    let theme_line = (
+        image_x + 48,
+        chapter_title.1 + chapter_title.3 + 18,
+        image_w - 96,
+        22,
+    );
+    let return_button = (
+        image_x + image_w / 2 - 100,
+        image_y + image_h - 64,
+        200,
+        34,
+    );
+    let summary = (image_x + 12, narrative_y + 18, image_w - 24, narrative_h - 28);
+    TurningPointLayout {
+        artifact,
+        chapter_title,
+        theme_line,
+        return_button,
+        summary,
+    }
+}
+
+/// True when any primary turning-point labels geometrically collide.
+pub fn turning_point_layout_has_overlap(layout: &TurningPointLayout) -> bool {
+    let rects = [
+        layout.artifact,
+        layout.chapter_title,
+        layout.theme_line,
+        layout.return_button,
+    ];
+    for i in 0..rects.len() {
+        for j in (i + 1)..rects.len() {
+            if rect_intersects(rects[i], rects[j]) {
+                return true;
+            }
+        }
+    }
+    // Summary lives in the narrative band and must stay below the image chrome.
+    rect_intersects(layout.summary, layout.return_button)
+        || rect_intersects(layout.summary, layout.theme_line)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3141,6 +3486,7 @@ pub enum ValidationError {
     UnmarkedConvergence(String),
     MissingEnding(String),
     UnreachableEnding(String),
+    SuspiciousProseJoin(String),
 }
 
 pub fn validate_graph() -> Result<(), Vec<ValidationError>> {
@@ -3193,6 +3539,11 @@ pub fn validate_graph() -> Result<(), Vec<ValidationError>> {
         if item.choices.is_empty() && item.automatic_target.is_none() && item.id != START_NODE {
             errors.push(ValidationError::DeadEnd(String::from(item.id.0)));
         }
+        if !is_machine_syntax(item.narration)
+            && has_suspicious_punctuation_letter_join(item.narration)
+        {
+            errors.push(ValidationError::SuspiciousProseJoin(String::from(item.id.0)));
+        }
         validate_effects(item.entry_effects, &node_ids, &actor_ids, &mut errors);
         if let Some(target) = item.automatic_target {
             validate_transition(target, &node_ids, &mut errors);
@@ -3200,6 +3551,13 @@ pub fn validate_graph() -> Result<(), Vec<ValidationError>> {
         for choice in item.choices {
             if !choice_ids.insert(choice.id.0) {
                 errors.push(ValidationError::DuplicateChoice(String::from(choice.id.0)));
+            }
+            if !is_machine_syntax(choice.text)
+                && has_suspicious_punctuation_letter_join(choice.text)
+            {
+                errors.push(ValidationError::SuspiciousProseJoin(String::from(
+                    choice.id.0,
+                )));
             }
             validate_condition(choice.condition, &node_ids, &mut errors);
             validate_effects(choice.effects, &node_ids, &actor_ids, &mut errors);
@@ -3211,6 +3569,12 @@ pub fn validate_graph() -> Result<(), Vec<ValidationError>> {
                 }
             }
         }
+    }
+    let consequence = chapter_two_consequence_summary();
+    if has_suspicious_punctuation_letter_join(&consequence) {
+        errors.push(ValidationError::SuspiciousProseJoin(String::from(
+            "ending.chapter-two.summary",
+        )));
     }
     for (target, choices) in incoming {
         if choices.len() > 1 && choices.iter().any(|choice| !choice.intentionally_converges) {
@@ -4186,6 +4550,58 @@ mod tests {
     }
 
     #[test]
+    fn default_normal_pacing_is_slower_than_legacy() {
+        let normal = PresentationProfile::Normal.config();
+        assert_eq!(PresentationConfig::default(), normal);
+        assert!(normal.grapheme_delay_ms > LEGACY_NORMAL_GRAPHEME_DELAY_MS);
+        assert!(normal.sentence_pause_ms > LEGACY_NORMAL_SENTENCE_PAUSE_MS);
+        assert!(normal.clause_pause_ms >= 120 && normal.clause_pause_ms <= 180);
+        assert!(normal.sentence_pause_ms >= 260 && normal.sentence_pause_ms <= 380);
+        assert!(normal.paragraph_pause_ms >= 350 && normal.paragraph_pause_ms <= 500);
+        assert!(normal.post_reveal_pause_ms >= 400 && normal.post_reveal_pause_ms <= 650);
+        assert!(normal.entrance_pause_ms >= 350 && normal.entrance_pause_ms <= 500);
+        assert!(normal.grapheme_delay_ms >= 45 && normal.grapheme_delay_ms <= 55);
+        assert!(!normal.instant_text);
+        assert!(PresentationProfile::Instant.config().instant_text);
+    }
+
+    #[test]
+    fn punctuation_pauses_match_profile_delays() {
+        let config = PresentationConfig {
+            entrance_pause_ms: 0,
+            grapheme_delay_ms: 10,
+            clause_pause_ms: 40,
+            sentence_pause_ms: 80,
+            paragraph_pause_ms: 120,
+            post_reveal_pause_ms: 50,
+            instant_text: false,
+        };
+        let samples = [
+            (",", 40u64),
+            (";", 40),
+            (":", 40),
+            (".", 80),
+            ("?", 80),
+            ("!", 80),
+            ("a\n\n", 120),
+            ("word ", 10),
+        ];
+        for (text, expected) in samples {
+            let mut presentation =
+                NarrativePresentation::new(String::from(text), 0, config);
+            presentation.tick(0);
+            while presentation.revealed_count() < presentation.boundary_count() {
+                presentation.tick(u64::MAX / 2);
+            }
+            assert_eq!(
+                presentation.reveal_delay_after_visible(),
+                expected,
+                "delay mismatch for {text:?}"
+            );
+        }
+    }
+
+    #[test]
     fn presentation_reveals_utf8_at_valid_boundaries_and_then_waits() {
         let config = PresentationConfig {
             entrance_pause_ms: 10,
@@ -4213,6 +4629,61 @@ mod tests {
     }
 
     #[test]
+    fn long_passage_reveals_completely_without_skipping_or_overflow() {
+        let mut text = String::new();
+        for _ in 0..40 {
+            text.push_str("The revision holds a longer memory. ");
+        }
+        text.push_str("Final.");
+        let config = PresentationConfig {
+            entrance_pause_ms: 0,
+            grapheme_delay_ms: 1,
+            clause_pause_ms: 2,
+            sentence_pause_ms: 3,
+            paragraph_pause_ms: 4,
+            post_reveal_pause_ms: 5,
+            instant_text: false,
+        };
+        let mut presentation = NarrativePresentation::new(text.clone(), 0, config);
+        presentation.tick(0);
+        let mut now = 0u64;
+        let mut steps = 0u32;
+        while !presentation.choices_visible() && steps < 100_000 {
+            now = now.saturating_add(16);
+            presentation.tick(now);
+            steps += 1;
+            let end = presentation.visible_byte_end();
+            assert!(text.is_char_boundary(end));
+            assert_eq!(&text[..end], &presentation.text()[..end]);
+        }
+        assert!(presentation.choices_visible());
+        assert_eq!(presentation.visible_byte_end(), text.len());
+        assert_eq!(presentation.revealed_count(), presentation.boundary_count());
+    }
+
+    #[test]
+    fn catchup_respects_punctuation_and_caps_work_per_tick() {
+        let config = PresentationConfig {
+            entrance_pause_ms: 0,
+            grapheme_delay_ms: 1,
+            clause_pause_ms: 1,
+            sentence_pause_ms: 1,
+            paragraph_pause_ms: 1,
+            post_reveal_pause_ms: 1,
+            instant_text: false,
+        };
+        let long = "a".repeat(MAX_REVEALS_PER_TICK + 40);
+        let mut presentation = NarrativePresentation::new(long, 0, config);
+        presentation.tick(0);
+        presentation.tick(u64::MAX / 4);
+        assert!(presentation.revealed_count() <= MAX_REVEALS_PER_TICK);
+        assert!(presentation.is_revealing());
+        // A second catch-up continues without skipping remaining scalars.
+        presentation.tick(u64::MAX / 2);
+        assert!(presentation.revealed_count() <= MAX_REVEALS_PER_TICK * 2);
+    }
+
+    #[test]
     fn reveal_skip_never_enters_choice_state() {
         let config = PresentationConfig {
             entrance_pause_ms: 0,
@@ -4233,6 +4704,43 @@ mod tests {
     }
 
     #[test]
+    fn space_and_enter_complete_reveal_without_activating_choice() {
+        let config = PresentationConfig {
+            entrance_pause_ms: 0,
+            grapheme_delay_ms: 10,
+            clause_pause_ms: 10,
+            sentence_pause_ms: 10,
+            paragraph_pause_ms: 10,
+            post_reveal_pause_ms: 30,
+            instant_text: false,
+        };
+        let mut presentation =
+            NarrativePresentation::new(String::from("Wait for the pause."), 0, config);
+        presentation.tick(0);
+        assert!(presentation.skip_reveal(5));
+        assert!(!presentation.choices_visible());
+        // The same logical input must not reach AwaitingChoice.
+        assert_eq!(presentation.state(), ScenePresentation::PostRevealPause);
+        // Post-reveal pause is still active at t=5+29; choices open only after it.
+        presentation.tick(5 + 29);
+        assert!(!presentation.choices_visible());
+        presentation.tick(5 + 30);
+        assert!(presentation.choices_visible());
+    }
+
+    #[test]
+    fn shortcut_letters_remain_ignored_during_reveal() {
+        let mut gate = ShortcutGate::default();
+        assert_eq!(gate.shortcut_index('a', false, 10), None);
+        assert_eq!(gate.shortcut_index('b', false, 20), None);
+        assert_eq!(gate.shortcut_index('c', false, 30), None);
+        assert_eq!(gate.shortcut_index('d', false, 40), None);
+        // Still blocked until quiet release after choices become active.
+        assert_eq!(gate.shortcut_index('a', true, 50), None);
+        assert_eq!(gate.shortcut_index('a', true, 50 + ShortcutGate::QUIET_RELEASE_MS), Some(0));
+    }
+
+    #[test]
     fn shortcut_gate_blocks_stale_and_repeated_letters() {
         let mut gate = ShortcutGate::default();
         assert_eq!(gate.shortcut_index('a', false, 10), None);
@@ -4247,15 +4755,144 @@ mod tests {
         let presentation = NarrativePresentation::new(
             String::from("Immediate."),
             77,
-            PresentationConfig {
-                instant_text: true,
-                ..PresentationConfig::default()
-            },
+            PresentationProfile::Instant.config(),
         );
         assert_eq!(presentation.state(), ScenePresentation::AwaitingChoice);
         assert_eq!(presentation.visible_byte_end(), "Immediate.".len());
         let state = WorldState::new();
         assert_eq!(decode_save(&encode_save(&state)).unwrap(), state);
+    }
+
+    #[test]
+    fn instant_mode_completes_both_chapters_without_wall_clock_waits() {
+        let chapter_one = chapter_path(0x1A).unwrap();
+        let mut presentation = NarrativePresentation::new(
+            presentation_narration(&chapter_one, node(chapter_one.current_node).unwrap()),
+            0,
+            PresentationProfile::Instant.config(),
+        );
+        assert!(presentation.choices_visible());
+        assert_eq!(presentation.visible_byte_end(), presentation.text().len());
+
+        let chapter_two = chapter_two_path(0x1A).unwrap();
+        presentation = NarrativePresentation::new(
+            presentation_narration(&chapter_two, node(chapter_two.current_node).unwrap()),
+            0,
+            PresentationProfile::Instant.config(),
+        );
+        assert!(presentation.choices_visible());
+        assert!(chapter_two.chapter_complete || chapter_two.current_node.0.contains("turning"));
+    }
+
+    #[test]
+    fn prose_join_never_glues_period_to_name() {
+        let joined = join_prose(&[
+            "Mara has not won or lost anything.",
+            "Riley has a copy.",
+        ]);
+        assert_eq!(joined, "Mara has not won or lost anything. Riley has a copy.");
+        assert!(!joined.contains("anything.Riley"));
+        let mut broken = String::from("anything.");
+        append_prose(&mut broken, "Riley");
+        assert_eq!(broken, "anything. Riley");
+        assert!(!has_suspicious_punctuation_letter_join(&broken));
+        assert!(has_suspicious_punctuation_letter_join("anything.Riley"));
+        assert!(!has_suspicious_punctuation_letter_join("ECHO / REVISION"));
+        assert_eq!(
+            chapter_two_consequence_summary(),
+            "Mara has not won or lost anything. Riley has a copy. Lio has closed a channel. Elias remembers a room the city denies. The response may be from 2013, or from ECHO's need to be believed."
+        );
+    }
+
+    #[test]
+    fn authored_story_prose_has_no_suspicious_joins() {
+        assert_eq!(validate_graph(), Ok(()));
+        for item in nodes() {
+            assert!(
+                !has_suspicious_punctuation_letter_join(item.narration)
+                    || is_machine_syntax(item.narration),
+                "narration join in {}",
+                item.id.0
+            );
+            for choice in item.choices {
+                assert!(
+                    !has_suspicious_punctuation_letter_join(choice.text)
+                        || is_machine_syntax(choice.text),
+                    "choice join in {}",
+                    choice.id.0
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn choice_rows_expand_for_one_two_and_three_lines() {
+        assert_eq!(choice_row_height(1), choice_row_height(1).max(CHOICE_MIN_HEIGHT));
+        assert!(choice_row_height(2) > choice_row_height(1));
+        assert!(choice_row_height(3) > choice_row_height(2));
+        let rows = layout_choice_rows(&[1, 2, 3], 10, 20, 200, 400);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].3, choice_row_height(1) as u32);
+        assert_eq!(rows[1].3, choice_row_height(2) as u32);
+        assert_eq!(rows[2].3, choice_row_height(3) as u32);
+        // Subsequent rows start after the previous measured bottom.
+        assert!(rows[1].1 >= rows[0].1 + rows[0].3 as i32);
+        assert!(rows[2].1 >= rows[1].1 + rows[1].3 as i32);
+        // No overlap.
+        assert!(rows[0].1 + rows[0].3 as i32 <= rows[1].1);
+        assert!(rows[1].1 + rows[1].3 as i32 <= rows[2].1);
+    }
+
+    #[test]
+    fn wrapped_choice_hitboxes_match_visual_bounds_and_focus_order() {
+        let chamber_second =
+            "Seal the output port before the chamber can send another record.";
+        // At typical choice text widths this is two lines; geometry must still
+        // use the measured height rather than a fixed one-line row.
+        let line_counts = [1usize, 2];
+        let rows = layout_choice_rows(&line_counts, 100, 50, 280, 180);
+        assert_eq!(rows[0].3, choice_row_height(1) as u32);
+        assert_eq!(rows[1].3, choice_row_height(2) as u32);
+        assert!(rows[1].3 > rows[0].3);
+        assert!(chamber_second.len() > 40);
+        // Keyboard order follows visual order: index 0 then 1.
+        assert!(rows[0].1 < rows[1].1);
+    }
+
+    #[test]
+    fn turning_point_layout_elements_do_not_overlap() {
+        for (w, h) in [(1080u32, 720u32), (900, 600)] {
+            let layout = chapter_two_turning_point_layout(w, h);
+            assert!(
+                !turning_point_layout_has_overlap(&layout),
+                "overlap at {w}x{h}: {layout:?}"
+            );
+            // Hierarchy: artifact above chapter title above theme above return.
+            assert!(layout.artifact.1 < layout.chapter_title.1);
+            assert!(layout.chapter_title.1 < layout.theme_line.1);
+            assert!(layout.theme_line.1 < layout.return_button.1);
+            assert!(layout.summary.1 > layout.return_button.1);
+        }
+    }
+
+    #[test]
+    fn repeated_presentation_rebuild_does_not_accumulate_state() {
+        let text = String::from("A short room.");
+        for _ in 0..32 {
+            let mut presentation = NarrativePresentation::new(
+                text.clone(),
+                0,
+                PresentationProfile::Instant.config(),
+            );
+            assert_eq!(presentation.visible_byte_end(), text.len());
+            presentation.begin_transition();
+            assert!(!presentation.tick(100));
+        }
+        let mut gate = ShortcutGate::default();
+        for i in 0..16u64 {
+            gate.block_until_quiet(i * 10);
+            gate.clear();
+        }
     }
 
     fn leave_bedroom(state: &mut WorldState) {
