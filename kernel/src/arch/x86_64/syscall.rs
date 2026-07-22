@@ -4795,7 +4795,12 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
         return 0;
     }
 
-    let user_addr = x86_64::VirtAddr::new(0x0000_0000_0080_0000);
+    // Prefer the reserved system slot. If a process already occupies it
+    // (tests, exotic layouts), scan a few page-aligned candidates upward
+    // rather than failing hard — callers only need the returned VA.
+    const CANDIDATE_STRIDE: u64 = PAGE_SIZE * 16;
+    const MAX_CANDIDATES: u64 = 64;
+    let preferred = crate::process::layout::USER_TELEMETRY_BASE;
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let process = sched.current_process_mut();
@@ -4806,16 +4811,39 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
             Err(_) => return 0,
         };
 
-    for i in 0..telemetry_pages {
-        let Ok(page) =
-            x86_64::structures::paging::Page::from_start_address(user_addr + i * PAGE_SIZE)
-        else {
-            return 0;
-        };
-        if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
-            crate::process::address_space::note_mapping_collision();
-            return 0;
+    let mut user_addr = x86_64::VirtAddr::new(preferred);
+    let mut found_slot = false;
+    for candidate_idx in 0..MAX_CANDIDATES {
+        let candidate =
+            x86_64::VirtAddr::new(preferred.saturating_add(candidate_idx * CANDIDATE_STRIDE));
+        // Stay clear of the user stack window (top 2 MiB of the low half).
+        let stack_floor = crate::process::layout::USER_STACK_TOP
+            .saturating_sub(crate::process::layout::USER_STACK_SIZE);
+        if candidate.as_u64().saturating_add(telemetry_pages * PAGE_SIZE) > stack_floor {
+            break;
         }
+        let mut free = true;
+        for i in 0..telemetry_pages {
+            let Ok(page) =
+                x86_64::structures::paging::Page::from_start_address(candidate + i * PAGE_SIZE)
+            else {
+                free = false;
+                break;
+            };
+            if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
+                free = false;
+                break;
+            }
+        }
+        if free {
+            user_addr = candidate;
+            found_slot = true;
+            break;
+        }
+    }
+    if !found_slot {
+        crate::process::address_space::note_mapping_collision();
+        return 0;
     }
 
     let region = match crate::process::region::MappingRegion::new(

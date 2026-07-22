@@ -1453,11 +1453,15 @@ impl VortexShell {
         let dock_theme = DockTheme::load();
         let symbols = SymbolTheme::load();
         let telemetry = if ENABLE_RUNNING_TASKBAR {
-            let telemetry = Telemetry::init().ok();
-            if telemetry.is_none() {
-                debug_log("[VORTEX] telemetry unavailable for running-app names\n");
+            match Telemetry::init() {
+                Ok(t) => Some(t),
+                Err(reason) => {
+                    debug_log("[VORTEX] telemetry unavailable for running-app names: ");
+                    debug_log(reason);
+                    debug_log("\n");
+                    None
+                }
             }
-            telemetry
         } else {
             debug_log("[VORTEX] running taskbar disabled for perf test\n");
             None
@@ -3067,6 +3071,9 @@ impl VortexShell {
         self.show_datetime_tooltip = false;
         self.sidebar.open();
         self.next_sidebar_telemetry_retry_ms = now;
+        // Sample immediately so the first paint is not stuck on
+        // "Telemetry unavailable" until the next Event::Tick.
+        let _ = self.refresh_sidebar_telemetry(now);
         true
     }
 
@@ -3081,6 +3088,8 @@ impl VortexShell {
             snapshot.used_ram_kb,
             snapshot.total_ram_kb,
             snapshot.proc_count,
+            snapshot.zram_orig_kb,
+            snapshot.zram_comp_kb,
         )
     }
 
@@ -3090,7 +3099,25 @@ impl VortexShell {
         }
         if self.telemetry.is_none() && now >= self.next_sidebar_telemetry_retry_ms {
             self.next_sidebar_telemetry_retry_ms = now.saturating_add(STATUS_POLL_MS);
-            self.telemetry = Telemetry::init().ok();
+            match Telemetry::init() {
+                Ok(t) => {
+                    debug_log("[VORTEX] telemetry mapped for sidebar\n");
+                    self.telemetry = Some(t);
+                }
+                Err(reason) => {
+                    debug_log("[VORTEX] sidebar telemetry init failed: ");
+                    debug_log(reason);
+                    debug_log("\n");
+                }
+            }
+        }
+        // Always poll while the Sidebar is open. Do not depend on
+        // `sync_app_registry` having run first — that path can skip poll
+        // when the window-list refresh fails or the app-state cadence has
+        // not elapsed, which left the System Monitor card permanently on
+        // "Telemetry unavailable".
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            let _ = telemetry.poll();
         }
         self.sidebar
             .observe_telemetry(self.sidebar_telemetry_view())

@@ -18,7 +18,7 @@ const HEADER_H: u32 = 40;
 const CONTENT_PAD: i32 = 12;
 const CARD_GAP: i32 = 10;
 const WEATHER_CARD_H: u32 = 126;
-const MONITOR_CARD_H: u32 = 142;
+const MONITOR_CARD_H: u32 = 170;
 const NEWS_ROW_H: u32 = 48;
 const NEWS_CARD_H: u32 = 36 + NEWS_ROW_H * NEWS_PREVIEW.len() as u32 + 12;
 const SCROLL_STEP: u32 = 64;
@@ -111,6 +111,8 @@ pub(crate) struct SystemMonitorViewData {
     pub used_ram_kb: u64,
     pub total_ram_kb: u64,
     pub task_count: usize,
+    pub zram_orig_kb: u64,
+    pub zram_comp_kb: u64,
 }
 
 impl SystemMonitorViewData {
@@ -119,6 +121,8 @@ impl SystemMonitorViewData {
         used_ram_kb: u64,
         total_ram_kb: u64,
         task_count: usize,
+        zram_orig_kb: u64,
+        zram_comp_kb: u64,
     ) -> Option<Self> {
         if total_ram_kb == 0 || used_ram_kb > total_ram_kb {
             return None;
@@ -134,6 +138,8 @@ impl SystemMonitorViewData {
             used_ram_kb,
             total_ram_kb,
             task_count,
+            zram_orig_kb,
+            zram_comp_kb,
         })
     }
 }
@@ -292,19 +298,30 @@ impl SidebarState {
 
     /// Accepts the shell's already-owned telemetry snapshot. Hidden Sidebars
     /// do not request updates and retain only one last-valid sample.
+    ///
+    /// A failed / missing sample does **not** wipe a previously good sample —
+    /// the card keeps showing the last valid numbers and only reports
+    /// "Telemetry unavailable" when no sample has ever been accepted.
     pub(crate) fn observe_telemetry(&mut self, data: Option<SystemMonitorViewData>) -> bool {
         if !self.open {
             return false;
         }
-        let unavailable = data.is_none();
-        let changed = self.telemetry != data || self.telemetry_unavailable != unavailable;
-        if let Some(data) = data {
-            self.telemetry = Some(data);
-            self.telemetry_unavailable = false;
-        } else {
-            self.telemetry_unavailable = true;
+        match data {
+            Some(data) => {
+                let changed = self.telemetry != Some(data) || self.telemetry_unavailable;
+                self.telemetry = Some(data);
+                self.telemetry_unavailable = false;
+                changed
+            }
+            None => {
+                // Keep the last-valid sample visible. Only flip to unavailable
+                // when there is nothing useful to show yet.
+                let unavailable = self.telemetry.is_none();
+                let changed = self.telemetry_unavailable != unavailable;
+                self.telemetry_unavailable = unavailable;
+                changed
+            }
         }
-        changed
     }
 
     pub(crate) fn view(
@@ -435,7 +452,9 @@ impl SidebarState {
     fn draw_monitor(&self, canvas: &mut Canvas, theme: &Theme, layout: &SidebarLayout) {
         WidgetCard::new(layout.monitor, "System Monitor").draw_chrome(canvas, theme);
         draw_card_heading(canvas, layout.monitor, "System Monitor", theme);
-        let Some(data) = self.telemetry.filter(|_| !self.telemetry_unavailable) else {
+        // Prefer any retained last-valid sample. `telemetry_unavailable` is
+        // only true when no sample has been accepted yet.
+        let Some(data) = self.telemetry.as_ref().filter(|_| !self.telemetry_unavailable) else {
             draw_text_vcenter(
                 canvas,
                 "Telemetry unavailable",
@@ -548,6 +567,79 @@ impl SidebarState {
             18,
             &TextStyle::new(FontRole::UiRegular, theme.text),
         );
+
+        let mut zram_orig = [0u8; 16];
+        let mut zram_comp = [0u8; 16];
+        let zram_orig_len = write_mib_into(data.zram_orig_kb, &mut zram_orig);
+        let zram_comp_len = write_mib_into(data.zram_comp_kb, &mut zram_comp);
+        draw_text_vcenter(
+            canvas,
+            "ZRAM/Swap",
+            layout.monitor.x + 14,
+            layout.monitor.y + 132,
+            18,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+        if data.zram_orig_kb > 0 {
+            draw_text_vcenter(
+                canvas,
+                core::str::from_utf8(&zram_comp[..zram_comp_len]).unwrap_or("0"),
+                layout.monitor.x + 102,
+                layout.monitor.y + 132,
+                18,
+                &TextStyle::new(FontRole::UiRegular, theme.text),
+            );
+            draw_text_vcenter(
+                canvas,
+                "compressed from",
+                layout.monitor.x + 166,
+                layout.monitor.y + 132,
+                18,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            draw_text_vcenter(
+                canvas,
+                core::str::from_utf8(&zram_orig[..zram_orig_len]).unwrap_or("0"),
+                layout.monitor.x + 296,
+                layout.monitor.y + 132,
+                18,
+                &TextStyle::new(FontRole::UiRegular, theme.text),
+            );
+            let ratio = if data.zram_orig_kb > 0 {
+                (data.zram_comp_kb as u32).saturating_mul(100).checked_div(
+                    data.zram_orig_kb as u32,
+                ).unwrap_or(0)
+            } else {
+                0
+            };
+            let mut comp_text = [0u8; 8];
+            let comp_len = write_u64_into(ratio as u64, &mut comp_text);
+            draw_text_vcenter(
+                canvas,
+                core::str::from_utf8(&comp_text[..comp_len]).unwrap_or("0"),
+                layout.monitor.x + 346,
+                layout.monitor.y + 132,
+                18,
+                &TextStyle::new(FontRole::UiRegular, theme.accent),
+            );
+            draw_text_vcenter(
+                canvas,
+                "% ratio",
+                layout.monitor.x + 366,
+                layout.monitor.y + 132,
+                18,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+        } else {
+            draw_text_vcenter(
+                canvas,
+                "No compressed pages",
+                layout.monitor.x + 102,
+                layout.monitor.y + 132,
+                18,
+                &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+            );
+        }
     }
 
     fn draw_news(
@@ -942,14 +1034,53 @@ mod tests {
 
     #[test]
     fn malformed_ram_is_rejected_and_cpu_is_clamped() {
-        assert!(SystemMonitorViewData::from_values(12_000, 10, 0, 1).is_none());
-        assert!(SystemMonitorViewData::from_values(12_000, 11, 10, 1).is_none());
+        assert!(SystemMonitorViewData::from_values(12_000, 10, 0, 1, 0, 0).is_none());
+        assert!(SystemMonitorViewData::from_values(12_000, 11, 10, 1, 0, 0).is_none());
         assert_eq!(
-            SystemMonitorViewData::from_values(12_000, 10, 10, 1)
+            SystemMonitorViewData::from_values(12_000, 10, 10, 1, 0, 0)
                 .unwrap()
                 .cpu_bp,
             10_000
         );
+    }
+
+    #[test]
+    fn telemetry_missing_before_first_sample_is_unavailable() {
+        let mut sidebar = SidebarState::new();
+        sidebar.open();
+        assert!(sidebar.observe_telemetry(None));
+        assert!(sidebar.telemetry.is_none());
+        assert!(sidebar.telemetry_unavailable);
+        // Idempotent while still empty.
+        assert!(!sidebar.observe_telemetry(None));
+    }
+
+    #[test]
+    fn telemetry_retains_last_valid_sample_on_transient_failure() {
+        let mut sidebar = SidebarState::new();
+        sidebar.open();
+        let sample = SystemMonitorViewData::from_values(684, 424_800, 3_658_500, 27, 0, 0)
+            .expect("valid sample");
+        assert!(sidebar.observe_telemetry(Some(sample)));
+        assert_eq!(sidebar.telemetry, Some(sample));
+        assert!(!sidebar.telemetry_unavailable);
+
+        // A later failed sample must not hide the retained metrics.
+        assert!(!sidebar.observe_telemetry(None));
+        assert_eq!(sidebar.telemetry, Some(sample));
+        assert!(!sidebar.telemetry_unavailable);
+    }
+
+    #[test]
+    fn telemetry_updates_when_new_sample_arrives() {
+        let mut sidebar = SidebarState::new();
+        sidebar.open();
+        let first = SystemMonitorViewData::from_values(100, 100, 1000, 1, 0, 0).unwrap();
+        let second = SystemMonitorViewData::from_values(200, 200, 1000, 2, 0, 0).unwrap();
+        assert!(sidebar.observe_telemetry(Some(first)));
+        assert!(sidebar.observe_telemetry(Some(second)));
+        assert_eq!(sidebar.telemetry, Some(second));
+        assert!(!sidebar.telemetry_unavailable);
     }
 
     #[test]

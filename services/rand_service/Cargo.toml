@@ -1,6 +1,8 @@
 [package]
 name = "rand_service"
-version = "0.2.2038"
+version = "0.2.2040"
+
+
 
 
 
