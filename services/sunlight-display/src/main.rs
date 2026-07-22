@@ -2246,14 +2246,23 @@ fn activate_window(state: &mut CompositorState, win_id: u64) -> bool {
 const DESKTOP_COLOR: u32 = 0x00121214; // Deep dark gray/black
 const TITLEBAR_H: u32 = 32; // Balanced height; not oversized
 const COMPACT_TITLEBAR_H: u32 = 24;
-const TITLEBAR_COLOR: u32 = 0x002B2B36; // inactive titlebar (dark slate)
-const TITLEBAR_ACTIVE: u32 = 0x001E1E26; // active window titlebar (darker base)
 /// The display service's canonical Sunlight accent.  Decoration glow and
 /// existing informational accents intentionally share this one color.
 const SUNLIGHT_ACCENT: u32 = 0x00FF7A00;
 const TITLEBAR_ACCENT: u32 = SUNLIGHT_ACCENT;
-const TITLE_TEXT_COLOR: u32 = 0x00E8E8EE; // Active title
-const TITLE_TEXT_INACTIVE: u32 = 0x009A9AAA; // Reduced contrast when inactive
+/// Compositor chrome colors resolved once from the shared toolkit theme so
+/// titlebar/root stay in the same warm-neutral family as the Start menu.
+const SUNLIGHT_THEME: sunlight_ui::Theme = sunlight_ui::Theme::sunlight_dark();
+const TITLEBAR_COLOR: u32 = SUNLIGHT_THEME.chrome.titlebar_inactive.0 & 0x00FF_FFFF;
+const TITLEBAR_ACTIVE: u32 = SUNLIGHT_THEME.chrome.titlebar_active.0 & 0x00FF_FFFF;
+const TITLE_TEXT_COLOR: u32 = SUNLIGHT_THEME.chrome.title_active.0 & 0x00FF_FFFF;
+const TITLE_TEXT_INACTIVE: u32 = SUNLIGHT_THEME.chrome.title_inactive.0 & 0x00FF_FFFF;
+const TITLEBAR_DIVIDER_ACTIVE: u32 =
+    SUNLIGHT_THEME.chrome.titlebar_divider_active.0 & 0x00FF_FFFF;
+const TITLEBAR_DIVIDER_INACTIVE: u32 =
+    SUNLIGHT_THEME.chrome.titlebar_divider_inactive.0 & 0x00FF_FFFF;
+/// Legacy opaque window body — same charcoal family as WindowGlass tint.
+const WINDOW_BODY_OPAQUE: u32 = SUNLIGHT_THEME.chrome.window_bg.0 | 0xFF00_0000;
 const DECORATION_GEOMETRY: sunlight_ui::DecorationGeometry =
     sunlight_ui::DecorationGeometry::SUNLIGHT;
 const BORDER_W: u32 = DECORATION_GEOMETRY.structural_rim;
@@ -2291,17 +2300,19 @@ struct SolarDecorationTheme {
 }
 
 const SOLAR_DECORATION: SolarDecorationTheme = SolarDecorationTheme {
-    // Neutral rim: visible on dark and bright wallpaper without making focus
-    // depend on color alone.  Upper-left light direction is applied below.
-    structural_outer: 0x00434A55,
-    structural_light: 0x006A7380,
-    structural_dark: 0x00252A32,
+    // Mac-style hairline: only a few steps above the charcoal glass so the
+    // frame reads on bright wallpaper without a hard metal edge on dark glass.
+    structural_outer: 0x00484850,
+    structural_light: 0x005E5E66,
+    structural_dark: 0x00323238,
     ambient_shadow_rgb: 0x00000000,
-    ambient_shadow_peak_alpha: 26,
+    // Soft KWin/Mac ambient: wide, dark near the frame, light as it spreads.
+    ambient_shadow_peak_alpha: 38,
     ambient_shadow_radius_dip: DECORATION_GEOMETRY.ambient_shadow_falloff,
     ambient_shadow_offset_y_dip: DECORATION_GEOMETRY.ambient_shadow_offset_y,
     active_glow_rgb: SUNLIGHT_ACCENT,
-    active_glow_peak_alpha: 48, // 18.8%, deliberately below neon intensity.
+    // Solar Focus Glow: present but not neon; focus is also title contrast.
+    active_glow_peak_alpha: 40,
     active_glow_radius_dip: DECORATION_GEOMETRY.solar_focus_falloff,
 };
 
@@ -2724,7 +2735,7 @@ fn draw_title(canvas: &mut Canvas<'_>, title: &[u8; 64], rect: Rect, color: Colo
 }
 
 fn horizon_palette() -> sunlight_ui::HorizonPalette {
-    sunlight_ui::HorizonPalette::from_theme(&sunlight_ui::Theme::sunlight_dark())
+    sunlight_ui::HorizonPalette::from_theme(&SUNLIGHT_THEME)
 }
 
 fn draw_window_control(
@@ -3090,18 +3101,25 @@ fn blend_decoration_pixel(
     }
 }
 
-/// Quadratic bounded falloff.  This is intentionally a small fixed strip
-/// primitive, not a blur and not a per-window texture allocation.
+/// Bounded soft falloff for ambient shadow / Solar Focus glow.
+///
+/// Intentionally not a blur and not a per-window texture.  The curve is a
+/// weighted mix of quadratic (contact density near the frame) and linear
+/// (longer soft tail) so a wider radius reads like a KWin-style gradient —
+/// darker next to the window, lighter as it spreads — without mid-band steps.
 #[inline(always)]
 fn solar_falloff_alpha(distance: u32, radius: u32, peak_alpha: u8) -> u8 {
     if distance == 0 || distance > radius || radius == 0 {
         return 0;
     }
-    let remaining = radius + 1 - distance;
-    ((peak_alpha as u32)
-        .saturating_mul(remaining)
-        .saturating_mul(remaining)
-        / radius.saturating_mul(radius)) as u8
+    let remaining = radius + 1 - distance; // radius .. 1 as distance grows
+    let r = radius;
+    // (2 * remaining² + remaining * r) / (3 * r²)
+    let quad = remaining.saturating_mul(remaining);
+    let lin = remaining.saturating_mul(r);
+    let numerator = quad.saturating_mul(2).saturating_add(lin);
+    let denominator = r.saturating_mul(r).saturating_mul(3).max(1);
+    ((peak_alpha as u32).saturating_mul(numerator) / denominator) as u8
 }
 
 fn integer_sqrt(value: u32) -> u32 {
@@ -3160,43 +3178,35 @@ fn draw_solar_halo(
     }
 }
 
+/// Mac-style continuous hairline rim, including rounded corners.
+///
+/// Unlike a hard light/dark bevel (top-left light, bottom-right dark), this
+/// draws one continuous rounded stroke so the frame reads as a single thin
+/// border around the glass.  A very restrained top highlight adds slight depth
+/// without looking like a separate slab or cold metal edge.
 fn draw_structural_rim(canvas: &mut Canvas<'_>, outer: Rect, radius: u32) {
     if outer.w < 2 || outer.h < 2 {
         return;
     }
+    // Full perimeter including corners (the previous edge-only rim left
+    // squared-looking corner gaps against the soft shadow).
+    canvas.stroke_rounded_rect(
+        outer,
+        radius,
+        1,
+        Color(SOLAR_DECORATION.structural_outer | 0xFF00_0000),
+    );
+    // Subtle top highlight only — Mac depth cue, not a four-side bevel.
     let corner = radius.min(outer.w / 2).min(outer.h / 2) as i32;
     let horizontal = outer
         .w
-        .saturating_sub((corner.max(0) as u32).saturating_mul(2));
-    let vertical = outer
-        .h
         .saturating_sub((corner.max(0) as u32).saturating_mul(2));
     if horizontal > 0 {
         canvas.hline(
             outer.x + corner,
             outer.y,
             horizontal,
-            Color(SOLAR_DECORATION.structural_light),
-        );
-        canvas.hline(
-            outer.x + corner,
-            outer.bottom() - 1,
-            horizontal,
-            Color(SOLAR_DECORATION.structural_dark),
-        );
-    }
-    if vertical > 0 {
-        canvas.vline(
-            outer.x,
-            outer.y + corner,
-            vertical,
-            Color(SOLAR_DECORATION.structural_light),
-        );
-        canvas.vline(
-            outer.right() - 1,
-            outer.y + corner,
-            vertical,
-            Color(SOLAR_DECORATION.structural_dark),
+            Color(SOLAR_DECORATION.structural_light | 0xFF00_0000),
         );
     }
 }
@@ -3231,6 +3241,9 @@ fn composite_window(
             DECORATION_GEOMETRY.window_corner_radius,
             state.display_metrics().scale_fp,
         );
+        // Shadow is offset downward so contact reads under the window
+        // (KWin/Mac ambient).  One wide soft pass — dual layers can read as a
+        // hard band against bright wallpaper.
         let shadow_shape = Rect::new(
             outer.x,
             outer.y.saturating_add(metrics.shadow_offset_y as i32),
@@ -3312,10 +3325,11 @@ fn composite_window(
         } else {
             TITLEBAR_COLOR
         };
+        // Opaque alpha for solid text/glyph draws on the decoration buffer.
         let title_color = if is_focused {
-            TITLE_TEXT_COLOR
+            TITLE_TEXT_COLOR | 0xFF00_0000
         } else {
-            TITLE_TEXT_INACTIVE
+            TITLE_TEXT_INACTIVE | 0xFF00_0000
         };
         let hover_zone = hit_test_window(
             win,
@@ -3353,19 +3367,20 @@ fn composite_window(
                 Color(SOLAR_DECORATION.structural_outer),
             );
             if !glass_surface {
-                // Legacy/unopted windows retain their exact opaque backing.
-                canvas.fill_rounded_rect(inner, inner_radius, Color(0xFF1A1A20));
+                // Legacy/unopted windows: opaque charcoal body, same family as glass.
+                canvas.fill_rounded_rect(inner, inner_radius, Color(WINDOW_BODY_OPAQUE));
                 if win.decorations_visible() {
                     canvas.fill_top_rounded_rect(
                         inner,
                         inner_radius,
-                        Color(tb_color),
+                        // Force opaque XRGB for the solid decoration path.
+                        Color(tb_color | 0xFF00_0000),
                     );
                 }
             }
         }
         if glass_surface {
-            let palette = sunlight_ui::MaterialPalette::new(&sunlight_ui::Theme::sunlight_dark());
+            let palette = sunlight_ui::MaterialPalette::new(&SUNLIGHT_THEME);
             if win.decorations_visible() {
                 let titlebar = Rect::new(inner.x, inner.y, inner.w, titlebar_h.min(inner.h));
                 let content = Rect::new(
@@ -3409,13 +3424,21 @@ fn composite_window(
             let mut canvas = back_buffer_canvas(state, back_buffer);
             draw_structural_rim(&mut canvas, outer, outer_radius);
             if win.decorations_visible() {
-                // Subtle separation from application content.
-                canvas.hline(
-                    inner.x,
-                    inner.y + titlebar_h as i32 - 1,
-                    inner.w,
-                    Color(if is_focused { 0x00353840 } else { 0x00282830 }),
-                );
+                // Hairline divider — same warm-neutral family; not a slab seam.
+                // Clip to the inner chrome so it never escapes rounded corners.
+                let div_y = inner.y + titlebar_h as i32 - 1;
+                if div_y >= inner.y && div_y < inner.bottom() {
+                    canvas.hline(
+                        inner.x,
+                        div_y,
+                        inner.w,
+                        Color(if is_focused {
+                            TITLEBAR_DIVIDER_ACTIVE | 0xFF00_0000
+                        } else {
+                            TITLEBAR_DIVIDER_INACTIVE | 0xFF00_0000
+                        }),
+                    );
+                }
                 // Normal layout: pin divider via Horizon strip; compact: per-button.
                 if win.control_layout() == WindowControlLayout::Normal {
                     let layout = sunlight_ui::horizon::layout_controls(
@@ -5513,11 +5536,29 @@ mod tests {
     fn rounded_effect_distance_uses_inner_and_expanded_corner_radii() {
         let rect = Rect::new(20, 20, 100, 80);
         let inner = DECORATION_GEOMETRY.window_corner_radius;
-        assert_eq!(distance_outside_rounded_rect(20, 20, rect, inner), 3);
+        // Corner pixel just outside the rounded shape has positive distance.
+        assert!(distance_outside_rounded_rect(20, 20, rect, inner) > 0);
         let expansion = DECORATION_GEOMETRY.solar_focus_falloff;
         let outer_corner = inner + expansion;
         assert_eq!(outer_corner, DECORATION_GEOMETRY.outer_focus_corner_radius());
         assert!(distance_outside_rounded_rect(11, 11, rect, inner) >= expansion);
+    }
+
+    #[test]
+    fn ambient_shadow_falloff_is_wider_and_monotone() {
+        let radius = DECORATION_GEOMETRY.ambient_shadow_falloff;
+        let peak = SOLAR_DECORATION.ambient_shadow_peak_alpha;
+        assert!(radius >= 24);
+        assert!(peak >= 32);
+        // Darker near the frame (distance 1) than farther out.
+        let near = solar_falloff_alpha(1, radius, peak);
+        let mid = solar_falloff_alpha(radius / 2, radius, peak);
+        let far = solar_falloff_alpha(radius, radius, peak);
+        assert!(near > mid);
+        assert!(mid > far);
+        assert!(far > 0);
+        assert_eq!(solar_falloff_alpha(0, radius, peak), 0);
+        assert_eq!(solar_falloff_alpha(radius + 1, radius, peak), 0);
     }
 
     #[test]
@@ -5540,6 +5581,53 @@ mod tests {
             SOLAR_DECORATION.structural_outer
         );
         assert_eq!(TITLEBAR_ACCENT, SUNLIGHT_ACCENT);
+    }
+
+    #[test]
+    fn titlebar_and_root_share_sunlight_charcoal_family() {
+        let chrome = SUNLIGHT_THEME.chrome;
+        let root = Color(chrome.window_bg.0);
+        let active = Color(TITLEBAR_ACTIVE | 0xFF00_0000);
+        let inactive = Color(TITLEBAR_COLOR | 0xFF00_0000);
+        assert!(root.same_hue_family(active));
+        assert!(root.same_hue_family(inactive));
+        // Active density difference is luminance, not cold slate vs charcoal.
+        assert!(active.b().saturating_sub(active.r()) <= 4);
+        assert!(inactive.b().saturating_sub(inactive.r()) <= 4);
+        // Solar Focus Glow remains the primary colored focus treatment.
+        assert_eq!(SOLAR_DECORATION.active_glow_rgb, SUNLIGHT_ACCENT);
+        assert_ne!(TITLEBAR_ACTIVE & 0x00FF_FFFF, SUNLIGHT_ACCENT);
+    }
+
+    #[test]
+    fn decoration_materials_use_semantic_theme_roles() {
+        let palette = sunlight_ui::MaterialPalette::new(&SUNLIGHT_THEME);
+        assert_eq!(
+            palette.titlebar_active.tint.0 & 0x00FF_FFFF,
+            TITLEBAR_ACTIVE
+        );
+        assert_eq!(
+            palette.titlebar_inactive.tint.0 & 0x00FF_FFFF,
+            TITLEBAR_COLOR
+        );
+        assert_eq!(
+            palette.window_glass.tint.0 & 0x00FF_FFFF,
+            WINDOW_BODY_OPAQUE & 0x00FF_FFFF
+        );
+        // Start menu overlay stays at canonical charcoal values.
+        assert_eq!(palette.overlay_glass.tint, SUNLIGHT_THEME.panel);
+        assert_eq!(palette.overlay_glass.opacity, 232);
+    }
+
+    #[test]
+    fn inactive_title_and_controls_remain_readable() {
+        let title = Color(TITLE_TEXT_INACTIVE | 0xFF00_0000);
+        let luma = (title.r() as u32 + title.g() as u32 + title.b() as u32) / 3;
+        assert!(luma >= 0x70);
+        let palette = horizon_palette();
+        let glyph = palette.icon_inactive_window;
+        let g_luma = (glyph.r() as u32 + glyph.g() as u32 + glyph.b() as u32) / 3;
+        assert!(g_luma >= 0x60);
     }
 
     #[test]

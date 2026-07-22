@@ -56,7 +56,8 @@ const EQUALS_BG: Color = Color::rgb(0xCC, 0x84, 0x00);
 const EQUALS_HOVER: Color = Color::rgb(0xE0, 0x98, 0x20);
 const EQUALS_PRESSED: Color = Color::rgb(0xAA, 0x6E, 0x00);
 
-const DISPLAY_BG: Color = Color::rgb(0x28, 0x28, 0x30);
+/// Dense display surface in the shared warm-charcoal family (not cold slate).
+const DISPLAY_BG: Color = Color::rgb(0x22, 0x22, 0x26);
 const BTN_TEXT: Color = Color::rgb(0xF0, 0xF0, 0xF0);
 const BTN_TEXT_DARK: Color = Color::rgb(0x00, 0x00, 0x00);
 const BUTTON_RADIUS: u32 = 8;
@@ -314,7 +315,14 @@ impl CalcApp {
 
     fn draw_header(canvas: &mut Canvas, theme: &Theme) {
         let header = Rect::new(0, 0, WIN_W, HEADER_H);
-        canvas.fill_rect(header, theme.panel);
+        // Denser header over transparent WindowGlass root.
+        canvas.fill_material(
+            header,
+            sunlight_ui::MaterialPalette::new(theme)
+                .card_glass
+                .with_radius(0)
+                .without_border(),
+        );
 
         Label::new(Rect::new(10, 4, 220, 20), "Sunlight Calculator")
             .with_font(&F_MED)
@@ -332,7 +340,7 @@ impl CalcApp {
         let lh = sun_font::line_height(FontRole::UiSmall) as i32;
         let pill_h = (lh + 6) as u32;
         let pill_rect = Rect::new((WIN_W as i32) - (tw as i32) - 24, 4, tw + 14, pill_h);
-        canvas.fill_rounded_rect(pill_rect, 8, theme.panel_alt);
+        canvas.fill_rounded_rect(pill_rect, 8, theme.chrome.card_bg);
         draw_text_vcenter(
             canvas,
             sunlight_label,

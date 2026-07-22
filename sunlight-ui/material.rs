@@ -59,12 +59,17 @@ pub struct DecorationGeometry {
 }
 
 impl DecorationGeometry {
+    /// Shared Sunlight decoration metrics (device-independent pixels).
+    ///
+    /// Ambient shadow is intentionally wider than the original 12px strip so the
+    /// falloff reads as a soft KWin-style contact gradient (dark near the window,
+    /// lighter as it spreads). Structural rim stays a 1px Mac-style hairline.
     pub const SUNLIGHT: Self = Self {
-        window_corner_radius: 8,
+        window_corner_radius: 10,
         structural_rim: 1,
-        ambient_shadow_falloff: 12,
-        ambient_shadow_offset_y: 3,
-        solar_focus_falloff: 9,
+        ambient_shadow_falloff: 28,
+        ambient_shadow_offset_y: 6,
+        solar_focus_falloff: 10,
     };
 
     pub const fn outer_shadow_corner_radius(self) -> u32 {
@@ -95,30 +100,35 @@ pub struct MaterialPalette {
 
 impl MaterialPalette {
     pub const fn new(theme: &Theme) -> Self {
+        let chrome = theme.chrome;
+        let radius = DecorationGeometry::SUNLIGHT.window_corner_radius;
         Self {
             // Canonical Start-menu values: preserve its effective pre-extraction
             // appearance (including the fact that its old Tinted preset disabled
             // the requested noise).
-            overlay_glass: Material::glass(theme.panel, 232)
+            overlay_glass: Material::glass(chrome.window_bg, 232)
                 .with_noise(0)
-                .with_border(theme.border)
+                .with_border(chrome.subtle_border)
                 .with_radius(12),
-            window_glass: Material::glass(theme.panel, 232)
+            // Window root: Start-menu charcoal glass — shared hue with titlebar.
+            window_glass: Material::glass(chrome.window_bg, 232)
                 .with_noise(4)
-                .with_radius(DecorationGeometry::SUNLIGHT.window_corner_radius),
-            titlebar_active: Material::glass(Color::rgb(0x1E, 0x1E, 0x26), 240)
+                .with_radius(radius),
+            // Active titlebar: same hue family, ~4% denser (higher opacity + darker tint).
+            titlebar_active: Material::glass(chrome.titlebar_active, 240)
                 .with_noise(3)
-                .with_radius(DecorationGeometry::SUNLIGHT.window_corner_radius),
-            titlebar_inactive: Material::glass(Color::rgb(0x2B, 0x2B, 0x36), 235)
+                .with_radius(radius),
+            // Inactive titlebar: same material family near root density.
+            titlebar_inactive: Material::glass(chrome.titlebar_inactive, 233)
                 .with_noise(3)
-                .with_radius(DecorationGeometry::SUNLIGHT.window_corner_radius),
-            card_glass: Material::glass(theme.panel, 247)
+                .with_radius(radius),
+            card_glass: Material::glass(chrome.card_bg, 247)
                 .with_noise(2)
-                .with_border(theme.border)
+                .with_border(chrome.subtle_border)
                 .with_radius(8),
             solid_content: Material::solid(theme.bg),
-            tinted_content: Material::tinted(theme.panel_alt, 250)
-                .with_border(theme.border)
+            tinted_content: Material::tinted(chrome.input_bg, 250)
+                .with_border(chrome.subtle_border)
                 .with_radius(6),
         }
     }
@@ -498,6 +508,38 @@ mod tests {
             Material::for_role(SurfaceRole::PopupOrMenu, &theme),
             start
         );
+        // Start menu and window root share the canonical charcoal tint.
+        assert_eq!(palette.window_glass.tint, start.tint);
+        assert_eq!(palette.window_glass.opacity, start.opacity);
+    }
+
+    #[test]
+    fn titlebar_and_root_share_hue_family() {
+        let theme = Theme::sunlight_dark();
+        let palette = MaterialPalette::new(&theme);
+        assert!(palette
+            .window_glass
+            .tint
+            .same_hue_family(palette.titlebar_active.tint));
+        assert!(palette
+            .window_glass
+            .tint
+            .same_hue_family(palette.titlebar_inactive.tint));
+        // Active is denser (higher opacity) than window root.
+        assert!(palette.titlebar_active.opacity >= palette.window_glass.opacity);
+        // Inactive sits near root density — not a separate cold slab.
+        assert!(
+            palette
+                .titlebar_inactive
+                .opacity
+                .abs_diff(palette.window_glass.opacity)
+                <= 4
+        );
+        assert_eq!(palette.titlebar_active.tint, theme.chrome.titlebar_active);
+        assert_eq!(
+            palette.titlebar_inactive.tint,
+            theme.chrome.titlebar_inactive
+        );
     }
 
     #[test]
@@ -537,6 +579,11 @@ mod tests {
             geometry.outer_focus_corner_radius(),
             geometry.window_corner_radius + geometry.solar_focus_falloff
         );
+        // KWin-style ambient is intentionally wider than a tight 12px strip.
+        assert!(geometry.ambient_shadow_falloff >= 24);
+        assert!(geometry.ambient_shadow_offset_y >= 4);
+        // Mac-style hairline, not a thick frame.
+        assert_eq!(geometry.structural_rim, 1);
     }
 
     #[test]

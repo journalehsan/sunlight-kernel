@@ -14,7 +14,7 @@ use sunlight_ui::{
         BadgeKind, Button, DisclosureEvent, DisclosureGroup, DisclosureState, PropertyGrid,
         PropertyRow, StatusBadge,
     },
-    Canvas, Event, Point, Rect, Theme,
+    Canvas, Event, MaterialPalette, Point, Rect, Theme,
 };
 
 use crate::sysinfo::FixedStr;
@@ -174,9 +174,13 @@ impl NetworkPageState {
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme, win_w: u32, win_h: u32) {
         canvas.clear_transparent(Rect::new(0, 0, win_w, win_h));
+        let materials = MaterialPalette::new(theme);
         let header = Rect::new(0, 0, win_w, 44);
-        canvas.fill_rect(header, theme.panel);
-        canvas.draw_rect(Rect::new(0, 43, win_w, 1), theme.border);
+        canvas.fill_material(
+            header,
+            materials.card_glass.with_radius(0).without_border(),
+        );
+        canvas.draw_rect(Rect::new(0, 43, win_w, 1), theme.chrome.subtle_border);
         draw_text(canvas, "Network", 18, 10, 24, FontRole::UiTitle, theme.text);
 
         let refresh = refresh_rect(win_w, win_h);
@@ -189,8 +193,11 @@ impl NetworkPageState {
             .draw(canvas, theme);
 
         let summary = Rect::new(14, 54, win_w.saturating_sub(28), 42);
-        canvas.fill_rounded_rect(summary, 7, theme.panel_alt);
-        canvas.stroke_rounded_rect(summary, 7, 1, theme.border);
+        canvas.fill_material(
+            summary,
+            materials.card_glass.with_radius(7).without_border(),
+        );
+        canvas.stroke_rounded_rect(summary, 7, 1, theme.chrome.subtle_border);
         let count = self.interfaces().count();
         let primary = self
             .interfaces()

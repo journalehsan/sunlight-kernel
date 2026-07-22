@@ -84,19 +84,20 @@ pub struct HorizonPalette {
 
 impl HorizonPalette {
     pub fn from_theme(theme: &Theme) -> Self {
+        let chrome = theme.chrome;
         Self {
             icon_rest: theme.icon_muted,
-            icon_active_window: theme.icon_foreground,
-            icon_inactive_window: theme.icon_disabled.lighten(40),
-            // Neutral glass highlight
-            hover_fill: Color::rgba(0x3A, 0x3A, 0x4A, 200),
-            pressed_fill: Color::rgba(0x28, 0x28, 0x34, 230),
+            icon_active_window: chrome.control_glyph_active,
+            icon_inactive_window: chrome.control_glyph_inactive,
+            // Warm-neutral glass highlights (same family as titlebar charcoal).
+            hover_fill: chrome.control_hover,
+            pressed_fill: chrome.control_pressed,
             // Restrained dark terracotta / red for close
             close_hover_fill: Color::rgba(0x8A, 0x3A, 0x32, 220),
             close_pressed_fill: Color::rgba(0x6E, 0x2A, 0x24, 235),
             pin_active: theme.accent, // Sunlight orange
             focus_ring: theme.accent_hover,
-            divider: theme.border.lighten(12),
+            divider: chrome.subtle_border.lighten(12),
         }
     }
 }
@@ -580,6 +581,35 @@ mod tests {
         let pin_to_min = ltr.minimize.x - (ltr.pin.x + ltr.pin.w as i32);
         let min_to_max = ltr.maximize.x - (ltr.minimize.x + ltr.minimize.w as i32);
         assert!(pin_to_min > min_to_max);
+    }
+
+    #[test]
+    fn hover_backplates_fit_inside_titlebar_strip() {
+        let metrics = HorizonMetrics::default();
+        let titlebar_h = 32u32;
+        let layout = layout_controls(10, 40, 480, titlebar_h, metrics, false, false);
+        for r in [layout.pin, layout.minimize, layout.maximize, layout.close] {
+            assert!(r.y >= 40);
+            assert!(r.bottom() <= 40 + titlebar_h as i32);
+            assert_eq!(r.h, metrics.button_size);
+            assert_eq!(r.w, metrics.button_size);
+        }
+        // Equal top/bottom padding for optical centering.
+        let top_pad = layout.pin.y - 40;
+        let bot_pad = (40 + titlebar_h as i32) - layout.pin.bottom();
+        assert_eq!(top_pad, bot_pad);
+    }
+
+    #[test]
+    fn horizon_palette_uses_chrome_roles() {
+        let theme = Theme::sunlight_dark();
+        let p = HorizonPalette::from_theme(&theme);
+        assert_eq!(p.hover_fill, theme.chrome.control_hover);
+        assert_eq!(p.pressed_fill, theme.chrome.control_pressed);
+        assert_eq!(p.icon_active_window, theme.chrome.control_glyph_active);
+        assert_eq!(p.icon_inactive_window, theme.chrome.control_glyph_inactive);
+        // Hover is warm-neutral, not blue/purple-shifted.
+        assert!(p.hover_fill.b().saturating_sub(p.hover_fill.r()) <= 4);
     }
 
     #[test]

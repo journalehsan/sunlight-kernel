@@ -11,8 +11,9 @@ use sunlight_libc::kill as libc_kill;
 use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_CORES, MAX_PROCESSES};
 use sunlight_ui::{
     request_close,
-    widgets::{Column, Label, Panel, StatusBar, Table},
-    App, Color, Event, Point, Rect, Theme, VecText, Window, WindowConfig, WindowMaterial,
+    widgets::{Column, Label, StatusBar, Table},
+    App, Color, Event, Material, MaterialPalette, Point, Rect, Theme, VecText, Window,
+    WindowConfig, WindowMaterial,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -612,8 +613,12 @@ impl TasksApp {
         detail: &str,
         usage_bp: u16,
     ) {
-        canvas.fill_rounded_rect(rect, 9, theme.panel);
-        canvas.stroke_rounded_rect(rect, 9, 1, theme.border);
+        // Denser card glass over the transparent WindowGlass root.
+        canvas.fill_material(
+            rect,
+            Material::card(theme).with_radius(9).without_border(),
+        );
+        canvas.stroke_rounded_rect(rect, 9, 1, theme.chrome.subtle_border);
 
         let title_rect = Rect::new(rect.x + 12, rect.y + 6, rect.w.saturating_sub(24), 16);
         F_MED.draw_vcenter(
@@ -651,10 +656,11 @@ impl TasksApp {
 
 impl App for TasksApp {
     fn view(&mut self, canvas: &mut sunlight_ui::Canvas, theme: &sunlight_ui::Theme) {
+        // Root stays transparent so compositor WindowGlass is the base density.
         canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
         let content = self.content_rect();
-        Panel::new(content).draw(canvas, theme);
+        let materials = MaterialPalette::new(theme);
 
         let title_rect = Rect::new(content.x + 12, content.y + 6, 220, TITLE_H);
         Label::new(title_rect, "Tasks Monitor")
@@ -696,8 +702,11 @@ impl App for TasksApp {
         self.draw_action_button(canvas, theme, 3, "Refresh", false, false);
 
         let summary = self.summary_rect();
-        canvas.fill_rounded_rect(summary, 11, theme.panel_alt);
-        canvas.stroke_rounded_rect(summary, 11, 1, theme.border);
+        canvas.fill_material(
+            summary,
+            materials.card_glass.with_radius(11).without_border(),
+        );
+        canvas.stroke_rounded_rect(summary, 11, 1, theme.chrome.subtle_border);
         let overview_title = if self.show_system_info {
             "System overview"
         } else {
@@ -783,6 +792,15 @@ impl App for TasksApp {
         );
 
         let table_rect = self.table_rect();
+        // Dense readable surface for the process/core table.
+        canvas.fill_material(
+            table_rect,
+            materials
+                .tinted_content
+                .with_radius(8)
+                .without_border(),
+        );
+        canvas.stroke_rounded_rect(table_rect, 8, 1, theme.chrome.subtle_border);
         let visible = self.visible_rows();
 
         match self.view_mode {

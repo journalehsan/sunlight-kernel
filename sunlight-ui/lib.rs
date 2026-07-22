@@ -56,7 +56,7 @@ pub use material::{
     DecorationGeometry, Material, MaterialKind, MaterialPalette, ReadabilityRole, SurfaceRole,
 };
 pub use paint::Canvas;
-pub use theme::{Color, Theme};
+pub use theme::{ChromeRoles, Color, Theme};
 
 #[cfg(feature = "app")]
 pub use app::{

@@ -170,7 +170,8 @@ impl<'a> SidebarItem<'a> {
     /// Gap between the right edge of the icon and the start of the text column.
     const ICON_TEXT_GAP: i32 = 10;
     /// Width of the accent bar painted on the left edge of a selected item.
-    const ACCENT_BAR_W: u32 = 3;
+    /// Thin by design — the fill is restrained; the bar carries the accent.
+    const ACCENT_BAR_W: u32 = 2;
     /// Right margin reserved for an optional badge.
     const BADGE_MARGIN: i32 = 10;
 
@@ -236,11 +237,12 @@ impl<'a> SidebarItem<'a> {
         let card = self.card_rect();
 
         // ── Card background by state ──────────────────────────────────────
-        // Normal rows match the panel surface; hover/selected/focused get a
-        // rounded fill for the modern floating-card look.
+        // Selected uses the shared restrained chrome selection (same family as
+        // list rows).  Identity is the thin left accent bar — not a saturated
+        // orange slab across the whole item.
         let bg = match self.state {
-            SidebarState::Selected => theme.accent.darken(150),
-            SidebarState::Hovered => theme.panel_alt.lighten(10),
+            SidebarState::Selected => theme.chrome.selection,
+            SidebarState::Hovered => theme.panel_alt.lighten(8),
             SidebarState::Focused => theme.panel_alt,
             _ => theme.panel,
         };
@@ -248,7 +250,13 @@ impl<'a> SidebarItem<'a> {
 
         // ── Left accent pill for the selected item ────────────────────────
         if self.state == SidebarState::Selected {
-            let bar = Rect::new(card.x + 2, card.y, Self::ACCENT_BAR_W, card.h);
+            let bar_h = card.h.saturating_sub(8).max(8);
+            let bar = Rect::new(
+                card.x + 3,
+                card.y + (card.h.saturating_sub(bar_h) as i32) / 2,
+                Self::ACCENT_BAR_W,
+                bar_h,
+            );
             canvas.fill_rounded_rect(bar, Self::ACCENT_BAR_W, theme.accent);
         }
 

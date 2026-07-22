@@ -3,7 +3,6 @@
 
 extern crate alloc;
 
-use core::alloc::GlobalAlloc;
 use core::cmp::Ordering;
 
 use sun_font::{
@@ -20,7 +19,9 @@ use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::{mime_icon, TgaImage};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
-use sunlight_ui::{App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig};
+use sunlight_ui::{
+    App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig, WindowMaterial,
+};
 
 // ── Central GUI font instance (vector / Inter) ───────────────────────────────
 // Bitmap font (paint::font) remains available for early-boot and TTY rendering.
@@ -202,7 +203,8 @@ const STATUS_H: u32 = 24;
 const SIDEBAR_W: u32 = 224;
 const GAP: u32 = 10;
 const PAD: i32 = 10;
-const RADIUS: u32 = 7;
+/// Shared chrome corner radius (aligned with card materials / decoration family).
+const RADIUS: u32 = 8;
 const NAV_BTN_W: u32 = 64;
 const NAV_BTN_H: u32 = 28;
 const SEARCH_W: u32 = 224;
@@ -789,18 +791,7 @@ fn log_usize(value: usize) {
 // ---------------------------------------------------------------------------
 // Allocator / panic
 // ---------------------------------------------------------------------------
-
-struct NoAlloc;
-
-unsafe impl GlobalAlloc for NoAlloc {
-    unsafe fn alloc(&self, _layout: core::alloc::Layout) -> *mut u8 {
-        core::ptr::null_mut()
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
-#[global_allocator]
-static ALLOC: NoAlloc = NoAlloc;
+// Global allocator comes from sunlight-libc (`global-alloc` feature).
 
 // ---------------------------------------------------------------------------
 // Thumbnail helpers — no heap; uses a static read buffer.
@@ -1560,6 +1551,8 @@ struct FilesApp {
     status_msg: [u8; STATUS_MSG_LEN],
     status_msg_len: usize,
     status_is_error: bool,
+    /// Tracks compositor focus for quieter inactive selection.
+    window_focused: bool,
 }
 
 impl FilesApp {
@@ -1576,6 +1569,7 @@ impl FilesApp {
             status_msg: [0; STATUS_MSG_LEN],
             status_msg_len: 0,
             status_is_error: false,
+            window_focused: true,
         }
     }
 
@@ -2344,7 +2338,13 @@ impl FilesApp {
     // ── Draw ──────────────────────────────────────────────────────────────
 
     fn draw_toolbar(&self, canvas: &mut Canvas, theme: &Theme, toolbar: Rect) {
-        canvas.fill_rounded_rect_with_border(toolbar, RADIUS, theme.panel, theme.border, 1);
+        canvas.fill_rounded_rect_with_border(
+            toolbar,
+            RADIUS,
+            theme.chrome.window_bg,
+            theme.panel.lighten(20),
+            1,
+        );
         let (back, forward, up, search, breadcrumb) = Self::toolbar_layout(toolbar);
         let up_disabled = match self.state.view_mode {
             ViewMode::Directory => self.state.current_path.parent().is_none(),
@@ -2407,7 +2407,13 @@ impl FilesApp {
     }
 
     fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme, sidebar: Rect) {
-        canvas.fill_rounded_rect_with_border(sidebar, RADIUS, theme.panel, theme.border, 1);
+        canvas.fill_rounded_rect_with_border(
+            sidebar,
+            RADIUS,
+            theme.chrome.window_bg,
+            theme.panel.lighten(20),
+            1,
+        );
 
         let inner = sidebar.inset(PAD);
 
@@ -2752,11 +2758,16 @@ impl FilesApp {
             let row = Self::row_rect(main, idx);
             let selected = self.state.selected_row == Some(idx);
             let fill = if selected {
-                theme.accent.darken(190)
+                // Restrained warm accent tint — not a saturated orange slab.
+                if self.window_focused {
+                    theme.chrome.selection
+                } else {
+                    theme.chrome.selection_inactive
+                }
             } else if idx % 2 == 0 {
-                theme.panel
+                theme.chrome.window_bg
             } else {
-                theme.panel_alt
+                theme.chrome.card_bg
             };
             canvas.fill_rect(row, fill);
 
@@ -3467,7 +3478,8 @@ fn take_slice<'a>(bytes: &'a [u8], index: &mut usize, len: usize) -> Option<&'a 
 
 impl App for FilesApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        // WindowGlass root: leave unused pixels transparent for compositor glass.
+        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
         let (toolbar, body, details, status) = Self::root_layout();
         let (sidebar, main) = Self::body_layout(body);
         self.draw_toolbar(canvas, theme, toolbar);
@@ -3493,6 +3505,14 @@ impl App for FilesApp {
         const KEY_UP: u8 = 0x48;
         const KEY_DOWN: u8 = 0x50;
         const KEY_V: u8 = 0x2F;
+
+        if let Event::FocusChanged { focused } = event {
+            if self.window_focused != focused {
+                self.window_focused = focused;
+                return true;
+            }
+            return false;
+        }
 
         // Properties dialog is modal-lite: while open it swallows every event
         // (including right-clicks) until the user closes it. This also keeps
@@ -4069,12 +4089,15 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
 
     // Open the window first so the compositor can begin displaying the
     // skeleton UI while the app model initialises.
-    let mut window = match Window::connect(WindowConfig {
-        width: WIN_W,
-        height: WIN_H,
-        title: "Sunlight Files",
-        decoration: sunlight_ui::WindowDecoration::Normal,
-    }) {
+    let mut window = match Window::connect_with_material(
+        WindowConfig {
+            width: WIN_W,
+            height: WIN_H,
+            title: "Sunlight Files",
+            decoration: sunlight_ui::WindowDecoration::Normal,
+        },
+        WindowMaterial::WindowGlass,
+    ) {
         Some(w) => w,
         None => {
             debug_log("[FILES] failed to connect window\n");

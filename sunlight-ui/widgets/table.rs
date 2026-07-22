@@ -134,16 +134,17 @@ impl<'a> Table<'a> {
             let row_rect = Rect::new(self.rect.x, ry, self.rect.w, self.row_h);
 
             let bg = if self.selected == Some(row_idx) {
-                theme.accent.darken(180)
+                // Restrained warm selection from shared chrome roles.
+                theme.chrome.selection
             } else if local_idx % 2 == 0 {
-                theme.panel
+                theme.chrome.window_bg
             } else {
-                theme.panel_alt
+                theme.chrome.card_bg
             };
             canvas.fill_rect(row_rect, bg);
 
             let text_color = if self.selected == Some(row_idx) {
-                theme.accent
+                theme.accent_hover
             } else {
                 theme.text
             };

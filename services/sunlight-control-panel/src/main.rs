@@ -630,7 +630,15 @@ impl ControlPanelApp {
         sublabel: &str,
         tga_icon: Option<TgaImage>,
     ) {
-        canvas.fill_material(rect, MaterialPalette::new(theme).card_glass);
+        canvas.fill_material(
+            rect,
+            MaterialPalette::new(theme)
+                .card_glass
+                .with_radius(10)
+                .without_border(),
+        );
+        // Quiet hairline — modern grid without heavy framed tiles.
+        canvas.stroke_rounded_rect(rect, 10, 1, theme.panel.lighten(22));
 
         let ix = rect.x + rect.w as i32 / 2 - 24;
         let iy = rect.y + 22;
@@ -655,10 +663,16 @@ impl ControlPanelApp {
     fn draw_grid(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
-        // Header bar
+        // Header bar — denser surface in the same charcoal family as WindowGlass.
         let header = Rect::new(0, 0, WIN_W, 44);
-        canvas.fill_rect(header, theme.panel);
-        canvas.draw_rect(Rect::new(0, 43, WIN_W, 1), theme.border);
+        canvas.fill_material(
+            header,
+            MaterialPalette::new(theme)
+                .card_glass
+                .with_radius(0)
+                .without_border(),
+        );
+        canvas.draw_rect(Rect::new(0, 43, WIN_W, 1), theme.chrome.subtle_border);
 
         // Header: settings icon + title
         if let Ok(tga) = TgaImage::parse(ICON_SETTINGS_TGA) {
