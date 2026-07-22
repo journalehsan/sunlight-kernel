@@ -26,9 +26,9 @@ pub mod errno;
 pub mod fd;
 /// Launch-trace argv parsing for GUI apps.
 pub mod launch_trace;
-/// Freestanding memory primitives (memcpy, memmove, memset, memcmp).
+/// Freestanding memory primitives (memcpy, memmove, memset, memcmp, memchr).
 pub mod mem;
-/// Freestanding C string primitives (strlen, strnlen, strcmp, strncmp).
+/// Freestanding C string primitives (strlen, strnlen, strcmp, strncmp, strchr, strrchr).
 pub mod string;
 /// POSIX memory mapping wrappers (`mmap`, `munmap`).
 pub mod mman;

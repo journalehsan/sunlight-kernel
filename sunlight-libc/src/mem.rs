@@ -1,4 +1,5 @@
-//! Freestanding memory primitives (`memcpy`, `memmove`, `memset`, `memcmp`).
+//! Freestanding memory primitives (`memcpy`, `memmove`, `memset`, `memcmp`,
+//! `memchr`).
 //!
 //! # Symbol ownership
 //!
@@ -12,7 +13,7 @@
 //! `core::ptr::copy`, `copy_nonoverlapping`, or `write_bytes`, because those
 //! lower to LLVM memory intrinsics that can become calls back into these
 //! symbols. Generated assembly is verified not to call `memcpy`/`memmove`/
-//! `memset`/`memcmp` from within themselves.
+//! `memset`/`memcmp`/`memchr` from within themselves.
 //!
 //! # Caller validity (nonzero `n`)
 //!
@@ -108,6 +109,24 @@ pub unsafe fn memcmp_bytes(a: *const u8, b: *const u8, n: usize) -> i32 {
     0
 }
 
+/// Find the first byte equal to `c` in the first `n` bytes of `s`.
+///
+/// # Safety
+/// `s` must be readable for `n` bytes when `n > 0`. This performs one byte
+/// load per iteration and never reads a word or a byte beyond that range.
+#[inline]
+pub unsafe fn memchr_bytes(s: *const u8, c: u8, n: usize) -> *const u8 {
+    let mut i = 0usize;
+    while i < n {
+        let current = s.add(i);
+        if *current == c {
+            return current;
+        }
+        i += 1;
+    }
+    core::ptr::null()
+}
+
 // ── C ABI exports ────────────────────────────────────────────────────────────
 
 /// C11 `void *memcpy(void *dest, const void *src, size_t n);`
@@ -163,6 +182,19 @@ pub unsafe extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
     memcmp_bytes(s1, s2, n)
 }
 
+/// C11 `void *memchr(const void *s, int c, size_t n);`
+///
+/// Searches exactly the first `n` bytes using the low unsigned 8 bits of `c`.
+/// Returns the first matching address, or null when no byte matches. Supports
+/// unaligned addresses and does not read past `n`.
+///
+/// # Safety
+/// See module-level validity rules.
+#[cfg_attr(not(test), no_mangle)]
+pub unsafe extern "C" fn memchr(s: *const u8, c: i32, n: usize) -> *mut u8 {
+    memchr_bytes(s, c as u8, n) as *mut u8
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -171,6 +203,47 @@ mod tests {
 
     use super::*;
     use std::vec::Vec;
+
+    #[cfg(target_os = "linux")]
+    mod host {
+        use core::ffi::c_void;
+
+        #[link(name = "c")]
+        extern "C" {
+            #[link_name = "getpagesize"]
+            pub fn getpagesize() -> i32;
+            #[link_name = "mmap"]
+            pub fn mmap(
+                addr: *mut c_void,
+                length: usize,
+                prot: i32,
+                flags: i32,
+                fd: i32,
+                offset: isize,
+            ) -> *mut c_void;
+            #[link_name = "mprotect"]
+            pub fn mprotect(addr: *mut c_void, length: usize, prot: i32) -> i32;
+            #[link_name = "munmap"]
+            pub fn munmap(addr: *mut c_void, length: usize) -> i32;
+            #[link_name = "memcpy"]
+            pub fn memcpy(dst: *mut u8, src: *const u8, n: usize) -> *mut u8;
+            #[link_name = "memmove"]
+            pub fn memmove(dst: *mut u8, src: *const u8, n: usize) -> *mut u8;
+            #[link_name = "memset"]
+            pub fn memset(dst: *mut u8, c: i32, n: usize) -> *mut u8;
+            #[link_name = "memcmp"]
+            pub fn memcmp(a: *const u8, b: *const u8, n: usize) -> i32;
+            #[link_name = "memchr"]
+            pub fn memchr(s: *const u8, c: i32, n: usize) -> *mut u8;
+        }
+
+        pub const PROT_NONE: i32 = 0;
+        pub const PROT_READ: i32 = 1;
+        pub const PROT_WRITE: i32 = 2;
+        pub const MAP_PRIVATE: i32 = 2;
+        pub const MAP_ANONYMOUS: i32 = 0x20;
+        pub const MAP_FAILED: *mut c_void = !0usize as *mut c_void;
+    }
 
     fn canary_buf(len: usize, fill: u8) -> Vec<u8> {
         // 16-byte canaries on each side.
@@ -203,7 +276,9 @@ mod tests {
 
     #[test]
     fn memcpy_lengths_and_alignment() {
-        for &len in &[0usize, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 4095, 4096, 4097] {
+        for &len in &[
+            0usize, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 4095, 4096, 4097,
+        ] {
             for src_off in 0..8usize {
                 for dst_off in 0..8usize {
                     let mut src_storage = canary_buf(len + 16, 0);
@@ -274,7 +349,9 @@ mod tests {
         for &len in &[1usize, 2, 3, 7, 8, 9, 15, 16, 17, 32, 64, 100] {
             // Destination after source (must copy backward when overlapping).
             for dist in 1..=len {
-                let mut buf = (0..len * 2).map(|i| (i as u8).wrapping_add(1)).collect::<Vec<_>>();
+                let mut buf = (0..len * 2)
+                    .map(|i| (i as u8).wrapping_add(1))
+                    .collect::<Vec<_>>();
                 let expected: Vec<u8> = buf[..len].to_vec();
                 unsafe {
                     let src = buf.as_ptr();
@@ -292,7 +369,9 @@ mod tests {
             }
             // Destination before source (forward copy).
             for dist in 1..=len {
-                let mut buf = (0..len * 2).map(|i| (i as u8).wrapping_mul(3)).collect::<Vec<_>>();
+                let mut buf = (0..len * 2)
+                    .map(|i| (i as u8).wrapping_mul(3))
+                    .collect::<Vec<_>>();
                 // Place source at offset `dist`, dest at 0.
                 for i in 0..len {
                     buf[dist + i] = (i as u8).wrapping_add(0x40);
@@ -393,6 +472,54 @@ mod tests {
     }
 
     #[test]
+    fn memchr_bounds_unsigned_values_and_canaries() {
+        for &len in &[0usize, 1, 7, 8, 9, 15, 16, 17, 63, 64, 65, 4096] {
+            let mut storage = canary_buf(len, 0x11);
+            let bytes = region(&mut storage, len);
+            if len != 0 {
+                bytes[0] = 0x11;
+            }
+            if len > 1 {
+                bytes[len - 1] = 0xff;
+            }
+            let base = bytes.as_ptr();
+            unsafe {
+                assert_eq!(memchr(base, 0x22, len), core::ptr::null_mut());
+                assert_eq!(
+                    memchr(base, 0x11, len),
+                    if len == 0 {
+                        core::ptr::null_mut()
+                    } else {
+                        base as *mut u8
+                    }
+                );
+                assert_eq!(
+                    memchr(base, -1, len),
+                    if len <= 1 {
+                        core::ptr::null_mut()
+                    } else {
+                        base.add(len - 1) as *mut u8
+                    }
+                );
+                assert_eq!(memchr(base, 0x11, 0), core::ptr::null_mut());
+            }
+            assert_canaries(&storage, len);
+        }
+    }
+
+    #[test]
+    fn zero_length_accepts_null_without_access() {
+        unsafe {
+            let null = core::ptr::null_mut::<u8>();
+            assert_eq!(memcpy(null, core::ptr::null(), 0), null);
+            assert_eq!(memmove(null, core::ptr::null(), 0), null);
+            assert_eq!(memset(null, 0x5a, 0), null);
+            assert_eq!(memcmp(core::ptr::null(), core::ptr::null(), 0), 0);
+            assert_eq!(memchr(core::ptr::null(), 0x5a, 0), null);
+        }
+    }
+
+    #[test]
     fn helpers_match_c_abi() {
         unsafe {
             let src = [9u8, 8, 7, 6];
@@ -410,6 +537,10 @@ mod tests {
                 memcmp(d1.as_ptr(), d2.as_ptr(), 4),
                 memcmp_bytes(d1.as_ptr(), d2.as_ptr(), 4)
             );
+            assert_eq!(
+                memchr(d1.as_ptr(), 0xAB, 4),
+                memchr_bytes(d1.as_ptr(), 0xAB, 4) as *mut u8
+            );
         }
     }
 
@@ -421,16 +552,21 @@ mod tests {
         type MemmoveFn = unsafe extern "C" fn(*mut u8, *const u8, usize) -> *mut u8;
         type MemsetFn = unsafe extern "C" fn(*mut u8, i32, usize) -> *mut u8;
         type MemcmpFn = unsafe extern "C" fn(*const u8, *const u8, usize) -> i32;
+        type MemchrFn = unsafe extern "C" fn(*const u8, i32, usize) -> *mut u8;
 
         let memcpy_fp: MemcpyFn = memcpy;
         let memmove_fp: MemmoveFn = memmove;
         let memset_fp: MemsetFn = memset;
         let memcmp_fp: MemcmpFn = memcmp;
+        let memchr_fp: MemchrFn = memchr;
 
         unsafe {
             let src = [1u8, 2, 3, 4, 5, 6, 7, 8];
             let mut dst = [0u8; 8];
-            assert_eq!(memcpy_fp(dst.as_mut_ptr(), src.as_ptr(), 8), dst.as_mut_ptr());
+            assert_eq!(
+                memcpy_fp(dst.as_mut_ptr(), src.as_ptr(), 8),
+                dst.as_mut_ptr()
+            );
             assert_eq!(dst, src);
 
             let mut overlap = [10u8, 20, 30, 40, 50];
@@ -446,6 +582,138 @@ mod tests {
 
             assert_eq!(memcmp_fp(src.as_ptr(), src.as_ptr(), 8), 0);
             assert!(memcmp_fp([0x80u8].as_ptr(), [0x7fu8].as_ptr(), 1) > 0);
+            assert_eq!(
+                memchr_fp(src.as_ptr(), 5, 8),
+                src.as_ptr().add(4) as *mut u8
+            );
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn guard_pages_prevent_memory_overreads() {
+        unsafe {
+            let page = host::getpagesize() as usize;
+            assert!(page >= 1024);
+            let mapping = host::mmap(
+                core::ptr::null_mut(),
+                page * 2,
+                host::PROT_READ | host::PROT_WRITE,
+                host::MAP_PRIVATE | host::MAP_ANONYMOUS,
+                -1,
+                0,
+            );
+            assert_ne!(mapping, host::MAP_FAILED);
+            assert_eq!(
+                host::mprotect(
+                    (mapping as *mut u8).add(page) as *mut _,
+                    page,
+                    host::PROT_NONE
+                ),
+                0
+            );
+
+            let end = (mapping as *mut u8).add(page - 3);
+            *end = b'A';
+            *end.add(1) = 0x80;
+            *end.add(2) = 0;
+
+            assert_eq!(memchr(end, 0x80, 2), end.add(1));
+            assert_eq!(memchr(end, 0, 2), core::ptr::null_mut());
+            assert_eq!(memcmp(end, end, 2), 0);
+            assert_eq!(crate::string::strlen(end), 2);
+            assert_eq!(crate::string::strnlen(end, 0), 0);
+            assert_eq!(crate::string::strnlen(end, 2), 2);
+            assert_eq!(crate::string::strnlen(end, 3), 2);
+            assert_eq!(crate::string::strchr(end, 0), end.add(2));
+            assert_eq!(crate::string::strrchr(end, 0x80), end.add(1));
+
+            assert_eq!(host::munmap(mapping, page * 2), 0);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn host_libc_differential_memory_matrix() {
+        let mut seed = 0x4d59_5df4_d0f3_3173u64;
+        for _ in 0..256 {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let len = (seed as usize) % 129;
+            let src_off = ((seed >> 8) as usize) & 7;
+            let dst_off = ((seed >> 16) as usize) & 7;
+            let move_src = ((seed >> 24) as usize) % 32;
+            let move_dst = ((seed >> 32) as usize) % 32;
+
+            let mut source = [0u8; 160];
+            let mut ours = [0xCCu8; 160];
+            let mut expected = [0xCCu8; 160];
+            for (i, byte) in source.iter_mut().enumerate() {
+                *byte = (i as u8).wrapping_mul(29).wrapping_add(seed as u8);
+            }
+
+            unsafe {
+                memcpy(
+                    ours.as_mut_ptr().add(16 + dst_off),
+                    source.as_ptr().add(16 + src_off),
+                    len,
+                );
+                host::memcpy(
+                    expected.as_mut_ptr().add(16 + dst_off),
+                    source.as_ptr().add(16 + src_off),
+                    len,
+                );
+            }
+            assert_eq!(
+                ours, expected,
+                "memcpy len={len} src_off={src_off} dst_off={dst_off}"
+            );
+
+            let mut ours_move = source;
+            let mut expected_move = source;
+            unsafe {
+                memmove(
+                    ours_move.as_mut_ptr().add(move_dst),
+                    ours_move.as_ptr().add(move_src),
+                    len,
+                );
+                host::memmove(
+                    expected_move.as_mut_ptr().add(move_dst),
+                    expected_move.as_ptr().add(move_src),
+                    len,
+                );
+            }
+            assert_eq!(
+                ours_move, expected_move,
+                "memmove len={len} src={move_src} dst={move_dst}"
+            );
+
+            let fill = (seed >> 40) as i32;
+            unsafe {
+                memset(ours.as_mut_ptr().add(16 + dst_off), fill, len);
+                host::memset(expected.as_mut_ptr().add(16 + dst_off), fill, len);
+            }
+            assert_eq!(ours, expected, "memset len={len} dst_off={dst_off}");
+
+            unsafe {
+                let a = source.as_ptr().add(16 + src_off);
+                let b = expected_move.as_ptr().add(16 + dst_off);
+                assert_eq!(memcmp(a, b, len).cmp(&0), host::memcmp(a, b, len).cmp(&0));
+                let needle = (seed >> 48) as i32;
+                let ours_at = memchr(a, needle, len);
+                let host_at = host::memchr(a, needle, len);
+                assert_eq!(
+                    if ours_at.is_null() {
+                        None
+                    } else {
+                        Some(ours_at as usize - a as usize)
+                    },
+                    if host_at.is_null() {
+                        None
+                    } else {
+                        Some(host_at as usize - a as usize)
+                    }
+                );
+            }
         }
     }
 }

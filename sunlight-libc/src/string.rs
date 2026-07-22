@@ -1,12 +1,18 @@
-//! Freestanding C string primitives (`strlen`, `strnlen`, `strcmp`, `strncmp`).
+//! Freestanding C string primitives (`strlen`, `strnlen`, `strcmp`, `strncmp`,
+//! `strchr`, `strrchr`).
 //!
 //! # Symbol ownership
 //!
 //! Strong C ABI definitions for the baseline string operations required by
 //! compiler-generated code, C ABI consumers, and freestanding runtimes.
 //! `compiler_builtins` already provides a weak `strlen`; our strong symbol
-//! overrides it. `strnlen` / `strcmp` / `strncmp` are not provided by
-//! `compiler_builtins` and are supplied here.
+//! overrides it. The remaining functions are supplied here.
+//!
+//! # Compiler-recursion safety
+//!
+//! The engines use explicit byte loops and do not call Rust pointer-copy or
+//! slice helpers that could lower to an exported libc primitive. The host
+//! proof script inspects optimized freestanding code for such dependencies.
 //!
 //! # Semantics
 //!
@@ -20,6 +26,8 @@
 //! - `strcmp`: both strings must be readable up through their terminators.
 //! - `strncmp`: may read at most `n` bytes from each side; if `n == 0`, no
 //!   access is performed.
+//! - `strchr` / `strrchr`: `s` must point to a readable NUL-terminated
+//!   sequence. Searching for `0` returns the terminator.
 //!
 //! # Host tests
 //!
@@ -96,6 +104,47 @@ pub unsafe fn strncmp_bytes(a: *const u8, b: *const u8, n: usize) -> i32 {
     0
 }
 
+/// Find the first occurrence of `c`, including a matching terminator.
+///
+/// # Safety
+/// `s` must point to a readable NUL-terminated sequence.
+#[inline]
+pub unsafe fn strchr_bytes(s: *const u8, c: u8) -> *const u8 {
+    let mut i = 0usize;
+    loop {
+        let current = s.add(i);
+        let byte = *current;
+        if byte == c {
+            return current;
+        }
+        if byte == 0 {
+            return core::ptr::null();
+        }
+        i += 1;
+    }
+}
+
+/// Find the last occurrence of `c`, including a matching terminator.
+///
+/// # Safety
+/// `s` must point to a readable NUL-terminated sequence.
+#[inline]
+pub unsafe fn strrchr_bytes(s: *const u8, c: u8) -> *const u8 {
+    let mut i = 0usize;
+    let mut last = core::ptr::null();
+    loop {
+        let current = s.add(i);
+        let byte = *current;
+        if byte == c {
+            last = current;
+        }
+        if byte == 0 {
+            return last;
+        }
+        i += 1;
+    }
+}
+
 // ── C ABI exports ────────────────────────────────────────────────────────────
 
 /// C11 `size_t strlen(const char *s);`
@@ -134,6 +183,30 @@ pub unsafe extern "C" fn strncmp(s1: *const u8, s2: *const u8, n: usize) -> i32 
     strncmp_bytes(s1, s2, n)
 }
 
+/// C11 `char *strchr(const char *s, int c);`
+///
+/// Searches with unsigned-byte conversion. A search for `0` returns the
+/// address of the terminating NUL byte.
+///
+/// # Safety
+/// See module-level validity rules.
+#[cfg_attr(not(test), no_mangle)]
+pub unsafe extern "C" fn strchr(s: *const u8, c: i32) -> *mut u8 {
+    strchr_bytes(s, c as u8) as *mut u8
+}
+
+/// C11 `char *strrchr(const char *s, int c);`
+///
+/// Searches with unsigned-byte conversion and returns the final match. A
+/// search for `0` returns the address of the terminating NUL byte.
+///
+/// # Safety
+/// See module-level validity rules.
+#[cfg_attr(not(test), no_mangle)]
+pub unsafe extern "C" fn strrchr(s: *const u8, c: i32) -> *mut u8 {
+    strrchr_bytes(s, c as u8) as *mut u8
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -141,6 +214,25 @@ mod tests {
     extern crate std;
 
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    mod host {
+        #[link(name = "c")]
+        extern "C" {
+            #[link_name = "strlen"]
+            pub fn strlen(s: *const u8) -> usize;
+            #[link_name = "strnlen"]
+            pub fn strnlen(s: *const u8, n: usize) -> usize;
+            #[link_name = "strcmp"]
+            pub fn strcmp(a: *const u8, b: *const u8) -> i32;
+            #[link_name = "strncmp"]
+            pub fn strncmp(a: *const u8, b: *const u8, n: usize) -> i32;
+            #[link_name = "strchr"]
+            pub fn strchr(s: *const u8, c: i32) -> *mut u8;
+            #[link_name = "strrchr"]
+            pub fn strrchr(s: *const u8, c: i32) -> *mut u8;
+        }
+    }
 
     #[test]
     fn strlen_basic() {
@@ -219,6 +311,24 @@ mod tests {
     }
 
     #[test]
+    fn strchr_and_strrchr_find_first_last_and_terminator() {
+        unsafe {
+            let s = b"ab\x80ba\0tail";
+            let base = s.as_ptr();
+            assert_eq!(strchr(base, b'a' as i32), base as *mut u8);
+            assert_eq!(strrchr(base, b'a' as i32), base.add(4) as *mut u8);
+            assert_eq!(strchr(base, b'b' as i32), base.add(1) as *mut u8);
+            assert_eq!(strrchr(base, b'b' as i32), base.add(3) as *mut u8);
+            assert_eq!(strchr(base, -128), base.add(2) as *mut u8);
+            assert_eq!(strrchr(base, 0x180), base.add(2) as *mut u8);
+            assert_eq!(strchr(base, b'z' as i32), core::ptr::null_mut());
+            assert_eq!(strrchr(base, b'z' as i32), core::ptr::null_mut());
+            assert_eq!(strchr(base, 0), base.add(5) as *mut u8);
+            assert_eq!(strrchr(base, 0), base.add(5) as *mut u8);
+        }
+    }
+
+    #[test]
     fn helpers_match_c_abi() {
         unsafe {
             let s = b"sunlight\0";
@@ -232,6 +342,14 @@ mod tests {
                 strncmp(s.as_ptr(), b"sun\0".as_ptr(), 3),
                 strncmp_bytes(s.as_ptr(), b"sun\0".as_ptr(), 3)
             );
+            assert_eq!(
+                strchr(s.as_ptr(), b'l' as i32),
+                strchr_bytes(s.as_ptr(), b'l') as *mut u8
+            );
+            assert_eq!(
+                strrchr(s.as_ptr(), b'n' as i32),
+                strrchr_bytes(s.as_ptr(), b'n') as *mut u8
+            );
         }
     }
 
@@ -244,18 +362,102 @@ mod tests {
         type StrnlenFn = unsafe extern "C" fn(*const u8, usize) -> usize;
         type StrcmpFn = unsafe extern "C" fn(*const u8, *const u8) -> i32;
         type StrncmpFn = unsafe extern "C" fn(*const u8, *const u8, usize) -> i32;
+        type StrchrFn = unsafe extern "C" fn(*const u8, i32) -> *mut u8;
+        type StrrchrFn = unsafe extern "C" fn(*const u8, i32) -> *mut u8;
 
         let strlen_fp: StrlenFn = strlen;
         let strnlen_fp: StrnlenFn = strnlen;
         let strcmp_fp: StrcmpFn = strcmp;
         let strncmp_fp: StrncmpFn = strncmp;
+        let strchr_fp: StrchrFn = strchr;
+        let strrchr_fp: StrrchrFn = strrchr;
 
         unsafe {
+            let repeated = b"abca\0";
             assert_eq!(strlen_fp(b"probe\0".as_ptr()), 5);
             assert_eq!(strnlen_fp(b"probe\0".as_ptr(), 3), 3);
             assert_eq!(strcmp_fp(b"aa\0".as_ptr(), b"aa\0".as_ptr()), 0);
             assert!(strcmp_fp(b"ab\0".as_ptr(), b"aa\0".as_ptr()) > 0);
             assert_eq!(strncmp_fp(b"abc\0".as_ptr(), b"abd\0".as_ptr(), 2), 0);
+            assert_eq!(
+                strchr_fp(repeated.as_ptr(), b'a' as i32),
+                repeated.as_ptr() as *mut u8
+            );
+            assert_eq!(
+                strrchr_fp(repeated.as_ptr(), b'a' as i32),
+                repeated.as_ptr().add(3) as *mut u8
+            );
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn host_libc_differential_string_matrix() {
+        let mut seed = 0x3c6e_f372_fe94_f82bu64;
+        for _ in 0..256 {
+            seed = seed
+                .wrapping_mul(2862933555777941757)
+                .wrapping_add(3037000493);
+            let left_len = (seed as usize) % 96;
+            let right_len = ((seed >> 8) as usize) % 96;
+            let limit = ((seed >> 16) as usize) % 112;
+            let needle = (seed >> 24) as i32;
+            let mut left = [0u8; 97];
+            let mut right = [0u8; 97];
+            for i in 0..left_len {
+                left[i] = ((seed >> (i & 31)) as u8).wrapping_rem(255).wrapping_add(1);
+            }
+            for i in 0..right_len {
+                right[i] = ((seed.rotate_left(i as u32) >> 9) as u8)
+                    .wrapping_rem(255)
+                    .wrapping_add(1);
+            }
+            left[left_len] = 0;
+            right[right_len] = 0;
+
+            unsafe {
+                assert_eq!(strlen(left.as_ptr()), host::strlen(left.as_ptr()));
+                assert_eq!(
+                    strnlen(left.as_ptr(), limit),
+                    host::strnlen(left.as_ptr(), limit)
+                );
+                assert_eq!(
+                    strcmp(left.as_ptr(), right.as_ptr()).cmp(&0),
+                    host::strcmp(left.as_ptr(), right.as_ptr()).cmp(&0)
+                );
+                assert_eq!(
+                    strncmp(left.as_ptr(), right.as_ptr(), limit).cmp(&0),
+                    host::strncmp(left.as_ptr(), right.as_ptr(), limit).cmp(&0)
+                );
+                let ours_first = strchr(left.as_ptr(), needle);
+                let host_first = host::strchr(left.as_ptr(), needle);
+                assert_eq!(
+                    if ours_first.is_null() {
+                        None
+                    } else {
+                        Some(ours_first as usize - left.as_ptr() as usize)
+                    },
+                    if host_first.is_null() {
+                        None
+                    } else {
+                        Some(host_first as usize - left.as_ptr() as usize)
+                    }
+                );
+                let ours_last = strrchr(left.as_ptr(), needle);
+                let host_last = host::strrchr(left.as_ptr(), needle);
+                assert_eq!(
+                    if ours_last.is_null() {
+                        None
+                    } else {
+                        Some(ours_last as usize - left.as_ptr() as usize)
+                    },
+                    if host_last.is_null() {
+                        None
+                    } else {
+                        Some(host_last as usize - left.as_ptr() as usize)
+                    }
+                );
+            }
         }
     }
 }
