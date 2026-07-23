@@ -61,6 +61,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-usb-mouse",
+            output: "sunlight-usb-mouse",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-deviced",
             output: "deviced",
             rustflags: service_rustflags,

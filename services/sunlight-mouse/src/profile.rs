@@ -40,6 +40,7 @@ impl PointerProfile {
         match self {
             // Balanced baseline — works acceptably on unknown environments.
             PointerProfile::Generic => PointerTuning {
+                invert_y: true,
                 base_sensitivity_fp: FP_ONE * 5 / 4, // 1.25×
                 precise_max_magnitude: 2,
                 low_speed_scale_fp: FP_ONE, // 1.0×
@@ -53,6 +54,7 @@ impl PointerProfile {
             },
             // QEMU/KVM PS/2: emulated PS/2 feels sluggish — boost base + fast gain.
             PointerProfile::QemuPs2 => PointerTuning {
+                invert_y: false,
                 base_sensitivity_fp: FP_ONE * 3 / 2, // 1.5×
                 precise_max_magnitude: 2,
                 low_speed_scale_fp: FP_ONE, // 1.0× — keep slow zone unscaled
@@ -67,6 +69,7 @@ impl PointerProfile {
             // VMware PS/2: very low latency causes overshoot — pull back sensitivity
             // and cap fast-zone gain hard.
             PointerProfile::VmwarePs2 => PointerTuning {
+                invert_y: true,
                 base_sensitivity_fp: FP_ONE, // 1.0× — VMware already fast
                 precise_max_magnitude: 3,    // wider slow zone for fine clicks
                 low_speed_scale_fp: FP_ONE,  // 1.0×
@@ -81,6 +84,7 @@ impl PointerProfile {
             // Real PS/2 hardware: conservative baseline, slightly lower fast ceiling
             // than Generic to avoid overshoot on varied hardware mice.
             PointerProfile::RealHardwarePs2 => PointerTuning {
+                invert_y: true,
                 base_sensitivity_fp: FP_ONE * 5 / 4, // 1.25×
                 precise_max_magnitude: 2,
                 low_speed_scale_fp: FP_ONE, // 1.0×
@@ -94,6 +98,7 @@ impl PointerProfile {
             },
             // TODO: VirtioInput uses absolute position — acceleration is meaningless.
             PointerProfile::VirtioInput => PointerTuning {
+                invert_y: false,
                 base_sensitivity_fp: FP_ONE,
                 precise_max_magnitude: 1,
                 low_speed_scale_fp: FP_ONE,
@@ -107,6 +112,7 @@ impl PointerProfile {
             },
             // TODO: AbsoluteTablet sends absolute coords — bypass all relative accel.
             PointerProfile::AbsoluteTablet => PointerTuning {
+                invert_y: false,
                 base_sensitivity_fp: FP_ONE,
                 precise_max_magnitude: 0,
                 low_speed_scale_fp: FP_ONE,
@@ -124,6 +130,9 @@ impl PointerProfile {
 
 #[allow(dead_code)]
 pub struct PointerTuning {
+    /// Real PS/2 devices report positive Y upward. QEMU's relative PS/2
+    /// backend already reports screen-oriented positive Y downward.
+    pub invert_y: bool,
     /// Base sensitivity (Q16.16; FP_ONE = 1.0).
     pub base_sensitivity_fp: i32,
     /// |dx|+|dy| at or below which the precise/slow-zone gain applies.

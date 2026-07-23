@@ -291,6 +291,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-swapd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-mouse --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-usb-mouse --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-deviced --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-networkd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-resolved --release
@@ -493,6 +494,8 @@ QEMU_CMD=(
     -serial stdio
     -no-reboot
     -device virtio-rng-pci,disable-modern=on
+    -device qemu-xhci,id=xhci
+    -device usb-mouse,bus=xhci.0
 )
 
 if [ "$UEFI_MODE" = true ]; then

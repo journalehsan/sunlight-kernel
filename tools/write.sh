@@ -160,6 +160,7 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-swapd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-mouse --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-usb-mouse --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release

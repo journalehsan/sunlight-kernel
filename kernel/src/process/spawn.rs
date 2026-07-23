@@ -643,6 +643,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/sbin/sunlight-swapd" | "/usr/sbin/sunlight-swapd" => Ok(crate::SUNLIGHT_SWAPD_ELF_BYTES),
         "/sbin/sunlight-kbd" | "/usr/sbin/sunlight-kbd" => Ok(crate::SUNLIGHT_KBD_ELF_BYTES),
         "/sbin/sunlight-mouse" | "/usr/sbin/sunlight-mouse" => Ok(crate::SUNLIGHT_MOUSE_ELF_BYTES),
+        "/sbin/sunlight-usb-mouse" | "/usr/sbin/sunlight-usb-mouse" => {
+            Ok(crate::SUNLIGHT_USB_MOUSE_ELF_BYTES)
+        }
         "/sbin/deviced" | "/usr/sbin/deviced" => Ok(crate::DEVICED_ELF_BYTES),
         "/sbin/networkd" | "/usr/sbin/networkd" => Ok(crate::NETWORKD_ELF_BYTES),
         "/bin/networkctl" | "/usr/bin/networkctl" => Ok(crate::NETWORKCTL_ELF_BYTES),

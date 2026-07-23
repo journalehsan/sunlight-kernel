@@ -154,6 +154,11 @@ pub enum SunlightSyscall {
     /// rdi = host_w | (host_h << 32). Returns 1 changed, 2 unchanged, 0 fail.
     SvgaSetMode = 129,
 
+    // Ring-3 xHCI driver. These calls are restricted to sunlight-usb-mouse.
+    XhciInfo = 130,
+    MapMmio = 131,
+    DmaAlloc = 132,
+
     DebugLog = 99,
 }
 
@@ -550,6 +555,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         127 => sys_svga_get_info(frame),
         128 => sys_svga_update(frame),
         129 => sys_svga_set_mode(frame),
+        130 => sys_xhci_info(frame),
+        131 => sys_map_mmio(frame),
+        132 => sys_dma_alloc(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -5369,6 +5377,273 @@ fn sys_mouse_get_stats(frame: &mut SyscallFrame) -> u64 {
         return error;
     }
     0
+}
+
+const USB_MOUSE_MMIO_VADDR: u64 = 0x0000_0005_0000_0000;
+const USB_MOUSE_DMA_VADDR: u64 = 0x0000_0005_1000_0000;
+const USB_MOUSE_MAX_BAR_SIZE: u64 = 1024 * 1024;
+const USB_MOUSE_MAX_DMA_PAGES: usize = 16;
+
+static XHCI_BAR_PHYS: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+static XHCI_BAR_SIZE: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+
+fn current_process_is_usb_mouse_driver() -> bool {
+    crate::sched::SCHEDULER.lock().current_process().name_str() == "sunlight-usb-mouse"
+}
+
+/// Locate one PCI xHCI controller and return its BAR0 physical range.
+///
+/// The PCI configuration mechanism remains privileged; userspace receives only
+/// the resource assigned to class 0c:03, programming interface 30. BAR sizing
+/// is performed before bus mastering is enabled and then cached for map_mmio.
+fn sys_xhci_info(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_usb_mouse_driver() {
+        return u64::MAX;
+    }
+    use sunlight_virtio::pci::{pci_read32, pci_write32};
+
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            let header = unsafe { pci_read32(bus, slot, 0, 0x0c) };
+            let functions = if (header >> 16) as u8 & 0x80 != 0 {
+                8
+            } else {
+                1
+            };
+            for function in 0..functions {
+                let ids = unsafe { pci_read32(bus, slot, function, 0x00) };
+                if ids == 0xffff_ffff {
+                    continue;
+                }
+                let class = unsafe { pci_read32(bus, slot, function, 0x08) };
+                if (class >> 8) & 0x00ff_ffff != 0x000c_0330 {
+                    continue;
+                }
+
+                let command = unsafe { pci_read32(bus, slot, function, 0x04) } as u16;
+                let bar_low = unsafe { pci_read32(bus, slot, function, 0x10) };
+                if bar_low & 1 != 0 || bar_low & !0xf == 0 {
+                    continue;
+                }
+                let is_64_bit = (bar_low >> 1) & 3 == 2;
+                let bar_high = if is_64_bit {
+                    unsafe { pci_read32(bus, slot, function, 0x14) }
+                } else {
+                    0
+                };
+
+                // Disable memory decoding and bus mastering while probing BAR size.
+                unsafe { pci_write32(bus, slot, function, 0x04, (command & !0x6) as u32) };
+                unsafe { pci_write32(bus, slot, function, 0x10, 0xffff_ffff) };
+                if is_64_bit {
+                    unsafe { pci_write32(bus, slot, function, 0x14, 0xffff_ffff) };
+                }
+                let mask_low = unsafe { pci_read32(bus, slot, function, 0x10) };
+                let mask_high = if is_64_bit {
+                    unsafe { pci_read32(bus, slot, function, 0x14) }
+                } else {
+                    0
+                };
+                unsafe { pci_write32(bus, slot, function, 0x10, bar_low) };
+                if is_64_bit {
+                    unsafe { pci_write32(bus, slot, function, 0x14, bar_high) };
+                }
+                // Enable PCI memory decoding and DMA after restoring BAR0.
+                unsafe { pci_write32(bus, slot, function, 0x04, (command | 0x6) as u32) };
+
+                let physical = ((bar_high as u64) << 32) | (bar_low as u64 & !0xf);
+                let mask = if is_64_bit {
+                    ((mask_high as u64) << 32) | (mask_low as u64 & !0xf)
+                } else {
+                    mask_low as u64 & !0xf
+                };
+                let size = (!mask).wrapping_add(1) & if is_64_bit {
+                    u64::MAX
+                } else {
+                    u32::MAX as u64
+                };
+                if size < 4096 || size > USB_MOUSE_MAX_BAR_SIZE || !size.is_power_of_two() {
+                    return u64::MAX;
+                }
+                XHCI_BAR_PHYS.store(physical, core::sync::atomic::Ordering::Release);
+                XHCI_BAR_SIZE.store(size, core::sync::atomic::Ordering::Release);
+                frame.rdx = size;
+                return physical;
+            }
+        }
+    }
+    0
+}
+
+/// Map the cached xHCI BAR into the USB driver's address space as uncached,
+/// writable, non-executable device memory.
+fn sys_map_mmio(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_usb_mouse_driver() {
+        return u64::MAX;
+    }
+    let physical = XHCI_BAR_PHYS.load(core::sync::atomic::Ordering::Acquire);
+    let size = XHCI_BAR_SIZE.load(core::sync::atomic::Ordering::Acquire);
+    if physical == 0 || frame.rdi != physical || frame.rsi != size || physical & 0xfff != 0 {
+        return u64::MAX;
+    }
+    map_usb_mouse_pages(
+        USB_MOUSE_MMIO_VADDR,
+        physical,
+        size as usize / 4096,
+        crate::process::region::MappingKind::Framebuffer,
+        0x5848_4349,
+        false,
+    )
+}
+
+/// Allocate physically-contiguous, zeroable DMA memory and map it into the
+/// xHCI driver's address space. rax is the user VA; rdx is the bus address.
+fn sys_dma_alloc(frame: &mut SyscallFrame) -> u64 {
+    if !current_process_is_usb_mouse_driver() {
+        return u64::MAX;
+    }
+    let page_count = frame.rdi as usize;
+    if page_count == 0 || page_count > USB_MOUSE_MAX_DMA_PAGES {
+        return u64::MAX;
+    }
+    let (pid, physical) = {
+        let sched = crate::sched::SCHEDULER.lock();
+        let pid = sched.current_process().pid;
+        drop(sched);
+        let Some(physical) = crate::PMM
+            .lock()
+            .alloc_frames_owned(page_count, pid as u32)
+        else {
+            return u64::MAX;
+        };
+        (pid, physical.as_u64())
+    };
+    let result = map_usb_mouse_pages(
+        USB_MOUSE_DMA_VADDR,
+        physical,
+        page_count,
+        crate::process::region::MappingKind::InternalUserMapping,
+        pid as u64,
+        true,
+    );
+    if result == u64::MAX {
+        let mut pmm = crate::PMM.lock();
+        for index in 0..page_count {
+            pmm.free_frame(PhysAddr::new(physical + index as u64 * 4096));
+        }
+        return result;
+    }
+    frame.rdx = physical;
+    result
+}
+
+fn map_usb_mouse_pages(
+    virtual_base: u64,
+    physical_base: u64,
+    page_count: usize,
+    kind: crate::process::region::MappingKind,
+    backing: u64,
+    write_back: bool,
+) -> u64 {
+    if page_count == 0 {
+        return u64::MAX;
+    }
+    let Some(hhdm) = crate::HHDM_REQ.response() else {
+        return u64::MAX;
+    };
+    let hhdm_offset = VirtAddr::new(hhdm.offset);
+    let protection = crate::process::region::RegionProtection::READ_WRITE;
+    let mut flags = match crate::process::address_space::AddressSpace::protection_to_pte_flags(
+        protection,
+    ) {
+        Ok(flags) => flags,
+        Err(_) => return u64::MAX,
+    };
+    if !write_back {
+        flags |= PageTableFlags::NO_CACHE | PageTableFlags::WRITE_THROUGH;
+    }
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let process = sched.current_process_mut();
+    for index in 0..page_count {
+        let address = virtual_base + index as u64 * 4096;
+        let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address))
+            .expect("fixed USB mapping is page aligned");
+        if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
+            return u64::MAX;
+        }
+    }
+    let region = match crate::process::region::MappingRegion::new(
+        virtual_base,
+        virtual_base + page_count as u64 * 4096,
+        protection,
+        kind,
+        crate::process::region::RegionPolicy::SYSTEM
+            .union(crate::process::region::RegionPolicy::OWNER_MANAGED),
+        crate::process::region::RegionBacking::Internal(backing),
+    ) {
+        Ok(region) => region,
+        Err(_) => return u64::MAX,
+    };
+    let reservation = match process.address_space.preflight_region(region) {
+        Ok(reservation) => reservation,
+        Err(_) => return u64::MAX,
+    };
+    for index in 0..page_count {
+        let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(
+            virtual_base + index as u64 * 4096,
+        ))
+        .expect("fixed USB mapping is page aligned");
+        let physical = PhysAddr::new(physical_base + index as u64 * 4096);
+        let physical_frame = unsafe { PhysFrame::from_start_address_unchecked(physical) };
+        if unsafe {
+            process
+                .address_space
+                .map_page(page, physical_frame, flags, &mut *pmm, hhdm_offset)
+        }
+        .is_err()
+        {
+            for rollback in (0..index).rev() {
+                let rollback_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(
+                    virtual_base + rollback as u64 * 4096,
+                ))
+                .expect("fixed USB rollback page is aligned");
+                let rollback_phys = PhysAddr::new(physical_base + rollback as u64 * 4096);
+                let _ = unsafe {
+                    process.address_space.rollback_mapped_page(
+                        rollback_page,
+                        rollback_phys,
+                        &mut *pmm,
+                        hhdm_offset,
+                    )
+                };
+            }
+            process.address_space.cancel_region(reservation);
+            return u64::MAX;
+        }
+    }
+    if process.address_space.commit_region(reservation).is_err() {
+        for index in (0..page_count).rev() {
+            let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(
+                virtual_base + index as u64 * 4096,
+            ))
+            .expect("fixed USB rollback page is aligned");
+            let physical = PhysAddr::new(physical_base + index as u64 * 4096);
+            let _ = unsafe {
+                process.address_space.rollback_mapped_page(
+                    page,
+                    physical,
+                    &mut *pmm,
+                    hhdm_offset,
+                )
+            };
+        }
+        return u64::MAX;
+    }
+    virtual_base
 }
 
 /// Syscall: powerctl (80)

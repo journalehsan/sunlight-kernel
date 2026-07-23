@@ -1,0 +1,12 @@
+[package]
+name = "sunlight-usb-mouse"
+version = "0.2.2141-alpha.1"
+
+edition = "2021"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+
+[[bin]]
+name = "sunlight-usb-mouse"
+path = "src/main.rs"

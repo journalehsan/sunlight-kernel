@@ -40,6 +40,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --rel
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-swapd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-mouse --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-usb-mouse --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-deviced --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-networkd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-resolved --release
@@ -141,6 +142,7 @@ qemu-system-x86_64 \
     -smp "$QEMU_CPUS" \
     $KVM_FLAGS \
     -device virtio-rng-pci,disable-modern=on \
+    -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 \
     -netdev user,id=net0,hostfwd=tcp::8080-:80 -device virtio-net-pci,netdev=net0,disable-modern=on \
     -no-reboot \
     -no-shutdown

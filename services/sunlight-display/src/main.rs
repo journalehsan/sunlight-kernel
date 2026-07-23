@@ -7446,7 +7446,7 @@ pub extern "C" fn _start() -> ! {
             MouseMsg::RAW_MOTION => {
                 let raw = msg.words[0];
                 let metadata = msg.words[1];
-                // Driver already inverted Y (PS/2 up→negative screen delta). Do NOT negate again.
+                // Input drivers provide screen-relative deltas: positive Y is down.
                 let dx = ((raw & 0xFFFF) as i16) as i32;
                 let dy = (((raw >> 16) & 0xFFFF) as i16) as i32;
                 let buttons = ((raw >> 32) & 0xFF) as u8;

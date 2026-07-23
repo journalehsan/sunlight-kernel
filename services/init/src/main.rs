@@ -24,10 +24,11 @@ use sunlight_ipc::{
 /// already-running servers (tty, vfs, …) must be drained *between* spawns —
 /// init used to spawn the full list before entering the nameserver loop, which
 /// delayed `"tty"` registration until after networkd/powerd/etc.
-const INIT_SERVICES: [&str; 12] = [
+const INIT_SERVICES: [&str; 13] = [
     "/sbin/timer_server",
     "/sbin/sunlight-kbd",
     "/sbin/sunlight-mouse",
+    "/sbin/sunlight-usb-mouse",
     "/sbin/sunlight-swapd",
     "/sbin/deviced",
     "/sbin/sunlightd",

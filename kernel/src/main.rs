@@ -65,6 +65,8 @@ static SUNLIGHT_KBD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kbd");
 static SUNLIGHT_MOUSE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-mouse");
+static SUNLIGHT_USB_MOUSE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-usb-mouse");
 static DEVICED_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/deviced");
 static VFS_SERVER_ELF_BYTES: &[u8] =

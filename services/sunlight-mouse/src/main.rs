@@ -195,8 +195,12 @@ impl MouseState {
                     dy |= !0xFF;
                 }
 
-                // Invert Y: PS/2 defines up as positive; screen Y grows downward.
-                dy = -dy;
+                // Real PS/2 hardware reports positive Y upward, while QEMU's
+                // backend is already screen-oriented. Keep the distinction in
+                // the selected pointer profile instead of breaking one platform.
+                if self.tuning.invert_y {
+                    dy = -dy;
+                }
 
                 let raw_dx = dx as i16;
                 let raw_dy = dy as i16;
@@ -579,6 +583,8 @@ fn log_profile_startup(p: profile::PointerProfile) {
     let t = p.tuning();
     syscall::debug_log("[MOUSE] pointer profile=");
     syscall::debug_log(p.name());
+    syscall::debug_log(" invert_y=");
+    syscall::debug_log(if t.invert_y { "yes" } else { "no" });
     syscall::debug_log(" base_sens=");
     syscall::debug_log_i32(t.base_sensitivity_fp);
     syscall::debug_log("/65536 precise_zone<=");

@@ -1,0 +1,92 @@
+//! Ring-3 USB HID boot-mouse service.
+
+#![no_std]
+#![no_main]
+
+mod usb_mouse;
+
+use sunlight_ipc::{
+    getpid, ipc_call_timeout, nameserver_lookup, process_yield, DevicedMsg, DriverCaps, DriverKind,
+    DriverState, IpcMsg, MouseMsg, ProcessExit,
+};
+
+const FORWARD_TIMEOUT_MS: u64 = 50;
+
+fn debug_log(message: &str) {
+    unsafe {
+        core::arch::asm!(
+            "syscall",
+            inlateout("rax") 99u64 => _,
+            in("rdi") message.as_ptr() as u64,
+            in("rsi") message.len() as u64,
+            lateout("rcx") _, lateout("r11") _,
+            options(nostack)
+        );
+    }
+}
+
+fn pack_short_name(name: &str) -> u64 {
+    let mut word = 0;
+    let bytes = name.as_bytes();
+    let mut index = 0;
+    while index < bytes.len().min(8) {
+        word |= (bytes[index] as u64) << (index * 8);
+        index += 1;
+    }
+    word
+}
+
+fn register_with_deviced(state: DriverState) {
+    let Some(deviced) = sunlight_ipc::nameserver_lookup_timeout("deviced", 5) else {
+        return;
+    };
+    let metadata = (DriverKind::Mouse as u64) | ((state as u64) << 16);
+    let message = IpcMsg::with_label(DevicedMsg::REGISTER_DRIVER)
+        .word(0, pack_short_name("usbmouse"))
+        .word(1, getpid())
+        .word(2, metadata)
+        .word(
+            3,
+            DriverCaps::INPUT | DriverCaps::POINTER | DriverCaps::RELATIVE_MOTION,
+        );
+    let _ = ipc_call_timeout(deviced, message, 20);
+}
+
+fn dispatch(event: usb_mouse::MouseEvent) {
+    let Some(display) = nameserver_lookup("display_server") else {
+        return;
+    };
+    let packed = (event.dx as u16 as u64)
+        | ((event.dy as u16 as u64) << 16)
+        | (((event.buttons & 0x07) as u64) << 32);
+    let message = IpcMsg::with_label(MouseMsg::RAW_MOTION)
+        .word(0, packed)
+        .word(1, 1); // one HID report in this batch
+    let _ = ipc_call_timeout(display, message, FORWARD_TIMEOUT_MS);
+}
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    debug_log("[USB-MOUSE] PANIC\n");
+    ProcessExit::exit(101);
+}
+
+#[no_mangle]
+pub extern "C" fn _start() -> ! {
+    debug_log("[USB-MOUSE] ring-3 xHCI HID driver starting\n");
+    if usb_mouse::init().is_err() {
+        debug_log("[USB-MOUSE] no usable xHCI boot mouse\n");
+        register_with_deviced(DriverState::Failed);
+        ProcessExit::exit(1);
+    }
+    register_with_deviced(DriverState::Ready);
+    debug_log("[USB-MOUSE] boot mouse ready\n");
+
+    loop {
+        if let Some(event) = usb_mouse::poll() {
+            dispatch(event);
+        } else {
+            process_yield();
+        }
+    }
+}

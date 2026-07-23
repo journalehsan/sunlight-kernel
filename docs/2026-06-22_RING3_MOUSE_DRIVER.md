@@ -80,7 +80,7 @@ WaitingByte0 → (validate sync bit) → WaitingByte1 → WaitingByte2 → Proce
 - Maintains absolute X, Y position (initialized to screen center)
 - Applies relative deltas with sign extension
 - Clamps to screen bounds (0, 0) to (width-1, height-1)
-- Inverts Y axis (PS/2 positive = down, screen positive = up)
+- Selects Y polarity by platform: QEMU deltas are already screen-oriented, while real PS/2 hardware is inverted to match top-down screen coordinates
 
 #### Phase 4: Event Delivery
 

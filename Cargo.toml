@@ -52,6 +52,7 @@ members = [
     "sunlight-writer",
     "services/sunlight-kbd",
     "services/sunlight-mouse",
+    "services/sunlight-usb-mouse",
     "services/sunlight-display",
     "services/eyes",
     "services/sun-exec",
