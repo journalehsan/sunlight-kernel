@@ -323,6 +323,10 @@ pub fn get_stats() -> (usize, usize, usize) {
 
 /// Main IRQ1 handler: read raw byte, push to buffer, notify driver, send EOI.
 pub fn handle_irq1() {
+    if super::mouse::command_active() {
+        return;
+    }
+
     let status = unsafe {
         let mut status: Port<u8> = Port::new(STATUS_COMMAND_PORT);
         status.read()

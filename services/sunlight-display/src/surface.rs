@@ -188,6 +188,11 @@ mod tests {
             SurfaceLayout::for_new_surface(MAX_SURFACE_DIM + 1, 1),
             Err(SurfaceLayoutError::DimensionTooLarge)
         );
+
+        let wuxga = SurfaceLayout::for_new_surface(1920, 1200).unwrap();
+        assert_eq!(wuxga.stride_bytes, 7680);
+        assert_eq!(wuxga.required_bytes, 9_216_000);
+        assert_eq!(wuxga.surface_len_bytes, 9_216_000);
     }
 
     #[test]

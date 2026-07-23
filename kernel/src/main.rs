@@ -1801,6 +1801,14 @@ fn log_boot_firmware_diagnostics() {
                 address
             };
             let mapped_len = fb.pitch.checked_mul(fb.height).unwrap_or(0);
+            let bytes_per_pixel = u64::from(fb.bpp).div_ceil(8);
+            let pixels_per_scan_line = if bytes_per_pixel == 0 {
+                0
+            } else {
+                fb.pitch / bytes_per_pixel
+            };
+            let calculated_stride = fb.width.checked_mul(bytes_per_pixel).unwrap_or(0);
+            let calculated_bytes = calculated_stride.checked_mul(fb.height).unwrap_or(0);
             serial_println!(
                 "[BOOT] framebuffer: {}x{} pitch={} bpp={} model={}",
                 fb.width,
@@ -1817,6 +1825,19 @@ fn log_boot_firmware_diagnostics() {
                 fb.pitch,
                 fb.bpp,
                 mapped_len
+            );
+            serial_println!(
+                "[BOOT-DISPLAY-GEOMETRY] reported={}x{} physical_fb={}x{} pixels_per_scan_line={} pitch_bytes={} bytes_per_pixel={} framebuffer_size={} calculated_stride={} calculated_framebuffer_bytes={}",
+                fb.width,
+                fb.height,
+                fb.width,
+                fb.height,
+                pixels_per_scan_line,
+                fb.pitch,
+                bytes_per_pixel,
+                fb.size(),
+                calculated_stride,
+                calculated_bytes
             );
         } else {
             serial_println!("[BOOT] framebuffer: response present but empty list");
@@ -1884,10 +1905,12 @@ fn map_tty_framebuffer(
         .checked_mul(4096)
         .and_then(|bytes| bytes.checked_sub(fb_page_offset))
         .expect("boot framebuffer mapped length overflow");
+    let page_table_spans = page_count.div_ceil(512);
     serial_println!(
-        "[BOOT-DISPLAY] tty mapping cache={} pages={} required_len={} mapped_len={}",
+        "[BOOT-DISPLAY] tty mapping cache={} pages={} p1_tables={} required_len={} mapped_len={}",
         framebuffer_cache_label(cache_policy.pte_flags, cache_policy.leaf_pat),
         page_count,
+        page_table_spans,
         required_len,
         mapped_len
     );

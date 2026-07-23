@@ -1282,6 +1282,22 @@ fn fb_stride(state: &CompositorState) -> usize {
     (state.fb_pitch / 4) as usize
 }
 
+fn log_framebuffer_copy_geometry(state: &CompositorState, rows: usize, row_pixels: usize) {
+    let mut line = LogLine::new();
+    line.push_str("[DISPLAY-COPY] target=");
+    line.push_dim(state.fb_width, state.fb_height);
+    line.push_str(" copy_rows=");
+    line.push_dec_u64(rows as u64);
+    line.push_str(" copy_row_bytes=");
+    line.push_dec_u64(row_pixels.saturating_mul(surface::BYTES_PER_PIXEL as usize) as u64);
+    line.push_str(" source_stride_bytes=");
+    line.push_dec(state.fb_pitch);
+    line.push_str(" destination_stride_bytes=");
+    line.push_dec(state.fb_pitch);
+    line.push_str("\n");
+    line.flush();
+}
+
 fn clip_to_screen(r: Rect, w: u32, h: u32) -> Rect {
     let x0 = r.x.max(0);
     let y0 = r.y.max(0);
@@ -2530,6 +2546,13 @@ fn back_buffer_canvas<'a>(state: &CompositorState, pixels: &'a mut [u32]) -> Can
 fn present_back_buffer(state: &mut CompositorState) {
     match &state.display_backend {
         backend::DisplayBackend::Limine { fb, pitch_words } => {
+            if state.debug_counters.framebuffer_copy_count == 0 {
+                log_framebuffer_copy_geometry(
+                    state,
+                    state.fb_height as usize,
+                    state.fb_width as usize,
+                );
+            }
             state.debug_counters.framebuffer_copy_count += 1;
             let stride = *pitch_words;
             let fw = state.fb_width as usize;
@@ -2551,6 +2574,13 @@ fn present_back_buffer(state: &mut CompositorState) {
             height,
             ..
         } => {
+            if state.debug_counters.framebuffer_copy_count == 0 {
+                log_framebuffer_copy_geometry(
+                    state,
+                    state.fb_height as usize,
+                    state.fb_width as usize,
+                );
+            }
             state.debug_counters.framebuffer_copy_count += 1;
             let stride = *pitch_words;
             let fw = state.fb_width as usize;
@@ -2587,6 +2617,9 @@ fn present_rect(state: &mut CompositorState, r: Rect) {
     }
     match &state.display_backend {
         backend::DisplayBackend::Limine { fb, pitch_words } => {
+            if state.debug_counters.framebuffer_copy_count == 0 {
+                log_framebuffer_copy_geometry(state, y1 - y0, x1 - x0);
+            }
             state.debug_counters.framebuffer_copy_count += 1;
             let stride = *pitch_words;
             let len = x1 - x0;
@@ -2603,6 +2636,9 @@ fn present_rect(state: &mut CompositorState, r: Rect) {
         backend::DisplayBackend::VmwareSvga {
             fb, pitch_words, ..
         } => {
+            if state.debug_counters.framebuffer_copy_count == 0 {
+                log_framebuffer_copy_geometry(state, y1 - y0, x1 - x0);
+            }
             state.debug_counters.framebuffer_copy_count += 1;
             let stride = *pitch_words;
             let len = x1 - x0;
@@ -3975,7 +4011,11 @@ impl LogLine {
     }
 
     fn push_dec(&mut self, v: u32) {
-        let mut tmp = [0u8; 10];
+        self.push_dec_u64(u64::from(v));
+    }
+
+    fn push_dec_u64(&mut self, v: u64) {
+        let mut tmp = [0u8; 20];
         let mut n = v;
         let mut i = tmp.len();
         loop {
@@ -4091,6 +4131,13 @@ fn ensure_compositor_buffer(state: &mut CompositorState) -> bool {
         debug_log("[DISPLAY] buffer allocation failed\n");
         return false;
     }
+    let mut line = LogLine::new();
+    line.push_str("[DISPLAY-BUFFERS] frontbuffer_bytes=");
+    line.push_dec_u64(u64::from(state.fb_pitch) * u64::from(state.fb_height));
+    line.push_str(" backbuffer_allocation_bytes=");
+    line.push_dec_u64((state.back_buffer.len() * core::mem::size_of::<u32>()) as u64);
+    line.push_str("\n");
+    line.flush();
     debug_log("[DISPLAY] buffers ready\n");
     clear_back_buffer(state);
     true
@@ -4824,6 +4871,23 @@ mod tests {
         assert_eq!(
             validate_framebuffer_layout(1024, 768, 4352, 32, 4352 * 768, 1, 8, 16, 8, 8, 8, 0),
             Some((1088, 4352 * 768))
+        );
+        assert_eq!(
+            validate_framebuffer_layout(
+                1920,
+                1200,
+                8192,
+                32,
+                8192 * 1200,
+                1,
+                8,
+                16,
+                8,
+                8,
+                8,
+                0,
+            ),
+            Some((2048, 9_830_400))
         );
     }
 
@@ -6037,6 +6101,33 @@ pub extern "C" fn _start() -> ! {
     debug_log(" mapped_len=");
     debug_dec_u64(mapped_len);
     debug_log("\n");
+    let mut geometry = LogLine::new();
+    geometry.push_str("[DISPLAY-GEOMETRY] reported=");
+    geometry.push_dim(fb_width, fb_height);
+    geometry.push_str(" physical_fb=");
+    geometry.push_dim(framebuffer_info.width, framebuffer_info.height);
+    geometry.push_str(" pixels_per_scan_line=");
+    geometry.push_dec(pitch / surface::BYTES_PER_PIXEL);
+    geometry.push_str(" pitch_bytes=");
+    geometry.push_dec(pitch);
+    geometry.push_str(" bytes_per_pixel=");
+    geometry.push_dec(surface::BYTES_PER_PIXEL);
+    geometry.push_str("\n");
+    geometry.flush();
+    let calculated_stride = fb_width
+        .checked_mul(surface::BYTES_PER_PIXEL)
+        .unwrap_or(0);
+    let calculated_framebuffer_bytes =
+        u64::from(calculated_stride) * u64::from(fb_height);
+    let mut geometry_bytes = LogLine::new();
+    geometry_bytes.push_str("[DISPLAY-GEOMETRY] framebuffer_size=");
+    geometry_bytes.push_dec_u64(mapped_len);
+    geometry_bytes.push_str(" calculated_stride=");
+    geometry_bytes.push_dec(calculated_stride);
+    geometry_bytes.push_str(" calculated_framebuffer_bytes=");
+    geometry_bytes.push_dec_u64(calculated_framebuffer_bytes);
+    geometry_bytes.push_str("\n");
+    geometry_bytes.flush();
     debug_log("[DISPLAY-LIMINE] immutable=true runtime_modes=false required_len=");
     debug_dec_u64(limine_required_len);
     debug_log(" mapped_len=");
@@ -6310,6 +6401,15 @@ pub extern "C" fn _start() -> ! {
     debug_log(" actual_len=");
     debug_dec(back_buffer.len() as u32);
     debug_log("\n");
+    let mut buffer_line = LogLine::new();
+    buffer_line.push_str("[DISPLAY-BUFFERS] compositor_target=");
+    buffer_line.push_dim(render_width, render_height);
+    buffer_line.push_str(" frontbuffer_bytes=");
+    buffer_line.push_dec_u64(u64::from(render_pitch) * u64::from(render_height));
+    buffer_line.push_str(" backbuffer_allocation_bytes=");
+    buffer_line.push_dec_u64((back_buffer.len() * core::mem::size_of::<u32>()) as u64);
+    buffer_line.push_str("\n");
+    buffer_line.flush();
 
     let mut state = CompositorState {
         windows: Vec::new(),
@@ -6440,6 +6540,19 @@ pub extern "C" fn _start() -> ! {
                 let size = layout.surface_len_bytes;
                 let config = WindowConfig::from_ipc_words(&msg.words);
                 let is_desktop_window = config.window_type == WindowType::Desktop;
+                if is_desktop_window {
+                    let mut surface_line = LogLine::new();
+                    surface_line.push_str("[DISPLAY-SURFACE] role=desktop dimensions=");
+                    surface_line.push_dim(layout.width, layout.height);
+                    surface_line.push_str(" stride_bytes=");
+                    surface_line.push_dec_u64(layout.stride_bytes as u64);
+                    surface_line.push_str(" surface_bytes=");
+                    surface_line.push_dec_u64(layout.surface_len_bytes as u64);
+                    surface_line.push_str(" compositor_target=");
+                    surface_line.push_dim(state.fb_width, state.fb_height);
+                    surface_line.push_str("\n");
+                    surface_line.flush();
+                }
                 let owner_pid = msg.badge;
                 let trace = trace_for_pid(&state, owner_pid);
                 let window_subject = String::from(window_title_str(&config.title));
@@ -6593,7 +6706,10 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             SgpMsg::CONFIGURE_WINDOW => {
                 let win_id = msg.words[0];
+                let compositor_width = state.fb_width;
+                let compositor_height = state.fb_height;
                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == win_id) {
+                    let was_desktop_window = win.config.window_type == WindowType::Desktop;
                     // Update flags if non-zero.
                     if msg.words[1] != 0 {
                         let flags = msg.words[1];
@@ -6660,6 +6776,19 @@ pub extern "C" fn _start() -> ! {
                         if flags & SgpMsg::config_flags::MATERIAL_MASK != 0 {
                             win.config.surface_material = SurfaceMaterial::from_flags(flags);
                         }
+                    }
+                    if !was_desktop_window && win.config.window_type == WindowType::Desktop {
+                        let mut surface_line = LogLine::new();
+                        surface_line.push_str("[DISPLAY-SURFACE] role=desktop dimensions=");
+                        surface_line.push_dim(win.width, win.height);
+                        surface_line.push_str(" stride_bytes=");
+                        surface_line.push_dec_u64(win.surface_stride_bytes as u64);
+                        surface_line.push_str(" surface_bytes=");
+                        surface_line.push_dec_u64(win.surface_len_bytes as u64);
+                        surface_line.push_str(" compositor_target=");
+                        surface_line.push_dim(compositor_width, compositor_height);
+                        surface_line.push_str("\n");
+                        surface_line.flush();
                     }
                     // Update title from words[3] inline bytes.
                     if msg.words[3] != 0 {
@@ -7861,30 +7990,42 @@ pub extern "C" fn _start() -> ! {
             // SESSION_ACTIVATE — tty_server hands framebuffer to Desktop session.
             // -------------------------------------------------------------------
             SgpMsg::SESSION_ACTIVATE => {
+                let mut activated_now = false;
                 if !state.session_active {
-                    debug_log("[DISPLAY] [SESSION] activated — Desktop owns framebuffer\n");
-                    debug_log("[DISPLAY] framebuffer ownership acquired\n");
-                    // First activation on the VirtIO backend: wire the scanout
-                    // now, taking the display over from the VGA/TTY output.
-                    activate_virtio_scanout(&mut state);
                     if !ensure_limine_framebuffer_mapped(&mut state) {
                         debug_log("[DISPLAY] activation failed: framebuffer unavailable\n");
-                        let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                        let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, 0));
                         continue;
                     }
                     if !ensure_compositor_buffer(&mut state) {
                         debug_log("[DISPLAY] activation failed: compositor buffer unavailable\n");
-                        let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                        let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, 0));
                         continue;
                     }
+                    // Wire the VirtIO scanout only after all fallible setup has
+                    // succeeded, so an error cannot strand ownership between
+                    // the login renderer and the compositor.
+                    activate_virtio_scanout(&mut state);
                     state.session_active = true;
+                    activated_now = true;
+                    debug_log("[DISPLAY] [SESSION] activated — Desktop owns framebuffer\n");
+                    debug_log("[DISPLAY] framebuffer ownership acquired\n");
+                }
+                if activated_now {
+                    // Ownership is now committed and all fallible setup has
+                    // completed. Acknowledge before the resolution-dependent
+                    // first redraw so the TTY cannot time out and retain a
+                    // conflicting view of framebuffer ownership.
+                    let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, 1));
                     mark_dirty_full(&mut state);
                     redraw_scene(&mut state);
                     debug_log("[DISPLAY] first clear complete\n");
+                    ensure_vortex_shell(&mut state);
+                    continue;
                 }
                 // Keep the desktop surface present across logins/restarts.
                 ensure_vortex_shell(&mut state);
-                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, 1));
             }
 
             // -------------------------------------------------------------------

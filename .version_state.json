@@ -1,29 +1,15 @@
 {
   "state_schema": 2,
   "version_algorithm": "weighted-v1",
-  "last_known_weighted_lines": 456635.3999999999,
-  "accumulated_patch": 2074,
-  "last_version": "0.2.2074-alpha.1",
-  "last_total_raw_lines": 240993,
-  "last_total_weighted_lines": 456635.3999999999,
-  "last_canonical_epoch": 1784770785,
+  "last_known_weighted_lines": 456735.3999999999,
+  "accumulated_patch": 2075,
+  "last_version": "0.2.2075-alpha.1",
+  "last_total_raw_lines": 241036,
+  "last_total_weighted_lines": 456712.7999999999,
+  "last_canonical_epoch": 1784771964,
   "minor_offset_major": 0,
   "minor_offset": 1,
   "history": [
-    {
-      "timestamp": "2026-07-21T14:18:25.709994",
-      "version": "0.2.1816",
-      "total_lines": 215091,
-      "new_lines": 456,
-      "patch_increment": 5
-    },
-    {
-      "timestamp": "2026-07-21T15:08:52.489858",
-      "version": "0.2.1822",
-      "total_lines": 215644,
-      "new_lines": 509,
-      "patch_increment": 6
-    },
     {
       "timestamp": "2026-07-21T15:50:01.210291",
       "version": "0.2.1830",
@@ -368,6 +354,38 @@
       "total_weighted_lines": 456635.3999999999,
       "new_weighted_lines": 0.0,
       "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-07-23T01:59:24+00:00",
+      "canonical_source": "HEAD",
+      "version": "0.2.2074-alpha.1",
+      "major": 0,
+      "minor": 2,
+      "patch": 2074,
+      "prerelease": "alpha.1",
+      "release_name": null,
+      "months_total": 1,
+      "months_in_cycle": 1,
+      "total_raw_lines": 240993,
+      "total_weighted_lines": 456635.3999999999,
+      "new_weighted_lines": 0.0,
+      "patch_increment": 0
+    },
+    {
+      "timestamp": "2026-07-23T01:59:24+00:00",
+      "canonical_source": "HEAD",
+      "version": "0.2.2075-alpha.1",
+      "major": 0,
+      "minor": 2,
+      "patch": 2075,
+      "prerelease": "alpha.1",
+      "release_name": null,
+      "months_total": 1,
+      "months_in_cycle": 1,
+      "total_raw_lines": 241036,
+      "total_weighted_lines": 456712.7999999999,
+      "new_weighted_lines": 77.39999999996508,
+      "patch_increment": 1
     }
   ]
 }

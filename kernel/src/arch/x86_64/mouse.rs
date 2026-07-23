@@ -86,7 +86,7 @@ fn wait_input_buffer_clear() -> bool {
     false
 }
 
-fn read_data_timeout(timeout_ms: u64, auxiliary: Option<bool>) -> Option<u8> {
+fn read_data_timeout(timeout_ms: u64) -> Option<u8> {
     let start_tsc = read_tsc();
     let timeout_ticks = timeout_ticks(timeout_ms);
     let mut spins = 0usize;
@@ -94,12 +94,8 @@ fn read_data_timeout(timeout_ms: u64, auxiliary: Option<bool>) -> Option<u8> {
         let mut status: Port<u8> = Port::new(STATUS_COMMAND_PORT);
         let mut data: Port<u8> = Port::new(DATA_PORT);
         loop {
-            let value = status.read();
-            if value & STATUS_OUTPUT_FULL != 0 {
-                let from_auxiliary = value & STATUS_AUX_DATA != 0;
-                if auxiliary.is_none() || auxiliary == Some(from_auxiliary) {
-                    return Some(data.read());
-                }
+            if status.read() & STATUS_OUTPUT_FULL != 0 {
+                return Some(data.read());
             }
             spins = spins.saturating_add(1);
             if timeout_expired(start_tsc, timeout_ticks, spins) {
@@ -147,7 +143,7 @@ fn send_aux_command(command: u8) -> bool {
         if !unsafe { write_cmd(0xd4) } || !unsafe { write_data(command) } {
             return false;
         }
-        match read_data_timeout(IO_TIMEOUT_MS, Some(true)) {
+        match read_data_timeout(IO_TIMEOUT_MS) {
             Some(DEVICE_ACK) => return true,
             Some(DEVICE_RESEND) => continue,
             _ => return false,
@@ -160,7 +156,7 @@ fn configure_aux_irq(enabled: bool) -> bool {
     if !unsafe { write_cmd(0x20) } {
         return false;
     }
-    let Some(mut config) = read_data_timeout(IO_TIMEOUT_MS, Some(false)) else {
+    let Some(mut config) = read_data_timeout(IO_TIMEOUT_MS) else {
         return false;
     };
     config |= CONTROLLER_CONFIG_IRQ1;
@@ -200,7 +196,7 @@ pub fn init_ps2_mouse() -> bool {
             if !unsafe { write_cmd(0xa9) } {
                 return Err("aux interface-test timeout");
             }
-            match read_data_timeout(IO_TIMEOUT_MS, Some(false)) {
+            match read_data_timeout(IO_TIMEOUT_MS) {
                 Some(0x00) => {}
                 Some(code) => {
                     serial_println!("[MOUSE] auxiliary interface test failed: {:#x}", code);
@@ -215,7 +211,7 @@ pub fn init_ps2_mouse() -> bool {
             if !send_aux_command(0xff) {
                 return Err("device reset was not acknowledged");
             }
-            match read_data_timeout(BAT_TIMEOUT_MS, Some(true)) {
+            match read_data_timeout(BAT_TIMEOUT_MS) {
                 Some(0xaa) => {}
                 Some(code) => {
                     serial_println!("[MOUSE] device self-test failed: {:#x}", code);
@@ -223,8 +219,8 @@ pub fn init_ps2_mouse() -> bool {
                 }
                 None => return Err("device self-test timed out"),
             }
-            let device_id = read_data_timeout(IO_TIMEOUT_MS, Some(true))
-                .ok_or("device ID timed out after reset")?;
+            let device_id =
+                read_data_timeout(IO_TIMEOUT_MS).ok_or("device ID timed out after reset")?;
 
             if !send_aux_command(0xf6) {
                 return Err("failed to restore device defaults");
@@ -271,7 +267,7 @@ pub fn init_ps2_mouse() -> bool {
     success
 }
 
-fn command_active() -> bool {
+pub(super) fn command_active() -> bool {
     COMMAND_ACTIVE.load(Ordering::Acquire)
 }
 

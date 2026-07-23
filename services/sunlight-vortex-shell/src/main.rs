@@ -7955,6 +7955,24 @@ pub extern "C" fn _start() -> ! {
     debug_log_u32(screen_h);
     debug_log("\n");
 
+    let surface_bytes = u64::from(screen_w)
+        .checked_mul(u64::from(screen_h))
+        .and_then(|pixels| pixels.checked_mul(core::mem::size_of::<u32>() as u64))
+        .unwrap_or(0);
+    debug_log("[VORTEX-SURFACE] dimensions=");
+    debug_log_u32(screen_w);
+    debug_log("x");
+    debug_log_u32(screen_h);
+    debug_log(" stride_bytes=");
+    debug_log_u64(u64::from(screen_w) * core::mem::size_of::<u32>() as u64);
+    debug_log(" surface_bytes=");
+    debug_log_u64(surface_bytes);
+    debug_log(" compositor_target=");
+    debug_log_u32(metrics.width_px);
+    debug_log("x");
+    debug_log_u32(metrics.height_px);
+    debug_log("\n");
+
     // Create window at the exact physical screen size.
     // The SHM buffer will match canvas.width/height so panel positions are correct.
     let mut window = loop {

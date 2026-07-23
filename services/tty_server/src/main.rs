@@ -94,9 +94,98 @@ const INPUT_LINE_MAX: usize = 256;
 const PENDING_INPUT_MAX: usize = 128;
 const MAX_TABS: usize = 10;
 const DISPLAY_IPC_TIMEOUT_MS: u64 = 100;
+const DISPLAY_ACTIVATION_TIMEOUT_MS: u64 = 2_000;
 const SHELL_IPC_TIMEOUT_MS: u64 = 200;
 const TZ_IPC_TIMEOUT_MS: u64 = 100;
 const DISPLAY_TIMEOUT_LOG_INTERVAL: u64 = 32;
+
+struct GeometryLogLine {
+    bytes: [u8; 320],
+    len: usize,
+}
+
+impl GeometryLogLine {
+    fn new() -> Self {
+        Self {
+            bytes: [0; 320],
+            len: 0,
+        }
+    }
+
+    fn push_str(&mut self, text: &str) {
+        for byte in text.bytes() {
+            if self.len < self.bytes.len() {
+                self.bytes[self.len] = byte;
+                self.len += 1;
+            }
+        }
+    }
+
+    fn push_u64(&mut self, mut value: u64) {
+        let mut reversed = [0u8; 20];
+        let mut len = 0usize;
+        loop {
+            reversed[len] = b'0' + (value % 10) as u8;
+            len += 1;
+            value /= 10;
+            if value == 0 {
+                break;
+            }
+        }
+        for index in 0..len {
+            if self.len < self.bytes.len() {
+                self.bytes[self.len] = reversed[len - index - 1];
+                self.len += 1;
+            }
+        }
+    }
+
+    fn flush(&self) {
+        if let Ok(text) = core::str::from_utf8(&self.bytes[..self.len]) {
+            debug_log(text);
+        }
+    }
+}
+
+fn log_login_framebuffer_layout(layout: sunlight_tui::framebuffer::FramebufferLayout) {
+    let mut geometry = GeometryLogLine::new();
+    geometry.push_str("[LOGIN-GEOMETRY] reported=");
+    geometry.push_u64(u64::from(layout.width));
+    geometry.push_str("x");
+    geometry.push_u64(u64::from(layout.height));
+    geometry.push_str(" physical_fb=");
+    geometry.push_u64(u64::from(layout.width));
+    geometry.push_str("x");
+    geometry.push_u64(u64::from(layout.height));
+    geometry.push_str(" pixels_per_scan_line=");
+    geometry.push_u64(u64::from(layout.pixels_per_scan_line));
+    geometry.push_str(" pitch_bytes=");
+    geometry.push_u64(u64::from(layout.pitch_bytes));
+    geometry.push_str(" bytes_per_pixel=");
+    geometry.push_u64(u64::from(sunlight_tui::framebuffer::BYTES_PER_PIXEL));
+    geometry.push_str(" framebuffer_size=");
+    geometry.push_u64(layout.framebuffer_bytes);
+    geometry.push_str(" calculated_stride=");
+    geometry.push_u64(u64::from(layout.row_bytes));
+    geometry.push_str(" calculated_framebuffer_bytes=");
+    geometry.push_u64(u64::from(layout.row_bytes) * u64::from(layout.height));
+    geometry.push_str("\n");
+    geometry.flush();
+
+    let mut surface = GeometryLogLine::new();
+    surface.push_str("[LOGIN-SURFACE] dimensions=");
+    surface.push_u64(u64::from(layout.width));
+    surface.push_str("x");
+    surface.push_u64(u64::from(layout.height));
+    surface.push_str(" frontbuffer_bytes=");
+    surface.push_u64(layout.framebuffer_bytes);
+    surface.push_str(" backbuffer_bytes=0 presentation=direct draw_rows=");
+    surface.push_u64(u64::from(layout.height));
+    surface.push_str(" draw_row_bytes=");
+    surface.push_u64(u64::from(layout.row_bytes));
+    surface.push_str("\n");
+    surface.flush();
+}
 
 const CURSOR_W: usize = 10;
 const CURSOR_H: usize = 15;
@@ -119,14 +208,25 @@ fn vt_is_active(active_vt: VirtualTerminal, vt: VirtualTerminal) -> bool {
 }
 
 fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) -> bool {
+    let requires_activation_ack = msg.label == SgpMsg::SESSION_ACTIVATE;
+    let timeout_ms = if requires_activation_ack {
+        DISPLAY_ACTIVATION_TIMEOUT_MS
+    } else {
+        DISPLAY_IPC_TIMEOUT_MS
+    };
     if display_cap.is_none() {
         *display_cap = nameserver_lookup("display_server");
     }
     let Some(cap) = *display_cap else {
         return false;
     };
-    match ipc_call_timeout(cap, msg, DISPLAY_IPC_TIMEOUT_MS) {
-        Ok(reply) if reply.label == SgpMsg::REPLY => true,
+    match ipc_call_timeout(cap, msg, timeout_ms) {
+        Ok(reply)
+            if reply.label == SgpMsg::REPLY
+                && (!requires_activation_ack || reply.words[0] == 1) =>
+        {
+            true
+        }
         _ => {
             static mut DISPLAY_TIMEOUT_COUNT: u64 = 0;
             let should_log = unsafe {
@@ -490,13 +590,22 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     debug_log("[TTY]  TTY server started");
     debug_log("[LOGIN-TUI] service started");
 
-    let has_fb = fb_addr != 0 && fb_width != 0 && fb_height != 0 && fb_pitch != 0;
     let fb32_w = fb_width as u32;
     let fb32_h = fb_height as u32;
     let fb32_p = fb_pitch as u32;
+    let framebuffer_layout = if fb_width == u64::from(fb32_w)
+        && fb_height == u64::from(fb32_h)
+        && fb_pitch == u64::from(fb32_p)
+    {
+        sunlight_tui::framebuffer::validate_layout(fb32_w, fb32_h, fb32_p)
+    } else {
+        None
+    };
+    let has_fb = fb_addr != 0 && framebuffer_layout.is_some();
     let mut mouse = MouseState::new();
 
     if has_fb {
+        log_login_framebuffer_layout(framebuffer_layout.unwrap());
         debug_log("[TTY] Framebuffer acquired");
         debug_log("[LOGIN-TUI] metrics acquired");
         debug_log("[LOGIN-TUI] background begin");
@@ -512,6 +621,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         mouse.draw_overlay(fb_addr, fb32_w, fb32_h, fb32_p);
         debug_log("[TTY] Login rendered");
         debug_log("[LOGIN-TUI] first frame complete");
+    } else if fb_addr != 0 || fb_width != 0 || fb_height != 0 || fb_pitch != 0 {
+        debug_log("[LOGIN-GEOMETRY] rejected invalid framebuffer layout\n");
     }
 
     let ep = endpoint_create();
@@ -587,13 +698,16 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         break 'kbd;
                                     }
                                     if active_vt != VirtualTerminal::Desktop {
-                                        debug_log("[SESSION] switched to F2 GraphicalDesktop");
-                                        let _ = send_display_request(
+                                        if send_display_request(
                                             &mut display_cap,
                                             IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
-                                        );
+                                        ) {
+                                            debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                            active_vt = VirtualTerminal::Desktop;
+                                        } else {
+                                            debug_log("[SESSION] F2 activation failed; TTY retains framebuffer");
+                                        }
                                     }
-                                    active_vt = VirtualTerminal::Desktop;
                                     break 'kbd;
                                 }
                                 _ => {}
@@ -692,14 +806,25 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             }
                                         }
                                         SessionType::Desktop => {
-                                            debug_log("[SESSION] switched to F2 GraphicalDesktop");
                                             desktop_unlocked = true;
-                                            active_vt = VirtualTerminal::Desktop;
-                                            let _ = send_display_request(
+                                            if send_display_request(
                                                 &mut display_cap,
                                                 IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
-                                            );
-                                            login.message = "Desktop session launched.";
+                                            ) {
+                                                debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                                active_vt = VirtualTerminal::Desktop;
+                                                login.message = "Desktop session launched.";
+                                            } else {
+                                                active_vt = VirtualTerminal::Tty;
+                                                login.message = "Desktop unavailable; TTY retained.";
+                                                debug_log("[SESSION] desktop activation failed; TTY retains framebuffer");
+                                                if has_fb {
+                                                    render_login_fb(
+                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                        &mut mouse,
+                                                    );
+                                                }
+                                            }
                                         }
                                     }
                                     logged_in = true;
@@ -759,13 +884,16 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 }
                                 KEY_F2 => {
                                     if active_vt != VirtualTerminal::Desktop {
-                                        debug_log("[SESSION] switched to F2 GraphicalDesktop");
-                                        let _ = send_display_request(
+                                        if send_display_request(
                                             &mut display_cap,
                                             IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
-                                        );
+                                        ) {
+                                            debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                            active_vt = VirtualTerminal::Desktop;
+                                        } else {
+                                            debug_log("[SESSION] F2 activation failed; TTY retains framebuffer");
+                                        }
                                     }
-                                    active_vt = VirtualTerminal::Desktop;
                                     break 'kbd;
                                 }
                                 KEY_E => {

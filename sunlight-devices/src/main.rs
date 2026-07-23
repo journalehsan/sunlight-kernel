@@ -8,14 +8,15 @@ use sun_font::{draw_text, draw_text_vcenter, FontRole, TextStyle, VecFont};
 use sunlight_deviced::{
     failure_stage_label, list_timeout, load_record_timeout, state_display_label, DeviceId,
     InventoryClientError, InventoryRecord, InventorySummary, ShortName,
+    DEFAULT_INVENTORY_TIMEOUT_MS,
 };
 use sunlight_devices::{
     device_display_name, DeviceClassId, InventorySnapshot, PresentationState, SnapshotBuildError,
     TreeNodeId, TreeSnapshot,
 };
 use sunlight_ipc::{
-    debug_log, nameserver_lookup_timeout, process_yield, CapabilityToken, HardwareBus,
-    HardwareState, ProcessExit,
+    debug_log, monotonic_millis, nameserver_lookup_timeout, process_yield, CapabilityToken,
+    HardwareBus, HardwareState, ProcessExit,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
@@ -58,8 +59,9 @@ const KEY_HOME: u8 = 0x47;
 const KEY_END: u8 = 0x4f;
 const KEY_PGUP: u8 = 0x49;
 const KEY_PGDN: u8 = 0x51;
-const IPC_LOOKUP_TIMEOUT_MS: u64 = 30;
-const UI_INVENTORY_TIMEOUT_MS: u64 = 16;
+const IPC_LOOKUP_TIMEOUT_MS: u64 = DEFAULT_INVENTORY_TIMEOUT_MS;
+const UI_INVENTORY_TIMEOUT_MS: u64 = DEFAULT_INVENTORY_TIMEOUT_MS;
+const INITIAL_REFRESH_RETRY_DELAYS_MS: [u64; 3] = [25, 75, 150];
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -133,6 +135,9 @@ impl Icons {
 #[derive(Debug)]
 enum RefreshPhase {
     Idle,
+    RetryWait {
+        retry_at_ms: u64,
+    },
     Lookup,
     List {
         capability: CapabilityToken,
@@ -268,6 +273,7 @@ struct DevicesApp {
     detail_scroll: usize,
     status_text: String,
     diagnostics: RefreshDiagnostics,
+    initial_retry_count: usize,
 }
 
 impl DevicesApp {
@@ -285,6 +291,7 @@ impl DevicesApp {
             detail_scroll: 0,
             status_text: String::from("Loading hardware inventory…"),
             diagnostics: RefreshDiagnostics::default(),
+            initial_retry_count: 0,
         }
     }
 
@@ -317,6 +324,11 @@ impl DevicesApp {
             self.refresh_queued = true;
             return;
         }
+        self.initial_retry_count = 0;
+        self.begin_refresh();
+    }
+
+    fn begin_refresh(&mut self) {
         self.diagnostics.attempts = self.diagnostics.attempts.saturating_add(1);
         self.phase = RefreshPhase::Lookup;
         self.status_text = if self.presentation.snapshot.is_some() {
@@ -324,6 +336,22 @@ impl DevicesApp {
         } else {
             String::from("Loading hardware inventory…")
         };
+    }
+
+    fn schedule_initial_retry(&mut self) -> bool {
+        if self.presentation.snapshot.is_some()
+            || self.initial_retry_count >= INITIAL_REFRESH_RETRY_DELAYS_MS.len()
+        {
+            return false;
+        }
+        let delay_ms = INITIAL_REFRESH_RETRY_DELAYS_MS[self.initial_retry_count];
+        self.initial_retry_count += 1;
+        self.phase = RefreshPhase::RetryWait {
+            retry_at_ms: monotonic_millis().saturating_add(delay_ms),
+        };
+        self.status_text = String::from("deviced busy — retrying hardware inventory…");
+        debug_log("[DEVICES] transient deviced failure; retrying inventory\n");
+        true
     }
 
     fn fail_refresh(&mut self, failure: RefreshFailure) {
@@ -347,6 +375,9 @@ impl DevicesApp {
                 self.diagnostics.allocation_failures =
                     self.diagnostics.allocation_failures.saturating_add(1);
             }
+        }
+        if matches!(failure, RefreshFailure::ServiceUnavailable) && self.schedule_initial_retry() {
+            return;
         }
         let message = if self.presentation.snapshot.is_some() {
             "Refresh failed — showing previous device data"
@@ -394,6 +425,7 @@ impl DevicesApp {
             .as_ref()
             .map_or(0, |snapshot| snapshot.records.len());
         self.diagnostics.last_error = None;
+        self.initial_retry_count = 0;
         self.start_queued_refresh();
     }
 
@@ -444,6 +476,15 @@ impl DevicesApp {
         let phase = core::mem::replace(&mut self.phase, RefreshPhase::Idle);
         match phase {
             RefreshPhase::Idle => false,
+            RefreshPhase::RetryWait { retry_at_ms } => {
+                if monotonic_millis() >= retry_at_ms {
+                    self.begin_refresh();
+                    true
+                } else {
+                    self.phase = RefreshPhase::RetryWait { retry_at_ms };
+                    false
+                }
+            }
             RefreshPhase::Lookup => {
                 let Some(capability) = nameserver_lookup_timeout("deviced", IPC_LOOKUP_TIMEOUT_MS)
                 else {
@@ -1128,10 +1169,12 @@ impl App for DevicesApp {
     }
 
     fn poll_timeout_ms(&self) -> u64 {
-        if self.is_refreshing() {
-            0
-        } else {
-            200
+        match &self.phase {
+            RefreshPhase::Idle => 200,
+            RefreshPhase::RetryWait { retry_at_ms } => {
+                retry_at_ms.saturating_sub(monotonic_millis()).clamp(1, 25)
+            }
+            _ => 0,
         }
     }
 
