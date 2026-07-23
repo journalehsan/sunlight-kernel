@@ -99,6 +99,14 @@ impl<'a, const N: usize> TextInput<'a, N> {
     }
 
     pub fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
+        self.draw_field(canvas, theme);
+        self.draw_context_menu(canvas, theme);
+    }
+
+    /// Draw the generic input background, border, text, selection, and caret.
+    /// Applications with a specialized shell can instead draw their own frame
+    /// and call [`Self::draw_content`] for the shared editing surface.
+    pub fn draw_field(&self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rect(self.rect, theme.panel);
         canvas.draw_rect(
             self.rect,
@@ -109,6 +117,11 @@ impl<'a, const N: usize> TextInput<'a, N> {
             },
         );
 
+        self.draw_content(canvas, theme);
+    }
+
+    /// Draw only the shared text, selection, and caret inside `rect`.
+    pub fn draw_content(&self, canvas: &mut Canvas, theme: &Theme) {
         let text_x = self.rect.x + 6;
         let show_placeholder = self.len == 0 && !self.active;
         let (visible, visible_start) = if show_placeholder {
@@ -157,7 +170,11 @@ impl<'a, const N: usize> TextInput<'a, N> {
                 );
             }
         }
+    }
 
+    /// Draw an open text context menu.  Draw this after all regular window
+    /// surfaces so it remains an actual overlay rather than page content.
+    pub fn draw_context_menu(&self, canvas: &mut Canvas, theme: &Theme) {
         if let Some(menu) = self.menu {
             menu.draw(canvas, theme, self.font);
         }

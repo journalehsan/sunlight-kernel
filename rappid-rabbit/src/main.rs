@@ -64,7 +64,7 @@ use sunlight_ui::widgets::{
     DocumentFontFamily, DocumentNodeId, RenderInteraction, RenderObjectKind,
 };
 use sunlight_ui::{
-    request_close, App, Canvas, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
+    request_close, App, Canvas, Color, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
     WindowDecoration,
 };
 
@@ -147,6 +147,9 @@ const VIEW_W: u32 = 72;
 const STATUS_W: u32 = 220;
 const GUTTER: i32 = 12;
 const URL_INPUT_CAP: usize = 512;
+const URL_BAR_RADIUS: u32 = 8;
+const URL_SITE_W: u32 = 26;
+const URL_ACTION_W: u32 = 26;
 
 const KEY_Q: u8 = 0x10;
 const KEY_L: u8 = 0x26;
@@ -279,6 +282,8 @@ impl SourceContent {
 
 struct RabbitApp {
     url_input: TextInput<'static, URL_INPUT_CAP>,
+    url_hovered: bool,
+    url_action_hovered: bool,
     status: String,
     pending_fetch: bool,
     focus: FocusPane,
@@ -303,6 +308,7 @@ impl RabbitApp {
     fn new(initial_url: Option<&str>) -> Self {
         let mut url_input = TextInput::new(Rect::default())
             .with_font(&F_UI)
+            .with_clipboard_source(b"rappid-rabbit")
             .with_placeholder("Enter URL (http:// or https://)");
         url_input.set_text("http://example.com/");
 
@@ -320,6 +326,8 @@ impl RabbitApp {
 
         let mut app = Self {
             url_input,
+            url_hovered: false,
+            url_action_hovered: false,
             status: String::from("Idle"),
             pending_fetch: false,
             focus: FocusPane::Source,
@@ -440,6 +448,12 @@ impl RabbitApp {
             .as_ref()
             .map(format_url)
             .unwrap_or_else(|| String::from(requested_url));
+        // Navigation is currently performed from the next local tick, but
+        // retain this equality guard so a future asynchronous completion never
+        // overwrites a URL the user has begun editing.
+        if self.url_input.value().trim() == requested_url {
+            self.url_input.set_text(&final_url);
+        }
         let content_type = result
             .response
             .header("content-type")
@@ -1211,7 +1225,7 @@ impl RabbitApp {
         Rect::new(view.x - FETCH_W as i32 - 8, view.y, FETCH_W, 28)
     }
 
-    fn url_rect(&self) -> Rect {
+    fn url_bar_rect(&self) -> Rect {
         let method = self.method_rect();
         let fetch = self.fetch_rect();
         Rect::new(
@@ -1220,6 +1234,43 @@ impl RabbitApp {
             (fetch.x - method.right() - 16).max(120) as u32,
             method.h,
         )
+    }
+
+    fn url_site_rect(&self) -> Rect {
+        let bar = self.url_bar_rect();
+        Rect::new(bar.x + 4, bar.y + 4, URL_SITE_W, bar.h.saturating_sub(8))
+    }
+
+    fn url_action_rect(&self) -> Rect {
+        let bar = self.url_bar_rect();
+        Rect::new(
+            bar.right() - URL_ACTION_W as i32 - 4,
+            bar.y + 4,
+            URL_ACTION_W,
+            bar.h.saturating_sub(8),
+        )
+    }
+
+    fn url_text_rect(&self) -> Rect {
+        let bar = self.url_bar_rect();
+        let site = self.url_site_rect();
+        let action = self.url_action_rect();
+        Rect::new(
+            site.right() + 5,
+            bar.y + 2,
+            (action.x - site.right() - 10).max(32) as u32,
+            bar.h.saturating_sub(4),
+        )
+    }
+
+    fn update_url_chrome_hover(&mut self, x: i32, y: i32) -> bool {
+        let point = Point::new(x, y);
+        let hovered = self.url_bar_rect().contains(point);
+        let action_hovered = !self.pending_fetch && self.url_action_rect().contains(point);
+        let changed = self.url_hovered != hovered || self.url_action_hovered != action_hovered;
+        self.url_hovered = hovered;
+        self.url_action_hovered = action_hovered;
+        changed
     }
 
     fn content_rect(&self) -> Rect {
@@ -1593,8 +1644,7 @@ impl RabbitApp {
         method.state = ButtonState::Normal;
         method.draw(canvas, theme);
 
-        self.url_input.rect = self.url_rect();
-        self.url_input.draw(canvas, theme);
+        self.draw_url_bar(canvas, theme);
 
         let mut fetch = Button::new(self.fetch_rect(), "Fetch/Open").with_font(&F_UI);
         fetch.state = ButtonState::Normal;
@@ -1621,6 +1671,95 @@ impl RabbitApp {
         Label::new(self.status_rect(), self.status.as_str())
             .with_font(&F_SMALL)
             .draw(canvas, theme);
+    }
+
+    fn draw_url_bar(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        let rect = self.url_bar_rect();
+        let focused = self.url_input.active;
+        let disabled = self.pending_fetch;
+        let fill = if disabled {
+            theme.panel_alt.darken(18)
+        } else if focused {
+            theme.chrome.input_bg.lighten(10)
+        } else if self.url_hovered {
+            theme.chrome.input_bg.lighten(5)
+        } else {
+            theme.chrome.input_bg
+        };
+        let border = if disabled {
+            theme.chrome.subtle_border
+        } else if focused {
+            theme.accent
+        } else if self.url_hovered {
+            theme.border.lighten(38)
+        } else {
+            theme.chrome.subtle_border
+        };
+        canvas.fill_rounded_rect(rect, URL_BAR_RADIUS, fill);
+        canvas.stroke_rounded_rect(rect, URL_BAR_RADIUS, 1, border);
+        if focused {
+            canvas.stroke_rounded_rect(
+                rect.inset(2),
+                URL_BAR_RADIUS.saturating_sub(2),
+                1,
+                theme.accent.lighten(46),
+            );
+        }
+
+        let site = self.url_site_rect();
+        let secure = self.url_input.value().starts_with("https://");
+        let site_color = if secure { theme.ok } else { theme.warn };
+        canvas.fill_rounded_rect(site, 5, theme.panel_alt);
+        canvas.stroke_rounded_rect(site, 5, 1, theme.border);
+        Self::draw_site_indicator(canvas, site, site_color);
+
+        let action = self.url_action_rect();
+        if self.url_action_hovered {
+            canvas.fill_rounded_rect(action, 5, theme.chrome.control_hover);
+        }
+        Self::draw_reload_indicator(
+            canvas,
+            action,
+            if disabled {
+                theme.chrome.disabled_fg
+            } else if self.url_action_hovered {
+                theme.text
+            } else {
+                theme.icon_muted
+            },
+            disabled,
+        );
+
+        self.url_input.rect = self.url_text_rect();
+        self.url_input.draw_content(canvas, theme);
+    }
+
+    fn draw_site_indicator(canvas: &mut Canvas, rect: Rect, color: Color) {
+        let body = Rect::new(rect.x + 8, rect.y + 9, 10, 7);
+        canvas.draw_rect(body, color);
+        canvas.hbar(body.x + 2, body.y - 3, 6, 1, color);
+        canvas.vline(body.x + 2, body.y - 3, 4, color);
+        canvas.vline(body.right() - 3, body.y - 3, 4, color);
+        canvas.vline(body.x + 4, body.y + 2, 3, color);
+    }
+
+    fn draw_reload_indicator(canvas: &mut Canvas, rect: Rect, color: Color, loading: bool) {
+        let cx = rect.x + rect.w as i32 / 2;
+        let cy = rect.y + rect.h as i32 / 2;
+        if loading {
+            for offset in [-4, 0, 4] {
+                canvas.fill_rect(Rect::new(cx + offset - 1, cy - 1, 2, 2), color);
+            }
+            return;
+        }
+        canvas.hbar(cx - 5, cy - 5, 7, 1, color);
+        canvas.vline(cx - 5, cy - 5, 6, color);
+        canvas.hbar(cx - 5, cy + 5, 7, 1, color);
+        canvas.vline(cx + 5, cy, 6, color);
+        canvas.hbar(cx + 2, cy - 7, 4, 1, color);
+        canvas.hbar(cx - 6, cy + 7, 4, 1, color);
+        canvas.vline(cx + 5, cy - 7, 3, color);
+        canvas.vline(cx - 5, cy + 5, 3, color);
     }
 
     fn draw_resize_handle(
@@ -2434,9 +2573,26 @@ impl App for RabbitApp {
         }
 
         self.draw_developer_tools(canvas, theme);
+        // TextInput's menu is a window-local overlay.  It must paint after
+        // document and developer-tool surfaces rather than as part of the
+        // top-bar child draw, or those surfaces conceal its lower rows.
+        self.url_input.draw_context_menu(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {
+        self.url_input.rect = self.url_text_rect();
+        if self.url_input.context_menu_open() {
+            return self.url_input.update(event);
+        }
+
+        if let Event::Click { x, y } = event {
+            if !self.pending_fetch && self.url_action_rect().contains(Point::new(x, y)) {
+                self.url_input.active = false;
+                self.queue_fetch();
+                return true;
+            }
+        }
+
         if self.url_input.update(event) {
             return true;
         }
@@ -2478,7 +2634,8 @@ impl App for RabbitApp {
                 }
                 false
             }
-            Event::MouseMove { x: _, y } => {
+            Event::MouseMove { x, y } => {
+                let url_hover_changed = self.update_url_chrome_hover(x, y);
                 let changed = self
                     .developer_tools
                     .panel
@@ -2488,7 +2645,7 @@ impl App for RabbitApp {
                     self.refresh_render_viewport();
                     self.clamp_scrolls();
                 }
-                changed
+                changed || url_hover_changed
             }
             Event::MouseUp { x, y, .. } => {
                 #[cfg(feature = "dom")]
@@ -2511,6 +2668,12 @@ impl App for RabbitApp {
                 let was_resizing = self.developer_tools.panel.is_resizing();
                 self.developer_tools.panel.finish_resize();
                 was_resizing
+            }
+            Event::PointerOwnership { owned: false, .. } => {
+                let changed = self.url_hovered || self.url_action_hovered;
+                self.url_hovered = false;
+                self.url_action_hovered = false;
+                changed
             }
             Event::Click { x, y } => {
                 let point = Point::new(x, y);
