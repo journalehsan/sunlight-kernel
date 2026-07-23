@@ -13,7 +13,7 @@ pub mod offset; // local_offset_secs, local_now, LocalDateTime, is_dst_active //
 // Re-export the most commonly used items at crate root
 pub use csv::{all_zones, tz_by_display_name, tz_by_id, tz_count, TzEntry};
 pub use localtime::{read_localtime, write_localtime, LocalTimeCfg, TzError};
-pub use offset::{local_now, local_offset_secs, LocalDateTime};
+pub use offset::{local_now, local_offset_secs, weekday_iso, weekday_sun0, LocalDateTime};
 
 /// Convenience: look up zone by id (or None), then compute LocalDateTime.
 /// If lookup fails, returns None.

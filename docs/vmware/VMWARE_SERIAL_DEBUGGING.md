@@ -68,6 +68,23 @@ cp "$VMX" /tmp/sunlight-vmware-test.vmx.backup
 Do not edit the virtual disk, generated MAC address, NAT selection, or unrelated
 devices for a serial-log test.
 
+## Configure the virtual RTC as UTC
+
+SunlightOS keeps kernel wall time in UTC and applies the configured timezone
+once in `timezone_service`. Power the VM off and add this setting to the VMX:
+
+```text
+rtc.diffFromUTC = "0"
+```
+
+Without it, VMware Workstation can expose host-local civil time through CMOS.
+SunlightOS would then interpret that value as UTC and apply the timezone again.
+For example, a host-local `+03:30` RTC plus `Asia/Tehran` produces a duplicate
+`+03:30` and can advance the displayed date at midnight. The repository's
+`tools/runs.sh --vmware` path now refuses to launch a VMX that does not declare
+this UTC policy. [Broadcom also documents `rtc.diffFromUTC = 0`](https://knowledge.broadcom.com/external/article/419717/error-bios-time-gets-set-as-local-time-a.html)
+as the VMX setting that forces the virtual RTC to UTC.
+
 ## Configure a Serial Log
 
 VMware can write COM1 output directly to a host file. Temporarily disable the

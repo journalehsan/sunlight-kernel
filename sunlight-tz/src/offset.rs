@@ -6,7 +6,15 @@ use crate::csv::TzEntry;
 /// Total UTC offset in seconds, including DST if currently active.
 /// utc_secs: Unix timestamp seconds since 1970-01-01 00:00:00 UTC.
 pub fn local_offset_secs(entry: &TzEntry, utc_secs: u64) -> i64 {
-    let base: i64 = (entry.utc_offset_hours as i64) * 3600 + (entry.utc_offset_minutes as i64) * 60;
+    // `utc_offset_minutes` is a magnitude. For zones such as -03:30 it has
+    // the same sign as the negative hour, not the opposite sign.
+    let minute_component = (entry.utc_offset_minutes as i64) * 60;
+    let base: i64 = (entry.utc_offset_hours as i64) * 3600
+        + if entry.utc_offset_hours < 0 {
+            -minute_component
+        } else {
+            minute_component
+        };
     let dst: i64 = if is_dst_active(entry, utc_secs) {
         (entry.dst_offset_minutes as i64) * 60
     } else {
@@ -155,7 +163,7 @@ impl LocalDateTime {
     /// Format as "Day Mon DD HH:MM:SS TZ YYYY" (date(1) style) into 40-byte buf.
     pub fn fmt_date_cmd(&self, buf: &mut [u8; 40]) {
         // Weekday approx (simple Doomsday rule or fixed table not full; use fixed names, compute wday minimally)
-        let wday = weekday_from_ymd(self.year as i32, self.month, self.day);
+        let wday = weekday_sun0(self.year as i32, self.month, self.day);
         let wname = match wday {
             0 => b"Sun",
             1 => b"Mon",
@@ -233,7 +241,7 @@ fn write_u16_4(dst: &mut [u8], v: u16) {
 }
 
 /// Very small weekday calculator (0=Sun .. 6=Sat). Zeller-ish for proleptic Gregorian.
-fn weekday_from_ymd(y: i32, m: u8, d: u8) -> u8 {
+pub fn weekday_sun0(y: i32, m: u8, d: u8) -> u8 {
     let mut yy = y;
     let mut mm = m as i32;
     if mm <= 2 {
@@ -245,6 +253,14 @@ fn weekday_from_ymd(y: i32, m: u8, d: u8) -> u8 {
     let w = (d as i32 + (13 * (mm + 1) / 5) + k + (k / 4) + (c / 4) + 5 * c) % 7;
     // adjust to Sun=0
     ((w + 6) % 7) as u8 // trial; sufficient for formatting
+}
+
+/// Gregorian weekday using the locale ABI: Monday=1 through Sunday=7.
+pub fn weekday_iso(y: i32, m: u8, d: u8) -> u8 {
+    match weekday_sun0(y, m, d) {
+        0 => 7,
+        value => value,
+    }
 }
 
 /// Derive 8-byte null-terminated abbreviation.
@@ -412,6 +428,115 @@ mod tests {
         assert_eq!(
             (ldt.year, ldt.month, ldt.day, ldt.hour, ldt.minute),
             (2026, 7, 7, 16, 0)
+        );
+    }
+
+    #[test]
+    fn positive_offset_crosses_forward_into_next_date() {
+        // 2026-07-23 22:00 UTC +03:30 = 2026-07-24 01:30 local.
+        let ldt = local_now(1_784_844_000, &IRAN);
+        assert_eq!(
+            (ldt.year, ldt.month, ldt.day, ldt.hour, ldt.minute),
+            (2026, 7, 24, 1, 30)
+        );
+    }
+
+    #[test]
+    fn negative_half_hour_offset_keeps_the_negative_sign() {
+        let newfoundland = TzEntry {
+            id: "America/St_Johns",
+            region: "America",
+            city: "St_Johns",
+            display_name: "Newfoundland Standard Time",
+            utc_offset_hours: -3,
+            utc_offset_minutes: 30,
+            dst_offset_minutes: 0,
+            dst_start_month: 0,
+            dst_end_month: 0,
+        };
+        assert_eq!(local_offset_secs(&newfoundland, 1_783_468_800), -12_600);
+        let ldt = local_now(1_783_468_800, &newfoundland);
+        assert_eq!(
+            (ldt.year, ldt.month, ldt.day, ldt.hour, ldt.minute),
+            (2026, 7, 7, 20, 30)
+        );
+    }
+
+    #[test]
+    fn half_hour_offset_is_applied_exactly_once() {
+        let utc = 1_783_468_800;
+        let ldt = local_now(utc, &IRAN);
+        assert_eq!(ldt.utc_offset_secs, 12_600);
+        assert_eq!(
+            (ldt.year, ldt.month, ldt.day, ldt.hour, ldt.minute),
+            (2026, 7, 8, 3, 30)
+        );
+        // The designated conversion receives UTC, not an already-local epoch.
+        let applied_twice = local_now(utc + ldt.utc_offset_secs as u64, &IRAN);
+        assert_eq!((applied_twice.hour, applied_twice.minute), (7, 0));
+    }
+
+    #[test]
+    fn decomposition_covers_month_february_and_year_rollovers() {
+        let boundaries = [
+            (1_754_006_399, (2025, 7, 31, 23, 59, 59)),
+            (1_754_006_400, (2025, 8, 1, 0, 0, 0)),
+            (1_740_787_199, (2025, 2, 28, 23, 59, 59)),
+            (1_740_787_200, (2025, 3, 1, 0, 0, 0)),
+            (1_709_251_199, (2024, 2, 29, 23, 59, 59)),
+            (1_709_251_200, (2024, 3, 1, 0, 0, 0)),
+            (1_798_761_599, (2026, 12, 31, 23, 59, 59)),
+            (1_798_761_600, (2027, 1, 1, 0, 0, 0)),
+        ];
+        for &(timestamp, expected) in &boundaries {
+            assert_eq!(decompose(timestamp), expected);
+        }
+    }
+
+    #[test]
+    fn weekday_matches_known_dates() {
+        assert_eq!(weekday_iso(1970, 1, 1), 4);
+        assert_eq!(weekday_iso(2024, 2, 29), 4);
+        assert_eq!(weekday_iso(2026, 7, 23), 4);
+        assert_eq!(weekday_iso(2026, 7, 24), 5);
+    }
+
+    #[test]
+    fn screenshot_regression_proves_consistent_progression() {
+        // 2026-07-23 20:30 UTC is Fri, Jul 24 12:00 AM in Tehran.
+        let initial_utc = 1_784_838_600u64;
+        let initial_uptime = (21 * 60 + 39) * 60;
+        let elapsed = (6 * 60 + 46) * 60;
+
+        let initial = local_now(initial_utc, &IRAN);
+        let later = local_now(initial_utc + elapsed, &IRAN);
+        assert_eq!(
+            (
+                initial.year,
+                initial.month,
+                initial.day,
+                initial.hour,
+                initial.minute,
+                weekday_iso(initial.year as i32, initial.month, initial.day),
+            ),
+            (2026, 7, 24, 0, 0, 5)
+        );
+        assert_eq!(
+            (
+                later.year,
+                later.month,
+                later.day,
+                later.hour,
+                later.minute,
+                weekday_iso(later.year as i32, later.month, later.day),
+            ),
+            (2026, 7, 24, 6, 46, 5)
+        );
+        assert_eq!(initial_uptime + elapsed, (28 * 60 + 25) * 60);
+        assert_eq!(
+            (later.hour as i64 * 60 + later.minute as i64)
+                - (initial.hour as i64 * 60 + initial.minute as i64),
+            6 * 60 + 46
         );
     }
 }

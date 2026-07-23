@@ -25,7 +25,7 @@
 //! APs also arm their LAPIC timers at vector 0x20; the shared IDT entry
 //! (`timer_entry`) handles all cores.
 
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 // ─── LAPIC MMIO register offsets ──────────────────────────────────────────────
 
@@ -52,6 +52,7 @@ const TIMER_DIVISOR: u32 = 0x3;
 /// Calibrated LAPIC timer initial count for ~100 Hz periodic ticks.
 /// Written by the BSP calibration and reused by APs.
 static LAPIC_TIMER_INIT_COUNT: AtomicU32 = AtomicU32::new(0);
+static LAPIC_TIMER_HZ: AtomicU64 = AtomicU64::new(0);
 
 // ─── MMIO helpers ─────────────────────────────────────────────────────────────
 
@@ -195,6 +196,7 @@ pub unsafe fn calibrate_lapic_timer(target_hz: u32) -> u32 {
         // TSC not calibrated — use QEMU default: ~100 MHz bus / 16 / 100 Hz
         let fallback = 62_500u32;
         LAPIC_TIMER_INIT_COUNT.store(fallback, Ordering::Release);
+        LAPIC_TIMER_HZ.store(fallback as u64 * target_hz as u64, Ordering::Release);
         return fallback;
     }
 
@@ -232,7 +234,17 @@ pub unsafe fn calibrate_lapic_timer(target_hz: u32) -> u32 {
     };
 
     LAPIC_TIMER_INIT_COUNT.store(initial_count, Ordering::Release);
+    LAPIC_TIMER_HZ.store(lapic_hz, Ordering::Release);
     initial_count
+}
+
+/// Calibrated LAPIC countdown frequency after the programmed divisor.
+pub fn timer_frequency_hz() -> u64 {
+    LAPIC_TIMER_HZ.load(Ordering::Acquire)
+}
+
+pub fn timer_initial_count() -> u32 {
+    LAPIC_TIMER_INIT_COUNT.load(Ordering::Acquire)
 }
 
 /// Arm the LAPIC timer in periodic mode at the previously calibrated rate.

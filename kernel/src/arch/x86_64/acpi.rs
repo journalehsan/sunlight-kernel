@@ -122,6 +122,8 @@ pub struct ACPIState {
     pub smi_cmd_port: u32,
     pub acpi_enable_value: u8,
     pub acpi_disable_value: u8,
+    /// CMOS register index containing the RTC century, or 0 when unavailable.
+    pub rtc_century_register: u8,
     pub reset_reg_addr: u64,
     pub reset_reg_is_port: bool,
     pub reset_value: u8,
@@ -147,6 +149,7 @@ impl ACPIState {
             smi_cmd_port: 0,
             acpi_enable_value: 0,
             acpi_disable_value: 0,
+            rtc_century_register: 0,
             reset_reg_addr: 0,
             reset_reg_is_port: false,
             reset_value: 0,
@@ -345,6 +348,7 @@ fn parse_fadt() -> Result<(), &'static str> {
     state.smi_cmd_port = fadt_hdr.smi_cmd_port;
     state.acpi_enable_value = fadt_hdr.acpi_enable_value;
     state.acpi_disable_value = fadt_hdr.acpi_disable_value;
+    state.rtc_century_register = fadt_hdr.century;
 
     // Extract reset register info from FADT (bytes 116-127)
     let reset_reg = &fadt_hdr.reset_reg;
@@ -1117,4 +1121,12 @@ pub unsafe fn parse_madt() -> Result<Vec<CoreInfo>, &'static str> {
 /// Returns 0 if `parse_madt()` has not been called yet.
 pub fn lapic_base_addr() -> u64 {
     ACPI_STATE.lock().lapic_base
+}
+
+/// CMOS register index containing the RTC century, when advertised by FADT.
+pub fn rtc_century_register() -> Option<u8> {
+    match ACPI_STATE.lock().rtc_century_register {
+        0 => None,
+        register => Some(register),
+    }
 }

@@ -7,6 +7,7 @@ pub mod keyboard;
 pub mod lapic;
 pub mod mouse;
 pub mod rtc;
+mod rtc_codec;
 pub mod serial;
 pub mod smp;
 pub mod syscall;

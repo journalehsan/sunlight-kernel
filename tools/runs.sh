@@ -666,6 +666,13 @@ if [ "$VMWARE_MODE" = true ]; then
         echo -e "${YELLOW}  or place your VM at the default path above.${NC}"
         exit 1
     fi
+    if ! rg -iq '^[[:space:]]*rtc\.diffFromUTC[[:space:]]*=[[:space:]]*"?0"?[[:space:]]*$' "$VMWARE_VM_PATH"; then
+        echo -e "${RED}✗ VMware RTC is not explicitly configured as UTC${NC}"
+        echo -e "${YELLOW}  Power off the VM and add this to its .vmx file:${NC}"
+        echo -e "${YELLOW}  rtc.diffFromUTC = \"0\"${NC}"
+        echo -e "${YELLOW}  SunlightOS keeps kernel wall time in UTC and applies timezone once.${NC}"
+        exit 1
+    fi
     echo -e "${BLUE}Hypervisor:${NC} VMware"
     echo -e "${BLUE}VM:${NC}         $VMWARE_VM_PATH"
     echo ""

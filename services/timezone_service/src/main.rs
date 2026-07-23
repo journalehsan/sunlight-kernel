@@ -62,15 +62,44 @@ pub extern "C" fn _start() -> ! {
     unsafe {
         ACTIVE_CFG = read_localtime();
     }
-    let mut idbuf = [0u8; 64];
-    let id = unsafe { ACTIVE_CFG.id_str() };
-    // copy for logging
-    let idb = id.as_bytes();
-    let idl = idb.len().min(63);
-    idbuf[..idl].copy_from_slice(&idb[..idl]);
-    idbuf[idl] = 0;
-    // Log active
-    debug_log("[TZ] Active timezone: UTC"); // conservative; real name via later GET
+    // One-shot boot diagnostics. The kernel has already logged the raw RTC
+    // snapshot and decoded UTC; this records the sole UTC -> local boundary.
+    let cfg = unsafe { ACTIVE_CFG };
+    let utc = sunlight_ipc::get_time_utc();
+    if utc == u64::MAX {
+        debug_log("timezone: kernel wall UTC unavailable; local civil time unavailable");
+    } else {
+        let entry = TzEntry {
+            id: "active",
+            region: "",
+            city: "",
+            display_name: "active",
+            utc_offset_hours: cfg.utc_offset_hours,
+            utc_offset_minutes: cfg.utc_offset_minutes,
+            dst_offset_minutes: cfg.dst_offset_minutes,
+            dst_start_month: cfg.dst_start_month,
+            dst_end_month: cfg.dst_end_month,
+        };
+        let local = local_now(utc, &entry);
+        let weekday = sunlight_tz::weekday_iso(local.year as i32, local.month, local.day);
+        debug_log(&alloc::format!(
+            "timezone: zone={} offset_seconds={} dst={} application_point=timezone_service",
+            cfg.id_str(),
+            local.utc_offset_secs,
+            local.is_dst
+        ));
+        debug_log(&alloc::format!(
+            "local: {:04}-{:02}-{:02}T{:02}:{:02}:{:02} weekday={} utc_epoch={}",
+            local.year,
+            local.month,
+            local.day,
+            local.hour,
+            local.minute,
+            local.second,
+            weekday_name(weekday),
+            utc
+        ));
+    }
 
     // Ensure CSV is loaded (lazy init inside tz)
     let _zone_count = tz_count();
@@ -94,7 +123,10 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
         TzMsg::GET_LOCAL_TIME => {
             // Compute local time using active cfg + current UTC
             let utc = sunlight_ipc::get_time_utc(); // kernel UTC via syscall wrapper in ipc
-                                                    // SAFETY: single-threaded service; ACTIVE_CFG only mutated in SET_ZONE handler before reply loop continues.
+            if utc == u64::MAX {
+                return IpcMsg::with_label(TzMsg::ERROR).word(0, 2);
+            }
+            // SAFETY: single-threaded service; ACTIVE_CFG only mutated in SET_ZONE handler before reply loop continues.
             let cfg = unsafe { &ACTIVE_CFG };
             // Build a TzEntry-like from cfg for math (csv may have richer but offset same)
             let entry = TzEntry {
@@ -243,6 +275,18 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
         }
 
         _ => IpcMsg::with_label(TzMsg::ERROR),
+    }
+}
+
+fn weekday_name(weekday_iso: u8) -> &'static str {
+    match weekday_iso {
+        1 => "Monday",
+        2 => "Tuesday",
+        3 => "Wednesday",
+        4 => "Thursday",
+        5 => "Friday",
+        6 => "Saturday",
+        _ => "Sunday",
     }
 }
 

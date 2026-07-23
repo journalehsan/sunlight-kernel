@@ -187,7 +187,7 @@ pub fn init() {
     calibrate_tsc_from_pit();
     let hz = TSC_HZ_APPROX.load(Ordering::Relaxed);
     if hz != 0 {
-        serial_println!("[TIME] TSC calibrated ~{} Hz for monotonic ns clock", hz);
+        serial_println!("[TIME] TSC calibrated ~{} Hz for internal accounting", hz);
     } else {
         serial_println!("[TIME] TSC calibration unavailable; using tick-based ns fallback");
     }
@@ -206,6 +206,14 @@ pub fn init() {
         pic1_data.write(0xF9);
     }
 
+    serial_println!(
+        "time: clocksource=lapic-periodic tick_hz={} lapic_frequency_hz={} lapic_initial_count={} calibration_reference={} tsc_frequency_hz={}",
+        crate::timekeeping::TICK_HZ,
+        crate::arch::x86_64::lapic::timer_frequency_hz(),
+        crate::arch::x86_64::lapic::timer_initial_count(),
+        if hz == 0 { "fixed-fallback" } else { "pit-calibrated-tsc" },
+        hz
+    );
     serial_println!("[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC");
     serial_println!("[IDT] OK");
 }
