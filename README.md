@@ -1,6 +1,6 @@
 # SunlightOS
 
-**Version:** 0.1.51
+**Version:** 0.1.51 ([versioning policy](RELEASE_NAMING_CHARTER.md))
 
 > SunlightOS is a future-first, open-source microkernel desktop: minimal like
 > UNIX, modern in experience, and intelligent by design.
