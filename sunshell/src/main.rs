@@ -10,9 +10,6 @@ mod input;
 mod parser;
 mod shellenv;
 
-#[cfg(any(feature = "sunlight", test))]
-mod calc;
-
 #[cfg(feature = "std")]
 use exec::{execute_ast, Executor, PosixExecutor};
 #[cfg(feature = "std")]
@@ -172,8 +169,10 @@ static BUMP: BumpAllocator = BumpAllocator;
 mod sysfetch;
 
 #[cfg(feature = "sunlight")]
-#[no_main]
 mod sunlight {
+    // Shared calculator engine from the `sunshell` lib (same as Vortex Search).
+    use sunshell::calc;
+
     use sunlight_uac::auth::hash_password;
     use sunlight_ipc::{
         debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
@@ -245,7 +244,7 @@ mod sunlight {
         passwd_buffer_len: usize,
         env: crate::shellenv::ShellEnv,
         cwd: alloc::string::String,
-        calc: crate::calc::CalcSession,
+        calc: calc::CalcSession,
         /// Set when an external command was spawned as a foreground job. The
         /// shell reports it to tty_server (FG_STARTED) and parks until tty_server
         /// reports the child exited (FG_DONE), instead of blocking on the child.
@@ -270,7 +269,7 @@ mod sunlight {
                 passwd_buffer_len: 0,
                 env: crate::shellenv::ShellEnv::new(),
                 cwd: alloc::string::String::from("/"),
-                calc: crate::calc::CalcSession::new(),
+                calc: calc::CalcSession::new(),
                 fg_pid: None,
             }
         }

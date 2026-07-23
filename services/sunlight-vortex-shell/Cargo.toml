@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-vortex-shell"
-version = "0.2.2054"
+version = "0.2.2073"
+
+
+
 
 
 
@@ -292,6 +295,8 @@ sunlight-tz = { path = "../../sunlight-tz" }
 sunlight-calendar = { path = "../../sunlight-calendar" }
 sunlight-reminders = { path = "../../sunlight-reminders" }
 sunlight-shell-appstate = { path = "../../sunlight-shell-appstate" }
+# Shared Sun Shell calculator (`= expr`) — same engine as the terminal `=` builtin.
+sunshell = { path = "../../sunshell", default-features = false, features = ["sunlight"] }
 
 [[bin]]
 name = "sunlight-vortex-shell"

@@ -1228,7 +1228,9 @@ pub mod history {
     // persistence as a background operation; callers only talk to KV.
     #[cfg(feature = "sunlight")]
     const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
+    #[cfg(feature = "sunlight")]
     const KV_OP_TIMEOUT_MS: u64 = 250;
+    #[cfg(feature = "sunlight")]
     static mut KV_CAP_CACHE: sunlight_ipc::CapabilityToken = sunlight_ipc::CapabilityToken::INVALID;
 
     #[cfg(feature = "sunlight")]

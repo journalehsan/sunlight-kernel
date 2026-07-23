@@ -54,6 +54,7 @@
 extern crate alloc;
 
 mod calendar_math;
+mod search_palette;
 mod sidebar;
 mod start_menu;
 mod workspace_switcher;
@@ -1320,6 +1321,8 @@ struct VortexShell {
     overview_zone: Rect,
     /// Bounds of the dock's grid icon — toggles the Start Menu.
     launcher_zone: Rect,
+    /// Bounds of the bottom-right Search control — toggles the Search Palette.
+    search_zone: Rect,
     /// TGA icon theme for desktop shortcuts.
     desktop_theme: DesktopTheme,
     /// TGA icon theme for the bottom dock.
@@ -1403,6 +1406,8 @@ struct VortexShell {
     /// Compact Workspace Switcher overlay (four existing workspaces).
     /// In-shell system overlay: no dock entry, no Alt+Tab, no Solar Focus Glow.
     workspace_switcher: workspace_switcher::WorkspaceSwitcherState,
+    /// Centered Search Palette — keyboard-first application launcher.
+    search_palette: search_palette::SearchPaletteState,
     /// Retry cadence if telemetry was unavailable during shell startup.
     next_sidebar_telemetry_retry_ms: u64,
     /// Next monotonic deadline for app/window registry polling.
@@ -1515,6 +1520,7 @@ impl VortexShell {
             sidebar_zone: Rect::new(0, 0, 0, 0),
             overview_zone: Rect::new(0, 0, 0, 0),
             launcher_zone: Rect::new(0, 0, 0, 0),
+            search_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
             dock_theme,
             symbols,
@@ -1582,6 +1588,7 @@ impl VortexShell {
             telemetry,
             sidebar: sidebar::SidebarState::new(),
             workspace_switcher: workspace_switcher::WorkspaceSwitcherState::new(),
+            search_palette: search_palette::SearchPaletteState::new(),
             next_sidebar_telemetry_retry_ms: 0,
             next_app_poll_ms: 0,
             next_diagnostic_ms: 0,
@@ -2210,6 +2217,7 @@ impl VortexShell {
             self.start_menu.close();
         }
         let _ = self.workspace_switcher.close();
+        let _ = self.search_palette.close();
         self.show_system_menu = !self.show_system_menu;
         self.system_menu_hover = None;
         true
@@ -3085,6 +3093,7 @@ impl VortexShell {
         }
         self.start_menu.close();
         let _ = self.workspace_switcher.close();
+        let _ = self.search_palette.close();
         self.show_system_menu = false;
         self.system_menu_hover = None;
         self.show_calendar_popover = false;
@@ -3105,6 +3114,7 @@ impl VortexShell {
         }
         self.start_menu.close();
         let _ = self.sidebar.close();
+        let _ = self.search_palette.close();
         self.show_system_menu = false;
         self.system_menu_hover = None;
         self.show_calendar_popover = false;
@@ -3114,6 +3124,41 @@ impl VortexShell {
         self.refresh_workspace_switcher_cards();
         self.workspace_switcher.open(self.current_workspace);
         true
+    }
+
+    /// Open or close the centered Search Palette from the bottom-right Search control.
+    fn toggle_search_palette(&mut self) -> bool {
+        if self.search_palette.is_open() {
+            return self.search_palette.close();
+        }
+        self.start_menu.close();
+        let _ = self.sidebar.close();
+        let _ = self.workspace_switcher.close();
+        self.show_system_menu = false;
+        self.system_menu_hover = None;
+        self.show_calendar_popover = false;
+        self.show_notif_panel = false;
+        self.show_datetime_tooltip = false;
+        self.context_menu = None;
+        // Preserve existing query text; focus the input immediately.
+        self.search_palette.open();
+        true
+    }
+
+    fn apply_search_palette_action(
+        &mut self,
+        action: search_palette::SearchPaletteAction,
+        now: u64,
+    ) -> bool {
+        use search_palette::SearchPaletteAction;
+        match action {
+            SearchPaletteAction::None => false,
+            SearchPaletteAction::Close => self.search_palette.close(),
+            SearchPaletteAction::Launch(app_id) => {
+                let _ = self.search_palette.close();
+                self.open_app_from_ui(app_id, now, LaunchSource::Shell)
+            }
+        }
     }
 
     /// Rebuild the four workspace card summaries from the latest window list.
@@ -6793,22 +6838,39 @@ impl VortexShell {
 
 // (stash fields live in VortexShell)
 
-/// Draw the bottom-right search box.
-fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32, sym: SymbolTheme) {
+/// Draw the bottom-right search box. Returns the clickable zone.
+fn draw_bot_right(
+    canvas: &mut Canvas,
+    theme: &Theme,
+    by: i32,
+    screen_w: u32,
+    sym: SymbolTheme,
+    search_open: bool,
+) -> Rect {
     let sx = screen_w as i32 - TOP_PAD - SEARCH_W as i32;
     let sy = by + (BOT_H as i32 - SEARCH_H as i32) / 2;
     let search_rect = Rect::new(sx, sy, SEARCH_W, SEARCH_H);
-    draw_panel(canvas, search_rect, theme.panel_alt, theme.border, RADIUS);
+    if search_open {
+        canvas.fill_rounded_rect(search_rect, RADIUS, theme.panel_alt);
+        canvas.stroke_rounded_rect(search_rect, RADIUS, 1, theme.accent);
+    } else {
+        draw_panel(canvas, search_rect, theme.panel_alt, theme.border, RADIUS);
+    }
 
     // Search glyph icon on left
     let ic = 14u32;
     let icell = Rect::new(sx + 6, sy + (SEARCH_H as i32 - ic as i32) / 2, ic, ic);
     if let Some(tga) = sym.search {
-        draw_tga_tinted_orange(canvas, &tga, icell, theme.text_dim);
+        let tint = if search_open {
+            theme.accent
+        } else {
+            theme.text_dim
+        };
+        draw_tga_tinted_orange(canvas, &tga, icell, tint);
     }
 
     // Placeholder text (indented for icon)
-    let ph = "Search...";
+    let ph = if search_open { "Search" } else { "Search..." };
     let ph_x = sx + 24;
     draw_text_vcenter(
         canvas,
@@ -6816,8 +6878,16 @@ fn draw_bot_right(canvas: &mut Canvas, theme: &Theme, by: i32, screen_w: u32, sy
         ph_x,
         search_rect.y,
         search_rect.h,
-        &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        &TextStyle::new(
+            FontRole::UiSmall,
+            if search_open {
+                theme.text
+            } else {
+                theme.text_dim
+            },
+        ),
     );
+    search_rect
 }
 
 // ---------------------------------------------------------------------------
@@ -6957,7 +7027,14 @@ impl App for VortexShell {
             now,
         );
         self.launcher_zone = launcher_rect;
-        draw_bot_right(canvas, theme, by, cw, self.symbols);
+        self.search_zone = draw_bot_right(
+            canvas,
+            theme,
+            by,
+            cw,
+            self.symbols,
+            self.search_palette.is_open(),
+        );
 
         // Record clickable zones for each pinned app (same order as DOCK_PINNED).
         self.dock_zones = core::array::from_fn(|i| (dock_cells[i], Self::dock_zone_app(i)));
@@ -6995,6 +7072,18 @@ impl App for VortexShell {
             );
         }
 
+        if self.search_palette.is_open() {
+            let mut row_icons = [None; sunlight_ui::widgets::SEARCH_PAGE_ROWS];
+            let app_ids = self.search_palette.visible_app_ids();
+            for (i, id) in app_ids.iter().enumerate() {
+                if let Some(app_id) = id {
+                    row_icons[i] = self.icon_tga_for_app(*app_id);
+                }
+            }
+            self.search_palette
+                .view(canvas, theme, cw, ch, &row_icons);
+        }
+
         if let Some(menu) = &self.context_menu {
             draw_context_menu(canvas, theme, menu);
         }
@@ -7006,6 +7095,47 @@ impl App for VortexShell {
         let sidebar_bottom = bot_y(self.screen_h) - 8;
         let switcher_top = sidebar_top;
         let switcher_dock_top = bot_y(self.screen_h);
+        if self.search_palette.is_open() {
+            match event {
+                Event::Click { .. }
+                | Event::MouseMove { .. }
+                | Event::Key(_)
+                | Event::KeyPress { .. } => {
+                    let now = monotonic_millis();
+                    let (dirty, action) = self.search_palette.handle_event(
+                        event,
+                        self.screen_w,
+                        self.screen_h,
+                    );
+                    let acted = self.apply_search_palette_action(action, now);
+                    return dirty || acted;
+                }
+                Event::MouseDown { x, y, .. } | Event::MouseUp { x, y, .. } => {
+                    let point = Point::new(x, y);
+                    if self
+                        .search_palette
+                        .contains(point, self.screen_w, self.screen_h)
+                        || self.search_zone.contains(point)
+                    {
+                        if self.search_zone.contains(point) {
+                            return true;
+                        }
+                        let now = monotonic_millis();
+                        let (dirty, action) = self.search_palette.handle_event(
+                            event,
+                            self.screen_w,
+                            self.screen_h,
+                        );
+                        let acted = self.apply_search_palette_action(action, now);
+                        return dirty || acted;
+                    }
+                    let _ = self.search_palette.close();
+                    self.suppress_next_click = true;
+                    return true;
+                }
+                _ => {}
+            }
+        }
         if self.workspace_switcher.is_open() {
             match event {
                 Event::Click { .. }
@@ -7379,9 +7509,13 @@ impl App for VortexShell {
                     } else {
                         self.sidebar.close();
                         let _ = self.workspace_switcher.close();
+                        let _ = self.search_palette.close();
                         self.start_menu.open_menu();
                     }
                     return true;
+                }
+                if self.search_zone.contains(point) {
+                    return self.toggle_search_palette();
                 }
                 if self.overview_zone.contains(point) {
                     return self.toggle_workspace_switcher();
@@ -7444,6 +7578,9 @@ impl App for VortexShell {
                     return true;
                 }
                 self.set_top_panel_focus(None);
+                if self.search_zone.contains(point) {
+                    return true;
+                }
                 if self.overview_zone.contains(point) {
                     return true;
                 }
@@ -7559,6 +7696,9 @@ impl App for VortexShell {
                     self.show_logout_confirm = false;
                     did = true;
                 }
+                if self.search_palette.close() {
+                    did = true;
+                }
                 if self.workspace_switcher.close() {
                     did = true;
                 }
@@ -7595,6 +7735,20 @@ impl App for VortexShell {
                     true
                 } else {
                     false
+                }
+            }
+            // Ctrl+K / Super+K — open centered Search Palette (Walker-style).
+            Event::KeyPress {
+                keycode: 0x25, // KEY_K
+                pressed: true,
+                ctrl,
+                super_key,
+                ..
+            } if ctrl || super_key => {
+                if !self.search_palette.is_open() {
+                    self.toggle_search_palette()
+                } else {
+                    true
                 }
             }
             Event::KeyPress {

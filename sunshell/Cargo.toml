@@ -1,6 +1,9 @@
 [package]
 name    = "sunshell"
-version = "0.2.2054"
+version = "0.2.2073"
+
+
+
 
 
 
@@ -386,6 +389,10 @@ version = "0.2.2054"
 
 
 edition = "2021"
+
+[lib]
+name = "sunshell"
+path = "src/lib.rs"
 
 [[bin]]
 name = "sshl"

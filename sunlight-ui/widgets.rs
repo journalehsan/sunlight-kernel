@@ -18,6 +18,7 @@ pub mod text_view;
 pub mod toolbar;
 pub mod tree_view;
 pub mod workspace_switcher;
+pub mod search_palette;
 
 // Re-export the most-used types at the widgets level
 pub use button::{Button, ButtonState};
@@ -64,4 +65,9 @@ pub use workspace_switcher::{
     draw_panel_ambient_shadow, AppIconStack, BoundedOverflowBadge, WorkspaceCard,
     WorkspaceCardState, WorkspaceCardView, WorkspaceSwitcherLayout, WorkspaceSwitcherPanel,
     WORKSPACE_CARD_COUNT, WORKSPACE_ICON_SLOTS,
+};
+pub use search_palette::{
+    draw_palette_ambient_shadow, search_page_count, BoundedSearchField, SearchPaletteFonts,
+    SearchPaletteLayout, SearchPalettePanel, SearchResultRow, SearchResultState, SearchResultView,
+    SEARCH_FIELD_CAP, SEARCH_PAGE_DOT_CAP, SEARCH_PAGE_ROWS,
 };
