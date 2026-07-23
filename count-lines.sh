@@ -6,6 +6,57 @@ set -e
 echo "=== SunlightOS Kernel Code Metrics ==="
 echo
 
+# --- Project age (days since first commit) ------------------------------------
+
+# Ordinal suffix for a positive integer (1st, 2nd, 3rd, 4th, 11th, 21st, …).
+ordinal_suffix() {
+    local n=$1
+    local mod100=$((n % 100))
+    local mod10=$((n % 10))
+
+    if [ "$mod100" -ge 11 ] && [ "$mod100" -le 13 ]; then
+        echo "th"
+        return
+    fi
+    case "$mod10" in
+        1) echo "st" ;;
+        2) echo "nd" ;;
+        3) echo "rd" ;;
+        *) echo "th" ;;
+    esac
+}
+
+# Days since the first git commit (day 1 = commit day). Falls back to 2026-06-06.
+project_day_info() {
+    local first_date
+    first_date=$(git log --reverse --format='%ad' --date=short 2>/dev/null | head -1)
+
+    if [ -z "$first_date" ]; then
+        first_date="2026-06-06"
+    fi
+
+    local today
+    today=$(date +%Y-%m-%d)
+
+    # Inclusive day count: first commit day is day 1 of the project.
+    local days
+    days=$(( ($(date -d "$today" +%s) - $(date -d "$first_date" +%s)) / 86400 + 1 ))
+
+    if [ "$days" -lt 1 ]; then
+        days=1
+    fi
+
+    local suffix
+    suffix=$(ordinal_suffix "$days")
+
+    echo "$days" "$suffix" "$first_date" "$today"
+}
+
+read -r PROJECT_DAY PROJECT_DAY_SUFFIX PROJECT_START PROJECT_TODAY <<< "$(project_day_info)"
+echo "Project day:          ${PROJECT_DAY}${PROJECT_DAY_SUFFIX} day of the project"
+echo "  Since first commit: $PROJECT_START  (today: $PROJECT_TODAY)"
+echo
+
 # Paths excluded from all metrics.
 FIND_PRUNE=(
     ! -path './target/*'
