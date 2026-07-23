@@ -740,11 +740,9 @@ Response Headers:\n(pending)",
     }
 
     fn update_active_request_inputs(&mut self, event: Event) -> bool {
-        if self.url_input.update(event) {
-            return true;
-        }
+        let mut changed = self.url_input.update(event);
 
-        match self.request_tab {
+        changed |= match self.request_tab {
             0 => self.update_rows(event, false),
             1 => self.update_rows(event, true),
             2 => {
@@ -753,13 +751,12 @@ Response Headers:\n(pending)",
             }
             _ => {
                 self.auth_username.rect = self.auth_username_rect();
-                if self.auth_username.update(event) {
-                    return true;
-                }
+                let username_changed = self.auth_username.update(event);
                 self.auth_password.rect = self.auth_password_rect();
-                self.auth_password.update(event)
+                username_changed | self.auth_password.update(event)
             }
-        }
+        };
+        changed
     }
 
     fn update_rows(&mut self, event: Event, headers: bool) -> bool {
@@ -770,15 +767,15 @@ Response Headers:\n(pending)",
             &mut self.params
         };
 
+        let mut changed = false;
         for (index, row) in rows.iter_mut().enumerate() {
             let row_rect = entry_row_rect(area, index);
             row.key_input.rect = entry_key_rect(row_rect);
             row.value_input.rect = entry_value_rect(row_rect);
-            if row.key_input.update(event) || row.value_input.update(event) {
-                return true;
-            }
+            changed |= row.key_input.update(event);
+            changed |= row.value_input.update(event);
         }
-        false
+        changed
     }
 
     fn handle_request_click(&mut self, x: i32, y: i32) -> bool {

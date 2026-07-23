@@ -2886,18 +2886,7 @@ pub fn ipc_reply(reply: IpcMsg) {
 /// Retain the current server call and return a generation-scoped completion
 /// token. The caller must later use `ipc_complete_deferred_reply` exactly once.
 pub fn ipc_defer_reply() -> Result<u64, IpcError> {
-    let (ret, _) = unsafe {
-        raw_syscall(
-            SunlightSyscall::IpcDeferReply,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        )
-    };
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::IpcDeferReply, 0, 0, 0, 0, 0, 0, 0) };
     if ret <= IpcError::PeerClosed as u64 {
         Err(match ret {
             value if value == IpcError::InvalidCapability as u64 => IpcError::InvalidCapability,
@@ -2919,9 +2908,8 @@ pub fn ipc_defer_reply() -> Result<u64, IpcError> {
 /// Complete a deferred server reply. The kernel checks the token's original
 /// caller and IPC generation before waking that task.
 pub fn ipc_complete_deferred_reply(token: u64, reply: IpcMsg) -> Result<(), IpcError> {
-    let (ret, _) = unsafe {
-        raw_syscall_ipc(SunlightSyscall::IpcCompleteDeferredReply, token, reply)
-    };
+    let (ret, _) =
+        unsafe { raw_syscall_ipc(SunlightSyscall::IpcCompleteDeferredReply, token, reply) };
     if ret == 0 {
         Ok(())
     } else {
@@ -3230,8 +3218,7 @@ pub fn entropy_u64() -> u64 {
 /// Whether the kernel approved-entropy collector has completed.
 pub fn secure_entropy_ready() -> bool {
     // SAFETY: SecureEntropyReady takes no user pointers.
-    let (ret, _) =
-        unsafe { raw_syscall(SunlightSyscall::SecureEntropyReady, 0, 0, 0, 0, 0, 0, 0) };
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::SecureEntropyReady, 0, 0, 0, 0, 0, 0, 0) };
     ret == 1
 }
 
@@ -3247,8 +3234,18 @@ pub struct PtyCallerCredentials {
 
 pub fn pty_caller_credentials(caller_pid: u64) -> Option<PtyCallerCredentials> {
     // SAFETY: the kernel validates both the service identity and target PID.
-    let (packed, reply) =
-        unsafe { raw_syscall(SunlightSyscall::PtyGetCredentials, caller_pid, 0, 0, 0, 0, 0, 0) };
+    let (packed, reply) = unsafe {
+        raw_syscall(
+            SunlightSyscall::PtyGetCredentials,
+            caller_pid,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
     if packed == u64::MAX {
         return None;
     }

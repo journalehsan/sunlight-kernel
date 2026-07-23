@@ -811,12 +811,15 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 &mut display_cap,
                                                 IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
                                             ) {
-                                                debug_log("[SESSION] switched to F2 GraphicalDesktop");
+                                                debug_log(
+                                                    "[SESSION] switched to F2 GraphicalDesktop",
+                                                );
                                                 active_vt = VirtualTerminal::Desktop;
                                                 login.message = "Desktop session launched.";
                                             } else {
                                                 active_vt = VirtualTerminal::Tty;
-                                                login.message = "Desktop unavailable; TTY retained.";
+                                                login.message =
+                                                    "Desktop unavailable; TTY retained.";
                                                 debug_log("[SESSION] desktop activation failed; TTY retains framebuffer");
                                                 if has_fb {
                                                     render_login_fb(
@@ -1678,7 +1681,14 @@ fn handle_ctrl_key(
         b't' | b'T' => {
             // A second shell requires a fresh authentication grant. Do not
             // reuse a consumed grant or fall back to caller-supplied uid/gid.
-            let _ = (tabs, tab_count, active_tab, next_shell_id, spawn_cap, phase3_6_done);
+            let _ = (
+                tabs,
+                tab_count,
+                active_tab,
+                next_shell_id,
+                spawn_cap,
+                phase3_6_done,
+            );
             debug_log("[TTY]  Ctrl+T requires a new authenticated session");
             return true;
         }

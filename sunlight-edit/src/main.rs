@@ -7,24 +7,28 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::alloc::GlobalAlloc;
 
-use sun_font::{draw_text, draw_text_vcenter, line_height, measure_text, FontRole, TextStyle};
+use sun_font::{
+    draw_text, draw_text_vcenter, line_height, measure_text, FontRole, TextStyle, VecFont,
+};
 use sunlight_dialogs::{
     decode_result, encode_request, ConfirmRequest, ConfirmStyle,
     DialogButton as DialogChoiceButton, DialogCommonOptions, DialogError, DialogMsg, DialogRequest,
     DialogResult, OpenFileRequest, SaveFileRequest,
 };
 use sunlight_edit::args::extract_first_real_file_path;
-use sunlight_edit::text_buffer::{TextBuffer, TextPosition, TextRange};
+use sunlight_edit::text_buffer::{TextBuffer, TextRange};
 use sunlight_ipc::{
     debug_log, ipc_call,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, process_yield, shm_alloc,
-    shm_free, shm_map, CapabilityToken, ClipMsg, IpcMsg, ProcessExit, SHM_PAGE,
+    shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, crt0};
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::button::ButtonState;
-use sunlight_ui::widgets::{StatusBar, TextInput};
+use sunlight_ui::widgets::{
+    StatusBar, TextCommand, TextEditor, TextEditorResponse, TextEditorState, TextInput,
+};
 use sunlight_ui::{
     request_close, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
     WindowDecoration,
@@ -44,18 +48,15 @@ const MAX_ARGC: usize = 8;
 const UNTITLED_DISPLAY: &str = "Untitled";
 const FIND_QUERY_MAX: usize = 128;
 const FIND_REPLACE_MAX: usize = 128;
-const DOUBLE_CLICK_MS: u64 = 350;
-const TRIPLE_CLICK_MS: u64 = 520;
 const TOOLBAR_ICON: u32 = 16;
 const TOOLBAR_BTN_W: u32 = 40;
 const TOOLBAR_GAP: i32 = 4;
 const MENU_W: u32 = 184;
 const MENU_ITEM_H: u32 = 24;
 const FIND_PANEL_H: u32 = 76;
-const CLIP_WIRE_MAGIC_SET: u32 = 0x4353_4554;
-const CLIP_WIRE_MAGIC_ITEM: u32 = 0x434C_4950;
-const CLIP_WIRE_VERSION: u16 = 1;
 const CLIP_SOURCE_APP: &[u8] = b"sunlight-edit";
+
+static F_MONO: VecFont = VecFont(FontRole::MonoRegular);
 
 const KEY_ESC: u8 = 0x01;
 const KEY_A: u8 = 0x1E;
@@ -222,12 +223,6 @@ struct DialogButton {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum MenuKind {
-    Context,
-    Hamburger,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusTarget {
     Editor,
     Find,
@@ -323,30 +318,6 @@ impl FindState {
     }
 }
 
-struct SelectionState {
-    anchor: Option<TextPosition>,
-    drag_anchor: Option<TextPosition>,
-    drag_active: bool,
-    preferred_col: Option<usize>,
-    last_click_ms: u64,
-    last_click_pos: Option<TextPosition>,
-    click_count: u8,
-}
-
-impl SelectionState {
-    fn new() -> Self {
-        Self {
-            anchor: None,
-            drag_anchor: None,
-            drag_active: false,
-            preferred_col: None,
-            last_click_ms: 0,
-            last_click_pos: None,
-            click_count: 0,
-        }
-    }
-}
-
 struct EditorIcons {
     open: Option<TgaImage>,
     save: Option<TgaImage>,
@@ -426,7 +397,7 @@ struct EditApp {
     active_dialog: ActiveDialog,
     dialog_buttons: [DialogButton; 3],
     dialog_button_count: usize,
-    selection: SelectionState,
+    selection: TextEditorState,
     menu: Option<PopupMenu>,
     find: FindState,
     icons: EditorIcons,
@@ -461,7 +432,7 @@ impl EditApp {
                 label: "",
             }; 3],
             dialog_button_count: 0,
-            selection: SelectionState::new(),
+            selection: TextEditorState::new(),
             menu: None,
             find: FindState::new(),
             icons: EditorIcons::load(),
@@ -850,6 +821,57 @@ impl EditApp {
         }
     }
 
+    fn update_shared_editor(&mut self, event: Event) -> bool {
+        self.selection.scroll_line = self.scroll_line;
+        self.selection.focused = self.focus == FocusTarget::Editor;
+        let rect = self.editor_rect();
+        let response = TextEditor::new(rect, &mut self.buffer, &mut self.selection)
+            .with_font(&F_MONO)
+            .with_gutter_width(GUTTER_W)
+            .with_menu_bounds(Rect::new(0, 0, WIN_W, WIN_H - STATUS_H))
+            .with_clipboard_source(CLIP_SOURCE_APP)
+            .update(event);
+        self.scroll_line = self.selection.scroll_line;
+        self.apply_editor_response(response)
+    }
+
+    fn run_shared_editor_command(&mut self, command: TextCommand) -> bool {
+        self.selection.scroll_line = self.scroll_line;
+        self.selection.focused = true;
+        let rect = self.editor_rect();
+        let response = TextEditor::new(rect, &mut self.buffer, &mut self.selection)
+            .with_font(&F_MONO)
+            .with_gutter_width(GUTTER_W)
+            .with_menu_bounds(Rect::new(0, 0, WIN_W, WIN_H - STATUS_H))
+            .with_clipboard_source(CLIP_SOURCE_APP)
+            .command(command);
+        self.scroll_line = self.selection.scroll_line;
+        self.apply_editor_response(response)
+    }
+
+    fn apply_editor_response(&mut self, response: TextEditorResponse) -> bool {
+        if let Some(error) = response.clipboard_error {
+            self.set_status_message(error.message());
+        } else if let Some(command) = response.command {
+            let status = match command {
+                TextCommand::Cut => "Cut",
+                TextCommand::Copy => "Copied",
+                TextCommand::Paste => "Pasted",
+                TextCommand::Delete => "Deleted",
+                TextCommand::SelectAll => "Selected all",
+                TextCommand::Undo => "Undo unavailable",
+                TextCommand::Redo => "Redo unavailable",
+            };
+            self.set_status_message(status);
+        }
+        if response.changed {
+            self.note_document_changed();
+        } else if response.selection_changed {
+            self.refresh_status_bars();
+        }
+        response.consumed || response.changed || response.selection_changed
+    }
+
     fn toolbar_rect(&self) -> Rect {
         Rect::new(0, HEADER_H as i32, WIN_W, TOOLBAR_H)
     }
@@ -925,54 +947,21 @@ impl EditApp {
         self.find.replace.active = self.find.focus == FocusTarget::Replace;
     }
 
-    fn menu_specs(kind: MenuKind) -> &'static [MenuItemSpec] {
-        const CONTEXT: &[MenuItemSpec] = &[
-            MenuItemSpec {
-                action: EditorAction::Cut,
-                label: "Cut",
-                icon: Some(ICON_CUT_TGA),
-            },
-            MenuItemSpec {
-                action: EditorAction::Copy,
-                label: "Copy",
-                icon: Some(ICON_COPY_TGA),
-            },
-            MenuItemSpec {
-                action: EditorAction::Paste,
-                label: "Paste",
-                icon: Some(ICON_PASTE_TGA),
-            },
-            MenuItemSpec {
-                action: EditorAction::SelectAll,
-                label: "Select All",
-                icon: Some(ICON_SELECT_ALL_TGA),
-            },
-            MenuItemSpec {
-                action: EditorAction::Find,
-                label: "Find",
-                icon: Some(ICON_FIND_TGA),
-            },
-            MenuItemSpec {
-                action: EditorAction::Replace,
-                label: "Replace",
-                icon: Some(ICON_REPLACE_TGA),
-            },
-            MenuItemSpec {
-                action: EditorAction::Open,
-                label: "Open",
-                icon: Some(ICON_OPEN_TGA),
-            },
-            MenuItemSpec {
-                action: EditorAction::Save,
-                label: "Save",
-                icon: Some(ICON_SAVE_TGA),
-            },
-            MenuItemSpec {
-                action: EditorAction::SaveAs,
-                label: "Save As",
-                icon: Some(ICON_SAVE_AS_TGA),
-            },
-        ];
+    fn update_find_inputs(&mut self, event: Event) -> bool {
+        if !self.find.visible {
+            return false;
+        }
+        self.layout_find_panel();
+        let query_changed = self.find.query.update(event);
+        let replace_changed = self.find.replace_visible && self.find.replace.update(event);
+        if query_changed {
+            self.find.query_revision = self.find.query_revision.wrapping_add(1);
+            self.sync_find_matches();
+        }
+        query_changed || replace_changed
+    }
+
+    fn menu_specs() -> &'static [MenuItemSpec] {
         const HAMBURGER: &[MenuItemSpec] = &[
             MenuItemSpec {
                 action: EditorAction::New,
@@ -1030,14 +1019,11 @@ impl EditApp {
                 icon: None,
             },
         ];
-        match kind {
-            MenuKind::Context => CONTEXT,
-            MenuKind::Hamburger => HAMBURGER,
-        }
+        HAMBURGER
     }
 
-    fn open_menu(&mut self, kind: MenuKind, x: i32, y: i32) {
-        let specs = Self::menu_specs(kind);
+    fn open_menu(&mut self, x: i32, y: i32) {
+        let specs = Self::menu_specs();
         let menu_h = MENU_ITEM_H * specs.len() as u32 + 8;
         let max_x = WIN_W as i32 - MENU_W as i32 - 6;
         let max_y = WIN_H as i32 - menu_h as i32 - STATUS_H as i32 - 6;
@@ -1096,14 +1082,6 @@ impl EditApp {
         self.selection.drag_active = false;
     }
 
-    fn select_all(&mut self) {
-        let range = self.buffer.select_all_range();
-        self.buffer.set_cursor(range.end);
-        self.selection.anchor = Some(range.start);
-        self.ensure_cursor_visible();
-        self.refresh_status_bars();
-    }
-
     fn has_selection(&self) -> bool {
         self.selection_range().is_some()
     }
@@ -1128,69 +1106,9 @@ impl EditApp {
         changed
     }
 
-    fn replace_selection_with(&mut self, text: &str) -> bool {
-        if let Some(range) = self.selection_range() {
-            let changed = self.buffer.replace_range(range.start, range.end, text);
-            self.clear_selection();
-            if changed {
-                self.note_document_changed();
-                self.ensure_cursor_visible();
-            }
-            return changed;
-        }
-        let changed = self.buffer.insert_text(text);
-        if changed {
-            self.note_document_changed();
-            self.ensure_cursor_visible();
-        }
-        changed
-    }
-
     fn selected_text(&self) -> Option<String> {
         self.selection_range()
             .map(|range| self.buffer.extract_range(range.start, range.end))
-    }
-
-    fn move_caret_to(&mut self, pos: TextPosition, keep_selection: bool) {
-        if keep_selection {
-            if self.selection.anchor.is_none() {
-                self.selection.anchor = Some(self.buffer.cursor());
-            }
-        } else {
-            self.clear_selection();
-        }
-        self.buffer.set_cursor(pos);
-        self.ensure_cursor_visible();
-        self.refresh_status_bars();
-    }
-
-    fn line_col_at_point(&self, x: i32, y: i32) -> TextPosition {
-        let rect = self.editor_rect();
-        let line_h = line_height(FontRole::MonoRegular).max(1) as i32;
-        let row = ((y - rect.y).max(0) / line_h) as usize;
-        let line = (self.scroll_line + row).min(self.buffer.line_count().saturating_sub(1));
-        let gutter = Rect::new(rect.x, rect.y, GUTTER_W, rect.h);
-        let text_x = gutter.right() + PAD;
-        let rel_x = (x - text_x).max(0);
-        let line_text = self.buffer.line(line).unwrap_or("");
-        let mut col = 0usize;
-        for (idx, _) in line_text.chars().enumerate() {
-            let prefix: String = line_text.chars().take(idx + 1).collect();
-            let width = measure_text(&prefix, FontRole::MonoRegular).w as i32;
-            if width >= rel_x {
-                col = idx + if rel_x > width - 4 { 1 } else { 0 };
-                return TextPosition {
-                    line,
-                    col: col.min(self.buffer.line_len_chars(line)),
-                };
-            }
-            col = idx + 1;
-        }
-        TextPosition { line, col }
-    }
-
-    fn point_in_editor(&self, x: i32, y: i32) -> bool {
-        self.editor_rect().contains(Point::new(x, y))
     }
 
     fn action_enabled(&self, action: EditorAction) -> bool {
@@ -1247,20 +1165,19 @@ impl EditApp {
             EditorAction::ReplaceAll => self.replace_all_matches(),
             EditorAction::SelectAll => {
                 self.close_menu();
-                self.select_all();
-                true
+                self.run_shared_editor_command(TextCommand::SelectAll)
             }
             EditorAction::Cut => {
                 self.close_menu();
-                self.cut_selection()
+                self.run_shared_editor_command(TextCommand::Cut)
             }
             EditorAction::Copy => {
                 self.close_menu();
-                self.copy_selection()
+                self.run_shared_editor_command(TextCommand::Copy)
             }
             EditorAction::Paste => {
                 self.close_menu();
-                self.paste_from_clipboard()
+                self.run_shared_editor_command(TextCommand::Paste)
             }
             EditorAction::About => {
                 self.close_menu();
@@ -1355,6 +1272,18 @@ impl EditApp {
                 return true;
             }
         }
+        if self.focus == FocusTarget::Editor
+            && self.update_shared_editor(Event::KeyPress {
+                keycode,
+                pressed: true,
+                shift,
+                ctrl,
+                alt: false,
+                super_key: false,
+            })
+        {
+            return true;
+        }
         if ctrl {
             let action = match keycode {
                 KEY_O => Some(EditorAction::Open),
@@ -1395,7 +1324,14 @@ impl EditApp {
 
     fn handle_find_keypress(&mut self, keycode: u8, shift: bool, ctrl: bool) -> bool {
         if ctrl {
-            return false;
+            return self.update_find_inputs(Event::KeyPress {
+                keycode,
+                pressed: true,
+                shift,
+                ctrl: true,
+                alt: false,
+                super_key: false,
+            });
         }
         match keycode {
             KEY_ENTER => {
@@ -1462,32 +1398,7 @@ impl EditApp {
             }
             return false;
         }
-        let changed = match ch {
-            '\u{8}' => {
-                if self.delete_selection() {
-                    true
-                } else {
-                    self.buffer.backspace()
-                }
-            }
-            '\n' => self.replace_selection_with("\n"),
-            '\r' => false,
-            c if !c.is_control() => {
-                let mut text = [0u8; 4];
-                self.replace_selection_with(c.encode_utf8(&mut text))
-            }
-            _ => false,
-        };
-        if changed {
-            self.ensure_cursor_visible();
-            if !matches!(ch, '\n') {
-                self.selection.preferred_col = None;
-            }
-            if ch != '\n' && ch != '\u{8}' && !ch.is_control() {
-                self.clear_selection();
-            }
-        }
-        changed
+        self.update_shared_editor(Event::Key(ch))
     }
 
     fn show_find(&mut self, replace: bool) {
@@ -1698,48 +1609,6 @@ impl EditApp {
         }
     }
 
-    fn draw_selection_highlight(&self, canvas: &mut Canvas, theme: &Theme, range: TextRange) {
-        let rect = self.editor_rect();
-        let gutter = Rect::new(rect.x, rect.y, GUTTER_W, rect.h);
-        let text_x = gutter.right() + PAD;
-        let lh = line_height(FontRole::MonoRegular).max(1) as i32;
-        let fill = Color::rgba(theme.accent.r(), theme.accent.g(), theme.accent.b(), 70);
-        for line_idx in range.start.line..=range.end.line {
-            if line_idx < self.scroll_line {
-                continue;
-            }
-            let row = line_idx - self.scroll_line;
-            let y = rect.y + row as i32 * lh;
-            if y >= rect.bottom() {
-                break;
-            }
-            let line = self.buffer.line(line_idx).unwrap_or("");
-            let start_col = if line_idx == range.start.line {
-                range.start.col
-            } else {
-                0
-            };
-            let end_col = if line_idx == range.end.line {
-                range.end.col
-            } else {
-                self.buffer.line_len_chars(line_idx)
-            };
-            let prefix: String = line.chars().take(start_col).collect();
-            let selected: String = line
-                .chars()
-                .skip(start_col)
-                .take(end_col.saturating_sub(start_col))
-                .collect();
-            let sx = text_x + measure_text(&prefix, FontRole::MonoRegular).w as i32;
-            let sw = measure_text(&selected, FontRole::MonoRegular).w.max(4) as i32;
-            for py in y..(y + lh - 1).min(rect.bottom()) {
-                for px in sx..sx + sw {
-                    canvas.blend_pixel(px, py, fill);
-                }
-            }
-        }
-    }
-
     fn draw_match_highlight(&self, canvas: &mut Canvas, theme: &Theme, highlight: MatchHighlight) {
         let rect = self.editor_rect();
         let gutter = Rect::new(rect.x, rect.y, GUTTER_W, rect.h);
@@ -1789,22 +1658,18 @@ impl EditApp {
         }
     }
 
-    fn draw_editor(&self, canvas: &mut Canvas, theme: &Theme) {
+    fn draw_editor(&mut self, canvas: &mut Canvas, theme: &Theme) {
         let rect = self.editor_rect();
-        canvas.fill_rect(rect, theme.bg);
-
-        let gutter = Rect::new(rect.x, rect.y, GUTTER_W, rect.h);
-        canvas.fill_rect(gutter, theme.panel_alt);
-        canvas.vline(gutter.right() - 1, gutter.y, gutter.h, theme.border);
-
-        let text_x = gutter.right() + PAD;
-        let lh = line_height(FontRole::MonoRegular).max(1) as i32;
-        let visible = self.visible_line_count();
-        let mono = TextStyle::new(FontRole::MonoRegular, theme.text);
-        let gutter_style = TextStyle::new(FontRole::MonoRegular, theme.text_dim);
-
-        if let Some(selection) = self.selection_range() {
-            self.draw_selection_highlight(canvas, theme, selection);
+        self.selection.scroll_line = self.scroll_line;
+        self.selection.focused = self.focus == FocusTarget::Editor;
+        {
+            let editor = TextEditor::new(rect, &mut self.buffer, &mut self.selection)
+                .with_font(&F_MONO)
+                .with_caret_visible(self.caret_visible)
+                .with_gutter_width(GUTTER_W)
+                .with_menu_bounds(Rect::new(0, 0, WIN_W, WIN_H - STATUS_H))
+                .with_clipboard_source(CLIP_SOURCE_APP);
+            editor.draw_surface(canvas, theme);
         }
         if self.find.visible {
             for (idx, range) in self.find.matches.iter().enumerate() {
@@ -1818,39 +1683,16 @@ impl EditApp {
                 );
             }
         }
+    }
 
-        for row in 0..visible {
-            let line_idx = self.scroll_line + row;
-            let y = rect.y + (row as i32) * lh;
-            if y + lh > rect.bottom() {
-                break;
-            }
-            let line_no = line_idx + 1;
-            let mut num = String::new();
-            push_usize(&mut num, line_no);
-            let nw = measure_text(&num, FontRole::MonoRegular).w;
-            draw_text(
-                canvas,
-                &num,
-                gutter.right() - (nw as i32) - 6,
-                y,
-                &gutter_style,
-            );
-
-            let Some(line) = self.buffer.line(line_idx) else {
-                continue;
-            };
-            draw_text(canvas, line, text_x, y, &mono);
-
-            if line_idx == self.buffer.cursor_line
-                && self.caret_visible
-                && self.focus == FocusTarget::Editor
-            {
-                let prefix: String = line.chars().take(self.buffer.cursor_col).collect();
-                let cx = text_x + measure_text(&prefix, FontRole::MonoRegular).w as i32;
-                canvas.vline(cx, y, lh.saturating_sub(2) as u32, theme.accent);
-            }
-        }
+    fn draw_editor_context_menu(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        let rect = self.editor_rect();
+        let editor = TextEditor::new(rect, &mut self.buffer, &mut self.selection)
+            .with_font(&F_MONO)
+            .with_gutter_width(GUTTER_W)
+            .with_menu_bounds(Rect::new(0, 0, WIN_W, WIN_H - STATUS_H))
+            .with_clipboard_source(CLIP_SOURCE_APP);
+        editor.draw_context_menu(canvas, theme);
     }
 
     fn draw_find_panel(&self, canvas: &mut Canvas, theme: &Theme) {
@@ -2095,51 +1937,6 @@ impl EditApp {
         .draw(canvas, theme);
     }
 
-    fn handle_editor_click(&mut self, x: i32, y: i32, button: u8) -> bool {
-        if !self.point_in_editor(x, y) {
-            return false;
-        }
-        let pos = self.line_col_at_point(x, y);
-        if button == 1 {
-            let inside_selection = self.selection_range().map_or(false, |range| {
-                let norm = self.buffer.normalized_range(range.start, range.end);
-                pos >= norm.start && pos <= norm.end
-            });
-            if !inside_selection {
-                self.move_caret_to(pos, false);
-            }
-            self.open_menu(MenuKind::Context, x, y);
-            return true;
-        }
-        let now = monotonic_millis();
-        let same_spot = self.selection.last_click_pos == Some(pos);
-        let within_double = now.saturating_sub(self.selection.last_click_ms) <= DOUBLE_CLICK_MS;
-        let within_triple = now.saturating_sub(self.selection.last_click_ms) <= TRIPLE_CLICK_MS;
-        if same_spot && within_triple && self.selection.click_count >= 2 {
-            if let Some(range) = self.buffer.line_range_at(pos.line) {
-                self.buffer.set_cursor(range.end);
-                self.selection.anchor = Some(range.start);
-            }
-            self.selection.click_count = 3;
-        } else if same_spot && within_double {
-            if let Some(range) = self.buffer.word_range_at(pos) {
-                self.buffer.set_cursor(range.end);
-                self.selection.anchor = Some(range.start);
-            } else {
-                self.move_caret_to(pos, false);
-            }
-            self.selection.click_count = 2;
-        } else {
-            self.move_caret_to(pos, false);
-            self.selection.drag_anchor = Some(pos);
-            self.selection.click_count = 1;
-        }
-        self.selection.last_click_ms = now;
-        self.selection.last_click_pos = Some(pos);
-        self.focus = FocusTarget::Editor;
-        true
-    }
-
     fn handle_find_panel_click(&mut self, x: i32, y: i32) -> bool {
         if !self.find.visible || !self.find_panel_rect().contains(Point::new(x, y)) {
             return false;
@@ -2184,87 +1981,9 @@ impl EditApp {
         false
     }
 
-    fn handle_mouse_drag(&mut self, x: i32, y: i32) -> bool {
-        let Some(anchor) = self.selection.drag_anchor else {
-            return false;
-        };
-        if !self.point_in_editor(x, y) {
-            return false;
-        }
-        let pos = self.line_col_at_point(x, y);
-        self.selection.drag_active = true;
-        self.selection.anchor = Some(anchor);
-        self.buffer.set_cursor(pos);
-        self.ensure_cursor_visible();
-        self.refresh_status_bars();
-        true
-    }
-
     fn show_menu_from_toolbar(&mut self) {
         let button = self.toolbar_buttons()[5];
-        self.open_menu(
-            MenuKind::Hamburger,
-            button.rect.x - 120,
-            button.rect.bottom() + 4,
-        );
-    }
-
-    fn copy_selection(&mut self) -> bool {
-        let Some(text) = self.selected_text() else {
-            self.set_status_message("Nothing selected");
-            return false;
-        };
-        match set_clipboard_text(text.as_bytes()) {
-            Ok(()) => {
-                self.set_status_message("Copied");
-                true
-            }
-            Err(msg) => {
-                self.set_status_message(msg);
-                false
-            }
-        }
-    }
-
-    fn cut_selection(&mut self) -> bool {
-        let Some(text) = self.selected_text() else {
-            self.set_status_message("Nothing selected");
-            return false;
-        };
-        match set_clipboard_text(text.as_bytes()) {
-            Ok(()) => {
-                let changed = self.delete_selection();
-                if changed {
-                    self.set_status_message("Cut");
-                }
-                changed
-            }
-            Err(msg) => {
-                self.set_status_message(msg);
-                false
-            }
-        }
-    }
-
-    fn paste_from_clipboard(&mut self) -> bool {
-        let mut item_buf = [0u8; SHM_PAGE];
-        match get_clipboard_text(&mut item_buf) {
-            Ok(Some(text)) => {
-                let changed = self.replace_selection_with(text);
-                if changed {
-                    self.set_status_message("Pasted");
-                }
-                changed
-            }
-            Ok(None) => {
-                self.set_status_message("Clipboard is empty");
-                false
-            }
-            Err(msg) => {
-                self.set_status_message(msg);
-                false
-            }
-        }
+        self.open_menu(button.rect.x - 120, button.rect.bottom() + 4);
     }
 }
 
@@ -2279,6 +1998,7 @@ impl App for EditApp {
         self.draw_startup_error(canvas, theme);
         self.draw_status(canvas, theme);
         self.draw_popup_menu(canvas, theme);
+        self.draw_editor_context_menu(canvas, theme);
         self.draw_active_dialog(canvas, theme);
     }
 
@@ -2307,13 +2027,20 @@ impl App for EditApp {
             }
             Event::Click { x, y } => {
                 self.toolbar_pressed = None;
-                self.selection.drag_anchor = None;
-                self.selection.drag_active = false;
                 if self.active_dialog != ActiveDialog::None {
                     if let Some(action) = self.dialog_button_hit(x, y) {
                         return self.dialog_action(action);
                     }
                     return false;
+                }
+                if self.selection.context_menu_open() {
+                    return self.update_shared_editor(Event::Click { x, y });
+                }
+                if self.find.visible
+                    && (self.find.query.context_menu_open()
+                        || self.find.replace.context_menu_open())
+                {
+                    return self.update_find_inputs(Event::Click { x, y });
                 }
                 if let Some(menu) = self.menu {
                     let p = Point::new(x, y);
@@ -2352,8 +2079,11 @@ impl App for EditApp {
                     };
                     self.find.focus = self.focus;
                     self.layout_find_panel();
+                    if self.update_find_inputs(Event::Click { x, y }) {
+                        return true;
+                    }
                 }
-                if self.handle_editor_click(x, y, 0) {
+                if self.update_shared_editor(Event::Click { x, y }) {
                     return true;
                 }
                 false
@@ -2365,22 +2095,37 @@ impl App for EditApp {
                 if button == 0 {
                     self.toolbar_pressed = self.toolbar_hit(x, y);
                 }
-                if button == 1 {
-                    self.handle_editor_click(x, y, 1)
-                } else {
-                    false
+                if self.editor_rect().contains(Point::new(x, y)) {
+                    self.focus = FocusTarget::Editor;
+                    self.find.focus = FocusTarget::Editor;
                 }
+                if self.find.visible {
+                    let point = Point::new(x, y);
+                    if self.find.query.rect.contains(point) {
+                        self.focus = FocusTarget::Find;
+                        self.find.focus = FocusTarget::Find;
+                    } else if self.find.replace_visible && self.find.replace.rect.contains(point) {
+                        self.focus = FocusTarget::Replace;
+                        self.find.focus = FocusTarget::Replace;
+                    }
+                    if self.update_find_inputs(Event::MouseDown { x, y, button }) {
+                        return true;
+                    }
+                }
+                self.update_shared_editor(Event::MouseDown { x, y, button })
             }
-            Event::MouseUp { .. } => {
-                self.selection.drag_anchor = None;
-                self.selection.drag_active = false;
-                false
+            Event::MouseUp { x, y, button } => {
+                if self.update_find_inputs(Event::MouseUp { x, y, button }) {
+                    return true;
+                }
+                self.update_shared_editor(Event::MouseUp { x, y, button })
             }
             Event::MouseMove { x, y } => {
                 if self.active_dialog != ActiveDialog::None {
                     return false;
                 }
-                if self.selection.drag_anchor.is_some() && self.handle_mouse_drag(x, y) {
+                let find_redraw = self.update_find_inputs(Event::MouseMove { x, y });
+                if self.update_shared_editor(Event::MouseMove { x, y }) {
                     return true;
                 }
                 let hover = self.toolbar_hit(x, y);
@@ -2388,7 +2133,7 @@ impl App for EditApp {
                     self.toolbar_hover = hover;
                     return true;
                 }
-                false
+                find_redraw
             }
             Event::Key(ch) => self.handle_text_key(ch),
             Event::KeyPress {
@@ -2401,12 +2146,12 @@ impl App for EditApp {
             Event::FocusChanged { focused: false }
             | Event::PointerOwnership { owned: false, .. } => {
                 self.toolbar_pressed = None;
-                self.selection.drag_anchor = None;
-                self.selection.drag_active = false;
-                false
+                let find_changed = self.update_find_inputs(event);
+                find_changed | self.update_shared_editor(event)
             }
             Event::FocusChanged { focused: true } | Event::PointerOwnership { owned: true, .. } => {
-                false
+                let find_changed = self.update_find_inputs(event);
+                find_changed | self.update_shared_editor(event)
             }
         }
     }
@@ -2722,204 +2467,6 @@ fn dialog_error_message(err: DialogError) -> &'static str {
         DialogError::HostUnavailable => "Dialog host unavailable",
         DialogError::Corrupt => "Dialog returned invalid data",
     }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ClipPayloadKind {
-    Text = 1,
-    FileList = 2,
-    Binary = 3,
-}
-
-impl ClipPayloadKind {
-    const fn as_u8(self) -> u8 {
-        self as u8
-    }
-
-    const fn from_u8(value: u8) -> Option<Self> {
-        match value {
-            1 => Some(Self::Text),
-            2 => Some(Self::FileList),
-            3 => Some(Self::Binary),
-            _ => None,
-        }
-    }
-}
-
-struct ClipboardItemView<'a> {
-    kind: ClipPayloadKind,
-    payload: &'a [u8],
-}
-
-fn set_clipboard_text(payload: &[u8]) -> Result<(), &'static str> {
-    let cap = ensure_clipboard_service().ok_or("Clipboard service unavailable")?;
-    let mime = b"text/plain";
-    let total_len = 16 + mime.len() + CLIP_SOURCE_APP.len() + payload.len();
-    if total_len > SHM_PAGE {
-        return Err("Clipboard payload is too large");
-    }
-    let (ptr, token) = shm_alloc().map_err(|_| "Clipboard service unavailable")?;
-    unsafe {
-        let buf = core::slice::from_raw_parts_mut(ptr, SHM_PAGE);
-        let mut index = 0usize;
-        index += push_u32_le(&mut buf[index..], CLIP_WIRE_MAGIC_SET);
-        index += push_u16_le(&mut buf[index..], CLIP_WIRE_VERSION);
-        buf[index] = ClipPayloadKind::Text.as_u8();
-        index += 1;
-        buf[index] = 1;
-        index += 1;
-        index += push_u16_le(&mut buf[index..], mime.len() as u16);
-        index += push_u16_le(&mut buf[index..], CLIP_SOURCE_APP.len() as u16);
-        index += push_u32_le(&mut buf[index..], payload.len() as u32);
-        index += copy_bytes(&mut buf[index..], mime);
-        index += copy_bytes(&mut buf[index..], CLIP_SOURCE_APP);
-        let _ = copy_bytes(&mut buf[index..], payload);
-    }
-    let reply = ipc_call(
-        cap,
-        IpcMsg::with_label(ClipMsg::SET_CLIPBOARD)
-            .word(0, total_len as u64)
-            .with_cap(0, token),
-    );
-    let _ = shm_free(token);
-    if reply.label == ClipMsg::ERROR {
-        return Err(clip_error_label(reply.words[0]));
-    }
-    Ok(())
-}
-
-fn get_clipboard_text<'a>(item_buf: &'a mut [u8]) -> Result<Option<&'a str>, &'static str> {
-    let cap = ensure_clipboard_service().ok_or("Clipboard service unavailable")?;
-    let reply = ipc_call(cap, IpcMsg::with_label(ClipMsg::GET_CLIPBOARD));
-    if reply.label == ClipMsg::ERROR {
-        return Err(clip_error_label(reply.words[0]));
-    }
-    let len = reply.words[1] as usize;
-    let token = reply.caps[0];
-    if len == 0 || token == CapabilityToken::INVALID {
-        return Ok(None);
-    }
-    if len > item_buf.len() || len > SHM_PAGE {
-        let _ = shm_free(token);
-        return Err("Invalid clipboard item");
-    }
-    let ptr = shm_map(token).map_err(|_| "Invalid clipboard item")?;
-    unsafe {
-        core::ptr::copy_nonoverlapping(ptr, item_buf.as_mut_ptr(), len);
-    }
-    let _ = shm_free(token);
-    let item = parse_clipboard_item(&item_buf[..len]).map_err(|_| "Invalid clipboard item")?;
-    if item.kind != ClipPayloadKind::Text {
-        return Err("Paste not supported for this clipboard type");
-    }
-    core::str::from_utf8(item.payload)
-        .map(Some)
-        .map_err(|_| "Invalid clipboard item")
-}
-
-fn parse_clipboard_item(bytes: &[u8]) -> Result<ClipboardItemView<'_>, ()> {
-    let mut index = 0usize;
-    if take_u32_le(bytes, &mut index).ok_or(())? != CLIP_WIRE_MAGIC_ITEM {
-        return Err(());
-    }
-    if take_u16_le(bytes, &mut index).ok_or(())? != CLIP_WIRE_VERSION {
-        return Err(());
-    }
-    let kind = ClipPayloadKind::from_u8(take_u8(bytes, &mut index).ok_or(())?).ok_or(())?;
-    let flags = take_u8(bytes, &mut index).ok_or(())?;
-    let _id = take_u32_le(bytes, &mut index).ok_or(())?;
-    let _created_at_ms = take_u64_le(bytes, &mut index).ok_or(())?;
-    let payload_len = take_u32_le(bytes, &mut index).ok_or(())? as usize;
-    let mime_len = take_u16_le(bytes, &mut index).ok_or(())? as usize;
-    let source_len = take_u16_le(bytes, &mut index).ok_or(())? as usize;
-    let _ = take_slice(bytes, &mut index, mime_len).ok_or(())?;
-    if (flags & 1) != 0 {
-        let _ = take_slice(bytes, &mut index, source_len).ok_or(())?;
-    } else {
-        let _ = take_slice(bytes, &mut index, source_len).ok_or(())?;
-    }
-    let payload = take_slice(bytes, &mut index, payload_len).ok_or(())?;
-    Ok(ClipboardItemView { kind, payload })
-}
-
-fn ensure_clipboard_service() -> Option<CapabilityToken> {
-    if let Some(cap) = nameserver_lookup_timeout("clipd", 50) {
-        return Some(cap);
-    }
-    let _ = libc::spawn(b"/sbin/sunlight-clipd", &[b"sunlight-clipd"], None)
-        .or_else(|_| libc::spawn(b"/bin/sunlight-clipd", &[b"sunlight-clipd"], None));
-    for _ in 0..8 {
-        if let Some(cap) = nameserver_lookup_timeout("clipd", 75) {
-            return Some(cap);
-        }
-        process_yield();
-    }
-    None
-}
-
-fn clip_error_label(code: u64) -> &'static str {
-    match code {
-        x if x == ClipMsg::ERR_BAD_REQUEST => "Clipboard request is invalid",
-        x if x == ClipMsg::ERR_NOT_FOUND => "Clipboard item not found",
-        x if x == ClipMsg::ERR_TOO_LARGE => "Clipboard payload is too large",
-        x if x == ClipMsg::ERR_UNSUPPORTED => "Paste not supported for this clipboard type",
-        x if x == ClipMsg::ERR_CORRUPT => "Invalid clipboard item",
-        _ => "Clipboard service unavailable",
-    }
-}
-
-fn push_u16_le(buf: &mut [u8], value: u16) -> usize {
-    if buf.len() < 2 {
-        return 0;
-    }
-    buf[..2].copy_from_slice(&value.to_le_bytes());
-    2
-}
-
-fn push_u32_le(buf: &mut [u8], value: u32) -> usize {
-    if buf.len() < 4 {
-        return 0;
-    }
-    buf[..4].copy_from_slice(&value.to_le_bytes());
-    4
-}
-
-fn copy_bytes(buf: &mut [u8], src: &[u8]) -> usize {
-    let len = src.len().min(buf.len());
-    buf[..len].copy_from_slice(&src[..len]);
-    len
-}
-
-fn take_u8(bytes: &[u8], index: &mut usize) -> Option<u8> {
-    let out = *bytes.get(*index)?;
-    *index += 1;
-    Some(out)
-}
-
-fn take_u16_le(bytes: &[u8], index: &mut usize) -> Option<u16> {
-    let slice = bytes.get(*index..*index + 2)?;
-    *index += 2;
-    Some(u16::from_le_bytes([slice[0], slice[1]]))
-}
-
-fn take_u32_le(bytes: &[u8], index: &mut usize) -> Option<u32> {
-    let slice = bytes.get(*index..*index + 4)?;
-    *index += 4;
-    Some(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
-}
-
-fn take_u64_le(bytes: &[u8], index: &mut usize) -> Option<u64> {
-    let slice = bytes.get(*index..*index + 8)?;
-    *index += 8;
-    Some(u64::from_le_bytes([
-        slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
-    ]))
-}
-
-fn take_slice<'a>(bytes: &'a [u8], index: &mut usize, len: usize) -> Option<&'a [u8]> {
-    let slice = bytes.get(*index..*index + len)?;
-    *index += len;
-    Some(slice)
 }
 
 #[no_mangle]

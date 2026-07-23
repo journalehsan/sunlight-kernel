@@ -20,11 +20,12 @@
 //! ```
 
 use core::ptr;
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use sunlight_ipc::{
-    ipc_call, ipc_call_timeout, monotonic_millis, process_yield,
+    ipc_call, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    nameserver_lookup, shm_create, shm_free, shm_map, CapabilityToken, IpcMsg, SgpMsg,
+    monotonic_millis, nameserver_lookup, process_yield, shm_create, shm_free, shm_map,
+    CapabilityToken, IpcMsg, SgpMsg,
 };
 
 use crate::event::Event;
@@ -40,6 +41,8 @@ const WINDOW_IPC_TIMEOUT_MS: u64 = 500;
 const WINDOW_CREATE_TIMEOUT_MS: u64 = 2_000;
 static CLOSE_REQUESTED: AtomicBool = AtomicBool::new(false);
 static CLIENT_CURSOR: AtomicU8 = AtomicU8::new(u8::MAX);
+static CLIENT_WIDTH: AtomicU32 = AtomicU32::new(0);
+static CLIENT_HEIGHT: AtomicU32 = AtomicU32::new(0);
 
 const fn should_deliver_local_tick(timeout_ms: u64, local_tick_streak: u8) -> bool {
     timeout_ms == 0 && local_tick_streak < MAX_LOCAL_TICKS_BEFORE_EVENT_POLL
@@ -109,7 +112,19 @@ pub enum CursorShape {
 /// receive a mutable reference to the [`Window`].  The initial cursor
 /// is always [`CursorShape::Pointer`].
 pub fn set_client_cursor(shape: CursorShape) {
-    CLIENT_CURSOR.store(shape as u8, Ordering::Relaxed);
+    if shape == CursorShape::Pointer {
+        // Pointer is the fallback. Preserve a more-specific request made by
+        // another widget during the same event dispatch (for example when a
+        // pointer crosses directly between two text inputs).
+        let _ = CLIENT_CURSOR.compare_exchange(
+            u8::MAX,
+            shape as u8,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        );
+    } else {
+        CLIENT_CURSOR.store(shape as u8, Ordering::Relaxed);
+    }
 }
 
 impl CursorShape {
@@ -137,6 +152,12 @@ pub fn request_close() {
 fn take_requested_cursor() -> Option<CursorShape> {
     let v = CLIENT_CURSOR.swap(u8::MAX, Ordering::Relaxed);
     CursorShape::from_discriminant(v)
+}
+
+pub(crate) fn active_client_bounds() -> Option<crate::geom::Rect> {
+    let width = CLIENT_WIDTH.load(Ordering::Relaxed);
+    let height = CLIENT_HEIGHT.load(Ordering::Relaxed);
+    (width > 0 && height > 0).then_some(crate::geom::Rect::new(0, 0, width, height))
 }
 
 fn take_close_requested() -> bool {
@@ -340,6 +361,9 @@ impl Window {
             let _ = shm_free(title_cap);
         }
         launch_trace::log_phase_now(trace, config.title, "window_registered", Some(pid));
+
+        CLIENT_WIDTH.store(config.width, Ordering::Relaxed);
+        CLIENT_HEIGHT.store(config.height, Ordering::Relaxed);
 
         Some(Self {
             width: config.width,

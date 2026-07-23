@@ -400,7 +400,10 @@ impl CapabilityBroker {
         owner_pid: usize,
         now_tick: u64,
     ) -> Option<(u32, u32)> {
-        let idx = self.auth_session_grants.iter().position(|grant| grant.token == token)?;
+        let idx = self
+            .auth_session_grants
+            .iter()
+            .position(|grant| grant.token == token)?;
         let grant = self.auth_session_grants.swap_remove(idx);
         if grant.owner_pid != owner_pid || now_tick > grant.expires_at_tick {
             return None;

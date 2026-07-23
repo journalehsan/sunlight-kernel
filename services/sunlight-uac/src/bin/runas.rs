@@ -168,7 +168,10 @@ fn unpack_username(words: &[u64]) -> heapless::String<32> {
 fn current_username() -> Option<heapless::String<32>> {
     let vfs = nameserver_lookup("vfs")?;
     let uid = sunlight_libc::getuid() as u32;
-    let reply = ipc_call(vfs, IpcMsg::with_label(sunlight_ipc::VfsMsg::GETPWUID).word(0, uid as u64));
+    let reply = ipc_call(
+        vfs,
+        IpcMsg::with_label(sunlight_ipc::VfsMsg::GETPWUID).word(0, uid as u64),
+    );
     if reply.label != sunlight_ipc::VfsMsg::REPLY || reply.word_count < 7 {
         return None;
     }

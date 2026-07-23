@@ -28,19 +28,19 @@ pub mod fd;
 pub mod launch_trace;
 /// Freestanding memory primitives (memcpy, memmove, memset, memcmp, memchr).
 pub mod mem;
-/// Freestanding C string primitives (strlen, strnlen, strcmp, strncmp, strchr, strrchr).
-pub mod string;
 /// POSIX memory mapping wrappers (`mmap`, `munmap`).
 pub mod mman;
 /// Power management: shutdown/reboot via the kernel `PowerCtl` syscall.
 pub mod power;
+pub mod secret_store;
+/// Strict, fail-closed configuration loader for the future SSH daemon.
+pub mod ssh_config;
+/// Freestanding C string primitives (strlen, strnlen, strcmp, strncmp, strchr, strrchr).
+pub mod string;
 /// Canonical user-space app launch resolution and tracing.
 pub mod sun_exec;
 /// Global file-open resolver (extension MIME + default app associations).
 pub mod sun_open;
-pub mod secret_store;
-/// Strict, fail-closed configuration loader for the future SSH daemon.
-pub mod ssh_config;
 /// Native thread spawning.
 pub mod thread;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
@@ -376,13 +376,7 @@ pub fn chown(path: &[u8], uid: u32, gid: u32) -> Result<(), Errno> {
 pub(crate) fn secret_create_temp(path: &[u8], mode: u16) -> Result<Fd, Errno> {
     let mut path_buf = [0u8; MAX_PATH];
     let path_ptr = cstr(&mut path_buf, path)?;
-    let ret = unsafe {
-        sys::syscall2(
-            sys::SYS_SECRET_CREATE,
-            path_ptr as u64,
-            mode as u64,
-        )
-    };
+    let ret = unsafe { sys::syscall2(sys::SYS_SECRET_CREATE, path_ptr as u64, mode as u64) };
     checked_fd(ret)
 }
 

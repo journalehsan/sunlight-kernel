@@ -753,10 +753,7 @@ impl<D: BlockDevice> Vfs<D> {
             return Err(FsError::Unsupported);
         }
 
-        let fs = &mut self.mounts[old_mount]
-            .as_mut()
-            .ok_or(FsError::NotFound)?
-            .fs;
+        let fs = &mut self.mounts[old_mount].as_mut().ok_or(FsError::NotFound)?.fs;
         let source = fs.stat(old_local)?;
         validate_private_stat(source, uid, gid, mode)?;
 
@@ -826,12 +823,7 @@ fn validate_private_parent<D: BlockDevice>(vfs: &mut Vfs<D>, path: &str) -> Resu
     Ok(())
 }
 
-fn validate_private_stat(
-    stat: FileStat,
-    uid: u32,
-    gid: u32,
-    mode: u16,
-) -> Result<(), FsError> {
+fn validate_private_stat(stat: FileStat, uid: u32, gid: u32, mode: u16) -> Result<(), FsError> {
     if stat.file_type != FileType::File {
         return Err(FsError::UnexpectedType);
     }

@@ -312,9 +312,9 @@ impl PtyServer {
         };
         let mut token = entropy
             ^ self
-            .next_token
-            .wrapping_mul(0x9e37_79b9_7f4a_7c15)
-            .rotate_left((id as u32) & 31)
+                .next_token
+                .wrapping_mul(0x9e37_79b9_7f4a_7c15)
+                .rotate_left((id as u32) & 31)
             ^ generation.rotate_left(17)
             ^ pid.rotate_left(29)
             ^ role_tag;
@@ -441,14 +441,11 @@ mod tests {
     #[test]
     fn reused_slot_receives_a_new_generation() {
         let mut server = PtyServer::new();
-        let (id, first_generation, _, _) = server
-            .create(CALLER, 0, WindowSize::default())
-            .unwrap();
+        let (id, first_generation, _, _) = server.create(CALLER, 0, WindowSize::default()).unwrap();
         let index = server.locate(id, first_generation).unwrap();
         server.sessions[index].destroy();
-        let (next_id, next_generation, _, _) = server
-            .create(CALLER, 0, WindowSize::default())
-            .unwrap();
+        let (next_id, next_generation, _, _) =
+            server.create(CALLER, 0, WindowSize::default()).unwrap();
         assert_eq!(id, next_id);
         assert_ne!(first_generation, next_generation);
         assert_eq!(
@@ -464,7 +461,10 @@ mod tests {
         let reply = read_ring(1, 1, &mut output, false, 8);
         assert_eq!(reply.label, PtyMsg::REPLY);
         assert_eq!(reply.words[2], 2);
-        assert_eq!(read_ring(1, 1, &mut output, false, 8).words[0], PtyMsg::ERR_PEER_CLOSED);
+        assert_eq!(
+            read_ring(1, 1, &mut output, false, 8).words[0],
+            PtyMsg::ERR_PEER_CLOSED
+        );
     }
 }
 
@@ -502,7 +502,9 @@ fn handle_message(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
             match server.create(caller, msg.words[0], size) {
                 Ok((id, generation, master, control)) => {
                     debug_log("[PTY] create\n");
-                    let mut reply = IpcMsg::with_label(PtyMsg::REPLY).word(0, id).word(1, generation);
+                    let mut reply = IpcMsg::with_label(PtyMsg::REPLY)
+                        .word(0, id)
+                        .word(1, generation);
                     reply.caps[0] = master;
                     reply.caps[1] = control;
                     reply.cap_count = 2;
@@ -648,7 +650,11 @@ fn set_foreground_process(
     ok_identity(session.id, session.generation)
 }
 
-fn get_foreground_process(server: &PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+fn get_foreground_process(
+    server: &PtyServer,
+    msg: &IpcMsg,
+    caller: PtyCallerCredentials,
+) -> IpcMsg {
     let index = match server.check(msg, caller, PtyRole::Control) {
         Ok(index) => index,
         Err(code) => return error(code),
@@ -811,7 +817,9 @@ fn error(code: u64) -> IpcMsg {
 }
 
 fn ok_identity(id: u64, generation: u64) -> IpcMsg {
-    IpcMsg::with_label(PtyMsg::REPLY).word(0, id).word(1, generation)
+    IpcMsg::with_label(PtyMsg::REPLY)
+        .word(0, id)
+        .word(1, generation)
 }
 
 fn pack_reply(id: u64, generation: u64, bytes: &[u8]) -> IpcMsg {

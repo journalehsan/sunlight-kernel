@@ -173,7 +173,6 @@ mod sunlight {
     // Shared calculator engine from the `sunshell` lib (same as Vortex Search).
     use sunshell::calc;
 
-    use sunlight_uac::auth::hash_password;
     use sunlight_ipc::{
         debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
         launch_trace::{LaunchSource, LaunchTrace},
@@ -181,6 +180,7 @@ mod sunlight {
         tty_stdin_push, tty_stdout_pull, unpack_ipv4, CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg,
         TzMsg, VfsMsg,
     };
+    use sunlight_uac::auth::hash_password;
 
     /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
     /// Returns the bytes written into `buf` (trimmed of NULs/leading spaces).
@@ -2878,8 +2878,13 @@ mod sunlight {
                                     sunlight_ipc::process_exit::ProcessExit::exit(0);
                                 }
                                 // Command completed inline; separator then prompt.
-                                let _ =
-                                    pty_write(service_cap, slave_cap, session_id, generation, b"\n");
+                                let _ = pty_write(
+                                    service_cap,
+                                    slave_cap,
+                                    session_id,
+                                    generation,
+                                    b"\n",
+                                );
                                 send_osc_prompt(
                                     service_cap,
                                     slave_cap,

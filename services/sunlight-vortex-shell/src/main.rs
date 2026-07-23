@@ -2716,8 +2716,7 @@ impl VortexShell {
         // windows appear and disappear). No polling timer of its own — driven
         // by the existing app-state refresh cadence.
         if self.workspace_switcher.is_open() {
-            let summaries =
-                workspace_switcher::build_workspace_summaries(&windows, &self.apps);
+            let summaries = workspace_switcher::build_workspace_summaries(&windows, &self.apps);
             if self.workspace_switcher.observe_summaries(summaries) {
                 dirty = true;
             }
@@ -3166,10 +3165,8 @@ impl VortexShell {
         // Always take a fresh LIST_WINDOWS snapshot so open reflects current
         // ownership; closed windows must not linger as stale icons/counts.
         let _ = self.refresh_window_snapshots();
-        let summaries = workspace_switcher::build_workspace_summaries(
-            &self.window_snapshots,
-            &self.apps,
-        );
+        let summaries =
+            workspace_switcher::build_workspace_summaries(&self.window_snapshots, &self.apps);
         self.workspace_switcher.observe_summaries(summaries)
     }
 
@@ -7080,8 +7077,7 @@ impl App for VortexShell {
                     row_icons[i] = self.icon_tga_for_app(*app_id);
                 }
             }
-            self.search_palette
-                .view(canvas, theme, cw, ch, &row_icons);
+            self.search_palette.view(canvas, theme, cw, ch, &row_icons);
         }
 
         if let Some(menu) = &self.context_menu {
@@ -7102,11 +7098,9 @@ impl App for VortexShell {
                 | Event::Key(_)
                 | Event::KeyPress { .. } => {
                     let now = monotonic_millis();
-                    let (dirty, action) = self.search_palette.handle_event(
-                        event,
-                        self.screen_w,
-                        self.screen_h,
-                    );
+                    let (dirty, action) =
+                        self.search_palette
+                            .handle_event(event, self.screen_w, self.screen_h);
                     let acted = self.apply_search_palette_action(action, now);
                     return dirty || acted;
                 }
@@ -7121,11 +7115,9 @@ impl App for VortexShell {
                             return true;
                         }
                         let now = monotonic_millis();
-                        let (dirty, action) = self.search_palette.handle_event(
-                            event,
-                            self.screen_w,
-                            self.screen_h,
-                        );
+                        let (dirty, action) =
+                            self.search_palette
+                                .handle_event(event, self.screen_w, self.screen_h);
                         let acted = self.apply_search_palette_action(action, now);
                         return dirty || acted;
                     }

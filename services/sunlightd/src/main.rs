@@ -301,10 +301,8 @@ fn load_persisted_enabled_state(services: &mut ServiceTable) {
 
 fn persist_enabled_state(services: &ServiceTable) -> Result<(), &'static str> {
     let content = collect_enabled_state(services);
-    let fd =
-        libc::open_with_flags(ENABLED_STATE_TMP_PATH, O_WRONLY | O_CREAT | O_TRUNC).map_err(
-            |_| "open-temp",
-        )?;
+    let fd = libc::open_with_flags(ENABLED_STATE_TMP_PATH, O_WRONLY | O_CREAT | O_TRUNC)
+        .map_err(|_| "open-temp")?;
     libc::chmod(ENABLED_STATE_TMP_PATH, 0o600).map_err(|_| "chmod-temp")?;
     libc::write_all(fd, content.as_bytes()).map_err(|_| "write-temp")?;
     libc::close(fd).map_err(|_| "close-temp")?;
@@ -756,7 +754,11 @@ fn entry_pid(entry: &ServiceEntry) -> Option<u32> {
     }
 }
 
-fn spawn_service_at(services: &mut ServiceTable, idx: usize, spawn_cap: CapabilityToken) -> Result<(), u32> {
+fn spawn_service_at(
+    services: &mut ServiceTable,
+    idx: usize,
+    spawn_cap: CapabilityToken,
+) -> Result<(), u32> {
     let Some(unit) = services.get(idx).map(|entry| entry.unit.clone()) else {
         return Err(FAILURE_SPAWN);
     };
@@ -784,14 +786,7 @@ fn spawn_service_at(services: &mut ServiceTable, idx: usize, spawn_cap: Capabili
         gid,
         capability_summary(unit.capability_mask)
     );
-    match spawn_named_with_identity(
-        spawn_cap,
-        &path,
-        &name_buf,
-        uid,
-        gid,
-        unit.capability_mask,
-    ) {
+    match spawn_named_with_identity(spawn_cap, &path, &name_buf, uid, gid, unit.capability_mask) {
         Ok(pid) => {
             let now = monotonic_millis();
             if let Some(entry) = services.get_mut(idx) {
@@ -799,7 +794,13 @@ fn spawn_service_at(services: &mut ServiceTable, idx: usize, spawn_cap: Capabili
             }
             serial_println!("[SUNLIGHTD] spawned {} pid={}", name_buf, pid);
             if let Some(entry) = services.get(idx) {
-                if !matches!(entry.state, ServiceState::Starting { needs_ready: true, .. }) {
+                if !matches!(
+                    entry.state,
+                    ServiceState::Starting {
+                        needs_ready: true,
+                        ..
+                    }
+                ) {
                     if let Some(entry) = services.get_mut(idx) {
                         entry.mark_running(pid, now);
                     }
@@ -1108,7 +1109,11 @@ fn handle_control_message(
         SunlightdOp::Enable => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
-                if services.get(idx).map(|entry| entry.enabled).unwrap_or(false) {
+                if services
+                    .get(idx)
+                    .map(|entry| entry.enabled)
+                    .unwrap_or(false)
+                {
                     reply.label = REPLY_NOP;
                 } else {
                     if let Some(entry) = services.get_mut(idx) {
@@ -1167,7 +1172,9 @@ fn handle_control_message(
             let pid = msg.badge as u32;
             if let Some(idx) = find_service_idx_by_pid(services, pid) {
                 let next = services.get(idx).and_then(|entry| match entry.state {
-                    ServiceState::Starting { pid, started_at, .. } => Some((pid, started_at)),
+                    ServiceState::Starting {
+                        pid, started_at, ..
+                    } => Some((pid, started_at)),
                     ServiceState::Running { pid, started_at } => Some((pid, started_at)),
                     _ => None,
                 });
@@ -1212,7 +1219,9 @@ fn handle_control_message(
                             enabled: entry.enabled,
                             detail: entry.last_status_detail,
                         },
-                        ServiceState::Starting { pid, started_at, .. } => StatusReply {
+                        ServiceState::Starting {
+                            pid, started_at, ..
+                        } => StatusReply {
                             state: 1,
                             pid,
                             restarts: entry.restart_count,
@@ -1388,8 +1397,11 @@ mod tests {
     #[test]
     fn persisted_state_overrides_defaults() {
         let mut services = load_for_test();
-        apply_enabled_state_from_str(&mut services, "v1\nsolar.service=1\nsunlight-tls.service=0\n")
-            .expect("valid state");
+        apply_enabled_state_from_str(
+            &mut services,
+            "v1\nsolar.service=1\nsunlight-tls.service=0\n",
+        )
+        .expect("valid state");
 
         let solar = services.find_by_name("solar").unwrap();
         let tls = services.find_by_name("sunlight-tls").unwrap();

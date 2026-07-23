@@ -53,11 +53,7 @@ pub fn authenticate_password_for_session(username: &[u8], password: &[u8]) -> Op
     authenticate_password_with_op(username, password, AUTH_PASSWORD_SESSION_OP)
 }
 
-fn authenticate_password_with_op(
-    username: &[u8],
-    password: &[u8],
-    op: u64,
-) -> Option<AuthSuccess> {
+fn authenticate_password_with_op(username: &[u8], password: &[u8], op: u64) -> Option<AuthSuccess> {
     if !username_valid(username) || !password_valid(password) {
         return None;
     }
@@ -80,7 +76,8 @@ fn authenticate_password_with_op(
 
     if reply.label == AUTH_SUCCESS {
         let session_grant = reply.caps[0];
-        if op == AUTH_PASSWORD_SESSION_OP && session_grant == sunlight_ipc::CapabilityToken::INVALID {
+        if op == AUTH_PASSWORD_SESSION_OP && session_grant == sunlight_ipc::CapabilityToken::INVALID
+        {
             return None;
         }
         Some(AuthSuccess {
@@ -133,8 +130,8 @@ pub fn verify_shadow_credentials(
         }
 
         let hash_len = nul_len(&shadow_entry.password);
-        let hash_str =
-            core::str::from_utf8(&shadow_entry.password[..hash_len]).map_err(|_| AuthError::Failed)?;
+        let hash_str = core::str::from_utf8(&shadow_entry.password[..hash_len])
+            .map_err(|_| AuthError::Failed)?;
         verify_password_hash(hash_str, password)?;
         return Ok(AuthSuccess {
             uid: entry.uid,
@@ -146,7 +143,10 @@ pub fn verify_shadow_credentials(
     Err(AuthError::Failed)
 }
 
-pub fn migrate_shadow_contents(passwd_data: &[u8], shadow_data: &[u8]) -> Result<String, AuthError> {
+pub fn migrate_shadow_contents(
+    passwd_data: &[u8],
+    shadow_data: &[u8],
+) -> Result<String, AuthError> {
     let shadow_str = core::str::from_utf8(shadow_data).map_err(|_| AuthError::Failed)?;
     let (passwd_entries, passwd_count) = parse_passwd(passwd_data);
     let mut migrated = String::new();
@@ -255,7 +255,10 @@ fn passwd_index(entries: &[sunlight_fs::PasswdEntry], username: &[u8]) -> Option
 }
 
 fn nul_len(bytes: &[u8]) -> usize {
-    bytes.iter().position(|&byte| byte == 0).unwrap_or(bytes.len())
+    bytes
+        .iter()
+        .position(|&byte| byte == 0)
+        .unwrap_or(bytes.len())
 }
 
 fn username_valid(username: &[u8]) -> bool {
@@ -269,7 +272,9 @@ fn username_valid(username: &[u8]) -> bool {
 fn password_valid(password: &[u8]) -> bool {
     !password.is_empty()
         && password.len() <= MAX_PASSWORD_LEN
-        && password.iter().all(|byte| *byte != 0 && *byte != b'\n' && *byte != b'\r')
+        && password
+            .iter()
+            .all(|byte| *byte != 0 && *byte != b'\n' && *byte != b'\r')
 }
 
 fn pack_nul_terminated(msg: &mut IpcMsg, start: usize, bytes: &[u8]) {
@@ -309,21 +314,23 @@ mod tests {
             verify_shadow_credentials(PASSWD_DATA, shadow.as_bytes(), b"root", b"root").unwrap();
         assert_eq!(success.uid, 0);
         assert_eq!(success.gid, 0);
-        assert!(verify_shadow_credentials(PASSWD_DATA, shadow.as_bytes(), b"root", b"bad").is_err());
-        assert!(verify_shadow_credentials(PASSWD_DATA, shadow.as_bytes(), b"missing", b"root").is_err());
+        assert!(
+            verify_shadow_credentials(PASSWD_DATA, shadow.as_bytes(), b"root", b"bad").is_err()
+        );
+        assert!(
+            verify_shadow_credentials(PASSWD_DATA, shadow.as_bytes(), b"missing", b"root").is_err()
+        );
     }
 
     #[test]
     fn rejects_plaintext_shadow_entries() {
-        assert!(
-            verify_shadow_credentials(
-                PASSWD_DATA,
-                b"root:root:0:0:99999:7:::\n",
-                b"root",
-                b"root"
-            )
-            .is_err()
-        );
+        assert!(verify_shadow_credentials(
+            PASSWD_DATA,
+            b"root:root:0:0:99999:7:::\n",
+            b"root",
+            b"root"
+        )
+        .is_err());
     }
 
     #[test]

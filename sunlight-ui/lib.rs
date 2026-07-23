@@ -43,6 +43,8 @@ pub mod widgets;
 // Application framework (requires the "app" feature + sunlight-ipc)
 #[cfg(feature = "app")]
 pub mod app;
+#[cfg(feature = "app")]
+pub mod clipboard;
 
 // Top-level re-exports for convenience
 pub use event::Event;

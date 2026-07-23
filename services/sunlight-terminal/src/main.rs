@@ -1250,14 +1250,16 @@ impl TerminalApp {
                 let shell_id = (pty.id as u8).max(1) as u64;
                 let slave = match pty.attach_slave_timeout(SPAWN_STEP_TIMEOUT_MS) {
                     Ok(slave) => slave,
-                    Err(PtyIoError::Timeout) => return {
-                        self.pending_spawn = Some(PendingSpawn {
-                            tab_id: pending.tab_id,
-                            step: SpawnStep::SpawnShell(pty),
-                            started_ms: pending.started_ms,
-                        });
-                        true
-                    },
+                    Err(PtyIoError::Timeout) => {
+                        return {
+                            self.pending_spawn = Some(PendingSpawn {
+                                tab_id: pending.tab_id,
+                                step: SpawnStep::SpawnShell(pty),
+                                started_ms: pending.started_ms,
+                            });
+                            true
+                        }
+                    }
                     Err(PtyIoError::Rejected) => {
                         pty.close();
                         self.mark_pending_failed_id(pending.tab_id);
@@ -2081,9 +2083,7 @@ impl App for TerminalApp {
                 self.clear_tracked_mods();
                 self.window_focused = true;
             }
-            Event::MouseUp { .. }
-            | Event::MouseMove { .. }
-            | Event::PointerOwnership { .. } => {}
+            Event::MouseUp { .. } | Event::MouseMove { .. } | Event::PointerOwnership { .. } => {}
         }
         dirty
     }

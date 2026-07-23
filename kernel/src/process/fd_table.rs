@@ -416,13 +416,7 @@ mod tests {
     #[test]
     fn cloexec_handles_are_removed_without_touching_standard_streams() {
         let mut table = FdTable::new();
-        let cloexec = table
-            .open(
-                FileHandle::vfs(7),
-                READ,
-                0x0008_0000,
-            )
-            .unwrap();
+        let cloexec = table.open(FileHandle::vfs(7), READ, 0x0008_0000).unwrap();
         let normal = table.open(FileHandle::vfs(8), READ, 0).unwrap();
         let taken = table.take_cloexec_handles();
         assert_eq!(taken[cloexec as usize], Some(FileHandle::vfs(7)));

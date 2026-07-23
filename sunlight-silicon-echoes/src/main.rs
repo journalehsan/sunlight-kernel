@@ -17,10 +17,10 @@ use sunlight_libc::{self as libc, rand::getrandom, GRND_NONCRYPTO};
 use sunlight_silicon_echoes::{
     chapter_two_consequence_summary, chapter_two_turning_point_layout, choice_row_height,
     decode_save, echo_object_is_active, echo_objects, encode_save, hotspot, layout_choice_rows,
-    node, presentation_narration, run_deterministic_stress, validate_graph, ChoiceId,
-    EchoLayer, GameState, HotspotId, NarrativePresentation, PresentationConfig, SaveError,
-    SaveStage, SceneId, ScenePresentation, ShortcutGate, StoryNodeId, Transition,
-    CHOICE_LINE_HEIGHT, CHOICE_TEXT_INSET_LEFT, CHOICE_TEXT_INSET_RIGHT,
+    node, presentation_narration, run_deterministic_stress, validate_graph, ChoiceId, EchoLayer,
+    GameState, HotspotId, NarrativePresentation, PresentationConfig, SaveError, SaveStage, SceneId,
+    ScenePresentation, ShortcutGate, StoryNodeId, Transition, CHOICE_LINE_HEIGHT,
+    CHOICE_TEXT_INSET_LEFT, CHOICE_TEXT_INSET_RIGHT,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, Canvas, Color, CursorShape, Event, Point, Rect, Theme,
@@ -660,10 +660,7 @@ impl SiliconEchoesApp {
 
     fn choice_line_count(&self, text: &str) -> usize {
         let lines = prepare_text_lines(text, self.choice_text_width(), FontRole::UiRegular);
-        let count = lines
-            .iter()
-            .filter(|line| line.end > line.start)
-            .count();
+        let count = lines.iter().filter(|line| line.end > line.start).count();
         count.max(1)
     }
 
@@ -2114,7 +2111,10 @@ impl SiliconEchoesApp {
         }
         if self.presentation_accepts_input() && self.current_node_is_uncontrolled() {
             let rects = self.choice_rects();
-            let rect = rects.first().copied().unwrap_or_else(|| self.choice_rect(0));
+            let rect = rects
+                .first()
+                .copied()
+                .unwrap_or_else(|| self.choice_rect(0));
             self.draw_action(
                 canvas,
                 rect,
@@ -2155,14 +2155,7 @@ impl SiliconEchoesApp {
                     .get(visible_index)
                     .copied()
                     .unwrap_or_else(|| self.choice_rect(visible_index));
-                self.draw_choice(
-                    canvas,
-                    rect,
-                    choice.text,
-                    hovered,
-                    focused,
-                    visible_index,
-                );
+                self.draw_choice(canvas, rect, choice.text, hovered, focused, visible_index);
             }
         }
         draw_text(

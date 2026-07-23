@@ -197,13 +197,19 @@ impl ConfigError {
             ConfigErrorKind::CrossFieldConflict => write!(out, "configuration values conflict"),
             ConfigErrorKind::FileMissing => write!(out, "configuration file is missing"),
             ConfigErrorKind::FileTooLarge => write!(out, "configuration file exceeds 16 KiB"),
-            ConfigErrorKind::FileReadFailed => write!(out, "configuration file read or close failed"),
+            ConfigErrorKind::FileReadFailed => {
+                write!(out, "configuration file read or close failed")
+            }
             ConfigErrorKind::InvalidUtf8 => write!(out, "configuration file is not valid UTF-8"),
             ConfigErrorKind::EmptyFile => write!(out, "configuration file is empty"),
-            ConfigErrorKind::UnexpectedFileType => write!(out, "configuration is not a regular file"),
+            ConfigErrorKind::UnexpectedFileType => {
+                write!(out, "configuration is not a regular file")
+            }
             ConfigErrorKind::InsecureFileOwner => write!(out, "configuration is not root-owned"),
             ConfigErrorKind::InsecureFileMode => write!(out, "configuration has insecure metadata"),
-            ConfigErrorKind::InsecureParentDirectory => write!(out, "configuration parent is insecure"),
+            ConfigErrorKind::InsecureParentDirectory => {
+                write!(out, "configuration parent is insecure")
+            }
             ConfigErrorKind::SyntaxError => write!(out, "invalid supported TOML syntax"),
             ConfigErrorKind::UnsupportedSyntax => write!(out, "unsupported TOML syntax"),
             ConfigErrorKind::InternalError => write!(out, "internal configuration policy error"),
@@ -525,9 +531,8 @@ pub fn validate_raw_ssh_config(
     limits: &SshRuntimeLimits,
 ) -> Result<ValidatedSshConfig, ConfigError> {
     validate_runtime_limits(*limits)?;
-    let listen_address = validate_ipv4(raw.listen_address.as_str()).map_err(|error| {
-        raw.error(error.kind, SshConfigField::ListenAddress)
-    })?;
+    let listen_address = validate_ipv4(raw.listen_address.as_str())
+        .map_err(|error| raw.error(error.kind, SshConfigField::ListenAddress))?;
     let port = bounded_nonzero(
         raw.port,
         1,
@@ -686,14 +691,20 @@ impl RawBuilder {
     ) -> Result<(), ConfigError> {
         let error = |kind| ConfigError::new(kind).at(line, column).field(field);
         match field {
-            SshConfigField::ListenAddress => self.listen_address = Some(parse_string(value, error)?),
+            SshConfigField::ListenAddress => {
+                self.listen_address = Some(parse_string(value, error)?)
+            }
             SshConfigField::Port => self.port = Some(parse_integer(value, error)?),
             SshConfigField::HostKeyFile => self.host_key_file = Some(parse_string(value, error)?),
             SshConfigField::PasswordAuthentication => {
                 self.password_authentication = Some(parse_boolean(value, error)?)
             }
-            SshConfigField::MaxAuthAttempts => self.max_auth_attempts = Some(parse_integer(value, error)?),
-            SshConfigField::MaxConnections => self.max_connections = Some(parse_integer(value, error)?),
+            SshConfigField::MaxAuthAttempts => {
+                self.max_auth_attempts = Some(parse_integer(value, error)?)
+            }
+            SshConfigField::MaxConnections => {
+                self.max_connections = Some(parse_integer(value, error)?)
+            }
             SshConfigField::MaxSessionsPerConnection => {
                 self.max_sessions_per_connection = Some(parse_integer(value, error)?)
             }
@@ -782,7 +793,8 @@ fn validate_ipv4(value: &str) -> Result<[u8; 4], ConfigError> {
     let mut octets = [0u8; 4];
     for octet in &mut octets {
         let part = parts.next().ok_or_else(|| {
-            ConfigError::new(ConfigErrorKind::InvalidIpv4Address).field(SshConfigField::ListenAddress)
+            ConfigError::new(ConfigErrorKind::InvalidIpv4Address)
+                .field(SshConfigField::ListenAddress)
         })?;
         if part.is_empty()
             || part.len() > 3
@@ -793,7 +805,8 @@ fn validate_ipv4(value: &str) -> Result<[u8; 4], ConfigError> {
                 .field(SshConfigField::ListenAddress));
         }
         *octet = part.parse::<u8>().map_err(|_| {
-            ConfigError::new(ConfigErrorKind::InvalidIpv4Address).field(SshConfigField::ListenAddress)
+            ConfigError::new(ConfigErrorKind::InvalidIpv4Address)
+                .field(SshConfigField::ListenAddress)
         })?;
     }
     if parts.next().is_some() {
@@ -820,7 +833,9 @@ fn validate_host_key_path(
         || path == config_path
         || path[SSH_HOST_KEY_DIRECTORY.len()..].contains('/')
     {
-        return Err(ConfigError::new(ConfigErrorKind::InvalidPath).field(SshConfigField::HostKeyFile));
+        return Err(
+            ConfigError::new(ConfigErrorKind::InvalidPath).field(SshConfigField::HostKeyFile)
+        );
     }
     Ok(ValidatedAbsolutePath { value })
 }
@@ -853,8 +868,7 @@ fn bounded_nonzero(
     if value > maximum {
         return Err(ConfigError::new(too_large).field(field));
     }
-    NonZeroU16::new(value as u16)
-        .ok_or_else(|| ConfigError::new(too_small).field(field))
+    NonZeroU16::new(value as u16).ok_or_else(|| ConfigError::new(too_small).field(field))
 }
 
 fn parse_string<const N: usize>(
@@ -903,7 +917,10 @@ fn parse_string<const N: usize>(
     BoundedText::from_str(decoded).ok_or_else(|| error(ConfigErrorKind::ValueTooLarge))
 }
 
-fn parse_integer(value: &str, error: impl Fn(ConfigErrorKind) -> ConfigError) -> Result<i64, ConfigError> {
+fn parse_integer(
+    value: &str,
+    error: impl Fn(ConfigErrorKind) -> ConfigError,
+) -> Result<i64, ConfigError> {
     if value.starts_with('"') || matches!(value, "true" | "false") {
         return Err(error(ConfigErrorKind::WrongType));
     }
@@ -914,10 +931,15 @@ fn parse_integer(value: &str, error: impl Fn(ConfigErrorKind) -> ConfigError) ->
     {
         return Err(error(type_or_syntax(value)));
     }
-    value.parse::<i64>().map_err(|_| error(ConfigErrorKind::ValueTooLarge))
+    value
+        .parse::<i64>()
+        .map_err(|_| error(ConfigErrorKind::ValueTooLarge))
 }
 
-fn parse_boolean(value: &str, error: impl Fn(ConfigErrorKind) -> ConfigError) -> Result<bool, ConfigError> {
+fn parse_boolean(
+    value: &str,
+    error: impl Fn(ConfigErrorKind) -> ConfigError,
+) -> Result<bool, ConfigError> {
     match value {
         "true" => Ok(true),
         "false" => Ok(false),
@@ -1033,7 +1055,11 @@ login_timeout_seconds = 30
         }
 
         fn open(&mut self, _: &str) -> Result<Self::Handle, ConfigSourceError> {
-            if self.present { Ok(1) } else { Err(ConfigSourceError::Missing) }
+            if self.present {
+                Ok(1)
+            } else {
+                Err(ConfigSourceError::Missing)
+            }
         }
 
         fn fstat(&mut self, _: Self::Handle) -> Result<FileMetadata, ConfigSourceError> {
@@ -1057,7 +1083,11 @@ login_timeout_seconds = 30
     }
 
     fn validate(text: &str) -> Result<ValidatedSshConfig, ConfigError> {
-        validate_raw_ssh_config(parse_raw_ssh_config(text)?, SSH_CONFIG_PATH, &SshRuntimeLimits::default())
+        validate_raw_ssh_config(
+            parse_raw_ssh_config(text)?,
+            SSH_CONFIG_PATH,
+            &SshRuntimeLimits::default(),
+        )
     }
 
     #[test]
@@ -1065,7 +1095,10 @@ login_timeout_seconds = 30
         let config = validate(VALID).unwrap();
         assert_eq!(config.listen_address, [0, 0, 0, 0]);
         assert_eq!(config.port.get(), 22);
-        assert_eq!(config.host_key_file.as_str(), "/etc/sunlight/ssh_host_ed25519_key");
+        assert_eq!(
+            config.host_key_file.as_str(),
+            "/etc/sunlight/ssh_host_ed25519_key"
+        );
         assert!(config.password_authentication);
         assert_eq!(config.max_connections.get(), 8);
         assert_eq!(config.login_timeout.as_secs(), 30);
@@ -1096,29 +1129,53 @@ login_timeout_seconds = 30
         source.present = false;
         let mut buffer = [0; MAX_SSH_CONFIG_BYTES];
         assert_eq!(
-            load_and_validate_ssh_config_from(&mut source, SSH_CONFIG_PATH, &SshRuntimeLimits::default(), &mut buffer)
-                .unwrap_err().kind,
+            load_and_validate_ssh_config_from(
+                &mut source,
+                SSH_CONFIG_PATH,
+                &SshRuntimeLimits::default(),
+                &mut buffer
+            )
+            .unwrap_err()
+            .kind,
             ConfigErrorKind::FileMissing
         );
         let mut source = FakeSource::valid(b"");
         source.file.size = 0;
         assert_eq!(
-            load_and_validate_ssh_config_from(&mut source, SSH_CONFIG_PATH, &SshRuntimeLimits::default(), &mut buffer)
-                .unwrap_err().kind,
+            load_and_validate_ssh_config_from(
+                &mut source,
+                SSH_CONFIG_PATH,
+                &SshRuntimeLimits::default(),
+                &mut buffer
+            )
+            .unwrap_err()
+            .kind,
             ConfigErrorKind::EmptyFile
         );
         let mut source = FakeSource::valid(VALID.as_bytes());
         source.file.mode = CONFIG_FILE_TYPE_BITS | 0o666;
         assert_eq!(
-            load_and_validate_ssh_config_from(&mut source, SSH_CONFIG_PATH, &SshRuntimeLimits::default(), &mut buffer)
-                .unwrap_err().kind,
+            load_and_validate_ssh_config_from(
+                &mut source,
+                SSH_CONFIG_PATH,
+                &SshRuntimeLimits::default(),
+                &mut buffer
+            )
+            .unwrap_err()
+            .kind,
             ConfigErrorKind::InsecureFileMode
         );
         let mut source = FakeSource::valid(VALID.as_bytes());
         source.parent.mode = DIRECTORY_TYPE_BITS | 0o777;
         assert_eq!(
-            load_and_validate_ssh_config_from(&mut source, SSH_CONFIG_PATH, &SshRuntimeLimits::default(), &mut buffer)
-                .unwrap_err().kind,
+            load_and_validate_ssh_config_from(
+                &mut source,
+                SSH_CONFIG_PATH,
+                &SshRuntimeLimits::default(),
+                &mut buffer
+            )
+            .unwrap_err()
+            .kind,
             ConfigErrorKind::InsecureParentDirectory
         );
     }
@@ -1146,41 +1203,68 @@ port = 2222
         let error = parse_raw_ssh_config("port = 22\n").unwrap_err();
         assert!(error.missing(SshConfigField::ListenAddress));
         assert_eq!(
-            parse_raw_ssh_config(&VALID.replace("port = 22", "port = \"22\"")).unwrap_err().kind,
+            parse_raw_ssh_config(&VALID.replace("port = 22", "port = \"22\""))
+                .unwrap_err()
+                .kind,
             ConfigErrorKind::WrongType
         );
         assert_eq!(
             parse_raw_ssh_config(&VALID.replace("max_connections = 8", "max_connections = []"))
-                .unwrap_err().kind,
+                .unwrap_err()
+                .kind,
             ConfigErrorKind::UnsupportedSyntax
         );
     }
 
     #[test]
     fn validates_values_and_resource_relationships() {
-        assert_eq!(validate(&VALID.replace("port = 22", "port = 0")).unwrap_err().kind, ConfigErrorKind::InvalidPort);
-        assert_eq!(validate(&VALID.replace("0.0.0.0", "::1")).unwrap_err().kind, ConfigErrorKind::InvalidIpv4Address);
         assert_eq!(
-            validate(&VALID.replace("0.0.0.0", "255.255.255.255")).unwrap_err().kind,
+            validate(&VALID.replace("port = 22", "port = 0"))
+                .unwrap_err()
+                .kind,
+            ConfigErrorKind::InvalidPort
+        );
+        assert_eq!(
+            validate(&VALID.replace("0.0.0.0", "::1")).unwrap_err().kind,
+            ConfigErrorKind::InvalidIpv4Address
+        );
+        assert_eq!(
+            validate(&VALID.replace("0.0.0.0", "255.255.255.255"))
+                .unwrap_err()
+                .kind,
             ConfigErrorKind::UnsupportedAddress
         );
         assert_eq!(
-            validate(&VALID.replace("/etc/sunlight/ssh_host_ed25519_key", "/tmp/key")).unwrap_err().kind,
+            validate(&VALID.replace("/etc/sunlight/ssh_host_ed25519_key", "/tmp/key"))
+                .unwrap_err()
+                .kind,
             ConfigErrorKind::InvalidPath
         );
         assert_eq!(
-            validate(&VALID.replace("max_auth_attempts = 3", "max_auth_attempts = 11")).unwrap_err().kind,
+            validate(&VALID.replace("max_auth_attempts = 3", "max_auth_attempts = 11"))
+                .unwrap_err()
+                .kind,
             ConfigErrorKind::ValueTooLarge
         );
         assert_eq!(
-            validate(&VALID.replace("max_sessions_per_connection = 1", "max_sessions_per_connection = 2"))
-                .unwrap_err().kind,
+            validate(&VALID.replace(
+                "max_sessions_per_connection = 1",
+                "max_sessions_per_connection = 2"
+            ))
+            .unwrap_err()
+            .kind,
             ConfigErrorKind::UnsupportedValue
         );
         let raw = parse_raw_ssh_config(VALID).unwrap();
-        let small_pty_budget = SshRuntimeLimits { pty_capacity: 8, pty_reserve: 4, ..SshRuntimeLimits::default() };
+        let small_pty_budget = SshRuntimeLimits {
+            pty_capacity: 8,
+            pty_reserve: 4,
+            ..SshRuntimeLimits::default()
+        };
         assert_eq!(
-            validate_raw_ssh_config(raw, SSH_CONFIG_PATH, &small_pty_budget).unwrap_err().kind,
+            validate_raw_ssh_config(raw, SSH_CONFIG_PATH, &small_pty_budget)
+                .unwrap_err()
+                .kind,
             ConfigErrorKind::ResourceLimitExceeded
         );
     }
@@ -1190,9 +1274,18 @@ port = 2222
         struct Dependencies(u8);
         impl ValidatedSshStartup for Dependencies {
             type Error = ();
-            fn load_or_create_host_key(&mut self, _: &ValidatedSshConfig) -> Result<(), ()> { self.0 += 1; Ok(()) }
-            fn create_and_bind_listener(&mut self, _: &ValidatedSshConfig) -> Result<(), ()> { self.0 += 1; Ok(()) }
-            fn publish_ready(&mut self, _: &ValidatedSshConfig) -> Result<(), ()> { self.0 += 1; Ok(()) }
+            fn load_or_create_host_key(&mut self, _: &ValidatedSshConfig) -> Result<(), ()> {
+                self.0 += 1;
+                Ok(())
+            }
+            fn create_and_bind_listener(&mut self, _: &ValidatedSshConfig) -> Result<(), ()> {
+                self.0 += 1;
+                Ok(())
+            }
+            fn publish_ready(&mut self, _: &ValidatedSshConfig) -> Result<(), ()> {
+                self.0 += 1;
+                Ok(())
+            }
         }
         let mut source = FakeSource::valid(b"port = 0\n");
         let mut dependencies = Dependencies(0);

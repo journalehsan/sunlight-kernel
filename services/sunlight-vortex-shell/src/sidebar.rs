@@ -454,7 +454,11 @@ impl SidebarState {
         draw_card_heading(canvas, layout.monitor, "System Monitor", theme);
         // Prefer any retained last-valid sample. `telemetry_unavailable` is
         // only true when no sample has been accepted yet.
-        let Some(data) = self.telemetry.as_ref().filter(|_| !self.telemetry_unavailable) else {
+        let Some(data) = self
+            .telemetry
+            .as_ref()
+            .filter(|_| !self.telemetry_unavailable)
+        else {
             draw_text_vcenter(
                 canvas,
                 "Telemetry unavailable",
@@ -606,9 +610,10 @@ impl SidebarState {
                 &TextStyle::new(FontRole::UiRegular, theme.text),
             );
             let ratio = if data.zram_orig_kb > 0 {
-                (data.zram_comp_kb as u32).saturating_mul(100).checked_div(
-                    data.zram_orig_kb as u32,
-                ).unwrap_or(0)
+                (data.zram_comp_kb as u32)
+                    .saturating_mul(100)
+                    .checked_div(data.zram_orig_kb as u32)
+                    .unwrap_or(0)
             } else {
                 0
             };

@@ -2724,7 +2724,6 @@ fn initial_url_from_argv(argc: u64, argv: *const *const u8) -> Option<&'static s
     None
 }
 
-
 fn adjust_scroll(
     scroll: &mut usize,
     delta: i32,

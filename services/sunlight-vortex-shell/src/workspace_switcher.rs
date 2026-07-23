@@ -19,12 +19,8 @@ use sunlight_ui::{
 use crate::{AppId, AppLaunchState, DockAppState, ShellWindowType, WindowSnapshot};
 
 /// Default titles when the compositor has no workspace names (current phase).
-pub(crate) const WORKSPACE_TITLES: [&str; WORKSPACE_CARD_COUNT] = [
-    "Workspace 1",
-    "Workspace 2",
-    "Workspace 3",
-    "Workspace 4",
-];
+pub(crate) const WORKSPACE_TITLES: [&str; WORKSPACE_CARD_COUNT] =
+    ["Workspace 1", "Workspace 2", "Workspace 3", "Workspace 4"];
 
 const KEY_ESC: u8 = 1;
 const KEY_1: u8 = 0x02;
@@ -663,7 +659,10 @@ mod tests {
             48,
             716,
         );
-        assert_eq!(a, WorkspaceSwitcherAction::Activate(index_to_workspace_id(sw.focus_index())));
+        assert_eq!(
+            a,
+            WorkspaceSwitcherAction::Activate(index_to_workspace_id(sw.focus_index()))
+        );
     }
 
     #[test]
@@ -672,13 +671,7 @@ mod tests {
         sw.open(1);
         let layout = sw.layout(1366, 768, 48, 716);
         let c = layout.cards[3];
-        let (_, action) = sw.handle_event(
-            Event::click(c.x + 2, c.y + 2),
-            1366,
-            768,
-            48,
-            716,
-        );
+        let (_, action) = sw.handle_event(Event::click(c.x + 2, c.y + 2), 1366, 768, 48, 716);
         assert_eq!(action, WorkspaceSwitcherAction::Activate(4));
     }
 

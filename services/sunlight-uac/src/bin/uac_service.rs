@@ -232,7 +232,8 @@ fn migrate_development_shadow() {
         return;
     };
 
-    let Ok(migrated) = migrate_shadow_contents(&passwd_data[..passwd_len], &shadow_data[..shadow_len])
+    let Ok(migrated) =
+        migrate_shadow_contents(&passwd_data[..passwd_len], &shadow_data[..shadow_len])
     else {
         serial_println!("[UAC] auth migration failed");
         return;
@@ -279,18 +280,17 @@ fn handle_auth_password(msg: &IpcMsg, issue_session_grant: bool) -> IpcMsg {
 
     let mut passwd_data = [0u8; 512];
     let mut shadow_data = [0u8; 512];
-    let result = read_vfs_bytes(AUTH_PASSWD_PATH, &mut passwd_data)
-        .and_then(|passwd_len| {
-            read_vfs_bytes(AUTH_SHADOW_PATH, &mut shadow_data).and_then(|shadow_len| {
-                verify_shadow_credentials(
-                    &passwd_data[..passwd_len],
-                    &shadow_data[..shadow_len],
-                    username.as_bytes(),
-                    &password[..password_len],
-                )
-                .ok()
-            })
-        });
+    let result = read_vfs_bytes(AUTH_PASSWD_PATH, &mut passwd_data).and_then(|passwd_len| {
+        read_vfs_bytes(AUTH_SHADOW_PATH, &mut shadow_data).and_then(|shadow_len| {
+            verify_shadow_credentials(
+                &passwd_data[..passwd_len],
+                &shadow_data[..shadow_len],
+                username.as_bytes(),
+                &password[..password_len],
+            )
+            .ok()
+        })
+    });
     password.zeroize();
 
     if let Some(success) = result {

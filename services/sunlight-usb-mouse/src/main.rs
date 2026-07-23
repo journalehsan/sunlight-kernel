@@ -25,6 +25,39 @@ fn debug_log(message: &str) {
     }
 }
 
+#[cfg(feature = "usb_mouse_debug")]
+fn debug_u64(value: u64) {
+    let mut buffer = [0u8; 20];
+    let mut value = value;
+    let mut start = buffer.len();
+    loop {
+        start -= 1;
+        buffer[start] = b'0' + (value % 10) as u8;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    debug_log(unsafe { core::str::from_utf8_unchecked(&buffer[start..]) });
+}
+
+#[cfg(feature = "usb_mouse_debug")]
+fn debug_i16(value: i16) {
+    if value < 0 {
+        debug_log("-");
+        debug_u64((-(value as i32)) as u64);
+    } else {
+        debug_u64(value as u64);
+    }
+}
+
+#[cfg(feature = "usb_mouse_debug")]
+fn debug_byte(value: u8) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let bytes = [HEX[(value >> 4) as usize], HEX[(value & 0x0f) as usize]];
+    debug_log(unsafe { core::str::from_utf8_unchecked(&bytes) });
+}
+
 fn pack_short_name(name: &str) -> u64 {
     let mut word = 0;
     let bytes = name.as_bytes();

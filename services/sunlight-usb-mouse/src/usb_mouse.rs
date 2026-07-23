@@ -8,6 +8,7 @@
 
 use core::mem::MaybeUninit;
 use core::ptr::{read_volatile, write_volatile};
+use sunlight_usb_mouse::hid::{decode_mouse_report, DecodedMouseReport, BOOT_MOUSE_LAYOUT};
 
 const PAGE_SIZE: usize = 4096;
 const DMA_PAGES: usize = 4;
@@ -66,6 +67,7 @@ const COMPLETION_SUCCESS: u8 = 1;
 const COMPLETION_SHORT_PACKET: u8 = 13;
 
 const REQUEST_GET_DESCRIPTOR: u8 = 6;
+const REQUEST_GET_PROTOCOL: u8 = 3;
 const REQUEST_SET_CONFIGURATION: u8 = 9;
 const REQUEST_SET_PROTOCOL: u8 = 11;
 const DESCRIPTOR_DEVICE: u8 = 1;
@@ -112,6 +114,7 @@ pub enum Error {
     CommandFailed,
     TransferFailed,
     BadDescriptor,
+    ProtocolMismatch,
     NoBootMouse,
 }
 
@@ -164,6 +167,7 @@ struct XhciMouse {
     event_dequeue: usize,
     event_cycle: bool,
     interrupt_armed: bool,
+    diagnostic_reports_remaining: u8,
 }
 
 unsafe impl Send for XhciMouse {}
@@ -237,6 +241,11 @@ impl XhciMouse {
             event_dequeue: 0,
             event_cycle: true,
             interrupt_armed: false,
+            diagnostic_reports_remaining: if cfg!(feature = "usb_mouse_debug") {
+                16
+            } else {
+                0
+            },
         };
 
         driver.take_ownership(hccparams1)?;
@@ -432,6 +441,11 @@ impl XhciMouse {
             control: (TRB_TYPE_CONFIGURE_ENDPOINT << 10) | ((self.slot_id as u32) << 24),
         })?;
         self.control_no_data(0x21, REQUEST_SET_PROTOCOL, 0, interface as u16)?;
+        let protocol_length =
+            self.control_in(0xa1, REQUEST_GET_PROTOCOL, 0, interface as u16, 1)?;
+        if protocol_length != 1 || self.data()[0] != 0 {
+            return Err(Error::ProtocolMismatch);
+        }
         self.submit_interrupt();
         Ok(())
     }
@@ -610,21 +624,26 @@ impl XhciMouse {
                     self.submit_interrupt();
                     return None;
                 }
-                let report = self.data();
-                // Wheel is decoded for protocol completeness. MouseEvent is
-                // intentionally ABI-compatible with the existing PS/2 event,
-                // which has no wheel member yet.
-                let _wheel = if actual_length >= 4 {
-                    report[3] as i8
-                } else {
-                    0
-                };
+                let mut report = [0u8; HID_REPORT_LENGTH];
+                report[..actual_length].copy_from_slice(&self.data()[..actual_length]);
+                let decoded =
+                    match decode_mouse_report(&report[..actual_length], &BOOT_MOUSE_LAYOUT) {
+                        Some(decoded) => decoded,
+                        None => {
+                            self.submit_interrupt();
+                            return None;
+                        }
+                    };
+                self.diagnose_report(&report[..actual_length], decoded);
+                // Wheel remains decoded for protocol completeness. MouseEvent
+                // is ABI-compatible with the existing PS/2 event (no wheel).
+                let _wheel = decoded.wheel.unwrap_or(0);
                 let result = MouseEvent {
-                    buttons: report[0] & 0x07,
-                    dx: report[1] as i8 as i16,
+                    buttons: decoded.buttons & 0x07,
+                    dx: decoded.dx,
                     // HID boot reports positive Y down, which already matches
                     // display_server's top-down coordinate system.
-                    dy: report[2] as i8 as i16,
+                    dy: decoded.dy,
                 };
                 self.submit_interrupt();
                 Some(result)
@@ -634,6 +653,38 @@ impl XhciMouse {
                 None
             }
         }
+    }
+
+    fn diagnose_report(&mut self, report: &[u8], decoded: DecodedMouseReport) {
+        if self.diagnostic_reports_remaining == 0 {
+            return;
+        }
+        self.diagnostic_reports_remaining -= 1;
+        #[cfg(feature = "usb_mouse_debug")]
+        {
+            crate::debug_log("[USB-MOUSE-DIAG] len=");
+            crate::debug_u64(report.len() as u64);
+            crate::debug_log(" id=none bytes=");
+            for byte in report {
+                crate::debug_byte(*byte);
+                crate::debug_log(" ");
+            }
+            crate::debug_log("raw_x=");
+            crate::debug_u64(decoded.raw_x);
+            crate::debug_log(" raw_y=");
+            crate::debug_u64(decoded.raw_y);
+            crate::debug_log(" dx=");
+            crate::debug_i16(decoded.dx);
+            crate::debug_log(" dy=");
+            crate::debug_i16(decoded.dy);
+            crate::debug_log(" emit_dx=");
+            crate::debug_i16(decoded.dx);
+            crate::debug_log(" emit_dy=");
+            crate::debug_i16(decoded.dy);
+            crate::debug_log("\n");
+        }
+        #[cfg(not(feature = "usb_mouse_debug"))]
+        let _ = (report, decoded);
     }
 
     fn submit_interrupt(&mut self) {

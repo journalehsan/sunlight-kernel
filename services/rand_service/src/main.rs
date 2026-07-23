@@ -14,9 +14,7 @@
 //! that many bytes into `words[0..3]`. Callers wanting more loop; nothing here
 //! uses shared memory. STATS is an additive, non-sensitive telemetry query.
 
-use rand_service::engine::{
-    secure_wipe, ChaCha20, EntropySource, ReseedReason, BLOCK_BYTES,
-};
+use rand_service::engine::{secure_wipe, ChaCha20, EntropySource, ReseedReason, BLOCK_BYTES};
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg, RandMsg,
 };

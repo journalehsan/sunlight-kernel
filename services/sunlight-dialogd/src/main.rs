@@ -952,8 +952,14 @@ fn update_simple_dialog(
     secondary_rect: Rect,
     result: &mut Option<DialogResult>,
 ) -> bool {
+    if matches!(state.request, DialogRequest::TextInput(_)) && state.input.context_menu_open() {
+        return state.input.update(event);
+    }
     match event {
         Event::MouseMove { x, y } => {
+            if matches!(state.request, DialogRequest::TextInput(_)) {
+                let _ = state.input.update(event);
+            }
             let pt = Point::new(x, y);
             state.hover_primary = primary_rect.contains(pt);
             state.hover_secondary = secondary_rect.contains(pt);
@@ -1254,8 +1260,14 @@ fn update_file_dialog(
     result: &mut Option<DialogResult>,
 ) -> bool {
     let body = file_body_rect(card, matches!(state.kind, FileDialogKind::SaveFile));
+    if matches!(state.kind, FileDialogKind::SaveFile) && state.input.context_menu_open() {
+        return state.input.update(event);
+    }
     match event {
         Event::MouseMove { x, y } => {
+            if matches!(state.kind, FileDialogKind::SaveFile) {
+                let _ = state.input.update(event);
+            }
             state.hover_row = state.row_at(x, y, body);
             true
         }
@@ -1299,13 +1311,20 @@ fn update_file_dialog(
             }
             false
         }
-        Event::MouseDown { x, y, button: 0 } => {
-            if let Some(row_idx) = state.row_at(x, y, body) {
-                state.selected = Some(row_idx);
-                state.pending_overwrite_confirm = false;
-                state.update_details();
-                state.sync_save_input_to_selection();
+        Event::MouseDown { x, y, button } => {
+            if matches!(state.kind, FileDialogKind::SaveFile)
+                && state.input.update(Event::MouseDown { x, y, button })
+            {
                 return true;
+            }
+            if button == 0 {
+                if let Some(row_idx) = state.row_at(x, y, body) {
+                    state.selected = Some(row_idx);
+                    state.pending_overwrite_confirm = false;
+                    state.update_details();
+                    state.sync_save_input_to_selection();
+                    return true;
+                }
             }
             false
         }

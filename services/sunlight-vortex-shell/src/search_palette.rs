@@ -10,7 +10,8 @@ use sunlight_ui::{
     image::TgaImage,
     widgets::{
         search_page_count, BoundedSearchField, SearchPaletteFonts, SearchPaletteLayout,
-        SearchPalettePanel, SearchResultState, SearchResultView, SEARCH_FIELD_CAP, SEARCH_PAGE_ROWS,
+        SearchPalettePanel, SearchResultState, SearchResultView, SEARCH_FIELD_CAP,
+        SEARCH_PAGE_ROWS,
     },
     Canvas, Event, Point, Theme,
 };
@@ -76,14 +77,7 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
         app_id: AppId::Settings,
         title: "System Preferences",
         aliases: &["settings", "preferences", "control panel", "system"],
-        keywords: &[
-            "network",
-            "ethernet",
-            "ip",
-            "display",
-            "تنظیمات",
-            "شبکه",
-        ],
+        keywords: &["network", "ethernet", "ip", "display", "تنظیمات", "شبکه"],
         action: SearchAction::Preferences("root"),
         category: "System",
     },
@@ -205,11 +199,7 @@ pub(crate) fn normalize_query<'a>(raw: &str, out: &'a mut [u8]) -> &'a str {
         if len >= out.len() {
             break;
         }
-        let c = if b.is_ascii_uppercase() {
-            b + 32
-        } else {
-            b
-        };
+        let c = if b.is_ascii_uppercase() { b + 32 } else { b };
         if c == b' ' || c == b'\t' {
             if prev_space {
                 continue;
@@ -549,7 +539,9 @@ impl SearchPaletteState {
 
     fn visible_row_count(&self) -> usize {
         let start = self.page_start();
-        self.result_count.saturating_sub(start).min(SEARCH_PAGE_ROWS)
+        self.result_count
+            .saturating_sub(start)
+            .min(SEARCH_PAGE_ROWS)
     }
 
     fn sync_page_to_selection(&mut self) {
@@ -664,9 +656,7 @@ impl SearchPaletteState {
             }
             Event::MouseMove { x, y, .. } => {
                 let p = Point::new(x, y);
-                let next = layout
-                    .row_index_at(p)
-                    .filter(|&i| i < visible);
+                let next = layout.row_index_at(p).filter(|&i| i < visible);
                 if self.hover != next {
                     self.hover = next;
                     if let Some(row) = next {

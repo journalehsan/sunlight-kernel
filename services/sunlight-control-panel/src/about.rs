@@ -90,7 +90,15 @@ fn draw_button(canvas: &mut Canvas, theme: &Theme, rect: Rect, label: &str, prim
     b.with_font(&Typography::UI_MEDIUM).draw(canvas, theme);
 }
 
-fn draw_text(canvas: &mut Canvas, x: i32, y: i32, h: u32, text: &str, color: Color, role: FontRole) {
+fn draw_text(
+    canvas: &mut Canvas,
+    x: i32,
+    y: i32,
+    h: u32,
+    text: &str,
+    color: Color,
+    role: FontRole,
+) {
     sun_font::draw_text_vcenter(canvas, text, x, y, h, &TextStyle::new(role, color));
 }
 
@@ -110,13 +118,7 @@ fn ellipsize<'a>(text: &'a str, max_chars: usize, scratch: &'a mut FixedStr<96>)
     scratch.as_str()
 }
 
-fn info_card(
-    canvas: &mut Canvas,
-    theme: &Theme,
-    rect: Rect,
-    title: &str,
-    lines: &[(&str, &str)],
-) {
+fn info_card(canvas: &mut Canvas, theme: &Theme, rect: Rect, title: &str, lines: &[(&str, &str)]) {
     canvas.fill_material(rect, sunlight_ui::Material::card(theme));
     draw_text(
         canvas,
@@ -168,15 +170,7 @@ fn detail_row(
     draw_text(canvas, x, y, 14, label, theme.text_dim, FontRole::UiSmall);
     let mut scratch = FixedStr::<96>::empty();
     let shown = ellipsize(value, 42, &mut scratch);
-    draw_text(
-        canvas,
-        x + 120,
-        y,
-        14,
-        shown,
-        theme.text,
-        FontRole::UiSmall,
-    );
+    draw_text(canvas, x + 120, y, 14, shown, theme.text, FontRole::UiSmall);
     let _ = w;
 }
 
@@ -374,12 +368,7 @@ pub fn draw_computer_page(
     // Computer details
     let details_y = c3.bottom() + 12;
     if details_y < view_bottom {
-        let details = Rect::new(
-            content.x + 12,
-            details_y,
-            content.w - 24,
-            110,
-        );
+        let details = Rect::new(content.x + 12, details_y, content.w - 24, 110);
         canvas.fill_rounded_rect(details, 8, theme.panel);
         canvas.stroke_rounded_rect(details, 8, 1, theme.border);
         draw_text(
@@ -431,10 +420,7 @@ pub fn draw_computer_page(
     }
 
     // Action bar background
-    canvas.fill_rect(
-        Rect::new(0, action_bar_y(win_h) - 4, win_w, 44),
-        theme.bg,
-    );
+    canvas.fill_rect(Rect::new(0, action_bar_y(win_h) - 4, win_w, 44), theme.bg);
     draw_button(canvas, theme, btn_back(win_h), "Back", false);
     draw_button(canvas, theme, btn_refresh(win_w, win_h), "Refresh", false);
     draw_button(canvas, theme, btn_copy(win_w, win_h), "Copy Summary", false);
@@ -607,7 +593,12 @@ pub fn draw_os_page(
 
     // Technical kernel string (subdued / expandable)
     if y < view_bottom {
-        let tech = Rect::new(content.x + 12, y, content.w - 24, if state.show_uname { 52 } else { 28 });
+        let tech = Rect::new(
+            content.x + 12,
+            y,
+            content.w - 24,
+            if state.show_uname { 52 } else { 28 },
+        );
         canvas.fill_rounded_rect(tech, 6, theme.panel);
         canvas.stroke_rounded_rect(tech, 6, 1, theme.border);
         let label = if state.show_uname {
@@ -651,26 +642,11 @@ pub fn draw_os_page(
         );
     }
 
-    canvas.fill_rect(
-        Rect::new(0, action_bar_y(win_h) - 4, win_w, 44),
-        theme.bg,
-    );
+    canvas.fill_rect(Rect::new(0, action_bar_y(win_h) - 4, win_w, 44), theme.bg);
     draw_button(canvas, theme, btn_back(win_h), "Back", false);
     draw_button(canvas, theme, btn_refresh(win_w, win_h), "Refresh", false);
-    draw_button(
-        canvas,
-        theme,
-        btn_copy(win_w, win_h),
-        "Copy Report",
-        false,
-    );
-    draw_button(
-        canvas,
-        theme,
-        btn_nav(win_w, win_h),
-        "This Computer",
-        true,
-    );
+    draw_button(canvas, theme, btn_copy(win_w, win_h), "Copy Report", false);
+    draw_button(canvas, theme, btn_nav(win_w, win_h), "This Computer", true);
 }
 
 fn draw_section(

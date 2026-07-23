@@ -614,10 +614,7 @@ impl TasksApp {
         usage_bp: u16,
     ) {
         // Denser card glass over the transparent WindowGlass root.
-        canvas.fill_material(
-            rect,
-            Material::card(theme).with_radius(9).without_border(),
-        );
+        canvas.fill_material(rect, Material::card(theme).with_radius(9).without_border());
         canvas.stroke_rounded_rect(rect, 9, 1, theme.chrome.subtle_border);
 
         let title_rect = Rect::new(rect.x + 12, rect.y + 6, rect.w.saturating_sub(24), 16);
@@ -795,10 +792,7 @@ impl App for TasksApp {
         // Dense readable surface for the process/core table.
         canvas.fill_material(
             table_rect,
-            materials
-                .tinted_content
-                .with_radius(8)
-                .without_border(),
+            materials.tinted_content.with_radius(8).without_border(),
         );
         canvas.stroke_rounded_rect(table_rect, 8, 1, theme.chrome.subtle_border);
         let visible = self.visible_rows();

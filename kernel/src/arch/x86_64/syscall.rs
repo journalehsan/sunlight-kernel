@@ -899,18 +899,21 @@ fn ipc_complete_deferred_reply(frame: &mut SyscallFrame) -> u64 {
         Ok(endpoint_id) => endpoint_id,
         Err(error) => return error as u64,
     };
-    crate::ipc::with_shard(endpoint_id, |bus| {
-        match crate::ipc::complete_deferred_reply(server_pid, token, reply, &mut sched, bus) {
+    crate::ipc::with_shard(
+        endpoint_id,
+        |bus| match crate::ipc::complete_deferred_reply(server_pid, token, reply, &mut sched, bus) {
             Ok(()) => 0,
             Err(error) => error as u64,
-        }
-    })
+        },
+    )
 }
 
 fn ipc_deferred_reply_is_live(token: u64) -> u64 {
     let sched = crate::sched::SCHEDULER.lock();
     let server_pid = sched.current_process().pid;
-    u64::from(crate::ipc::deferred_reply_is_live(server_pid, token, &sched))
+    u64::from(crate::ipc::deferred_reply_is_live(
+        server_pid, token, &sched,
+    ))
 }
 
 fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
@@ -1500,7 +1503,10 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
                         let _ = vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle()));
                     }
                 } else if handle.is_pipe() {
-                    crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
+                    crate::process::pipe::pipe_close_end(
+                        handle.pipe_index(),
+                        handle.pipe_is_write(),
+                    );
                 }
             }
             process.trusted_display_service =
@@ -2286,14 +2292,13 @@ fn sys_secret_create(frame: &mut SyscallFrame) -> u64 {
     };
     let mut sched = crate::sched::SCHEDULER.lock();
     let rights = crate::process::fd_table::CapRights::new(
-        crate::process::fd_table::CapRights::WRITE
-            | crate::process::fd_table::CapRights::FSTAT,
+        crate::process::fd_table::CapRights::WRITE | crate::process::fd_table::CapRights::FSTAT,
     );
-    match sched
-        .current_process_mut()
-        .fd_table
-        .open(crate::process::fd_table::FileHandle::vfs(handle.0), rights, O_CLOEXEC as u32)
-    {
+    match sched.current_process_mut().fd_table.open(
+        crate::process::fd_table::FileHandle::vfs(handle.0),
+        rights,
+        O_CLOEXEC as u32,
+    ) {
         Ok(fd) => fd as u64,
         Err(_) => {
             drop(sched);
@@ -4827,7 +4832,11 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
         // Stay clear of the user stack window (top 2 MiB of the low half).
         let stack_floor = crate::process::layout::USER_STACK_TOP
             .saturating_sub(crate::process::layout::USER_STACK_SIZE);
-        if candidate.as_u64().saturating_add(telemetry_pages * PAGE_SIZE) > stack_floor {
+        if candidate
+            .as_u64()
+            .saturating_add(telemetry_pages * PAGE_SIZE)
+            > stack_floor
+        {
             break;
         }
         let mut free = true;
@@ -5384,10 +5393,8 @@ const USB_MOUSE_DMA_VADDR: u64 = 0x0000_0005_1000_0000;
 const USB_MOUSE_MAX_BAR_SIZE: u64 = 1024 * 1024;
 const USB_MOUSE_MAX_DMA_PAGES: usize = 16;
 
-static XHCI_BAR_PHYS: core::sync::atomic::AtomicU64 =
-    core::sync::atomic::AtomicU64::new(0);
-static XHCI_BAR_SIZE: core::sync::atomic::AtomicU64 =
-    core::sync::atomic::AtomicU64::new(0);
+static XHCI_BAR_PHYS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static XHCI_BAR_SIZE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 fn current_process_is_usb_mouse_driver() -> bool {
     crate::sched::SCHEDULER.lock().current_process().name_str() == "sunlight-usb-mouse"
@@ -5459,11 +5466,8 @@ fn sys_xhci_info(frame: &mut SyscallFrame) -> u64 {
                 } else {
                     mask_low as u64 & !0xf
                 };
-                let size = (!mask).wrapping_add(1) & if is_64_bit {
-                    u64::MAX
-                } else {
-                    u32::MAX as u64
-                };
+                let size =
+                    (!mask).wrapping_add(1) & if is_64_bit { u64::MAX } else { u32::MAX as u64 };
                 if size < 4096 || size > USB_MOUSE_MAX_BAR_SIZE || !size.is_power_of_two() {
                     return u64::MAX;
                 }
@@ -5512,10 +5516,7 @@ fn sys_dma_alloc(frame: &mut SyscallFrame) -> u64 {
         let sched = crate::sched::SCHEDULER.lock();
         let pid = sched.current_process().pid;
         drop(sched);
-        let Some(physical) = crate::PMM
-            .lock()
-            .alloc_frames_owned(page_count, pid as u32)
-        else {
+        let Some(physical) = crate::PMM.lock().alloc_frames_owned(page_count, pid as u32) else {
             return u64::MAX;
         };
         (pid, physical.as_u64())
@@ -5555,12 +5556,11 @@ fn map_usb_mouse_pages(
     };
     let hhdm_offset = VirtAddr::new(hhdm.offset);
     let protection = crate::process::region::RegionProtection::READ_WRITE;
-    let mut flags = match crate::process::address_space::AddressSpace::protection_to_pte_flags(
-        protection,
-    ) {
-        Ok(flags) => flags,
-        Err(_) => return u64::MAX,
-    };
+    let mut flags =
+        match crate::process::address_space::AddressSpace::protection_to_pte_flags(protection) {
+            Ok(flags) => flags,
+            Err(_) => return u64::MAX,
+        };
     if !write_back {
         flags |= PageTableFlags::NO_CACHE | PageTableFlags::WRITE_THROUGH;
     }
@@ -5593,10 +5593,9 @@ fn map_usb_mouse_pages(
         Err(_) => return u64::MAX,
     };
     for index in 0..page_count {
-        let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(
-            virtual_base + index as u64 * 4096,
-        ))
-        .expect("fixed USB mapping is page aligned");
+        let page =
+            Page::<Size4KiB>::from_start_address(VirtAddr::new(virtual_base + index as u64 * 4096))
+                .expect("fixed USB mapping is page aligned");
         let physical = PhysAddr::new(physical_base + index as u64 * 4096);
         let physical_frame = unsafe { PhysFrame::from_start_address_unchecked(physical) };
         if unsafe {
@@ -5633,12 +5632,9 @@ fn map_usb_mouse_pages(
             .expect("fixed USB rollback page is aligned");
             let physical = PhysAddr::new(physical_base + index as u64 * 4096);
             let _ = unsafe {
-                process.address_space.rollback_mapped_page(
-                    page,
-                    physical,
-                    &mut *pmm,
-                    hhdm_offset,
-                )
+                process
+                    .address_space
+                    .rollback_mapped_page(page, physical, &mut *pmm, hhdm_offset)
             };
         }
         return u64::MAX;

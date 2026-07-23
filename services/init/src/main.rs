@@ -2,9 +2,9 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_recv_timeout, ipc_reply, ipc_reply_and_wait,
-    nameserver_endpoint_is_live, nameserver_note_diagnostic, CapabilityToken, EndpointId, InitMsg,
-    InitStatus, IpcMsg, NameserverDiagnosticEvent, SpawnMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_recv_timeout, ipc_reply,
+    ipc_reply_and_wait, nameserver_endpoint_is_live, nameserver_note_diagnostic, CapabilityToken,
+    EndpointId, InitMsg, InitStatus, IpcMsg, NameserverDiagnosticEvent, SpawnMsg,
 };
 
 /// Base servers that init launches via the kernel spawn capability once it

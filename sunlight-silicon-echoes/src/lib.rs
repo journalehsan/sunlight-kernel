@@ -3283,10 +3283,7 @@ pub fn presentation_narration(world: &WorldState, story_node: &StoryNode) -> Str
             );
         }
         "chapter-two.caretaker" if world.observations.contains("mara_arrived_before_riley") => {
-            append_prose(
-                &mut text,
-                "Elias studies you before Riley reaches the lot.",
-            );
+            append_prose(&mut text, "Elias studies you before Riley reaches the lot.");
         }
         "chapter-two.chamber" if world.flags.get("riley_copied_card") => {
             append_prose(
@@ -3405,13 +3402,13 @@ pub fn chapter_two_turning_point_layout(width: u32, height: u32) -> TurningPoint
         image_w - 96,
         22,
     );
-    let return_button = (
-        image_x + image_w / 2 - 100,
-        image_y + image_h - 64,
-        200,
-        34,
+    let return_button = (image_x + image_w / 2 - 100, image_y + image_h - 64, 200, 34);
+    let summary = (
+        image_x + 12,
+        narrative_y + 18,
+        image_w - 24,
+        narrative_h - 28,
     );
-    let summary = (image_x + 12, narrative_y + 18, image_w - 24, narrative_h - 28);
     TurningPointLayout {
         artifact,
         chapter_title,
@@ -3542,7 +3539,9 @@ pub fn validate_graph() -> Result<(), Vec<ValidationError>> {
         if !is_machine_syntax(item.narration)
             && has_suspicious_punctuation_letter_join(item.narration)
         {
-            errors.push(ValidationError::SuspiciousProseJoin(String::from(item.id.0)));
+            errors.push(ValidationError::SuspiciousProseJoin(String::from(
+                item.id.0,
+            )));
         }
         validate_effects(item.entry_effects, &node_ids, &actor_ids, &mut errors);
         if let Some(target) = item.automatic_target {
@@ -4587,8 +4586,7 @@ mod tests {
             ("word ", 10),
         ];
         for (text, expected) in samples {
-            let mut presentation =
-                NarrativePresentation::new(String::from(text), 0, config);
+            let mut presentation = NarrativePresentation::new(String::from(text), 0, config);
             presentation.tick(0);
             while presentation.revealed_count() < presentation.boundary_count() {
                 presentation.tick(u64::MAX / 2);
@@ -4737,7 +4735,10 @@ mod tests {
         assert_eq!(gate.shortcut_index('d', false, 40), None);
         // Still blocked until quiet release after choices become active.
         assert_eq!(gate.shortcut_index('a', true, 50), None);
-        assert_eq!(gate.shortcut_index('a', true, 50 + ShortcutGate::QUIET_RELEASE_MS), Some(0));
+        assert_eq!(
+            gate.shortcut_index('a', true, 50 + ShortcutGate::QUIET_RELEASE_MS),
+            Some(0)
+        );
     }
 
     #[test]
@@ -4786,11 +4787,11 @@ mod tests {
 
     #[test]
     fn prose_join_never_glues_period_to_name() {
-        let joined = join_prose(&[
-            "Mara has not won or lost anything.",
-            "Riley has a copy.",
-        ]);
-        assert_eq!(joined, "Mara has not won or lost anything. Riley has a copy.");
+        let joined = join_prose(&["Mara has not won or lost anything.", "Riley has a copy."]);
+        assert_eq!(
+            joined,
+            "Mara has not won or lost anything. Riley has a copy."
+        );
         assert!(!joined.contains("anything.Riley"));
         let mut broken = String::from("anything.");
         append_prose(&mut broken, "Riley");
@@ -4827,7 +4828,10 @@ mod tests {
 
     #[test]
     fn choice_rows_expand_for_one_two_and_three_lines() {
-        assert_eq!(choice_row_height(1), choice_row_height(1).max(CHOICE_MIN_HEIGHT));
+        assert_eq!(
+            choice_row_height(1),
+            choice_row_height(1).max(CHOICE_MIN_HEIGHT)
+        );
         assert!(choice_row_height(2) > choice_row_height(1));
         assert!(choice_row_height(3) > choice_row_height(2));
         let rows = layout_choice_rows(&[1, 2, 3], 10, 20, 200, 400);
@@ -4845,8 +4849,7 @@ mod tests {
 
     #[test]
     fn wrapped_choice_hitboxes_match_visual_bounds_and_focus_order() {
-        let chamber_second =
-            "Seal the output port before the chamber can send another record.";
+        let chamber_second = "Seal the output port before the chamber can send another record.";
         // At typical choice text widths this is two lines; geometry must still
         // use the measured height rather than a fixed one-line row.
         let line_counts = [1usize, 2];
@@ -4879,11 +4882,8 @@ mod tests {
     fn repeated_presentation_rebuild_does_not_accumulate_state() {
         let text = String::from("A short room.");
         for _ in 0..32 {
-            let mut presentation = NarrativePresentation::new(
-                text.clone(),
-                0,
-                PresentationProfile::Instant.config(),
-            );
+            let mut presentation =
+                NarrativePresentation::new(text.clone(), 0, PresentationProfile::Instant.config());
             assert_eq!(presentation.visible_byte_end(), text.len());
             presentation.begin_transition();
             assert!(!presentation.tick(100));

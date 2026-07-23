@@ -644,13 +644,15 @@ fn finish_call(sched: &mut Scheduler, idx: usize, outcome: IpcCallOutcome) {
         sched.processes[idx].ipc_call_outcome,
         outcome.generation(),
     ) {
-        let target = sched.processes[idx].pending_call.map(|pending| IpcReplyTarget {
-            endpoint_id: pending.endpoint_id,
-            call: IpcCallId {
-                pid: sched.processes[idx].pid,
-                generation: pending.generation,
-            },
-        });
+        let target = sched.processes[idx]
+            .pending_call
+            .map(|pending| IpcReplyTarget {
+                endpoint_id: pending.endpoint_id,
+                call: IpcCallId {
+                    pid: sched.processes[idx].pid,
+                    generation: pending.generation,
+                },
+            });
         sched.processes[idx].pending_call = None;
         if !matches!(outcome, IpcCallOutcome::ReplyDelivered(_)) {
             sched.processes[idx].ipc_reply = None;
@@ -1014,11 +1016,11 @@ pub fn handle_ipc_reply(
     deliver_reply_to_current_target(server_pid, reply, sched, bus)
 }
 
-pub fn defer_current_reply(
-    server_pid: usize,
-    sched: &mut Scheduler,
-) -> Result<u64, IpcError> {
-    let Some(server_idx) = sched.processes.iter().position(|process| process.pid == server_pid)
+pub fn defer_current_reply(server_pid: usize, sched: &mut Scheduler) -> Result<u64, IpcError> {
+    let Some(server_idx) = sched
+        .processes
+        .iter()
+        .position(|process| process.pid == server_pid)
     else {
         return Err(IpcError::InvalidArgument);
     };
@@ -1092,7 +1094,10 @@ pub fn complete_deferred_reply(
     sched: &mut Scheduler,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
-    let Some(server_idx) = sched.processes.iter().position(|process| process.pid == server_pid)
+    let Some(server_idx) = sched
+        .processes
+        .iter()
+        .position(|process| process.pid == server_pid)
     else {
         return Err(IpcError::InvalidArgument);
     };

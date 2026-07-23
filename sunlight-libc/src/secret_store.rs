@@ -311,7 +311,9 @@ impl SecretStore {
         let mut removed = 0usize;
         for entry in entries.into_iter().take(count) {
             let name = entry.name_bytes();
-            if entry.file_type != FT_FILE || !name.starts_with(&prefix[PRIVATE_SECRET_DIRECTORY.len()..prefix_len]) {
+            if entry.file_type != FT_FILE
+                || !name.starts_with(&prefix[PRIVATE_SECRET_DIRECTORY.len()..prefix_len])
+            {
                 continue;
             }
             let full_len = PRIVATE_SECRET_DIRECTORY
@@ -396,7 +398,9 @@ impl SecretStore {
                 }
                 Ok(CreateResult::Created)
             }
-            Err(Errno::Again) if matches!(options.publish_mode, SecretPublishMode::CreateIfAbsent) => {
+            Err(Errno::Again)
+                if matches!(options.publish_mode, SecretPublishMode::CreateIfAbsent) =>
+            {
                 self.cleanup_temp(&temporary[..temporary_len]);
                 self.validate_existing(options, validator)?;
                 self.counters.secret_create_existing_total += 1;
@@ -438,7 +442,8 @@ impl SecretStore {
         options: SecretFileOptions<'_>,
         validator: SecretValidator,
     ) -> Result<(), SecretStoreError> {
-        let fd = libc::open(options.destination).map_err(|_| SecretStoreError::DestinationMissing)?;
+        let fd =
+            libc::open(options.destination).map_err(|_| SecretStoreError::DestinationMissing)?;
         self.validate_open_existing(fd, options, validator)
     }
 

@@ -1386,6 +1386,7 @@ impl App for EmojiPickerApp {
                 false
             }
             Event::MouseMove { x, y } => {
+                let _ = self.search.update(Event::MouseMove { x, y });
                 let new_hover = self.hit_test(x, y);
                 if new_hover != self.hovered_idx {
                     self.hovered_idx = new_hover;
@@ -1407,7 +1408,10 @@ impl App for EmojiPickerApp {
             Event::KeyPress {
                 keycode,
                 pressed: true,
-                ..
+                shift,
+                ctrl,
+                alt,
+                super_key,
             } => {
                 if self.search.active {
                     if keycode == KEY_ESC {
@@ -1418,10 +1422,10 @@ impl App for EmojiPickerApp {
                     let changed = self.search.update(Event::KeyPress {
                         keycode,
                         pressed: true,
-                        shift: false,
-                        ctrl: false,
-                        alt: false,
-                        super_key: false,
+                        shift,
+                        ctrl,
+                        alt,
+                        super_key,
                     });
                     if changed && self.search.value().len() != old_len {
                         self.filter_emojis();
@@ -1449,6 +1453,13 @@ impl App for EmojiPickerApp {
                     _ => {}
                 }
                 false
+            }
+            Event::MouseDown { x, y, button } => {
+                self.search.update(Event::MouseDown { x, y, button })
+            }
+            Event::MouseUp { x, y, button } => self.search.update(Event::MouseUp { x, y, button }),
+            Event::FocusChanged { .. } | Event::PointerOwnership { .. } => {
+                self.search.update(event)
             }
             _ => false,
         }

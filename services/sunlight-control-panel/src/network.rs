@@ -176,10 +176,7 @@ impl NetworkPageState {
         canvas.clear_transparent(Rect::new(0, 0, win_w, win_h));
         let materials = MaterialPalette::new(theme);
         let header = Rect::new(0, 0, win_w, 44);
-        canvas.fill_material(
-            header,
-            materials.card_glass.with_radius(0).without_border(),
-        );
+        canvas.fill_material(header, materials.card_glass.with_radius(0).without_border());
         canvas.draw_rect(Rect::new(0, 43, win_w, 1), theme.chrome.subtle_border);
         draw_text(canvas, "Network", 18, 10, 24, FontRole::UiTitle, theme.text);
 

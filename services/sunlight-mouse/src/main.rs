@@ -13,6 +13,7 @@ use sunlight_ipc::{
     nameserver_register, process_yield, query_display_metrics, DevicedMsg, DisplayMetrics,
     DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
 };
+use sunlight_mouse::ps2::decode_relative_axes;
 
 mod profile;
 use profile::{select_profile, FP_SHIFT};
@@ -184,26 +185,13 @@ impl MouseState {
                     (left_btn as u8) | ((right_btn as u8) << 1) | ((middle_btn as u8) << 2);
                 self.raw_buttons = raw_buttons_after;
 
-                // Sign-extend dx/dy from 9-bit two's complement (sign bit in byte0).
-                let mut dx = self.byte1 as i32;
-                let mut dy = self.byte2 as i32;
-
-                if (flags & 0x10) != 0 {
-                    dx |= !0xFF;
-                }
-                if (flags & 0x20) != 0 {
-                    dy |= !0xFF;
-                }
-
                 // Real PS/2 hardware reports positive Y upward, while QEMU's
                 // backend is already screen-oriented. Keep the distinction in
                 // the selected pointer profile instead of breaking one platform.
-                if self.tuning.invert_y {
-                    dy = -dy;
-                }
-
-                let raw_dx = dx as i16;
-                let raw_dy = dy as i16;
+                let (raw_dx, raw_dy) =
+                    decode_relative_axes(flags, self.byte1, self.byte2, self.tuning.invert_y);
+                let dx = i32::from(raw_dx);
+                let dy = i32::from(raw_dy);
                 let (clamped, accel_fast) = self.apply_motion(dx, dy);
                 self.diagnostics
                     .record_motion(raw_dx, raw_dy, clamped, accel_fast);

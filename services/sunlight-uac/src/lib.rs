@@ -12,6 +12,6 @@
 
 #![no_std]
 
-pub mod capability;
 pub mod auth;
+pub mod capability;
 pub mod session;

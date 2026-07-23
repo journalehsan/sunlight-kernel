@@ -301,9 +301,7 @@ impl SystemInfoSnapshot {
 
     pub fn mem_usage_ratio(&self) -> f32 {
         match (self.mem_used_kb, self.mem_total_kb) {
-            (Some(used), Some(total)) if total > 0 => {
-                (used as f32 / total as f32).clamp(0.0, 1.0)
-            }
+            (Some(used), Some(total)) if total > 0 => (used as f32 / total as f32).clamp(0.0, 1.0),
             _ => 0.0,
         }
     }
@@ -339,14 +337,26 @@ impl SystemInfoSnapshot {
     pub fn copy_computer_summary(&self, out: &mut FixedStr<1024>) {
         out.clear();
         let _ = writeln!(out, "About This Computer");
-        let _ = writeln!(out, "Computer: {}", Self::field_or_na(self.hostname.as_str()));
-        let _ = writeln!(out, "Platform: {}", Self::field_or_na(self.platform.as_str()));
+        let _ = writeln!(
+            out,
+            "Computer: {}",
+            Self::field_or_na(self.hostname.as_str())
+        );
+        let _ = writeln!(
+            out,
+            "Platform: {}",
+            Self::field_or_na(self.platform.as_str())
+        );
         let _ = writeln!(
             out,
             "Architecture: {}",
             Self::field_or_na(self.architecture.as_str())
         );
-        let _ = writeln!(out, "Processor: {}", Self::field_or_na(self.cpu_model.as_str()));
+        let _ = writeln!(
+            out,
+            "Processor: {}",
+            Self::field_or_na(self.cpu_model.as_str())
+        );
         match self.cpu_cores {
             Some(n) => {
                 let _ = writeln!(out, "CPU cores: {}", n);
@@ -398,10 +408,22 @@ impl SystemInfoSnapshot {
         out.clear();
         let _ = writeln!(out, "About SunlightOS — System Report");
         let _ = writeln!(out, "OS: {}", Self::field_or_na(self.os_name.as_str()));
-        let _ = writeln!(out, "Version: {}", Self::field_or_na(self.os_version.as_str()));
+        let _ = writeln!(
+            out,
+            "Version: {}",
+            Self::field_or_na(self.os_version.as_str())
+        );
         let _ = writeln!(out, "Build: {}", Self::field_or_na(self.os_build.as_str()));
-        let _ = writeln!(out, "Edition: {}", Self::field_or_na(self.os_edition.as_str()));
-        let _ = writeln!(out, "Channel: {}", Self::field_or_na(self.os_channel.as_str()));
+        let _ = writeln!(
+            out,
+            "Edition: {}",
+            Self::field_or_na(self.os_edition.as_str())
+        );
+        let _ = writeln!(
+            out,
+            "Channel: {}",
+            Self::field_or_na(self.os_channel.as_str())
+        );
         let _ = writeln!(
             out,
             "Architecture: {}",
@@ -453,9 +475,21 @@ impl SystemInfoSnapshot {
         );
         let _ = writeln!(out, "");
         let _ = writeln!(out, "--- Host snapshot ---");
-        let _ = writeln!(out, "Computer: {}", Self::field_or_na(self.hostname.as_str()));
-        let _ = writeln!(out, "Platform: {}", Self::field_or_na(self.platform.as_str()));
-        let _ = writeln!(out, "Processor: {}", Self::field_or_na(self.cpu_model.as_str()));
+        let _ = writeln!(
+            out,
+            "Computer: {}",
+            Self::field_or_na(self.hostname.as_str())
+        );
+        let _ = writeln!(
+            out,
+            "Platform: {}",
+            Self::field_or_na(self.platform.as_str())
+        );
+        let _ = writeln!(
+            out,
+            "Processor: {}",
+            Self::field_or_na(self.cpu_model.as_str())
+        );
         self.write_mem_lines(out);
         self.write_zram_lines(out);
         match self.uptime_secs {

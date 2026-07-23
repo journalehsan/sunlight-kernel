@@ -19,9 +19,7 @@
 //! IPC waits are bounded so a dead `rand` service cannot hang TLS forever.
 
 use crate::sys::{syscall0, SYS_GET_ENTROPY, SYS_SECURE_ENTROPY_READY};
-use sunlight_ipc::{
-    ipc_call_timeout, nameserver_lookup_timeout, IpcCallError, IpcMsg, RandMsg,
-};
+use sunlight_ipc::{ipc_call_timeout, nameserver_lookup_timeout, IpcCallError, IpcMsg, RandMsg};
 
 /// Service the request locally with the fast non-crypto generator.
 pub const GRND_NONCRYPTO: u32 = 0x0001;

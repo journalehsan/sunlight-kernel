@@ -212,7 +212,10 @@ unsafe fn fill_virtio_rng(
     if used_len.read_volatile() < out.len() as u32 {
         return false;
     }
-    out.copy_from_slice(core::slice::from_raw_parts(buffer_virt as *const u8, out.len()));
+    out.copy_from_slice(core::slice::from_raw_parts(
+        buffer_virt as *const u8,
+        out.len(),
+    ));
     true
 }
 
