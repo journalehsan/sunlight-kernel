@@ -160,6 +160,7 @@ pub fn init() {
 
     // Keyboard IRQ1 handler (vector 0x21)
     idt[0x21].set_handler_fn(keyboard_entry);
+    serial_println!("[KBD] IRQ1 handler installed at vector 0x21");
 
     // Mouse IRQ12 handler (vector 0x2C = 32 + 12)
     idt[0x2C].set_handler_fn(mouse_entry);

@@ -100,7 +100,7 @@ fn wait_input_buffer_clear() -> bool {
     false
 }
 
-fn read_data_timeout(timeout_ms: u64) -> Option<u8> {
+fn read_data_timeout(timeout_ms: u64) -> Option<(u8, u8)> {
     let start_tsc = read_tsc();
     let timeout_ticks = timeout_ticks(timeout_ms);
     let mut spins = 0usize;
@@ -108,8 +108,9 @@ fn read_data_timeout(timeout_ms: u64) -> Option<u8> {
         let mut status: Port<u8> = Port::new(STATUS_COMMAND_PORT);
         let mut data: Port<u8> = Port::new(DATA_PORT);
         loop {
-            if status.read() & STATUS_OUTPUT_FULL != 0 {
-                return Some(data.read());
+            let status_byte = status.read();
+            if status_byte & STATUS_OUTPUT_FULL != 0 {
+                return Some((status_byte, data.read()));
             }
             spins = spins.saturating_add(1);
             if timeout_expired(start_tsc, timeout_ticks, spins) {
@@ -125,6 +126,7 @@ unsafe fn write_controller_command(command: u8) -> bool {
     if !wait_input_buffer_clear() {
         return false;
     }
+    serial_println!("[KBD-INIT] controller tx={:#04x}", command);
     let mut port: Port<u8> = Port::new(STATUS_COMMAND_PORT);
     unsafe { port.write(command) };
     true
@@ -155,17 +157,83 @@ fn drain_output_buffer() {
 }
 
 fn send_keyboard_command(command: u8) -> bool {
-    for _ in 0..2 {
+    for attempt in 1..=3 {
+        serial_println!(
+            "[KBD-INIT] keyboard tx={:#04x} attempt={}",
+            command,
+            attempt
+        );
         if !unsafe { write_data(command) } {
+            serial_println!("[KBD-INIT] keyboard tx timeout");
             return false;
         }
         match read_data_timeout(IO_TIMEOUT_MS) {
-            Some(KEYBOARD_ACK) => return true,
-            Some(KEYBOARD_RESEND) => continue,
-            _ => return false,
+            Some((status, KEYBOARD_ACK)) if status & STATUS_AUX_DATA == 0 => {
+                serial_println!("[KBD-INIT] keyboard ACK");
+                return true;
+            }
+            Some((status, KEYBOARD_RESEND)) if status & STATUS_AUX_DATA == 0 => {
+                serial_println!("[KBD-INIT] keyboard RESEND");
+            }
+            Some((status, byte)) => {
+                serial_println!(
+                    "[KBD-INIT] unexpected response={:#04x} source={}",
+                    byte,
+                    if status & STATUS_AUX_DATA != 0 {
+                        "aux"
+                    } else {
+                        "keyboard"
+                    }
+                );
+                return false;
+            }
+            None => {
+                serial_println!("[KBD-INIT] keyboard response timeout");
+                return false;
+            }
         }
     }
+    serial_println!("[KBD-INIT] keyboard RESEND limit reached");
     false
+}
+
+fn read_controller_config() -> Option<u8> {
+    if !unsafe { write_controller_command(0x20) } {
+        return None;
+    }
+    match read_data_timeout(IO_TIMEOUT_MS) {
+        Some((status, byte)) if status & STATUS_AUX_DATA == 0 => Some(byte),
+        Some((_, byte)) => {
+            serial_println!(
+                "[KBD-INIT] rejected AUX byte {:#04x} while reading controller config",
+                byte
+            );
+            None
+        }
+        None => None,
+    }
+}
+
+fn write_controller_config(config: u8) -> bool {
+    if !unsafe { write_controller_command(0x60) } {
+        return false;
+    }
+    serial_println!("[KBD-INIT] controller data={:#04x}", config);
+    unsafe { write_data(config) }
+}
+
+fn read_keyboard_response(timeout_ms: u64) -> Option<u8> {
+    match read_data_timeout(timeout_ms) {
+        Some((status, byte)) if status & STATUS_AUX_DATA == 0 => Some(byte),
+        Some((_, byte)) => {
+            serial_println!(
+                "[KBD-INIT] rejected AUX byte {:#04x} during keyboard transaction",
+                byte
+            );
+            None
+        }
+        None => None,
+    }
 }
 
 /// Put the first i8042 port and keyboard into a known, translated set-2 state.
@@ -186,20 +254,23 @@ pub fn init_ps2_keyboard() -> bool {
         }
         drain_output_buffer();
 
-        if !unsafe { write_controller_command(0x20) } {
-            return Err("configuration read timeout");
-        }
-        let Some(mut config) = read_data_timeout(IO_TIMEOUT_MS) else {
+        let Some(original_config) = read_controller_config() else {
             return Err("no configuration byte");
         };
+        serial_println!(
+            "[KBD-INIT] controller config initial={:#04x}",
+            original_config
+        );
 
-        // Keyboard: clock enabled, IRQ enabled, set-2 -> set-1 translation.
-        // Auxiliary port remains disabled until sunlight-mouse initializes it.
-        config |= CONTROLLER_CONFIG_IRQ1
+        // Keep both device clocks and interrupts disabled while testing the
+        // first port. Translation is selected now, but cannot affect traffic
+        // until the keyboard clock is enabled below.
+        let quiescent_config = (original_config
+            | CONTROLLER_CONFIG_FIRST_CLOCK_DISABLED
             | CONTROLLER_CONFIG_SECOND_CLOCK_DISABLED
-            | CONTROLLER_CONFIG_TRANSLATION;
-        config &= !(CONTROLLER_CONFIG_IRQ12 | CONTROLLER_CONFIG_FIRST_CLOCK_DISABLED);
-        if !unsafe { write_controller_command(0x60) } || !unsafe { write_data(config) } {
+            | CONTROLLER_CONFIG_TRANSLATION)
+            & !(CONTROLLER_CONFIG_IRQ1 | CONTROLLER_CONFIG_IRQ12);
+        if !write_controller_config(quiescent_config) {
             return Err("configuration write timeout");
         }
 
@@ -207,8 +278,8 @@ pub fn init_ps2_keyboard() -> bool {
             return Err("interface-test timeout");
         }
         match read_data_timeout(IO_TIMEOUT_MS) {
-            Some(0x00) => {}
-            Some(code) => {
+            Some((status, 0x00)) if status & STATUS_AUX_DATA == 0 => {}
+            Some((_, code)) => {
                 serial_println!("[KBD] i8042 first-port test failed: {:#x}", code);
                 return Err("first-port interface test failed");
             }
@@ -219,11 +290,31 @@ pub fn init_ps2_keyboard() -> bool {
             return Err("first-port enable timeout");
         }
 
+        // Do not depend on the side effects of 0xAE. Program and then verify
+        // every controller bit the keyboard path relies on.
+        let keyboard_config =
+            (quiescent_config | CONTROLLER_CONFIG_IRQ1) & !CONTROLLER_CONFIG_FIRST_CLOCK_DISABLED;
+        if !write_controller_config(keyboard_config) {
+            return Err("failed to enable keyboard clock and IRQ");
+        }
+        let Some(config) = read_controller_config() else {
+            return Err("configuration read-back timed out");
+        };
+        serial_println!("[KBD-INIT] controller config readback={:#04x}", config);
+        let required = CONTROLLER_CONFIG_IRQ1
+            | CONTROLLER_CONFIG_SECOND_CLOCK_DISABLED
+            | CONTROLLER_CONFIG_TRANSLATION;
+        let forbidden = CONTROLLER_CONFIG_IRQ12 | CONTROLLER_CONFIG_FIRST_CLOCK_DISABLED;
+        if config & required != required || config & forbidden != 0 {
+            return Err("controller configuration read-back mismatch");
+        }
+        serial_println!("[KBD-INIT] translation=enabled (set 2 -> set 1)");
+
         // Reset and wait for the keyboard's Basic Assurance Test completion.
         if !send_keyboard_command(0xff) {
             return Err("keyboard reset was not acknowledged");
         }
-        match read_data_timeout(BAT_TIMEOUT_MS) {
+        match read_keyboard_response(BAT_TIMEOUT_MS) {
             Some(0xaa) => {}
             Some(code) => {
                 serial_println!("[KBD] keyboard self-test failed: {:#x}", code);
@@ -231,9 +322,34 @@ pub fn init_ps2_keyboard() -> bool {
             }
             None => return Err("keyboard self-test timed out"),
         }
+        serial_println!("[KBD-INIT] BAT=0xaa passed");
+
+        // Establish a command-only transaction window before identify and
+        // configuration so scan bytes cannot be mistaken for responses.
+        if !send_keyboard_command(0xf5) {
+            return Err("failed to disable keyboard scanning");
+        }
+
+        if !send_keyboard_command(0xf2) {
+            return Err("keyboard identify was not acknowledged");
+        }
+        let Some(id0) = read_keyboard_response(IO_TIMEOUT_MS) else {
+            return Err("keyboard identify first byte timed out");
+        };
+        serial_println!("[KBD-INIT] identify[0]={:#04x}", id0);
+        let Some(id1) = read_keyboard_response(IO_TIMEOUT_MS) else {
+            return Err("keyboard identify second byte timed out");
+        };
+        serial_println!("[KBD-INIT] identify[1]={:#04x}", id1);
+        if id0 != 0xab && id0 != 0xac {
+            return Err("device on first port is not an AT keyboard");
+        }
 
         if !send_keyboard_command(0xf0) || !send_keyboard_command(0x02) {
             return Err("failed to select scancode set 2");
+        }
+        if !send_keyboard_command(0xed) || !send_keyboard_command(0x00) {
+            return Err("failed to initialize keyboard LEDs");
         }
         if !send_keyboard_command(0xf4) {
             return Err("failed to enable keyboard scanning");
@@ -243,11 +359,9 @@ pub fn init_ps2_keyboard() -> bool {
 
     if let Err(error) = result {
         serial_println!("[KBD] i8042 initialization failed: {}", error);
-        // Never strand a firmware-working keyboard behind a disabled port.
-        // Re-enable it and request scanning as a best-effort fallback.
+        // Keep the physical port reachable for diagnostics, but do not issue
+        // further device commands after a failed transaction.
         let _ = unsafe { write_controller_command(0xae) };
-        drain_output_buffer();
-        let _ = send_keyboard_command(0xf4);
         return false;
     }
 
@@ -347,6 +461,9 @@ pub fn handle_irq1() {
         let mut port: Port<u8> = Port::new(DATA_PORT);
         port.read()
     };
+    if IRQ_COUNT.load(Ordering::Relaxed) == 1 {
+        serial_println!("[KBD] first scan code={:#04x}", scancode);
+    }
 
     // 2. Push to ring buffer (non-blocking)
     let pushed = push_scancode(scancode);

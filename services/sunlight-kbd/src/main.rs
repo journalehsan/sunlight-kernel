@@ -267,6 +267,27 @@ fn kbd_pop_scancode() -> Option<u8> {
     }
 }
 
+fn log_first_decoded_key(event: u64) {
+    let hex = b"0123456789ABCDEF";
+    let code = event as u8;
+    let ascii = (event >> 24) as u8;
+    let mut bytes = [0u8; 64];
+    let mut len = 0usize;
+    let mut append = |part: &[u8]| {
+        bytes[len..len + part.len()].copy_from_slice(part);
+        len += part.len();
+    };
+    append(b"[KBD] first decoded key code=0x");
+    append(&[hex[(code >> 4) as usize], hex[(code & 0x0f) as usize]]);
+    append(b" pressed=");
+    append(if event & (1 << 8) != 0 { b"1" } else { b"0" });
+    append(b" ascii=0x");
+    append(&[hex[(ascii >> 4) as usize], hex[(ascii & 0x0f) as usize]]);
+    append(b"\n");
+    let text = unsafe { core::str::from_utf8_unchecked(&bytes[..len]) };
+    debug_log(text);
+}
+
 fn pack_short_name(name: &str) -> u64 {
     let bytes = name.as_bytes();
     let mut word = 0u64;
@@ -331,6 +352,7 @@ pub extern "C" fn _start() -> ! {
 
     let mut modifiers = Modifiers::default();
     let mut extended_prefix = false;
+    let mut first_decoded_key = true;
     loop {
         while let Some(scancode) = kbd_pop_scancode() {
             if scancode == keycode::EXTENDED_PREFIX {
@@ -338,6 +360,10 @@ pub extern "C" fn _start() -> ! {
                 continue;
             }
             if let Some(event_val) = process_scancode(scancode, extended_prefix, &mut modifiers) {
+                if first_decoded_key {
+                    log_first_decoded_key(event_val);
+                    first_decoded_key = false;
+                }
                 let msg = IpcMsg::with_label(0x1).word(0, event_val);
                 let _ = ipc_call(tty_token, msg);
             }
