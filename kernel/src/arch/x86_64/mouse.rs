@@ -19,6 +19,11 @@ const CONTROLLER_CONFIG_FIRST_CLOCK_DISABLED: u8 = 1 << 4;
 const CONTROLLER_CONFIG_SECOND_CLOCK_DISABLED: u8 = 1 << 5;
 const DEVICE_ACK: u8 = 0xfa;
 const DEVICE_RESEND: u8 = 0xfe;
+const MOUSE_SET_SCALE_1_1: u8 = 0xe6;
+const MOUSE_SET_RESOLUTION: u8 = 0xe8;
+const MOUSE_STATUS_REQUEST: u8 = 0xe9;
+const MOUSE_SET_SAMPLE_RATE: u8 = 0xf3;
+const SYNAPTICS_SET_MODE2: u8 = 0x14;
 const IO_TIMEOUT_MS: u64 = 100;
 const BAT_TIMEOUT_MS: u64 = 1_000;
 const FALLBACK_TIMEOUT_SPINS: usize = 1_000_000;
@@ -152,6 +157,56 @@ fn send_aux_command(command: u8) -> bool {
     false
 }
 
+fn send_aux_command_with_data(command: u8, data: u8) -> bool {
+    send_aux_command(command) && send_aux_command(data)
+}
+
+/// Encode a Synaptics extended command using the standard PS/2 sliced-command
+/// sequence. Non-Synaptics mice harmlessly interpret this as resolution setup.
+fn send_synaptics_sliced_command(command: u8) -> bool {
+    if !send_aux_command(MOUSE_SET_SCALE_1_1) {
+        return false;
+    }
+
+    for shift in [6, 4, 2, 0] {
+        if !send_aux_command_with_data(MOUSE_SET_RESOLUTION, (command >> shift) & 0x03) {
+            return false;
+        }
+    }
+    true
+}
+
+fn read_aux_response_3() -> Option<[u8; 3]> {
+    Some([
+        read_data_timeout(IO_TIMEOUT_MS)?,
+        read_data_timeout(IO_TIMEOUT_MS)?,
+        read_data_timeout(IO_TIMEOUT_MS)?,
+    ])
+}
+
+/// Linux uses the same four-zero-resolution query and checks byte 1 for 0x47.
+/// The sequence is accepted by ordinary PS/2 mice too, so a non-matching
+/// response simply selects the generic relative-mode path.
+fn detect_synaptics_touchpad() -> Option<[u8; 3]> {
+    for _ in 0..4 {
+        if !send_aux_command_with_data(MOUSE_SET_RESOLUTION, 0) {
+            return None;
+        }
+    }
+    if !send_aux_command(MOUSE_STATUS_REQUEST) {
+        return None;
+    }
+    let response = read_aux_response_3()?;
+    (response[1] == 0x47).then_some(response)
+}
+
+/// Select mouse-compatible relative packets and explicitly clear DisGest.
+/// Synaptics documents that a normal PS/2 reset does not reset that mode bit.
+fn enable_synaptics_relative_gestures() -> bool {
+    send_synaptics_sliced_command(0)
+        && send_aux_command_with_data(MOUSE_SET_SAMPLE_RATE, SYNAPTICS_SET_MODE2)
+}
+
 fn configure_aux_irq(enabled: bool) -> bool {
     if !unsafe { write_cmd(0x20) } {
         return false;
@@ -205,9 +260,7 @@ pub fn init_ps2_mouse() -> bool {
                 None => return Err("no auxiliary interface-test result"),
             }
 
-            // UEFI may leave a ThinkPad Synaptics clickpad in its native six-byte
-            // protocol. Resetting restores standard three-byte relative packets,
-            // where pressing the single mechanical clickpad button is bit 0.
+            // Return the device to its basic PS/2 state before protocol probing.
             if !send_aux_command(0xff) {
                 return Err("device reset was not acknowledged");
             }
@@ -224,6 +277,24 @@ pub fn init_ps2_mouse() -> bool {
 
             if !send_aux_command(0xf6) {
                 return Err("failed to restore device defaults");
+            }
+
+            if let Some(signature) = detect_synaptics_touchpad() {
+                serial_println!(
+                    "[MOUSE] Synaptics PS/2 touchpad detected (signature={:#04x} {:#04x} {:#04x})",
+                    signature[0],
+                    signature[1],
+                    signature[2]
+                );
+                if !enable_synaptics_relative_gestures() {
+                    return Err("failed to enable Synaptics relative-mode gestures");
+                }
+                serial_println!(
+                    "[MOUSE] Synaptics relative mode active with tap/click gestures enabled"
+                );
+            } else if !send_aux_command(0xf6) {
+                // The Synaptics probe changes the resolution on generic mice.
+                return Err("failed to restore defaults after pointing-device probe");
             }
             if !configure_aux_irq(true) {
                 return Err("failed to enable auxiliary IRQ");
