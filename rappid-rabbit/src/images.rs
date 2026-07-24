@@ -239,6 +239,10 @@ fn format_tga_error(error: sunlight_ui::image::DecodeError) -> String {
             String::from("unsupported TGA depth")
         }
         sunlight_ui::image::DecodeError::Truncated => String::from("truncated TGA pixels"),
+        sunlight_ui::image::DecodeError::SimgV2Invalid => String::from("invalid SIMG v2 image"),
+        sunlight_ui::image::DecodeError::SimgV2Unsupported => {
+            String::from("unsupported SIMG v2 image")
+        }
     }
 }
 

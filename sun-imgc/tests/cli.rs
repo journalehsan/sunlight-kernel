@@ -77,3 +77,34 @@ fn convert_fails_on_garbage_input() {
     let _ = fs::remove_file(input);
     let _ = fs::remove_file(output);
 }
+
+#[test]
+fn to_simg_and_from_simg_roundtrip() {
+    let input = temp_path("rt-in.tga");
+    let simg = temp_path("rt-out.simg");
+    let back = temp_path("rt-back.tga");
+    fs::write(&input, fixture_tga()).unwrap();
+    let out = Command::new(cli_bin())
+        .args(["to-simg", "--verify", &input.to_string_lossy(), &simg.to_string_lossy()])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("method:"));
+    assert!(stdout.contains("verify: ok"));
+    let status = Command::new(cli_bin())
+        .args(["from-simg", &simg.to_string_lossy(), &back.to_string_lossy()])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let inspect = Command::new(cli_bin())
+        .args(["inspect", &simg.to_string_lossy()])
+        .output()
+        .unwrap();
+    assert!(inspect.status.success());
+    let text = String::from_utf8(inspect.stdout).unwrap();
+    assert!(text.contains("format: simg-v2"));
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(simg);
+    let _ = fs::remove_file(back);
+}

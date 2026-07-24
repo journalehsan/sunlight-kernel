@@ -1,4 +1,29 @@
-use std::fmt;
+//! SunlightOS image conversion foundation (TGA + SIMG v2).
+//!
+//! Host tooling uses the default `std` feature. Freestanding UI crates depend
+//! with `default-features = false` (`no_std` + `alloc`).
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
+
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::fmt;
+
+pub mod crc32;
+pub mod simg_v2;
+
+pub use simg_v2::{
+    decode as decode_simg_v2, decode_argb_u32 as decode_simg_v2_argb_u32,
+    decode_bgra as decode_simg_v2_bgra, encode as encode_simg_v2,
+    encode_with_method as encode_simg_v2_with, is_simg_v2, method_name as simg_v2_method_name,
+    parse_header as parse_simg_v2_header, Compression as SimgV2Compression,
+    EncodeReport as SimgV2EncodeReport, Filter as SimgV2Filter, SimgV2Header,
+    ENCODER_VERSION as SIMG_V2_ENCODER_VERSION, HEADER_SIZE as SIMG_V2_HEADER_SIZE,
+    MAGIC as SIMG_V2_MAGIC, MAX_DECODED_BYTES, MAX_DIMENSION, VERSION as SIMG_V2_VERSION,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImageRgba8 {
@@ -10,6 +35,7 @@ pub struct ImageRgba8 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImageFormat {
     Tga,
+    SimgV2,
     Bmp,
     Png,
     Jpeg,
@@ -19,6 +45,7 @@ pub enum ImageFormat {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputFormat {
     TgaRgba32,
+    SimgV2,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,6 +94,7 @@ impl fmt::Display for ImageError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for ImageError {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,6 +113,9 @@ pub struct TgaInfo {
 }
 
 pub fn detect_format(bytes: &[u8]) -> ImageFormat {
+    if simg_v2::is_simg_v2(bytes) {
+        return ImageFormat::SimgV2;
+    }
     if is_png(bytes) {
         return ImageFormat::Png;
     }
@@ -100,12 +131,18 @@ pub fn detect_format(bytes: &[u8]) -> ImageFormat {
     ImageFormat::Unknown
 }
 
+/// Decode TGA or SIMG v2 into host RGBA8 (straight alpha).
 pub fn decode_image(bytes: &[u8]) -> Result<ImageRgba8, ImageError> {
+    if simg_v2::is_simg_v2(bytes) {
+        // Strict v2 path — never fall back to TGA after magic match.
+        return simg_v2::decode(bytes);
+    }
     if bytes.len() < 18 {
         return Err(ImageError::TruncatedInput);
     }
     match detect_format(bytes) {
         ImageFormat::Tga => decode_tga(bytes),
+        ImageFormat::SimgV2 => simg_v2::decode(bytes),
         ImageFormat::Bmp | ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Unknown => {
             Err(ImageError::UnsupportedFormat)
         }
@@ -129,7 +166,10 @@ pub fn encode_tga_rgba32(image: &ImageRgba8) -> Result<Vec<u8>, ImageError> {
     out.push(0x28);
 
     for chunk in image.pixels.chunks_exact(4) {
-        let [r, g, b, a]: [u8; 4] = chunk.try_into().expect("rgba chunk");
+        let r = chunk[0];
+        let g = chunk[1];
+        let b = chunk[2];
+        let a = chunk[3];
         out.push(b);
         out.push(g);
         out.push(r);
@@ -144,9 +184,6 @@ pub fn convert_to_tga_rgba32(input: &[u8]) -> Result<Vec<u8>, ImageError> {
 }
 
 pub fn convert_with_options(input: &[u8], options: &ConvertOptions) -> Result<Vec<u8>, ImageError> {
-    match options.output_format {
-        OutputFormat::TgaRgba32 => {}
-    }
     let mut image = decode_image(input)?;
     if options.force_alpha {
         force_alpha_opaque(&mut image)?;
@@ -154,12 +191,25 @@ pub fn convert_with_options(input: &[u8], options: &ConvertOptions) -> Result<Ve
     if options.flip_vertical {
         flip_vertical(&mut image)?;
     }
-    encode_tga_rgba32(&image)
+    match options.output_format {
+        OutputFormat::TgaRgba32 => encode_tga_rgba32(&image),
+        OutputFormat::SimgV2 => Ok(simg_v2::encode(&image)?.bytes),
+    }
+}
+
+/// Encode input image bytes (TGA/SIMG) to SIMG v2 without force-opaque alpha.
+pub fn convert_to_simg_v2(input: &[u8]) -> Result<simg_v2::EncodeReport, ImageError> {
+    let image = decode_image(input)?;
+    simg_v2::encode(&image)
 }
 
 pub fn inspect_tga(bytes: &[u8]) -> Result<TgaInfo, ImageError> {
     if bytes.len() < 18 {
         return Err(ImageError::TruncatedInput);
+    }
+    // Do not accept SIMG v2 as TGA.
+    if simg_v2::is_simg_v2(bytes) {
+        return Err(ImageError::UnsupportedFormat);
     }
     let color_map_type = bytes[1];
     let image_type = bytes[2];
@@ -296,7 +346,7 @@ fn pixel_count(width: u32, height: u32) -> Result<usize, ImageError> {
         .ok_or(ImageError::InvalidDimensions)
 }
 
-fn rgba_len(width: u32, height: u32) -> Result<usize, ImageError> {
+pub(crate) fn rgba_len(width: u32, height: u32) -> Result<usize, ImageError> {
     pixel_count(width, height)?
         .checked_mul(4)
         .ok_or(ImageError::InvalidDimensions)
@@ -360,6 +410,13 @@ mod tests {
         );
         assert_eq!(detect_format(&[b'B', b'M', 0, 0]), ImageFormat::Bmp);
         assert_eq!(detect_format(&[0xFF, 0xD8, 0xFF, 0xE0]), ImageFormat::Jpeg);
+        let v2 = encode_simg_v2(&ImageRgba8 {
+            width: 1,
+            height: 1,
+            pixels: vec![1, 2, 3, 4],
+        })
+        .unwrap();
+        assert_eq!(detect_format(&v2.bytes), ImageFormat::SimgV2);
     }
 
     #[test]
@@ -436,5 +493,31 @@ mod tests {
             decode_image(&bytes),
             Err(ImageError::UnsupportedCompression)
         );
+    }
+
+    #[test]
+    fn legacy_tga_matches_simg_v2_canonical_pixels() {
+        let tga = tiny_tga32_top_left();
+        let legacy = decode_image(&tga).unwrap();
+        let v2 = encode_simg_v2(&legacy).unwrap();
+        let from_v2 = decode_image(&v2.bytes).unwrap();
+        assert_eq!(legacy, from_v2);
+    }
+
+    #[test]
+    fn malformed_v2_does_not_fallback_to_tga() {
+        let mut bytes = encode_simg_v2(&ImageRgba8 {
+            width: 1,
+            height: 1,
+            pixels: vec![1, 2, 3, 4],
+        })
+        .unwrap()
+        .bytes;
+        // Corrupt version after magic.
+        bytes[4] = 9;
+        assert!(matches!(
+            decode_image(&bytes),
+            Err(ImageError::UnsupportedFormat)
+        ));
     }
 }

@@ -1,7 +1,8 @@
 #![no_std]
 #![no_main]
 
-use core::alloc::{GlobalAlloc, Layout};
+extern crate alloc;
+
 use core::cmp::Ordering;
 
 use sun_font::{
@@ -15,7 +16,7 @@ use sunlight_ipc::{
     process_yield, ProcessExit,
 };
 use sunlight_libc::{self as libc, crt0, DirEntry, FT_FILE};
-use sunlight_ui::image::TgaImage;
+use sunlight_ui::image::{decode_simg, TgaImage};
 use sunlight_ui::widgets::StatusBar;
 use sunlight_ui::{
     request_close, App, Canvas, Color, Event, Point, Rect, Theme, UiSymbol, Window, WindowConfig,
@@ -53,18 +54,8 @@ static MISSING_ICON_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_
 static mut IMAGE_BUF: [u8; MAX_IMAGE_BYTES] = [0u8; MAX_IMAGE_BYTES];
 static mut IMAGE_LEN: usize = 0;
 
-struct NoAlloc;
-
-unsafe impl GlobalAlloc for NoAlloc {
-    unsafe fn alloc(&self, _: Layout) -> *mut u8 {
-        core::ptr::null_mut()
-    }
-
-    unsafe fn dealloc(&self, _: *mut u8, _: Layout) {}
-}
-
-#[global_allocator]
-static ALLOC: NoAlloc = NoAlloc;
+// Global allocator comes from sunlight-libc (`global-alloc` feature) so SIMG v2
+// can allocate a single decoded pixel buffer.
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct PathBuf {
@@ -238,7 +229,10 @@ enum LoadState {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FormatKind {
-    Simg,
+    /// Historical `.simg` that is still TGA type-2 on disk.
+    SimgLegacy,
+    /// Versioned SIMG v2 container (magic `SIMG`).
+    SimgV2,
     Tga,
     Unknown,
 }
@@ -612,11 +606,13 @@ impl LightLensApp {
 
         let parsed = unsafe { parse_runtime_tga(total) };
         match parsed {
-            Some((image, width, height, bpp)) => {
+            Some((image, width, height, bpp, kind)) => {
                 self.image = Some(image);
                 self.info.width = width;
                 self.info.height = height;
                 self.info.bpp = bpp;
+                // Prefer content-based format over extension-only guess.
+                self.info.format = kind;
                 self.load_state = LoadState::Ready;
                 self.message.set_str("Ready");
             }
@@ -1200,7 +1196,47 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         .position(|window| window == needle)
 }
 
-unsafe fn parse_runtime_tga(total: usize) -> Option<(TgaImage, u32, u32, u8)> {
+/// Parse runtime image bytes in `IMAGE_BUF`.
+///
+/// - SIMG v2: decode (allocates once), rewrite as top-down TGA-32 into `IMAGE_BUF`,
+///   then expose via zero-alloc `TgaImage` for the existing blit path.
+/// - Legacy TGA / historical `.simg`: parse in place.
+unsafe fn parse_runtime_tga(total: usize) -> Option<(TgaImage, u32, u32, u8, FormatKind)> {
+    if total < 4 {
+        return None;
+    }
+    if IMAGE_BUF[..4] == *b"SIMG" {
+        // Borrow ends before we rewrite IMAGE_BUF as a TGA view.
+        let decoded = {
+            let src = &IMAGE_BUF[..total];
+            decode_simg(src).ok()?
+        };
+        let pixel_count = decoded.pixel_count();
+        let need = 18usize.checked_add(pixel_count.checked_mul(4)?)?;
+        if need > MAX_IMAGE_BYTES {
+            return None;
+        }
+        // Uncompressed TGA type-2, 32 bpp, top-down, BGRA.
+        IMAGE_BUF[0..12].copy_from_slice(&[
+            0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ]);
+        IMAGE_BUF[12..14].copy_from_slice(&(decoded.width as u16).to_le_bytes());
+        IMAGE_BUF[14..16].copy_from_slice(&(decoded.height as u16).to_le_bytes());
+        IMAGE_BUF[16] = 32;
+        IMAGE_BUF[17] = 0x28; // alpha bits + top-down origin
+        let mut off = 18usize;
+        for px in &decoded.pixels {
+            IMAGE_BUF[off] = *px as u8;
+            IMAGE_BUF[off + 1] = (*px >> 8) as u8;
+            IMAGE_BUF[off + 2] = (*px >> 16) as u8;
+            IMAGE_BUF[off + 3] = (*px >> 24) as u8;
+            off += 4;
+        }
+        IMAGE_LEN = need;
+        let bytes: &'static [u8] = &IMAGE_BUF[..need];
+        let image = TgaImage::parse(bytes).ok()?;
+        return Some((image, decoded.width, decoded.height, 32, FormatKind::SimgV2));
+    }
     if total < 18 {
         return None;
     }
@@ -1218,12 +1254,14 @@ unsafe fn parse_runtime_tga(total: usize) -> Option<(TgaImage, u32, u32, u8)> {
     }
     let bytes: &'static [u8] = &IMAGE_BUF[..total];
     let image = TgaImage::parse(bytes).ok()?;
-    Some((image, width, height, bpp))
+    // Extension may say .simg while content is still legacy TGA.
+    Some((image, width, height, bpp, FormatKind::Tga))
 }
 
 fn format_from_name(name: &[u8]) -> FormatKind {
     if ends_with_ignore_ascii_case(name, b".simg") {
-        FormatKind::Simg
+        // Content may still be SIMG v2; refined after parse.
+        FormatKind::SimgLegacy
     } else if ends_with_ignore_ascii_case(name, b".tga") {
         FormatKind::Tga
     } else {
@@ -1233,7 +1271,8 @@ fn format_from_name(name: &[u8]) -> FormatKind {
 
 fn format_label(kind: FormatKind) -> &'static str {
     match kind {
-        FormatKind::Simg => "SIMG",
+        FormatKind::SimgLegacy => "SIMG (legacy TGA)",
+        FormatKind::SimgV2 => "SIMG v2",
         FormatKind::Tga => "TGA",
         FormatKind::Unknown => "Unknown",
     }

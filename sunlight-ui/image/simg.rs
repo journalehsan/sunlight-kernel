@@ -8,14 +8,19 @@
 //! any code path that must decode an image whose lifetime is not `'static`.
 //!
 //! ## "SIMG" format note
-//! SunlightOS sample pictures and thumbnails use the `.simg` extension, but the
-//! on-disk bytes are **uncompressed TGA type-2** (the only bitmap format the OS
-//! can decode). So a `.simg` file and a `.tga` file are decoded identically.
-//! See `image::tga` for the byte-level format description.
+//! Historical SunlightOS sample pictures and thumbnails use the `.simg`
+//! extension, but those on-disk bytes are **uncompressed TGA type-2**. So a
+//! legacy `.simg` file and a `.tga` file are decoded identically.
 //!
-//! **SIMG v2 / compression intentionally deferred.** This module does not add
-//! a new magic, headers, LZ4, or any compressed container — only decode and
-//! scale quality improvements for the existing type-2 payload.
+//! **SIMG v2** introduces an explicit `SIMG` magic, versioned header, optional
+//! Sub filter, and LZ4 block compression. Detection selects **one** parser:
+//! magic match → strict v2 (no TGA fallback); otherwise → TGA type-2.
+//! See `docs/SIMG_V2.md`.
+//!
+//! # Legal / patent notice
+//!
+//! We are **not sure** of the patent-free status of SIMG v2 (LZ4 + Sub filter
+//! packaging). Formal legal review is required before “patent free” claims.
 //!
 //! The decoder is intentionally defensive: malformed or truncated inputs return
 //! `Err` rather than panicking, so a broken thumbnail file can never take down
@@ -26,19 +31,24 @@ use alloc::vec::Vec;
 /// Errors returned by [`decode`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeError {
-    /// Fewer than 18 header bytes.
+    /// Fewer than 18 header bytes (TGA) or truncated SIMG v2 header/payload.
     TooShort,
-    /// Image type is not 2 (uncompressed true-colour).
+    /// Image type is not 2 (uncompressed true-colour) for legacy TGA.
     UnsupportedType(u8),
-    /// Pixel depth is not 24 or 32 bpp.
+    /// Pixel depth is not 24 or 32 bpp (TGA) or unsupported v2 format.
     UnsupportedDepth(u8),
     /// Header claims dimensions whose pixel payload does not fit in `data`.
     Truncated,
+    /// SIMG v2 magic matched but the file failed strict validation.
+    SimgV2Invalid,
+    /// SIMG v2 version or feature is not supported by this decoder.
+    SimgV2Unsupported,
 }
 
 /// Decoded image: width, height, and packed ARGB8888 pixels (top-down).
 ///
 /// Each pixel is `(a << 24) | (r << 16) | (g << 8) | b`. Row 0 is the top row.
+/// Alpha is **straight** (not premultiplied), matching legacy TGA decode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RgbaImage {
     pub width: u32,
@@ -64,12 +74,49 @@ impl RgbaImage {
     }
 }
 
+/// Decode a legacy TGA type-2 image or a SIMG v2 file from `data`.
+///
+/// Detection: if the file starts with magic `SIMG`, only the v2 parser runs.
+/// Otherwise the TGA type-2 path runs (covers historical `.simg` assets).
+pub fn decode(data: &[u8]) -> Result<RgbaImage, DecodeError> {
+    if sun_img::is_simg_v2(data) {
+        return decode_simg_v2(data);
+    }
+    decode_tga_type2(data)
+}
+
+fn decode_simg_v2(data: &[u8]) -> Result<RgbaImage, DecodeError> {
+    // LZ4 decompresses into one BGRA buffer; Sub reverses in place; then a single
+    // ARGB u32 vector is built for the renderer (no second full intermediate kept).
+    let (width, height, pixels) =
+        sun_img::simg_v2::decode_argb_u32(data).map_err(map_sun_img_err)?;
+    Ok(RgbaImage {
+        width,
+        height,
+        pixels,
+    })
+}
+
+fn map_sun_img_err(err: sun_img::ImageError) -> DecodeError {
+    use sun_img::ImageError;
+    match err {
+        ImageError::TruncatedInput => DecodeError::TooShort,
+        ImageError::UnsupportedFormat | ImageError::UnsupportedCompression => {
+            DecodeError::SimgV2Unsupported
+        }
+        ImageError::UnsupportedBitDepth => DecodeError::UnsupportedDepth(0),
+        ImageError::InvalidHeader
+        | ImageError::InvalidDimensions
+        | ImageError::DecodeFailed(_)
+        | ImageError::EncodeFailed(_)
+        | ImageError::Io(_) => DecodeError::SimgV2Invalid,
+    }
+}
+
 /// Decode an uncompressed TGA type-2 image (24 or 32 bpp) from `data`.
 ///
-/// This is the reusable SIMG/TGA decoder. Both `.simg` and `.tga` extensions
-/// map to this path. Handles the image-origin bit so the returned buffer is
-/// always top-down regardless of how the file stored its rows.
-pub fn decode(data: &[u8]) -> Result<RgbaImage, DecodeError> {
+/// Handles the image-origin bit so the returned buffer is always top-down.
+fn decode_tga_type2(data: &[u8]) -> Result<RgbaImage, DecodeError> {
     if data.len() < 18 {
         return Err(DecodeError::TooShort);
     }
@@ -100,8 +147,16 @@ pub fn decode(data: &[u8]) -> Result<RgbaImage, DecodeError> {
         return Err(DecodeError::Truncated);
     }
     let bpp_bytes = (bpp / 8) as u32;
-    let pixel_count = (width as usize) * (height as usize);
-    let needed = data_offset + pixel_count * (bpp_bytes as usize);
+    let pixel_count = (width as usize)
+        .checked_mul(height as usize)
+        .ok_or(DecodeError::Truncated)?;
+    let needed = data_offset
+        .checked_add(
+            pixel_count
+                .checked_mul(bpp_bytes as usize)
+                .ok_or(DecodeError::Truncated)?,
+        )
+        .ok_or(DecodeError::Truncated)?;
     if data.len() < needed {
         return Err(DecodeError::Truncated);
     }
@@ -165,7 +220,9 @@ pub fn scale_fit(src: &RgbaImage, max_w: u32, max_h: u32) -> RgbaImage {
         let y_fp = map_src_fp(dy as i32, th, src.height);
         for dx in 0..tw {
             let x_fp = map_src_fp(dx as i32, tw, src.width);
-            out.push(sample_bilinear_premul(&sample, src.width, src.height, x_fp, y_fp));
+            out.push(sample_bilinear_premul(
+                &sample, src.width, src.height, x_fp, y_fp,
+            ));
         }
     }
     RgbaImage {
@@ -192,8 +249,9 @@ pub fn fit_dimensions(w: u32, h: u32, max_w: u32, max_h: u32) -> (u32, u32) {
 }
 
 /// Encode an [`RgbaImage`] as an uncompressed TGA type-2 (24 bpp BGR) byte
-/// vector — the canonical SIMG/thumbnail container the File Manager decodes.
-/// Top-down origin (descriptor `0x20`) is used so blitters need no Y-flip.
+/// vector — the canonical legacy SIMG/thumbnail container the File Manager
+/// decodes. Top-down origin (descriptor `0x20`) is used so blitters need no
+/// Y-flip. Prefer SIMG v2 (`sun_img::encode_simg_v2`) for new assets.
 pub fn encode_tga_type2_bgr24(img: &RgbaImage) -> Vec<u8> {
     let pixel_count = img.pixel_count();
     let mut out = Vec::with_capacity(18 + pixel_count * 3);
@@ -288,5 +346,43 @@ mod tests {
         assert_eq!(img2.width, img.width);
         assert_eq!(img2.height, img.height);
         assert_eq!(img2.pixel(0, 0), img.pixel(0, 0));
+    }
+
+    #[test]
+    fn simg_v2_roundtrip_matches_legacy_pixels() {
+        let legacy = decode(&tiny_tga()).unwrap();
+        // Build host RGBA from ARGB for encoder.
+        let mut rgba = Vec::with_capacity(legacy.pixel_count() * 4);
+        for px in &legacy.pixels {
+            let a = (*px >> 24) as u8;
+            let r = (*px >> 16) as u8;
+            let g = (*px >> 8) as u8;
+            let b = *px as u8;
+            rgba.extend_from_slice(&[r, g, b, a]);
+        }
+        let host = sun_img::ImageRgba8 {
+            width: legacy.width,
+            height: legacy.height,
+            pixels: rgba,
+        };
+        let v2 = sun_img::encode_simg_v2(&host).unwrap();
+        let img2 = decode(&v2.bytes).expect("v2 decode");
+        assert_eq!(img2, legacy);
+    }
+
+    #[test]
+    fn malformed_v2_does_not_become_tga() {
+        let mut bytes = sun_img::encode_simg_v2(&sun_img::ImageRgba8 {
+            width: 1,
+            height: 1,
+            pixels: alloc::vec![1, 2, 3, 4],
+        })
+        .unwrap()
+        .bytes;
+        bytes[4] = 9; // bad version after magic
+        assert!(matches!(
+            decode(&bytes),
+            Err(DecodeError::SimgV2Unsupported | DecodeError::SimgV2Invalid)
+        ));
     }
 }

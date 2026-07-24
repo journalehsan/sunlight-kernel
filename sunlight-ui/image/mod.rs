@@ -15,5 +15,7 @@ pub use mime_icon::{
     MAX_MIME_ICON_NAME, UNKNOWN_ICON,
 };
 pub use mono_icon::{draw_mono_icon, MonoIcon, MonoIconError};
-pub use simg::{decode as decode_simg, encode_tga_type2_bgr24, scale_fit, DecodeError, RgbaImage};
+pub use simg::{
+    decode as decode_simg, encode_tga_type2_bgr24, scale_fit, DecodeError, RgbaImage,
+};
 pub use tga::TgaImage;

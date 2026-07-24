@@ -16,7 +16,7 @@ use sunlight_ipc::{
     CapabilityToken, ClipMsg, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
-use sunlight_ui::image::{mime_icon, TgaImage};
+use sunlight_ui::image::{decode_simg, mime_icon, TgaImage};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::{
@@ -887,13 +887,30 @@ fn file_type_label(name: &[u8], mime: &[u8]) -> &'static str {
     }
 }
 
-/// Draw a raw TGA type-2 (24bpp) byte slice directly onto `canvas` at `dst`,
-/// scaling with nearest-neighbour. No allocation; reads pixel data inline.
+/// Draw a raw TGA type-2 or SIMG v2 byte slice onto `canvas` at `dst`.
+///
+/// Prefer the toolkit TGA blitter (`draw_tga_icon`) so pixels are opaque ARGB
+/// with correct alpha blending — bare `Color(rgb)` has A=0 and paints a gray
+/// hole on alpha-capable surfaces. SIMG v2 is expanded to TGA-32 at load time
+/// so this path stays zero-alloc per frame; a raw SIMG magic buffer still
+/// decodes once as a fallback.
 fn draw_tga_bytes(canvas: &mut Canvas, data: &[u8], dst: Rect) {
-    if data.len() < 18 {
+    if data.len() >= 4 && data[0..4] == *b"SIMG" {
+        if let Ok(img) = decode_simg(data) {
+            draw_argb_image(canvas, &img, dst);
+        }
         return;
     }
-    if data[2] != 2 {
+    // `TgaImage` needs `'static`; preview buffer is a process static.
+    // SAFETY: `data` must be a subslice of `PREVIEW_SRC_BUF` (or other 'static).
+    // Callers only pass the static preview buffer.
+    let static_data: &'static [u8] = unsafe { core::slice::from_raw_parts(data.as_ptr(), data.len()) };
+    if let Ok(img) = TgaImage::parse(static_data) {
+        canvas.draw_tga_icon(&img, dst);
+        return;
+    }
+    // Fallback: manual sample with *opaque* ARGB (legacy / partial TGA).
+    if data.len() < 18 || data[2] != 2 {
         return;
     }
     let bpp = data[16];
@@ -930,6 +947,7 @@ fn draw_tga_bytes(canvas: &mut Canvas, data: &[u8], dst: Rect) {
     let dw = cx1 - cx0;
     let dh = cy1 - cy0;
 
+    use sunlight_ui::theme::Color;
     for dy in 0..dh {
         let src_y_scale = dy * h / dh;
         let file_row = if top_down {
@@ -943,15 +961,84 @@ fn draw_tga_bytes(canvas: &mut Canvas, data: &[u8], dst: Rect) {
             if idx + 2 >= data.len() {
                 continue;
             }
-            let b = data[idx] as u32;
-            let g = data[idx + 1] as u32;
-            let r = data[idx + 2] as u32;
-            use sunlight_ui::theme::Color;
-            canvas.put_pixel(
-                (cx0 + dx) as i32,
-                (cy0 + dy) as i32,
-                Color((r << 16) | (g << 8) | b),
-            );
+            let b = data[idx];
+            let g = data[idx + 1];
+            let r = data[idx + 2];
+            let a = if bpp == 32 && idx + 3 < data.len() {
+                data[idx + 3]
+            } else {
+                0xFF
+            };
+            if a == 0 {
+                continue;
+            }
+            // Color::rgb/rgba set the high alpha byte; bare RGB would be A=0
+            // and disappear on alpha-composited windows (gray panel square).
+            let color = if a == 0xFF {
+                Color::rgb(r, g, b)
+            } else {
+                Color::rgba(r, g, b, a)
+            };
+            if a == 0xFF {
+                canvas.put_pixel((cx0 + dx) as i32, (cy0 + dy) as i32, color);
+            } else {
+                // Source-over onto existing panel pixel.
+                let x = (cx0 + dx) as i32;
+                let y = (cy0 + dy) as i32;
+                if x >= 0 && y >= 0 && (x as u32) < canvas.width && (y as u32) < canvas.height {
+                    let idx = y as usize * canvas.stride as usize + x as usize;
+                    if idx < canvas.pixels.len() {
+                        canvas.pixels[idx] = color.blend_over(Color(canvas.pixels[idx])).0;
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn draw_argb_image(canvas: &mut Canvas, img: &sunlight_ui::image::RgbaImage, dst: Rect) {
+    use sunlight_ui::theme::Color;
+    if img.width == 0 || img.height == 0 {
+        return;
+    }
+    let cx0 = dst.x.max(0) as u32;
+    let cy0 = dst.y.max(0) as u32;
+    let cx1 = (dst.right() as u32).min(canvas.width);
+    let cy1 = (dst.bottom() as u32).min(canvas.height);
+    if cx0 >= cx1 || cy0 >= cy1 {
+        return;
+    }
+    let dw = cx1 - cx0;
+    let dh = cy1 - cy0;
+    let w = img.width;
+    let h = img.height;
+    for dy in 0..dh {
+        let sy = dy * h / dh;
+        for dx in 0..dw {
+            let sx = dx * w / dw;
+            let px = img.pixel(sx, sy);
+            let a = ((px >> 24) & 0xFF) as u8;
+            let r = ((px >> 16) & 0xFF) as u8;
+            let g = ((px >> 8) & 0xFF) as u8;
+            let b = (px & 0xFF) as u8;
+            if a == 0 {
+                continue;
+            }
+            let color = if a == 0xFF {
+                Color::rgb(r, g, b)
+            } else {
+                Color::rgba(r, g, b, a)
+            };
+            let x = (cx0 + dx) as i32;
+            let y = (cy0 + dy) as i32;
+            if a == 0xFF {
+                canvas.put_pixel(x, y, color);
+            } else if x >= 0 && y >= 0 && (x as u32) < canvas.width && (y as u32) < canvas.height {
+                let idx = y as usize * canvas.stride as usize + x as usize;
+                if idx < canvas.pixels.len() {
+                    canvas.pixels[idx] = color.blend_over(Color(canvas.pixels[idx])).0;
+                }
+            }
         }
     }
 }
@@ -987,24 +1074,32 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 // ---------------------------------------------------------------------------
 
 /// Maximum source file size we will preview. Files larger than this show
-/// "Preview unavailable" without reading. 4 MiB covers the sample pictures.
-const PREVIEW_SRC_BUF_LEN: usize = 4 * 1024 * 1024;
+/// "Preview unavailable" without reading. 8 MiB covers SIMG v2 samples after
+/// expansion to TGA-32 (e.g. 1312×816×4 + header ≈ 4.3 MiB).
+const PREVIEW_SRC_BUF_LEN: usize = 8 * 1024 * 1024;
 
-/// 0 = no preview, 1 = ready (SRC_BUF valid), 2 = failed / unsupported.
+/// 0 = no preview, 1 = ready (SRC_BUF valid TGA bytes), 2 = failed / unsupported.
 static mut PREVIEW_READY: u8 = 0;
-/// Bytes of valid TGA data at the start of PREVIEW_SRC_BUF.
+/// Bytes of valid image data at the start of PREVIEW_SRC_BUF (TGA after expand).
 static mut PREVIEW_SRC_FILLED: usize = 0;
-/// Native dimensions extracted from the TGA header.
+/// Native dimensions (pre-scale) from the file header.
 static mut PREVIEW_SRC_W: u32 = 0;
 static mut PREVIEW_SRC_H: u32 = 0;
-/// Raw file bytes — in BSS, costs nothing in the binary on disk.
+/// 1 if the source file was SIMG v2 (buffer holds expanded TGA-32 for draw).
+static mut PREVIEW_FROM_SIMG_V2: u8 = 0;
+/// Raw file bytes, or expanded TGA-32 for SIMG v2 — BSS, not in the ELF image.
 static mut PREVIEW_SRC_BUF: [u8; PREVIEW_SRC_BUF_LEN] = [0u8; PREVIEW_SRC_BUF_LEN];
 static mut TEXT_PREVIEW_READY: u8 = 0;
 static mut TEXT_PREVIEW_LEN: usize = 0;
 static mut TEXT_PREVIEW_TRUNCATED: u8 = 0;
 static mut TEXT_PREVIEW_BUF: [u8; TEXT_PREVIEW_BUF_LEN] = [0u8; TEXT_PREVIEW_BUF_LEN];
 
-/// Load `path` synchronously into PREVIEW_SRC_BUF and validate the TGA header.
+/// Load `path` into PREVIEW_SRC_BUF for the details preview.
+///
+/// - Legacy TGA type-2: stored as-is (zero-alloc draw path).
+/// - SIMG v2: validated, then decoded once and rewritten as top-down TGA-32 so
+///   per-frame draw stays on the existing TGA path (no re-decompress every frame).
+///
 /// Sets PREVIEW_READY to 1 on success, 2 on any failure.
 fn load_preview_sync(path: &[u8]) {
     unsafe {
@@ -1012,6 +1107,7 @@ fn load_preview_sync(path: &[u8]) {
         PREVIEW_SRC_FILLED = 0;
         PREVIEW_SRC_W = 0;
         PREVIEW_SRC_H = 0;
+        PREVIEW_FROM_SIMG_V2 = 0;
     }
 
     let stat = match libc::stat(path) {
@@ -1024,7 +1120,8 @@ fn load_preview_sync(path: &[u8]) {
         }
     };
     let file_size = stat.size as usize;
-    if file_size > PREVIEW_SRC_BUF_LEN || file_size < 18 {
+    // SIMG v2 header is 36 bytes; TGA needs 18. Reject empty / truncated early.
+    if file_size > PREVIEW_SRC_BUF_LEN || file_size < 4 {
         unsafe {
             PREVIEW_READY = 2;
         }
@@ -1058,19 +1155,58 @@ fn load_preview_sync(path: &[u8]) {
 
     unsafe {
         PREVIEW_SRC_FILLED = total;
-        // Validate TGA type-2 header
-        if total >= 18 && PREVIEW_SRC_BUF[2] == 2 {
-            let bpp = PREVIEW_SRC_BUF[16];
-            let w = u16::from_le_bytes([PREVIEW_SRC_BUF[12], PREVIEW_SRC_BUF[13]]) as u32;
-            let h = u16::from_le_bytes([PREVIEW_SRC_BUF[14], PREVIEW_SRC_BUF[15]]) as u32;
-            if (bpp == 24 || bpp == 32) && w > 0 && h > 0 {
-                PREVIEW_SRC_W = w;
-                PREVIEW_SRC_H = h;
-                PREVIEW_READY = 1;
+        let Some((w, h, _bpp)) = tga_header_dims(&PREVIEW_SRC_BUF[..total]) else {
+            PREVIEW_READY = 2;
+            return;
+        };
+        PREVIEW_SRC_W = w;
+        PREVIEW_SRC_H = h;
+
+        // Expand SIMG v2 → TGA-32 once so draw_tga_bytes stays zero-alloc/frame.
+        if total >= 4 && PREVIEW_SRC_BUF[0..4] == *b"SIMG" {
+            let Ok(decoded) = (|| {
+                let src = &PREVIEW_SRC_BUF[..total];
+                decode_simg(src)
+            })() else {
+                PREVIEW_READY = 2;
+                return;
+            };
+            let pixel_count = decoded.pixel_count();
+            let Some(need) = 18usize
+                .checked_add(pixel_count.checked_mul(4).unwrap_or(usize::MAX))
+            else {
+                PREVIEW_READY = 2;
+                return;
+            };
+            if need > PREVIEW_SRC_BUF_LEN {
+                PREVIEW_READY = 2;
                 return;
             }
+            PREVIEW_SRC_BUF[0..12].copy_from_slice(&[
+                0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            ]);
+            PREVIEW_SRC_BUF[12..14].copy_from_slice(&(decoded.width as u16).to_le_bytes());
+            PREVIEW_SRC_BUF[14..16].copy_from_slice(&(decoded.height as u16).to_le_bytes());
+            PREVIEW_SRC_BUF[16] = 32;
+            PREVIEW_SRC_BUF[17] = 0x28;
+            let mut off = 18usize;
+            for px in &decoded.pixels {
+                PREVIEW_SRC_BUF[off] = *px as u8;
+                PREVIEW_SRC_BUF[off + 1] = (*px >> 8) as u8;
+                PREVIEW_SRC_BUF[off + 2] = (*px >> 16) as u8;
+                PREVIEW_SRC_BUF[off + 3] = (*px >> 24) as u8;
+                off += 4;
+            }
+            PREVIEW_SRC_FILLED = need;
+            PREVIEW_SRC_W = decoded.width;
+            PREVIEW_SRC_H = decoded.height;
+            PREVIEW_FROM_SIMG_V2 = 1;
+        } else if total < 18 {
+            PREVIEW_READY = 2;
+            return;
         }
-        PREVIEW_READY = 2;
+
+        PREVIEW_READY = 1;
     }
 }
 
@@ -3046,9 +3182,14 @@ impl FilesApp {
             }
             y += lh_sm + 4;
 
+            let format_label = if unsafe { PREVIEW_FROM_SIMG_V2 } != 0 {
+                "Format: SIMG v2"
+            } else {
+                "Format: TGA"
+            };
             sf_draw(
                 canvas,
-                "Format: RGBA8888",
+                format_label,
                 left.x,
                 y,
                 &TextStyle::new(FontRole::UiSmall, theme.text),
@@ -3939,10 +4080,25 @@ fn write_number(value: u64, out: &mut [u8], suffix: &[u8]) -> usize {
 /// Empty static byte slice used as the MIME value for folders.
 const EMPTY_BYTES: &[u8] = b"";
 
-/// Parse width/height/bpp from an uncompressed TGA type-2 header. Both `.tga`
-/// and `.simg` files share this on-disk layout (see `image::simg`), so one
-/// parser covers both. Reads only the header — never decodes pixels.
+/// Parse width/height/bpp from an image header.
+/// Supports SIMG v2 and uncompressed TGA type-2 (legacy `.simg` / `.tga`).
+/// Reads only the header — never decodes pixels.
 fn tga_header_dims(buf: &[u8]) -> Option<(u32, u32, u8)> {
+    if buf.len() >= 4 && buf[0..4] == *b"SIMG" {
+        if buf.len() < 36 {
+            return None;
+        }
+        if u16::from_le_bytes([buf[4], buf[5]]) != 2 {
+            return None;
+        }
+        let w = u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]);
+        let h = u32::from_le_bytes([buf[16], buf[17], buf[18], buf[19]]);
+        if w == 0 || h == 0 {
+            return None;
+        }
+        // Canonical v2 is BGRA8.
+        return Some((w, h, 32));
+    }
     if buf.len() < 18 || buf[2] != 2 {
         return None;
     }
