@@ -1168,6 +1168,13 @@ login_timeout_seconds = 30
         b"#!/sunlight/powerctl\n",
     ),
     RamEntry::file(
+        "/bin/thermalctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/thermalctl\n",
+    ),
+    RamEntry::file(
         "/bin/nicectl",
         0,
         0,
@@ -1946,6 +1953,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/powerctl\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/thermalctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/thermalctl\n",
     ),
     RamEntry::file(
         "/usr/bin/fetch",

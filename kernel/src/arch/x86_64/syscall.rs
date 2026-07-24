@@ -1726,6 +1726,13 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             "/bin/powerctl" | "/usr/bin/powerctl" => {
                 crate::ipc::ServiceCapability::PowerControl.bit()
             }
+            "/bin/thermalctl" | "/usr/bin/thermalctl" => {
+                crate::ipc::ServiceCapability::ThermalControl.bit()
+            }
+            "/bin/control-panel" | "/usr/bin/control-panel" => {
+                crate::ipc::ServiceCapability::PowerControl.bit()
+                    | crate::ipc::ServiceCapability::ThermalControl.bit()
+            }
             "/bin/nicectl" | "/usr/bin/nicectl" => {
                 crate::ipc::ServiceCapability::SchedulerControl.bit()
             }

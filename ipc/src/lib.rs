@@ -227,6 +227,8 @@ pub enum ServiceCapability {
     DeviceControl = 20,
     /// Administrative access to the powerd policy service.
     PowerControl = 21,
+    /// Administrative access to the thermal policy service (thermald).
+    ThermalControl = 22,
 }
 
 impl ServiceCapability {
@@ -258,6 +260,7 @@ impl ServiceCapability {
             "network-control" => Some(Self::NetworkControl),
             "device-control" => Some(Self::DeviceControl),
             "power-control" => Some(Self::PowerControl),
+            "thermal-control" => Some(Self::ThermalControl),
             _ => None,
         }
     }
@@ -286,11 +289,12 @@ impl ServiceCapability {
             Self::NetworkControl => "network-control",
             Self::DeviceControl => "device-control",
             Self::PowerControl => "power-control",
+            Self::ThermalControl => "thermal-control",
         }
     }
 }
 
-pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 22] = [
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 23] = [
     ServiceCapability::Network,
     ServiceCapability::Authentication,
     ServiceCapability::Pty,
@@ -313,6 +317,7 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 22] = [
     ServiceCapability::NetworkControl,
     ServiceCapability::DeviceControl,
     ServiceCapability::PowerControl,
+    ServiceCapability::ThermalControl,
 ];
 
 pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'static str> + Clone {
@@ -388,12 +393,16 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::PowerControl.bit() != 0 && name_key == name_to_u64("powerd") {
         return true;
     }
+    if mask & ServiceCapability::ThermalControl.bit() != 0 && name_key == name_to_u64("thermald")
+    {
+        return true;
+    }
     false
 }
 
 /// Brokers ordinary interactive applications may resolve. Keep privileged
 /// control-plane services out of this list: notably spawn, sm, deviced,
-/// sunlightd, networkd, powerd, gcd/proc, niced, and timed.
+/// sunlightd, networkd, powerd, thermald, gcd/proc, niced, and timed.
 fn matches_user_session_service(name_key: u64) -> bool {
     name_key == name_to_u64("vfs")
         || name_key == name_to_u64("display_server")
@@ -451,7 +460,14 @@ mod service_capability_tests {
     #[test]
     fn ordinary_user_session_still_cannot_resolve_control_plane_services() {
         let session = ServiceCapability::UserSession.bit();
-        for name in ["networkd", "deviced", "powerd", "sunlightd", "niced"] {
+        for name in [
+            "networkd",
+            "deviced",
+            "powerd",
+            "thermald",
+            "sunlightd",
+            "niced",
+        ] {
             assert!(!service_capability_allows_hashed_name(
                 session,
                 name_to_u64(name)
@@ -460,6 +476,19 @@ mod service_capability_tests {
         assert!(service_capability_allows_hashed_name(
             session,
             name_to_u64("net")
+        ));
+    }
+
+    #[test]
+    fn thermal_control_resolves_only_thermald() {
+        let thermal = ServiceCapability::ThermalControl.bit();
+        assert!(service_capability_allows_hashed_name(
+            thermal,
+            name_to_u64("thermald")
+        ));
+        assert!(!service_capability_allows_hashed_name(
+            thermal,
+            name_to_u64("powerd")
         ));
     }
 }
@@ -1698,6 +1727,18 @@ pub mod PowerdMsg {
     pub const SET_CUSTOM_POLICY: u64 = 0xD020;
     pub const GET_CUSTOM_POLICY: u64 = 0xD021;
 
+    /// Temporary thermal upper-bound on the effective power mode.
+    /// w0: severity (ThermalConstraintSeverity)
+    /// w1: maximum_allowed_mode (PowerProfile tag; must be concrete, not Auto)
+    /// w2: reason (ThermalConstraintReason)
+    /// w3: source (ThermalConstraintSource)
+    /// w4: monotonic_generation (must be > active generation to replace)
+    pub const SET_THERMAL_CONSTRAINT: u64 = 0xD030;
+    /// Clear a thermal constraint only when w0 generation >= active generation.
+    pub const CLEAR_THERMAL_CONSTRAINT: u64 = 0xD031;
+    /// Extended status: requested, effective, active constraints.
+    pub const GET_POWER_POLICY_STATUS: u64 = 0xD032;
+
     pub const REPLY: u64 = 0xD0FF;
     pub const ERROR: u64 = 0xD0FE;
 
@@ -1705,6 +1746,269 @@ pub mod PowerdMsg {
     pub const ERR_BAD_REQUEST: u64 = 2;
     pub const ERR_UNAVAILABLE: u64 = 3;
     pub const ERR_UNSUPPORTED: u64 = 4;
+    pub const ERR_STALE_GENERATION: u64 = 5;
+    pub const ERR_DENIED: u64 = 6;
+}
+
+/// thermald: thermal policy manager (sensors, fan policy, thermal constraints).
+/// Registered as "thermald". Does not own user power-mode selection.
+#[allow(non_snake_case)]
+pub mod ThermaldMsg {
+    pub const GET_STATUS: u64 = 0xD201;
+    pub const LIST_SENSORS: u64 = 0xD202; // w0 = index
+    pub const LIST_COOLING: u64 = 0xD203; // w0 = index
+    pub const GET_PROFILE: u64 = 0xD204;
+    pub const SET_PROFILE: u64 = 0xD210; // w0 = CoolingProfile tag
+    pub const GET_POLICY: u64 = 0xD205;
+    pub const SET_VALIDATED_CUSTOM_POLICY: u64 = 0xD220; // optional; may ERR_UNSUPPORTED
+    pub const RESET_SAFE_DEFAULTS: u64 = 0xD211;
+    pub const FORCE_FIRMWARE_AUTO: u64 = 0xD212;
+    /// Service-internal / privileged lifecycle hooks (suspend/resume notification).
+    pub const PREPARE_SUSPEND: u64 = 0xD230;
+    pub const RESUME: u64 = 0xD231;
+
+    pub const REPLY: u64 = 0xD2FF;
+    pub const ERROR: u64 = 0xD2FE;
+
+    pub const ERR_NOT_FOUND: u64 = 1;
+    pub const ERR_BAD_REQUEST: u64 = 2;
+    pub const ERR_UNAVAILABLE: u64 = 3;
+    pub const ERR_UNSUPPORTED: u64 = 4;
+    pub const ERR_DENIED: u64 = 5;
+    pub const ERR_INVALID_CONFIG: u64 = 6;
+}
+
+/// Severity of a temporary thermal constraint published to powerd.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThermalConstraintSeverity {
+    None = 0,
+    Warm = 1,
+    Hot = 2,
+    Critical = 3,
+}
+
+impl ThermalConstraintSeverity {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Warm,
+            2 => Self::Hot,
+            3 => Self::Critical,
+            _ => Self::None,
+        }
+    }
+}
+
+/// Why powerd is applying a thermal upper bound.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThermalConstraintReason {
+    None = 0,
+    ThermalWarm = 1,
+    ThermalHot = 2,
+    ThermalCritical = 3,
+    SensorFailure = 4,
+    FanFailure = 5,
+}
+
+impl ThermalConstraintReason {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::ThermalWarm,
+            2 => Self::ThermalHot,
+            3 => Self::ThermalCritical,
+            4 => Self::SensorFailure,
+            5 => Self::FanFailure,
+            _ => Self::None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::ThermalWarm => "ThermalWarm",
+            Self::ThermalHot => "ThermalHot",
+            Self::ThermalCritical => "ThermalCritical",
+            Self::SensorFailure => "SensorFailure",
+            Self::FanFailure => "FanFailure",
+        }
+    }
+}
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThermalConstraintSource {
+    None = 0,
+    Thermald = 1,
+}
+
+impl ThermalConstraintSource {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Thermald,
+            _ => Self::None,
+        }
+    }
+}
+
+/// Overall thermal classification used by thermald / UI / CLI.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThermalState {
+    Normal = 0,
+    Warm = 1,
+    Hot = 2,
+    Critical = 3,
+}
+
+impl ThermalState {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Warm,
+            2 => Self::Hot,
+            3 => Self::Critical,
+            _ => Self::Normal,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::Warm => "Warm",
+            Self::Hot => "Hot",
+            Self::Critical => "Critical",
+        }
+    }
+}
+
+/// Fan control mode reported by thermald.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FanControlMode {
+    FirmwareAuto = 0,
+    Managed = 1,
+    FullSpeed = 2,
+    Unavailable = 3,
+    MonitoringOnly = 4,
+}
+
+impl FanControlMode {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Managed,
+            2 => Self::FullSpeed,
+            3 => Self::Unavailable,
+            4 => Self::MonitoringOnly,
+            _ => Self::FirmwareAuto,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::FirmwareAuto => "FirmwareAuto",
+            Self::Managed => "Managed",
+            Self::FullSpeed => "FullSpeed",
+            Self::Unavailable => "Unavailable",
+            Self::MonitoringOnly => "MonitoringOnly",
+        }
+    }
+}
+
+/// Cooling preference (thermal fan bias). Not a powerd power mode.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoolingProfile {
+    Balanced = 0,
+    Quiet = 1,
+    Cool = 2,
+    Performance = 3,
+}
+
+impl CoolingProfile {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Quiet,
+            2 => Self::Cool,
+            3 => Self::Performance,
+            _ => Self::Balanced,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Balanced => "Balanced",
+            Self::Quiet => "Quiet",
+            Self::Cool => "Cool",
+            Self::Performance => "Performance",
+        }
+    }
+}
+
+/// Validated ThinkPad-style discrete fan levels (0 = min/off, 7 = high, 8 = full-speed).
+/// Never includes a "disengaged" / unbounded mode.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FanLevel {
+    Level0 = 0,
+    Level1 = 1,
+    Level2 = 2,
+    Level3 = 3,
+    Level4 = 4,
+    Level5 = 5,
+    Level6 = 6,
+    Level7 = 7,
+    FullSpeed = 8,
+}
+
+impl FanLevel {
+    pub const fn from_u64(v: u64) -> Option<Self> {
+        match v {
+            0 => Some(Self::Level0),
+            1 => Some(Self::Level1),
+            2 => Some(Self::Level2),
+            3 => Some(Self::Level3),
+            4 => Some(Self::Level4),
+            5 => Some(Self::Level5),
+            6 => Some(Self::Level6),
+            7 => Some(Self::Level7),
+            8 => Some(Self::FullSpeed),
+            _ => None,
+        }
+    }
+
+    pub const fn as_u8(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Managed-fan lease health as observed by thermald.
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeaseState {
+    None = 0,
+    Healthy = 1,
+    Expired = 2,
+    Unavailable = 3,
+}
+
+impl LeaseState {
+    pub const fn from_u64(v: u64) -> Self {
+        match v {
+            1 => Self::Healthy,
+            2 => Self::Expired,
+            3 => Self::Unavailable,
+            _ => Self::None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Healthy => "Healthy",
+            Self::Expired => "Expired",
+            Self::Unavailable => "Unavailable",
+        }
+    }
 }
 
 #[allow(non_snake_case)]

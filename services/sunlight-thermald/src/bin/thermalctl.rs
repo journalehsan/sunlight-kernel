@@ -1,0 +1,381 @@
+//! thermalctl — CLI for sunlight-thermald.
+
+#![no_std]
+#![no_main]
+
+extern crate alloc;
+
+struct BumpAllocator;
+
+unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        static mut HEAP: [u8; 32 * 1024] = [0; 32 * 1024];
+        static mut NEXT: usize = 0;
+        let start = NEXT;
+        let align = layout.align();
+        let aligned = (start + align - 1) & !(align - 1);
+        let end = aligned + layout.size();
+        if end > HEAP.len() {
+            return core::ptr::null_mut();
+        }
+        NEXT = end;
+        HEAP.as_mut_ptr().add(aligned)
+    }
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
+}
+
+#[global_allocator]
+static BUMP: BumpAllocator = BumpAllocator;
+
+use core::fmt::Write;
+use sunlight_ipc::{
+    ipc_call, nameserver_lookup, CoolingProfile, FanControlMode, FanLevel, IpcMsg, LeaseState,
+    PowerProfile, ThermalState, ThermaldMsg,
+};
+
+const MAX_ARGS: usize = 16;
+
+fn stdout_write(s: &str) {
+    let mut data = s.as_bytes();
+    while !data.is_empty() {
+        match sunlight_libc::write(sunlight_libc::STDOUT, data) {
+            Ok(n) if n > 0 => data = &data[n..],
+            _ => break,
+        }
+    }
+}
+
+macro_rules! println {
+    ($($arg:tt)*) => {{
+        use core::fmt::Write;
+        let mut buf = heapless::String::<512>::new();
+        let _ = write!(&mut buf, $($arg)*);
+        stdout_write(&buf);
+        stdout_write("\n");
+    }};
+}
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    println!("thermalctl: PANIC");
+    sunlight_ipc::ProcessExit::exit(101);
+}
+
+#[no_mangle]
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    let mut storage = [""; MAX_ARGS];
+    let count = unsafe { collect_args(argc, argv, &mut storage) };
+    let args = &storage[..count];
+
+    let Some(cap) = nameserver_lookup("thermald") else {
+        println!("thermalctl: thermald not running");
+        sunlight_ipc::ProcessExit::exit(1);
+    };
+
+    let sub = args.get(1).copied().unwrap_or("status");
+    let code = match sub {
+        "status" => {
+            print_status(cap);
+            0
+        }
+        "sensors" => {
+            print_sensors(cap);
+            0
+        }
+        "fans" => {
+            print_fans(cap);
+            0
+        }
+        "profile" => {
+            if args.len() >= 3 && args[2] == "set" {
+                if args.len() < 4 {
+                    println!("Usage: thermalctl profile set <balanced|quiet|cool|performance>");
+                    1
+                } else {
+                    do_set_profile(cap, args[3])
+                }
+            } else {
+                print_profile(cap);
+                0
+            }
+        }
+        "auto" => do_auto(cap),
+        "reset-defaults" | "reset" => do_reset(cap),
+        _ => {
+            print_usage();
+            1
+        }
+    };
+
+    sunlight_ipc::ProcessExit::exit(code);
+}
+
+fn print_usage() {
+    println!("Usage: thermalctl <status|sensors|fans|profile|auto|reset-defaults>");
+    println!("  thermalctl status");
+    println!("  thermalctl sensors");
+    println!("  thermalctl fans");
+    println!("  thermalctl profile");
+    println!("  thermalctl profile set <balanced|quiet|cool|performance>");
+    println!("  thermalctl auto");
+    println!("  thermalctl reset-defaults");
+}
+
+fn profile_from_str(s: &str) -> Option<CoolingProfile> {
+    match s {
+        "balanced" | "Balanced" => Some(CoolingProfile::Balanced),
+        "quiet" | "Quiet" => Some(CoolingProfile::Quiet),
+        "cool" | "Cool" => Some(CoolingProfile::Cool),
+        "performance" | "Performance" => Some(CoolingProfile::Performance),
+        _ => None,
+    }
+}
+
+struct StatusView {
+    state: ThermalState,
+    fan_mode: FanControlMode,
+    profile: CoolingProfile,
+    lease: LeaseState,
+    temp_mc: Option<i32>,
+    level: FanLevel,
+    rpm: u32,
+    power_req: PowerProfile,
+    power_eff: PowerProfile,
+    constraint: bool,
+    on_ac: Option<bool>,
+    errors: u32,
+    model: u64,
+}
+
+fn fetch_status(cap: sunlight_ipc::CapabilityToken) -> Option<StatusView> {
+    let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::GET_STATUS));
+    if reply.label != ThermaldMsg::REPLY {
+        return None;
+    }
+    let w0 = reply.words[0];
+    let w1 = reply.words[1];
+    let w2 = reply.words[2];
+    let w3 = reply.words[3];
+    let w4 = reply.words[4];
+    let temp_bits = w1 as u32 as i32;
+    let temp_mc = if temp_bits == i32::MIN {
+        None
+    } else {
+        Some(temp_bits)
+    };
+    let on_ac = if (w3 & (1 << 16)) != 0 {
+        Some((w3 & (1 << 17)) != 0)
+    } else {
+        None
+    };
+    Some(StatusView {
+        state: ThermalState::from_u64(w0 & 0xff),
+        fan_mode: FanControlMode::from_u64((w0 >> 8) & 0xff),
+        profile: CoolingProfile::from_u64((w0 >> 16) & 0xff),
+        lease: LeaseState::from_u64((w0 >> 24) & 0xff),
+        temp_mc,
+        level: FanLevel::from_u64(w2 & 0xff).unwrap_or(FanLevel::Level0),
+        rpm: ((w2 >> 8) & 0xffff) as u32,
+        power_req: PowerProfile::from_u64(w3 & 0xff),
+        power_eff: PowerProfile::from_u64((w3 >> 8) & 0xff),
+        constraint: (w3 & (1 << 24)) != 0,
+        on_ac,
+        errors: (w4 & 0xffff_ffff) as u32,
+        model: (w4 >> 32) & 0xff,
+    })
+}
+
+fn fmt_temp(mc: Option<i32>) -> heapless::String<16> {
+    let mut s = heapless::String::new();
+    match mc {
+        Some(t) => {
+            let whole = t / 1000;
+            let _ = write!(s, "{}°C", whole);
+        }
+        None => {
+            let _ = s.push_str("n/a");
+        }
+    }
+    s
+}
+
+fn model_name(tag: u64) -> &'static str {
+    match tag {
+        1 => "Generic",
+        2 => "ThinkPad T440p",
+        3 => "ThinkPad T480",
+        _ => "Unknown",
+    }
+}
+
+fn print_status(cap: sunlight_ipc::CapabilityToken) {
+    let Some(st) = fetch_status(cap) else {
+        println!("thermalctl: failed to get status");
+        return;
+    };
+    let temp = fmt_temp(st.temp_mc);
+    let level_str = match st.level {
+        FanLevel::FullSpeed => "full-speed",
+        other => {
+            // numeric
+            match other {
+                FanLevel::Level0 => "0",
+                FanLevel::Level1 => "1",
+                FanLevel::Level2 => "2",
+                FanLevel::Level3 => "3",
+                FanLevel::Level4 => "4",
+                FanLevel::Level5 => "5",
+                FanLevel::Level6 => "6",
+                FanLevel::Level7 => "7",
+                FanLevel::FullSpeed => "full-speed",
+            }
+        }
+    };
+
+    println!("State: {}", st.state.as_str());
+    println!("CPU: {}", temp.as_str());
+    if st.rpm > 0 {
+        println!(
+            "Fan: {}, level {}, {} RPM",
+            st.fan_mode.as_str(),
+            level_str,
+            st.rpm
+        );
+    } else {
+        println!("Fan: {}, level {}", st.fan_mode.as_str(), level_str);
+    }
+    println!("Profile: {} (cooling preference)", st.profile.as_str());
+    println!(
+        "Power policy: requested {} / effective {}",
+        st.power_req.as_str(),
+        st.power_eff.as_str()
+    );
+    if st.constraint {
+        println!("Thermal constraint: active");
+    }
+    println!("Lease: {}", st.lease.as_str());
+    println!("Hardware: {}", model_name(st.model));
+    match st.on_ac {
+        Some(true) => println!("Power source: AC"),
+        Some(false) => println!("Power source: Battery"),
+        None => println!("Power source: unknown"),
+    }
+    if st.errors != 0 {
+        println!("Errors: flags={:#x}", st.errors);
+        if st.errors & 0x40 != 0 {
+            println!("Note: monitoring-only or unsupported hardware (manual fan control disabled)");
+        }
+        if st.errors & 0x1 != 0 {
+            println!("Note: CPU temperature sensor unavailable");
+        }
+        if st.errors & 0x80 != 0 {
+            println!("Note: powerd unavailable; power clamping deferred");
+        }
+    }
+}
+
+fn print_sensors(cap: sunlight_ipc::CapabilityToken) {
+    let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::LIST_SENSORS).word(0, 0));
+    if reply.label != ThermaldMsg::REPLY {
+        println!("thermalctl: no sensors");
+        return;
+    }
+    let valid = reply.words[1] != 0;
+    let temp_bits = reply.words[2] as u32 as i32;
+    println!("Sensors:");
+    if valid {
+        println!("  [0] CPU package: {}°C", temp_bits / 1000);
+    } else {
+        println!("  [0] CPU package: unavailable (not 0°C)");
+    }
+}
+
+fn print_fans(cap: sunlight_ipc::CapabilityToken) {
+    let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::LIST_COOLING).word(0, 0));
+    if reply.label != ThermaldMsg::REPLY {
+        println!("thermalctl: no cooling devices");
+        return;
+    }
+    let mode = FanControlMode::from_u64(reply.words[1]);
+    let level = FanLevel::from_u64(reply.words[2]).unwrap_or(FanLevel::Level0);
+    let rpm = reply.words[3];
+    println!("Cooling devices:");
+    println!("  [0] Fan mode={}", mode.as_str());
+    println!("      requested_level={}", level as u64);
+    if rpm > 0 {
+        println!("      rpm={}", rpm);
+    } else {
+        println!("      rpm=unavailable");
+    }
+}
+
+fn print_profile(cap: sunlight_ipc::CapabilityToken) {
+    let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::GET_PROFILE));
+    if reply.label != ThermaldMsg::REPLY {
+        println!("thermalctl: profile unavailable");
+        return;
+    }
+    let p = CoolingProfile::from_u64(reply.words[0]);
+    println!("Cooling profile: {}", p.as_str());
+    if p == CoolingProfile::Balanced {
+        println!("  (Recommended default — verified T440p curve when managed)");
+    }
+}
+
+fn do_set_profile(cap: sunlight_ipc::CapabilityToken, name: &str) -> i32 {
+    let Some(p) = profile_from_str(name) else {
+        println!("thermalctl: unknown profile '{}'", name);
+        println!("valid: balanced, quiet, cool, performance");
+        return 1;
+    };
+    let reply = ipc_call(
+        cap,
+        IpcMsg::with_label(ThermaldMsg::SET_PROFILE).word(0, p as u64),
+    );
+    if reply.label != ThermaldMsg::REPLY {
+        println!("thermalctl: set failed");
+        return 1;
+    }
+    println!("cooling profile: {}", p.as_str());
+    0
+}
+
+fn do_auto(cap: sunlight_ipc::CapabilityToken) -> i32 {
+    let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::FORCE_FIRMWARE_AUTO));
+    if reply.label != ThermaldMsg::REPLY {
+        println!("thermalctl: auto failed");
+        return 1;
+    }
+    println!("fan control: FirmwareAuto requested");
+    0
+}
+
+fn do_reset(cap: sunlight_ipc::CapabilityToken) -> i32 {
+    let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::RESET_SAFE_DEFAULTS));
+    if reply.label != ThermaldMsg::REPLY {
+        println!("thermalctl: reset failed");
+        return 1;
+    }
+    println!("safe defaults restored");
+    0
+}
+
+unsafe fn collect_args<'a>(argc: u64, argv: *const *const u8, out: &mut [&'a str]) -> usize {
+    if argv.is_null() {
+        return 0;
+    }
+    let mut count = 0usize;
+    for i in 0..(argc as usize).min(out.len()) {
+        let ptr = *argv.add(i);
+        if ptr.is_null() {
+            break;
+        }
+        let mut len = 0usize;
+        while len < 256 && *ptr.add(len) != 0 {
+            len += 1;
+        }
+        out[count] = core::str::from_utf8(core::slice::from_raw_parts(ptr, len)).unwrap_or("");
+        count += 1;
+    }
+    count
+}

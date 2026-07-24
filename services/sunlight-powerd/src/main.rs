@@ -1,19 +1,9 @@
 //! powerd v0 — SunlightOS central power profile policy service.
 //!
-//! v0 purpose:
-//! - Establish the profile model (Turbo..Auto) and PowerPolicy knobs.
-//! - Provide a tiny, reliable IPC surface and powerctl.
-//! - Compute Auto effective profile from a simple PowerContext.
-//! - Keep kernel small: all policy lives here in userspace.
-//!
-//! Non-goals for v0:
-//! - Real ACPI battery driver integration (model is ready; values may be unknown).
-//! - CPU freq scaling, thermal, display effects, scheduler bias consumers.
-//! - Persistence of selected profile (future via KV/sm).
-//!
-//! Future hooks (stubs/TODOs in code):
-//! - Battery / AC presence from a future power/acpi service or deviced Power driver.
-//! - Notify scheduler (niced), cache manager, prefetch, Vortex/display, networkd, sm.
+//! Owns user-selected power modes (RequestedMode) and computes EffectiveMode
+//! as the safest intersection of the user choice and temporary safety
+//! constraints (thermal). Thermald may publish/clear thermal constraints;
+//! powerd never calls back into thermald while applying one.
 //!
 //! Registered as "powerd".
 
@@ -22,7 +12,8 @@
 
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg,
-    PowerPolicy, PowerProfile, PowerdMsg,
+    PowerPolicy, PowerProfile, PowerdMsg, ThermalConstraintReason, ThermalConstraintSeverity,
+    ThermalConstraintSource,
 };
 
 /// Simple in-memory context. v0 treats missing data as None / safe defaults.
@@ -47,15 +38,26 @@ impl Default for PowerContext {
     }
 }
 
+#[derive(Clone, Copy)]
+struct ThermalConstraint {
+    severity: ThermalConstraintSeverity,
+    maximum_allowed_mode: PowerProfile,
+    reason: ThermalConstraintReason,
+    source: ThermalConstraintSource,
+    generation: u64,
+}
+
 struct PowerState {
-    selected: PowerProfile,
+    /// Persistent user choice (never overwritten by thermal).
+    requested: PowerProfile,
     context: PowerContext,
+    thermal: Option<ThermalConstraint>,
 }
 
 impl PowerState {
     const fn new() -> Self {
         Self {
-            selected: PowerProfile::Balanced,
+            requested: PowerProfile::Balanced,
             context: PowerContext {
                 on_ac: None,
                 battery_percent: None,
@@ -63,47 +65,92 @@ impl PowerState {
                 load_percent: None,
                 user_active: true,
             },
+            thermal: None,
+        }
+    }
+
+    /// User/auto base mode before thermal intersection.
+    fn base_mode(&self) -> PowerProfile {
+        if self.requested == PowerProfile::Auto {
+            choose_auto_profile(&self.context)
+        } else {
+            self.requested
         }
     }
 
     fn effective(&self) -> PowerProfile {
-        if self.selected == PowerProfile::Auto {
-            choose_auto_profile(&self.context)
-        } else {
-            self.selected
-        }
+        let base = self.base_mode();
+        let Some(t) = self.thermal else {
+            return base;
+        };
+        intersect_modes(base, t.maximum_allowed_mode)
     }
 
     fn current_policy(&self) -> PowerPolicy {
-        // For Custom in v0 we map to a conservative Balanced-derived policy.
-        // Real Custom editing is a future feature.
         let eff = self.effective();
         let mut p = PowerPolicy::from_profile(eff);
-        if self.selected == PowerProfile::Custom {
-            p.selected_profile = PowerProfile::Custom;
-            // Keep the concrete effective knobs computed above.
-        }
+        p.selected_profile = self.requested;
+        p.effective_profile = eff;
         p
     }
 
     fn set_profile(&mut self, p: PowerProfile) {
-        self.selected = p;
+        self.requested = p;
     }
 
     fn set_auto(&mut self) {
-        self.selected = PowerProfile::Auto;
+        self.requested = PowerProfile::Auto;
     }
 
-    /// Best-effort context update from IPC. Unknowns remain None/false.
+    fn set_thermal_constraint(
+        &mut self,
+        severity: ThermalConstraintSeverity,
+        max_mode: PowerProfile,
+        reason: ThermalConstraintReason,
+        source: ThermalConstraintSource,
+        generation: u64,
+    ) -> Result<(), u64> {
+        if matches!(max_mode, PowerProfile::Auto) {
+            return Err(PowerdMsg::ERR_BAD_REQUEST);
+        }
+        if let Some(active) = self.thermal {
+            if generation < active.generation {
+                return Err(PowerdMsg::ERR_STALE_GENERATION);
+            }
+        }
+        if severity == ThermalConstraintSeverity::None {
+            // Treat as clear only if generation is current enough.
+            if let Some(active) = self.thermal {
+                if generation < active.generation {
+                    return Err(PowerdMsg::ERR_STALE_GENERATION);
+                }
+            }
+            self.thermal = None;
+            return Ok(());
+        }
+        self.thermal = Some(ThermalConstraint {
+            severity,
+            maximum_allowed_mode: max_mode,
+            reason,
+            source,
+            generation,
+        });
+        Ok(())
+    }
+
+    fn clear_thermal_constraint(&mut self, generation: u64) -> Result<(), u64> {
+        if let Some(active) = self.thermal {
+            if generation < active.generation {
+                return Err(PowerdMsg::ERR_STALE_GENERATION);
+            }
+        }
+        // Retain conservative effective mode when thermald dies: we do NOT
+        // auto-clear on timeout here. Clear only via explicit Clear with gen.
+        self.thermal = None;
+        Ok(())
+    }
+
     fn update_context(&mut self, msg: &IpcMsg) {
-        // Packing chosen for v0 (fits in few words, easy to extend):
-        // word0: flags byte:
-        //   bit0 = on_ac_known, bit1 = on_ac_value
-        //   bit2 = battery_known, bit3..10 = battery_percent (if known)
-        //   bit11 = battery_present
-        //   bit12 = load_known, bit13..20 = load_percent
-        //   bit21 = user_active
-        // word1 reserved for future (thermal, etc.)
         let w = msg.words[0];
         let on_ac_known = (w & 0x1) != 0;
         let on_ac_val = (w & 0x2) != 0;
@@ -128,8 +175,34 @@ impl PowerState {
     }
 }
 
-/// v0 Auto policy — conservative and safe.
-/// Matches request, with small adjustments for unknown cases.
+/// Lower rank = more aggressive.
+fn mode_rank(p: PowerProfile) -> u8 {
+    match p {
+        PowerProfile::Turbo => 0,
+        PowerProfile::Performance => 1,
+        PowerProfile::Balanced | PowerProfile::Auto | PowerProfile::Custom => 2,
+        PowerProfile::LowPower => 3,
+        PowerProfile::Stamina => 4,
+    }
+}
+
+fn intersect_modes(requested_base: PowerProfile, thermal_max: PowerProfile) -> PowerProfile {
+    let base = match requested_base {
+        PowerProfile::Auto | PowerProfile::Custom => PowerProfile::Balanced,
+        other => other,
+    };
+    let tmax = match thermal_max {
+        PowerProfile::Auto | PowerProfile::Custom => PowerProfile::Balanced,
+        other => other,
+    };
+    // Lower rank = more aggressive. Clamp if requested exceeds thermal max.
+    if mode_rank(base) < mode_rank(tmax) {
+        tmax
+    } else {
+        base
+    }
+}
+
 fn choose_auto_profile(ctx: &PowerContext) -> PowerProfile {
     if ctx.on_ac == Some(true) {
         if ctx.load_percent.unwrap_or(0) > 70 {
@@ -146,7 +219,6 @@ fn choose_auto_profile(ctx: &PowerContext) -> PowerProfile {
             PowerProfile::Balanced
         }
     } else {
-        // Unknown power source and no battery info: stay conservative.
         PowerProfile::Balanced
     }
 }
@@ -169,11 +241,7 @@ fn reply_err(code: u64) -> IpcMsg {
     IpcMsg::with_label(PowerdMsg::ERROR).word(0, code)
 }
 
-fn reply_ok_status(state: &PowerState) -> IpcMsg {
-    let sel = state.selected as u64;
-    let eff = state.effective() as u64;
-    let ctx = &state.context;
-    // Pack small context snapshot for status consumers.
+fn pack_context_word(ctx: &PowerContext) -> u64 {
     let mut w2: u64 = 0;
     if let Some(ac) = ctx.on_ac {
         w2 |= 1;
@@ -195,23 +263,43 @@ fn reply_ok_status(state: &PowerState) -> IpcMsg {
     if ctx.user_active {
         w2 |= 1 << 21;
     }
+    w2
+}
+
+fn reply_ok_status(state: &PowerState) -> IpcMsg {
+    let sel = state.requested as u64;
+    let eff = state.effective() as u64;
+    let w2 = pack_context_word(&state.context);
+    // word3: thermal constraint snapshot
+    let mut w3: u64 = 0;
+    if let Some(t) = state.thermal {
+        w3 |= 1; // present
+        w3 |= (t.severity as u64) << 8;
+        w3 |= (t.maximum_allowed_mode as u64) << 16;
+        w3 |= (t.reason as u64) << 24;
+        w3 |= (t.generation & 0xffff) << 32;
+    }
     IpcMsg::with_label(PowerdMsg::REPLY)
         .word(0, sel)
         .word(1, eff)
         .word(2, w2)
+        .word(3, w3)
 }
 
 fn reply_policy(state: &PowerState) -> IpcMsg {
     let pol = state.current_policy();
-    // word0: selected (low 8) | effective (next 8)
     let w0 = (pol.selected_profile as u64) | ((pol.effective_profile as u64) << 8);
-    // word1: cache | prefetch<<8 | effects<<16 | sched<<24 | bg<<32
     let w1 = (pol.cache_mode as u64)
         | ((pol.prefetch_mode as u64) << 8)
         | ((pol.effects_mode as u64) << 16)
         | ((pol.scheduler_bias as u64) << 24)
         | (if pol.background_work_allowed { 1u64 } else { 0 } << 32);
     IpcMsg::with_label(PowerdMsg::REPLY).word(0, w0).word(1, w1)
+}
+
+fn reply_power_policy_status(state: &PowerState) -> IpcMsg {
+    // Same packing as GET_STATUS plus explicit constraint fields for thermald/UI.
+    reply_ok_status(state)
 }
 
 #[macro_export]
@@ -232,7 +320,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    debug_log("[POWERD] powerd v0 starting");
+    debug_log("[POWERD] powerd v0 starting (thermal constraints enabled)");
     let ep = endpoint_create();
     nameserver_register("powerd", ep);
     debug_log("[POWERD] registered as 'powerd'");
@@ -242,11 +330,13 @@ pub extern "C" fn _start() -> ! {
     let mut msg = ipc_recv(ep);
     loop {
         let reply = match msg.label {
-            PowerdMsg::GET_STATUS | PowerdMsg::GET_PROFILE => reply_ok_status(&state),
+            PowerdMsg::GET_STATUS | PowerdMsg::GET_PROFILE | PowerdMsg::GET_POWER_POLICY_STATUS => {
+                reply_power_policy_status(&state)
+            }
             PowerdMsg::SET_PROFILE => {
                 let p = PowerProfile::from_u64(msg.words[0]);
                 state.set_profile(p);
-                serial_println!("[POWERD] set profile -> {}", profile_name(p));
+                serial_println!("[POWERD] set requested profile -> {}", profile_name(p));
                 reply_ok_status(&state)
             }
             PowerdMsg::SET_AUTO => {
@@ -268,11 +358,39 @@ pub extern "C" fn _start() -> ! {
             PowerdMsg::GET_POLICY => reply_policy(&state),
             PowerdMsg::UPDATE_CONTEXT => {
                 state.update_context(&msg);
-                // Recompute is implicit on next queries.
                 reply_ok_status(&state)
             }
+            PowerdMsg::SET_THERMAL_CONSTRAINT => {
+                let severity = ThermalConstraintSeverity::from_u64(msg.words[0]);
+                let max_mode = PowerProfile::from_u64(msg.words[1]);
+                let reason = ThermalConstraintReason::from_u64(msg.words[2]);
+                let source = ThermalConstraintSource::from_u64(msg.words[3]);
+                let generation = msg.words[4];
+                match state.set_thermal_constraint(severity, max_mode, reason, source, generation)
+                {
+                    Ok(()) => {
+                        serial_println!(
+                            "[POWERD] thermal constraint gen={} max={} reason={}",
+                            generation,
+                            profile_name(max_mode),
+                            reason.as_str()
+                        );
+                        reply_ok_status(&state)
+                    }
+                    Err(code) => reply_err(code),
+                }
+            }
+            PowerdMsg::CLEAR_THERMAL_CONSTRAINT => {
+                let generation = msg.words[0];
+                match state.clear_thermal_constraint(generation) {
+                    Ok(()) => {
+                        serial_println!("[POWERD] thermal constraint cleared gen={}", generation);
+                        reply_ok_status(&state)
+                    }
+                    Err(code) => reply_err(code),
+                }
+            }
             PowerdMsg::SET_CUSTOM_POLICY | PowerdMsg::GET_CUSTOM_POLICY => {
-                // v0: explicit unsupported until real custom policy store exists.
                 reply_err(PowerdMsg::ERR_UNSUPPORTED)
             }
             _ => reply_err(PowerdMsg::ERR_BAD_REQUEST),

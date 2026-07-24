@@ -84,6 +84,18 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release", "--bin", "powerd"],
         },
+        EmbeddedBinary {
+            package: "sunlight-thermald",
+            output: "thermald",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "thermald"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-thermald",
+            output: "thermalctl",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "thermalctl"],
+        },
         // vfs-server (pulls in sunlight-fs which seeds /etc/locale.conf, /etc/locale.gen etc.)
         EmbeddedBinary {
             package: "sunlight-vfs-server",

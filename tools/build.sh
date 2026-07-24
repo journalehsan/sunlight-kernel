@@ -45,6 +45,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-deviced --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-networkd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-resolved --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-powerd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thermald --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release

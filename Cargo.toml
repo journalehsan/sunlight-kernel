@@ -67,6 +67,7 @@ members = [
     "services/sunlight-networkd",
     "services/sunlight-resolved",
     "services/sunlight-powerd",
+    "services/sunlight-thermald",
     "services/solar",
     "sun-font",
     "sunlight-bench",

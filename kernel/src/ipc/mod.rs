@@ -893,6 +893,7 @@ fn registration_identity_matches(process_name: &str, registered_name: u64) -> bo
         name if name == name_hash("niced") => "niced",
         name if name == name_hash("resolved") => "resolved",
         name if name == name_hash("powerd") => "powerd",
+        name if name == name_hash("thermald") => "thermald",
         name if name == name_hash("networkd") => "networkd",
         name if name == name_hash("deviced") => "deviced",
         name if name == name_hash("timed") => "timed",

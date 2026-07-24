@@ -153,7 +153,7 @@ fn print_status(cap: sunlight_ipc::CapabilityToken) {
     };
 
     println!("Power:");
-    println!("  selected:  {}", profile_str(sel));
+    println!("  requested: {}", profile_str(sel));
     println!("  effective: {}", profile_str(eff));
 
     let ac_str = match on_ac {
@@ -167,6 +167,27 @@ fn print_status(cap: sunlight_ipc::CapabilityToken) {
         println!("  Battery:   {}%", bp);
     } else {
         println!("  Battery:   unknown");
+    }
+
+    // word3: thermal constraint (present when bit0 set)
+    let w3 = reply.words[3];
+    if (w3 & 1) != 0 {
+        let max = PowerProfile::from_u64((w3 >> 16) & 0xff);
+        let reason = ((w3 >> 24) & 0xff) as u64;
+        let reason_s = match reason {
+            1 => "ThermalWarm",
+            2 => "ThermalHot",
+            3 => "ThermalCritical",
+            4 => "SensorFailure",
+            5 => "FanFailure",
+            _ => "Unknown",
+        };
+        println!("  constraint: thermal max={} ({})", profile_str(max), reason_s);
+        if sel != eff {
+            println!("  note:      effective reduced by thermal safety");
+        }
+    } else {
+        println!("  constraint: none");
     }
 }
 

@@ -1,0 +1,23 @@
+[package]
+name = "sunlight-thermald"
+version = "0.2.2302-alpha.1"
+
+edition = "2021"
+description = "SunlightOS thermal policy manager (thermald) and thermalctl"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+heapless = "0.8"
+
+[lib]
+name = "sunlight_thermald"
+path = "src/lib.rs"
+
+[[bin]]
+name = "thermald"
+path = "src/main.rs"
+
+[[bin]]
+name = "thermalctl"
+path = "src/bin/thermalctl.rs"
