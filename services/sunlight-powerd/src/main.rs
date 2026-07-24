@@ -79,11 +79,15 @@ impl PowerState {
     }
 
     fn effective(&self) -> PowerProfile {
-        let base = self.base_mode();
+        // Auto is resolved to a concrete mode before applying a thermal ceiling.
+        // Custom is mapped through a validated safe concrete profile, never by
+        // enum discriminant ordering.
+        let base = resolve_concrete_for_ceiling(self.base_mode(), &self.context);
         let Some(t) = self.thermal else {
             return base;
         };
-        intersect_modes(base, t.maximum_allowed_mode)
+        let tmax = resolve_concrete_for_ceiling(t.maximum_allowed_mode, &self.context);
+        intersect_modes(base, tmax)
     }
 
     fn current_policy(&self) -> PowerPolicy {
@@ -110,7 +114,8 @@ impl PowerState {
         source: ThermalConstraintSource,
         generation: u64,
     ) -> Result<(), u64> {
-        if matches!(max_mode, PowerProfile::Auto) {
+        // Maximum allowed mode must be a concrete ordered mode — never Auto/Custom.
+        if matches!(max_mode, PowerProfile::Auto | PowerProfile::Custom) {
             return Err(PowerdMsg::ERR_BAD_REQUEST);
         }
         if let Some(active) = self.thermal {
@@ -175,18 +180,34 @@ impl PowerState {
     }
 }
 
-/// Lower rank = more aggressive.
+/// Rank for concrete power modes only (lower = more aggressive).
+/// Auto/Custom must be resolved to a concrete mode before calling this.
 fn mode_rank(p: PowerProfile) -> u8 {
     match p {
         PowerProfile::Turbo => 0,
         PowerProfile::Performance => 1,
-        PowerProfile::Balanced | PowerProfile::Auto | PowerProfile::Custom => 2,
+        PowerProfile::Balanced => 2,
         PowerProfile::LowPower => 3,
         PowerProfile::Stamina => 4,
+        // Auto/Custom are not ordered by enum discriminant; map via safe default
+        // only if a caller forgets to resolve first.
+        PowerProfile::Auto | PowerProfile::Custom => 2,
+    }
+}
+
+/// Resolve Auto (context) / Custom (safe mapping) before thermal intersection.
+fn resolve_concrete_for_ceiling(p: PowerProfile, ctx: &PowerContext) -> PowerProfile {
+    match p {
+        PowerProfile::Auto => choose_auto_profile(ctx),
+        // Custom is not compared by discriminant; until custom parameters exist,
+        // map through the validated safe Balanced profile.
+        PowerProfile::Custom => PowerProfile::Balanced,
+        other => other,
     }
 }
 
 fn intersect_modes(requested_base: PowerProfile, thermal_max: PowerProfile) -> PowerProfile {
+    // Callers should pass concrete modes; still sanitize defensively.
     let base = match requested_base {
         PowerProfile::Auto | PowerProfile::Custom => PowerProfile::Balanced,
         other => other,
@@ -196,6 +217,7 @@ fn intersect_modes(requested_base: PowerProfile, thermal_max: PowerProfile) -> P
         other => other,
     };
     // Lower rank = more aggressive. Clamp if requested exceeds thermal max.
+    // Never compare raw enum discriminants (Custom=5 would look "safer" than Stamina=4).
     if mode_rank(base) < mode_rank(tmax) {
         tmax
     } else {

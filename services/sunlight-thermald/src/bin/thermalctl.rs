@@ -29,8 +29,8 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use core::fmt::Write;
 use sunlight_ipc::{
-    ipc_call, nameserver_lookup, CoolingProfile, FanControlMode, FanLevel, IpcMsg, LeaseState,
-    PowerProfile, ThermalState, ThermaldMsg,
+    ipc_call, nameserver_lookup, system_identity, CoolingProfile, FanControlMode, FanLevel, IpcMsg,
+    LeaseState, PowerProfile, SystemIdentityRecord, ThermalState, ThermaldMsg,
 };
 
 const MAX_ARGS: usize = 16;
@@ -82,6 +82,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             print_sensors(cap);
             0
         }
+        "identity" => {
+            print_identity();
+            0
+        }
         "fans" => {
             print_fans(cap);
             0
@@ -111,9 +115,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
 }
 
 fn print_usage() {
-    println!("Usage: thermalctl <status|sensors|fans|profile|auto|reset-defaults>");
+    println!("Usage: thermalctl <status|sensors|identity|fans|profile|auto|reset-defaults>");
     println!("  thermalctl status");
     println!("  thermalctl sensors");
+    println!("  thermalctl identity");
     println!("  thermalctl fans");
     println!("  thermalctl profile");
     println!("  thermalctl profile set <balanced|quiet|cool|performance>");
@@ -145,6 +150,8 @@ struct StatusView {
     on_ac: Option<bool>,
     errors: u32,
     model: u64,
+    package_sensor: bool,
+    sensor_count: u64,
 }
 
 fn fetch_status(cap: sunlight_ipc::CapabilityToken) -> Option<StatusView> {
@@ -182,6 +189,8 @@ fn fetch_status(cap: sunlight_ipc::CapabilityToken) -> Option<StatusView> {
         on_ac,
         errors: (w4 & 0xffff_ffff) as u32,
         model: (w4 >> 32) & 0xff,
+        package_sensor: ((w4 >> 40) & 1) != 0,
+        sensor_count: (w4 >> 48) & 0xff,
     })
 }
 
@@ -193,7 +202,7 @@ fn fmt_temp(mc: Option<i32>) -> heapless::String<16> {
             let _ = write!(s, "{}°C", whole);
         }
         None => {
-            let _ = s.push_str("n/a");
+            let _ = s.push_str("Unavailable");
         }
     }
     s
@@ -208,43 +217,91 @@ fn model_name(tag: u64) -> &'static str {
     }
 }
 
+fn print_device_line() {
+    if let Some(id) = system_identity() {
+        let mfr = SystemIdentityRecord::field_str(&id.manufacturer);
+        let prod = SystemIdentityRecord::field_str(&id.product_name);
+        if !mfr.is_empty() || !prod.is_empty() {
+            println!("Device: {} {}", mfr, prod);
+            return;
+        }
+    }
+    println!("Device: Unknown");
+}
+
 fn print_status(cap: sunlight_ipc::CapabilityToken) {
     let Some(st) = fetch_status(cap) else {
         println!("thermalctl: failed to get status");
         return;
     };
-    let temp = fmt_temp(st.temp_mc);
-    let level_str = match st.level {
-        FanLevel::FullSpeed => "full-speed",
-        other => {
-            // numeric
-            match other {
-                FanLevel::Level0 => "0",
-                FanLevel::Level1 => "1",
-                FanLevel::Level2 => "2",
-                FanLevel::Level3 => "3",
-                FanLevel::Level4 => "4",
-                FanLevel::Level5 => "5",
-                FanLevel::Level6 => "6",
-                FanLevel::Level7 => "7",
-                FanLevel::FullSpeed => "full-speed",
-            }
-        }
-    };
 
-    println!("State: {}", st.state.as_str());
-    println!("CPU: {}", temp.as_str());
-    if st.rpm > 0 {
-        println!(
-            "Fan: {}, level {}, {} RPM",
-            st.fan_mode.as_str(),
-            level_str,
-            st.rpm
-        );
-    } else {
-        println!("Fan: {}, level {}", st.fan_mode.as_str(), level_str);
+    print_device_line();
+    if let Some(id) = system_identity() {
+        if id.smbios_major != 0 {
+            println!("SMBIOS: {}.{}", id.smbios_major, id.smbios_minor);
+        }
     }
-    println!("Profile: {} (cooling preference)", st.profile.as_str());
+    println!("Thermal state: {}", st.state.as_str());
+    if matches!(st.state, ThermalState::Unavailable) && st.temp_mc.is_none() {
+        // Explicit Unavailable — never imply Normal without a controlling sensor.
+        println!("CPU temperature: Unavailable");
+        if (st.errors & 0x1) != 0 {
+            println!("Reason: No thermal telemetry / no valid controlling sensor");
+        } else if (st.errors & 0x2) != 0 {
+            println!("Reason: Sensor stale");
+        } else {
+            println!("Reason: No valid controlling sensor");
+        }
+    } else {
+        let temp = fmt_temp(st.temp_mc);
+        if st.temp_mc.is_some() {
+            if st.package_sensor {
+                println!("CPU package maximum: {}", temp.as_str());
+            } else {
+                println!("CPU maximum: {} (maximum core temperature)", temp.as_str());
+            }
+        } else {
+            println!("CPU temperature: Unavailable");
+        }
+    }
+
+    let mut valid = 0u32;
+    let mut stale = 0u32;
+    // Best-effort recount via LIST_SENSORS
+    for i in 0..st.sensor_count.max(1) {
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(ThermaldMsg::LIST_SENSORS).word(0, i),
+        );
+        if reply.label != ThermaldMsg::REPLY {
+            break;
+        }
+        let status = reply.words[4] & 0xff;
+        if status == 1 {
+            valid += 1;
+        } else if status == 4 {
+            stale += 1;
+        }
+        let total = reply.words[3];
+        if i + 1 >= total {
+            break;
+        }
+    }
+    println!("Sensors: {} valid, {} stale", valid, stale);
+
+    match st.fan_mode {
+        FanControlMode::FirmwareAuto => println!("Fan: Firmware Auto"),
+        FanControlMode::Unavailable => println!("Fan: Unavailable"),
+        other => println!("Fan: {}", other.as_str()),
+    }
+    if st.rpm > 0 {
+        println!("Fan RPM: {}", st.rpm);
+    } else {
+        println!("Fan RPM: Unavailable");
+    }
+    println!("Managed control: unavailable");
+    println!("  Disabled — safe EC backend not implemented");
+    println!("Cooling profile: {}", st.profile.as_str());
     println!(
         "Power policy: requested {} / effective {}",
         st.power_req.as_str(),
@@ -254,40 +311,145 @@ fn print_status(cap: sunlight_ipc::CapabilityToken) {
         println!("Thermal constraint: active");
     }
     println!("Lease: {}", st.lease.as_str());
-    println!("Hardware: {}", model_name(st.model));
+    println!("Hardware model tag: {}", model_name(st.model));
     match st.on_ac {
         Some(true) => println!("Power source: AC"),
         Some(false) => println!("Power source: Battery"),
         None => println!("Power source: unknown"),
     }
-    if st.errors != 0 {
-        println!("Errors: flags={:#x}", st.errors);
-        if st.errors & 0x40 != 0 {
-            println!("Note: monitoring-only or unsupported hardware (manual fan control disabled)");
-        }
-        if st.errors & 0x1 != 0 {
-            println!("Note: CPU temperature sensor unavailable");
-        }
-        if st.errors & 0x80 != 0 {
-            println!("Note: powerd unavailable; power clamping deferred");
-        }
+}
+
+fn sensor_class_name(class: u8) -> &'static str {
+    match class {
+        1 => "CPU package",
+        2 => "Core",
+        3 => "Logical CPU",
+        _ => "Sensor",
+    }
+}
+
+fn sensor_source_name(src: u8) -> &'static str {
+    match src {
+        1 => "Intel DTS",
+        2 => "ACPI",
+        3 => "EC",
+        4 => "Mock",
+        _ => "Unknown",
+    }
+}
+
+fn sensor_status_name(st: u8) -> &'static str {
+    match st {
+        1 => "Valid",
+        2 => "Unavailable",
+        3 => "Unsupported",
+        4 => "Stale",
+        5 => "Invalid",
+        6 => "HardwareError",
+        _ => "Unavailable",
     }
 }
 
 fn print_sensors(cap: sunlight_ipc::CapabilityToken) {
-    let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::LIST_SENSORS).word(0, 0));
-    if reply.label != ThermaldMsg::REPLY {
-        println!("thermalctl: no sensors");
-        return;
-    }
-    let valid = reply.words[1] != 0;
-    let temp_bits = reply.words[2] as u32 as i32;
     println!("Sensors:");
-    if valid {
-        println!("  [0] CPU package: {}°C", temp_bits / 1000);
-    } else {
-        println!("  [0] CPU package: unavailable (not 0°C)");
+    let mut any = false;
+    for i in 0..32u64 {
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(ThermaldMsg::LIST_SENSORS).word(0, i),
+        );
+        if reply.label != ThermaldMsg::REPLY {
+            if i == 0 {
+                println!("  (none / unavailable)");
+            }
+            break;
+        }
+        any = true;
+        let id = reply.words[0];
+        let valid = reply.words[1] != 0;
+        let temp_bits = reply.words[2] as u32 as i32;
+        let total = reply.words[3];
+        let meta = reply.words[4];
+        let status = (meta & 0xff) as u8;
+        let class = ((meta >> 8) & 0xff) as u8;
+        let source = ((meta >> 16) & 0xff) as u8;
+        let label = ((meta >> 24) & 0xff) as u8;
+
+        let name = sensor_class_name(class);
+        if valid {
+            println!(
+                "  [{}] {} {}: {}°C  source={} status={}",
+                i,
+                name,
+                label,
+                temp_bits / 1000,
+                sensor_source_name(source),
+                sensor_status_name(status)
+            );
+        } else {
+            println!(
+                "  [{}] {} {}: {}  source={} (not 0°C)",
+                i,
+                name,
+                label,
+                sensor_status_name(status),
+                sensor_source_name(source)
+            );
+        }
+        let _ = id;
+        if i + 1 >= total {
+            break;
+        }
     }
+    if !any {
+        println!("  (none)");
+    }
+}
+
+fn print_identity() {
+    // Public identity only — never print serial/UUID.
+    let Some(id) = system_identity() else {
+        // Fall back to thermald GET_IDENTITY partial.
+        let Some(cap) = nameserver_lookup("thermald") else {
+            println!("identity: unavailable");
+            return;
+        };
+        let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::GET_IDENTITY));
+        if reply.label != ThermaldMsg::REPLY {
+            println!("identity: unavailable");
+            return;
+        }
+        let major = reply.words[0] & 0xff;
+        let minor = (reply.words[0] >> 8) & 0xff;
+        println!("SMBIOS: {}.{}", major, minor);
+        println!("(full strings require system_identity syscall)");
+        return;
+    };
+    println!(
+        "Manufacturer: {}",
+        SystemIdentityRecord::field_str(&id.manufacturer)
+    );
+    println!(
+        "Product: {}",
+        SystemIdentityRecord::field_str(&id.product_name)
+    );
+    println!(
+        "Product version: {}",
+        SystemIdentityRecord::field_str(&id.product_version)
+    );
+    println!(
+        "Board: {} {}",
+        SystemIdentityRecord::field_str(&id.board_manufacturer),
+        SystemIdentityRecord::field_str(&id.board_product)
+    );
+    println!(
+        "BIOS: {} {}",
+        SystemIdentityRecord::field_str(&id.bios_vendor),
+        SystemIdentityRecord::field_str(&id.bios_version)
+    );
+    println!("SMBIOS: {}.{}", id.smbios_major, id.smbios_minor);
+    println!("Confidence: {}", id.identity_confidence);
+    // Explicitly do not print serial number or UUID.
 }
 
 fn print_fans(cap: sunlight_ipc::CapabilityToken) {
@@ -305,8 +467,9 @@ fn print_fans(cap: sunlight_ipc::CapabilityToken) {
     if rpm > 0 {
         println!("      rpm={}", rpm);
     } else {
-        println!("      rpm=unavailable");
+        println!("      rpm=Unavailable");
     }
+    println!("  Managed fan control: Disabled — safe EC backend not implemented");
 }
 
 fn print_profile(cap: sunlight_ipc::CapabilityToken) {

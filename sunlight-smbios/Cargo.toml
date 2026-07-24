@@ -1,0 +1,12 @@
+[package]
+name = "sunlight-smbios"
+version = "0.2.2353-alpha.1"
+
+
+edition = "2021"
+description = "Bounded SMBIOS/DMI parser for SunlightOS (read-only identity)"
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"

@@ -558,6 +558,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         130 => sys_xhci_info(frame),
         131 => sys_map_mmio(frame),
         132 => sys_dma_alloc(frame),
+        // Hardware identity + thermal sensors (read-only; gated by process name).
+        133 => sys_system_identity(frame),
+        134 => sys_thermal_sensors(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -4386,6 +4389,108 @@ fn sys_hardware_inventory(frame: &mut SyscallFrame) -> u64 {
     };
     if let Err(error) = copy_to_user(frame.rsi, bytes) {
         return error;
+    }
+    total as u64
+}
+
+/// Public system identity (no serial/UUID). Allowed: thermald, deviced, control-panel.
+fn sys_system_identity(frame: &mut SyscallFrame) -> u64 {
+    let allowed = {
+        let sched = crate::sched::SCHEDULER.lock();
+        matches!(
+            sched.current_process().name_str(),
+            "thermald" | "deviced" | "control-panel" | "thermalctl" | "sunlight-hwinfo"
+        )
+    };
+    if !allowed {
+        return u64::MAX;
+    }
+    if frame.rsi as usize != core::mem::size_of::<::sunlight_ipc::SystemIdentityRecord>() {
+        return u64::MAX;
+    }
+    let id = crate::smbios::public_identity();
+    let mut rec = ::sunlight_ipc::SystemIdentityRecord::empty();
+    copy_str_field(&mut rec.manufacturer, id.manufacturer.as_bytes());
+    copy_str_field(&mut rec.product_name, id.product_name.as_bytes());
+    copy_str_field(&mut rec.product_version, id.product_version.as_bytes());
+    copy_str_field(&mut rec.board_manufacturer, id.board_manufacturer.as_bytes());
+    copy_str_field(&mut rec.board_product, id.board_product.as_bytes());
+    copy_str_field(&mut rec.bios_vendor, id.bios_vendor.as_bytes());
+    copy_str_field(&mut rec.bios_version, id.bios_version.as_bytes());
+    rec.smbios_major = id.smbios_major;
+    rec.smbios_minor = id.smbios_minor;
+    rec.identity_confidence = id.identity_confidence as u8;
+    rec.ready = crate::smbios::is_ready() as u8;
+    let bytes = unsafe {
+        core::slice::from_raw_parts(
+            &rec as *const _ as *const u8,
+            core::mem::size_of::<::sunlight_ipc::SystemIdentityRecord>(),
+        )
+    };
+    if let Err(error) = copy_to_user(frame.rdi, bytes) {
+        return error;
+    }
+    0
+}
+
+fn copy_str_field(dst: &mut [u8; 64], src: &[u8]) {
+    let n = src.len().min(63);
+    dst[..n].copy_from_slice(&src[..n]);
+    dst[n] = 0;
+}
+
+/// Thermal sensor snapshot. Allowed: thermald, thermalctl, control-panel.
+/// rdi = user buffer, rsi = capacity (count of ThermalSensorRecord), rdx = record size.
+/// Returns total sensors available (may be > capacity).
+fn sys_thermal_sensors(frame: &mut SyscallFrame) -> u64 {
+    let allowed = {
+        let sched = crate::sched::SCHEDULER.lock();
+        matches!(
+            sched.current_process().name_str(),
+            "thermald" | "thermalctl" | "control-panel" | "deviced"
+        )
+    };
+    if !allowed {
+        return u64::MAX;
+    }
+    let rec_size = core::mem::size_of::<::sunlight_ipc::ThermalSensorRecord>();
+    if frame.rdx as usize != rec_size {
+        return u64::MAX;
+    }
+    let cap = frame.rsi as usize;
+    if cap > 32 {
+        return u64::MAX;
+    }
+    let now = crate::timekeeping::monotonic_ms();
+    let mut export = [crate::thermal_hw::SensorExport::empty(); 32];
+    let total = crate::thermal_hw::snapshot_sensors(&mut export, now);
+    let write_n = total.min(cap);
+    for i in 0..write_n {
+        let e = export[i];
+        let rec = ::sunlight_ipc::ThermalSensorRecord {
+            id: e.id,
+            class: e.class,
+            label: e.label,
+            location: e.location,
+            unit: e.unit,
+            scope: e.scope,
+            source: e.source,
+            read_only: e.read_only,
+            status: e.status,
+            _pad: [0; 3],
+            value: e.value,
+            mono_ms: e.mono_ms,
+        };
+        let bytes = unsafe {
+            core::slice::from_raw_parts(
+                &rec as *const _ as *const u8,
+                rec_size,
+            )
+        };
+        let dest = frame.rdi.saturating_add((i * rec_size) as u64);
+        if let Err(error) = copy_to_user(dest, bytes) {
+            return error;
+        }
     }
     total as u64
 }

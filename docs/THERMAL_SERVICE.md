@@ -188,21 +188,27 @@ Boot sequence:
 
 | Model | Monitoring | Manual fan |
 |-------|------------|------------|
-| ThinkPad T440p | Prepared (needs sensors/DMI) | **Disabled** until kernel lease + verification |
-| ThinkPad T480 | Future / monitoring only | **Disabled** |
-| Generic / VMware | Unavailable | **Disabled** |
+| ThinkPad T440p | Intel DTS on Haswell 0x3C/0x45/0x46 when CPUID allows; SMBIOS when present. **Physical validation pending** (no T440p on 2026-07-24 host) | **Disabled** until kernel lease + verification |
+| ThinkPad T480 | Architecture only (unknown model stays Unsupported) | **Disabled** |
+| Generic / VMware | SMBIOS identity may work; temps **Unavailable** (not 0°C) | **Disabled** |
+
+See `docs/HARDWARE_IDENTITY_AND_THERMAL_TELEMETRY.md` for SMBIOS/DTS Phase 1 details.
 
 ## CLI
 
 ```
 thermalctl status
 thermalctl sensors
+thermalctl identity
 thermalctl fans
 thermalctl profile
 thermalctl profile set balanced|quiet|cool|performance
 thermalctl auto
 thermalctl reset-defaults
 ```
+
+`thermalctl identity` prints public manufacturer/product/BIOS fields only — never
+serial number or UUID.
 
 `powerctl` remains the owner of power-mode selection.
 
@@ -222,23 +228,24 @@ thermalctl reset-defaults
 | Item | Classification |
 |------|----------------|
 | ACPI thermal zones | **Missing prerequisite** |
-| Temperature sensor APIs | **Missing prerequisite** |
-| CPU package/core temps | **Not available** |
+| Temperature sensor APIs | **Done (Phase 1)** — kernel DTS + thermald |
+| CPU package/core temps | **Done (Phase 1)** — allowlisted Intel DTS |
 | EC / ThinkPad fan control | **Missing prerequisite** / **safety blocker** |
 | Fan RPM/level APIs | **Not available** |
-| DMI/SMBIOS identity | **Missing prerequisite** |
-| powerd five modes + IPC | **Reusable** (extended) |
+| DMI/SMBIOS identity | **Done (Phase 1)** — public fields only |
+| powerd five modes + IPC | **Reusable** (Auto/Custom ceiling audited) |
 | Battery/AC real data | **Partial** (context model only) |
 | sunlightd supervision | **Reusable** (thermald via init today) |
 | Capabilities / IPC auth | **Reusable** (+ ThermalControl) |
-| Control Panel pages | **Reusable** |
+| Control Panel pages | **Reusable** (identity + sensors) |
 | CLI patterns (powerctl) | **Reusable** |
 | sunlight-kv persistence | **Reusable** (deferred wiring) |
 | Suspend/resume service hooks | **Not available** (IPC ops ready) |
 | Kernel fan lease | **Safety blocker** |
 | Fan mode mutation paths | **None** (already safe) |
 | T440p safe control today | **Hardware-specific concern** — not yet |
-| VMware testing | Service/UI/CLI/policy only |
+| VMware testing | Identity + Unavailable sensors + UI/CLI |
+| Live power clamp from DTS | **Disabled** until physical validation |
 
 ## Runtime validation
 
@@ -256,16 +263,20 @@ power intersection.
 ### VMware (expected)
 
 - `thermald` starts, registers, stays in monitoring/unavailable
+- Thermal state **Unavailable** (not Normal) without a valid sensor
 - `thermalctl status` reports unsupported/missing sensors clearly
 - Control Panel Power & Thermal does not crash
-- No busy-loop (1 Hz sample + 200 ms IPC timeout)
+- No busy-loop (1 Hz sample + **1 s** IPC idle wait after measurement)
 - Manual fan **not** claimed
 
 ### Physical T440p
 
-**Not performed in this change.** Do not claim sustained ~60°C / ~3100 RPM
-success until the hardware checklist in the implementation brief is run with a
-kernel lease backend.
+**Blocked 2026-07-24:** validation host is ThinkPad T14 Gen 3 (i7-1260P,
+family 6 model 0x9A), not T440p. See
+`docs/HARDWARE_IDENTITY_AND_THERMAL_TELEMETRY.md` § Physical T440p validation.
+
+Do not claim T440p identity, DTS comparison, or sustained fan RPM success until
+that checklist is run on the correct hardware.
 
 ## Idle resource targets
 
@@ -279,12 +290,14 @@ kernel lease backend.
 
 ## Remaining limitations
 
-1. No real temperature sensors or EC fan control.
-2. No DMI product identification.
+1. EC fan control and RPM reading not implemented.
+2. Live thermal→power constraints from real DTS stay off until T440p validation.
 3. No kernel-owned fan lease → managed mode disabled.
-4. T480 manual control not verified.
+4. T480 not enabled until observed CPUID model + SMBIOS identity.
 5. Profile persistence not yet wired to sunlight-kv.
 6. Suspend framework not present; PREPARE_SUSPEND/RESUME are ready.
 7. powerd still does not drive CPU frequency hardware (constraint is policy-level).
 8. Unauthorized in-process IPC mutation checks rely on nameserver capability
    mediation (same model as powerd/networkd).
+9. No recoverable #GP for RDMSR — unknown models never probe.
+10. Physical core vs SMT labeling waits on full topology enumeration.

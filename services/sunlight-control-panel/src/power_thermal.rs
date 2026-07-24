@@ -10,8 +10,8 @@ use core::fmt::Write;
 use sun_font::{self, FontRole, TextStyle};
 
 use sunlight_ipc::{
-    ipc_call, monotonic_millis, nameserver_lookup, CoolingProfile, FanControlMode, IpcMsg,
-    PowerProfile, PowerdMsg, ThermalState, ThermaldMsg,
+    ipc_call, monotonic_millis, nameserver_lookup, system_identity, CoolingProfile, FanControlMode,
+    IpcMsg, PowerProfile, PowerdMsg, SystemIdentityRecord, ThermalState, ThermaldMsg,
 };
 use sunlight_ui::{
     widgets::{Button, ButtonState},
@@ -47,11 +47,23 @@ struct ThermalSnap {
     rpm: u32,
     errors: u32,
     available: bool,
+    sensor_count: u8,
+    valid_sensors: u8,
+    package_sensor: bool,
+}
+
+#[derive(Clone, Copy)]
+struct IdentitySnap {
+    manufacturer: FixedStr<40>,
+    product: FixedStr<40>,
+    ready: bool,
 }
 
 pub struct PowerThermalPageState {
     power: Option<PowerSnap>,
     thermal: Option<ThermalSnap>,
+    identity: IdentitySnap,
+    sensors_expanded: bool,
     power_error: FixedStr<64>,
     thermal_error: FixedStr<64>,
     status: FixedStr<80>,
@@ -80,6 +92,12 @@ impl PowerThermalPageState {
         Self {
             power: None,
             thermal: None,
+            identity: IdentitySnap {
+                manufacturer: FixedStr::empty(),
+                product: FixedStr::empty(),
+                ready: false,
+            },
+            sensors_expanded: false,
             power_error: FixedStr::empty(),
             thermal_error: FixedStr::empty(),
             status: FixedStr::empty(),
@@ -95,10 +113,26 @@ impl PowerThermalPageState {
 
     pub fn refresh(&mut self) -> bool {
         let now = monotonic_millis();
+        self.refresh_identity();
         self.refresh_power();
         self.refresh_thermal();
         self.next_refresh_ms = now.saturating_add(REFRESH_INTERVAL_MS);
         true
+    }
+
+    fn refresh_identity(&mut self) {
+        // Public identity only — never request serial/UUID.
+        if let Some(id) = system_identity() {
+            let mut mfr = FixedStr::<40>::empty();
+            let mut prod = FixedStr::<40>::empty();
+            let _ = mfr.push_str(SystemIdentityRecord::field_str(&id.manufacturer));
+            let _ = prod.push_str(SystemIdentityRecord::field_str(&id.product_name));
+            self.identity = IdentitySnap {
+                manufacturer: mfr,
+                product: prod,
+                ready: id.ready != 0,
+            };
+        }
     }
 
     fn refresh_power(&mut self) {
@@ -144,6 +178,9 @@ impl PowerThermalPageState {
                 rpm: 0,
                 errors: 0,
                 available: false,
+                sensor_count: 0,
+                valid_sensors: 0,
+                package_sensor: false,
             });
             return;
         };
@@ -168,6 +205,18 @@ impl PowerThermalPageState {
             .position(|p| *p == profile)
             .unwrap_or(0);
         let _ = profile;
+        let sensor_count = ((w4 >> 48) & 0xff) as u8;
+        let package_sensor = ((w4 >> 40) & 1) != 0;
+        let mut valid_sensors = 0u8;
+        for i in 0..sensor_count.min(8) {
+            let r = ipc_call(
+                cap,
+                IpcMsg::with_label(ThermaldMsg::LIST_SENSORS).word(0, i as u64),
+            );
+            if r.label == ThermaldMsg::REPLY && r.words[1] != 0 {
+                valid_sensors = valid_sensors.saturating_add(1);
+            }
+        }
         self.thermal = Some(ThermalSnap {
             state: ThermalState::from_u64(w0 & 0xff),
             fan_mode: FanControlMode::from_u64((w0 >> 8) & 0xff),
@@ -176,6 +225,9 @@ impl PowerThermalPageState {
             rpm: ((w2 >> 8) & 0xffff) as u32,
             errors: (w4 & 0xffff_ffff) as u32,
             available: true,
+            sensor_count,
+            valid_sensors,
+            package_sensor,
         });
         self.thermal_error.clear();
     }
@@ -357,7 +409,7 @@ impl PowerThermalPageState {
         }
 
         // --- Thermal section ---
-        let thermal_card = Rect::new(12, 218, win_w - 24, 250);
+        let thermal_card = Rect::new(12, 218, win_w - 24, 280);
         canvas.fill_material(
             thermal_card,
             MaterialPalette::new(theme)
@@ -374,21 +426,50 @@ impl PowerThermalPageState {
             theme.text,
         );
 
+        // Device identity (public fields only).
+        {
+            let mut dev = FixedStr::<96>::empty();
+            if self.identity.ready
+                && (!self.identity.manufacturer.is_empty() || !self.identity.product.is_empty())
+            {
+                let _ = write!(
+                    dev,
+                    "Device: {} {}",
+                    self.identity.manufacturer.as_str(),
+                    self.identity.product.as_str()
+                );
+            } else {
+                let _ = dev.push_str("Device: Unknown");
+            }
+            draw_text(
+                canvas,
+                Rect::new(24, 246, win_w - 48, 16),
+                dev.as_str(),
+                theme,
+                FontRole::UiSmall,
+                theme.text_dim,
+            );
+        }
+
         if let Some(t) = self.thermal {
-            let mut temp_s = FixedStr::<32>::empty();
+            let mut temp_s = FixedStr::<48>::empty();
             match t.temp_mc {
                 Some(mc) => {
-                    let _ = write!(temp_s, "CPU: {}°C", mc / 1000);
+                    if t.package_sensor {
+                        let _ = write!(temp_s, "CPU package: {}°C", mc / 1000);
+                    } else {
+                        let _ = write!(temp_s, "CPU max (cores): {}°C", mc / 1000);
+                    }
                 }
                 None => {
-                    let _ = temp_s.push_str("CPU: unavailable");
+                    let _ = temp_s.push_str("CPU: Unavailable");
                 }
             }
             let mut state_s = FixedStr::<48>::empty();
             let _ = write!(state_s, "State: {}", t.state.as_str());
             draw_text(
                 canvas,
-                Rect::new(24, 250, 200, 16),
+                Rect::new(24, 266, 200, 16),
                 state_s.as_str(),
                 theme,
                 FontRole::UiSmall,
@@ -396,33 +477,62 @@ impl PowerThermalPageState {
             );
             draw_text(
                 canvas,
-                Rect::new(220, 250, 160, 16),
+                Rect::new(220, 266, 220, 16),
                 temp_s.as_str(),
                 theme,
                 FontRole::UiSmall,
                 theme.text,
             );
 
+            let mut sens_s = FixedStr::<64>::empty();
+            let _ = write!(
+                sens_s,
+                "Sensors: {} valid of {}",
+                t.valid_sensors, t.sensor_count
+            );
+            draw_text(
+                canvas,
+                Rect::new(24, 284, 220, 16),
+                sens_s.as_str(),
+                theme,
+                FontRole::UiSmall,
+                theme.text_dim,
+            );
+            let expand_label = if self.sensors_expanded {
+                "[-] Sensors"
+            } else {
+                "[+] Sensors"
+            };
+            draw_text(
+                canvas,
+                Rect::new(260, 284, 120, 16),
+                expand_label,
+                theme,
+                FontRole::UiSmall,
+                theme.accent,
+            );
+
             let mut fan_s = FixedStr::<96>::empty();
             if t.rpm > 0 {
                 let _ = write!(
                     fan_s,
-                    "Fan: {}  level {}  {} RPM",
-                    t.fan_mode.as_str(),
-                    t.level,
+                    "Fan: Firmware Auto  {} RPM",
                     t.rpm
                 );
             } else {
                 let _ = write!(
                     fan_s,
-                    "Fan: {}  level {}",
-                    t.fan_mode.as_str(),
-                    t.level
+                    "Fan: {}  RPM: Unavailable",
+                    if matches!(t.fan_mode, FanControlMode::Unavailable) {
+                        "Unavailable"
+                    } else {
+                        "Firmware Auto"
+                    }
                 );
             }
             draw_text(
                 canvas,
-                Rect::new(24, 270, win_w - 48, 16),
+                Rect::new(24, 302, win_w - 48, 16),
                 fan_s.as_str(),
                 theme,
                 FontRole::UiSmall,
@@ -430,34 +540,26 @@ impl PowerThermalPageState {
             );
 
             // Warnings
-            let mut warn_y = 292i32;
-            if matches!(
-                t.fan_mode,
-                FanControlMode::MonitoringOnly | FanControlMode::Unavailable
-            ) || (t.errors & 0x40) != 0
-            {
+            let mut warn_y = 320i32;
+            draw_text(
+                canvas,
+                Rect::new(24, warn_y, win_w - 48, 16),
+                "Managed fan control: Disabled — EC lease not implemented",
+                theme,
+                FontRole::UiSmall,
+                Color::rgb(220, 140, 40),
+            );
+            warn_y += 18;
+            if t.temp_mc.is_none() || matches!(t.state, ThermalState::Unavailable) {
                 draw_text(
                     canvas,
                     Rect::new(24, warn_y, win_w - 48, 16),
-                    "Warning: monitoring-only — manual fan control disabled",
-                    theme,
-                    FontRole::UiSmall,
-                    Color::rgb(220, 140, 40),
-                );
-                warn_y += 18;
-            }
-            if matches!(t.fan_mode, FanControlMode::FirmwareAuto) && t.available {
-                draw_text(
-                    canvas,
-                    Rect::new(24, warn_y, win_w - 48, 16),
-                    "Fan: Firmware Auto (managed control not active)",
+                    "Thermal state: Unavailable (not Normal without a valid sensor)",
                     theme,
                     FontRole::UiSmall,
                     theme.text_dim,
                 );
                 warn_y += 18;
-            }
-            if t.temp_mc.is_none() {
                 draw_text(
                     canvas,
                     Rect::new(24, warn_y, win_w - 48, 16),
@@ -466,18 +568,20 @@ impl PowerThermalPageState {
                     FontRole::UiSmall,
                     theme.text_dim,
                 );
+                warn_y += 18;
             }
+            let _ = warn_y;
 
             draw_text(
                 canvas,
-                Rect::new(24, 348, 280, 16),
+                Rect::new(24, 368, 280, 16),
                 "Cooling preference (not a power mode):",
                 theme,
                 FontRole::UiSmall,
                 theme.text_dim,
             );
             let mut cx = 24i32;
-            let cy = 370i32;
+            let cy = 388i32;
             for (i, prof) in COOLING_PROFILES.iter().enumerate() {
                 let label = if *prof == CoolingProfile::Balanced {
                     "Balanced*"
@@ -497,7 +601,7 @@ impl PowerThermalPageState {
             }
             draw_text(
                 canvas,
-                Rect::new(24, 404, 200, 14),
+                Rect::new(24, 420, 200, 14),
                 "* Recommended",
                 theme,
                 FontRole::UiSmall,
@@ -506,7 +610,7 @@ impl PowerThermalPageState {
         } else if !self.thermal_error.is_empty() {
             draw_text(
                 canvas,
-                Rect::new(24, 250, win_w - 48, 16),
+                Rect::new(24, 266, win_w - 48, 16),
                 self.thermal_error.as_str(),
                 theme,
                 FontRole::UiSmall,
@@ -544,6 +648,12 @@ impl PowerThermalPageState {
                 let reset = Rect::new(win_w as i32 - 180, win_h as i32 - 44, 168, 28);
                 if reset.contains(pt) {
                     self.reset_thermal_defaults();
+                    return (true, PowerThermalAction::None);
+                }
+                // Toggle sensors expanded region.
+                let expand = Rect::new(260, 284, 120, 16);
+                if expand.contains(pt) {
+                    self.sensors_expanded = !self.sensors_expanded;
                     return (true, PowerThermalAction::None);
                 }
                 // Power mode buttons

@@ -20,7 +20,9 @@ mod memory;
 mod panic;
 mod process;
 mod sched;
+mod smbios;
 mod telemetry;
+mod thermal_hw;
 mod timekeeping;
 
 use arch::x86_64::{acpi, cpu, interrupts, keyboard, serial, smp, syscall};
@@ -46,6 +48,8 @@ static FIRMWARE_REQ: limine::request::FirmwareTypeRequest =
 /// and provide their LAPIC IDs + `MpInfo` pointers.  APs are parked by Limine
 /// until `MpInfo::bootstrap()` is called for each one in `smp::start_aps()`.
 static MP_REQ: limine::request::MpRequest = limine::request::MpRequest::new(0);
+/// SMBIOS entry-point discovery via Limine (firmware-neutral; prefers 3.x).
+static SMBIOS_REQ: limine::request::SmbiosRequest = limine::request::SmbiosRequest::new();
 // 1 MiB boot stack (Limine defaults to 64 KiB). `init_kernel_vfs` and the
 // FAT bootstrap keep multi-KiB filesystem objects on the stack before the
 // scheduler's per-process kernel stacks take over; overflowing the default
@@ -349,6 +353,28 @@ pub extern "C" fn _start() -> ! {
     splash.set_progress(250); // 25%
     splash.redraw();
 
+    // 2.6. SMBIOS / DMI public identity (read-only; no serial/UUID in logs)
+    splash.set_status("Reading firmware hardware identity");
+    splash.log("[SMBIOS] Initializing...");
+    {
+        let (entry_32, entry_64) = match SMBIOS_REQ.response() {
+            Some(r) => (r.entry_32 as u64, r.entry_64 as u64),
+            None => (0, 0),
+        };
+        // Limine may report null pointers as 0; treat non-null as physical for
+        // base revisions 3/4, and normalize inside smbios::init via HHDM.
+        unsafe {
+            smbios::init(
+                hhdm_offset,
+                smbios::LimineSmbiosPointers {
+                    entry_32_phys: entry_32,
+                    entry_64_phys: entry_64,
+                },
+            );
+        }
+    }
+    splash.log("[SMBIOS] done");
+
     // 3. IDT + PIC + PIT
     splash.set_status("Loading interrupt handlers");
     splash.log("[IDT] Loading...");
@@ -490,13 +516,17 @@ pub extern "C" fn _start() -> ! {
             // Phase 0→1 transition: seed the per-core scheduler with the
             // total logical CPU count so enqueue/steal logic knows all cores.
             crate::sched::init_cores(cpus.len());
+            thermal_hw::set_logical_cpu_count(cpus.len());
             splash.log("[SMP] APs online");
         }
         None => {
             serial_println!("[SMP] No MP response from bootloader (single-CPU mode)");
             splash.log("[SMP] Single CPU mode");
+            thermal_hw::set_logical_cpu_count(1);
         }
     }
+    // Intel DTS probe after SMP count is known (strict allowlist; no speculative MSR).
+    thermal_hw::init();
     #[cfg(all(
         feature = "mm2b_smp_test",
         not(any(

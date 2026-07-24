@@ -193,6 +193,8 @@ pub fn level_exit_temp_mc(level: FanLevel, profile: CoolingProfile) -> MilliC {
     enter.saturating_sub(HYSTERESIS_MC)
 }
 
+/// Classify a **valid, fresh** controlling temperature.
+/// Call only when a sensor reading has already passed validation.
 pub fn classify_thermal_state(temp_mc: MilliC) -> ThermalState {
     if temp_mc >= CRITICAL_MC {
         ThermalState::Critical
@@ -207,9 +209,10 @@ pub fn classify_thermal_state(temp_mc: MilliC) -> ThermalState {
 
 /// Recommended powerd maximum mode for a thermal state.
 /// Does not touch requested mode — powerd applies the intersection.
+/// Unavailable/missing sensors must not create a constraint.
 pub fn recommended_max_power_mode(state: ThermalState) -> Option<(PowerProfile, ThermalConstraintSeverity, ThermalConstraintReason)> {
     match state {
-        ThermalState::Normal => None,
+        ThermalState::Normal | ThermalState::Unavailable => None,
         ThermalState::Warm => Some((
             PowerProfile::Performance,
             ThermalConstraintSeverity::Warm,
@@ -250,14 +253,16 @@ fn resolve_concrete(p: PowerProfile) -> PowerProfile {
     }
 }
 
-/// Lower rank = more aggressive / higher power.
+/// Rank for concrete power modes only (lower = more aggressive).
+/// Auto/Custom must be resolved before comparison — never order by discriminant.
 fn mode_rank(p: PowerProfile) -> u8 {
     match p {
         PowerProfile::Turbo => 0,
         PowerProfile::Performance => 1,
-        PowerProfile::Balanced | PowerProfile::Auto | PowerProfile::Custom => 2,
+        PowerProfile::Balanced => 2,
         PowerProfile::LowPower => 3,
         PowerProfile::Stamina => 4,
+        PowerProfile::Auto | PowerProfile::Custom => 2,
     }
 }
 
@@ -445,11 +450,14 @@ impl ThermalPolicy {
     }
 
     pub fn status(&self) -> PolicyStatus {
+        // Normal/Warm/Hot/Critical only when a controlling sensor is valid.
+        // Missing or cleared readings report Unavailable — never fake Normal.
+        let thermal_state = match self.last_valid_temp {
+            Some(t) => classify_thermal_state(t),
+            None => ThermalState::Unavailable,
+        };
         PolicyStatus {
-            thermal_state: self
-                .last_valid_temp
-                .map(classify_thermal_state)
-                .unwrap_or(ThermalState::Normal),
+            thermal_state,
             fan_mode: self.fan_mode,
             requested_level: self.current_level,
             profile: self.profile,
@@ -1096,5 +1104,66 @@ mod tests {
         let packed = c.pack_u64();
         let back = PersistedConfig::unpack_u64(packed).unwrap();
         assert_eq!(back.profile, CoolingProfile::Cool);
+    }
+
+    #[test]
+    fn auto_resolves_before_thermal_ceiling() {
+        // Auto must not be ordered by discriminant (Auto=6); resolve first.
+        let clamped = intersect_power_mode(PowerProfile::Auto, Some(PowerProfile::LowPower));
+        assert_eq!(clamped, PowerProfile::LowPower);
+        let free = intersect_power_mode(PowerProfile::Auto, None);
+        assert_eq!(free, PowerProfile::Balanced);
+    }
+
+    #[test]
+    fn custom_not_ordered_by_discriminant() {
+        // Custom discriminant is 5; Stamina is 4. Discriminant compare would
+        // wrongly treat Custom as "safer". Intersection must map Custom safely.
+        let clamped = intersect_power_mode(PowerProfile::Custom, Some(PowerProfile::Stamina));
+        assert_eq!(clamped, PowerProfile::Stamina);
+        let free = intersect_power_mode(PowerProfile::Custom, None);
+        assert_eq!(free, PowerProfile::Balanced);
+    }
+
+    #[test]
+    fn stale_telemetry_does_not_drive_constraint() {
+        let mut p = ThermalPolicy::new(HardwareModel::ThinkPadT440p);
+        let mut clock = MockClock::new();
+        // Establish a hot constraint via managed test path.
+        let _ = p.tick_managed(clock.ms, 85_000);
+        assert!(p.status().max_power_mode.is_some());
+        // Stale/missing sensor forces firmware-auto and clears controlling temp;
+        // power recommendation generation advances when state returns to Normal
+        // only after valid Normal sample — missing clears temp and forces auto.
+        clock.advance(SENSOR_STALE_MS + 1);
+        let action = p.tick_sensor(clock.ms, Err(SensorError::Stale));
+        assert_eq!(action, PolicyAction::FirmwareAuto);
+        assert!(p.status().controlling_temp_mc.is_none());
+    }
+
+    #[test]
+    fn unavailable_when_no_valid_sensor_not_normal() {
+        let p = ThermalPolicy::new(HardwareModel::Unknown);
+        assert_eq!(p.status().thermal_state, ThermalState::Unavailable);
+        assert!(!p.status().thermal_state.has_valid_controlling_sensor());
+    }
+
+    #[test]
+    fn normal_only_with_valid_fresh_temp() {
+        let mut p = ThermalPolicy::new(HardwareModel::Generic);
+        let clock = MockClock::new();
+        assert_eq!(p.status().thermal_state, ThermalState::Unavailable);
+        let _ = p.tick_sensor(clock.ms, Ok(40_000));
+        assert_eq!(p.status().thermal_state, ThermalState::Normal);
+        assert_eq!(p.status().controlling_temp_mc, Some(40_000));
+        let _ = p.tick_sensor(clock.ms + 1, Err(SensorError::Missing));
+        assert_eq!(p.status().thermal_state, ThermalState::Unavailable);
+        assert!(p.status().controlling_temp_mc.is_none());
+    }
+
+    #[test]
+    fn recommended_power_none_when_unavailable() {
+        assert!(recommended_max_power_mode(ThermalState::Unavailable).is_none());
+        assert!(recommended_max_power_mode(ThermalState::Normal).is_none());
     }
 }

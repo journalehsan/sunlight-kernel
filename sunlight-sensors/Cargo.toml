@@ -1,0 +1,12 @@
+[package]
+name = "sunlight-sensors"
+version = "0.2.2353-alpha.1"
+
+
+edition = "2021"
+description = "Generic read-only hardware sensor model and Intel DTS pure helpers"
+
+[dependencies]
+
+[lib]
+path = "src/lib.rs"

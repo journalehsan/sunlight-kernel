@@ -47,6 +47,8 @@ members = [
     "std-proof/sunlight-dict",
     "sunlight-hangman", "helios-note",
     "cpu-utils",
+    "sunlight-smbios",
+    "sunlight-sensors",
     "sunlight-edit",
     "sunlight-emoji-picker",
     "sunlight-writer",

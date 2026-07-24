@@ -91,9 +91,109 @@ pub enum SunlightSyscall {
     SvgaGetInfo = 127,
     SvgaUpdate = 128,
     SvgaSetMode = 129,
+    /// Public system identity (no serial/UUID). Gated to thermald/deviced/UI.
+    SystemIdentity = 133,
+    /// Thermal sensor snapshot (read-only). Gated to thermald/UI.
+    ThermalSensors = 134,
     DebugLog = 99,
     /// Trusted PTY service credential lookup for an IPC caller PID.
     PtyGetCredentials = 103,
+}
+
+/// Public SMBIOS-derived system identity (never includes serial/UUID).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SystemIdentityRecord {
+    pub manufacturer: [u8; 64],
+    pub product_name: [u8; 64],
+    pub product_version: [u8; 64],
+    pub board_manufacturer: [u8; 64],
+    pub board_product: [u8; 64],
+    pub bios_vendor: [u8; 64],
+    pub bios_version: [u8; 64],
+    pub smbios_major: u8,
+    pub smbios_minor: u8,
+    pub identity_confidence: u8,
+    pub ready: u8,
+    pub _pad: [u8; 4],
+}
+
+impl SystemIdentityRecord {
+    pub const fn empty() -> Self {
+        Self {
+            manufacturer: [0; 64],
+            product_name: [0; 64],
+            product_version: [0; 64],
+            board_manufacturer: [0; 64],
+            board_product: [0; 64],
+            bios_vendor: [0; 64],
+            bios_version: [0; 64],
+            smbios_major: 0,
+            smbios_minor: 0,
+            identity_confidence: 0,
+            ready: 0,
+            _pad: [0; 4],
+        }
+    }
+
+    pub fn field_str(field: &[u8; 64]) -> &str {
+        let len = field.iter().position(|&b| b == 0).unwrap_or(field.len());
+        core::str::from_utf8(&field[..len]).unwrap_or("")
+    }
+
+    pub fn manufacturer_str(&self) -> &str {
+        Self::field_str(&self.manufacturer)
+    }
+
+    pub fn product_name_str(&self) -> &str {
+        Self::field_str(&self.product_name)
+    }
+}
+
+/// One thermal sensor record exported by the kernel (read-only).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ThermalSensorRecord {
+    pub id: u32,
+    pub class: u8,
+    pub label: u8,
+    pub location: u8,
+    pub unit: u8,
+    pub scope: u8,
+    pub source: u8,
+    pub read_only: u8,
+    pub status: u8,
+    pub _pad: [u8; 3],
+    pub value: i32,
+    pub mono_ms: u64,
+}
+
+impl ThermalSensorRecord {
+    pub const fn empty() -> Self {
+        Self {
+            id: 0,
+            class: 0,
+            label: 0,
+            location: 0,
+            unit: 0,
+            scope: 0,
+            source: 0,
+            read_only: 1,
+            status: 2, // Unavailable
+            _pad: [0; 3],
+            value: 0,
+            mono_ms: 0,
+        }
+    }
+
+    /// Temperature only when status is Valid (1). Never treat Unavailable as 0°C.
+    pub fn temp_milli_c(self) -> Option<i32> {
+        if self.status == 1 {
+            Some(self.value)
+        } else {
+            None
+        }
+    }
 }
 
 /// System statistics filled by the SysInfo syscall (kernel writes four u64s).
@@ -1763,6 +1863,8 @@ pub mod ThermaldMsg {
     pub const SET_VALIDATED_CUSTOM_POLICY: u64 = 0xD220; // optional; may ERR_UNSUPPORTED
     pub const RESET_SAFE_DEFAULTS: u64 = 0xD211;
     pub const FORCE_FIRMWARE_AUTO: u64 = 0xD212;
+    /// Public system identity (no serial/UUID).
+    pub const GET_IDENTITY: u64 = 0xD206;
     /// Service-internal / privileged lifecycle hooks (suspend/resume notification).
     pub const PREPARE_SUSPEND: u64 = 0xD230;
     pub const RESUME: u64 = 0xD231;
@@ -1852,6 +1954,9 @@ impl ThermalConstraintSource {
 }
 
 /// Overall thermal classification used by thermald / UI / CLI.
+///
+/// `Normal` is reported only when a controlling temperature sensor is valid
+/// and fresh. Missing/stale/unsupported telemetry uses `Unavailable`.
 #[repr(u64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThermalState {
@@ -1859,15 +1964,20 @@ pub enum ThermalState {
     Warm = 1,
     Hot = 2,
     Critical = 3,
+    /// No valid controlling sensor (missing, stale, unsupported, or unknown).
+    Unavailable = 4,
 }
 
 impl ThermalState {
     pub const fn from_u64(v: u64) -> Self {
         match v {
+            0 => Self::Normal,
             1 => Self::Warm,
             2 => Self::Hot,
             3 => Self::Critical,
-            _ => Self::Normal,
+            4 => Self::Unavailable,
+            // Unknown tags must not become Normal (that would imply a valid sensor).
+            _ => Self::Unavailable,
         }
     }
 
@@ -1877,7 +1987,16 @@ impl ThermalState {
             Self::Warm => "Warm",
             Self::Hot => "Hot",
             Self::Critical => "Critical",
+            Self::Unavailable => "Unavailable",
         }
+    }
+
+    /// True when a live controlling temperature was used for classification.
+    pub const fn has_valid_controlling_sensor(self) -> bool {
+        matches!(
+            self,
+            Self::Normal | Self::Warm | Self::Hot | Self::Critical
+        )
     }
 }
 
@@ -3689,6 +3808,55 @@ pub fn hardware_inventory_record(index: usize) -> Option<(HardwareInventoryRecor
         None
     } else {
         Some((record, ret as usize))
+    }
+}
+
+/// Public system identity from kernel SMBIOS parse (no serial/UUID).
+pub fn system_identity() -> Option<SystemIdentityRecord> {
+    let mut record = SystemIdentityRecord::empty();
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::SystemIdentity,
+            &mut record as *mut SystemIdentityRecord as u64,
+            core::mem::size_of::<SystemIdentityRecord>() as u64,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if ret == u64::MAX {
+        None
+    } else {
+        Some(record)
+    }
+}
+
+/// Thermal sensors from kernel Intel DTS backend.
+/// Returns (filled_count, total_available).
+pub fn thermal_sensors(out: &mut [ThermalSensorRecord]) -> Option<(usize, usize)> {
+    if out.is_empty() {
+        return Some((0, 0));
+    }
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::ThermalSensors,
+            out.as_mut_ptr() as u64,
+            out.len() as u64,
+            core::mem::size_of::<ThermalSensorRecord>() as u64,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if ret == u64::MAX {
+        None
+    } else {
+        let total = ret as usize;
+        let filled = total.min(out.len());
+        Some((filled, total))
     }
 }
 

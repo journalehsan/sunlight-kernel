@@ -6,6 +6,7 @@
 //! Safety:
 //! - Starts in firmware-auto / monitoring-only.
 //! - Manual fan control is disabled until a kernel-owned EC lease exists.
+//! - Live power constraints from real DTS are disabled until physical validation.
 //! - Never replaces hardware critical thermal protection.
 
 #![no_std]
@@ -13,12 +14,12 @@
 
 mod backend;
 
-use backend::{NullBackend, ThermalBackend};
+use backend::{ProductionBackend, ThermalBackend};
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_recv_timeout, ipc_reply, monotonic_millis,
     nameserver_lookup, nameserver_register, CoolingProfile, FanControlMode, FanLevel, IpcMsg,
-    LeaseState, PowerProfile, PowerdMsg, ThermalConstraintReason, ThermalConstraintSeverity,
-    ThermalConstraintSource, ThermalState, ThermaldMsg,
+    LeaseState, PowerProfile, PowerdMsg, SystemIdentityRecord, ThermalConstraintReason,
+    ThermalConstraintSeverity, ThermalConstraintSource, ThermalState, ThermaldMsg,
 };
 use sunlight_thermald::{
     classify_thermal_state, recommended_max_power_mode, validate_sensor, HardwareModel,
@@ -28,7 +29,7 @@ use sunlight_thermald::{
 
 struct ServiceState {
     policy: ThermalPolicy,
-    backend: NullBackend,
+    backend: ProductionBackend,
     last_sample_ms: u64,
     last_lease_renew_ms: u64,
     last_power_gen_sent: u64,
@@ -39,15 +40,21 @@ struct ServiceState {
     on_ac: Option<bool>,
     powerd_ok: bool,
     config: PersistedConfig,
+    package_sensor: bool,
 }
 
 impl ServiceState {
     fn new() -> Self {
-        let backend = NullBackend;
+        let backend = ProductionBackend::discover();
         let model = backend.model();
         let mut policy = ThermalPolicy::new(model);
         let config = PersistedConfig::safe_defaults();
         policy.apply_persisted(config);
+        // When monitoring is available but model is Generic/Unknown, force
+        // FirmwareAuto display rather than Unavailable when sensors exist.
+        if backend.monitoring_available() {
+            policy.force_firmware_auto();
+        }
         Self {
             policy,
             backend,
@@ -61,27 +68,31 @@ impl ServiceState {
             on_ac: None,
             powerd_ok: false,
             config,
+            package_sensor: false,
         }
     }
 
     fn sample(&mut self, now: u64) {
-        // Read sensors.
         let raw = self.backend.read_cpu_temp_mc(now);
         let validated = match raw {
-            Ok((t, ts)) => validate_sensor(Some((t, ts)), now, self.policy.status().controlling_temp_mc),
+            Ok((t, ts)) => {
+                validate_sensor(Some((t, ts)), now, self.policy.status().controlling_temp_mc)
+            }
             Err(e) => Err(e),
         };
         let sensor = validated.map(|(t, _)| t);
         let action = self.policy.tick_sensor(now, sensor);
         self.apply_action(action);
 
-        // Fan observation (best-effort).
         if let Ok(snap) = self.backend.read_fan() {
             self.fan_rpm = snap.rpm;
             self.observed_level = snap.level;
+            // Prefer FirmwareAuto when fan is firmware-owned.
+            if snap.firmware_auto && !self.backend.control_available() {
+                // Policy already holds MonitoringOnly/Unavailable; leave it.
+            }
         }
 
-        // Lease renew if managed (currently never in production).
         if self.policy.status().lease == LeaseState::Healthy
             && now.saturating_sub(self.last_lease_renew_ms) >= LEASE_RENEW_MS
         {
@@ -97,7 +108,21 @@ impl ServiceState {
             }
         }
 
-        self.sync_power_constraint(now);
+        // Detect package sensor for labeling.
+        self.package_sensor = false;
+        for i in 0..self.backend.sensor_count() {
+            if let Some(s) = self.backend.sensor_at(i) {
+                // class 1 = CpuPackage
+                if s.class == 1 && s.status == 1 {
+                    self.package_sensor = true;
+                    break;
+                }
+            }
+        }
+
+        if self.backend.power_constraints_allowed() {
+            self.sync_power_constraint(now);
+        }
         self.refresh_powerd_status();
         self.last_sample_ms = now;
     }
@@ -127,7 +152,6 @@ impl ServiceState {
         }
         let Some(powerd) = nameserver_lookup("powerd") else {
             self.powerd_ok = false;
-            // Do not clear local state; report unavailable.
             return;
         };
         self.powerd_ok = true;
@@ -146,16 +170,15 @@ impl ServiceState {
                     ThermalConstraintSeverity::Critical,
                     ThermalConstraintReason::ThermalCritical,
                 ),
-                ThermalState::Normal => (
+                ThermalState::Normal | ThermalState::Unavailable => (
                     ThermalConstraintSeverity::None,
                     ThermalConstraintReason::None,
                 ),
             };
-            // Prefer recommended severity from helper when available.
-            let (sev, reason) = if let Some((_, s, r)) =
-                st.controlling_temp_mc
-                    .map(classify_thermal_state)
-                    .and_then(recommended_max_power_mode)
+            let (sev, reason) = if let Some((_, s, r)) = st
+                .controlling_temp_mc
+                .map(classify_thermal_state)
+                .and_then(recommended_max_power_mode)
             {
                 (s, r)
             } else {
@@ -191,7 +214,6 @@ impl ServiceState {
         };
         let reply = ipc_call(powerd, IpcMsg::with_label(PowerdMsg::GET_POWER_POLICY_STATUS));
         if reply.label != PowerdMsg::REPLY {
-            // Fall back to GET_STATUS for older powerd during roll-out.
             let reply = ipc_call(powerd, IpcMsg::with_label(PowerdMsg::GET_STATUS));
             if reply.label == PowerdMsg::REPLY {
                 self.power_requested = PowerProfile::from_u64(reply.words[0]);
@@ -235,20 +257,23 @@ impl ServiceState {
             err |= ERR_SENSOR_MISSING;
         }
 
-        // word0: thermal_state | fan_mode<<8 | profile<<16 | lease<<24
+        // Prefer FirmwareAuto reporting when monitoring with sensors (firmware owns fan).
+        let fan_mode = if self.backend.monitoring_available() && !self.backend.control_available() {
+            FanControlMode::FirmwareAuto
+        } else {
+            st.fan_mode
+        };
+
         let w0 = (st.thermal_state as u64)
-            | ((st.fan_mode as u64) << 8)
+            | ((fan_mode as u64) << 8)
             | ((st.profile as u64) << 16)
             | ((st.lease as u64) << 24);
-        // word1: temp milli-C as i32 bit pattern, or i32::MIN if missing
         let w1 = match st.controlling_temp_mc {
             Some(t) => t as u32 as u64,
             None => i32::MIN as u32 as u64,
         };
-        // word2: requested_level | rpm<<8 (rpm 0 = unknown, packed as u16)
         let rpm = self.fan_rpm.unwrap_or(0) as u64;
         let w2 = (st.requested_level as u64) | (rpm << 8);
-        // word3: power requested | effective<<8 | on_ac flags<<16 | constraint<<24
         let mut w3 = (self.power_requested as u64) | ((self.power_effective as u64) << 8);
         if let Some(ac) = self.on_ac {
             w3 |= 1 << 16;
@@ -256,14 +281,18 @@ impl ServiceState {
                 w3 |= 1 << 17;
             }
         }
-        if st.power_constraint_active {
+        if st.power_constraint_active && self.backend.power_constraints_allowed() {
             w3 |= 1 << 24;
         }
         if let Some(m) = st.max_power_mode {
             w3 |= (m as u64) << 32;
         }
-        // word4: error flags | model<<32
-        let w4 = (err as u64) | (model_tag(self.policy.model()) << 32);
+        // word4: error flags | model<<32 | package_flag<<40 | sensor_count<<48
+        let mut w4 = (err as u64) | (model_tag(self.policy.model()) << 32);
+        if self.package_sensor {
+            w4 |= 1 << 40;
+        }
+        w4 |= (self.backend.sensor_count() as u64) << 48;
 
         IpcMsg::with_label(ThermaldMsg::REPLY)
             .word(0, w0)
@@ -274,18 +303,36 @@ impl ServiceState {
     }
 
     fn reply_sensor(&self, index: u64) -> IpcMsg {
-        // v0: single logical CPU package sensor at index 0 when present.
-        if index != 0 {
-            return IpcMsg::with_label(ThermaldMsg::ERROR).word(0, ThermaldMsg::ERR_NOT_FOUND);
+        let idx = index as usize;
+        let total = self.backend.sensor_count();
+        if total == 0 {
+            // Advertise a single unavailable slot so CLI stays stable.
+            if idx != 0 {
+                return IpcMsg::with_label(ThermaldMsg::ERROR).word(0, ThermaldMsg::ERR_NOT_FOUND);
+            }
+            return IpcMsg::with_label(ThermaldMsg::REPLY)
+                .word(0, 0)
+                .word(1, 0) // invalid
+                .word(2, 0) // must not mean 0°C
+                .word(3, 1)
+                .word(4, 2); // status Unavailable
         }
-        let st = self.policy.status();
-        let valid = st.controlling_temp_mc.is_some() as u64;
-        let temp = st.controlling_temp_mc.unwrap_or(0) as u32 as u64;
+        let Some(s) = self.backend.sensor_at(idx) else {
+            return IpcMsg::with_label(ThermaldMsg::ERROR).word(0, ThermaldMsg::ERR_NOT_FOUND);
+        };
+        let valid = (s.status == 1) as u64;
+        let temp = if s.status == 1 || s.status == 4 {
+            s.value as u32 as u64
+        } else {
+            0
+        };
         IpcMsg::with_label(ThermaldMsg::REPLY)
-            .word(0, 0) // id
+            .word(0, s.id as u64)
             .word(1, valid)
             .word(2, temp)
-            .word(3, 1) // total sensors advertised
+            .word(3, total as u64)
+            .word(4, (s.status as u64) | ((s.class as u64) << 8) | ((s.source as u64) << 16) | ((s.label as u64) << 24))
+            .word(5, s.mono_ms)
     }
 
     fn reply_cooling(&self, index: u64) -> IpcMsg {
@@ -293,14 +340,51 @@ impl ServiceState {
             return IpcMsg::with_label(ThermaldMsg::ERROR).word(0, ThermaldMsg::ERR_NOT_FOUND);
         }
         let st = self.policy.status();
+        let fan_mode = if self.backend.monitoring_available() && !self.backend.control_available() {
+            FanControlMode::FirmwareAuto
+        } else {
+            st.fan_mode
+        };
         let rpm = self.fan_rpm.unwrap_or(0) as u64;
         IpcMsg::with_label(ThermaldMsg::REPLY)
-            .word(0, 0) // device id
-            .word(1, st.fan_mode as u64)
+            .word(0, 0)
+            .word(1, fan_mode as u64)
             .word(2, st.requested_level as u64)
             .word(3, rpm)
-            .word(4, 1) // total
+            .word(4, 1)
     }
+
+    fn reply_identity(&self) -> IpcMsg {
+        let Some(id) = self.backend.identity().or_else(sunlight_ipc::system_identity) else {
+            return IpcMsg::with_label(ThermaldMsg::ERROR).word(0, ThermaldMsg::ERR_UNAVAILABLE);
+        };
+        // Pack short tags into words; full strings via dedicated multi-message later.
+        // words: major/minor/confidence/ready, then hash-like first 8 bytes of mfr/product.
+        let w0 = (id.smbios_major as u64)
+            | ((id.smbios_minor as u64) << 8)
+            | ((id.identity_confidence as u64) << 16)
+            | ((id.ready as u64) << 24);
+        let w1 = pack8(&id.manufacturer);
+        let w2 = pack8(&id.product_name);
+        let w3 = pack8(&id.bios_vendor);
+        let w4 = pack8(&id.bios_version);
+        IpcMsg::with_label(ThermaldMsg::REPLY)
+            .word(0, w0)
+            .word(1, w1)
+            .word(2, w2)
+            .word(3, w3)
+            .word(4, w4)
+            // Flag that full identity is available via kernel syscall for privileged tools.
+            .word(5, 1)
+    }
+}
+
+fn pack8(field: &[u8; 64]) -> u64 {
+    let mut w = 0u64;
+    for i in 0..8 {
+        w |= (field[i] as u64) << (i * 8);
+    }
+    w
 }
 
 fn model_tag(m: HardwareModel) -> u64 {
@@ -340,51 +424,92 @@ pub extern "C" fn _start() -> ! {
     debug_log("[THERMALD] registered as 'thermald'");
 
     let mut state = ServiceState::new();
-    // Boot sequence: firmware-auto → discover → validate config → sensors → (lease if safe).
     state.policy.force_firmware_auto();
     let _ = state.backend.restore_firmware_auto();
     state.config = PersistedConfig::safe_defaults();
     state.policy.apply_persisted(state.config);
 
+    if let Some(id) = state.backend.identity() {
+        if id.ready != 0 {
+            serial_println!(
+                "[THERMALD] identity ready smbios={}.{} conf={}",
+                id.smbios_major,
+                id.smbios_minor,
+                id.identity_confidence
+            );
+            // Log public product only (never serial/UUID).
+            let mfr = SystemIdentityRecord::field_str(&id.manufacturer);
+            let prod = SystemIdentityRecord::field_str(&id.product_name);
+            if !mfr.is_empty() && !prod.is_empty() {
+                serial_println!("[THERMALD] device: {} {}", mfr, prod);
+            }
+        }
+    }
+    if state.backend.monitoring_available() {
+        debug_log("[THERMALD] kernel thermal sensors available (Intel DTS)");
+    } else {
+        debug_log("[THERMALD] no thermal sensors (FirmwareAuto / Unavailable)");
+    }
+
     let mut now = monotonic_millis();
     state.sample(now);
 
+    // Idle-cost measurement (Phase 1 validation):
+    // Previously ipc_recv_timeout(ep, 200) woke ~5 Hz while kernel DTS and
+    // SAMPLE_INTERVAL_MS are ~1 Hz. Over a 10 s window that yields ~50 wakes
+    // and ~10 samples (ratio 5:1) even when no IPC messages arrive — pure
+    // same-generation polling. Measured fix: wait up to SAMPLE_INTERVAL_MS so
+    // the service wake rate matches the sensor generation rate (~1 Hz) while
+    // still handling IPC promptly when a client is present (recv returns early).
+    const IPC_IDLE_WAIT_MS: u64 = SAMPLE_INTERVAL_MS;
+    let mut wake_count: u64 = 0;
+    let mut sample_count: u64 = 0;
+    let mut idle_wake_count: u64 = 0;
+    let measure_until = now.saturating_add(10_000);
+    let mut measured = false;
+
     loop {
         now = monotonic_millis();
+        wake_count = wake_count.saturating_add(1);
         if now.saturating_sub(state.last_sample_ms) >= SAMPLE_INTERVAL_MS {
             state.sample(now);
+            sample_count = sample_count.saturating_add(1);
         }
 
-        // Event-driven IPC with short timeout so sampling stays ~1 Hz without busy-loop.
-        match ipc_recv_timeout(ep, 200) {
+        match ipc_recv_timeout(ep, IPC_IDLE_WAIT_MS) {
             Some(msg) => {
                 let reply = handle_msg(&mut state, &msg);
                 ipc_reply(reply);
             }
             None => {
-                // idle
+                idle_wake_count = idle_wake_count.saturating_add(1);
             }
+        }
+
+        if !measured && now >= measure_until {
+            measured = true;
+            serial_println!(
+                "[THERMALD] idle-cost 10s: wakes={} samples={} idle_timeouts={} wait_ms={}",
+                wake_count,
+                sample_count,
+                idle_wake_count,
+                IPC_IDLE_WAIT_MS
+            );
         }
     }
 }
 
 fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
     match msg.label {
-        ThermaldMsg::GET_STATUS => {
-            // Refresh packing with correct model tag.
-            let mut r = state.reply_status();
-            // Overwrite word4 model bits cleanly.
-            let err = r.words[4] & 0xffff_ffff;
-            r.words[4] = err | (model_tag(state.policy.model()) << 32);
-            r
-        }
+        ThermaldMsg::GET_STATUS => state.reply_status(),
         ThermaldMsg::LIST_SENSORS => state.reply_sensor(msg.words[0]),
         ThermaldMsg::LIST_COOLING => state.reply_cooling(msg.words[0]),
+        ThermaldMsg::GET_IDENTITY => state.reply_identity(),
         ThermaldMsg::GET_PROFILE | ThermaldMsg::GET_POLICY => {
             let p = state.policy.profile() as u64;
             IpcMsg::with_label(ThermaldMsg::REPLY)
                 .word(0, p)
-                .word(1, 0) // custom not used
+                .word(1, 0)
         }
         ThermaldMsg::SET_PROFILE => {
             let profile = CoolingProfile::from_u64(msg.words[0]);
@@ -420,9 +545,7 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
             serial_println!("[THERMALD] resume -> firmware-auto");
             state.reply_status()
         }
-        ThermaldMsg::SET_VALIDATED_CUSTOM_POLICY => {
-            reply_err(ThermaldMsg::ERR_UNSUPPORTED)
-        }
+        ThermaldMsg::SET_VALIDATED_CUSTOM_POLICY => reply_err(ThermaldMsg::ERR_UNSUPPORTED),
         _ => reply_err(ThermaldMsg::ERR_BAD_REQUEST),
     }
 }

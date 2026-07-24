@@ -809,6 +809,10 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // 2–3 redundant CPUID executions the old code did per tick per core.
     let cpu_id = crate::sched::current_cpu_id();
 
+    // Per-core Intel DTS sample (allowlisted models only; ~1 Hz). Each CPU
+    // reads its own IA32_THERM_STATUS so readings are never mislabeled.
+    crate::thermal_hw::on_timer_tick(cpu_id);
+
     // ── AP fast-paths (lock-free) ─────────────────────────────────────────────
 
     // AP: scheduler not yet ready — run queues not seeded, skip everything.
