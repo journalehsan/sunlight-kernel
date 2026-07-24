@@ -61,7 +61,7 @@
 //! # Icon handling
 //!
 //! Pass an `Option<&TgaImage>` via [`SidebarItem::with_icon`]. The image is
-//! nearest-neighbour scaled to [`SidebarItem::ICON_SIZE`]x[...] on blit by the
+//! scaled to [`SidebarItem::ICON_SIZE`]×[…] on blit by the
 //! existing zero-alloc [`Canvas::draw_tga_icon`] — so any native source size
 //! (16, 32, 48, 64, 256 ...) works. **32x32 is the recommended source size**
 //! for sidebar use, since it needs no upscaling and stays crisp.
@@ -142,8 +142,9 @@ pub struct SidebarItem<'a> {
     /// Optional short badge shown at the right edge (e.g. an unread count).
     /// Rendered inside an accent-tinted pill for readability.
     pub badge: Option<&'a str>,
-    /// Optional TGA icon. Any native size — nearest-neighbour scaled to
-    /// [`ICON_SIZE`](Self::ICON_SIZE)x[..] on blit. Pass `None` for text rows.
+    /// Optional TGA icon. Any native size — bilinear-scaled (premultiplied)
+    /// to [`ICON_SIZE`](Self::ICON_SIZE) on blit; 1:1 uses the fast path.
+    /// Pass `None` for text rows.
     pub icon: Option<&'a TgaImage>,
     pub state: SidebarState,
     /// Vector font for label rendering. Falls back to the 5×7 bitmap font when `None`.
@@ -155,7 +156,7 @@ impl<'a> SidebarItem<'a> {
     /// Comfortably fits a 32x32 icon plus a two-line title/hint block.
     pub const HEIGHT: u32 = 48;
 
-    /// Icon render size (nearest-neighbour scaled from the TGA's native size).
+    /// Icon render size (scaled from the TGA's native size).
     /// 32x32 is the recommended source resolution for sidebar icons.
     pub const ICON_SIZE: u32 = 32;
 
@@ -199,7 +200,7 @@ impl<'a> SidebarItem<'a> {
         self
     }
 
-    /// Optional TGA icon, nearest-neighbour scaled to [`ICON_SIZE`](Self::ICON_SIZE).
+    /// Optional TGA icon, scaled to [`ICON_SIZE`](Self::ICON_SIZE).
     pub fn with_icon(mut self, icon: &'a TgaImage) -> Self {
         self.icon = Some(icon);
         self

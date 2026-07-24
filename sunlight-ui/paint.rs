@@ -339,37 +339,128 @@ impl<'fb> Canvas<'fb> {
         self.draw_text(tx, ty, text, color);
     }
 
-    /// Fill the canvas by scaling `img` to cover it (nearest-neighbour, no alloc).
-    ///
-    /// Both axes are scaled independently so the image fills the canvas exactly.
-    /// For same-aspect-ratio images (e.g., a 16:9 wallpaper on a 16:9 screen)
-    /// this is identical to cover/center-crop with no cropping required.
     /// Blit a TGA icon scaled to `dst`, with alpha compositing.
     ///
-    /// The source image is nearest-neighbour scaled from its native resolution to
-    /// `dst.w × dst.h`.  Fully-transparent pixels are skipped; partially-
-    /// transparent pixels are blended over whatever is already in the canvas.
-    /// Clipping against canvas bounds is applied automatically.
+    /// **Fast path** (native size, no corner radius): direct 1:1 sample + blend,
+    /// no bilinear math.
+    ///
+    /// **Scaled path**: bilinear sampling in premultiplied-alpha space so
+    /// transparent edge RGB cannot form dark/coloured halos.
+    ///
+    /// Fully transparent source samples are skipped; partial alpha uses the
+    /// canonical source-over blend. Clipping against canvas bounds is automatic.
+    /// No heap allocation.
     pub fn draw_tga_icon(&mut self, img: &crate::image::TgaImage, dst: Rect) {
-        if img.width == 0 || img.height == 0 {
+        self.draw_tga_icon_rounded(img, dst, 0);
+    }
+
+    /// Like [`draw_tga_icon`](Self::draw_tga_icon) with optional corner radius.
+    ///
+    /// `corner_radius == 0` preserves rectangular behaviour. Excess radii are
+    /// clamped to half the destination size. Coverage is analytic (~1 px AA
+    /// only in the corner regions); the interior stays on the fast path.
+    pub fn draw_tga_icon_rounded(
+        &mut self,
+        img: &crate::image::TgaImage,
+        dst: Rect,
+        corner_radius: u32,
+    ) {
+        self.blit_tga(img, dst, corner_radius, None);
+    }
+
+    /// Draw a TGA icon (typically white+alpha from Material Icons raster) tinted
+    /// to a solid `tint` color using the source alpha mask. This produces clean
+    /// monochrome icons that match theme.icon_foreground / accent etc. without
+    /// baking color into the asset. Reduces reliance on colored bitmaps → lower RAM.
+    pub fn draw_tga_icon_tinted(&mut self, img: &crate::image::TgaImage, dst: Rect, tint: Color) {
+        self.draw_tga_icon_tinted_rounded(img, dst, tint, 0);
+    }
+
+    /// Tinted TGA blit with optional antialiased corner radius (see
+    /// [`draw_tga_icon_rounded`](Self::draw_tga_icon_rounded)).
+    pub fn draw_tga_icon_tinted_rounded(
+        &mut self,
+        img: &crate::image::TgaImage,
+        dst: Rect,
+        tint: Color,
+        corner_radius: u32,
+    ) {
+        self.blit_tga(img, dst, corner_radius, Some(tint));
+    }
+
+    /// Shared TGA blit: optional tint + optional rounded clip + bilinear when scaled.
+    fn blit_tga(
+        &mut self,
+        img: &crate::image::TgaImage,
+        dst: Rect,
+        corner_radius: u32,
+        tint: Option<Color>,
+    ) {
+        use crate::image::blit::{
+            apply_coverage, blend_source_over, map_src_fp, rounded_rect_coverage,
+            sample_bilinear_premul,
+        };
+
+        if img.width == 0 || img.height == 0 || dst.w == 0 || dst.h == 0 {
             return;
         }
         let cx0 = dst.x.max(0) as u32;
         let cy0 = dst.y.max(0) as u32;
-        let cx1 = (dst.right() as u32).min(self.width);
-        let cy1 = (dst.bottom() as u32).min(self.height);
+        let cx1 = dst.right().min(self.width as i32).max(0) as u32;
+        let cy1 = dst.bottom().min(self.height as i32).max(0) as u32;
         if cx0 >= cx1 || cy0 >= cy1 {
             return;
         }
-        let dw = (dst.right() - dst.x.max(0)).max(1) as u32;
-        let dh = (dst.bottom() - dst.y.max(0)).max(1) as u32;
+
+        let dw = dst.w;
+        let dh = dst.h;
+        let sw = img.width;
+        let sh = img.height;
+        let exact_size = dw == sw && dh == sh;
+        let radius = crate::image::blit::clamp_corner_radius(dw, dh, corner_radius);
+        let use_radius = radius > 0;
+
+        // Closure-friendly sample of the source image.
+        let sample = |x: u32, y: u32| img.pixel_argb(x, y);
 
         for dy in cy0..cy1 {
-            let src_y = (dy - cy0) * img.height / dh;
             let row_off = dy as usize * self.stride as usize;
+            let ly = dy as i32 - dst.y;
             for dx in cx0..cx1 {
-                let src_x = (dx - cx0) * img.width / dw;
-                let argb = img.pixel_argb(src_x, src_y);
+                let lx = dx as i32 - dst.x;
+
+                let coverage = if use_radius {
+                    rounded_rect_coverage(dst.x, dst.y, dw, dh, radius, dx as i32, dy as i32)
+                } else {
+                    255
+                };
+                if coverage == 0 {
+                    continue;
+                }
+
+                let mut argb = if exact_size {
+                    // 1:1 fast path — integer sample, no bilinear.
+                    sample(lx as u32, ly as u32)
+                } else {
+                    let x_fp = map_src_fp(lx, dw, sw);
+                    let y_fp = map_src_fp(ly, dh, sh);
+                    sample_bilinear_premul(&sample, sw, sh, x_fp, y_fp)
+                };
+
+                if coverage != 255 {
+                    argb = apply_coverage(argb, coverage);
+                }
+
+                if let Some(t) = tint {
+                    let a = (argb >> 24) as u8;
+                    if a == 0 {
+                        continue;
+                    }
+                    let source_alpha =
+                        crate::image::blit::mul_div_255(a as u32, t.a() as u32) as u8;
+                    argb = Color::rgba(t.r(), t.g(), t.b(), source_alpha).0;
+                }
+
                 let a = (argb >> 24) as u8;
                 if a == 0 {
                     continue;
@@ -381,47 +472,8 @@ impl<'fb> Canvas<'fb> {
                 if a == 255 {
                     self.pixels[idx] = argb;
                 } else {
-                    self.pixels[idx] = Color(argb).blend_over(Color(self.pixels[idx])).0;
+                    self.pixels[idx] = blend_source_over(argb, self.pixels[idx]);
                 }
-            }
-        }
-    }
-
-    /// Draw a TGA icon (typically white+alpha from Material Icons raster) tinted
-    /// to a solid `tint` color using the source alpha mask. This produces clean
-    /// monochrome icons that match theme.icon_foreground / accent etc. without
-    /// baking color into the asset. Reduces reliance on colored bitmaps → lower RAM.
-    pub fn draw_tga_icon_tinted(&mut self, img: &crate::image::TgaImage, dst: Rect, tint: Color) {
-        if img.width == 0 || img.height == 0 {
-            return;
-        }
-        let cx0 = dst.x.max(0) as u32;
-        let cy0 = dst.y.max(0) as u32;
-        let cx1 = (dst.right() as u32).min(self.width);
-        let cy1 = (dst.bottom() as u32).min(self.height);
-        if cx0 >= cx1 || cy0 >= cy1 {
-            return;
-        }
-        let dw = (dst.right() - dst.x.max(0)).max(1) as u32;
-        let dh = (dst.bottom() - dst.y.max(0)).max(1) as u32;
-
-        for dy in cy0..cy1 {
-            let src_y = (dy - cy0) * img.height / dh;
-            let row_off = dy as usize * self.stride as usize;
-            for dx in cx0..cx1 {
-                let src_x = (dx - cx0) * img.width / dw;
-                let argb = img.pixel_argb(src_x, src_y);
-                let a = (argb >> 24) as u8;
-                if a == 0 {
-                    continue;
-                }
-                let idx = row_off + dx as usize;
-                if idx >= self.pixels.len() {
-                    continue;
-                }
-                let source_alpha = ((a as u32 * tint.a() as u32 + 127) / 255) as u8;
-                let source = Color::rgba(tint.r(), tint.g(), tint.b(), source_alpha);
-                self.pixels[idx] = source.blend_over(Color(self.pixels[idx])).0;
             }
         }
     }
@@ -542,6 +594,110 @@ mod material_tests {
         let mut canvas = Canvas::new(&mut pixels, 1, 1, 1);
         canvas.draw_image_cover(&image);
         assert_eq!(pixels[0], 0xFF00_00FF);
+    }
+
+    // Synthetic 4×4 TGA (type-2, 32 bpp, top-down):
+    //   - inner 2×2: opaque green
+    //   - outer ring: fully transparent with hostile red RGB
+    // Layout per pixel: B, G, R, A
+    static HOSTILE_EDGE_TGA: [u8; 18 + 64] = {
+        let mut tga = [0u8; 82];
+        tga[2] = 2;
+        tga[12] = 4;
+        tga[14] = 4;
+        tga[16] = 32;
+        tga[17] = 0x20;
+        // Row-major 4×4. Indices into pixel payload.
+        // inside when x,y in {1,2}
+        let mut y = 0usize;
+        while y < 4 {
+            let mut x = 0usize;
+            while x < 4 {
+                let i = 18 + (y * 4 + x) * 4;
+                let inside = x >= 1 && x <= 2 && y >= 1 && y <= 2;
+                if inside {
+                    tga[i] = 0;
+                    tga[i + 1] = 255;
+                    tga[i + 2] = 0;
+                    tga[i + 3] = 255;
+                } else {
+                    tga[i] = 0;
+                    tga[i + 1] = 0;
+                    tga[i + 2] = 255; // hostile red
+                    tga[i + 3] = 0;
+                }
+                x += 1;
+            }
+            y += 1;
+        }
+        tga
+    };
+
+    #[test]
+    fn scaled_icon_bilinear_avoids_red_fringe_from_transparent_texels() {
+        let image = TgaImage::parse(&HOSTILE_EDGE_TGA).unwrap();
+        // White destination so any red fringe would be visible.
+        let mut pixels = [0xFFFF_FFFFu32; 64];
+        let mut canvas = Canvas::new(&mut pixels, 8, 8, 8);
+        canvas.draw_tga_icon(&image, Rect::new(0, 0, 8, 8));
+        for &p in &pixels {
+            let a = p >> 24;
+            if a == 0 || (a == 255 && (p & 0x00FF_FFFF) == 0x00FF_FFFF) {
+                continue;
+            }
+            let r = (p >> 16) & 0xFF;
+            let g = (p >> 8) & 0xFF;
+            // Over white, blended green stays green-leaning; red must not
+            // dominate (classic straight-RGB fringe symptom).
+            assert!(r <= g + 8, "red fringe detected: {p:#010x} r={r} g={g}");
+        }
+    }
+
+    #[test]
+    fn native_size_radius_zero_matches_direct_sample() {
+        let image = TgaImage::parse(&OPAQUE_RED_TGA).unwrap();
+        let mut a = [0u32; 1];
+        let mut b = [0u32; 1];
+        {
+            let mut ca = Canvas::new(&mut a, 1, 1, 1);
+            ca.draw_tga_icon(&image, Rect::new(0, 0, 1, 1));
+        }
+        {
+            let mut cb = Canvas::new(&mut b, 1, 1, 1);
+            cb.draw_tga_icon_rounded(&image, Rect::new(0, 0, 1, 1), 0);
+        }
+        assert_eq!(a[0], b[0]);
+        assert_eq!(a[0], 0xFFFF_0000);
+    }
+
+    #[test]
+    fn rounded_icon_clips_corners_and_keeps_centre() {
+        let image = TgaImage::parse(&OPAQUE_RED_TGA).unwrap();
+        // Scale 1×1 solid red to 8×8 with circular radius (half size).
+        let mut pixels = [0xFF00_FF00u32; 64]; // green destination
+        let mut canvas = Canvas::new(&mut pixels, 8, 8, 8);
+        canvas.draw_tga_icon_rounded(&image, Rect::new(0, 0, 8, 8), 4);
+        // Centre fully covered → solid red.
+        assert_eq!(pixels[4 * 8 + 4], 0xFFFF_0000, "centre inside circle");
+        // Outer corner is outside/on the AA ring: not solid source red, and
+        // still retains destination green (binary clip would leave it pure green;
+        // AA may blend a little).
+        let corner = pixels[0];
+        assert_ne!(corner, 0xFFFF_0000, "outer corner must not be solid source");
+        let g = (corner >> 8) & 0xFF;
+        assert!(g > 80, "outer corner keeps destination green: {corner:#010x}");
+        // Pixel clearly outside the destination rect is untouched (not drawn).
+        // (covered by rounded_rect_coverage unit tests)
+    }
+
+    #[test]
+    fn channel_order_tga_bgra_to_argb() {
+        // OPAQUE_RED_TGA is B=0,G=0,R=255,A=255 → ARGB 0xFFFF0000
+        let image = TgaImage::parse(&OPAQUE_RED_TGA).unwrap();
+        assert_eq!(image.pixel_argb(0, 0), 0xFFFF_0000);
+        // OPAQUE_BLUE_24 is B=255,G=0,R=0 → ARGB 0xFF0000FF
+        let blue = TgaImage::parse(&OPAQUE_BLUE_24_TGA).unwrap();
+        assert_eq!(blue.pixel_argb(0, 0), 0xFF00_00FF);
     }
 }
 

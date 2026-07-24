@@ -1508,7 +1508,8 @@ impl StartMenuState {
             icon_size,
         );
         if let Some(img) = self.icons.app_icon(slot.entry) {
-            canvas.draw_tga_icon(&img, icon_rect);
+            // Soft-rounded app tile icons (radius 8 ≈ modern launcher chips).
+            canvas.draw_tga_icon_rounded(&img, icon_rect, 8);
         } else {
             canvas.fill_rounded_rect(icon_rect, 6, theme.panel);
         }

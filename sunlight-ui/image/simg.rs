@@ -1,4 +1,4 @@
-//! Owned (heap-backed) SIMG/TGA decoder + nearest-neighbour scaler.
+//! Owned (heap-backed) SIMG/TGA decoder + premultiplied bilinear scaler.
 //!
 //! `image::tga::TgaImage` is a zero-alloc view over a `&'static [u8]`, which is
 //! ideal for `include_bytes!` assets but cannot decode files loaded at runtime
@@ -12,6 +12,10 @@
 //! on-disk bytes are **uncompressed TGA type-2** (the only bitmap format the OS
 //! can decode). So a `.simg` file and a `.tga` file are decoded identically.
 //! See `image::tga` for the byte-level format description.
+//!
+//! **SIMG v2 / compression intentionally deferred.** This module does not add
+//! a new magic, headers, LZ4, or any compressed container — only decode and
+//! scale quality improvements for the existing type-2 payload.
 //!
 //! The decoder is intentionally defensive: malformed or truncated inputs return
 //! `Err` rather than panicking, so a broken thumbnail file can never take down
@@ -128,9 +132,14 @@ pub fn decode(data: &[u8]) -> Result<RgbaImage, DecodeError> {
 }
 
 /// Scale `src` so it fits within `(max_w, max_h)` while preserving aspect
-/// ratio. Uses nearest-neighbour sampling (v0 scaler).
+/// ratio.
 ///
-/// Returns a new owned image; the source is unchanged.
+/// - **1:1** (already fits exactly at native size): memcpy of pixels.
+/// - **Otherwise**: bilinear sampling in premultiplied-alpha space so
+///   transparent edges do not pick up hostile RGB from a=0 texels.
+///
+/// Returns a new owned image; the source is unchanged. Allocation is once for
+/// the output buffer only (not per pixel / not a second full-size scratch).
 pub fn scale_fit(src: &RgbaImage, max_w: u32, max_h: u32) -> RgbaImage {
     if max_w == 0 || max_h == 0 || src.width == 0 || src.height == 0 {
         return RgbaImage {
@@ -140,12 +149,23 @@ pub fn scale_fit(src: &RgbaImage, max_w: u32, max_h: u32) -> RgbaImage {
         };
     }
     let (tw, th) = fit_dimensions(src.width, src.height, max_w, max_h);
+    if tw == src.width && th == src.height {
+        return RgbaImage {
+            width: tw,
+            height: th,
+            pixels: src.pixels.clone(),
+        };
+    }
+
+    use crate::image::blit::{map_src_fp, sample_bilinear_premul};
+
+    let sample = |x: u32, y: u32| src.pixel(x, y);
     let mut out = Vec::with_capacity((tw as usize) * (th as usize));
     for dy in 0..th {
-        let sy = (dy as u64 * src.height as u64 / th as u64) as u32;
+        let y_fp = map_src_fp(dy as i32, th, src.height);
         for dx in 0..tw {
-            let sx = (dx as u64 * src.width as u64 / tw as u64) as u32;
-            out.push(src.pixel(sx, sy));
+            let x_fp = map_src_fp(dx as i32, tw, src.width);
+            out.push(sample_bilinear_premul(&sample, src.width, src.height, x_fp, y_fp));
         }
     }
     RgbaImage {

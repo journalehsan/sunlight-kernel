@@ -645,8 +645,8 @@ impl ControlPanelApp {
         let icon_rect = Rect::new(ix, iy, 48, 48);
 
         if let Some(tga) = tga_icon {
-            // Draw TGA icon with alpha compositing over the panel background.
-            canvas.draw_tga_icon(&tga, icon_rect);
+            // Rounded application icon (AA corner clip + bilinear when scaled).
+            canvas.draw_tga_icon_rounded(&tga, icon_rect, 12);
         } else {
             // Fallback: solid color square + inner highlight.
             canvas.fill_rect(icon_rect, icon_color);

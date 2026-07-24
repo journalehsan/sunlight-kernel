@@ -216,7 +216,8 @@ pub fn draw_computer_page(
     // Hero
     let hero_y = content.y + 8 - scroll;
     if let Some(icon) = icon_computer {
-        canvas.draw_tga_icon(&icon, Rect::new(content.x + 14, hero_y, 40, 40));
+        // Circular hero/avatar treatment (radius = half of 40).
+        canvas.draw_tga_icon_rounded(&icon, Rect::new(content.x + 14, hero_y, 40, 40), 20);
     } else {
         canvas.fill_rounded_rect(
             Rect::new(content.x + 14, hero_y, 40, 40),
