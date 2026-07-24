@@ -1207,6 +1207,54 @@ pub mod MouseMsg {
     pub const RAW_MOTION: u64 = 0x3;
 }
 
+/// Device-independent relative pointer report shared by PS/2, USB HID, TTY,
+/// and the graphical compositor. Positive X moves right and positive Y moves
+/// down; the low three button bits are primary, secondary, and middle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PointerReport {
+    pub dx: i16,
+    pub dy: i16,
+    pub buttons: u8,
+}
+
+impl PointerReport {
+    pub const fn new(dx: i16, dy: i16, buttons: u8) -> Self {
+        Self {
+            dx,
+            dy,
+            buttons: buttons & 0x07,
+        }
+    }
+
+    pub const fn pack(self) -> u64 {
+        (self.dx as u16 as u64) | ((self.dy as u16 as u64) << 16) | ((self.buttons as u64) << 32)
+    }
+
+    pub const fn unpack(word: u64) -> Self {
+        Self {
+            dx: (word & 0xffff) as u16 as i16,
+            dy: ((word >> 16) & 0xffff) as u16 as i16,
+            buttons: ((word >> 32) & 0x07) as u8,
+        }
+    }
+}
+
+#[cfg(test)]
+mod pointer_report_tests {
+    use super::PointerReport;
+
+    #[test]
+    fn normalized_pointer_report_round_trips_signed_axes_and_buttons() {
+        for report in [
+            PointerReport::new(12, -34, 0x01),
+            PointerReport::new(i16::MIN, i16::MAX, 0x07),
+            PointerReport::new(-1, 1, 0xff),
+        ] {
+            assert_eq!(PointerReport::unpack(report.pack()), report);
+        }
+    }
+}
+
 #[allow(non_snake_case)]
 pub mod SpawnMsg {
     pub const SPAWN: u64 = 1;

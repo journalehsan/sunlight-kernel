@@ -530,11 +530,7 @@ mod material_tests {
         let mut pixels = [0u32; 2];
         let mut canvas = Canvas::new(&mut pixels, 2, 2, 1);
         canvas.draw_tga_icon(&opaque, Rect::new(0, 0, 1, 1));
-        canvas.draw_tga_icon_tinted(
-            &masked,
-            Rect::new(1, 0, 1, 1),
-            Color::rgb(20, 40, 60),
-        );
+        canvas.draw_tga_icon_tinted(&masked, Rect::new(1, 0, 1, 1), Color::rgb(20, 40, 60));
         assert_eq!(pixels[0], 0xFFFF_0000);
         assert_eq!(pixels[1], 0x8014_283C);
     }

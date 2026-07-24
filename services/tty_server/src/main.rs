@@ -38,7 +38,7 @@ use sunlight_ipc::{
     launch_trace::{LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
     sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
-    SgpMsg, SpawnMsg, TzMsg,
+    MouseMsg, PointerReport, SgpMsg, SpawnMsg, TzMsg,
 };
 use sunlight_libc::sun_exec;
 use sunlight_tty::login::{
@@ -47,6 +47,7 @@ use sunlight_tty::login::{
 };
 use sunlight_tty::proc::{ProcOp, SIGKILL};
 use sunlight_tty::TerminalGrid;
+use sunlight_tui::interaction::PointerSurface;
 use sunlight_tui::ANSI_COLORS;
 
 #[panic_handler]
@@ -73,7 +74,7 @@ enum VirtualTerminal {
 }
 
 const KBD_LABEL: u64 = 1;
-const MOUSE_LABEL: u64 = 2;
+const MOUSE_LABEL: u64 = MouseMsg::RAW_MOTION;
 const OUTPUT_LABEL: u64 = 2;
 const EXIT_LABEL: u64 = 3;
 const DRAIN_LABEL: u64 = 4;
@@ -187,24 +188,50 @@ fn log_login_framebuffer_layout(layout: sunlight_tui::framebuffer::FramebufferLa
     surface.flush();
 }
 
-const CURSOR_W: usize = 10;
-const CURSOR_H: usize = 15;
-const CURSOR_PIXELS: usize = CURSOR_W * CURSOR_H;
-const CURSOR_WHITE: u32 = 0x00ff_ffff;
-const CURSOR_BLACK: u32 = 0x0000_0000;
-const CURSOR_TRANSPARENT: u8 = 0;
-const CURSOR_OUTLINE: u8 = 1;
-
-const ARROW_CURSOR: [u8; CURSOR_PIXELS] = [
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0, 1, 2,
-    2, 2, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 2, 0, 0, 0, 0, 1, 2, 2, 2,
-    2, 2, 2, 0, 0, 0, 1, 2, 2, 2, 2, 2, 2, 2, 0, 0, 1, 2, 2, 2, 2, 1, 1, 1, 1, 0, 1, 2, 2, 1, 2, 2,
-    0, 0, 0, 0, 1, 2, 1, 0, 1, 2, 2, 0, 0, 0, 1, 1, 0, 0, 1, 2, 2, 0, 0, 0, 1, 0, 0, 0, 0, 1, 2, 2,
-    0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
-];
-
 fn vt_is_active(active_vt: VirtualTerminal, vt: VirtualTerminal) -> bool {
     active_vt == vt
+}
+
+fn login_focus_for_widget(id: sunlight_tui::interaction::WidgetId) -> Option<FocusArea> {
+    if let Some(index) = sunlight_tui::login_user_index(id) {
+        return Some(FocusArea::UserSlot(index));
+    }
+    match id {
+        sunlight_tui::LOGIN_PASSWORD_WIDGET => Some(FocusArea::Password),
+        sunlight_tui::LOGIN_DROPDOWN_WIDGET => Some(FocusArea::Dropdown),
+        sunlight_tui::LOGIN_REBOOT_WIDGET => Some(FocusArea::Reboot),
+        sunlight_tui::LOGIN_SHUTDOWN_WIDGET => Some(FocusArea::Shutdown),
+        _ => None,
+    }
+}
+
+fn request_login_power(result: LoginResult) {
+    let reboot = match result {
+        LoginResult::Reboot => true,
+        LoginResult::Shutdown => false,
+        _ => return,
+    };
+    debug_log(if reboot {
+        "[TTY]  Reboot requested from login screen"
+    } else {
+        "[TTY]  Shutdown requested from login screen"
+    });
+    unsafe {
+        core::arch::asm!(
+            "syscall",
+            inlateout("rax") 80u64 => _,
+            in("rdi") reboot as u64,
+            lateout("rcx") _,
+            lateout("r11") _,
+            options(nomem, nostack)
+        );
+    }
+}
+
+fn erase_tui_pointer(fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32, pointer: &mut PointerSurface) {
+    unsafe {
+        pointer.erase_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
+    }
 }
 
 fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) -> bool {
@@ -243,121 +270,22 @@ fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) 
     }
 }
 
-struct MouseState {
-    x: u32,
-    y: u32,
-    saved_x: u32,
-    saved_y: u32,
-    saved_bg: [u32; CURSOR_PIXELS],
-    saved_mask: [bool; CURSOR_PIXELS],
-    has_saved: bool,
-    left_button: bool,
-    right_button: bool,
-    middle_button: bool,
-}
-
-impl MouseState {
-    const fn new() -> Self {
-        Self {
-            x: 0,
-            y: 0,
-            saved_x: 0,
-            saved_y: 0,
-            saved_bg: [0; CURSOR_PIXELS],
-            saved_mask: [false; CURSOR_PIXELS],
-            has_saved: false,
-            left_button: false,
-            right_button: false,
-            middle_button: false,
+fn forward_pointer_to_display(
+    display_cap: &mut Option<CapabilityToken>,
+    msg: IpcMsg,
+    suppress_buttons_until_release: &mut bool,
+) -> bool {
+    let mut report = PointerReport::unpack(msg.words[0]);
+    if *suppress_buttons_until_release {
+        if report.buttons == 0 {
+            *suppress_buttons_until_release = false;
         }
+        report.buttons = 0;
     }
-
-    fn center_if_unset(&mut self, fb_w: u32, fb_h: u32) {
-        if self.x == 0 && self.y == 0 && !self.has_saved {
-            self.x = fb_w / 2;
-            self.y = fb_h / 2;
-        }
-    }
-
-    fn update_from_event(&mut self, event: u64, fb_w: u32, fb_h: u32) {
-        let max_x = fb_w.saturating_sub(1);
-        let max_y = fb_h.saturating_sub(1);
-        self.x = ((event & 0xffff) as u32).min(max_x);
-        self.y = (((event >> 16) & 0xffff) as u32).min(max_y);
-        let buttons = ((event >> 32) & 0xff) as u8;
-        self.left_button = (buttons & 0x01) != 0;
-        self.right_button = (buttons & 0x02) != 0;
-        self.middle_button = (buttons & 0x04) != 0;
-    }
-
-    fn erase_overlay(&mut self, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32) {
-        if !self.has_saved || fb_addr == 0 || fb_w == 0 || fb_h == 0 || fb_p == 0 {
-            return;
-        }
-        let fb = fb_addr as *mut u32;
-        let stride = (fb_p as usize) / core::mem::size_of::<u32>();
-        for row in 0..CURSOR_H {
-            let y = self.saved_y + row as u32;
-            if y >= fb_h {
-                continue;
-            }
-            for col in 0..CURSOR_W {
-                let idx = row * CURSOR_W + col;
-                if !self.saved_mask[idx] {
-                    continue;
-                }
-                let x = self.saved_x + col as u32;
-                if x >= fb_w {
-                    continue;
-                }
-                let offset = y as usize * stride + x as usize;
-                unsafe {
-                    fb.add(offset).write_volatile(self.saved_bg[idx]);
-                }
-            }
-        }
-        self.has_saved = false;
-    }
-
-    fn draw_overlay(&mut self, fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32) {
-        if fb_addr == 0 || fb_w == 0 || fb_h == 0 || fb_p == 0 {
-            return;
-        }
-        self.center_if_unset(fb_w, fb_h);
-        let fb = fb_addr as *mut u32;
-        let stride = (fb_p as usize) / core::mem::size_of::<u32>();
-        self.saved_x = self.x.min(fb_w.saturating_sub(1));
-        self.saved_y = self.y.min(fb_h.saturating_sub(1));
-        self.saved_mask = [false; CURSOR_PIXELS];
-        for row in 0..CURSOR_H {
-            let y = self.saved_y + row as u32;
-            if y >= fb_h {
-                continue;
-            }
-            for col in 0..CURSOR_W {
-                let idx = row * CURSOR_W + col;
-                let pixel = ARROW_CURSOR[idx];
-                if pixel == CURSOR_TRANSPARENT {
-                    continue;
-                }
-                let x = self.saved_x + col as u32;
-                if x >= fb_w {
-                    continue;
-                }
-                let offset = y as usize * stride + x as usize;
-                unsafe {
-                    self.saved_bg[idx] = fb.add(offset).read_volatile();
-                    fb.add(offset).write_volatile(if pixel == CURSOR_OUTLINE {
-                        CURSOR_BLACK
-                    } else {
-                        CURSOR_WHITE
-                    });
-                }
-                self.saved_mask[idx] = true;
-            }
-        }
-        self.has_saved = true;
-    }
+    let routed = IpcMsg::with_label(MouseMsg::RAW_MOTION)
+        .word(0, report.pack())
+        .word(1, msg.words[1]);
+    send_display_request(display_cap, routed)
 }
 
 /// Per-tab scrollback viewport state
@@ -602,7 +530,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         None
     };
     let has_fb = fb_addr != 0 && framebuffer_layout.is_some();
-    let mut mouse = MouseState::new();
+    let mut mouse = PointerSurface::new();
 
     if has_fb {
         log_login_framebuffer_layout(framebuffer_layout.unwrap());
@@ -618,7 +546,9 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 Some(login_bg_data()),
             );
         }
-        mouse.draw_overlay(fb_addr, fb32_w, fb32_h, fb32_p);
+        unsafe {
+            mouse.draw_overlay(fb_addr as *mut u32, fb32_w, fb32_h, fb32_p);
+        }
         debug_log("[TTY] Login rendered");
         debug_log("[LOGIN-TUI] first frame complete");
     } else if fb_addr != 0 || fb_width != 0 || fb_height != 0 || fb_pitch != 0 {
@@ -646,6 +576,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     let mut login = LoginScreen::new();
     // TTY/Login is the default session at boot; Desktop becomes active after Desktop login.
     let mut active_vt = VirtualTerminal::Tty;
+    let mut desktop_pointer_release_gate = false;
     // Lazily resolved on first Ctrl+F1/F2 press or key-forward attempt.
     let mut display_cap: Option<CapabilityToken> = None;
 
@@ -667,9 +598,12 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         match state {
             TtyState::Login => {
                 let mut logged_in = false;
+                let mut needs_render =
+                    msg.label == KbdMsg::KEY_EVENT && active_vt == VirtualTerminal::Tty;
+                let mut pointer_only_render = false;
                 if msg.label == KbdMsg::KEY_EVENT {
                     'kbd: {
-                        let (keycode, pressed, _shift, _ctrl, _alt, _super, ascii_opt) =
+                        let (keycode, pressed, shift, _ctrl, _alt, _super, ascii_opt) =
                             unpack_key_event(msg.words[0]);
 
                         // Session-switch hotkeys (Ctrl+F1/F2) are intercepted on
@@ -685,6 +619,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         );
                                     }
                                     active_vt = VirtualTerminal::Tty;
+                                    desktop_pointer_release_gate = false;
+                                    mouse.activate(fb32_w, fb32_h);
                                     if has_fb {
                                         render_login_fb(
                                             &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
@@ -698,14 +634,27 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         break 'kbd;
                                     }
                                     if active_vt != VirtualTerminal::Desktop {
+                                        if has_fb {
+                                            erase_tui_pointer(
+                                                fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
+                                            );
+                                        }
                                         if send_display_request(
                                             &mut display_cap,
                                             IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
                                         ) {
                                             debug_log("[SESSION] switched to F2 GraphicalDesktop");
                                             active_vt = VirtualTerminal::Desktop;
+                                            desktop_pointer_release_gate = true;
+                                            mouse.deactivate();
                                         } else {
                                             debug_log("[SESSION] F2 activation failed; TTY retains framebuffer");
+                                            if has_fb {
+                                                render_login_fb(
+                                                    &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                    &mut mouse,
+                                                );
+                                            }
                                         }
                                     }
                                     break 'kbd;
@@ -722,28 +671,14 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         }
 
                         if pressed {
-                            match login.handle_key_event(keycode, pressed, ascii_opt) {
+                            match login
+                                .handle_key_event_with_shift(keycode, pressed, shift, ascii_opt)
+                            {
                                 LoginResult::Reboot => {
-                                    debug_log("[TTY]  Reboot requested from login screen");
-                                    unsafe {
-                                        core::arch::asm!(
-                                            "mov rax, 80",
-                                            "mov rdi, 1",
-                                            "syscall",
-                                            options(nomem, nostack)
-                                        );
-                                    }
+                                    request_login_power(LoginResult::Reboot);
                                 }
                                 LoginResult::Shutdown => {
-                                    debug_log("[TTY]  Shutdown requested from login screen");
-                                    unsafe {
-                                        core::arch::asm!(
-                                            "mov rax, 80",
-                                            "mov rdi, 0",
-                                            "syscall",
-                                            options(nomem, nostack)
-                                        );
-                                    }
+                                    request_login_power(LoginResult::Shutdown);
                                 }
                                 LoginResult::Success {
                                     username,
@@ -755,6 +690,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 } => {
                                     debug_log_login_success(&username[..username_len], uid, gid);
                                     debug_log("[SunlightOS] Phase 3.7 OK");
+                                    mouse.clear_interaction();
 
                                     match session {
                                         SessionType::Tty => {
@@ -807,6 +743,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         }
                                         SessionType::Desktop => {
                                             desktop_unlocked = true;
+                                            if has_fb {
+                                                erase_tui_pointer(
+                                                    fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
+                                                );
+                                            }
                                             if send_display_request(
                                                 &mut display_cap,
                                                 IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
@@ -815,6 +756,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     "[SESSION] switched to F2 GraphicalDesktop",
                                                 );
                                                 active_vt = VirtualTerminal::Desktop;
+                                                desktop_pointer_release_gate = true;
+                                                mouse.deactivate();
                                                 login.message = "Desktop session launched.";
                                             } else {
                                                 active_vt = VirtualTerminal::Tty;
@@ -833,6 +776,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     logged_in = true;
                                 }
                                 LoginResult::Locked => {
+                                    mouse.clear_interaction();
                                     debug_log("[TTY]  Login locked");
                                 }
                                 LoginResult::Pending => {}
@@ -840,23 +784,86 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         }
                     } // end 'kbd
                 }
-                login.tick();
+                if msg.label != MOUSE_LABEL {
+                    let was_locked = login.locked_ticks > 0;
+                    login.tick();
+                    needs_render |= was_locked && login.locked_ticks == 0;
+                }
                 if msg.label == MOUSE_LABEL {
-                    mouse.update_from_event(msg.words[0], fb32_w, fb32_h);
+                    if active_vt == VirtualTerminal::Desktop {
+                        let _ = forward_pointer_to_display(
+                            &mut display_cap,
+                            msg,
+                            &mut desktop_pointer_release_gate,
+                        );
+                    } else {
+                        let report = PointerReport::unpack(msg.words[0]);
+                        let generation = (msg.words[1] >> 32) as u32;
+                        let layout = sunlight_tui::LoginLayout::new(
+                            fb32_w,
+                            fb32_h,
+                            login.active_count,
+                            login.locked_ticks == 0,
+                        );
+                        let outcome = mouse.handle_report(
+                            report.dx,
+                            report.dy,
+                            report.buttons,
+                            generation,
+                            fb32_w,
+                            fb32_h,
+                            layout.widgets(),
+                        );
+                        if let Some(target) = outcome.clicked.and_then(login_focus_for_widget) {
+                            let result = login.handle_pointer_click(target);
+                            if matches!(result, LoginResult::Reboot | LoginResult::Shutdown) {
+                                request_login_power(result);
+                            }
+                            needs_render = true;
+                        }
+                        if outcome.interaction_changed() {
+                            needs_render = true;
+                        } else if outcome.moved {
+                            pointer_only_render = true;
+                        }
+                    }
                 }
                 if has_fb && !logged_in && vt_is_active(active_vt, VirtualTerminal::Tty) {
-                    render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
+                    if needs_render {
+                        render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
+                    } else if pointer_only_render {
+                        redraw_mouse_overlay(fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
+                    }
                 }
             }
             TtyState::Shell => {
                 let mut needs_render = false;
+                let mut pointer_only_render = false;
                 let prev_output_len = active_shell_tab(&tabs, active_tab)
                     .map(|tab| tab.output_len)
                     .unwrap_or(0);
 
                 if msg.label == MOUSE_LABEL {
-                    mouse.update_from_event(msg.words[0], fb32_w, fb32_h);
-                    needs_render = true;
+                    if active_vt == VirtualTerminal::Desktop {
+                        let _ = forward_pointer_to_display(
+                            &mut display_cap,
+                            msg,
+                            &mut desktop_pointer_release_gate,
+                        );
+                    } else {
+                        let report = PointerReport::unpack(msg.words[0]);
+                        let generation = (msg.words[1] >> 32) as u32;
+                        let outcome = mouse.handle_report(
+                            report.dx,
+                            report.dy,
+                            report.buttons,
+                            generation,
+                            fb32_w,
+                            fb32_h,
+                            &[],
+                        );
+                        pointer_only_render = outcome.moved;
+                    }
                 }
 
                 // Lazy lookup: try to find sshl once it registers after being spawned.
@@ -876,6 +883,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                         );
                                     }
                                     active_vt = VirtualTerminal::Tty;
+                                    desktop_pointer_release_gate = false;
+                                    mouse.activate(fb32_w, fb32_h);
                                     // In Shell state, redraw the shell (not the login screen).
                                     if has_fb {
                                         render_active_shell_fb(
@@ -887,14 +896,27 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 }
                                 KEY_F2 => {
                                     if active_vt != VirtualTerminal::Desktop {
+                                        if has_fb {
+                                            erase_tui_pointer(
+                                                fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
+                                            );
+                                        }
                                         if send_display_request(
                                             &mut display_cap,
                                             IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
                                         ) {
                                             debug_log("[SESSION] switched to F2 GraphicalDesktop");
                                             active_vt = VirtualTerminal::Desktop;
+                                            desktop_pointer_release_gate = true;
+                                            mouse.deactivate();
                                         } else {
                                             debug_log("[SESSION] F2 activation failed; TTY retains framebuffer");
+                                            if has_fb {
+                                                render_active_shell_fb(
+                                                    fb_addr, fb32_w, fb32_h, fb32_p, &tabs,
+                                                    tab_count, active_tab, true, &mut mouse,
+                                                );
+                                            }
                                         }
                                     }
                                     break 'kbd;
@@ -1153,6 +1175,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             ShellKeyResult::Exited => {
                                                 state = TtyState::Login;
                                                 reset_login(&mut login);
+                                                mouse.clear_interaction();
                                                 reset_tabs(
                                                     &mut tabs,
                                                     &mut tab_count,
@@ -1254,6 +1277,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             &mut mouse,
                         );
                     }
+                } else if has_fb
+                    && pointer_only_render
+                    && vt_is_active(active_vt, VirtualTerminal::Tty)
+                {
+                    redraw_mouse_overlay(fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
                 }
             }
         }
@@ -1377,9 +1405,11 @@ pub fn get_viewport_offset(tab_idx: usize) -> usize {
     }
 }
 
-fn redraw_mouse_overlay(fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32, mouse: &mut MouseState) {
-    mouse.erase_overlay(fb_addr, fb_w, fb_h, fb_p);
-    mouse.draw_overlay(fb_addr, fb_w, fb_h, fb_p);
+fn redraw_mouse_overlay(fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32, mouse: &mut PointerSurface) {
+    unsafe {
+        mouse.erase_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
+        mouse.draw_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
+    }
 }
 
 fn render_login_fb(
@@ -1388,9 +1418,11 @@ fn render_login_fb(
     fb_w: u32,
     fb_h: u32,
     fb_p: u32,
-    mouse: &mut MouseState,
+    mouse: &mut PointerSurface,
 ) {
-    mouse.erase_overlay(fb_addr, fb_w, fb_h, fb_p);
+    unsafe {
+        mouse.erase_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
+    }
 
     let mut user_bufs = [[0u8; 64]; MAX_USERS];
     let mut user_lens = [0usize; MAX_USERS];
@@ -1422,7 +1454,7 @@ fn render_login_fb(
     };
 
     unsafe {
-        sunlight_tui::render_login_grid(
+        sunlight_tui::render_login_grid_interactive(
             fb_addr as *mut u32,
             fb_w,
             fb_h,
@@ -1439,9 +1471,13 @@ fn render_login_fb(
             login.session.label(),
             login.password.len,
             login.message,
+            sunlight_tui::LoginPointerVisual {
+                hovered: mouse.hovered(),
+                pressed: mouse.pressed(),
+            },
         );
+        mouse.draw_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
     }
-    mouse.draw_overlay(fb_addr, fb_w, fb_h, fb_p);
 }
 
 fn render_active_shell_fb(
@@ -1453,9 +1489,11 @@ fn render_active_shell_fb(
     tab_count: usize,
     active_tab: usize,
     show_prompt: bool,
-    mouse: &mut MouseState,
+    mouse: &mut PointerSurface,
 ) {
-    mouse.erase_overlay(fb_addr, fb_w, fb_h, fb_p);
+    unsafe {
+        mouse.erase_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
+    }
 
     // Size the grid with the exact same formula the renderer uses, so every
     // row is shown from the top of the content area with no clipping. Computing
@@ -1571,7 +1609,9 @@ fn render_active_shell_fb(
             input_cursor,
         );
     }
-    mouse.draw_overlay(fb_addr, fb_w, fb_h, fb_p);
+    unsafe {
+        mouse.draw_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
+    }
 
     // NOTE: Grid is NOT dropped here - it's cached in GRID_CACHE for reuse on next render
     // This prevents the 400KB+ allocation that was exhausting the bump allocator heap

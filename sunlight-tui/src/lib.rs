@@ -11,6 +11,7 @@ pub mod fmt;
 pub mod font;
 pub mod fontatlas;
 pub mod framebuffer;
+pub mod interaction;
 pub mod layout;
 mod modes;
 mod splash;
@@ -491,6 +492,174 @@ pub enum LoginUserIcon {
     Luggage,
 }
 
+pub const LOGIN_USER_WIDGET_BASE: u16 = 0x0100;
+pub const LOGIN_PASSWORD_WIDGET: interaction::WidgetId = interaction::WidgetId(0x0200);
+pub const LOGIN_DROPDOWN_WIDGET: interaction::WidgetId = interaction::WidgetId(0x0201);
+pub const LOGIN_REBOOT_WIDGET: interaction::WidgetId = interaction::WidgetId(0x0202);
+pub const LOGIN_SHUTDOWN_WIDGET: interaction::WidgetId = interaction::WidgetId(0x0203);
+const MAX_LOGIN_USER_WIDGETS: usize = 6;
+const MAX_LOGIN_WIDGETS: usize = MAX_LOGIN_USER_WIDGETS + 4;
+
+pub const fn login_user_widget(index: usize) -> interaction::WidgetId {
+    interaction::WidgetId(LOGIN_USER_WIDGET_BASE + index as u16)
+}
+
+pub const fn login_user_index(id: interaction::WidgetId) -> Option<usize> {
+    if id.0 >= LOGIN_USER_WIDGET_BASE
+        && id.0 < LOGIN_USER_WIDGET_BASE + MAX_LOGIN_USER_WIDGETS as u16
+    {
+        Some((id.0 - LOGIN_USER_WIDGET_BASE) as usize)
+    } else {
+        None
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LoginPointerVisual {
+    pub hovered: Option<interaction::WidgetId>,
+    pub pressed: Option<interaction::WidgetId>,
+}
+
+/// Final pixel geometry for the login controls. Rendering and hit testing both
+/// consume this structure so their bounds cannot silently drift apart.
+pub struct LoginLayout {
+    pub panel: interaction::Rect,
+    user_slots: [interaction::Rect; MAX_LOGIN_USER_WIDGETS],
+    pub password: interaction::Rect,
+    pub dropdown: interaction::Rect,
+    pub reboot: interaction::Rect,
+    pub shutdown: interaction::Rect,
+    widgets: [interaction::Widget; MAX_LOGIN_WIDGETS],
+    widget_count: usize,
+}
+
+impl LoginLayout {
+    pub fn new(fb_width: u32, fb_height: u32, active_count: usize, enabled: bool) -> Self {
+        const SLOT_W: u32 = 96;
+        const USER_H: u32 = 64;
+        const BTN_H: u32 = 40;
+        const BTN_ICON: u32 = 32;
+        const BTN_GAP: u32 = 12;
+        const BTN_ICON_PAD: u32 = 4;
+        const BTN_TEXT_GAP: u32 = 6;
+        const BTN_RIGHT_PAD: u32 = 10;
+
+        let screen = layout::Layout::new(fb_width, fb_height);
+        let panel_w = 520u32.min(screen.main.w.saturating_sub(32));
+        let panel_h = 360u32;
+        let panel_x = screen.main.x + screen.main.w.saturating_sub(panel_w) / 2;
+        let panel_y = screen.main.y + screen.main.h.saturating_sub(panel_h) / 2;
+        let panel = interaction::Rect::new(panel_x, panel_y, panel_w, panel_h);
+
+        let count = active_count.min(MAX_LOGIN_USER_WIDGETS);
+        let row_w = count as u32 * SLOT_W;
+        let row_x = panel_x + panel_w.saturating_sub(row_w) / 2;
+        let mut user_slots = [interaction::Rect::new(0, 0, 0, 0); MAX_LOGIN_USER_WIDGETS];
+        for (index, slot) in user_slots.iter_mut().enumerate().take(count) {
+            *slot =
+                interaction::Rect::new(row_x + index as u32 * SLOT_W, panel_y + 68, SLOT_W, USER_H);
+        }
+
+        let field_x = panel_x + 40;
+        let field_right = panel_x + panel_w.saturating_sub(40);
+        let password_x =
+            field_x + fontatlas::measure_text("Password: ", fontatlas::FontSize::Regular);
+        let password = interaction::Rect::new(
+            password_x,
+            panel_y + 148,
+            field_right.saturating_sub(password_x),
+            26,
+        );
+        let dropdown_x =
+            field_x + fontatlas::measure_text("Session:  ", fontatlas::FontSize::Regular);
+        let dropdown = interaction::Rect::new(dropdown_x, panel_y + 192, 130, 26);
+
+        let reboot_w = BTN_ICON_PAD
+            + BTN_ICON
+            + BTN_TEXT_GAP
+            + fontatlas::measure_text("Reboot", fontatlas::FontSize::Regular)
+            + BTN_RIGHT_PAD;
+        let shutdown_w = BTN_ICON_PAD
+            + BTN_ICON
+            + BTN_TEXT_GAP
+            + fontatlas::measure_text("Shutdown", fontatlas::FontSize::Regular)
+            + BTN_RIGHT_PAD;
+        let shutdown_x = panel_x + panel_w.saturating_sub(shutdown_w + 14);
+        let reboot_x = shutdown_x.saturating_sub(reboot_w + BTN_GAP);
+        let reboot = interaction::Rect::new(reboot_x, panel_y + 286, reboot_w, BTN_H);
+        let shutdown = interaction::Rect::new(shutdown_x, panel_y + 286, shutdown_w, BTN_H);
+
+        let empty = interaction::Widget::new(
+            interaction::WidgetId(0),
+            interaction::Rect::new(0, 0, 0, 0),
+            interaction::WidgetKind::Button,
+        )
+        .hidden();
+        let mut widgets = [empty; MAX_LOGIN_WIDGETS];
+        let mut widget_count = 0;
+        for (index, bounds) in user_slots.iter().copied().enumerate().take(count) {
+            let widget = interaction::Widget::new(
+                login_user_widget(index),
+                bounds,
+                interaction::WidgetKind::Selectable,
+            );
+            widgets[widget_count] = if enabled {
+                widget
+            } else {
+                widget.unavailable()
+            };
+            widget_count += 1;
+        }
+        for widget in [
+            interaction::Widget::new(
+                LOGIN_PASSWORD_WIDGET,
+                password,
+                interaction::WidgetKind::TextInput,
+            ),
+            interaction::Widget::new(
+                LOGIN_DROPDOWN_WIDGET,
+                dropdown,
+                interaction::WidgetKind::Button,
+            ),
+            interaction::Widget::new(LOGIN_REBOOT_WIDGET, reboot, interaction::WidgetKind::Button),
+            interaction::Widget::new(
+                LOGIN_SHUTDOWN_WIDGET,
+                shutdown,
+                interaction::WidgetKind::Button,
+            ),
+        ] {
+            widgets[widget_count] = if enabled {
+                widget
+            } else {
+                widget.unavailable()
+            };
+            widget_count += 1;
+        }
+
+        Self {
+            panel,
+            user_slots,
+            password,
+            dropdown,
+            reboot,
+            shutdown,
+            widgets,
+            widget_count,
+        }
+    }
+
+    pub fn user_slot(&self, index: usize) -> Option<interaction::Rect> {
+        self.user_slots
+            .get(index)
+            .copied()
+            .filter(|bounds| bounds.w != 0 && bounds.h != 0)
+    }
+
+    pub fn widgets(&self) -> &[interaction::Widget] {
+        &self.widgets[..self.widget_count]
+    }
+}
+
 /// Draw a user avatar tile: 32×32 Material Icon (or TGA) inside a 40×40 slot box.
 ///
 /// Falls back to a letter glyph when `icon` is `None` (icon failed to load).
@@ -504,6 +673,8 @@ fn draw_user_avatar(
     is_custom: bool,
     selected: bool,
     focused: bool,
+    hovered: bool,
+    pressed: bool,
 ) {
     const ICON_SZ: u32 = 32;
     const PAD: u32 = 4;
@@ -513,8 +684,12 @@ fn draw_user_avatar(
     let box_y = icon_top.saturating_sub(PAD);
 
     // Tile background: warm orange tint when selected, dark when inactive.
-    let fill = if focused {
+    let fill = if pressed {
+        0x2A1100
+    } else if focused {
         0x1C0C00
+    } else if hovered {
+        0x140A02
     } else if selected {
         0x160900
     } else {
@@ -522,7 +697,7 @@ fn draw_user_avatar(
     };
     fb.fill_rect(box_x, box_y, BOX_SZ, BOX_SZ, fill);
 
-    let border_color = if focused {
+    let border_color = if focused || hovered {
         layout::palette::ACCENT
     } else if selected {
         layout::palette::ACCENT_DIM
@@ -535,13 +710,13 @@ fn draw_user_avatar(
         box_y,
         BOX_SZ,
         BOX_SZ,
-        if focused { 2 } else { 1 },
+        if focused || pressed { 2 } else { 1 },
         border_color,
     );
 
     // Fallback icon color: orange for focused, dimmed orange for selected,
     // muted gray for inactive.
-    let icon_color = if focused {
+    let icon_color = if focused || hovered {
         layout::palette::ACCENT
     } else if selected {
         layout::palette::ACCENT_DIM
@@ -589,7 +764,7 @@ fn draw_user_avatar(
 /// Icons: generated from Material-Icons TTF via sunlight-tui/build.rs (no more checked-in TGAs)
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
-pub unsafe fn render_login_grid(
+pub unsafe fn render_login_grid_interactive(
     fb_addr: *mut u32,
     fb_width: u32,
     fb_height: u32,
@@ -606,6 +781,7 @@ pub unsafe fn render_login_grid(
     session_label: &str,
     password_len: usize,
     message: &str,
+    pointer: LoginPointerVisual,
 ) {
     // Parse login icons — cheap (header-only), no heap allocation.
     let icon_users = tga::TgaImage::parse(ICON_USERS);
@@ -643,11 +819,11 @@ pub unsafe fn render_login_grid(
     );
 
     // ── Login card ──────────────────────────────────────────────────────────
-    let main = &layout.main;
-    let panel_w = 520u32.min(main.w.saturating_sub(32));
-    let panel_h = 360u32;
-    let panel_x = main.x + main.w.saturating_sub(panel_w) / 2;
-    let panel_y = main.y + main.h.saturating_sub(panel_h) / 2;
+    let login_layout = LoginLayout::new(fb_width, fb_height, active_count, true);
+    let panel_x = login_layout.panel.x;
+    let panel_y = login_layout.panel.y;
+    let panel_w = login_layout.panel.w;
+    let panel_h = login_layout.panel.h;
 
     // Card: solid dark fill + 2 px border for stronger separation
     fb.fill_rect(panel_x, panel_y, panel_w, panel_h, layout::palette::BG);
@@ -667,11 +843,8 @@ pub unsafe fn render_login_grid(
 
     // ── User avatar row ─────────────────────────────────────────────────────
     // Each slot: 96 px wide, 32×32 icon centred, name 8 px below the icon.
-    const SLOT_W: u32 = 96;
     const ICON_SZ: u32 = 32;
     let avatar_icon_top = panel_y + 72;
-    let row_w = active_count as u32 * SLOT_W;
-    let row_x = panel_x + panel_w.saturating_sub(row_w) / 2;
 
     for i in 0..active_count
         .min(user_bufs.len())
@@ -680,7 +853,10 @@ pub unsafe fn render_login_grid(
         .min(user_icons.len())
         .min(is_custom.len())
     {
-        let slot_cx = row_x + i as u32 * SLOT_W + SLOT_W / 2;
+        let Some(slot_bounds) = login_layout.user_slot(i) else {
+            continue;
+        };
+        let slot_cx = slot_bounds.x + slot_bounds.w / 2;
         let name = &user_bufs[i][..user_lens[i]];
         let focused = focus == LoginFocus::UserSlot(i);
         let selected = i == selected_user_idx;
@@ -698,6 +874,8 @@ pub unsafe fn render_login_grid(
             is_custom[i],
             selected,
             focused,
+            pointer.hovered == Some(login_user_widget(i)),
+            pointer.pressed == Some(login_user_widget(i)),
         );
 
         let label = user_labels[i];
@@ -719,7 +897,6 @@ pub unsafe fn render_login_grid(
     // ── Form fields ─────────────────────────────────────────────────────────
     // Both password and session use the same outlined-box language.
     let field_x = panel_x + 40;
-    let field_right = panel_x + panel_w.saturating_sub(40);
 
     // — Password —
     let pass_y = panel_y + 152;
@@ -731,11 +908,11 @@ pub unsafe fn render_login_grid(
         layout::palette::TEXT_DIM,
         fontatlas::FontSize::Regular,
     );
-    let pw_label_w = fontatlas::measure_text("Password: ", fontatlas::FontSize::Regular);
-    let pw_box_x = field_x + pw_label_w;
-    let pw_box_w = field_right.saturating_sub(pw_box_x);
-    let pw_box_h = 26u32;
+    let pw_box_x = login_layout.password.x;
+    let pw_box_w = login_layout.password.w;
+    let pw_box_h = login_layout.password.h;
     let pw_focused = focus == LoginFocus::Password;
+    let pw_hovered = pointer.hovered == Some(LOGIN_PASSWORD_WIDGET);
 
     // Box fill: slightly brighter when active to hint at focus
     fb.fill_rect(
@@ -743,7 +920,15 @@ pub unsafe fn render_login_grid(
         pass_y.saturating_sub(4),
         pw_box_w,
         pw_box_h,
-        if pw_focused { 0x0E0D00 } else { 0x080808 },
+        if pointer.pressed == Some(LOGIN_PASSWORD_WIDGET) {
+            0x181000
+        } else if pw_focused {
+            0x0E0D00
+        } else if pw_hovered {
+            0x10100A
+        } else {
+            0x080808
+        },
     );
     draw::rect_outline(
         &mut fb,
@@ -752,7 +937,7 @@ pub unsafe fn render_login_grid(
         pw_box_w,
         pw_box_h,
         if pw_focused { 2 } else { 1 },
-        if pw_focused {
+        if pw_focused || pw_hovered {
             layout::palette::ACCENT
         } else {
             layout::palette::SEPARATOR
@@ -786,18 +971,26 @@ pub unsafe fn render_login_grid(
         layout::palette::TEXT_DIM,
         fontatlas::FontSize::Regular,
     );
-    let drop_label_w = fontatlas::measure_text("Session:  ", fontatlas::FontSize::Regular);
-    let drop_box_x = field_x + drop_label_w;
-    let drop_box_w = 130u32;
-    let drop_box_h = 26u32;
+    let drop_box_x = login_layout.dropdown.x;
+    let drop_box_w = login_layout.dropdown.w;
+    let drop_box_h = login_layout.dropdown.h;
     let drop_focused = focus == LoginFocus::Dropdown;
+    let drop_hovered = pointer.hovered == Some(LOGIN_DROPDOWN_WIDGET);
 
     fb.fill_rect(
         drop_box_x,
         drop_y.saturating_sub(4),
         drop_box_w,
         drop_box_h,
-        if drop_focused { 0x0E0D00 } else { 0x080808 },
+        if pointer.pressed == Some(LOGIN_DROPDOWN_WIDGET) {
+            0x181000
+        } else if drop_focused {
+            0x0E0D00
+        } else if drop_hovered {
+            0x10100A
+        } else {
+            0x080808
+        },
     );
     draw::rect_outline(
         &mut fb,
@@ -806,7 +999,7 @@ pub unsafe fn render_login_grid(
         drop_box_w,
         drop_box_h,
         if drop_focused { 2 } else { 1 },
-        if drop_focused {
+        if drop_focused || drop_hovered {
             layout::palette::ACCENT
         } else {
             layout::palette::SEPARATOR
@@ -849,7 +1042,6 @@ pub unsafe fn render_login_grid(
     // Button height = 40 px (4 px padding each side of the 32 px icon).
     const BTN_H: u32 = 40;
     const BTN_ICON: u32 = 32;
-    const BTN_GAP: u32 = 12; // gap between Reboot and Shutdown
     const BTN_ICON_PAD: u32 = 4; // padding left of icon
     const BTN_TEXT_GAP: u32 = 6; // gap between icon right edge and label
     const BTN_RIGHT_PAD: u32 = 10; // padding right of label
@@ -866,12 +1058,21 @@ pub unsafe fn render_login_grid(
     let sd_lw = fontatlas::measure_text(sd_label, fontatlas::FontSize::Regular);
     let sd_btn_w = BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP + sd_lw + BTN_RIGHT_PAD;
 
-    let shutdown_x = panel_x + panel_w.saturating_sub(sd_btn_w + 14);
-    let reboot_x = shutdown_x.saturating_sub(rb_btn_w + BTN_GAP);
+    let shutdown_x = login_layout.shutdown.x;
+    let reboot_x = login_layout.reboot.x;
 
     // Reboot button
     {
-        let bg = if reboot_focused { 0x1C0C00 } else { 0x080808 };
+        let reboot_hovered = pointer.hovered == Some(LOGIN_REBOOT_WIDGET);
+        let bg = if pointer.pressed == Some(LOGIN_REBOOT_WIDGET) {
+            0x2A1100
+        } else if reboot_focused {
+            0x1C0C00
+        } else if reboot_hovered {
+            0x140A02
+        } else {
+            0x080808
+        };
         fb.fill_rect(reboot_x, btn_y, rb_btn_w, BTN_H, bg);
         draw::rect_outline(
             &mut fb,
@@ -880,7 +1081,7 @@ pub unsafe fn render_login_grid(
             rb_btn_w,
             BTN_H,
             if reboot_focused { 2 } else { 1 },
-            if reboot_focused {
+            if reboot_focused || reboot_hovered {
                 layout::palette::ACCENT
             } else {
                 layout::palette::SEPARATOR
@@ -893,7 +1094,7 @@ pub unsafe fn render_login_grid(
             btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
             BTN_ICON,
             BTN_ICON,
-            if reboot_focused {
+            if reboot_focused || reboot_hovered {
                 layout::palette::ACCENT
             } else {
                 layout::palette::TEXT_DIM
@@ -904,7 +1105,7 @@ pub unsafe fn render_login_grid(
             rb_label,
             reboot_x + BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP,
             btn_y + (BTN_H.saturating_sub(14)) / 2,
-            if reboot_focused {
+            if reboot_focused || reboot_hovered {
                 layout::palette::ACCENT
             } else {
                 layout::palette::TEXT_DIM
@@ -915,7 +1116,16 @@ pub unsafe fn render_login_grid(
 
     // Shutdown button
     {
-        let bg = if shutdown_focused { 0x1C0C00 } else { 0x080808 };
+        let shutdown_hovered = pointer.hovered == Some(LOGIN_SHUTDOWN_WIDGET);
+        let bg = if pointer.pressed == Some(LOGIN_SHUTDOWN_WIDGET) {
+            0x2A1100
+        } else if shutdown_focused {
+            0x1C0C00
+        } else if shutdown_hovered {
+            0x140A02
+        } else {
+            0x080808
+        };
         fb.fill_rect(shutdown_x, btn_y, sd_btn_w, BTN_H, bg);
         draw::rect_outline(
             &mut fb,
@@ -924,7 +1134,7 @@ pub unsafe fn render_login_grid(
             sd_btn_w,
             BTN_H,
             if shutdown_focused { 2 } else { 1 },
-            if shutdown_focused {
+            if shutdown_focused || shutdown_hovered {
                 layout::palette::ACCENT
             } else {
                 layout::palette::SEPARATOR
@@ -937,7 +1147,7 @@ pub unsafe fn render_login_grid(
             btn_y + (BTN_H.saturating_sub(BTN_ICON)) / 2,
             BTN_ICON,
             BTN_ICON,
-            if shutdown_focused {
+            if shutdown_focused || shutdown_hovered {
                 layout::palette::ACCENT
             } else {
                 layout::palette::TEXT_DIM
@@ -948,7 +1158,7 @@ pub unsafe fn render_login_grid(
             sd_label,
             shutdown_x + BTN_ICON_PAD + BTN_ICON + BTN_TEXT_GAP,
             btn_y + (BTN_H.saturating_sub(14)) / 2,
-            if shutdown_focused {
+            if shutdown_focused || shutdown_hovered {
                 layout::palette::ACCENT
             } else {
                 layout::palette::TEXT_DIM
@@ -968,6 +1178,49 @@ pub unsafe fn render_login_grid(
         layout::palette::TEXT_DIM,
         fontatlas::FontSize::Regular,
     );
+}
+
+/// Compatibility renderer for callers that do not yet expose pointer state.
+#[allow(clippy::too_many_arguments)]
+pub unsafe fn render_login_grid(
+    fb_addr: *mut u32,
+    fb_width: u32,
+    fb_height: u32,
+    fb_pitch: u32,
+    bg_tga: Option<&[u8]>,
+    user_bufs: &[[u8; 64]],
+    user_lens: &[usize],
+    user_labels: &[&str],
+    user_icons: &[LoginUserIcon],
+    is_custom: &[bool],
+    active_count: usize,
+    selected_user_idx: usize,
+    focus: LoginFocus,
+    session_label: &str,
+    password_len: usize,
+    message: &str,
+) {
+    unsafe {
+        render_login_grid_interactive(
+            fb_addr,
+            fb_width,
+            fb_height,
+            fb_pitch,
+            bg_tga,
+            user_bufs,
+            user_lens,
+            user_labels,
+            user_icons,
+            is_custom,
+            active_count,
+            selected_user_idx,
+            focus,
+            session_label,
+            password_len,
+            message,
+            LoginPointerVisual::default(),
+        );
+    }
 }
 
 pub unsafe fn render_login_dynamic(
@@ -1156,4 +1409,53 @@ pub unsafe fn render_login_screen(
         0,
         "Welcome. Please log in.",
     );
+}
+
+#[cfg(test)]
+mod login_interaction_tests {
+    use super::*;
+    use crate::interaction::{hit_test, Point};
+
+    #[test]
+    fn login_hit_testing_uses_render_layout_bounds() {
+        let layout = LoginLayout::new(1280, 720, 3, true);
+        let password = layout.password;
+        assert_eq!(
+            hit_test(
+                layout.widgets(),
+                Point {
+                    x: password.x + password.w / 2,
+                    y: password.y + password.h / 2,
+                },
+            ),
+            Some(LOGIN_PASSWORD_WIDGET)
+        );
+        let reboot = layout.reboot;
+        assert_eq!(
+            hit_test(
+                layout.widgets(),
+                Point {
+                    x: reboot.x + 1,
+                    y: reboot.y + 1,
+                },
+            ),
+            Some(LOGIN_REBOOT_WIDGET)
+        );
+    }
+
+    #[test]
+    fn locked_login_controls_are_not_pointer_targets() {
+        let layout = LoginLayout::new(1280, 720, 3, false);
+        let password = layout.password;
+        assert_eq!(
+            hit_test(
+                layout.widgets(),
+                Point {
+                    x: password.x,
+                    y: password.y,
+                },
+            ),
+            None
+        );
+    }
 }

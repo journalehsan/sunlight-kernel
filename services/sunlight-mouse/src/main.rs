@@ -2,8 +2,8 @@
 //!
 //! Initializes the 8042 controller's auxiliary port, receives raw IRQ12 bytes
 //! from the kernel via IPC, parses 3-byte PS/2 packets, and forwards raw relative
-//! motion (dx/dy/buttons) to display_server when available, falling back to absolute
-//! coordinates sent to tty_server for legacy terminal UI.
+//! motion (dx/dy/buttons) to tty_server, which owns active-session routing for
+//! both the graphical desktop and terminal UIs.
 
 #![no_std]
 #![no_main]
@@ -11,7 +11,7 @@
 use sunlight_ipc::{
     endpoint_create, getpid, ipc_call_timeout, nameserver_lookup, nameserver_lookup_timeout,
     nameserver_register, process_yield, query_display_metrics, DevicedMsg, DisplayMetrics,
-    DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg, ProcessExit,
+    DriverCaps, DriverKind, DriverState, IpcMsg, MouseMsg, PointerReport, ProcessExit,
 };
 use sunlight_mouse::ps2::decode_relative_axes;
 
@@ -47,8 +47,8 @@ struct MouseDiagnostics {
     kernel_raw_drop_count: u64,
     /// Times the fast-acceleration zone (magnitude > normal_max_magnitude) was applied.
     accel_fast_count: u64,
-    /// Times a move IPC was sent to display_server (hardware cursor moves).
-    hw_cursor_moves: u64,
+    /// Normalized report batches accepted by the TTY input router.
+    forwarded_reports: u64,
     /// Times motion was suppressed by a future jitter/click-stabilize filter (unused — future).
     #[allow(dead_code)]
     filtered_packets: u64,
@@ -71,7 +71,7 @@ impl MouseDiagnostics {
             dropped_packet_count: 0,
             kernel_raw_drop_count: 0,
             accel_fast_count: 0,
-            hw_cursor_moves: 0,
+            forwarded_reports: 0,
             filtered_packets: 0,
             click_stabilized_count: 0,
         }
@@ -117,9 +117,7 @@ struct MouseState {
     screen_height: i32,
     tuning: profile::PointerTuning,
     diagnostics: MouseDiagnostics,
-    display_timeout_count: u64,
     tty_timeout_count: u64,
-    display_route_logged: bool,
     raw_buttons: u8,
 }
 
@@ -138,9 +136,7 @@ impl MouseState {
             screen_height: height,
             tuning: active.tuning(),
             diagnostics: MouseDiagnostics::new(),
-            display_timeout_count: 0,
             tty_timeout_count: 0,
-            display_route_logged: false,
             raw_buttons: 0,
         }
     }
@@ -205,7 +201,7 @@ impl MouseState {
                     syscall::debug_log_i16(raw_dy);
                     syscall::debug_log("\n");
                 }
-                if raw_buttons_before != raw_buttons_after {
+                if MOUSE_DEBUG && raw_buttons_before != raw_buttons_after {
                     syscall::debug_log("[MOUSE-BUTTON] raw_buttons_before=");
                     syscall::debug_log_u64(raw_buttons_before as u64);
                     syscall::debug_log(" raw_buttons_after=");
@@ -216,8 +212,6 @@ impl MouseState {
                 Some(MouseEvent {
                     dx: raw_dx,
                     dy: raw_dy,
-                    abs_x: self.cursor_x() as u16,
-                    abs_y: self.cursor_y() as u16,
                     left_button: left_btn,
                     right_button: right_btn,
                     middle_button: middle_btn,
@@ -288,7 +282,8 @@ impl MouseState {
     }
 
     fn maybe_log_diagnostics(&mut self) {
-        if self.diagnostics.ps2_packet_count == 0
+        if !MOUSE_DEBUG
+            || self.diagnostics.ps2_packet_count == 0
             || self.diagnostics.ps2_packet_count % DIAG_LOG_INTERVAL != 0
         {
             return;
@@ -301,8 +296,8 @@ impl MouseState {
         syscall::debug_log_u64(d.coalesced_batch_count);
         syscall::debug_log(" batch_packets=");
         syscall::debug_log_u64(d.coalesced_packet_total);
-        syscall::debug_log(" hw_moves=");
-        syscall::debug_log_u64(d.hw_cursor_moves);
+        syscall::debug_log(" forwarded=");
+        syscall::debug_log_u64(d.forwarded_reports);
         syscall::debug_log(" accel_fast=");
         syscall::debug_log_u64(d.accel_fast_count);
         syscall::debug_log(" clamped=");
@@ -331,8 +326,6 @@ impl MouseState {
 struct MouseEvent {
     dx: i16,
     dy: i16,
-    abs_x: u16,
-    abs_y: u16,
     left_button: bool,
     right_button: bool,
     middle_button: bool,
@@ -342,8 +335,6 @@ struct MouseEvent {
 struct PendingMotionBatch {
     dx: i32,
     dy: i32,
-    abs_x: u16,
-    abs_y: u16,
     buttons: u8,
     packet_count: u32,
 }
@@ -353,8 +344,6 @@ impl PendingMotionBatch {
         Self {
             dx: event.dx as i32,
             dy: event.dy as i32,
-            abs_x: event.abs_x,
-            abs_y: event.abs_y,
             buttons: (event.left_button as u8)
                 | ((event.right_button as u8) << 1)
                 | ((event.middle_button as u8) << 2),
@@ -365,8 +354,6 @@ impl PendingMotionBatch {
     fn absorb(&mut self, event: MouseEvent) {
         self.dx = self.dx.saturating_add(event.dx as i32);
         self.dy = self.dy.saturating_add(event.dy as i32);
-        self.abs_x = event.abs_x;
-        self.abs_y = event.abs_y;
         self.packet_count = self.packet_count.saturating_add(1);
     }
 }
@@ -594,7 +581,6 @@ fn clamp_i32_to_i16(v: i32) -> i16 {
 
 fn flush_motion_batch(
     batch: &mut Option<PendingMotionBatch>,
-    display_token: &mut Option<sunlight_ipc::CapabilityToken>,
     tty_token: sunlight_ipc::CapabilityToken,
     mouse_state: &mut MouseState,
     next_generation: &mut u32,
@@ -607,59 +593,30 @@ fn flush_motion_batch(
         .diagnostics
         .record_coalesced_batch(batch.packet_count);
 
-    if display_token.is_none() {
-        *display_token = nameserver_lookup("display_server");
-        if display_token.is_some() && !mouse_state.display_route_logged {
-            syscall::debug_log("[MOUSE] display_server available, routing raw events there\n");
-            mouse_state.display_route_logged = true;
-        }
-    }
-
-    if let Some(disp) = *display_token {
-        let dx = clamp_i32_to_i16(batch.dx);
-        let dy = clamp_i32_to_i16(batch.dy);
-        let raw =
-            (dx as u64 & 0xFFFF) | ((dy as u64 & 0xFFFF) << 16) | ((batch.buttons as u64) << 32);
-        let generation = *next_generation;
-        let metadata = (batch.packet_count as u64) | ((generation as u64) << 32);
-        let msg = IpcMsg::with_label(MouseMsg::RAW_MOTION)
-            .word(0, raw)
-            .word(1, metadata);
-        match ipc_call_timeout(disp, msg, INPUT_FORWARD_TIMEOUT_MS) {
-            Ok(_) => {
-                mouse_state.diagnostics.hw_cursor_moves += 1;
-                *next_generation = next_generation.wrapping_add(1);
-                if *next_generation == 0 {
-                    *next_generation = 1;
-                }
-            }
-            Err(_) => {
-                mouse_state.display_timeout_count =
-                    mouse_state.display_timeout_count.saturating_add(1);
-                if mouse_state.display_timeout_count == 1
-                    || mouse_state.display_timeout_count % TIMEOUT_LOG_INTERVAL == 0
-                {
-                    syscall::debug_log("[MOUSE] display forward timeout count=");
-                    syscall::debug_log_i32(mouse_state.display_timeout_count as i32);
-                    syscall::debug_log("\n");
-                }
-                *display_token = None;
-            }
+    let report = PointerReport::new(
+        clamp_i32_to_i16(batch.dx),
+        clamp_i32_to_i16(batch.dy),
+        batch.buttons,
+    );
+    let generation = *next_generation;
+    let metadata = (batch.packet_count as u64) | ((generation as u64) << 32);
+    let msg = IpcMsg::with_label(MouseMsg::RAW_MOTION)
+        .word(0, report.pack())
+        .word(1, metadata);
+    if ipc_call_timeout(tty_token, msg, INPUT_FORWARD_TIMEOUT_MS).is_ok() {
+        mouse_state.diagnostics.forwarded_reports += 1;
+        *next_generation = next_generation.wrapping_add(1);
+        if *next_generation == 0 {
+            *next_generation = 1;
         }
     } else {
-        let mut abs = batch.abs_x as u64;
-        abs |= (batch.abs_y as u64) << 16;
-        abs |= (batch.buttons as u64) << 32;
-        let msg = IpcMsg::with_label(0x2).word(0, abs);
-        if ipc_call_timeout(tty_token, msg, INPUT_FORWARD_TIMEOUT_MS).is_err() {
-            mouse_state.tty_timeout_count = mouse_state.tty_timeout_count.saturating_add(1);
-            if mouse_state.tty_timeout_count == 1
-                || mouse_state.tty_timeout_count % TIMEOUT_LOG_INTERVAL == 0
-            {
-                syscall::debug_log("[MOUSE] tty fallback forward timeout count=");
-                syscall::debug_log_i32(mouse_state.tty_timeout_count as i32);
-                syscall::debug_log("\n");
-            }
+        mouse_state.tty_timeout_count = mouse_state.tty_timeout_count.saturating_add(1);
+        if mouse_state.tty_timeout_count == 1
+            || mouse_state.tty_timeout_count % TIMEOUT_LOG_INTERVAL == 0
+        {
+            syscall::debug_log("[MOUSE] tty input-router timeout count=");
+            syscall::debug_log_i32(mouse_state.tty_timeout_count as i32);
+            syscall::debug_log("\n");
         }
     }
 }
@@ -739,7 +696,6 @@ pub extern "C" fn _start() -> ! {
                     Some(_) => {
                         flush_motion_batch(
                             &mut pending_batch,
-                            &mut display_token,
                             tty_token,
                             &mut mouse_state,
                             &mut next_motion_generation,
@@ -755,7 +711,6 @@ pub extern "C" fn _start() -> ! {
 
         flush_motion_batch(
             &mut pending_batch,
-            &mut display_token,
             tty_token,
             &mut mouse_state,
             &mut next_motion_generation,

@@ -88,7 +88,8 @@ use sunlight_ui::{
         icon_theme::{self, category as icon_category, name as icon_name},
         mime_icon, TgaImage,
     },
-    App, Canvas, Color, Event, EventPollCounters, Point, Rect, Theme, Window, WindowConfig,
+    set_client_cursor, App, Canvas, Color, CursorShape, Event, EventPollCounters, Point, Rect,
+    Theme, Window, WindowConfig,
 };
 use sunlight_wallpaper::{is_supported_wallpaper, load_desktop_config, DesktopConfig};
 
@@ -703,6 +704,12 @@ pub(crate) const TOP_PAD: i32 = 8; // horizontal margin from screen edge
 pub(crate) const BOT_H: u32 = 44; // bottom cluster height
 pub(crate) const BOT_Y_OFF: i32 = 8; // distance from screen bottom to bottom of cluster
 const ICON_BTN: u32 = 36; // square size for icon buttons in clusters
+/// Pixel-art shell glyphs are authored on a 16×16 grid. Render them at 2× in
+/// the dock so their visual weight matches the TGA application icons.
+const DOCK_ICON_SCALE: u32 = 2;
+/// The workspace overview is the shell's main workspace discovery affordance.
+/// Give it a slightly roomier target than neighboring utility controls.
+const OVERVIEW_BTN: u32 = 40;
 const CLUSTER_PAD: i32 = 6; // inner horizontal padding inside clusters
 const ICON_GAP: i32 = 4; // gap between icon buttons
                          // Top-right status cluster spacing. Kept as constants so the balance of the
@@ -751,8 +758,9 @@ const MAX_WINDOW_SNAPSHOTS: usize = 256;
 const APP_REGISTRY_LEN: usize = 15;
 const ENABLE_RUNNING_TASKBAR: bool = true;
 
-const SEARCH_W: u32 = 200; // search box width
-const SEARCH_H: u32 = 32; // search box height
+/// Search is an icon button that opens the centered palette; typing belongs
+/// exclusively to the palette's real input control.
+const SEARCH_BTN: u32 = 36;
 const MAX_RECENT_APPS: usize = 12; // Start Menu "Recent" section cap
 const STATUS_POLL_MS: u64 = 1000;
 const TIME_IPC_TIMEOUT_MS: u64 = 250;
@@ -822,21 +830,21 @@ const SUN_ROWS: [u16; 16] = [
 
 /// Overview icon — 2×2 grid of rounded squares.
 const OVERVIEW_ROWS: [u16; 16] = [
-    0b0111101111000000,
-    0b0100101001000000,
-    0b0100101001000000,
-    0b0111101111000000,
     0b0000000000000000,
-    0b0111101111000000,
-    0b0100101001000000,
-    0b0100101001000000,
-    0b0111101111000000,
+    0b0111111001111110,
+    0b0100001001000010,
+    0b0100001001000010,
+    0b0100001001000010,
+    0b0100001001000010,
+    0b0111111001111110,
     0b0000000000000000,
     0b0000000000000000,
-    0b0000000000000000,
-    0b0000000000000000,
-    0b0000000000000000,
-    0b0000000000000000,
+    0b0111111001111110,
+    0b0100001001000010,
+    0b0100001001000010,
+    0b0100001001000010,
+    0b0100001001000010,
+    0b0111111001111110,
     0b0000000000000000,
 ];
 
@@ -1291,6 +1299,12 @@ struct VortexShell {
     hover: Option<usize>,
     /// Tracks hover on the settings button in the left cluster.
     settings_hover: bool,
+    /// Tracks hover on the enlarged workspace overview control.
+    overview_hover: bool,
+    /// Tracks hover on the search-palette trigger button.
+    search_hover: bool,
+    /// True between press and release while the pointer is held on Search.
+    search_pressed: bool,
     /// Cached local hour/min for the status clock.
     status_hour: u8,
     status_min: u8,
@@ -1496,6 +1510,9 @@ impl VortexShell {
             suppress_next_click: false,
             hover: None,
             settings_hover: false,
+            overview_hover: false,
+            search_hover: false,
+            search_pressed: false,
             status_hour: 0xff,
             status_min: 0xff,
             status_year: 1970,
@@ -3125,21 +3142,24 @@ impl VortexShell {
         true
     }
 
-    /// Open or close the centered Search Palette from the bottom-right Search control.
-    fn toggle_search_palette(&mut self) -> bool {
-        if self.search_palette.is_open() {
-            return self.search_palette.close();
+    /// Shared desktop action for the shelf button and forwarded shortcuts.
+    ///
+    /// This is deliberately open/focus rather than a toggle: a second trigger
+    /// must never make the active launcher disappear or create another palette.
+    fn open_search_palette(&mut self) -> bool {
+        if !self.search_palette.is_open() {
+            self.start_menu.close();
+            let _ = self.sidebar.close();
+            let _ = self.workspace_switcher.close();
+            self.show_system_menu = false;
+            self.system_menu_hover = None;
+            self.show_calendar_popover = false;
+            self.show_notif_panel = false;
+            self.show_datetime_tooltip = false;
+            self.context_menu = None;
         }
-        self.start_menu.close();
-        let _ = self.sidebar.close();
-        let _ = self.workspace_switcher.close();
-        self.show_system_menu = false;
-        self.system_menu_hover = None;
-        self.show_calendar_popover = false;
-        self.show_notif_panel = false;
-        self.show_datetime_tooltip = false;
-        self.context_menu = None;
-        // Preserve existing query text; focus the input immediately.
+        // Preserve the query while restoring the existing field's active
+        // state, cursor, and result selection policy.
         self.search_palette.open();
         true
     }
@@ -3433,12 +3453,6 @@ fn top_bar_rect(screen_w: u32, presentation: PanelPresentation) -> Rect {
     }
 }
 
-/// Draw a panel pill: filled rounded rect with a 1-px border.
-fn draw_panel(canvas: &mut Canvas, rect: Rect, fill: Color, border: Color, radius: u32) {
-    canvas.fill_rounded_rect(rect, radius, fill);
-    canvas.stroke_rounded_rect(rect, radius, 1, border);
-}
-
 /// Dock / bottom cluster chrome using the reusable dock material.
 fn draw_dock_surface(canvas: &mut Canvas, theme: &Theme, rect: Rect, radius: u32) {
     canvas.fill_material(
@@ -3496,7 +3510,7 @@ fn draw_top_panel_item_bg(
     canvas.stroke_rounded_rect(rect, TOP_ITEM_RADIUS, 1, border);
 }
 
-/// Draw an icon button cell. `highlight` draws it with the accent tint.
+/// Draw a dock icon button cell. `highlight` draws it with the accent tint.
 fn draw_icon_btn(
     canvas: &mut Canvas,
     cell: Rect,
@@ -3515,7 +3529,7 @@ fn draw_icon_btn(
     } else {
         theme.text_dim
     };
-    draw_icon16(canvas, cell, rows, icon_color);
+    draw_icon16_scaled(canvas, cell, rows, icon_color, DOCK_ICON_SCALE);
 }
 
 fn draw_app_button(
@@ -5927,6 +5941,14 @@ struct BottomLeftZones {
     settings: Rect,
 }
 
+fn bottom_left_cluster_width() -> u32 {
+    CLUSTER_PAD as u32 * 2 + OVERVIEW_BTN + ICON_BTN * 2 + ICON_GAP as u32 * 2
+}
+
+fn search_cluster_width() -> u32 {
+    SEARCH_BTN + CLUSTER_PAD as u32 * 2
+}
+
 /// Draw the bottom-left cluster: overview | sidebar | settings.
 ///
 /// Overview toggles the compact Workspace Switcher; Sidebar and Settings are
@@ -5942,51 +5964,63 @@ fn draw_bot_left(
     overview_open: bool,
     now: u64,
 ) -> BottomLeftZones {
-    let icons: &[&[u16; 16]] = &[&OVERVIEW_ROWS, &SIDEBAR_ROWS, &SETTINGS_ROWS];
-    let cluster_w = dock_cluster_width(icons.len());
+    let cluster_w = bottom_left_cluster_width();
     let cluster = Rect::new(TOP_PAD, by, cluster_w, BOT_H);
     draw_dock_surface(canvas, theme, cluster, RADIUS);
 
     let mut cx = cluster.x + CLUSTER_PAD;
-    let mut overview_cell = Rect::new(0, 0, 0, 0);
-    let mut sidebar_cell = Rect::new(0, 0, 0, 0);
-    let mut settings_cell = Rect::new(0, 0, 0, 0);
-    for (i, rows) in icons.iter().enumerate() {
-        let cell = Rect::new(
-            cx,
-            cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2,
-            ICON_BTN,
-            ICON_BTN,
-        );
-        // Slot 2 = settings icon — use TGA if available.
-        if i == 2 {
-            settings_cell = cell;
-            draw_app_button(
-                canvas,
-                cell,
-                theme,
-                dock,
-                rows,
-                settings_app,
-                settings_hover,
-                now,
-            );
-        } else {
-            if i == 0 {
-                overview_cell = cell;
-                // Restrained open/active state while the Workspace Switcher is visible.
-                if overview_open {
-                    canvas.fill_rounded_rect(cell, 5, theme.panel_alt);
-                    canvas.stroke_rounded_rect(cell, 5, 1, theme.accent);
-                }
-                draw_icon_btn(canvas, cell, rows, theme, overview_open, false);
-            } else {
-                sidebar_cell = cell;
-                draw_icon_btn(canvas, cell, rows, theme, sidebar_open, false);
-            }
-        }
-        cx += ICON_BTN as i32 + ICON_GAP;
-    }
+    let overview_cell = Rect::new(
+        cx,
+        cluster.y + (BOT_H as i32 - OVERVIEW_BTN as i32) / 2,
+        OVERVIEW_BTN,
+        OVERVIEW_BTN,
+    );
+    // Match the Sidebar's icon-only treatment exactly. The 40×40 cell remains
+    // the generous workspace hit target; the shared dock glyph scale keeps the
+    // overview visually balanced with neighboring icons. Open is communicated
+    // solely by the established orange icon tint.
+    draw_icon_btn(
+        canvas,
+        overview_cell,
+        &OVERVIEW_ROWS,
+        theme,
+        overview_open,
+        false,
+    );
+    cx += OVERVIEW_BTN as i32 + ICON_GAP;
+
+    let sidebar_cell = Rect::new(
+        cx,
+        cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2,
+        ICON_BTN,
+        ICON_BTN,
+    );
+    draw_icon_btn(
+        canvas,
+        sidebar_cell,
+        &SIDEBAR_ROWS,
+        theme,
+        sidebar_open,
+        false,
+    );
+    cx += ICON_BTN as i32 + ICON_GAP;
+
+    let settings_cell = Rect::new(
+        cx,
+        cluster.y + (BOT_H as i32 - ICON_BTN as i32) / 2,
+        ICON_BTN,
+        ICON_BTN,
+    );
+    draw_app_button(
+        canvas,
+        settings_cell,
+        theme,
+        dock,
+        &SETTINGS_ROWS,
+        settings_app,
+        settings_hover,
+        now,
+    );
     BottomLeftZones {
         overview: overview_cell,
         sidebar: sidebar_cell,
@@ -6041,8 +6075,8 @@ fn draw_bot_center(
         );
     }
     let total_w = fixed_w.saturating_add(running_total_w);
-    let min_x = TOP_PAD + dock_cluster_width(3) as i32 + 8;
-    let max_x = screen_w as i32 - TOP_PAD - SEARCH_W as i32 - 8 - total_w as i32;
+    let min_x = TOP_PAD + bottom_left_cluster_width() as i32 + 8;
+    let max_x = screen_w as i32 - TOP_PAD - search_cluster_width() as i32 - 8 - total_w as i32;
     let cx_start = ((screen_w as i32 - total_w as i32) / 2).clamp(min_x, max_x.max(min_x));
     let cluster = Rect::new(cx_start, by, total_w, BOT_H);
     draw_dock_surface(canvas, theme, cluster, RADIUS);
@@ -6835,7 +6869,7 @@ impl VortexShell {
 
 // (stash fields live in VortexShell)
 
-/// Draw the bottom-right search box. Returns the clickable zone.
+/// Draw the bottom-right Search Palette trigger. Returns its hit target.
 fn draw_bot_right(
     canvas: &mut Canvas,
     theme: &Theme,
@@ -6843,48 +6877,94 @@ fn draw_bot_right(
     screen_w: u32,
     sym: SymbolTheme,
     search_open: bool,
+    search_hover: bool,
+    search_pressed: bool,
 ) -> Rect {
-    let sx = screen_w as i32 - TOP_PAD - SEARCH_W as i32;
-    let sy = by + (BOT_H as i32 - SEARCH_H as i32) / 2;
-    let search_rect = Rect::new(sx, sy, SEARCH_W, SEARCH_H);
-    if search_open {
-        canvas.fill_rounded_rect(search_rect, RADIUS, theme.panel_alt);
-        canvas.stroke_rounded_rect(search_rect, RADIUS, 1, theme.accent);
+    let cluster = Rect::new(
+        screen_w as i32 - TOP_PAD - (SEARCH_BTN as i32 + CLUSTER_PAD * 2),
+        by,
+        search_cluster_width(),
+        BOT_H,
+    );
+    draw_dock_surface(canvas, theme, cluster, RADIUS);
+    let search_rect = Rect::new(
+        cluster.x + CLUSTER_PAD,
+        cluster.y + (BOT_H as i32 - SEARCH_BTN as i32) / 2,
+        SEARCH_BTN,
+        SEARCH_BTN,
+    );
+    let (fill, border, tint) = if search_pressed {
+        (
+            theme.accent_hover.darken(35),
+            theme.accent_hover,
+            theme.text,
+        )
+    } else if search_open {
+        (theme.accent.darken(34), theme.accent, theme.accent)
+    } else if search_hover {
+        (theme.panel_alt, theme.border.lighten(18), theme.text)
     } else {
-        draw_panel(canvas, search_rect, theme.panel_alt, theme.border, RADIUS);
-    }
+        (theme.panel, theme.border, theme.text_dim)
+    };
+    canvas.fill_rounded_rect(search_rect, 6, fill);
+    canvas.stroke_rounded_rect(search_rect, 6, 1, border);
 
-    // Search glyph icon on left
-    let ic = 14u32;
-    let icell = Rect::new(sx + 6, sy + (SEARCH_H as i32 - ic as i32) / 2, ic, ic);
+    let icon_size = 20u32;
+    let icon = Rect::new(
+        search_rect.x + (SEARCH_BTN as i32 - icon_size as i32) / 2,
+        search_rect.y + (SEARCH_BTN as i32 - icon_size as i32) / 2,
+        icon_size,
+        icon_size,
+    );
     if let Some(tga) = sym.search {
-        let tint = if search_open {
-            theme.accent
-        } else {
-            theme.text_dim
-        };
-        draw_tga_tinted_orange(canvas, &tga, icell, tint);
+        draw_tga_tinted_orange(canvas, &tga, icon, tint);
     }
+    search_rect
+}
 
-    // Placeholder text (indented for icon)
-    let ph = if search_open { "Search" } else { "Search..." };
-    let ph_x = sx + 24;
+/// Compact shelf tooltip shared by icon-only desktop controls.
+fn draw_shelf_tooltip(canvas: &mut Canvas, theme: &Theme, cell: Rect, label: &str, screen_w: u32) {
+    let pad = 5i32;
+    let width = measure_text(label, FontRole::UiSmall).w as i32 + pad * 2;
+    let height = 18u32;
+    let mut x = cell.x + cell.w as i32 / 2 - width / 2;
+    x = x.clamp(2, screen_w as i32 - width - 2);
+    let y = (cell.y - height as i32 - 8).max(2);
+    let tooltip = Rect::new(x, y, width as u32, height);
+    canvas.fill_material(
+        tooltip,
+        sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::Tooltip, theme).with_radius(3),
+    );
     draw_text_vcenter(
         canvas,
-        ph,
-        ph_x,
-        search_rect.y,
-        search_rect.h,
-        &TextStyle::new(
-            FontRole::UiSmall,
-            if search_open {
-                theme.text
-            } else {
-                theme.text_dim
-            },
-        ),
+        label,
+        x + pad,
+        y,
+        height,
+        &TextStyle::new(FontRole::UiSmall, theme.text),
     );
-    search_rect
+}
+
+#[cfg(test)]
+mod shelf_control_tests {
+    use super::*;
+
+    #[test]
+    fn shelf_controls_have_independent_targets_at_supported_widths() {
+        let overview_x = TOP_PAD + CLUSTER_PAD;
+        let sidebar_x = overview_x + OVERVIEW_BTN as i32 + ICON_GAP;
+        let settings_x = sidebar_x + ICON_BTN as i32 + ICON_GAP;
+        assert_eq!(OVERVIEW_BTN, 40);
+        assert_eq!(SEARCH_BTN, 36);
+        assert!(overview_x + OVERVIEW_BTN as i32 <= sidebar_x);
+        assert!(sidebar_x + ICON_BTN as i32 <= settings_x);
+
+        for screen_w in [1366u32, 1920] {
+            let left_end = TOP_PAD + bottom_left_cluster_width() as i32;
+            let search_x = screen_w as i32 - TOP_PAD - search_cluster_width() as i32;
+            assert!(left_end < search_x, "controls must fit at {screen_w}px");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -7031,7 +7111,21 @@ impl App for VortexShell {
             cw,
             self.symbols,
             self.search_palette.is_open(),
+            self.search_hover,
+            self.search_pressed,
         );
+
+        if self.overview_hover {
+            draw_shelf_tooltip(canvas, theme, self.overview_zone, "Show Workspaces", cw);
+        } else if self.search_hover {
+            draw_shelf_tooltip(
+                canvas,
+                theme,
+                self.search_zone,
+                "Search  Ctrl+K / Super+K",
+                cw,
+            );
+        }
 
         // Record clickable zones for each pinned app (same order as DOCK_PINNED).
         self.dock_zones = core::array::from_fn(|i| (dock_cells[i], Self::dock_zone_app(i)));
@@ -7091,8 +7185,67 @@ impl App for VortexShell {
         let sidebar_bottom = bot_y(self.screen_h) - 8;
         let switcher_top = sidebar_top;
         let switcher_dock_top = bot_y(self.screen_h);
+
+        // Search gets a pressed frame between physical down and release.
+        // Click remains the sole activation event, which keeps one click equal
+        // to exactly one action. Overview uses the Sidebar's icon-only style.
+        if let Event::MouseDown { x, y, button: 0 } = event {
+            let point = Point::new(x, y);
+            if self.overview_zone.contains(point) {
+                return true;
+            }
+            if self.search_zone.contains(point) {
+                self.search_pressed = true;
+                return true;
+            }
+        }
+        if let Event::MouseUp { x, y, button: 0 } = event {
+            let point = Point::new(x, y);
+            let was_pressed = self.search_pressed;
+            self.search_pressed = false;
+            if self.overview_zone.contains(point)
+                || (was_pressed && self.search_zone.contains(point))
+            {
+                return true;
+            }
+        }
+
+        // This is the shell half of the single search action. The compositor
+        // forwards Super+K globally and Ctrl+K only when no application owns
+        // keyboard focus (see sunlight-display's documented routing limit).
+        if matches!(
+            event,
+            Event::KeyPress {
+                keycode: 0x25, // KEY_K
+                pressed: true,
+                shift: false,
+                ctrl,
+                alt: false,
+                super_key,
+            } if (ctrl && !super_key) || (super_key && !ctrl)
+        ) {
+            return self.open_search_palette();
+        }
+
         if self.search_palette.is_open() {
+            if let Event::MouseMove { x, y } = event {
+                let point = Point::new(x, y);
+                let cursor = if self
+                    .search_palette
+                    .layout(self.screen_w, self.screen_h)
+                    .input
+                    .contains(point)
+                {
+                    CursorShape::Text
+                } else {
+                    CursorShape::Pointer
+                };
+                set_client_cursor(cursor);
+            }
             match event {
+                Event::Click { x, y } if self.search_zone.contains(Point::new(x, y)) => {
+                    return self.open_search_palette();
+                }
                 Event::Click { .. }
                 | Event::MouseMove { .. }
                 | Event::Key(_)
@@ -7130,6 +7283,9 @@ impl App for VortexShell {
         }
         if self.workspace_switcher.is_open() {
             match event {
+                Event::Click { x, y } if self.overview_zone.contains(Point::new(x, y)) => {
+                    return self.toggle_workspace_switcher();
+                }
                 Event::Click { .. }
                 | Event::MouseMove { .. }
                 | Event::Key(_)
@@ -7507,7 +7663,7 @@ impl App for VortexShell {
                     return true;
                 }
                 if self.search_zone.contains(point) {
-                    return self.toggle_search_palette();
+                    return self.open_search_palette();
                 }
                 if self.overview_zone.contains(point) {
                     return self.toggle_workspace_switcher();
@@ -7729,20 +7885,6 @@ impl App for VortexShell {
                     false
                 }
             }
-            // Ctrl+K / Super+K — open centered Search Palette (Walker-style).
-            Event::KeyPress {
-                keycode: 0x25, // KEY_K
-                pressed: true,
-                ctrl,
-                super_key,
-                ..
-            } if ctrl || super_key => {
-                if !self.search_palette.is_open() {
-                    self.toggle_search_palette()
-                } else {
-                    true
-                }
-            }
             Event::KeyPress {
                 keycode: KEY_TAB,
                 pressed: true,
@@ -7806,9 +7948,15 @@ impl App for VortexShell {
                 }
                 let prev_settings = self.settings_hover;
                 self.settings_hover = self.settings_zone.contains(point);
+                let prev_overview = self.overview_hover;
+                self.overview_hover = self.overview_zone.contains(point);
+                let prev_search = self.search_hover;
+                self.search_hover = self.search_zone.contains(point);
                 let prev_top_hover = self.top_panel_hover;
                 self.top_panel_hover = self.top_panel_item_at_point(point);
                 if self.settings_hover != prev_settings
+                    || self.overview_hover != prev_overview
+                    || self.search_hover != prev_search
                     || self.top_panel_hover != prev_top_hover
                     || self.system_menu_hover != previous_system_menu_hover
                 {
@@ -7827,6 +7975,8 @@ impl App for VortexShell {
 
                 self.hover != prev
                     || self.running_hover != prev_running
+                    || self.overview_hover != prev_overview
+                    || self.search_hover != prev_search
                     || self.top_panel_hover != prev_top_hover
                     || self.show_datetime_tooltip != prev_tip
             }

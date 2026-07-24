@@ -1088,4 +1088,20 @@ mod tests {
         assert!(!sp.is_open());
         assert!(sp.query().len() <= SEARCH_FIELD_CAP);
     }
+
+    #[test]
+    fn reopening_focuses_the_existing_palette_and_preserves_its_query() {
+        let mut sp = SearchPaletteState::new();
+        sp.open();
+        sp.field.set_text("files");
+        sp.recompute_results();
+
+        // `open` is intentionally idempotent for shelf/shortcut activation:
+        // there is one state object, its field stays active, and its query is
+        // retained rather than creating a second launcher surface.
+        sp.open();
+        assert!(sp.is_open());
+        assert!(sp.field.active);
+        assert_eq!(sp.query(), "files");
+    }
 }

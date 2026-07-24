@@ -340,7 +340,7 @@ impl Material {
         let mut b = m.tint.b() as i16;
         if matches!(m.kind, MaterialKind::Glass) && m.noise_strength > 0 {
             let n = noise_sample(x, y) as i16; // 0..=255
-            // Map noise around 0 with amplitude ~ noise_strength.
+                                               // Map noise around 0 with amplitude ~ noise_strength.
             let delta = ((n - 128) * m.noise_strength as i16) / 255;
             r = (r + delta).clamp(0, 255);
             g = (g + delta).clamp(0, 255);
@@ -367,9 +367,7 @@ const fn generate_noise_tile() -> [u8; NOISE_TILE_N * NOISE_TILE_N] {
     let mut state: u32 = 0xA5A5_5A5A;
     let mut i = 0;
     while i < out.len() {
-        state = state
-            .wrapping_mul(1664525)
-            .wrapping_add(1013904223);
+        state = state.wrapping_mul(1664525).wrapping_add(1013904223);
         out[i] = (state >> 16) as u8;
         i += 1;
     }
@@ -413,9 +411,7 @@ mod tests {
         assert_eq!(m.noise_strength, Material::MAX_NOISE);
         assert_eq!(m.opacity, 200);
 
-        let solid = Material::solid(Color::rgb(1, 2, 3))
-            .with_noise(40)
-            .clamp();
+        let solid = Material::solid(Color::rgb(1, 2, 3)).with_noise(40).clamp();
         assert_eq!(solid.opacity, 255);
         assert_eq!(solid.noise_strength, 0);
 
@@ -504,10 +500,7 @@ mod tests {
         assert_eq!(start.noise_strength, 0);
         assert_eq!(start.border, Some(Color::rgb(0x35, 0x35, 0x40)));
         assert_eq!(start.radius, 12);
-        assert_eq!(
-            Material::for_role(SurfaceRole::PopupOrMenu, &theme),
-            start
-        );
+        assert_eq!(Material::for_role(SurfaceRole::PopupOrMenu, &theme), start);
         // Start menu and window root share the canonical charcoal tint.
         assert_eq!(palette.window_glass.tint, start.tint);
         assert_eq!(palette.window_glass.opacity, start.opacity);

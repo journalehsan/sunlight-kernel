@@ -203,12 +203,7 @@ impl<const N: usize> BoundedSearchField<N> {
                     );
                 }
             } else {
-                canvas.draw_text(
-                    text_x,
-                    rect.y + (rect.h as i32 - 10) / 2,
-                    value,
-                    theme.text,
-                );
+                canvas.draw_text(text_x, rect.y + (rect.h as i32 - 10) / 2, value, theme.text);
                 if self.active {
                     let cursor_x = text_x + (self.cursor as i32) * 6;
                     canvas.vline(
@@ -281,11 +276,7 @@ impl<'a> SearchResultRow<'a> {
 
         let text_x = icon_rect.right() + 10;
         let selected = self.view.state == SearchResultState::Selected;
-        let title_color = if selected {
-            theme.text
-        } else {
-            theme.text_dim
-        };
+        let title_color = if selected { theme.text } else { theme.text_dim };
         let title_font = if selected {
             fonts.medium.or(fonts.regular)
         } else {
@@ -316,14 +307,7 @@ impl<'a> SearchResultRow<'a> {
         }
         if let Some(sub) = self.view.subtitle {
             if let Some(f) = fonts.small.or(fonts.regular) {
-                f.draw_vcenter(
-                    canvas,
-                    sub,
-                    text_x,
-                    self.rect.y + 22,
-                    18,
-                    theme.text_muted,
-                );
+                f.draw_vcenter(canvas, sub, text_x, self.rect.y + 22, 18, theme.text_muted);
             } else {
                 canvas.draw_text(text_x, self.rect.y + 24, sub, theme.text_muted);
             }
@@ -372,12 +356,7 @@ impl SearchPaletteLayout {
     pub const PAGE_DOT: u32 = 8;
     pub const PAGE_DOT_GAP: i32 = 10;
 
-    pub fn compute(
-        screen_w: u32,
-        screen_h: u32,
-        visible_rows: usize,
-        page_count: usize,
-    ) -> Self {
+    pub fn compute(screen_w: u32, screen_h: u32, visible_rows: usize, page_count: usize) -> Self {
         let panel_w = Self::PANEL_W.min(screen_w.saturating_sub(24)).max(280);
         let rows = visible_rows.min(SEARCH_PAGE_ROWS).max(1);
         let list_h = (rows as u32)
@@ -389,13 +368,8 @@ impl SearchPaletteLayout {
         } else {
             0
         };
-        let content_h = Self::INPUT_H
-            + 10
-            + list_h
-            + dots_h
-            + 8
-            + Self::FOOTER_H
-            + (Self::PAD as u32) * 2;
+        let content_h =
+            Self::INPUT_H + 10 + list_h + dots_h + 8 + Self::FOOTER_H + (Self::PAD as u32) * 2;
         let panel_h = content_h
             .min(Self::PANEL_H_MAX)
             .min(screen_h.saturating_sub(48));
@@ -624,12 +598,15 @@ mod tests {
         let layout = SearchPaletteLayout::compute(1366, 768, 4, 2);
         for i in 0..4 {
             let r = layout.rows[i];
-            assert_eq!(
-                layout.row_index_at(Point::new(r.x + 2, r.y + 2)),
-                Some(i)
-            );
+            assert_eq!(layout.row_index_at(Point::new(r.x + 2, r.y + 2)), Some(i));
         }
-        assert_eq!(layout.page_dot_at(Point::new(layout.page_dots[0].x + 1, layout.page_dots[0].y + 1)), Some(0));
+        assert_eq!(
+            layout.page_dot_at(Point::new(
+                layout.page_dots[0].x + 1,
+                layout.page_dots[0].y + 1
+            )),
+            Some(0)
+        );
         assert_eq!(layout.row_index_at(Point::new(0, 0)), None);
     }
 

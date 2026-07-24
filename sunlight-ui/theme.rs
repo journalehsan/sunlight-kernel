@@ -83,8 +83,7 @@ impl Color {
         let out_a_numerator = src_a * 255 + dst_a * inv_src_a;
         let out_a = (out_a_numerator + 127) / 255;
         let blend_channel = |src: u8, dst_channel: u8| -> u8 {
-            let numerator = src as u64 * src_a * 255
-                + dst_channel as u64 * dst_a * inv_src_a;
+            let numerator = src as u64 * src_a * 255 + dst_channel as u64 * dst_a * inv_src_a;
             ((numerator + out_a_numerator / 2) / out_a_numerator) as u8
         };
         Color::rgba(
@@ -364,7 +363,12 @@ mod tests {
         assert!(c.titlebar_active.b() <= c.window_bg.b());
         // No strong blue/purple bias vs R/G on charcoal surfaces.
         assert!(c.titlebar_active.b().saturating_sub(c.titlebar_active.r()) <= 4);
-        assert!(c.titlebar_inactive.b().saturating_sub(c.titlebar_inactive.r()) <= 4);
+        assert!(
+            c.titlebar_inactive
+                .b()
+                .saturating_sub(c.titlebar_inactive.r())
+                <= 4
+        );
     }
 
     #[test]

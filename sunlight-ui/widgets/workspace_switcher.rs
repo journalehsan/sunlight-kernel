@@ -94,8 +94,7 @@ impl WorkspaceSwitcherLayout {
             .clamp(Self::CARD_H_MIN, Self::CARD_H_MAX);
 
         let panel_h = (card_h as i32 + Self::PANEL_PAD * 2)
-            .clamp(Self::PANEL_H_MIN as i32, Self::PANEL_H_MAX as i32)
-            as u32;
+            .clamp(Self::PANEL_H_MIN as i32, Self::PANEL_H_MAX as i32) as u32;
 
         // Prefer sitting just above the dock; clamp so the panel stays on-screen
         // and below the top inset (top panel / reserved chrome).
@@ -120,8 +119,7 @@ impl WorkspaceSwitcherLayout {
 
         let panel = Rect::new(panel_x, panel_y, panel_w, panel_h);
 
-        let total_cards_w =
-            card_w * WORKSPACE_CARD_COUNT as u32 + gaps;
+        let total_cards_w = card_w * WORKSPACE_CARD_COUNT as u32 + gaps;
         let row_x = panel.x + (panel.w as i32 - total_cards_w as i32) / 2;
         let row_y = panel.y + (panel.h as i32 - card_h as i32) / 2;
 
@@ -238,11 +236,7 @@ impl<'a> AppIconStack<'a> {
                 badge_w.min(self.rect.right().saturating_sub(x).max(0) as u32),
                 16,
             );
-            BoundedOverflowBadge {
-                rect: badge,
-                label,
-            }
-            .draw(canvas, theme);
+            BoundedOverflowBadge { rect: badge, label }.draw(canvas, theme);
         }
     }
 }
@@ -357,12 +351,7 @@ impl<'a> WorkspaceCard<'a> {
         } else {
             let mut count_buf = [0u8; 12];
             let count_label = format_window_count(self.view.window_count, &mut count_buf);
-            canvas.draw_text(
-                footer.x,
-                footer.y + 4,
-                count_label,
-                theme.text_muted,
-            );
+            canvas.draw_text(footer.x, footer.y + 4, count_label, theme.text_muted);
 
             let icons_rect = Rect::new(
                 footer.x + 36,

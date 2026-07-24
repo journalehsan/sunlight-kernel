@@ -166,7 +166,7 @@ impl LoginScreen {
 
     /// Handle a key event. Returns the login result.
     pub fn handle_key_ascii(&mut self, ascii: u8) -> LoginResult {
-        self.handle_key_event(0, true, Some(ascii))
+        self.handle_key_event_with_shift(0, true, false, Some(ascii))
     }
 
     /// Handle a raw key event. Arrow keys are routed here so the dropdown can
@@ -175,6 +175,16 @@ impl LoginScreen {
         &mut self,
         keycode: u8,
         pressed: bool,
+        ascii: Option<u8>,
+    ) -> LoginResult {
+        self.handle_key_event_with_shift(keycode, pressed, false, ascii)
+    }
+
+    pub fn handle_key_event_with_shift(
+        &mut self,
+        keycode: u8,
+        pressed: bool,
+        shift: bool,
         ascii: Option<u8>,
     ) -> LoginResult {
         if self.locked_ticks > 0 {
@@ -209,12 +219,19 @@ impl LoginScreen {
                 }
             }
             Some(b'\t') => {
-                self.cycle_focus_forward();
+                if shift {
+                    self.cycle_focus_backward();
+                } else {
+                    self.cycle_focus_forward();
+                }
                 LoginResult::Pending
             }
             Some(b' ') => {
-                if self.focus == FocusArea::Dropdown {
-                    self.session = self.session.toggle();
+                match self.focus {
+                    FocusArea::Dropdown => self.session = self.session.toggle(),
+                    FocusArea::Reboot => return LoginResult::Reboot,
+                    FocusArea::Shutdown => return LoginResult::Shutdown,
+                    _ => {}
                 }
                 LoginResult::Pending
             }
@@ -266,6 +283,62 @@ impl LoginScreen {
             FocusArea::Dropdown => self.focus = FocusArea::Reboot,
             FocusArea::Reboot => self.focus = FocusArea::Shutdown,
             FocusArea::Shutdown => self.focus = FocusArea::UserSlot(0),
+        }
+    }
+
+    fn cycle_focus_backward(&mut self) {
+        match self.focus {
+            FocusArea::UserSlot(0) => self.focus = FocusArea::Shutdown,
+            FocusArea::UserSlot(idx) => self.focus = FocusArea::UserSlot(idx - 1),
+            FocusArea::Password => {
+                self.focus = FocusArea::UserSlot(self.active_count.saturating_sub(1))
+            }
+            FocusArea::Dropdown => self.focus = FocusArea::Password,
+            FocusArea::Reboot => self.focus = FocusArea::Dropdown,
+            FocusArea::Shutdown => self.focus = FocusArea::Reboot,
+        }
+    }
+
+    /// Apply one completed primary-button click from the shared TUI pointer
+    /// tracker. Hover and press capture never alter keyboard focus; accepting a
+    /// click updates this single focus state so subsequent Tab/Enter continues
+    /// from the mouse-selected control.
+    pub fn handle_pointer_click(&mut self, target: FocusArea) -> LoginResult {
+        if self.locked_ticks > 0 {
+            return LoginResult::Locked;
+        }
+
+        match target {
+            FocusArea::UserSlot(index) if index < self.active_count => {
+                if self.selected_user_idx != index {
+                    self.password.clear();
+                }
+                self.selected_user_idx = index;
+                if self.is_custom_slot[index] && self.users[index].len == 0 {
+                    self.focus = FocusArea::UserSlot(index);
+                } else {
+                    self.focus = FocusArea::Password;
+                }
+                LoginResult::Pending
+            }
+            FocusArea::Password => {
+                self.focus = FocusArea::Password;
+                LoginResult::Pending
+            }
+            FocusArea::Dropdown => {
+                self.focus = FocusArea::Dropdown;
+                self.session = self.session.toggle();
+                LoginResult::Pending
+            }
+            FocusArea::Reboot => {
+                self.focus = FocusArea::Reboot;
+                LoginResult::Reboot
+            }
+            FocusArea::Shutdown => {
+                self.focus = FocusArea::Shutdown;
+                LoginResult::Shutdown
+            }
+            FocusArea::UserSlot(_) => LoginResult::Pending,
         }
     }
 
@@ -331,8 +404,11 @@ fn verify_login(username: &[u8], password: &[u8]) -> Option<AuthSuccess> {
 #[cfg(test)]
 mod tests {
     use super::{
-        login_display_name, login_user_icon, InputField, LoginResult, LoginScreen, LoginUserIcon,
+        login_display_name, login_user_icon, FocusArea, InputField, LoginResult, LoginScreen,
+        LoginUserIcon, SessionType,
     };
+    use sunlight_ipc::CapabilityToken;
+    use sunlight_uac::auth::AuthSuccess;
 
     #[test]
     fn guest_display_name_is_presentation_only() {
@@ -415,5 +491,66 @@ mod tests {
             }
             _ => panic!("expected failed login to remain pending"),
         }
+    }
+
+    #[test]
+    fn pointer_selects_account_and_synchronizes_keyboard_focus() {
+        let mut login = LoginScreen::new();
+        login.password.push(b'x');
+        assert!(matches!(
+            login.handle_pointer_click(FocusArea::UserSlot(1)),
+            LoginResult::Pending
+        ));
+        assert_eq!(login.selected_user_idx, 1);
+        assert_eq!(login.focus, FocusArea::Password);
+        assert_eq!(login.password.len, 0);
+
+        login.handle_key_ascii(b'\t');
+        assert_eq!(login.focus, FocusArea::Dropdown);
+    }
+
+    #[test]
+    fn pointer_focuses_custom_username_and_password_fields_for_typing() {
+        let mut login = LoginScreen::new();
+        login.handle_pointer_click(FocusArea::UserSlot(2));
+        assert_eq!(login.focus, FocusArea::UserSlot(2));
+        login.handle_key_ascii(b'a');
+        assert_eq!(login.users[2].as_str(), "a");
+
+        login.handle_pointer_click(FocusArea::Password);
+        login.handle_key_ascii(b'p');
+        assert_eq!(login.password.as_str(), "p");
+    }
+
+    #[test]
+    fn pointer_dropdown_toggles_session_and_takes_focus() {
+        let mut login = LoginScreen::new();
+        assert_eq!(login.session, SessionType::Tty);
+        login.handle_pointer_click(FocusArea::Dropdown);
+        assert_eq!(login.session, SessionType::Desktop);
+        assert_eq!(login.focus, FocusArea::Dropdown);
+    }
+
+    #[test]
+    fn shift_tab_moves_backward_from_mouse_selected_focus() {
+        let mut login = LoginScreen::new();
+        login.handle_pointer_click(FocusArea::Password);
+        login.handle_key_event_with_shift(0x0f, true, true, Some(b'\t'));
+        assert_eq!(login.focus, FocusArea::UserSlot(2));
+    }
+
+    #[test]
+    fn pointer_power_actions_use_existing_login_results() {
+        let mut login = LoginScreen::new();
+        assert!(matches!(
+            login.handle_pointer_click(FocusArea::Reboot),
+            LoginResult::Reboot
+        ));
+        assert_eq!(login.focus, FocusArea::Reboot);
+        assert!(matches!(
+            login.handle_pointer_click(FocusArea::Shutdown),
+            LoginResult::Shutdown
+        ));
+        assert_eq!(login.focus, FocusArea::Shutdown);
     }
 }

@@ -7,7 +7,7 @@ mod usb_mouse;
 
 use sunlight_ipc::{
     getpid, ipc_call_timeout, nameserver_lookup, process_yield, DevicedMsg, DriverCaps, DriverKind,
-    DriverState, IpcMsg, MouseMsg, ProcessExit,
+    DriverState, IpcMsg, MouseMsg, PointerReport, ProcessExit,
 };
 
 const FORWARD_TIMEOUT_MS: u64 = 50;
@@ -85,17 +85,12 @@ fn register_with_deviced(state: DriverState) {
     let _ = ipc_call_timeout(deviced, message, 20);
 }
 
-fn dispatch(event: usb_mouse::MouseEvent) {
-    let Some(display) = nameserver_lookup("display_server") else {
-        return;
-    };
-    let packed = (event.dx as u16 as u64)
-        | ((event.dy as u16 as u64) << 16)
-        | (((event.buttons & 0x07) as u64) << 32);
+fn dispatch(event: usb_mouse::MouseEvent, tty: sunlight_ipc::CapabilityToken) {
+    let report = PointerReport::new(event.dx, event.dy, event.buttons);
     let message = IpcMsg::with_label(MouseMsg::RAW_MOTION)
-        .word(0, packed)
+        .word(0, report.pack())
         .word(1, 1); // one HID report in this batch
-    let _ = ipc_call_timeout(display, message, FORWARD_TIMEOUT_MS);
+    let _ = ipc_call_timeout(tty, message, FORWARD_TIMEOUT_MS);
 }
 
 #[panic_handler]
@@ -115,9 +110,17 @@ pub extern "C" fn _start() -> ! {
     register_with_deviced(DriverState::Ready);
     debug_log("[USB-MOUSE] boot mouse ready\n");
 
+    let tty = loop {
+        if let Some(cap) = nameserver_lookup("tty") {
+            break cap;
+        }
+        process_yield();
+    };
+    debug_log("[USB-MOUSE] tty input router ready\n");
+
     loop {
         if let Some(event) = usb_mouse::poll() {
-            dispatch(event);
+            dispatch(event, tty);
         } else {
             process_yield();
         }

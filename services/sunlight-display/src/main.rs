@@ -196,6 +196,7 @@ const KEY_ALT: u8 = 0x38;
 const KEY_R: u8 = 0x13;
 const KEY_V: u8 = 0x2F;
 const KEY_W: u8 = 0x11;
+const KEY_K: u8 = 0x25;
 const KEY_PERIOD: u8 = 0x34;
 const KEY_SPACE: u8 = 0x39;
 const KEY_LEFT_SUPER: u8 = 0x5B;
@@ -832,6 +833,9 @@ struct KeyboardState {
     pressed: [bool; 256],
     alt_tab_chord_active: bool,
     alt_tab_next_repeat_ms: u64,
+    /// A search K-down was consumed by the desktop shell; consume its repeat
+    /// and release too so the focused app never observes an unmatched key-up.
+    desktop_search_k_active: bool,
 }
 
 impl KeyboardState {
@@ -840,6 +844,7 @@ impl KeyboardState {
             pressed: [false; 256],
             alt_tab_chord_active: false,
             alt_tab_next_repeat_ms: 0,
+            desktop_search_k_active: false,
         }
     }
 
@@ -869,6 +874,16 @@ impl KeyboardState {
     fn clear_alt_tab_repeat(&mut self) {
         self.alt_tab_chord_active = false;
         self.alt_tab_next_repeat_ms = 0;
+    }
+
+    fn consume_active_desktop_search_k(&mut self, keycode: u8, pressed: bool) -> bool {
+        if keycode != KEY_K || !self.desktop_search_k_active {
+            return false;
+        }
+        if !pressed {
+            self.desktop_search_k_active = false;
+        }
+        true
     }
 }
 
@@ -1536,6 +1551,52 @@ fn has_desktop_window(state: &CompositorState) -> bool {
         .windows
         .iter()
         .any(|win| win.config.window_type == WindowType::Desktop)
+}
+
+/// Route a fixed desktop-search chord to the existing Vortex Shell window.
+///
+/// Desktop windows intentionally never take keyboard focus, so Super+K uses
+/// this narrow compositor bridge. Ctrl+K is routed here only when no normal
+/// window is focused: key dispatch is one-way today, therefore the compositor
+/// cannot learn after delivery whether an application handled Ctrl+K. Keeping
+/// Ctrl+K with every focused app is the safe contextual behavior until that
+/// protocol gains handled/unhandled propagation. The queued event omits ASCII
+/// so shell input sees a shortcut `KeyPress`, not text for the palette input.
+fn queue_desktop_search_shortcut(state: &mut CompositorState, ctrl: bool, super_key: bool) -> bool {
+    let Some(desktop) = state
+        .windows
+        .iter_mut()
+        .find(|win| win.config.window_type == WindowType::Desktop)
+    else {
+        return false;
+    };
+    desktop.pending_keys.push(sunlight_ipc::pack_key_event(
+        KEY_K, true, false, ctrl, false, super_key, None,
+    ));
+    true
+}
+
+/// Whether this transition may be forwarded to the desktop search action.
+/// Ctrl+K stays with a focused application; Super+K is shell-owned.
+fn desktop_search_shortcut_eligible(
+    keycode: u8,
+    pressed: bool,
+    was_down: bool,
+    shift: bool,
+    ctrl_down: bool,
+    alt_down: bool,
+    super_down: bool,
+    has_focused_application: bool,
+) -> bool {
+    let exactly_one_search_modifier = (ctrl_down && !super_down) || (super_down && !ctrl_down);
+    let may_bypass_focus = super_down || !has_focused_application;
+    pressed
+        && !was_down
+        && !shift
+        && !alt_down
+        && exactly_one_search_modifier
+        && may_bypass_focus
+        && keycode == KEY_K
 }
 
 fn ensure_vortex_shell(state: &mut CompositorState) {
@@ -4889,6 +4950,104 @@ mod tests {
     }
 
     #[test]
+    fn desktop_search_shortcut_is_queued_only_for_the_shell() {
+        let shell = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        let app = test_window(
+            2,
+            20,
+            20,
+            400,
+            300,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        let mut state = test_state(vec![shell, app]);
+
+        assert!(queue_desktop_search_shortcut(&mut state, true, false));
+        let event = state.windows[0]
+            .pending_keys
+            .pop()
+            .expect("desktop shell receives the search shortcut");
+        assert_eq!(
+            sunlight_ipc::unpack_key_event(event),
+            (KEY_K, true, false, true, false, false, None)
+        );
+        assert!(state.windows[1].pending_keys.pop().is_none());
+    }
+
+    #[test]
+    fn ctrl_k_falls_back_to_shell_only_without_a_focused_application() {
+        let shell = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        let app = test_window(
+            2,
+            20,
+            20,
+            400,
+            300,
+            WindowType::Normal,
+            WindowState::Minimized,
+            ZIndexType::Normal,
+        );
+        let state = test_state(vec![shell, app]);
+        assert!(focused_window_idx(&state).is_none());
+    }
+
+    #[test]
+    fn desktop_search_chords_are_exact_and_repeat_safe() {
+        assert!(desktop_search_shortcut_eligible(
+            KEY_K, true, false, false, true, false, false, false
+        ));
+        assert!(desktop_search_shortcut_eligible(
+            KEY_K, true, false, false, false, false, true, true
+        ));
+        assert!(!desktop_search_shortcut_eligible(
+            KEY_K, true, false, false, true, false, false, true
+        ));
+        assert!(!desktop_search_shortcut_eligible(
+            KEY_K, true, true, false, false, false, true, false
+        ));
+        assert!(!desktop_search_shortcut_eligible(
+            KEY_K, true, false, false, false, false, false, false
+        ));
+        assert!(!desktop_search_shortcut_eligible(
+            KEY_K, true, false, true, false, false, true, false
+        ));
+        assert!(!desktop_search_shortcut_eligible(
+            KEY_K, true, false, false, true, false, true, false
+        ));
+    }
+
+    #[test]
+    fn consumed_search_key_keeps_repeat_and_release_out_of_app_delivery() {
+        let mut keys = KeyboardState::new();
+        keys.desktop_search_k_active = true;
+        assert!(keys.consume_active_desktop_search_k(KEY_K, true)); // repeat
+        assert!(keys.desktop_search_k_active);
+        assert!(keys.consume_active_desktop_search_k(KEY_K, false)); // release
+        assert!(!keys.desktop_search_k_active);
+        assert!(!keys.consume_active_desktop_search_k(KEY_K, false));
+    }
+
+    #[test]
     fn topmost_hit_test_prefers_frontmost_visible_window() {
         let mut state = test_state(vec![
             test_window(
@@ -7160,6 +7319,7 @@ pub extern "C" fn _start() -> ! {
 
             // -------------------------------------------------------------------
             // KEY_EVENT — Global keyboard interceptor.
+            // Ctrl + K or Super + K: open the Vortex Shell's Search Palette.
             // Ctrl + W: close currently active (focused) window.
             // Super + R or Ctrl + Space: launch the Run dialog.
             // Super + . or Ctrl + .: toggle Emoji Picker.
@@ -7167,7 +7327,7 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             sunlight_ipc::KbdMsg::KEY_EVENT => {
                 let packed = msg.words[0];
-                let (keycode, pressed, _, ctrl, alt, super_key, _) =
+                let (keycode, pressed, shift, ctrl, alt, super_key, _) =
                     sunlight_ipc::unpack_key_event(packed);
                 let was_down = state.keyboard.update_key(keycode, pressed);
                 let now = monotonic_millis();
@@ -7176,7 +7336,24 @@ pub extern "C" fn _start() -> ! {
                 let super_down = state.keyboard.super_down() || super_key;
                 let mut consumed = false;
 
-                if keycode == KEY_TAB {
+                if state
+                    .keyboard
+                    .consume_active_desktop_search_k(keycode, pressed)
+                {
+                    consumed = true;
+                } else if desktop_search_shortcut_eligible(
+                    keycode,
+                    pressed,
+                    was_down,
+                    shift,
+                    ctrl_down,
+                    alt_down,
+                    super_down,
+                    focused_window_idx(&state).is_some(),
+                ) {
+                    consumed = queue_desktop_search_shortcut(&mut state, ctrl_down, super_down);
+                    state.keyboard.desktop_search_k_active = consumed;
+                } else if keycode == KEY_TAB {
                     if pressed && alt_down {
                         state.keyboard.alt_tab_chord_active = true;
                         if !was_down {
@@ -7790,7 +7967,8 @@ pub extern "C" fn _start() -> ! {
                         redraw_scene(&mut state);
                     }
                 }
-                if state.debug_counters.mouse_event_count % COUNTER_LOG_INTERVAL == 0 {
+                if INPUT_DEBUG && state.debug_counters.mouse_event_count % COUNTER_LOG_INTERVAL == 0
+                {
                     log_debug_counters(&state, "mouse");
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
