@@ -212,6 +212,7 @@ impl App for DisplayConfirmationApp {
             Rect::new(26, 28, DISPLAY_DIALOG_W - 52, 24),
             "Keep this display configuration?",
         )
+        .with_font(&Typography::UI_MEDIUM)
         .draw(canvas, theme);
         let mut countdown_buf = [0u8; 64];
         Label::new(
@@ -222,10 +223,11 @@ impl App for DisplayConfirmationApp {
                 &mut countdown_buf,
             ),
         )
+        .with_font(&Typography::UI_SMALL)
         .draw(canvas, theme);
         let (revert_rect, keep_rect) = Self::button_rects();
-        let mut revert = Button::secondary(revert_rect, "Revert");
-        let mut keep = Button::new(keep_rect, "Keep Changes");
+        let mut revert = Button::secondary(revert_rect, "Revert").with_font(&Typography::UI_MEDIUM);
+        let mut keep = Button::new(keep_rect, "Keep Changes").with_font(&Typography::UI_MEDIUM);
         if self.keep_focused {
             keep.state = ButtonState::Pressed;
         } else {
@@ -372,7 +374,9 @@ impl ControlPanelApp {
         let sens_slider = Slider::horizontal(Rect::default())
             .with_range(1, 10)
             .with_value(5);
-        let mut accel_cb = Checkbox::new(Rect::default(), "Enable pointer acceleration");
+        let mut accel_cb =
+            Checkbox::new(Rect::default(), "Enable pointer acceleration")
+                .with_font(&Typography::UI_REGULAR);
         accel_cb.checked = true;
         let wallpaper_config = load_desktop_config();
         let wallpaper_items = scan_wallpapers(&wallpaper_config.wallpaper);
@@ -1036,7 +1040,9 @@ impl ControlPanelApp {
         canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
-        Panel::with_title(content, "Mouse").draw(canvas, theme);
+        Panel::with_title(content, "Mouse")
+            .with_font(&Typography::UI_MEDIUM)
+            .draw(canvas, theme);
 
         let inner = Rect::new(
             content.x + 14,
@@ -1053,7 +1059,9 @@ impl ControlPanelApp {
         let status_row = rows.next().unwrap_or_default();
         let actions_row = rows.next().unwrap_or_default();
 
-        Label::new(desc_row, "Adjust pointer speed and acceleration.").draw(canvas, theme);
+        Label::new(desc_row, "Adjust pointer speed and acceleration.")
+            .with_font(&Typography::UI_SMALL)
+            .draw(canvas, theme);
 
         // Slider row
         let sc_widths = [110u32, slider_row.w.saturating_sub(180), 60];
@@ -1062,7 +1070,9 @@ impl ControlPanelApp {
         let sslider_r = sc.next().unwrap_or_default();
         let shint_r = sc.next().unwrap_or_default();
 
-        Label::new(slabel_r, "Pointer Speed:").draw(canvas, theme);
+        Label::new(slabel_r, "Pointer Speed:")
+            .with_font(&Typography::UI_REGULAR)
+            .draw(canvas, theme);
         self.sens_slider.rect = sslider_r;
         self.sens_slider.draw(canvas, theme);
 
@@ -1075,13 +1085,17 @@ impl ControlPanelApp {
             8 | 9 => "Faster",
             _ => "Fastest",
         };
-        Label::new(shint_r, hint).draw(canvas, theme);
+        Label::new(shint_r, hint)
+            .with_font(&Typography::UI_SMALL)
+            .draw(canvas, theme);
 
         self.accel_cb.rect = accel_row;
         self.accel_cb.draw(canvas, theme);
 
         if self.status_len > 0 {
-            Label::new(status_row, self.status_str()).draw(canvas, theme);
+            Label::new(status_row, self.status_str())
+                .with_font(&Typography::UI_SMALL)
+                .draw(canvas, theme);
         }
 
         // Buttons
@@ -1090,11 +1104,11 @@ impl ControlPanelApp {
 
         let mut back = Button::secondary(back_r, "Back");
         back.state = ButtonState::Normal;
-        back.draw(canvas, theme);
+        Self::draw_button(canvas, theme, back);
 
         let mut apply = Button::new(apply_r, "Apply");
         apply.state = ButtonState::Normal;
-        apply.draw(canvas, theme);
+        Self::draw_button(canvas, theme, apply);
     }
 
     fn mouse_action_rects(&self) -> (Rect, Rect) {
@@ -1146,18 +1160,23 @@ impl ControlPanelApp {
         canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
 
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
-        Panel::with_title(content, "Monitor").draw(canvas, theme);
+        Panel::with_title(content, "Monitor")
+            .with_font(&Typography::UI_MEDIUM)
+            .draw(canvas, theme);
         let inner = Self::monitor_inner_rect();
         let backend = self
             .display_capabilities
             .map(|capabilities| backend_label(capabilities.backend))
             .unwrap_or("Unavailable");
-        Label::new(Rect::new(inner.x, inner.y, inner.w, 18), backend).draw(canvas, theme);
+        Label::new(Rect::new(inner.x, inner.y, inner.w, 18), backend)
+            .with_font(&Typography::UI_REGULAR)
+            .draw(canvas, theme);
         let mut current_buf = [0u8; 48];
         Label::new(
             Rect::new(inner.x, inner.y + 22, inner.w, 18),
             fmt_cur_res(self.screen_w, self.screen_h, &mut current_buf),
         )
+        .with_font(&Typography::UI_REGULAR)
         .draw(canvas, theme);
 
         let management_text = self
@@ -1172,6 +1191,7 @@ impl ControlPanelApp {
             Rect::new(inner.x, inner.y + 44, inner.w, 18),
             management_text,
         )
+        .with_font(&Typography::UI_SMALL)
         .draw(canvas, theme);
 
         if self.display_modes.is_empty() {
@@ -1180,9 +1200,12 @@ impl ControlPanelApp {
                 .map(|capabilities| capabilities.read_only_reason.message())
                 .filter(|reason| !reason.is_empty())
                 .unwrap_or(self.display_error.as_str());
-            Label::new(Rect::new(inner.x, inner.y + 82, inner.w, 36), reason).draw(canvas, theme);
+            Label::new(Rect::new(inner.x, inner.y + 82, inner.w, 36), reason)
+                .with_font(&Typography::UI_SMALL)
+                .draw(canvas, theme);
         } else {
             Label::new(Rect::new(inner.x, inner.y + 70, inner.w, 18), "Resolution")
+                .with_font(&Typography::UI_MEDIUM)
                 .draw(canvas, theme);
             for (index, mode) in self.display_modes.iter().enumerate() {
                 let rect = Self::monitor_mode_rect(index);
@@ -1208,6 +1231,7 @@ impl ControlPanelApp {
                     Rect::new(rect.x + 10, rect.y, rect.w - 20, rect.h),
                     mode_text,
                 )
+                .with_font(&Typography::UI_REGULAR)
                 .draw(canvas, theme);
             }
         }
@@ -1216,13 +1240,14 @@ impl ControlPanelApp {
                 Rect::new(inner.x, inner.bottom() - 54, inner.w - 100, 18),
                 self.display_error.as_str(),
             )
+            .with_font(&Typography::UI_SMALL)
             .draw(canvas, theme);
         }
 
         let (back_r, apply_r) = Self::monitor_action_rects();
         let mut back = Button::secondary(back_r, "Back");
         back.state = ButtonState::Normal;
-        back.draw(canvas, theme);
+        Self::draw_button(canvas, theme, back);
         let can_apply = self
             .display_modes
             .get(self.selected_mode)
@@ -1234,7 +1259,7 @@ impl ControlPanelApp {
         } else {
             ButtonState::Disabled
         };
-        apply.draw(canvas, theme);
+        Self::draw_button(canvas, theme, apply);
     }
 
     fn monitor_inner_rect() -> Rect {
@@ -1336,7 +1361,9 @@ impl ControlPanelApp {
     fn draw_wallpaper_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
         canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
         let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
-        Panel::with_title(content, "Wallpaper").draw(canvas, theme);
+        Panel::with_title(content, "Wallpaper")
+            .with_font(&Typography::UI_MEDIUM)
+            .draw(canvas, theme);
 
         let preview = Self::wallpaper_preview_rect();
         canvas.fill_rect(preview, theme.panel_alt);
@@ -1349,6 +1376,7 @@ impl ControlPanelApp {
                 Rect::new(preview.x + 8, preview.y + 8, preview.w - 16, preview.h - 16),
                 "Preview unavailable",
             )
+            .with_font(&Typography::UI_SMALL)
             .draw(canvas, theme);
         }
 
@@ -1367,7 +1395,9 @@ impl ControlPanelApp {
             };
             canvas.fill_rounded_rect(r, 6, fill);
             canvas.stroke_rounded_rect(r, 6, 1, border);
-            Label::new(Rect::new(r.x + 8, r.y + 9, r.w - 16, 16), &item.label).draw(canvas, theme);
+            Label::new(Rect::new(r.x + 8, r.y + 9, r.w - 16, 16), &item.label)
+                .with_font(&Typography::UI_REGULAR)
+                .draw(canvas, theme);
         }
 
         if self.wallpaper_status_len > 0 {
@@ -1375,20 +1405,21 @@ impl ControlPanelApp {
                 Rect::new(28, 270, WIN_W - 56, 14),
                 self.wallpaper_status_str(),
             )
+            .with_font(&Typography::UI_SMALL)
             .draw(canvas, theme);
         }
 
         let mut back = Button::secondary(Self::wallpaper_back_rect(), "Back");
         back.state = ButtonState::Normal;
-        back.draw(canvas, theme);
+        Self::draw_button(canvas, theme, back);
 
         let mut refresh = Button::secondary(Self::wallpaper_refresh_rect(), "Refresh");
         refresh.state = ButtonState::Normal;
-        refresh.draw(canvas, theme);
+        Self::draw_button(canvas, theme, refresh);
 
         let mut apply = Button::new(Self::wallpaper_apply_rect(), "Apply");
         apply.state = ButtonState::Normal;
-        apply.draw(canvas, theme);
+        Self::draw_button(canvas, theme, apply);
     }
 
     fn apply_wallpaper(&mut self) {

@@ -7,7 +7,7 @@
 
 use core::fmt::Write;
 
-use sun_font::{self, FontRole, TextStyle};
+use sun_font::{self, FontRole, TextStyle, Typography};
 
 use sunlight_ipc::{
     ipc_call, monotonic_millis, nameserver_lookup, system_identity, CoolingProfile, FanControlMode,
@@ -17,6 +17,10 @@ use sunlight_ui::{
     widgets::{Button, ButtonState},
     Canvas, Color, Event, MaterialPalette, Point, Rect, Theme,
 };
+
+fn draw_button(canvas: &mut Canvas, theme: &Theme, button: Button<'_>) {
+    button.with_font(&Typography::UI_MEDIUM).draw(canvas, theme);
+}
 
 use crate::sysinfo::FixedStr;
 
@@ -304,7 +308,7 @@ impl PowerThermalPageState {
 
         // Back button
         let back = Button::secondary(Rect::new(12, win_h as i32 - 44, 80, 28), "Back");
-        back.draw(canvas, theme);
+        draw_button(canvas, theme, back);
 
         // --- Power section ---
         let power_card = Rect::new(12, 56, win_w - 24, 150);
@@ -404,7 +408,7 @@ impl PowerThermalPageState {
             } else {
                 Button::secondary(Rect::new(x, y, w, 26), label)
             };
-            btn.draw(canvas, theme);
+            draw_button(canvas, theme, btn);
             x += w as i32 + 6;
         }
 
@@ -596,7 +600,7 @@ impl PowerThermalPageState {
                 } else {
                     Button::secondary(Rect::new(cx, cy, w, 26), label)
                 };
-                btn.draw(canvas, theme);
+                draw_button(canvas, theme, btn);
                 cx += w as i32 + 6;
             }
             draw_text(
@@ -623,7 +627,7 @@ impl PowerThermalPageState {
             Rect::new(win_w as i32 - 180, win_h as i32 - 44, 168, 28),
             "Restore Safe Defaults",
         );
-        reset.draw(canvas, theme);
+        draw_button(canvas, theme, reset);
 
         if !self.status.is_empty() {
             draw_text(

@@ -13,6 +13,8 @@ pub struct Panel<'a> {
     /// If Some, a title bar is drawn at the top.
     pub title: Option<&'a str>,
     pub title_h: u32,
+    /// Vector font for the title. Falls back to the 5×7 bitmap font when `None`.
+    font: Option<&'a dyn VecText>,
 }
 
 impl<'a> Panel<'a> {
@@ -21,6 +23,7 @@ impl<'a> Panel<'a> {
             rect,
             title: None,
             title_h: 20,
+            font: None,
         }
     }
 
@@ -29,7 +32,14 @@ impl<'a> Panel<'a> {
             rect,
             title: Some(title),
             title_h: 20,
+            font: None,
         }
+    }
+
+    /// Render the title with a Sunlight vector font (MiniType).
+    pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
+        self.font = Some(font);
+        self
     }
 
     /// Returns the inner content rect (below any title bar).
@@ -52,12 +62,23 @@ impl<'a> Panel<'a> {
         if let Some(title) = self.title {
             let title_rect = Rect::new(self.rect.x, self.rect.y, self.rect.w, self.title_h);
             canvas.fill_rect(title_rect, theme.panel_alt);
-            canvas.draw_text(
-                self.rect.x + 8,
-                self.rect.y + (self.title_h as i32 - 10) / 2,
-                title,
-                theme.accent,
-            );
+            if let Some(font) = self.font {
+                font.draw_vcenter(
+                    canvas,
+                    title,
+                    self.rect.x + 8,
+                    self.rect.y,
+                    self.title_h,
+                    theme.accent,
+                );
+            } else {
+                canvas.draw_text(
+                    self.rect.x + 8,
+                    self.rect.y + (self.title_h as i32 - 10) / 2,
+                    title,
+                    theme.accent,
+                );
+            }
             canvas.hbar(
                 self.rect.x,
                 self.rect.y + self.title_h as i32,
