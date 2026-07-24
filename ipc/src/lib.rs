@@ -1264,6 +1264,22 @@ pub mod SpawnMsg {
     pub const SPAWN_AUTHENTICATED: u64 = 4;
 }
 
+/// IPC protocol between `tty_server` and a native `sshl` process.
+#[allow(non_snake_case)]
+pub mod ShellMsg {
+    pub const KEY: u64 = 1;
+    pub const OUTPUT: u64 = 2;
+    pub const EXIT: u64 = 3;
+    pub const DRAIN: u64 = 4;
+    pub const FOREGROUND_STARTED: u64 = 5;
+    pub const FOREGROUND_DONE: u64 = 6;
+    /// Ask an authenticated shell to spawn `/bin/sshl<word0>` as its child.
+    pub const SPAWN_TAB: u64 = 7;
+    /// Successful SPAWN_TAB reply; word0 contains the child pid.
+    pub const TAB_SPAWNED: u64 = 8;
+    pub const ERROR: u64 = 0xff;
+}
+
 /// sunlight-sm (Storage Manager) opcodes. Registered as "sm".
 /// Uses shm for payload (path + optional content) to support file sizes > inline.
 #[allow(non_snake_case)]

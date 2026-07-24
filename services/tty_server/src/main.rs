@@ -38,7 +38,7 @@ use sunlight_ipc::{
     launch_trace::{LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
     sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
-    MouseMsg, PointerReport, SgpMsg, SpawnMsg, TzMsg,
+    MouseMsg, PointerReport, SgpMsg, ShellMsg, SpawnMsg, TzMsg,
 };
 use sunlight_libc::sun_exec;
 use sunlight_tty::login::{
@@ -73,18 +73,18 @@ enum VirtualTerminal {
     Desktop = 2,
 }
 
-const KBD_LABEL: u64 = 1;
+const KBD_LABEL: u64 = ShellMsg::KEY;
 const MOUSE_LABEL: u64 = MouseMsg::RAW_MOTION;
-const OUTPUT_LABEL: u64 = 2;
-const EXIT_LABEL: u64 = 3;
-const DRAIN_LABEL: u64 = 4;
+const OUTPUT_LABEL: u64 = ShellMsg::OUTPUT;
+const EXIT_LABEL: u64 = ShellMsg::EXIT;
+const DRAIN_LABEL: u64 = ShellMsg::DRAIN;
 /// Shell→tty reply: an external command was launched as a foreground job;
 /// word0 = child pid. tty_server then drives the session (routes keyboard to
 /// the child's stdin ring, renders its stdout ring) until the child exits.
-const FG_STARTED_LABEL: u64 = 5;
+const FG_STARTED_LABEL: u64 = ShellMsg::FOREGROUND_STARTED;
 /// tty→shell request: the foreground child has exited; the shell reaps it and
 /// redraws the prompt.
-const FG_DONE_LABEL: u64 = 6;
+const FG_DONE_LABEL: u64 = ShellMsg::FOREGROUND_DONE;
 const KEY_F1: u8 = 0x3B;
 const KEY_F2: u8 = 0x3C;
 const KEY_E: u8 = 0x12;
@@ -839,6 +839,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             TtyState::Shell => {
                 let mut needs_render = false;
                 let mut pointer_only_render = false;
+                let mut force_shell_render = false;
                 let prev_output_len = active_shell_tab(&tabs, active_tab)
                     .map(|tab| tab.output_len)
                     .unwrap_or(0);
@@ -851,8 +852,18 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             &mut desktop_pointer_release_gate,
                         );
                     } else {
+                        resolve_active_shell(&mut tabs, active_tab, &mut logged_initial_spawn);
                         let report = PointerReport::unpack(msg.words[0]);
                         let generation = (msg.words[1] >> 32) as u32;
+                        let mut labels = [sunlight_tui::TabLabel::empty(); MAX_TABS];
+                        let label_count = build_tab_labels(&tabs, tab_count, &mut labels);
+                        let tab_layout = sunlight_tui::TerminalTabLayout::new(
+                            fb32_w,
+                            fb32_h,
+                            &labels[..label_count],
+                            active_tab,
+                            tab_count < MAX_TABS,
+                        );
                         let outcome = mouse.handle_report(
                             report.dx,
                             report.dy,
@@ -860,9 +871,33 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             generation,
                             fb32_w,
                             fb32_h,
-                            &[],
+                            tab_layout.widgets(),
                         );
-                        pointer_only_render = outcome.moved;
+                        if let Some(clicked) = outcome.clicked {
+                            if let Some(index) = sunlight_tui::terminal_tab_index(clicked) {
+                                if index < tab_count && index != active_tab {
+                                    active_tab = index;
+                                    mouse.clear_interaction();
+                                    force_shell_render = true;
+                                }
+                            } else if clicked == sunlight_tui::TERMINAL_ADD_TAB_WIDGET
+                                && spawn_tab_from_active_shell(
+                                    &mut tabs,
+                                    &mut tab_count,
+                                    &mut active_tab,
+                                    &mut next_shell_id,
+                                    &mut phase3_6_done,
+                                )
+                            {
+                                mouse.clear_interaction();
+                                force_shell_render = true;
+                            }
+                        }
+                        if outcome.interaction_changed() {
+                            needs_render = true;
+                        } else if outcome.moved {
+                            pointer_only_render = true;
+                        }
                     }
                 }
 
@@ -986,6 +1021,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 },
                                 _ => {
                                     if let Some(a) = ctrl_ascii {
+                                        if matches!(a, b't' | b'T') {
+                                            resolve_active_shell(
+                                                &mut tabs,
+                                                active_tab,
+                                                &mut logged_initial_spawn,
+                                            );
+                                        }
                                         if handle_ctrl_key(
                                             a,
                                             &mut tabs,
@@ -1269,7 +1311,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 let active_fg =
                     active_shell_tab(&tabs, active_tab).map_or(false, |t| t.fg_pid.is_some());
                 if has_fb && needs_render && vt_is_active(active_vt, VirtualTerminal::Tty) {
-                    if active_fg {
+                    if active_fg && !force_shell_render {
                         redraw_mouse_overlay(fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
                     } else {
                         render_active_shell_fb(
@@ -1410,6 +1452,25 @@ fn redraw_mouse_overlay(fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32, mouse: &m
         mouse.erase_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
         mouse.draw_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
     }
+}
+
+fn build_tab_labels(
+    tabs: &[ShellTab; MAX_TABS],
+    tab_count: usize,
+    labels: &mut [sunlight_tui::TabLabel; MAX_TABS],
+) -> usize {
+    *labels = [sunlight_tui::TabLabel::empty(); MAX_TABS];
+    let count = tab_count.max(1).min(MAX_TABS);
+    for (index, tab) in tabs.iter().enumerate().take(count) {
+        if tab.pid == 0 {
+            continue;
+        }
+        let len = tab.fg_app_name_len.min(24);
+        labels[index].name[..len].copy_from_slice(&tab.fg_app_name[..len]);
+        labels[index].name_len = len;
+        labels[index].running = tab.fg_pid.is_some();
+    }
+    count
 }
 
 fn render_login_fb(
@@ -1580,18 +1641,10 @@ fn render_active_shell_fb(
     // (uppercased by the renderer) or "SHELL" when idle, plus a "*" on
     // background tabs that still have a live foreground app.
     let mut labels = [sunlight_tui::TabLabel::empty(); MAX_TABS];
-    let n_tabs = tab_count.max(1).min(MAX_TABS);
-    for i in 0..n_tabs {
-        if let Some(tab) = tabs.get(i).filter(|t| t.pid != 0) {
-            let len = tab.fg_app_name_len.min(24);
-            labels[i].name[..len].copy_from_slice(&tab.fg_app_name[..len]);
-            labels[i].name_len = len;
-            labels[i].running = tab.fg_pid.is_some();
-        }
-    }
+    let n_tabs = build_tab_labels(tabs, tab_count, &mut labels);
 
     unsafe {
-        sunlight_tui::render_terminal_grid(
+        sunlight_tui::render_terminal_grid_interactive(
             fb_addr as *mut u32,
             fb_w,
             fb_h,
@@ -1607,6 +1660,11 @@ fn render_active_shell_fb(
             prompt_slice,
             &clock_buf[..clock_len],
             input_cursor,
+            sunlight_tui::TerminalPointerVisual {
+                hovered: mouse.hovered(),
+                pressed: mouse.pressed(),
+            },
+            tab_count < MAX_TABS,
         );
     }
     unsafe {
@@ -1708,6 +1766,58 @@ fn spawn_tab(
     true
 }
 
+/// Ask the active authenticated shell to create another shell process. The
+/// child is created by the normal spawn syscall, so it inherits the parent's
+/// verified uid/gid and restricted capability profile without replaying the
+/// one-time login grant.
+fn spawn_tab_from_active_shell(
+    tabs: &mut [ShellTab; MAX_TABS],
+    tab_count: &mut usize,
+    active_tab: &mut usize,
+    next_shell_id: &mut u64,
+    phase3_6_done: &mut bool,
+) -> bool {
+    if *tab_count >= MAX_TABS || *next_shell_id == 0 || *next_shell_id > u8::MAX as u64 {
+        return false;
+    }
+    let Some(parent) = active_shell_tab(tabs, *active_tab).copied() else {
+        return false;
+    };
+    let Some(cap) = parent.cap else {
+        debug_log("[TTY]  New tab unavailable until the active shell is ready");
+        return false;
+    };
+
+    let shell_id = *next_shell_id;
+    let request = IpcMsg::with_label(ShellMsg::SPAWN_TAB).word(0, shell_id);
+    let Ok(reply) = ipc_call_timeout(cap, request, SHELL_IPC_TIMEOUT_MS) else {
+        debug_log("[TTY]  New-tab shell request timed out");
+        return false;
+    };
+    if reply.label != ShellMsg::TAB_SPAWNED || reply.words[0] == 0 {
+        debug_log("[TTY]  Authenticated child shell spawn failed");
+        return false;
+    }
+
+    let index = *tab_count;
+    tabs[index] = ShellTab::empty();
+    tabs[index].shell_id = shell_id;
+    tabs[index].pid = reply.words[0];
+    tabs[index].session_pid = reply.words[0];
+    tabs[index].username = parent.username;
+    tabs[index].username_len = parent.username_len;
+    *active_tab = index;
+    *tab_count += 1;
+    *next_shell_id += 1;
+
+    if !*phase3_6_done {
+        debug_log("[TTY]  New authenticated shell tab OK");
+        debug_log("[SunlightOS] Phase 3.6 OK");
+        *phase3_6_done = true;
+    }
+    true
+}
+
 fn handle_ctrl_key(
     ascii: u8,
     tabs: &mut [ShellTab; MAX_TABS],
@@ -1719,17 +1829,14 @@ fn handle_ctrl_key(
 ) -> bool {
     match ascii {
         b't' | b'T' => {
-            // A second shell requires a fresh authentication grant. Do not
-            // reuse a consumed grant or fall back to caller-supplied uid/gid.
-            let _ = (
+            let _ = spawn_cap;
+            let _ = spawn_tab_from_active_shell(
                 tabs,
                 tab_count,
                 active_tab,
                 next_shell_id,
-                spawn_cap,
                 phase3_6_done,
             );
-            debug_log("[TTY]  Ctrl+T requires a new authenticated session");
             return true;
         }
         b'w' | b'W' => {

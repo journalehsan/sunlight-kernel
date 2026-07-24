@@ -178,7 +178,7 @@ mod sunlight {
         launch_trace::{LaunchSource, LaunchTrace},
         monotonic_millis, nameserver_lookup, nameserver_register, process_yield, sysinfo,
         tty_stdin_push, tty_stdout_pull, unpack_ipv4, CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg,
-        TzMsg, VfsMsg,
+        ShellMsg, TzMsg, VfsMsg,
     };
     use sunlight_uac::auth::hash_password;
 
@@ -2950,8 +2950,9 @@ mod sunlight {
                 slave_cap,
             );
         }
-        debug_log("[PTY-SHELL] missing PTY authority, exiting");
-        sunlight_ipc::process_exit::ProcessExit::exit(1);
+        // A numbered shell spawned by another authenticated TTY shell uses the
+        // normal SysV argv entry path but does not carry PTY authority.
+        start_tty_shell(shell_id, sunlight_libc::getuid(), sunlight_libc::getgid());
     }
 
     fn start_tty_shell(shell_id: u64, uid: u64, gid: u64) -> ! {
@@ -2988,6 +2989,28 @@ mod sunlight {
         let mut msg = ipc_recv(ep);
         debug_ipc_msg("[SSHL-IPC] after first ipc_recv", &msg);
         loop {
+            // Spawn additional TTY tabs from this already-authenticated shell.
+            // The normal spawn syscall inherits uid/gid, environment, and the
+            // restricted capability profile; no login grant is reused.
+            if msg.label == ShellMsg::SPAWN_TAB {
+                let new_shell_id = msg.words[0];
+                let reply = if new_shell_id == 0 || new_shell_id > u8::MAX as u64 {
+                    IpcMsg::with_label(ShellMsg::ERROR)
+                } else {
+                    let mut path = [0u8; 32];
+                    let prefix = b"/bin/sshl";
+                    path[..prefix.len()].copy_from_slice(prefix);
+                    let path_len =
+                        prefix.len() + fmt_u64_into(&mut path[prefix.len()..], new_shell_id);
+                    match sunlight_libc::spawn(&path[..path_len], &[&path[..path_len]], None) {
+                        Ok(pid) => IpcMsg::with_label(ShellMsg::TAB_SPAWNED).word(0, pid),
+                        Err(_) => IpcMsg::with_label(ShellMsg::ERROR),
+                    }
+                };
+                msg = ipc_reply_and_wait(ep, reply);
+                continue;
+            }
+
             // Drain request from tty_server: send the next chunk of long output
             if msg.label == DRAIN_LABEL {
                 debug_ipc_msg("[SSHL-IPC] handling DRAIN_LABEL", &msg);

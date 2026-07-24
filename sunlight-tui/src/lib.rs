@@ -59,6 +59,134 @@ impl TabLabel {
     }
 }
 
+pub const TERMINAL_TAB_WIDGET_BASE: u16 = 0x0300;
+pub const TERMINAL_ADD_TAB_WIDGET: interaction::WidgetId = interaction::WidgetId(0x03ff);
+const MAX_TERMINAL_TABS: usize = 10;
+const TERMINAL_TAB_H: u32 = 26;
+
+pub const fn terminal_tab_widget(index: usize) -> interaction::WidgetId {
+    interaction::WidgetId(TERMINAL_TAB_WIDGET_BASE + index as u16)
+}
+
+pub const fn terminal_tab_index(id: interaction::WidgetId) -> Option<usize> {
+    if id.0 >= TERMINAL_TAB_WIDGET_BASE
+        && id.0 < TERMINAL_TAB_WIDGET_BASE + MAX_TERMINAL_TABS as u16
+    {
+        Some((id.0 - TERMINAL_TAB_WIDGET_BASE) as usize)
+    } else {
+        None
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TerminalPointerVisual {
+    pub hovered: Option<interaction::WidgetId>,
+    pub pressed: Option<interaction::WidgetId>,
+}
+
+fn terminal_tab_caption(label: &TabLabel, is_active: bool, buf: &mut [u8; 28]) -> usize {
+    *buf = [b' '; 28];
+    let mut len = 1usize;
+    let name = if label.name_len == 0 {
+        &b"SHELL"[..]
+    } else {
+        &label.name[..label.name_len.min(24)]
+    };
+    for &byte in name {
+        if len >= buf.len() - 2 {
+            break;
+        }
+        buf[len] = if byte.is_ascii_lowercase() {
+            byte - 32
+        } else {
+            byte
+        };
+        len += 1;
+    }
+    if label.running && !is_active && len < buf.len() - 1 {
+        buf[len] = b'*';
+        len += 1;
+    }
+    buf[len] = b' ';
+    len + 1
+}
+
+/// Final tab-bar pixel geometry shared by rendering and pointer hit testing.
+pub struct TerminalTabLayout {
+    tab_bounds: [interaction::Rect; MAX_TERMINAL_TABS],
+    pub add_tab: interaction::Rect,
+    widgets: [interaction::Widget; MAX_TERMINAL_TABS + 1],
+    widget_count: usize,
+}
+
+impl TerminalTabLayout {
+    pub fn new(
+        fb_width: u32,
+        fb_height: u32,
+        labels: &[TabLabel],
+        active_tab: usize,
+        add_enabled: bool,
+    ) -> Self {
+        let screen = layout::Layout::new(fb_width, fb_height);
+        let tab_y = screen.main.y;
+        let empty_rect = interaction::Rect::new(0, 0, 0, 0);
+        let empty_widget = interaction::Widget::new(
+            interaction::WidgetId(0),
+            empty_rect,
+            interaction::WidgetKind::Selectable,
+        )
+        .hidden();
+        let mut tab_bounds = [empty_rect; MAX_TERMINAL_TABS];
+        let mut widgets = [empty_widget; MAX_TERMINAL_TABS + 1];
+        let count = labels.len().min(MAX_TERMINAL_TABS);
+        let mut tx = 8u32;
+        for (index, label) in labels.iter().take(count).enumerate() {
+            let mut caption = [b' '; 28];
+            let caption_len = terminal_tab_caption(label, index == active_tab, &mut caption);
+            let caption = core::str::from_utf8(&caption[..caption_len]).unwrap_or(" SHELL ");
+            let width = fontatlas::measure_text(caption, fontatlas::FontSize::Regular) + 2;
+            let bounds = interaction::Rect::new(tx, tab_y + 3, width, TERMINAL_TAB_H - 6);
+            tab_bounds[index] = bounds;
+            widgets[index] = interaction::Widget::new(
+                terminal_tab_widget(index),
+                bounds,
+                interaction::WidgetKind::Selectable,
+            );
+            tx = tx.saturating_add(width + 6);
+        }
+
+        let add_tab = interaction::Rect::new(tx, tab_y + 3, 24, TERMINAL_TAB_H - 6);
+        let add_widget = interaction::Widget::new(
+            TERMINAL_ADD_TAB_WIDGET,
+            add_tab,
+            interaction::WidgetKind::Button,
+        );
+        widgets[count] = if add_enabled {
+            add_widget
+        } else {
+            add_widget.unavailable()
+        };
+
+        Self {
+            tab_bounds,
+            add_tab,
+            widgets,
+            widget_count: count + 1,
+        }
+    }
+
+    pub fn tab(&self, index: usize) -> Option<interaction::Rect> {
+        self.tab_bounds
+            .get(index)
+            .copied()
+            .filter(|bounds| bounds.w != 0 && bounds.h != 0)
+    }
+
+    pub fn widgets(&self) -> &[interaction::Widget] {
+        &self.widgets[..self.widget_count]
+    }
+}
+
 /// Render the TTY shell screen. Called after successful login and on every key event.
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping.
@@ -255,7 +383,7 @@ pub fn terminal_dims(fb_width: u32, fb_height: u32) -> (usize, usize) {
     (cols, rows)
 }
 
-pub unsafe fn render_terminal_grid(
+pub unsafe fn render_terminal_grid_interactive(
     fb_addr: *mut u32,
     fb_width: u32,
     fb_height: u32,
@@ -271,6 +399,8 @@ pub unsafe fn render_terminal_grid(
     prompt: &[u8],
     clock: &[u8],
     input_cursor: usize,
+    pointer: TerminalPointerVisual,
+    add_enabled: bool,
 ) {
     let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
     let layout = layout::Layout::new(fb_width, fb_height);
@@ -319,63 +449,102 @@ pub unsafe fn render_terminal_grid(
     );
 
     // Tab bar
-    const TAB_H: u32 = 26;
     let tab_y = layout.main.y;
-    fb.fill_rect(0, tab_y, fb_width, TAB_H, layout::palette::SURFACE);
-    fb.hline(0, tab_y + TAB_H, fb_width, layout::palette::SEPARATOR);
+    fb.fill_rect(0, tab_y, fb_width, TERMINAL_TAB_H, layout::palette::SURFACE);
+    fb.hline(
+        0,
+        tab_y + TERMINAL_TAB_H,
+        fb_width,
+        layout::palette::SEPARATOR,
+    );
 
-    let tab_text_y = tab_y + TAB_H.saturating_sub(ui_lh) / 2;
-    let mut tx = 8u32;
-    for (i, label) in tab_labels.iter().take(10).enumerate() {
+    let tab_layout =
+        TerminalTabLayout::new(fb_width, fb_height, tab_labels, active_tab, add_enabled);
+    let tab_text_y = tab_y + TERMINAL_TAB_H.saturating_sub(ui_lh) / 2;
+    for (i, label) in tab_labels.iter().take(MAX_TERMINAL_TABS).enumerate() {
         let is_active = i == active_tab;
-        let fg = if is_active {
+        let id = terminal_tab_widget(i);
+        let hovered = pointer.hovered == Some(id);
+        let pressed = pointer.pressed == Some(id);
+        let fg = if is_active || hovered {
             layout::palette::ACCENT
         } else {
             layout::palette::TEXT_DIM
         };
-        // Compose the visible label: " NAME " (uppercase title), with a
-        // trailing "*" when a background tab still has a running app.
         let mut buf = [b' '; 28];
-        let mut n = 1usize; // leading space
-        let name = if label.name_len == 0 {
-            &b"SHELL"[..]
-        } else {
-            &label.name[..label.name_len.min(24)]
-        };
-        for &b in name {
-            if n < buf.len() - 2 {
-                // ASCII uppercase so titles read "TOP", "CURL", etc.
-                buf[n] = if b.is_ascii_lowercase() { b - 32 } else { b };
-                n += 1;
-            }
-        }
-        if label.running && !is_active && n < buf.len() - 1 {
-            buf[n] = b'*';
-            n += 1;
-        }
-        buf[n] = b' '; // trailing space
-        n += 1;
+        let n = terminal_tab_caption(label, is_active, &mut buf);
         let tab_text = core::str::from_utf8(&buf[..n]).unwrap_or(" SHELL ");
-        let tw = fontatlas::measure_text(tab_text, fontatlas::FontSize::Regular);
-        fb.fill_rect(tx, tab_y + 3, tw + 2, TAB_H - 6, layout::palette::BG);
+        let Some(bounds) = tab_layout.tab(i) else {
+            continue;
+        };
+        fb.fill_rect(
+            bounds.x,
+            bounds.y,
+            bounds.w,
+            bounds.h,
+            if pressed {
+                0x241200
+            } else if hovered {
+                0x171008
+            } else {
+                layout::palette::BG
+            },
+        );
         fontatlas::draw_text(
             &mut fb,
             tab_text,
-            tx + 1,
+            bounds.x + 1,
             tab_text_y,
             fg,
             fontatlas::FontSize::Regular,
         );
         if is_active {
-            fb.hline(tx, tab_y + TAB_H - 2, tw + 2, layout::palette::ACCENT);
+            fb.hline(
+                bounds.x,
+                tab_y + TERMINAL_TAB_H - 2,
+                bounds.w,
+                layout::palette::ACCENT,
+            );
         }
-        tx += tw + 8;
     }
+
+    let add_hovered = pointer.hovered == Some(TERMINAL_ADD_TAB_WIDGET);
+    let add_pressed = pointer.pressed == Some(TERMINAL_ADD_TAB_WIDGET);
+    let add = tab_layout.add_tab;
+    fb.fill_rect(
+        add.x,
+        add.y,
+        add.w,
+        add.h,
+        if add_pressed {
+            0x241200
+        } else if add_hovered {
+            0x171008
+        } else {
+            layout::palette::BG
+        },
+    );
+    fontatlas::draw_text(
+        &mut fb,
+        "+",
+        add.x + 7,
+        tab_text_y,
+        if add_enabled {
+            if add_hovered {
+                layout::palette::ACCENT
+            } else {
+                layout::palette::TEXT
+            }
+        } else {
+            layout::palette::TEXT_DIM
+        },
+        fontatlas::FontSize::Regular,
+    );
 
     // Content area: render the grid using Fira Code mono atlas.
     // cell_h must match terminal_dims() exactly so rows aren't clipped off the top.
     const MARGIN: u32 = 16;
-    let content_y = tab_y + TAB_H + 4;
+    let content_y = tab_y + TERMINAL_TAB_H + 4;
     let avail_h = layout.footer.y.saturating_sub(content_y + 4);
     let max_visible = (avail_h / cell_h) as usize;
 
@@ -474,6 +643,46 @@ pub unsafe fn render_terminal_grid(
             font::draw_char(&mut fb, cursor_x, footer_text_y, ch, layout::palette::BG, 1);
         }
     }
+}
+
+/// Compatibility renderer for terminal users that do not provide pointer
+/// interaction state.
+pub unsafe fn render_terminal_grid(
+    fb_addr: *mut u32,
+    fb_width: u32,
+    fb_height: u32,
+    fb_pitch: u32,
+    tab_labels: &[TabLabel],
+    active_tab: usize,
+    cols: usize,
+    rows: usize,
+    cells: &[TermCell],
+    cursor_row: usize,
+    cursor_col: usize,
+    input_line: &[u8],
+    prompt: &[u8],
+    clock: &[u8],
+    input_cursor: usize,
+) {
+    render_terminal_grid_interactive(
+        fb_addr,
+        fb_width,
+        fb_height,
+        fb_pitch,
+        tab_labels,
+        active_tab,
+        cols,
+        rows,
+        cells,
+        cursor_row,
+        cursor_col,
+        input_line,
+        prompt,
+        clock,
+        input_cursor,
+        TerminalPointerVisual::default(),
+        tab_labels.len() < MAX_TERMINAL_TABS,
+    );
 }
 
 /// Which login widget has keyboard focus (mirrors `sunlight_tty::login::FocusArea`).
@@ -1453,6 +1662,49 @@ mod login_interaction_tests {
                 Point {
                     x: password.x,
                     y: password.y,
+                },
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn terminal_tab_and_add_hit_targets_use_rendered_bounds() {
+        let labels = [TabLabel::empty(), TabLabel::empty()];
+        let layout = TerminalTabLayout::new(1280, 720, &labels, 0, true);
+        let second = layout.tab(1).unwrap();
+        assert_eq!(
+            hit_test(
+                layout.widgets(),
+                Point {
+                    x: second.x + second.w / 2,
+                    y: second.y + second.h / 2,
+                },
+            ),
+            Some(terminal_tab_widget(1))
+        );
+        assert_eq!(
+            hit_test(
+                layout.widgets(),
+                Point {
+                    x: layout.add_tab.x + layout.add_tab.w / 2,
+                    y: layout.add_tab.y + layout.add_tab.h / 2,
+                },
+            ),
+            Some(TERMINAL_ADD_TAB_WIDGET)
+        );
+    }
+
+    #[test]
+    fn terminal_add_target_is_disabled_at_capacity() {
+        let labels = [TabLabel::empty(); MAX_TERMINAL_TABS];
+        let layout = TerminalTabLayout::new(1280, 720, &labels, 0, false);
+        assert_eq!(
+            hit_test(
+                layout.widgets(),
+                Point {
+                    x: layout.add_tab.x + 1,
+                    y: layout.add_tab.y + 1,
                 },
             ),
             None
