@@ -32,6 +32,12 @@ pub fn is_trusted_pty_service_path(path: &str) -> bool {
     matches!(path, "/sbin/pty_server" | "/usr/sbin/pty_server")
 }
 
+pub fn is_trusted_lock_service_path(path: &str) -> bool {
+    matches!(path, "/sbin/mezzo" | "/usr/sbin/mezzo")
+}
+
+const LOCK_PRESENTER_ENTRY_MAGIC: u64 = 0x4C4F_434B_5052_4553;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpawnError {
     NotFound,
@@ -581,7 +587,20 @@ pub fn spawn_from_path_with_restrictions(
     process.trusted_swap_admin_service = is_trusted_swap_admin_path(path);
     process.trusted_zram_diagnostic = is_trusted_zram_diagnostic_path(path);
     process.trusted_pty_service = is_trusted_pty_service_path(path);
-    process.set_initial_args(shell_id.unwrap_or(0), uid as u64, gid as u64, 0);
+    process.trusted_lock_service = is_trusted_lock_service_path(path);
+    process.set_initial_args(
+        if matches!(
+            path,
+            "/bin/vortex-lock-presenter" | "/usr/bin/vortex-lock-presenter"
+        ) {
+            LOCK_PRESENTER_ENTRY_MAGIC
+        } else {
+            shell_id.unwrap_or(0)
+        },
+        uid as u64,
+        gid as u64,
+        0,
+    );
 
     let actual_pid = process.pid;
     let idx = sched.add_process_after_reaping(process);
@@ -676,10 +695,12 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/certificatectl" | "/usr/bin/certificatectl" => Ok(crate::CERTIFICATECTL_ELF_BYTES),
         // User Access Control daemon (spawned by sunlightd) + control client.
         "/sbin/uac_service" | "/usr/sbin/uac_service" => Ok(crate::UAC_SERVICE_ELF_BYTES),
+        "/sbin/mezzo" | "/usr/sbin/mezzo" => Ok(crate::MEZZO_ELF_BYTES),
         "/bin/capabilityctl" | "/usr/bin/capabilityctl" => Ok(crate::CAPABILITYCTL_ELF_BYTES),
         "/bin/runas" | "/usr/bin/runas" => Ok(crate::RUNAS_ELF_BYTES),
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
         "/usr/bin/sunlightctl" | "/bin/sunlightctl" => Ok(crate::SUNLIGHTCTL_ELF_BYTES),
+        "/usr/bin/mezzoctl" | "/bin/mezzoctl" => Ok(crate::MEZZOCTL_ELF_BYTES),
         "/usr/bin/devicectl" | "/bin/devicectl" => Ok(crate::DEVICECTL_ELF_BYTES),
         "/usr/bin/sunlight-hwinfo" | "/bin/sunlight-hwinfo" => Ok(crate::SUNLIGHT_HWINFO_ELF_BYTES),
         "/usr/bin/powerctl" | "/bin/powerctl" => Ok(crate::POWERCTL_ELF_BYTES),
@@ -755,7 +776,10 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/sbin/sunlight-dialogd" | "/usr/sbin/sunlight-dialogd" => {
             Ok(crate::SUNLIGHT_DIALOGD_ELF_BYTES)
         }
-        "/bin/sunlight-vortex-shell" | "/usr/bin/sunlight-vortex-shell" => {
+        "/bin/sunlight-vortex-shell"
+        | "/usr/bin/sunlight-vortex-shell"
+        | "/bin/vortex-lock-presenter"
+        | "/usr/bin/vortex-lock-presenter" => {
             Ok(crate::SUNLIGHT_VORTEX_SHELL_ELF_BYTES)
         }
         // control-panel: System Preferences (Mouse + Monitor settings).

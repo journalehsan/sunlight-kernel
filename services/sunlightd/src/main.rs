@@ -582,6 +582,34 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    let lock_presenter_service = r#"[Unit]
+Description=Vortex Lock Screen Presenter
+After=uac_service.service
+Requires=uac_service.service
+
+[Service]
+Type=simple
+ExecStart=/bin/vortex-lock-presenter
+Restart=no
+User=root
+Capability=authentication
+Capability=display
+Capability=session-lock
+Capability=logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(lock_presenter_service.as_bytes()) {
+        if let Ok(idx) = services.add(unit) {
+            if let Some(entry) = services.get_mut(idx) {
+                entry.enabled = false;
+            }
+        }
+    }
+
     // rand_service.service - ChaCha20 CSPRNG (libc crypto getrandom routes here).
     // MUST start before sunlight-tls: TLS handshakes pull randomness from it.
     let rand_service = r#"[Unit]

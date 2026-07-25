@@ -38,7 +38,8 @@ use sunlight_ipc::{
     launch_trace::{LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
     sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
-    MouseMsg, PointerReport, SgpMsg, ShellMsg, SpawnMsg, TzMsg,
+    MezzoMsg, MouseMsg, PointerReport, SgpMsg, ShellMsg, SpawnMsg, TzMsg,
+    LOCK_SESSION_USERNAME_MAX,
 };
 use sunlight_libc::sun_exec;
 use sunlight_tty::login::{
@@ -268,6 +269,24 @@ fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) 
             false
         }
     }
+}
+
+fn establish_desktop_session(username: &[u8], session_grant: CapabilityToken) -> bool {
+    let Some(mezzo) = nameserver_lookup("mezzo") else {
+        return false;
+    };
+    let mut message = IpcMsg::with_label(MezzoMsg::SESSION_ESTABLISH).with_cap(0, session_grant);
+    for (index, byte) in username
+        .iter()
+        .copied()
+        .take(LOCK_SESSION_USERNAME_MAX)
+        .enumerate()
+    {
+        message.words[index / 8] |= (byte as u64) << ((index % 8) * 8);
+    }
+    message.word_count = 4;
+    ipc_call_timeout(mezzo, message, DISPLAY_IPC_TIMEOUT_MS)
+        .is_ok_and(|reply| reply.label == MezzoMsg::REPLY)
 }
 
 fn forward_pointer_to_display(
@@ -742,6 +761,20 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             }
                                         }
                                         SessionType::Desktop => {
+                                            if !establish_desktop_session(
+                                                &username[..username_len],
+                                                session_grant,
+                                            ) {
+                                                login.message =
+                                                    "Session policy unavailable; login stayed secure.";
+                                                if has_fb {
+                                                    render_login_fb(
+                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                        &mut mouse,
+                                                    );
+                                                }
+                                                break 'kbd;
+                                            }
                                             desktop_unlocked = true;
                                             if has_fb {
                                                 erase_tui_pointer(

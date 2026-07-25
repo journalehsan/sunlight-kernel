@@ -583,6 +583,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         // Hardware identity + thermal sensors (read-only; gated by process name).
         133 => sys_system_identity(frame),
         134 => sys_thermal_sensors(frame),
+        135 => sys_lock_auth_consume(frame),
+        136 => sys_validate_lock_service_pid(frame),
+        137 => sys_validate_lock_caller(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -876,6 +879,69 @@ fn sys_mint_auth_session_grant(frame: &mut SyscallFrame) -> u64 {
         .lock()
         .mint_auth_session_grant(requester_pid, uid, gid, expires_at_tick)
         .map_or(u64::MAX, |token| token.0)
+}
+
+fn sys_lock_auth_consume(frame: &mut SyscallFrame) -> u64 {
+    let grant = CapabilityToken(frame.rdi);
+    let presenter_pid = frame.rsi as usize;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_lock_service {
+        return u64::MAX;
+    }
+    let now_tick = sched.global_tick;
+    drop(sched);
+    match crate::capability::CAP_BROKER
+        .lock()
+        .consume_auth_session_grant(grant, presenter_pid, now_tick)
+    {
+        Some((uid, gid)) => {
+            frame.r8 = gid as u64;
+            uid as u64
+        }
+        None => u64::MAX,
+    }
+}
+
+fn sys_validate_lock_service_pid(frame: &mut SyscallFrame) -> u64 {
+    let target_pid = frame.rdi as usize;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_display_service {
+        return 0;
+    }
+    u64::from(
+        sched
+            .processes
+            .iter()
+            .any(|process| process.pid == target_pid && process.trusted_lock_service),
+    )
+}
+
+fn sys_validate_lock_caller(frame: &mut SyscallFrame) -> u64 {
+    let target_pid = frame.rdi as usize;
+    let kind = frame.rsi;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_lock_service {
+        return 0;
+    }
+    let Some(target) = sched
+        .processes
+        .iter()
+        .find(|process| process.pid == target_pid)
+    else {
+        return 0;
+    };
+    match kind {
+        ::sunlight_ipc::LOCK_CALLER_TTY_SERVICE => {
+            u64::from(target.trusted_tty_session_service)
+        }
+        ::sunlight_ipc::LOCK_CALLER_AUTHENTICATED_TTY => u64::from(
+            target.tty_tab.is_some()
+                && target.service_lookup_restrictions.is_some_and(|mask| {
+                    mask & crate::ipc::ServiceCapability::UserSession.bit() != 0
+                }),
+        ),
+        _ => 0,
+    }
 }
 
 /// Decode a path from the first 4 IPC words (32 bytes max).

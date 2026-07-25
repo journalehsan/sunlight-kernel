@@ -1,0 +1,10 @@
+[package]
+name = "mezzoctl"
+version = "0.2.2434-alpha.1"
+
+edition = "2021"
+
+[dependencies]
+heapless = "0.8"
+sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc" }

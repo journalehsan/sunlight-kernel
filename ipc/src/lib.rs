@@ -95,6 +95,12 @@ pub enum SunlightSyscall {
     SystemIdentity = 133,
     /// Thermal sensor snapshot (read-only). Gated to thermald/UI.
     ThermalSensors = 134,
+    /// Mezzo-only: consume a UAC-minted authentication grant bound to a presenter PID.
+    LockAuthConsume = 135,
+    /// Display-only validation of the kernel-marked Mezzo process identity.
+    ValidateLockServicePid = 136,
+    /// Mezzo-only validation of trusted session and authenticated TTY callers.
+    ValidateLockCaller = 137,
     DebugLog = 99,
     /// Trusted PTY service credential lookup for an IPC caller PID.
     PtyGetCredentials = 103,
@@ -329,6 +335,7 @@ pub enum ServiceCapability {
     PowerControl = 21,
     /// Administrative access to the thermal policy service (thermald).
     ThermalControl = 22,
+    SessionLock = 23,
 }
 
 impl ServiceCapability {
@@ -361,6 +368,7 @@ impl ServiceCapability {
             "device-control" => Some(Self::DeviceControl),
             "power-control" => Some(Self::PowerControl),
             "thermal-control" => Some(Self::ThermalControl),
+            "session-lock" => Some(Self::SessionLock),
             _ => None,
         }
     }
@@ -390,11 +398,12 @@ impl ServiceCapability {
             Self::DeviceControl => "device-control",
             Self::PowerControl => "power-control",
             Self::ThermalControl => "thermal-control",
+            Self::SessionLock => "session-lock",
         }
     }
 }
 
-pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 23] = [
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 24] = [
     ServiceCapability::Network,
     ServiceCapability::Authentication,
     ServiceCapability::Pty,
@@ -418,6 +427,7 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 23] = [
     ServiceCapability::DeviceControl,
     ServiceCapability::PowerControl,
     ServiceCapability::ThermalControl,
+    ServiceCapability::SessionLock,
 ];
 
 pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'static str> + Clone {
@@ -497,6 +507,9 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     {
         return true;
     }
+    if mask & ServiceCapability::SessionLock.bit() != 0 && name_key == name_to_u64("mezzo") {
+        return true;
+    }
     false
 }
 
@@ -518,6 +531,7 @@ fn matches_user_session_service(name_key: u64) -> bool {
         || name_key == name_to_u64("thumbd")
         || name_key == name_to_u64("sunlight-kv")
         || name_key == name_to_u64("sunlight-tls")
+        || name_key == name_to_u64("mezzo")
 }
 
 #[cfg(test)]
@@ -886,6 +900,11 @@ pub mod sgp {
         pub const CONFIRM_DISPLAY_MODE_CHANGE: u64 = 0xA115;
         pub const REVERT_DISPLAY_MODE_CHANGE: u64 = 0xA116;
         pub const ATTACH_DISPLAY_MODE_DIALOG: u64 = 0xA117;
+        pub const LOCK_ENTER: u64 = 0xA118;
+        pub const LOCK_REGISTER_PRESENTER: u64 = 0xA119;
+        pub const LOCK_PRESENTER_READY: u64 = 0xA11A;
+        pub const LOCK_LEAVE: u64 = 0xA11B;
+        pub const LOCK_STATUS: u64 = 0xA11C;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)
@@ -1399,6 +1418,57 @@ pub mod SpawnMsg {
     /// Spawn a native user shell from a one-time UAC session grant in caps[0].
     pub const SPAWN_AUTHENTICATED: u64 = 4;
 }
+
+#[repr(u64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockState {
+    Unlocked = 0,
+    EnteringLock = 1,
+    LockedWithPresenter = 2,
+    LockedFallback = 3,
+    RecoveringPresenter = 4,
+    Authenticating = 5,
+    LeavingLock = 6,
+}
+
+impl LockState {
+    pub const fn from_u64(value: u64) -> Self {
+        match value {
+            1 => Self::EnteringLock,
+            2 => Self::LockedWithPresenter,
+            3 => Self::LockedFallback,
+            4 => Self::RecoveringPresenter,
+            5 => Self::Authenticating,
+            6 => Self::LeavingLock,
+            _ => Self::Unlocked,
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+pub mod MezzoMsg {
+    pub const SESSION_ESTABLISH: u64 = 0xB0FF;
+    pub const LOCK_ACTIVATE: u64 = 0xB100;
+    pub const LOCK_STATUS: u64 = 0xB101;
+    pub const LOCK_RECOVER: u64 = 0xB102;
+    pub const PRESENTER_HELLO: u64 = 0xB103;
+    pub const PRESENTER_READY: u64 = 0xB104;
+    pub const AUTHENTICATE: u64 = 0xB105;
+    pub const REPLY: u64 = 0xB1FF;
+    pub const ERROR: u64 = 0xB1FE;
+
+    pub const RECOVER_SAFE: u64 = 1;
+    pub const ERR_NOT_LOCKED: u64 = 1;
+    pub const ERR_STALE: u64 = 2;
+    pub const ERR_UNAUTHORIZED: u64 = 3;
+    pub const ERR_START_FAILED: u64 = 4;
+    pub const ERR_BUSY: u64 = 5;
+    pub const ERR_NO_SESSION: u64 = 6;
+}
+
+pub const LOCK_CALLER_TTY_SERVICE: u64 = 1;
+pub const LOCK_CALLER_AUTHENTICATED_TTY: u64 = 2;
+pub const LOCK_SESSION_USERNAME_MAX: usize = 32;
 
 /// IPC protocol between `tty_server` and a native `sshl` process.
 #[allow(non_snake_case)]
@@ -3748,6 +3818,61 @@ pub fn pty_caller_credentials(caller_pid: u64) -> Option<PtyCallerCredentials> {
         uid: packed as u32,
         gid: (packed >> 32) as u32,
     })
+}
+
+pub fn consume_lock_auth_grant(
+    grant: CapabilityToken,
+    presenter_pid: u64,
+) -> Option<(u32, u32)> {
+    let (ret, msg) = unsafe {
+        raw_syscall(
+            SunlightSyscall::LockAuthConsume,
+            grant.0,
+            presenter_pid,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if ret == u64::MAX {
+        None
+    } else {
+        Some((ret as u32, msg.words[0] as u32))
+    }
+}
+
+pub fn validate_lock_service_pid(pid: u64) -> bool {
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::ValidateLockServicePid,
+            pid,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 1
+}
+
+pub fn validate_lock_caller(pid: u64, kind: u64) -> bool {
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::ValidateLockCaller,
+            pid,
+            kind,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 1
 }
 
 pub fn kill(pid: u64, sig: u32) -> bool {

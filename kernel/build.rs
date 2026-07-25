@@ -187,6 +187,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "mezzoctl",
+            output: "mezzoctl",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-deviced",
             output: "devicectl",
             rustflags: service_rustflags,
@@ -395,6 +401,12 @@ fn main() {
         EmbeddedBinary {
             package: "sunlight-vortex-shell",
             output: "sunlight-vortex-shell",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "mezzo",
+            output: "mezzo",
             rustflags: service_rustflags,
             args: &["--release"],
         },

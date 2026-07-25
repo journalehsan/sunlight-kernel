@@ -54,6 +54,7 @@
 extern crate alloc;
 
 mod calendar_math;
+mod lock_presenter;
 mod search_palette;
 mod sidebar;
 mod start_menu;
@@ -8069,7 +8070,10 @@ impl App for VortexShell {
 
 #[cfg(not(test))]
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    if lock_presenter::requested(argc, argv) {
+        lock_presenter::run();
+    }
     debug_log("[VORTEX] starting\n");
 
     // Resolve display_server endpoint (spin until ready).

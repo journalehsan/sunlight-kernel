@@ -102,6 +102,8 @@ static SUNLIGHT_FETCH_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/fetch");
 static SUNLIGHTCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlightctl");
+static MEZZOCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/mezzoctl");
 static DEVICECTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/devicectl");
 static SUNLIGHT_HWINFO_ELF_BYTES: &[u8] =
@@ -143,6 +145,8 @@ static CERTIFICATECTL_ELF_BYTES: &[u8] =
 // User Access Control: daemon spawned by sunlightd + its control client.
 static UAC_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
+static MEZZO_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/mezzo");
 static CAPABILITYCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
 static RUNAS_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/runas");
@@ -709,6 +713,7 @@ pub extern "C" fn _start() -> ! {
         let mut pmm = PMM.lock();
         // SAFETY: hhdm_offset was provided by Limine and initialized before user process creation.
         let mut tty = unsafe { Process::new(4, 0, "tty_server", &mut pmm, hhdm_offset) };
+        tty.trusted_tty_session_service = true;
         let entry =
             process::elf_loader::load_elf(TTY_SERVER_ELF_BYTES, &mut tty, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {

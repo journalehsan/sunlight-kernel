@@ -13,13 +13,14 @@ use sunlight_libc as libc;
 
 use sunlight_ipc::debug_log;
 use sunlight_ipc::{
-    endpoint_create, ipc_recv, ipc_recv_timeout, ipc_reply, kill,
+    endpoint_bind, endpoint_create, endpoint_destroy, ipc_recv, ipc_recv_timeout, ipc_reply, kill,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_register,
     sgp::SgpMsg,
     validate_size, CapabilityToken, DisplayMetrics, DisplayMode, DisplayModeManagement,
     DisplayModeReadOnlyReason, IpcMsg, MouseMsg, NotificationKind, PixelFormat, ScreenBackend,
-    DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+    EndpointId, DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES, SAFE_FALLBACK_H,
+    SAFE_FALLBACK_W,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Point, Rect};
@@ -1050,6 +1051,12 @@ struct CompositorState {
     /// zombie processes.
     app_tracker: app_lifecycle::AppTracker,
     mode_transaction: Option<ModeTransaction>,
+    lock_generation: u64,
+    lock_authority_endpoint: Option<EndpointId>,
+    lock_authority: CapabilityToken,
+    lock_presenter_pid: u64,
+    lock_presenter_window: u64,
+    lock_presenter_ready: bool,
 }
 
 struct ModeSnapshot {
@@ -1363,6 +1370,12 @@ fn is_focusable_window(win: &Window) -> bool {
 }
 
 fn focused_window_idx(state: &CompositorState) -> Option<usize> {
+    if state.lock_generation != 0 {
+        return state
+            .windows
+            .iter()
+            .position(|window| window.id == state.lock_presenter_window);
+    }
     state
         .windows
         .iter()
@@ -1374,6 +1387,9 @@ fn focused_window_id(state: &CompositorState) -> Option<u64> {
 }
 
 fn event_poll_window_idx(state: &CompositorState, requested_id: u64) -> Option<usize> {
+    if state.lock_generation != 0 && requested_id != state.lock_presenter_window {
+        return None;
+    }
     state.windows.iter().position(|win| win.id == requested_id)
 }
 
@@ -1382,6 +1398,11 @@ fn pointer_eligible_window(state: &CompositorState, win: &Window) -> bool {
 }
 
 fn topmost_window_idx_at(state: &CompositorState, cx: u32, cy: u32) -> Option<usize> {
+    if state.lock_generation != 0 {
+        return state.windows.iter().position(|window| {
+            window.id == state.lock_presenter_window && is_window_visible(state, window)
+        });
+    }
     if let Some(dialog_id) = state
         .mode_transaction
         .as_ref()
@@ -2042,6 +2063,7 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
         state.client_pointer_capture = None;
     }
     let was_desktop = win.config.window_type == WindowType::Desktop;
+    let was_lock_presenter = state.lock_presenter_window == win_id;
     let closes_preview_ui = state.mode_transaction.as_ref().is_some_and(|transaction| {
         transaction.confirmation_window_id == Some(win_id)
             || (transaction.owner_pid == win.owner_pid
@@ -2083,6 +2105,12 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
         if state.session_active {
             ensure_vortex_shell(state);
         }
+    }
+    if was_lock_presenter {
+        state.lock_presenter_pid = 0;
+        state.lock_presenter_window = 0;
+        state.lock_presenter_ready = false;
+        mark_dirty_full(state);
     }
     if closes_preview_ui {
         let _ = revert_mode_transaction(state, ModeRevertReason::UiClosed);
@@ -3862,19 +3890,58 @@ fn redraw_scene(state: &mut CompositorState) {
     let _ = upload_hw_cursor_if_needed(state);
 
     clear_back_buffer(state);
-    let focused_idx = focused_window_idx(state);
-    let windows = &state.windows;
     let mut back_buffer = core::mem::take(&mut state.back_buffer);
-    for (i, win) in windows.iter().enumerate() {
-        let is_focused = focused_idx == Some(i);
-        composite_window(state, &mut back_buffer, win, is_focused);
-    }
-    // Re-paint the Desktop window's top panel strip after all normal windows so
-    // the Vortex Shell bar is always visible regardless of window z-order.
-    reblit_desktop_panel_strip(state, &mut back_buffer);
-    {
+    if state.lock_generation == 0 {
+        let focused_idx = focused_window_idx(state);
+        for (i, win) in state.windows.iter().enumerate() {
+            let is_focused = focused_idx == Some(i);
+            composite_window(state, &mut back_buffer, win, is_focused);
+        }
+        // Re-paint the Desktop window's top panel strip after all normal windows so
+        // the Vortex Shell bar is always visible regardless of window z-order.
+        reblit_desktop_panel_strip(state, &mut back_buffer);
         let mut canvas = back_buffer_canvas(state, &mut back_buffer);
         draw_notifications(&mut canvas, state);
+    } else {
+        let mut canvas = back_buffer_canvas(state, &mut back_buffer);
+        canvas.fill_rect(
+            Rect::new(0, 0, state.fb_width, state.fb_height),
+            Color(0x00101014),
+        );
+    }
+    if state.lock_generation != 0 && state.lock_presenter_ready {
+        if let Some(window) = state
+            .windows
+            .iter()
+            .find(|window| window.id == state.lock_presenter_window)
+        {
+            composite_window(state, &mut back_buffer, window, true);
+        }
+    } else if state.lock_generation != 0 {
+        let mut canvas = back_buffer_canvas(state, &mut back_buffer);
+        let x = (state.fb_width as i32 / 2).saturating_sub(190);
+        let y = (state.fb_height as i32 / 2).saturating_sub(40);
+        sun_font::draw_text(
+            &mut canvas,
+            "Lock screen unavailable",
+            x,
+            y,
+            &sun_font::TextStyle::new(sun_font::FontRole::UiTitle, Color(0x00F4F4F6)),
+        );
+        sun_font::draw_text(
+            &mut canvas,
+            "Press Ctrl+Alt+F1, sign in, then run:",
+            x,
+            y + 34,
+            &sun_font::TextStyle::new(sun_font::FontRole::UiRegular, Color(0x00B8B8C2)),
+        );
+        sun_font::draw_text(
+            &mut canvas,
+            "mezzoctl lock recover",
+            x,
+            y + 58,
+            &sun_font::TextStyle::new(sun_font::FontRole::UiMedium, Color(0x00FFB347)),
+        );
     }
     // Software cursor only: the GPU backend uses a hardware cursor overlay.
     draw_cursor(state, &mut back_buffer);
@@ -4946,6 +5013,12 @@ mod tests {
             last_chrome_hover: None,
             app_tracker: app_lifecycle::AppTracker::new(),
             mode_transaction: None,
+            lock_generation: 0,
+            lock_authority_endpoint: None,
+            lock_authority: CapabilityToken::INVALID,
+            lock_presenter_pid: 0,
+            lock_presenter_window: 0,
+            lock_presenter_ready: false,
         }
     }
 
@@ -5347,6 +5420,58 @@ mod tests {
 
         assert_eq!(topmost_window_id_at(&state, 100, 100), Some(1));
         assert_eq!(focused_window_id(&state), Some(1));
+    }
+
+    #[test]
+    fn secure_lock_routes_focus_pointer_and_polls_only_to_presenter() {
+        let mut state = test_state(vec![
+            test_window(
+                1,
+                40,
+                40,
+                300,
+                200,
+                WindowType::Normal,
+                WindowState::Normal,
+                ZIndexType::Normal,
+            ),
+            test_window(
+                2,
+                0,
+                0,
+                800,
+                600,
+                WindowType::Normal,
+                WindowState::Fullscreen,
+                ZIndexType::OnTop,
+            ),
+        ]);
+        state.lock_generation = 7;
+        state.lock_presenter_window = 2;
+        state.lock_presenter_pid = state.windows[1].owner_pid;
+        state.lock_presenter_ready = true;
+
+        assert_eq!(focused_window_id(&state), Some(2));
+        assert_eq!(topmost_window_id_at(&state, 100, 100), Some(2));
+        assert!(event_poll_window_idx(&state, 1).is_none());
+        assert_eq!(event_poll_window_idx(&state, 2), Some(1));
+    }
+
+    #[test]
+    fn missing_presenter_keeps_locked_fallback_authority() {
+        let mut state = test_state(Vec::new());
+        state.lock_generation = 9;
+        state.lock_presenter_pid = 44;
+        state.lock_presenter_window = 12;
+        state.lock_presenter_ready = true;
+
+        state.lock_presenter_pid = 0;
+        state.lock_presenter_window = 0;
+        state.lock_presenter_ready = false;
+
+        assert_eq!(state.lock_generation, 9);
+        assert!(focused_window_id(&state).is_none());
+        assert!(topmost_window_id_at(&state, 100, 100).is_none());
     }
 
     #[test]
@@ -6503,6 +6628,12 @@ pub extern "C" fn _start() -> ! {
         last_chrome_hover: None,
         app_tracker: app_lifecycle::AppTracker::new(),
         mode_transaction: None,
+        lock_generation: 0,
+        lock_authority_endpoint: None,
+        lock_authority: CapabilityToken::INVALID,
+        lock_presenter_pid: 0,
+        lock_presenter_window: 0,
+        lock_presenter_ready: false,
     };
     log_debug_counters(&state, "startup");
     if !state.back_buffer.is_empty() {
@@ -7412,7 +7543,12 @@ pub extern "C" fn _start() -> ! {
                 let super_down = state.keyboard.super_down() || super_key;
                 let mut consumed = false;
 
-                if state
+                if state.lock_generation != 0 {
+                    if let Some(index) = focused_window_idx(&state) {
+                        state.windows[index].pending_keys.push(packed);
+                    }
+                    consumed = true;
+                } else if state
                     .keyboard
                     .consume_active_desktop_search_k(keycode, pressed)
                 {
@@ -7590,12 +7726,13 @@ pub extern "C" fn _start() -> ! {
                 let cx = state.pointer.x() as u32;
                 let cy = state.pointer.y() as u32;
                 let motion_now = monotonic_millis();
-                let overlay_changed = update_overlay_window_visibility(
-                    &mut state,
-                    motion_now,
-                    cx != prev_cx || cy != prev_cy,
-                    left_down && !was_left_down,
-                );
+                let overlay_changed = state.lock_generation == 0
+                    && update_overlay_window_visibility(
+                        &mut state,
+                        motion_now,
+                        cx != prev_cx || cy != prev_cy,
+                        left_down && !was_left_down,
+                    );
                 let mut scene_changed = overlay_changed;
                 // Geometry / stacking change that needs a full present (vs chrome hover).
                 let mut full_geometry_dirty = overlay_changed;
@@ -7619,7 +7756,12 @@ pub extern "C" fn _start() -> ! {
 
                 // ── Left button just pressed ────────────────────────────────
                 if state.session_active && left_down && !was_left_down {
-                    if dismiss_notification_at_point(&mut state, Point::new(cx as i32, cy as i32)) {
+                    if state.lock_generation == 0
+                        && dismiss_notification_at_point(
+                            &mut state,
+                            Point::new(cx as i32, cy as i32),
+                        )
+                    {
                         state.active_drag = ActiveDrag::None;
                         state.pending_move_drag = None;
                         mark_dirty_full(&mut state);
@@ -8114,6 +8256,120 @@ pub extern "C" fn _start() -> ! {
                 }
                 state.vortex_launch_pending = false;
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
+            SgpMsg::LOCK_ENTER => {
+                if !sunlight_ipc::validate_lock_service_pid(msg.badge) {
+                    let _ = ipc_reply(IpcMsg::with_label(0xA1FE));
+                    continue;
+                }
+                let generation = msg.words[0];
+                if generation == 0 || generation < state.lock_generation {
+                    let _ = ipc_reply(IpcMsg::with_label(0xA1FE));
+                    continue;
+                }
+                let endpoint = endpoint_create();
+                let authority = endpoint_bind(endpoint.0);
+                if authority == CapabilityToken::INVALID {
+                    let _ = endpoint_destroy(endpoint);
+                    let _ = ipc_reply(IpcMsg::with_label(0xA1FE));
+                    continue;
+                }
+                if let Some(old_endpoint) = state.lock_authority_endpoint.take() {
+                    let _ = endpoint_destroy(old_endpoint);
+                }
+                state.lock_generation = generation;
+                state.lock_authority_endpoint = Some(endpoint);
+                state.lock_authority = authority;
+                state.lock_presenter_pid = 0;
+                state.lock_presenter_window = 0;
+                state.lock_presenter_ready = false;
+                state.active_drag = ActiveDrag::None;
+                state.pending_move_drag = None;
+                state.client_pointer_capture = None;
+                mark_dirty_full(&mut state);
+                redraw_scene(&mut state);
+                let reply = IpcMsg::with_label(SgpMsg::REPLY)
+                    .word(0, generation)
+                    .with_cap(0, authority);
+                let _ = ipc_reply(reply);
+            }
+
+            SgpMsg::LOCK_REGISTER_PRESENTER => {
+                let generation = msg.words[0];
+                let window_id = msg.words[1];
+                let valid = generation == state.lock_generation
+                    && generation != 0
+                    && msg.caps[0] == state.lock_authority
+                    && state
+                        .windows
+                        .iter()
+                        .any(|window| window.id == window_id && window.owner_pid == msg.badge);
+                if valid {
+                    state.lock_presenter_pid = msg.badge;
+                    state.lock_presenter_window = window_id;
+                    state.lock_presenter_ready = false;
+                    mark_dirty_full(&mut state);
+                    redraw_scene(&mut state);
+                }
+                let _ = ipc_reply(
+                    IpcMsg::with_label(if valid { SgpMsg::REPLY } else { 0xA1FE })
+                        .word(0, generation),
+                );
+            }
+
+            SgpMsg::LOCK_PRESENTER_READY => {
+                let valid = msg.words[0] == state.lock_generation
+                    && msg.caps[0] == state.lock_authority
+                    && msg.badge == state.lock_presenter_pid
+                    && state.lock_presenter_window != 0
+                    && state.windows.iter().any(|window| {
+                        window.id == state.lock_presenter_window && window.has_presented_frame
+                    });
+                if valid {
+                    state.lock_presenter_ready = true;
+                    mark_dirty_full(&mut state);
+                    redraw_scene(&mut state);
+                }
+                let _ = ipc_reply(IpcMsg::with_label(if valid {
+                    SgpMsg::REPLY
+                } else {
+                    0xA1FE
+                }));
+            }
+
+            SgpMsg::LOCK_LEAVE => {
+                let valid = sunlight_ipc::validate_lock_service_pid(msg.badge)
+                    && state.lock_generation != 0
+                    && msg.words[0] == state.lock_generation
+                    && msg.caps[0] == state.lock_authority;
+                if valid {
+                    if let Some(endpoint) = state.lock_authority_endpoint.take() {
+                        let _ = endpoint_destroy(endpoint);
+                    }
+                    state.lock_generation = 0;
+                    state.lock_authority = CapabilityToken::INVALID;
+                    state.lock_presenter_pid = 0;
+                    state.lock_presenter_window = 0;
+                    state.lock_presenter_ready = false;
+                    mark_dirty_full(&mut state);
+                    redraw_scene(&mut state);
+                }
+                let _ = ipc_reply(IpcMsg::with_label(if valid {
+                    SgpMsg::REPLY
+                } else {
+                    0xA1FE
+                }));
+            }
+
+            SgpMsg::LOCK_STATUS => {
+                let _ = ipc_reply(
+                    IpcMsg::with_label(SgpMsg::REPLY)
+                        .word(0, state.lock_generation)
+                        .word(1, state.lock_presenter_pid)
+                        .word(2, state.lock_presenter_window)
+                        .word(3, state.lock_presenter_ready as u64),
+                );
             }
 
             _ => {

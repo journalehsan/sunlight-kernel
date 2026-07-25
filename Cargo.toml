@@ -64,6 +64,7 @@ members = [
     "services/sunlight-tasks",
     "services/sunlight-runner",
     "services/sunlight-vortex-shell",
+    "services/mezzo",
     "services/pty_server",
     "services/sunlight-deviced",
     "services/sunlight-networkd",
@@ -96,6 +97,7 @@ members = [
     "sunlight-chronos",
     "sunlight-silicon-echoes",
     "sunlight-shell-appstate",
+    "mezzoctl",
 ]
 
 [workspace.dependencies]
