@@ -85,8 +85,7 @@ static SUNLIGHTD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlightd");
 static TIMEZONE_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/timezone_service");
-static TIMED_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/timed");
+static TIMED_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/timed");
 static TZUTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/tzutils");
 // Random service (ChaCha20 CSPRNG) launched by sunlightd.
@@ -149,8 +148,7 @@ static CERTIFICATECTL_ELF_BYTES: &[u8] =
 // User Access Control: daemon spawned by sunlightd + its control client.
 static UAC_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
-static MEZZO_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/mezzo");
+static MEZZO_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/mezzo");
 static CAPABILITYCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
 static RUNAS_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/runas");
@@ -328,6 +326,8 @@ pub extern "C" fn _start() -> ! {
             (kernel_span.frame_count * 4) / 1024
         );
         serial_println!("[PMM] {}/{} MiB free", free * 4 / 1024, total * 4 / 1024);
+        // I ADD THIS TO UNCOMMENT AND SEE OSOD :)
+        // serial_println!(100 / 0);
         splash.set_ram((total * 4 / 1024) as u32);
     }
     // Initialize ZRAM metadata early; smoke-fill after heap setup because

@@ -462,6 +462,21 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1016; // Linux clone containment
                     }
                 }
+                -19 => {
+                    if linux_num == 228 {
+                        num = 1017; // Linux clock_gettime
+                    }
+                }
+                -20 => {
+                    if linux_num == 82 || linux_num == 264 {
+                        num = 1018; // Linux rename / renameat
+                    }
+                }
+                -21 => {
+                    if linux_num == 35 {
+                        num = 1019; // Linux nanosleep
+                    }
+                }
                 -38 => {
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
                     num = 1005; // Linux ENOSYS
@@ -607,6 +622,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1014 => sys_linux_getrandom(frame),
         1015 => reject_linux_address_space_duplication("vfork"),
         1016 => sys_linux_clone_unsupported(frame),
+        1017 => sys_linux_clock_gettime(frame),
+        1018 => sys_linux_renameat(frame),
+        1019 => sys_linux_nanosleep(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -2786,27 +2804,142 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
-    let nfds = frame.rsi;
+    let fds_ptr = frame.rdi;
+    let nfds = frame.rsi as usize;
+    let timeout_ms = frame.rdx as i32;
 
     if nfds == 0 {
+        if timeout_ms > 0 {
+            process_yield();
+        }
         return 0;
     }
 
-    let Some(bytes) = nfds.checked_mul(8) else {
+    if nfds > 1024 {
         return linux_errno(22); // EINVAL
-    };
-    if bytes > 8192 {
-        return linux_errno(22); // keep the early compat shim bounded
     }
 
-    if crate::memory::user::UserRange::new(frame.rdi, bytes as usize).is_err() {
+    let bytes = nfds * 8;
+    if crate::memory::user::UserRange::new(fds_ptr, bytes).is_err() {
         return linux_errno(14); // EFAULT
     }
 
-    for idx in 0..nfds {
-        if crate::memory::user::copy_to_current(frame.rdi + idx * 8 + 6, &[0, 0]).is_err() {
-            return linux_errno(14);
+    let mut pollfds = alloc::vec![0u8; bytes];
+    if crate::memory::user::copy_from_current(fds_ptr, &mut pollfds).is_err() {
+        return linux_errno(14);
+    }
+
+    let tab = {
+        let sched = crate::sched::SCHEDULER.lock();
+        sched.current_process().fd_table.get(0).map(|e| e.handle.tty_tab() as usize).unwrap_or(0)
+    };
+
+    let has_input = crate::process::tty_io::has_stdin(tab);
+    let mut ready_count = 0u64;
+
+    for i in 0..nfds {
+        let fd = i32::from_ne_bytes(pollfds[i * 8..i * 8 + 4].try_into().unwrap());
+        let events = i16::from_ne_bytes(pollfds[i * 8 + 4..i * 8 + 6].try_into().unwrap());
+        let mut revents: i16 = 0;
+
+        if fd == 0 && (events & 0x0001 != 0) {
+            if has_input {
+                revents |= 0x0001; // POLLIN
+                ready_count += 1;
+            }
         }
+        pollfds[i * 8 + 6..i * 8 + 8].copy_from_slice(&revents.to_ne_bytes());
+    }
+
+    if crate::memory::user::copy_to_current(fds_ptr, &pollfds).is_err() {
+        return linux_errno(14);
+    }
+
+    if ready_count == 0 && timeout_ms != 0 {
+        process_yield();
+    }
+
+    ready_count
+}
+
+fn sys_linux_clock_gettime(frame: &mut SyscallFrame) -> u64 {
+    let clock_id = frame.rdi as i32;
+    let tp_ptr = frame.rsi;
+
+    if tp_ptr == 0 || crate::memory::user::UserRange::new(tp_ptr, 16).is_err() {
+        return linux_errno(14); // EFAULT
+    }
+
+    if clock_id < 0 || clock_id > 11 {
+        return linux_errno(22); // EINVAL
+    }
+
+    let now_ns = if clock_id == 0 || clock_id == 5 {
+        // Realtime / UTC
+        sys_get_time_utc() * 1_000_000_000
+    } else {
+        // Monotonic
+        sys_monotonic_ms() * 1_000_000
+    };
+
+    let sec = (now_ns / 1_000_000_000) as i64;
+    let nsec = (now_ns % 1_000_000_000) as i64;
+
+    let mut buf = [0u8; 16];
+    buf[0..8].copy_from_slice(&sec.to_ne_bytes());
+    buf[8..16].copy_from_slice(&nsec.to_ne_bytes());
+
+    if crate::memory::user::copy_to_current(tp_ptr, &buf).is_err() {
+        return linux_errno(14);
+    }
+
+    0
+}
+
+fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
+    let olddirfd = frame.rdi as i32;
+    let oldpath_ptr = frame.rsi;
+    let newdirfd = frame.rdx as i32;
+    let newpath_ptr = frame.r10;
+
+    const AT_FDCWD: i32 = -100;
+    if olddirfd != AT_FDCWD && olddirfd != 0 {
+        return linux_errno(38); // ENOSYS
+    }
+    if newdirfd != AT_FDCWD && newdirfd != 0 {
+        return linux_errno(38); // ENOSYS
+    }
+
+    let mut rename_frame = SyscallFrame {
+        rdi: oldpath_ptr,
+        rsi: newpath_ptr,
+        ..*frame
+    };
+    sys_rename(&mut rename_frame)
+}
+
+fn sys_linux_nanosleep(frame: &mut SyscallFrame) -> u64 {
+    let req_ptr = frame.rdi;
+
+    if req_ptr == 0 || crate::memory::user::UserRange::new(req_ptr, 16).is_err() {
+        return linux_errno(14); // EFAULT
+    }
+
+    let mut buf = [0u8; 16];
+    if crate::memory::user::copy_from_current(req_ptr, &mut buf).is_err() {
+        return linux_errno(14);
+    }
+    let sec = i64::from_ne_bytes(buf[0..8].try_into().unwrap());
+    let nsec = i64::from_ne_bytes(buf[8..16].try_into().unwrap());
+
+    if sec < 0 || nsec < 0 || nsec >= 1_000_000_000 {
+        return linux_errno(22); // EINVAL
+    }
+
+    let ms = (sec as u64) * 1000 + (nsec as u64) / 1_000_000;
+    let start = sys_monotonic_ms();
+    while sys_monotonic_ms().saturating_sub(start) < ms {
+        process_yield();
     }
 
     0
@@ -2882,10 +3015,17 @@ fn sys_linux_tkill(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_mmap(frame: &mut SyscallFrame) -> u64 {
-    // Do not erase Linux flags or synthesize anonymous/private semantics.
-    // `sys_mmap` validates the same intentionally small mapping contract as
-    // native callers and returns EINVAL for unsupported file/shared/hint
-    // requests through the normal Linux error path.
+    let linux_flags = frame.r10;
+    let Some(native_flags) = sunlight_compat_linux::translate_mmap_flags(linux_flags) else {
+        crate::serial_println!(
+            "[HELIOS] mmap rejected flags={:#x} addr={:#x} len={:#x}",
+            linux_flags,
+            frame.rdi,
+            frame.rsi
+        );
+        return linux_errno(22);
+    };
+    frame.r10 = native_flags as u64;
     sys_mmap(frame)
 }
 
@@ -4062,7 +4202,16 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
             mapped_addr
         }
         Err(error) => {
-            crate::serial_println!("[SYSCALL] mmap failed ({:#x}, {:#x})", addr, length);
+            crate::serial_println!(
+                "[SYSCALL] mmap failed addr={:#x} len={:#x} prot={:#x} flags={:#x} fd={} offset={:#x} error={:?}",
+                addr,
+                length,
+                prot,
+                flags,
+                fd,
+                offset,
+                error
+            );
             if crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat) {
                 match error {
                     crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),

@@ -165,15 +165,17 @@ pub fn diagnostic_report() {
 }
 
 /// Validate the ABI protection request against the permissions this kernel
-/// can represent exactly.  x86_64 page tables cannot enforce write-only or
+/// can represent exactly. x86_64 page tables cannot enforce write-only or
 /// execute-only user mappings, so those requests are rejected rather than
-/// silently widened to RW or RX. PROT_NONE remains unsupported in MM-2E.
+/// silently widened to RW or RX. PROT_NONE is represented by a present,
+/// supervisor-only NX leaf so ownership remains tracked while Ring 3 has no
+/// access.
 fn normalize_protection(prot: u32) -> Result<RegionProtection, MmapError> {
     if prot & !(PROT_READ | PROT_WRITE | PROT_EXEC) != 0 {
         return Err(MmapError::InvalidProt);
     }
     if prot == PROT_NONE {
-        return Err(MmapError::Unsupported);
+        return Ok(RegionProtection::NONE);
     }
     if prot & PROT_WRITE != 0 && prot & PROT_EXEC != 0 {
         return Err(MmapError::PermissionDenied);
@@ -697,7 +699,8 @@ fn expected_anonymous_leaf(
         return invariant_rejection();
     };
     if flags.contains(PageTableFlags::PRESENT) {
-        if !flags.contains(PageTableFlags::USER_ACCESSIBLE)
+        let user_accessible = flags.contains(PageTableFlags::USER_ACCESSIBLE);
+        if user_accessible != (region.protection != RegionProtection::NONE)
             || pmm.owner_of(frame_or_marker) != Some(owner)
         {
             return invariant_rejection();
@@ -705,9 +708,7 @@ fn expected_anonymous_leaf(
         if let Ok(actual) =
             crate::process::address_space::AddressSpace::protection_from_pte_flags(flags)
         {
-            if actual.writable() != region.protection.writable()
-                || actual.executable() != region.protection.executable()
-            {
+            if actual != region.protection {
                 return invariant_rejection();
             }
         } else {
@@ -756,10 +757,6 @@ pub fn sys_mprotect(
             crate::memory::security::note_rwx_mapping_rejected();
             MPROTECT_WX_REJECTIONS.fetch_add(1, Ordering::Relaxed);
             return Err(MmapError::PermissionDenied);
-        }
-        Err(MmapError::Unsupported) => {
-            MPROTECT_NONE_REJECTIONS.fetch_add(1, Ordering::Relaxed);
-            return Err(MmapError::Unsupported);
         }
         result => result?,
     };
@@ -944,7 +941,8 @@ fn preflight_protection_leaf(
         }
         return mprotect_invariant_rejection();
     }
-    if !flags.contains(PageTableFlags::USER_ACCESSIBLE)
+    let user_accessible = flags.contains(PageTableFlags::USER_ACCESSIBLE);
+    if user_accessible != (region.protection != RegionProtection::NONE)
         || pmm.owner_of(frame_or_marker) != Some(owner)
     {
         return mprotect_invariant_rejection();
@@ -977,6 +975,8 @@ fn note_transition(
         (RegionProtection::READ_ONLY, RegionProtection::READ_EXECUTE) => transitions.r_to_rx += 1,
         (RegionProtection::READ_EXECUTE, RegionProtection::READ_ONLY) => transitions.rx_to_r += 1,
         (RegionProtection::READ_EXECUTE, RegionProtection::READ_WRITE) => transitions.rx_to_rw += 1,
+        (RegionProtection::NONE, _)
+        | (_, RegionProtection::NONE) => {}
         _ => mprotect_invariant_failure("unsupported protection transition"),
     }
 }

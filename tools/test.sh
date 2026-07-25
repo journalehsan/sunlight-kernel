@@ -389,7 +389,7 @@ if [[ "$PHASE" == phase5* || "$PHASE" == phase5x* ]]; then
 fi
 
 set +e
-QEMU_SMP=2
+QEMU_SMP="${SUNLIGHT_TEST_CPUS:-2}"
 if [[ "$PHASE" == "mm2b" ]]; then
     QEMU_SMP=12
 elif [[ "$PHASE" == "mm2d" ]]; then

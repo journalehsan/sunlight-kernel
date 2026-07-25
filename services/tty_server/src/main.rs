@@ -97,7 +97,8 @@ const PENDING_INPUT_MAX: usize = 128;
 const MAX_TABS: usize = 10;
 const DISPLAY_IPC_TIMEOUT_MS: u64 = 100;
 const DISPLAY_ACTIVATION_TIMEOUT_MS: u64 = 2_000;
-const SHELL_IPC_TIMEOUT_MS: u64 = 200;
+const SHELL_IPC_TIMEOUT_MS: u64 = 1_000;
+const SHELL_SLOW_PATH_TIMEOUT_MS: u64 = 5_000;
 const TZ_IPC_TIMEOUT_MS: u64 = 100;
 const DISPLAY_TIMEOUT_LOG_INTERVAL: u64 = 32;
 
@@ -2004,7 +2005,16 @@ fn send_key_to_shell(
 ) -> ShellKeyResult {
     let kbd_msg = IpcMsg::with_label(KBD_LABEL).word(0, byte as u64);
     debug_ipc_msg("[TTY-IPC] before shell ipc_call KBD_LABEL", &kbd_msg);
-    let reply = match ipc_call_timeout(cap, kbd_msg, SHELL_IPC_TIMEOUT_MS) {
+    // The initial NUL handshake can arrive while sshl is still loading user
+    // state, and Enter may synchronously parse and spawn a large ELF before
+    // replying with FOREGROUND_STARTED. Both paths regularly exceed 200 ms on
+    // one or two vCPUs during service startup, even though the shell is healthy.
+    let timeout_ms = if byte == 0 || byte == b'\n' || byte == b'\r' {
+        SHELL_SLOW_PATH_TIMEOUT_MS
+    } else {
+        SHELL_IPC_TIMEOUT_MS
+    };
+    let reply = match ipc_call_timeout(cap, kbd_msg, timeout_ms) {
         Ok(reply) => reply,
         Err(_) => {
             append_term(term_output, term_output_len, b"\n[shell timeout]\n");

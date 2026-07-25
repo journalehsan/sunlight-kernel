@@ -145,6 +145,14 @@ pub fn pull_stdout(tab: usize, out: &mut [u8]) -> usize {
     n
 }
 
+/// Check if a tab's stdin ring has any bytes available without draining.
+pub fn has_stdin(tab: usize) -> bool {
+    if tab >= MAX_TTY_TABS {
+        return false;
+    }
+    STDIN.lock()[tab].len > 0
+}
+
 /// Drop any buffered bytes for a tab. Called when a new foreground command
 /// starts so stale keystrokes/output from the previous command don't bleed in.
 pub fn clear_tab(tab: usize) {

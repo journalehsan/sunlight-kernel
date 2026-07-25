@@ -8,7 +8,10 @@ use argon2::{
     Algorithm, Argon2, Params, Version,
 };
 use sunlight_fs::{lookup_by_name, parse_passwd, parse_shadow};
-use sunlight_ipc::{ipc_call, nameserver_lookup, shm_create, shm_free, IpcMsg};
+use sunlight_ipc::{
+    ipc_call, monotonic_millis, nameserver_lookup, process_yield, shm_create, shm_free,
+    swap_online_cpu_count, CapabilityToken, IpcMsg,
+};
 use zeroize::Zeroize;
 
 pub const MAX_USERNAME_LEN: usize = 64;
@@ -27,6 +30,7 @@ const ARGON2_ITERATIONS: u32 = 3;
 const ARGON2_LANES: u32 = 1;
 const ARGON2_OUTPUT_LEN: usize = 32;
 const ARGON2_PREFIX: &str = "$argon2id$";
+const SINGLE_CORE_UAC_READY_TIMEOUT_MS: u64 = 10_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AuthError {
@@ -58,7 +62,7 @@ fn authenticate_password_with_op(username: &[u8], password: &[u8], op: u64) -> O
         return None;
     }
 
-    let uac = nameserver_lookup("uac")?;
+    let uac = lookup_uac_for_login()?;
     let (ptr, token) = shm_create(AUTH_SHM_SIZE, 0).ok()?;
     unsafe {
         core::ptr::copy_nonoverlapping(password.as_ptr(), ptr, password.len());
@@ -87,6 +91,23 @@ fn authenticate_password_with_op(username: &[u8], password: &[u8], op: u64) -> O
         })
     } else {
         None
+    }
+}
+
+fn lookup_uac_for_login() -> Option<CapabilityToken> {
+    if swap_online_cpu_count() > 1 {
+        return nameserver_lookup("uac");
+    }
+
+    let deadline = monotonic_millis().saturating_add(SINGLE_CORE_UAC_READY_TIMEOUT_MS);
+    loop {
+        if let Some(uac) = nameserver_lookup("uac") {
+            return Some(uac);
+        }
+        if monotonic_millis() >= deadline {
+            return None;
+        }
+        process_yield();
     }
 }
 

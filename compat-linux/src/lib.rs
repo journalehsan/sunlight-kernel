@@ -413,17 +413,62 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         79 => 64,   // getcwd → SunlightOS Getcwd(64)
         80 => 63,   // chdir → SunlightOS Chdir(63)
         318 => -16, // getrandom → Linux ABI shim backed by kernel entropy
+        228 => -19, // clock_gettime → special Linux clock_gettime shim
+        82 => -20,  // rename → special Linux rename/renameat shim
+        264 => -20, // renameat → special Linux rename/renameat shim
+        35 => -21,  // nanosleep → special Linux nanosleep shim
 
         // Default: unsupported
         _ => -38, // ENOSYS
     }
 }
 
+pub const LINUX_MAP_PRIVATE: u64 = 0x02;
+pub const LINUX_MAP_FIXED: u64 = 0x10;
+pub const LINUX_MAP_ANONYMOUS: u64 = 0x20;
+pub const LINUX_MAP_STACK: u64 = 0x20_000;
+
+/// Translate the Linux anonymous-mapping flags supported by Helios into the
+/// strict native mmap surface. MAP_STACK is advisory on Linux, so it is
+/// accepted and removed only after the complete request has been validated.
+pub fn translate_mmap_flags(flags: u64) -> Option<u32> {
+    const SUPPORTED: u64 =
+        LINUX_MAP_PRIVATE | LINUX_MAP_FIXED | LINUX_MAP_ANONYMOUS | LINUX_MAP_STACK;
+
+    if flags & !SUPPORTED != 0
+        || flags & (LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS)
+            != (LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS)
+    {
+        return None;
+    }
+
+    Some((flags & !LINUX_MAP_STACK) as u32)
+}
+
 /// Helper to determine if a syscall requires special handling.
 pub fn needs_special_handling(linux_nr: u64) -> bool {
     matches!(
         linux_nr,
-        7 | 9 | 13 | 14 | 16 | 20 | 60 | 131 | 200 | 231 | 12 | 158 | 218 | 273 | 318 | 334 | 257
+        7 | 9
+            | 13
+            | 14
+            | 16
+            | 20
+            | 60
+            | 131
+            | 200
+            | 231
+            | 12
+            | 158
+            | 218
+            | 273
+            | 318
+            | 334
+            | 257
+            | 228
+            | 82
+            | 264
+            | 35
     )
 }
 
@@ -466,6 +511,28 @@ mod tests {
     #[test]
     fn unsupported_returns_enosys() {
         assert_eq!(translate_syscall(999), -38);
+    }
+
+    #[test]
+    fn mmap_flags_accept_linux_stack_advice_without_weakening_contract() {
+        assert_eq!(
+            translate_mmap_flags(LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | LINUX_MAP_STACK),
+            Some((LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS) as u32)
+        );
+        assert_eq!(
+            translate_mmap_flags(
+                LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | LINUX_MAP_FIXED | LINUX_MAP_STACK
+            ),
+            Some((LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | LINUX_MAP_FIXED) as u32)
+        );
+        assert_eq!(
+            translate_mmap_flags(LINUX_MAP_ANONYMOUS | LINUX_MAP_STACK),
+            None
+        );
+        assert_eq!(
+            translate_mmap_flags(LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | 0x4000_0000),
+            None
+        );
     }
 
     #[test]

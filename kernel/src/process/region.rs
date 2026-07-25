@@ -30,6 +30,7 @@ impl RegionProtection {
     const WRITE: u8 = 1 << 1;
     const EXECUTE: u8 = 1 << 2;
 
+    pub const NONE: Self = Self(0);
     pub const READ_ONLY: Self = Self(Self::READ);
     pub const READ_WRITE: Self = Self(Self::READ | Self::WRITE);
     pub const READ_EXECUTE: Self = Self(Self::READ | Self::EXECUTE);

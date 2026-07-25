@@ -282,7 +282,10 @@ impl AddressSpace {
         if !protection.is_valid() {
             return Err(MappingError::PermissionRejected);
         }
-        let mut flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+        let mut flags = PageTableFlags::PRESENT;
+        if protection != RegionProtection::NONE {
+            flags |= PageTableFlags::USER_ACCESSIBLE;
+        }
         if protection.writable() {
             flags |= PageTableFlags::WRITABLE;
         }
@@ -295,10 +298,16 @@ impl AddressSpace {
     pub fn protection_from_pte_flags(
         flags: PageTableFlags,
     ) -> Result<RegionProtection, MappingError> {
-        if !flags.contains(PageTableFlags::PRESENT)
-            || !flags.contains(PageTableFlags::USER_ACCESSIBLE)
-        {
+        if !flags.contains(PageTableFlags::PRESENT) {
             return Err(MappingError::PermissionRejected);
+        }
+        if !flags.contains(PageTableFlags::USER_ACCESSIBLE) {
+            if flags.contains(PageTableFlags::WRITABLE)
+                || !flags.contains(PageTableFlags::NO_EXECUTE)
+            {
+                return Err(MappingError::PermissionRejected);
+            }
+            return Ok(RegionProtection::NONE);
         }
         RegionProtection::new(
             true,
@@ -877,7 +886,7 @@ impl AddressSpace {
         Ok(())
     }
 
-    /// Replace only W/NX permission bits if the present leaf still has the
+    /// Replace only user/W/NX permission bits if the present leaf still has the
     /// exact frame and flags established by mprotect preflight. The caller is
     /// responsible for a synchronous batched shootdown before publishing
     /// software protection metadata.
@@ -897,12 +906,13 @@ impl AddressSpace {
         if entry.addr() != expected_frame
             || entry.flags() != expected_flags
             || !expected_flags.contains(PageTableFlags::PRESENT)
-            || !expected_flags.contains(PageTableFlags::USER_ACCESSIBLE)
         {
             return Err(MappingError::UnsupportedReplacement);
         }
 
-        let permission_bits = PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
+        let permission_bits = PageTableFlags::USER_ACCESSIBLE
+            | PageTableFlags::WRITABLE
+            | PageTableFlags::NO_EXECUTE;
         let mut replacement = expected_flags;
         replacement.remove(permission_bits);
         replacement |= desired & permission_bits;

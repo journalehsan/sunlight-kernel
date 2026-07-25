@@ -886,9 +886,18 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 if let Some(tty_pid) = sched
                     .processes
                     .iter()
-                    .find(|p| p.name_str() == "tty_server")
+                    .find(|p| {
+                        p.name_str() == "tty_server"
+                            && (sched.online_cores > 1
+                                || (p.state == crate::process::ProcessState::BlockedOnIpc
+                                    && p.pending_call.is_none()))
+                    })
                     .map(|p| p.pid)
                 {
+                    // On one CPU, wake only the TTY's receive wait. Do not mark
+                    // it Ready during a nested login call to UAC: the grant
+                    // mint requires the TTY caller to remain blocked until the
+                    // reply commits. Preserve the established SMP wake path.
                     sched.wake_pid(tty_pid);
                 }
             }

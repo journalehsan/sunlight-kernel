@@ -1231,8 +1231,8 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     assert_eq!(merged.protection, RegionProtection::READ_WRITE);
     crate::serial_println!("[MM-2E] middle/prefix/suffix splits and compatible merge: OK");
 
-    // Holes, protected kinds, invalid flags, PROT_NONE, zero length, and
-    // ledger-capacity exhaustion all reject before PTE mutation.
+    // Holes, protected kinds, invalid flags, zero length, and ledger-capacity
+    // exhaustion all reject before PTE mutation.
     crate::serial_println!("[MM-2E] policy/atomicity phase: begin");
     let hole = BASE + 2 * STRIDE;
     map_fixed(&mut sched, pmm, hole, 1, PROT_READ | PROT_WRITE);
@@ -1323,10 +1323,39 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
         protect(&mut sched, pmm, transitions, 1, PROT_EXEC),
         Err(MmapError::InvalidProt)
     );
+    let none_frame = entry(&sched, transitions, hhdm).0;
+    assert_eq!(protect(&mut sched, pmm, transitions, 1, PROT_NONE), Ok(()));
+    let (protected_frame, protected_flags) = entry(&sched, transitions, hhdm);
+    assert_eq!(protected_frame, none_frame);
+    assert!(protected_flags.contains(PageTableFlags::PRESENT));
+    assert!(protected_flags.contains(PageTableFlags::NO_EXECUTE));
+    assert!(!protected_flags.contains(PageTableFlags::USER_ACCESSIBLE));
+    assert!(!protected_flags.contains(PageTableFlags::WRITABLE));
     assert_eq!(
-        protect(&mut sched, pmm, transitions, 1, PROT_NONE),
-        Err(MmapError::Unsupported)
+        crate::memory::user::copy_from_process_bytes(
+            sched.current_process(),
+            hhdm,
+            transitions,
+            &mut [0u8; 1],
+        ),
+        Err(UserMemoryError::NotUserAccessible)
     );
+    assert_eq!(
+        protect(&mut sched, pmm, transitions, 1, PROT_READ | PROT_WRITE,),
+        Ok(())
+    );
+    assert_eq!(entry(&sched, transitions, hhdm).0, none_frame);
+
+    let none_guard = BASE + 12 * STRIDE;
+    let free_before_none_guard = pmm.free_page_count();
+    map_fixed(&mut sched, pmm, none_guard, 1, PROT_READ | PROT_WRITE);
+    assert_eq!(protect(&mut sched, pmm, none_guard, 1, PROT_NONE), Ok(()));
+    assert_eq!(
+        crate::process::mmap::sys_munmap(none_guard, PAGE_SIZE, pmm, &mut sched),
+        Ok(())
+    );
+    assert_eq!(pmm.free_page_count(), free_before_none_guard);
+
     assert_eq!(
         crate::process::mmap::sys_mprotect(transitions, 0, PROT_READ, pmm, &mut sched),
         Ok(())
@@ -1421,8 +1450,10 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     assert!(!crate::memory::zram::block_exists(block_id));
     crate::serial_println!("[MM-2E] swapped anonymous page rejected without swap-in: OK");
 
-    // Four active CPUs pre-touch the mapping. Each protection reduction and
-    // increase must synchronously run the MM-2B remote invalidation handler.
+    // All active CPUs pre-touch the mapping. Each protection reduction and
+    // increase must synchronously run the MM-2B remote invalidation handler
+    // when remote CPUs are available; single-core boots still validate the
+    // local permission transition path.
     let remote = BASE + 0xA0_0000;
     crate::serial_println!("[MM-2E] permission shootdown phase: begin");
     map_fixed(&mut sched, pmm, remote, 1, PROT_READ | PROT_WRITE);
@@ -1435,9 +1466,18 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     }
     assert_eq!(unsafe { (remote as *const u64).read_volatile() }, VALUE);
     let online = crate::sched::ONLINE_CORES.load(Ordering::Acquire);
-    assert_eq!(online, 4, "MM-2E gate requires exactly four online CPUs");
+    assert!(online > 0, "MM-2E gate requires an online BSP");
     let local_cpu = crate::sched::current_cpu_id();
-    let remote_cpus = ((1u64 << online) - 1) & !(1u64 << local_cpu);
+    assert!(
+        local_cpu < online,
+        "MM-2E gate current CPU must be part of the online topology"
+    );
+    let online_mask = if online >= u64::BITS as usize {
+        u64::MAX
+    } else {
+        (1u64 << online) - 1
+    };
+    let remote_cpus = online_mask & !(1u64 << local_cpu);
     crate::memory::tlb::test_activate_and_read(
         sched.current_process().address_space.identity(),
         remote,
@@ -1465,7 +1505,11 @@ pub fn run_mm2e_mprotect_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManage
     unsafe {
         crate::memory::tlb::activate_kernel_root();
     }
-    crate::serial_println!("[MM-2E] four CPUs acknowledged writable/NX permission shootdowns: OK");
+    crate::serial_println!(
+        "[MM-2E] permission shootdowns acknowledged: online={} remote={}: OK",
+        online,
+        remote_cpus.count_ones()
+    );
 
     // MM-2D remains composable after protection fragmentation, and fixed
     // remapping followed by protection works again.

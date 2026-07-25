@@ -1,6 +1,9 @@
 [package]
 name = "helios-note"
-version = "0.2.2585-alpha.1"
+version = "0.2.2619-alpha.1"
+
+
+
 
 
 
@@ -366,6 +369,7 @@ edition = "2021"
 [dependencies]
 libc = "0.2"
 tui = { version = "0.19", default-features = false, features = ["crossterm"] }
+ratatui = { version = "0.26", default-features = false, features = ["crossterm"] }
 crossterm = "0.25"
 
 [profile.release]
