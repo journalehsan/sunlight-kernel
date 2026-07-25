@@ -379,10 +379,3 @@ libc = "0.2"
 tui = { version = "0.19", default-features = false, features = ["crossterm"] }
 ratatui = { version = "0.26", default-features = false, features = ["crossterm"] }
 crossterm = "0.25"
-
-[profile.release]
-panic = "abort"
-lto = true
-codegen-units = 1
-strip = true
-opt-level = "z"

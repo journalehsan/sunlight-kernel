@@ -130,3 +130,6 @@ opt-level = "z"
 
 [profile.release.package.sunlight-devices]
 opt-level = "z"
+
+[profile.release.package.helios-note]
+opt-level = "z"

@@ -41,41 +41,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     let mut app = App::new(filename);
+    let mut needs_redraw = true;
 
     loop {
-        terminal.draw(|f| {
-            let area = f.size();
-            let view_height = area.height.saturating_sub(3) as usize;
-            let view_width = area.width.saturating_sub(6) as usize;
+        if needs_redraw {
+            terminal.draw(|f| {
+                let area = f.size();
+                let view_height = area.height.saturating_sub(3) as usize;
+                let view_width = area.width.saturating_sub(6) as usize;
 
-            app.cursor.adjust_viewport(view_width, view_height, &app.buffer, 4);
+                app.cursor.adjust_viewport(view_width, view_height, &app.buffer, 4);
 
-            draw_ui(
-                f,
-                UiState {
-                    filename: &app.filename,
-                    buffer: &app.buffer,
-                    cursor: &app.cursor,
-                    show_help: app.show_help,
-                    show_quit_confirm: app.show_quit_confirm,
-                    show_search_prompt: app.show_search_prompt,
-                    search_input: &app.search_input,
-                    status_message: app.status_message.as_deref(),
-                },
-            );
-        })?;
+                draw_ui(
+                    f,
+                    UiState {
+                        filename: &app.filename,
+                        buffer: &app.buffer,
+                        cursor: &app.cursor,
+                        show_help: app.show_help,
+                        show_quit_confirm: app.show_quit_confirm,
+                        show_search_prompt: app.show_search_prompt,
+                        search_input: &app.search_input,
+                        status_message: app.status_message.as_deref(),
+                    },
+                );
+            })?;
+            needs_redraw = false;
+        }
 
         if app.should_quit {
             break;
         }
 
         if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                let size = terminal.size()?;
-                let view_height = size.height.saturating_sub(3) as usize;
-                let view_width = size.width.saturating_sub(6) as usize;
+            match event::read()? {
+                Event::Key(key) => {
+                    let size = terminal.size()?;
+                    let view_height = size.height.saturating_sub(3) as usize;
+                    let view_width = size.width.saturating_sub(6) as usize;
 
-                app.handle_key(key, view_height, view_width);
+                    app.handle_key(key, view_height, view_width);
+                    needs_redraw = true;
+                }
+                Event::Resize(_, _) => {
+                    needs_redraw = true;
+                }
+                _ => {}
             }
         }
     }

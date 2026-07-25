@@ -45,11 +45,6 @@ impl TextBuffer {
         self.lines.len()
     }
 
-    /// Check if buffer is empty (0 lines or 1 empty line).
-    pub fn is_empty(&self) -> bool {
-        self.lines.is_empty() || (self.lines.len() == 1 && self.lines[0].is_empty())
-    }
-
     /// Read line by index.
     pub fn get_line(&self, idx: usize) -> Option<&str> {
         self.lines.get(idx).map(|s| s.as_str())
@@ -84,11 +79,6 @@ impl TextBuffer {
     /// Check if buffer has unsaved changes.
     pub fn is_modified(&self) -> bool {
         self.modified
-    }
-
-    /// Mark modified state.
-    pub fn set_modified(&mut self, modified: bool) {
-        self.modified = modified;
     }
 
     /// Convert entire buffer back into a single String (newline-joined).
@@ -209,7 +199,7 @@ impl TextBuffer {
         let tmp_path = Path::new(&tmp_filename);
 
         let content = self.to_string_content();
-        if let Err(e) = fs::write(tmp_path, content.as_bytes()) {
+        if fs::write(tmp_path, content.as_bytes()).is_err() {
             // If temporary file creation fails, fallback to direct save
             self.save_to_file(path_str)?;
             return Ok(false); // false = direct save fallback used

@@ -13,7 +13,6 @@ pub struct SearchState {
     pub query: String,
     pub matches: Vec<SearchMatch>,
     pub current_idx: usize,
-    pub active: bool,
 }
 
 impl SearchState {

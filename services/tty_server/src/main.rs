@@ -90,7 +90,11 @@ const KEY_F1: u8 = 0x3B;
 const KEY_F2: u8 = 0x3C;
 const KEY_E: u8 = 0x12;
 const KEY_T: u8 = 0x14;
-const TERM_OUTPUT_MAX: usize = 4096;
+/// Retained ANSI stream per tab. Full-screen TUIs emit cursor/style traffic
+/// even for small edits; 4 KiB could roll over mid-CSI sequence and replay a
+/// fragment such as `9m` as visible text. Event-driven clients now emit far
+/// less idle traffic, while 64 KiB keeps ordinary editing sessions intact.
+const TERM_OUTPUT_MAX: usize = 64 * 1024;
 const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
 const PENDING_INPUT_MAX: usize = 128;
