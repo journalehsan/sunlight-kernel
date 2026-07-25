@@ -663,21 +663,27 @@ unsafe fn requested_size(ptr: *mut u8) -> Option<usize> {
 }
 
 // ── C ABI allocator symbols ─────────────────────────────────────────────────
+//
+// Export the C names only on freestanding SunlightOS (`target_os = "none"`).
+// Host-linked unit tests (and any accidental Linux link of this crate) must
+// not interpose glibc `malloc`/`free` — that replaces the process heap with
+// the bounded Sunlight free-list and hangs or OOMs the test harness.
+// `cfg(test)` covers `cargo test -p sunlight-libc` itself.
 
 /// Allocate at least `size` bytes. Returns null on failure or if `size == 0`.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
     allocate(size, 16)
 }
 
 /// Release a pointer returned by this allocator. `free(NULL)` is a no-op.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn free(ptr: *mut u8) {
     let _ = release(ptr);
 }
 
 /// Allocate a zero-filled array of `count` × `size` bytes.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut u8 {
     let Some(total) = count.checked_mul(size) else {
         return ptr::null_mut();
@@ -691,7 +697,7 @@ pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut u8 {
 
 /// Resize an allocation while preserving its prefix.  Allocation happens
 /// before the old block is released, so a failure leaves the old block intact.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
     REALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
     if ptr.is_null() {

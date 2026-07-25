@@ -40,33 +40,103 @@ mod surface;
 use pointer_policy::PointerPolicy;
 
 // ---------------------------------------------------------------------------
-// Allocator
+// Pixel buffer (outside the ordinary libc heap)
 // ---------------------------------------------------------------------------
 
-struct BumpAllocator;
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 16 * 1024 * 1024] = [0; 16 * 1024 * 1024];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
+/// Page-aligned compositor / GPU pixel storage.
+///
+/// Ownership domain is intentional and separate from `sunlight-libc`'s
+/// reclaiming heap (`global-alloc` + `dynamic-heap-8m`):
+/// - created by anonymous `mmap` on SunlightOS (host tests use the process
+///   allocator so unit tests stay host-runnable);
+/// - released only by matching `munmap` / host `dealloc` in [`Drop`];
+/// - never mixed with `malloc` / `GlobalAlloc` free for the same pointer.
+///
+/// Ordinary window metadata, queues, and protocol strings use the libc heap.
+struct PixelBuffer {
+    ptr: *mut u32,
+    len: usize,
 }
 
-#[cfg(not(test))]
-// Host unit tests use the standard allocator. The freestanding bump heap is
-// only for the Sunlight userspace binary (where std is unavailable).
-#[cfg(not(test))]
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
+// SAFETY: PixelBuffer is process-local pixel storage moved only with exclusive
+// ownership of CompositorState; no shared aliasing across threads.
+unsafe impl Send for PixelBuffer {}
+
+impl Default for PixelBuffer {
+    fn default() -> Self {
+        Self {
+            ptr: core::ptr::null_mut(),
+            len: 0,
+        }
+    }
+}
+
+impl PixelBuffer {
+    fn empty() -> Self {
+        Self::default()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn as_ptr(&self) -> *const u32 {
+        self.ptr
+    }
+}
+
+impl core::ops::Deref for PixelBuffer {
+    type Target = [u32];
+
+    fn deref(&self) -> &[u32] {
+        if self.ptr.is_null() || self.len == 0 {
+            &[]
+        } else {
+            // SAFETY: ptr/len form a live mapping established by
+            // alloc_page_aligned_pixels and not yet dropped.
+            unsafe { core::slice::from_raw_parts(self.ptr, self.len) }
+        }
+    }
+}
+
+impl core::ops::DerefMut for PixelBuffer {
+    fn deref_mut(&mut self) -> &mut [u32] {
+        if self.ptr.is_null() || self.len == 0 {
+            &mut []
+        } else {
+            // SAFETY: exclusive &mut self; mapping is live until Drop.
+            unsafe { core::slice::from_raw_parts_mut(self.ptr, self.len) }
+        }
+    }
+}
+
+impl Drop for PixelBuffer {
+    fn drop(&mut self) {
+        if self.ptr.is_null() || self.len == 0 {
+            return;
+        }
+        let bytes = self.len.saturating_mul(core::mem::size_of::<u32>());
+        let ptr = self.ptr as *mut u8;
+        self.ptr = core::ptr::null_mut();
+        self.len = 0;
+        #[cfg(not(test))]
+        {
+            let _ = sunlight_libc::mman::munmap(ptr, bytes);
+        }
+        #[cfg(test)]
+        {
+            if let Ok(layout) = core::alloc::Layout::from_size_align(bytes, 4096) {
+                // SAFETY: host test path allocates with the same layout in
+                // alloc_page_aligned_pixels.
+                unsafe { alloc::alloc::dealloc(ptr, layout) };
+            }
+        }
+    }
+}
 
 fn launch_runner(state: &mut CompositorState) {
     if libc::spawn(b"/bin/sunlight-runner", &[b"sunlight-runner"], None).is_err() {
@@ -639,6 +709,7 @@ struct Window {
     overlay_decorations_visible: bool,
     overlay_last_motion_ms: u64,
     overlay_pointer_inside: bool,
+    has_presented_frame: bool,
     first_present_logged: bool,
 }
 
@@ -915,7 +986,8 @@ struct CompositorState {
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
-    back_buffer: Vec<u32>,
+    /// Screen-sized pixel storage (mmap domain — not the libc heap).
+    back_buffer: PixelBuffer,
     /// Display backend: Limine memcpy or VirtIO GPU flush.
     display_backend: backend::DisplayBackend,
     /// When true, the hardware cursor is active (VirtIO GPU backend) and
@@ -1261,7 +1333,8 @@ fn window_visible_on_workspace(win: &Window, active_workspace_id: u32) -> bool {
 }
 
 fn is_window_visible(state: &CompositorState, win: &Window) -> bool {
-    !win.hidden
+    win.has_presented_frame
+        && !win.hidden
         && win.config.state != WindowState::Minimized
         && window_visible_on_workspace(win, state.active_workspace_id)
 }
@@ -1288,9 +1361,7 @@ fn event_poll_window_idx(state: &CompositorState, requested_id: u64) -> Option<u
 }
 
 fn pointer_eligible_window(state: &CompositorState, win: &Window) -> bool {
-    win.config.state != WindowState::Minimized
-        && !win.hidden
-        && window_visible_on_workspace(win, state.active_workspace_id)
+    is_window_visible(state, win)
 }
 
 fn topmost_window_idx_at(state: &CompositorState, cx: u32, cy: u32) -> Option<usize> {
@@ -3954,22 +4025,48 @@ impl LogLine {
 
 /// Allocate a page-aligned, tightly-packed pixel buffer. VirtIO GPU backing
 /// must start on a page boundary (the device scans whole pages, and the kernel
-/// rejects misaligned buffers). Returns an empty Vec on allocation failure.
-fn alloc_page_aligned_pixels(words: usize, fill: u32) -> Vec<u32> {
+/// rejects misaligned buffers). Returns an empty buffer on allocation failure.
+///
+/// Native path: anonymous `mmap` (graphics ownership domain). Host unit tests
+/// use the process allocator with matching Drop. Never the ordinary libc heap.
+fn alloc_page_aligned_pixels(words: usize, fill: u32) -> PixelBuffer {
     if words == 0 {
-        return Vec::new();
+        return PixelBuffer::empty();
     }
-    let layout = match core::alloc::Layout::from_size_align(words * 4, 4096) {
-        Ok(l) => l,
-        Err(_) => return Vec::new(),
+    let Some(bytes) = words.checked_mul(core::mem::size_of::<u32>()) else {
+        return PixelBuffer::empty();
     };
-    // SAFETY: layout is non-zero; the bump allocator never reclaims, so
-    // reconstructing the Vec with a u32 layout is safe (dealloc is a no-op).
-    let ptr = unsafe { alloc::alloc::alloc(layout) as *mut u32 };
-    if ptr.is_null() {
-        return Vec::new();
-    }
-    let mut pixels = unsafe { Vec::from_raw_parts(ptr, words, words) };
+
+    #[cfg(not(test))]
+    let ptr = {
+        match sunlight_libc::mman::mmap(
+            core::ptr::null_mut(),
+            bytes,
+            sunlight_libc::mman::PROT_READ | sunlight_libc::mman::PROT_WRITE,
+            sunlight_libc::mman::MAP_PRIVATE | sunlight_libc::mman::MAP_ANONYMOUS,
+            -1,
+            0,
+        ) {
+            Ok(p) => p as *mut u32,
+            Err(_) => return PixelBuffer::empty(),
+        }
+    };
+
+    #[cfg(test)]
+    let ptr = {
+        let layout = match core::alloc::Layout::from_size_align(bytes, 4096) {
+            Ok(l) => l,
+            Err(_) => return PixelBuffer::empty(),
+        };
+        // SAFETY: layout is non-zero; Drop uses the same layout on the host.
+        let raw = unsafe { alloc::alloc::alloc(layout) as *mut u32 };
+        if raw.is_null() {
+            return PixelBuffer::empty();
+        }
+        raw
+    };
+
+    let mut pixels = PixelBuffer { ptr, len: words };
     for p in pixels.iter_mut() {
         *p = fill;
     }
@@ -4109,7 +4206,7 @@ fn log_gpu_proxy_error(step: &str, e: sunlight_ipc::gpu_proxy::GpuProxyError) {
 ///
 /// Returns the attached buffer on success or a diagnostic reason string on
 /// failure (each step logs its exact error).
-fn setup_virtio_backend(gw: u32, gh: u32) -> Result<Vec<u32>, &'static str> {
+fn setup_virtio_backend(gw: u32, gh: u32) -> Result<PixelBuffer, &'static str> {
     let gpu_buffer = alloc_page_aligned_pixels((gw as usize) * (gh as usize), DESKTOP_COLOR);
     if gpu_buffer.is_empty() {
         debug_log("[DISPLAY] VirtIO back buffer allocation failed (");
@@ -4861,11 +4958,12 @@ mod tests {
             focus_press_pending: false,
             rolled_up: false,
             saved_unrolled_h: h,
-            workspace_id: 0,
+            workspace_id: 1,
             hidden: false,
             overlay_decorations_visible: false,
             overlay_last_motion_ms: 0,
             overlay_pointer_inside: false,
+            has_presented_frame: true,
             first_present_logged: false,
         }
     }
@@ -4887,7 +4985,7 @@ mod tests {
             fb_width: 800,
             fb_height: 600,
             fb_pitch: 800 * 4,
-            back_buffer: Vec::new(),
+            back_buffer: PixelBuffer::empty(),
             display_backend: backend::DisplayBackend::Limine {
                 fb: core::ptr::null_mut(),
                 pitch_words: 800,
@@ -5216,6 +5314,31 @@ mod tests {
         assert!(mouse_requires_scene_redraw(true, false, false));
         assert!(mouse_requires_scene_redraw(false, true, false));
         assert!(mouse_requires_scene_redraw(false, false, true));
+    }
+
+    #[test]
+    fn unpresented_window_is_not_composited_focused_or_pointer_eligible() {
+        let mut window = test_window(
+            7,
+            40,
+            40,
+            220,
+            180,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        window.has_presented_frame = false;
+        let mut state = test_state(vec![window]);
+
+        assert!(!is_window_visible(&state, &state.windows[0]));
+        assert!(focused_window_idx(&state).is_none());
+        assert!(topmost_window_idx_at(&state, 100, 100).is_none());
+
+        state.windows[0].has_presented_frame = true;
+        assert!(is_window_visible(&state, &state.windows[0]));
+        assert_eq!(focused_window_idx(&state), Some(0));
+        assert_eq!(topmost_window_idx_at(&state, 100, 100), Some(0));
     }
 
     #[test]
@@ -6201,7 +6324,7 @@ pub extern "C" fn _start() -> ! {
     let mut render_height = limine_render_h;
     let mut render_pitch = limine_render_pitch;
     let mut display_backend = limine_backend;
-    let mut back_buffer: Vec<u32> = Vec::new();
+    let mut back_buffer = PixelBuffer::empty();
     let mut svga_info_log: Option<sunlight_ipc::SvgaDisplayInfo> = None;
 
     if let Some((gw, gh)) = virtio_scanout {
@@ -6639,6 +6762,7 @@ pub extern "C" fn _start() -> ! {
                                 overlay_decorations_visible: false,
                                 overlay_last_motion_ms: 0,
                                 overlay_pointer_inside: false,
+                                has_presented_frame: false,
                                 first_present_logged: false,
                             },
                         );
@@ -6651,8 +6775,6 @@ pub extern "C" fn _start() -> ! {
                             window_title_str(&config.title),
                             is_desktop_window,
                         );
-                        mark_dirty_full(&mut state);
-                        redraw_scene(&mut state);
                         launch_trace::log_phase_now(
                             trace,
                             window_subject.as_str(),
@@ -6692,7 +6814,9 @@ pub extern "C" fn _start() -> ! {
                 let win_id = msg.words[0];
                 let compositor_width = state.fb_width;
                 let compositor_height = state.fb_height;
+                let mut redraw_configured_window = false;
                 if let Some(win) = state.windows.iter_mut().find(|w| w.id == win_id) {
+                    redraw_configured_window = win.has_presented_frame;
                     let was_desktop_window = win.config.window_type == WindowType::Desktop;
                     // Update flags if non-zero.
                     if msg.words[1] != 0 {
@@ -6827,9 +6951,11 @@ pub extern "C" fn _start() -> ! {
                         }
                     }
                 }
-                mark_dirty_full(&mut state);
-                redraw_scene(&mut state);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                if redraw_configured_window {
+                    mark_dirty_full(&mut state);
+                    redraw_scene(&mut state);
+                }
             }
 
             // -------------------------------------------------------------------
@@ -7177,22 +7303,30 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             SgpMsg::COMMIT_FRAME => {
                 let win_id = msg.words[0];
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
                 if let Some(win_idx) = state.windows.iter().position(|w| w.id == win_id) {
-                    let (chrome_rect, owner_pid, should_log_visible, trace, subject) = {
+                    let (chrome_rect, owner_pid, first_present, trace, subject) = {
                         let win = &state.windows[win_idx];
                         let trace = trace_for_pid(&state, win.owner_pid);
                         (
                             win.chrome_rect(state.fb_width, state.fb_height),
                             win.owner_pid,
-                            !win.first_present_logged,
+                            !win.has_presented_frame,
                             trace,
                             String::from(window_title_str(&win.config.title)),
                         )
                     };
+                    if first_present {
+                        state.windows[win_idx].has_presented_frame = true;
+                    }
                     let (wx, wy, ww, wh) = chrome_rect;
-                    mark_dirty_rect(&mut state, Rect::new(wx as i32, wy as i32, ww, wh));
+                    if first_present {
+                        mark_dirty_full(&mut state);
+                    } else {
+                        mark_dirty_rect(&mut state, Rect::new(wx as i32, wy as i32, ww, wh));
+                    }
                     redraw_scene(&mut state);
-                    if should_log_visible {
+                    if first_present {
                         launch_trace::log_phase_now(
                             trace,
                             subject.as_str(),
@@ -7204,7 +7338,6 @@ pub extern "C" fn _start() -> ! {
                         }
                     }
                 }
-                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }
 
             // -------------------------------------------------------------------

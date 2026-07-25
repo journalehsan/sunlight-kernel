@@ -128,7 +128,7 @@ where
 /// Unsupported IDs and malformed kernel timestamps fail with `EINVAL`; a null
 /// output pointer fails locally with `EFAULT`.  Success deliberately leaves
 /// `errno` unchanged.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn clock_gettime(clockid: i32, tp: *mut Timespec) -> i32 {
     unsafe { clock_gettime_with(clockid, tp, read_clock_from_syscall) }
 }

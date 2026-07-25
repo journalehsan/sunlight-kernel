@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-display"
-version = "0.2.2388-alpha.1"
+version = "0.2.2402-alpha.1"
+
+
+
 
 
 
@@ -324,9 +327,18 @@ edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
+# Host unit tests link without global-alloc so they keep the standard
+# allocator. Freestanding SunlightOS builds enable the reclaiming heap below.
 sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ui = { path = "../../sunlight-ui" }
 sun-font = { path = "../../sun-font" }
+
+# One reclaiming libc heap for ordinary Rust metadata (windows, queues,
+# notifications). Screen-sized pixel storage stays on anonymous mmap, not this
+# heap — see PixelBuffer in main.rs. Features are target-gated so Linux-host
+# `cargo test` does not install SunlightOS syscalls as the process allocator.
+[target.'cfg(target_os = "none")'.dependencies]
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
 
 [build-dependencies]
 fontdue = "0.7"

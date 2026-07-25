@@ -31,7 +31,7 @@ pub(crate) fn mark_tls_ready() {
 ///
 /// Returns the per-thread errno cell via `fs:8` when TLS is ready,
 /// or the global fallback before that.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn __errno_location() -> *mut i32 {
     if !TLS_READY.load(Ordering::Acquire) {
         return ERRNO_FALLBACK.as_ptr() as *mut i32;

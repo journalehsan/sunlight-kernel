@@ -38,7 +38,10 @@ const POLL_TIMEOUT_MS: u64 = 200;
 const RUNNABLE_EVENT_POLL_TIMEOUT_MS: u64 = 16;
 const MAX_LOCAL_TICKS_BEFORE_EVENT_POLL: u8 = 8;
 const WINDOW_IPC_TIMEOUT_MS: u64 = 500;
-const WINDOW_CREATE_TIMEOUT_MS: u64 = 2_000;
+const WINDOW_CREATE_BASE_TIMEOUT_MS: u64 = 2_000;
+const WINDOW_CREATE_PER_MIB_TIMEOUT_MS: u64 = 1_000;
+const WINDOW_CREATE_MAX_TIMEOUT_MS: u64 = 15_000;
+const MIB_BYTES: u64 = 1024 * 1024;
 static CLOSE_REQUESTED: AtomicBool = AtomicBool::new(false);
 static CLIENT_CURSOR: AtomicU8 = AtomicU8::new(u8::MAX);
 static CLIENT_WIDTH: AtomicU32 = AtomicU32::new(0);
@@ -46,6 +49,16 @@ static CLIENT_HEIGHT: AtomicU32 = AtomicU32::new(0);
 
 const fn should_deliver_local_tick(timeout_ms: u64, local_tick_streak: u8) -> bool {
     timeout_ms == 0 && local_tick_streak < MAX_LOCAL_TICKS_BEFORE_EVENT_POLL
+}
+
+fn window_create_timeout_ms(width: u32, height: u32) -> u64 {
+    let surface_bytes = u64::from(width)
+        .saturating_mul(u64::from(height))
+        .saturating_mul(core::mem::size_of::<u32>() as u64);
+    let surface_mib = surface_bytes.saturating_add(MIB_BYTES - 1) / MIB_BYTES;
+    WINDOW_CREATE_BASE_TIMEOUT_MS
+        .saturating_add(surface_mib.saturating_mul(WINDOW_CREATE_PER_MIB_TIMEOUT_MS))
+        .min(WINDOW_CREATE_MAX_TIMEOUT_MS)
 }
 
 /// Decode a packed display-server key word into an [`Event`].
@@ -323,7 +336,7 @@ impl Window {
                 .word(1, config.decoration.config_flag_bits() | config_flags)
                 .word(2, pid)
                 .word(3, title_words[0]),
-            WINDOW_CREATE_TIMEOUT_MS,
+            window_create_timeout_ms(config.width, config.height),
         )
         .ok()?;
 
@@ -752,7 +765,10 @@ impl Window {
 
 #[cfg(test)]
 mod tests {
-    use super::{should_deliver_local_tick, WindowDecoration, MAX_LOCAL_TICKS_BEFORE_EVENT_POLL};
+    use super::{
+        should_deliver_local_tick, window_create_timeout_ms, WindowDecoration,
+        MAX_LOCAL_TICKS_BEFORE_EVENT_POLL,
+    };
 
     #[test]
     fn decoration_flag_bits_match_protocol_layout() {
@@ -775,6 +791,14 @@ mod tests {
             MAX_LOCAL_TICKS_BEFORE_EVENT_POLL
         ));
         assert!(!should_deliver_local_tick(16, 0));
+    }
+
+    #[test]
+    fn window_create_timeout_scales_with_surface_allocation() {
+        assert_eq!(window_create_timeout_ms(1, 1), 3_000);
+        assert_eq!(window_create_timeout_ms(960, 620), 5_000);
+        assert_eq!(window_create_timeout_ms(1220, 760), 6_000);
+        assert_eq!(window_create_timeout_ms(8192, 8192), 15_000);
     }
 }
 

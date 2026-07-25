@@ -31,7 +31,7 @@
 //!
 //! # Host tests
 //!
-//! `#[no_mangle]` is omitted under `cfg(test)` so host unit tests do not
+//! C `#[no_mangle]` exports are freestanding-only (`target_os = "none"`) so host unit tests do not
 //! collide with the system libc.
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ pub unsafe fn strrchr_bytes(s: *const u8, c: u8) -> *const u8 {
 ///
 /// # Safety
 /// See module docs.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn strlen(s: *const u8) -> usize {
     strlen_bytes(s)
 }
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn strlen(s: *const u8) -> usize {
 ///
 /// # Safety
 /// See module docs.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn strnlen(s: *const u8, max_len: usize) -> usize {
     strnlen_bytes(s, max_len)
 }
@@ -169,7 +169,7 @@ pub unsafe extern "C" fn strnlen(s: *const u8, max_len: usize) -> usize {
 ///
 /// # Safety
 /// See module docs.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn strcmp(s1: *const u8, s2: *const u8) -> i32 {
     strcmp_bytes(s1, s2)
 }
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn strcmp(s1: *const u8, s2: *const u8) -> i32 {
 ///
 /// # Safety
 /// See module docs.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn strncmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
     strncmp_bytes(s1, s2, n)
 }
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn strncmp(s1: *const u8, s2: *const u8, n: usize) -> i32 
 ///
 /// # Safety
 /// See module-level validity rules.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn strchr(s: *const u8, c: i32) -> *mut u8 {
     strchr_bytes(s, c as u8) as *mut u8
 }
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn strchr(s: *const u8, c: i32) -> *mut u8 {
 ///
 /// # Safety
 /// See module-level validity rules.
-#[cfg_attr(not(test), no_mangle)]
+#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
 pub unsafe extern "C" fn strrchr(s: *const u8, c: i32) -> *mut u8 {
     strrchr_bytes(s, c as u8) as *mut u8
 }

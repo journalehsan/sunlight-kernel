@@ -4,7 +4,7 @@ use crate::errno::{set_errno, EBADF, EFAULT, EINVAL, EIO};
 use crate::{fstat as libc_fstat, lseek as libc_lseek, Fd, Stat};
 
 /// Reposition the read/write offset of an open file descriptor.
-#[no_mangle]
+#[cfg_attr(target_os = "none", no_mangle)]
 pub unsafe extern "C" fn lseek(fd: i32, offset: i64, whence: i32) -> i64 {
     if fd < 0 {
         set_errno(EBADF);
@@ -30,7 +30,7 @@ pub unsafe extern "C" fn lseek(fd: i32, offset: i64, whence: i32) -> i64 {
 }
 
 /// Get file status by open file descriptor.
-#[no_mangle]
+#[cfg_attr(target_os = "none", no_mangle)]
 pub unsafe extern "C" fn fstat(fd: i32, out: *mut Stat) -> i32 {
     if fd < 0 {
         set_errno(EBADF);
@@ -58,7 +58,7 @@ pub unsafe extern "C" fn fstat(fd: i32, out: *mut Stat) -> i32 {
 /// Test whether an open file descriptor refers to a terminal.
 /// Phase 1: fds 0 / 1 / 2 (stdin / stdout / stderr) are console-connected and
 /// report as terminals.  All other fds return 0 (not a terminal).
-#[no_mangle]
+#[cfg_attr(target_os = "none", no_mangle)]
 pub unsafe extern "C" fn isatty(fd: i32) -> i32 {
     if fd == 0 || fd == 1 || fd == 2 {
         1
