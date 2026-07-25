@@ -211,15 +211,15 @@ impl App {
         // Editing Operations
         if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT {
             match key.code {
-                KeyCode::Char(ch) => {
+                KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') => {
                     self.push_undo_step();
-                    let (nl, nc) = self.buffer.insert_char(self.cursor.line, self.cursor.col, ch);
+                    let (nl, nc) = self.buffer.insert_newline(self.cursor.line, self.cursor.col);
                     self.cursor.line = nl;
                     self.cursor.col = nc;
                 }
-                KeyCode::Enter => {
+                KeyCode::Char(ch) => {
                     self.push_undo_step();
-                    let (nl, nc) = self.buffer.insert_newline(self.cursor.line, self.cursor.col);
+                    let (nl, nc) = self.buffer.insert_char(self.cursor.line, self.cursor.col, ch);
                     self.cursor.line = nl;
                     self.cursor.col = nc;
                 }
@@ -269,5 +269,23 @@ impl App {
         }
 
         self.cursor.adjust_viewport(view_width, view_height, &self.buffer, 4);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raw_line_feed_creates_a_buffer_line() {
+        let mut app = App::new("/helios-note-newline-regression-missing");
+        app.handle_key(
+            KeyEvent::new(KeyCode::Char('\n'), KeyModifiers::NONE),
+            20,
+            80,
+        );
+
+        assert_eq!(app.buffer.lines, vec![String::new(), String::new()]);
+        assert_eq!((app.cursor.line, app.cursor.col), (1, 0));
     }
 }

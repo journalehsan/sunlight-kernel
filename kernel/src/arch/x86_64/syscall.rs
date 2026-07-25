@@ -512,6 +512,19 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1025; // Linux unlinkat
                     }
                 }
+                -28 => {
+                    if linux_num == 4 || linux_num == 6 {
+                        // stat(path, buf) / lstat(path, buf) → the normalized
+                        // newfstatat-style register layout used by our shim.
+                        frame.rdx = frame.rsi;
+                        frame.rsi = frame.rdi;
+                        frame.rdi = (-100i64) as u64; // AT_FDCWD
+                        frame.r10 = if linux_num == 6 { 0x100 } else { 0 };
+                        num = 1026;
+                    } else if linux_num == 262 {
+                        num = 1026; // Linux newfstatat
+                    }
+                }
                 -38 => {
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
                     num = 1005; // Linux ENOSYS
@@ -666,6 +679,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1023 => sys_linux_pipe2(frame),
         1024 => sys_linux_socketpair(frame),
         1025 => sys_linux_unlinkat(frame),
+        1026 => sys_linux_newfstatat(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -3277,6 +3291,68 @@ fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
         ..*frame
     };
     sys_unlink(&mut unlink_frame)
+}
+
+/// Linux newfstatat(2): the Rust standard library uses this for
+/// `Path::exists`, so returning the native 24-byte StatPath layout is not
+/// sufficient. Populate the Linux x86_64 144-byte `struct stat` directly.
+fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
+    use sunlight_fs::vfs::FileType;
+
+    let dirfd = frame.rdi as i32;
+    let path_ptr = frame.rsi;
+    let stat_ptr = frame.rdx;
+    let flags = frame.r10;
+
+    const AT_FDCWD: i32 = -100;
+    const AT_SYMLINK_NOFOLLOW: u64 = 0x100;
+    if dirfd != AT_FDCWD && dirfd != 0 {
+        return linux_errno(9); // EBADF
+    }
+    // SunlightFS has no symlinks, so NOFOLLOW has the same result as a normal
+    // lookup. Reject other flags until their semantics are implemented.
+    if flags & !AT_SYMLINK_NOFOLLOW != 0 {
+        return linux_errno(22); // EINVAL
+    }
+
+    let path_bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
+    };
+    let raw_path = match core::str::from_utf8(&path_bytes) {
+        Ok(path) => path,
+        Err(_) => return linux_errno(22),
+    };
+    let path_buf = resolve_current_path(raw_path);
+    let stat = {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return linux_errno(5); // EIO
+        };
+        match vfs.stat(path_buf.as_str()) {
+            Ok(stat) => stat,
+            Err(_) => return linux_errno(2), // ENOENT
+        }
+    };
+
+    let mut record = [0u8; 144];
+    record[0..8].copy_from_slice(&1u64.to_le_bytes()); // st_dev
+    record[8..16].copy_from_slice(&1u64.to_le_bytes()); // synthetic st_ino
+    record[16..24].copy_from_slice(&(stat.nlinks as u64).to_le_bytes());
+    let mode: u32 = match stat.file_type {
+        FileType::File => 0o100000 | (stat.mode as u32 & 0o7777),
+        FileType::Directory => 0o040000 | (stat.mode as u32 & 0o7777),
+    };
+    record[24..28].copy_from_slice(&mode.to_le_bytes());
+    record[28..32].copy_from_slice(&stat.uid.to_le_bytes());
+    record[32..36].copy_from_slice(&stat.gid.to_le_bytes());
+    record[48..56].copy_from_slice(&(stat.size as u64).to_le_bytes());
+    record[56..64].copy_from_slice(&4096u64.to_le_bytes());
+    record[64..72].copy_from_slice(&((stat.size as u64 + 511) / 512).to_le_bytes());
+    match copy_to_user(stat_ptr, &record) {
+        Ok(()) => 0,
+        Err(error) => error,
+    }
 }
 
 fn sys_linux_nanosleep(frame: &mut SyscallFrame) -> u64 {

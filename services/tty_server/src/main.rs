@@ -1198,8 +1198,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if tab.fg_pid.is_some() {
                             // A foreground command owns the screen: route the key
                             // to its stdin ring (keyed by shell_id) instead of the
-                            // shell line editor. No prompt echo.
-                            let _ = tty_stdin_push(tab.shell_id as u32, &[ascii]);
+                            // shell line editor. Raw POSIX terminals deliver Enter
+                            // as CR; Crossterm treats LF as an ordinary character
+                            // while raw mode is active.
+                            let raw_byte = if ascii == b'\n' { b'\r' } else { ascii };
+                            let _ = tty_stdin_push(tab.shell_id as u32, &[raw_byte]);
                         } else {
                             // Local line editing: the TTY owns the edit line and
                             // only flushes the completed command to the shell on

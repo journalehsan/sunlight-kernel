@@ -404,8 +404,8 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         200 => -10, // tkill → special Linux ABI shim
 
         // Process information
-        4 => 48, // stat → Fstat (approximation)
-        6 => 48, // lstat → Fstat (approximation)
+        4 => -28, // stat → special Linux stat-by-path shim
+        6 => -28, // lstat → special Linux stat-by-path shim
 
         // Tier 6: modern Linux fs variants (preferred by Rust std)
         72 => 49,   // fcntl → SunlightOS Fcntl(49) — same arg layout
@@ -418,6 +418,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         264 => -20, // renameat → special Linux rename/renameat shim
         87 => 65,   // unlink → SunlightOS Unlink(65) (same argument layout)
         263 => -27, // unlinkat → special Linux unlinkat shim
+        262 => -28, // newfstatat → special Linux stat-by-path shim
         35 => -21,  // nanosleep → special Linux nanosleep shim
 
         // Tier 7: epoll + pipe for crossterm/mio TUI input (helios-note)
@@ -531,10 +532,13 @@ mod tests {
         assert_eq!(translate_syscall(72), 49); // fcntl → SunlightOS Fcntl
         assert_eq!(translate_syscall(257), -15); // openat → frame-shifted sys_open
         assert_eq!(translate_syscall(318), -16); // getrandom
+        assert_eq!(translate_syscall(4), -28); // stat → path-stat ABI shim
+        assert_eq!(translate_syscall(6), -28); // lstat → path-stat ABI shim
         assert_eq!(translate_syscall(82), 66); // rename → native Rename
         assert_eq!(translate_syscall(264), -20); // renameat → ABI shim
         assert_eq!(translate_syscall(87), 65); // unlink → native Unlink
         assert_eq!(translate_syscall(263), -27); // unlinkat → ABI shim
+        assert_eq!(translate_syscall(262), -28); // newfstatat → ABI shim
         assert_eq!(translate_syscall(213), -22); // epoll_create
         assert_eq!(translate_syscall(291), -22); // epoll_create1
         assert_eq!(translate_syscall(233), -23); // epoll_ctl
