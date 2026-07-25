@@ -17,6 +17,31 @@ use input::ReadLine;
 #[cfg(feature = "std")]
 use std::env;
 
+#[cfg(any(feature = "sunlight", test))]
+fn should_clear_stale_foreground(
+    foreground_before_input: Option<u64>,
+    current_foreground: u64,
+    is_alive: bool,
+) -> bool {
+    foreground_before_input == Some(current_foreground) && !is_alive
+}
+
+#[cfg(test)]
+mod foreground_tests {
+    use super::should_clear_stale_foreground;
+
+    #[test]
+    fn exited_child_spawned_by_current_input_is_still_announced() {
+        assert!(!should_clear_stale_foreground(None, 31, false));
+    }
+
+    #[test]
+    fn dead_foreground_remembered_before_input_is_recovered() {
+        assert!(should_clear_stale_foreground(Some(31), 31, false));
+        assert!(!should_clear_stale_foreground(Some(31), 31, true));
+    }
+}
+
 #[cfg(feature = "std")]
 fn run_command(
     line: &str,
@@ -3166,6 +3191,7 @@ mod sunlight {
                 }
                 let mut out = [0u8; MAX_OUT];
                 let mut out_len = 0usize;
+                let foreground_before_input = shell.fg_pid;
                 if !is_poll {
                     long_out_reset();
                     let handled = shell.handle_byte(byte);
@@ -3175,12 +3201,15 @@ mod sunlight {
                 if out_len > 0 {
                     debug_log_cmd_output(&cmd_snap[..cmd_snap_len], &out[..out_len]);
                 }
-                // Recover from a missed FG_DONE: if our remembered child is
-                // already dead, clear it and treat this key as normal input.
-                // Otherwise a stalled FG_DONE leaves every keystroke returning
-                // FG_STARTED and the shell appears hung (tty key IPC timeouts).
+                // Recover from a missed FG_DONE only when this foreground PID
+                // was already present before handling the current key. A fast
+                // command can spawn, write its output, and exit before spawn()
+                // returns; that newly-created PID must still be announced to
+                // tty_server so it can perform the final stdout-ring drain.
                 if let Some(pid) = shell.fg_pid {
-                    if !sunlight_ipc::process_is_alive(pid) {
+                    let is_alive = sunlight_ipc::process_is_alive(pid);
+                    if crate::should_clear_stale_foreground(foreground_before_input, pid, is_alive)
+                    {
                         shell.fg_pid = None;
                     }
                 }
