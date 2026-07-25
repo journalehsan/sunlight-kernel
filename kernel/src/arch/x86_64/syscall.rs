@@ -714,6 +714,30 @@ const USER_ARG_MAX: usize = 256;
 const USER_ARG_COUNT_MAX: usize = 16;
 const USER_ARG_TOTAL_MAX: usize = 4096;
 
+// Native libc error sentinels. Keep EAGAIN at MAX-1; these values are decoded
+// by sunlight-libc::sys and are never printed as filesystem diagnostics.
+const ERR_NOENT: u64 = u64::MAX - 2;
+const ERR_EACCES: u64 = u64::MAX - 3;
+const ERR_EBADF: u64 = u64::MAX - 4;
+const ERR_EINVAL: u64 = u64::MAX - 5;
+const ERR_EISDIR: u64 = u64::MAX - 6;
+const ERR_ENOTDIR: u64 = u64::MAX - 7;
+const ERR_EIO: u64 = u64::MAX - 8;
+
+fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
+    match error {
+        sunlight_fs::FsError::NotFound => ERR_NOENT,
+        sunlight_fs::FsError::PermissionDenied
+        | sunlight_fs::FsError::OperationNotPermitted => ERR_EACCES,
+        sunlight_fs::FsError::BadHandle => ERR_EBADF,
+        sunlight_fs::FsError::InvalidPath => ERR_EINVAL,
+        sunlight_fs::FsError::IsDir => ERR_EISDIR,
+        sunlight_fs::FsError::NotDir => ERR_ENOTDIR,
+        sunlight_fs::FsError::Io => ERR_EIO,
+        _ => u64::MAX,
+    }
+}
+
 /// Resolve a userspace pathname against the calling process's current
 /// directory. The VFS accepts absolute paths only, while Linux file APIs also
 /// accept paths relative to CWD.
@@ -2326,7 +2350,7 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
     };
     let raw = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
-        Err(_) => return u64::MAX,
+        Err(_) => return ERR_EINVAL,
     };
 
     // Resolve relative paths against the process CWD.
@@ -2351,7 +2375,7 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         || (wants_exclusive && !wants_create)
         || (flags & O_TRUNC != 0 && !wants_write)
     {
-        return u64::MAX;
+        return ERR_EINVAL;
     }
 
     // Open on the VFS first, then register the fd. KERNEL_VFS is released
@@ -2364,12 +2388,12 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             // HostKeyAdmin service may obtain a descriptor, even if an
             // attacker made the object permissive before this check.
             if !has_host_key_admin() {
-                return u64::MAX;
+                return ERR_EACCES;
             }
         }
         if wants_write || wants_create {
             if private_secret_child(path) {
-                return u64::MAX;
+                return ERR_EACCES;
             }
             let operation = if wants_create {
                 sunlight_fs::FsOperation::Create
@@ -2393,12 +2417,12 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
                 decision.error
             );
             if !decision.allowed {
-                return u64::MAX;
+                return ERR_EACCES;
             }
         }
         let mut guard = crate::KERNEL_VFS.lock();
         let Some(vfs) = guard.as_mut() else {
-            return u64::MAX;
+            return ERR_EIO;
         };
         let opened = if wants_create {
             let mode = (frame.rdx as u16) & 0o777;
@@ -2410,12 +2434,12 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             };
             match result {
                 Ok(h) => h,
-                Err(_) => return u64::MAX,
+                Err(error) => return fs_error_raw(error),
             }
         } else {
             let stat = match vfs.stat(path) {
                 Ok(stat) => stat,
-                Err(_) => return u64::MAX,
+                Err(error) => return fs_error_raw(error),
             };
             let want = if wants_write {
                 sunlight_fs::permission::PermCheck::Write
@@ -2427,19 +2451,19 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
                 &sunlight_fs::permission::Credential { uid, gid },
                 want,
             ) {
-                return u64::MAX;
+                return ERR_EACCES;
             }
             match vfs.open(path) {
                 Ok(h) => h,
                 Err(e) => {
                     crate::serial_println!("[HELIOS] open({}) -> err {:?}", path, e);
-                    return u64::MAX;
+                    return fs_error_raw(e);
                 }
             }
         };
         if flags & O_TRUNC != 0 && vfs.truncate(opened).is_err() {
             let _ = vfs.close(opened);
-            return u64::MAX;
+            return ERR_EIO;
         }
         opened
     };
@@ -2642,14 +2666,14 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
 fn sys_getcwd(frame: &mut SyscallFrame) -> u64 {
     let buf_len = frame.rsi as usize;
     if frame.rdi == 0 || buf_len == 0 {
-        return u64::MAX;
+        return ERR_EINVAL;
     }
     let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
     let bytes = cwd.as_bytes();
     let copy_len = bytes.len().min(buf_len - 1);
     let mut output = alloc::vec::Vec::new();
     if output.try_reserve_exact(copy_len + 1).is_err() {
-        return u64::MAX;
+        return ERR_EIO;
     }
     output.extend_from_slice(&bytes[..copy_len]);
     output.push(0);
@@ -4062,7 +4086,7 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
         let mut sched = crate::sched::SCHEDULER.lock();
         match sched.current_process_mut().fd_table.take(fd) {
             Ok(entry) => entry.handle,
-            Err(_) => return u64::MAX,
+            Err(_) => return ERR_EBADF,
         }
     };
 
@@ -4076,9 +4100,9 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
         match crate::KERNEL_VFS.lock().as_mut() {
             Some(vfs) => match vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle())) {
                 Ok(()) => 0,
-                Err(_) => u64::MAX,
+                Err(error) => fs_error_raw(error),
             },
-            None => u64::MAX,
+            None => ERR_EIO,
         }
     } else {
         0
@@ -4094,7 +4118,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
 
     let fd = frame.rdi as i32;
     if frame.rdx > isize::MAX as u64 {
-        return u64::MAX;
+        return ERR_EINVAL;
     }
     let count = frame.rdx as usize;
     if count == 0 {
@@ -4104,7 +4128,11 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
-    // Check if fd is valid and has READ right
+    // Distinguish an absent descriptor from a valid descriptor without READ
+    // capability; libc exposes these as EBADF and EACCES respectively.
+    if sched.current_process().fd_table.get(fd).is_none() {
+        return ERR_EBADF;
+    }
     match sched.current_process().fd_table.check_rights(
         fd,
         crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::READ),
@@ -4145,7 +4173,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     let mut kernel_buf = [0u8; 4096];
                     let to_read = count.min(4096);
                     if fd_entry.offset.checked_add(to_read).is_none() {
-                        return u64::MAX;
+                        return ERR_EINVAL;
                     }
                     let read = {
                         let mut guard = crate::KERNEL_VFS.lock();
@@ -4153,7 +4181,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                             Some(vfs) => {
                                 vfs.read(vfs_handle, fd_entry.offset, &mut kernel_buf[..to_read])
                             }
-                            None => return u64::MAX,
+                            None => return ERR_EIO,
                         }
                     };
                     match read {
@@ -4173,7 +4201,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                             }
                             n as u64
                         }
-                        Err(_) => u64::MAX,
+                        Err(error) => fs_error_raw(error),
                     }
                 } else if fd_entry.handle.is_tty_stdin() {
                     // fd0 wired to a TTY tab's kernel stdin ring. Drain locally —
@@ -4216,12 +4244,12 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     }
                 }
             } else {
-                u64::MAX
+                ERR_EBADF
             }
         }
         Err(_) => {
             crate::serial_println!("[SYSCALL] read fd={} (capability denied)", fd);
-            u64::MAX // EACCES
+            ERR_EACCES
         }
     }
 }

@@ -18,6 +18,8 @@ pub const EACCES: i32 = 13;
 pub const EFAULT: i32 = 14;
 pub const EINVAL: i32 = 22;
 pub const ENOSYS: i32 = 38;
+pub const EISDIR: i32 = 21;
+pub const ENOTDIR: i32 = 20;
 
 static ERRNO_FALLBACK: AtomicI32 = AtomicI32::new(0);
 static TLS_READY: AtomicBool = AtomicBool::new(false);
@@ -62,6 +64,11 @@ pub fn set_from_errno(e: Errno) {
         Errno::Again => EAGAIN,
         Errno::Inval => EINVAL,
         Errno::TooBig => E2BIG,
+        Errno::NoEntry => ENOENT,
+        Errno::Access => EACCES,
+        Errno::BadFd => EBADF,
+        Errno::IsDir => EISDIR,
+        Errno::NotDir => ENOTDIR,
     };
     set_errno(code);
 }

@@ -3,9 +3,11 @@
 //! Minimal userland libc for SunlightOS (the lucerna role in Luxos).
 //!
 //! Thin safe wrappers over the kernel's SYSCALL ABI: syscall number in `rax`,
-//! arguments in `rdi`/`rsi`/`rdx`, return value in `rax`. `u64::MAX` means
-//! error; `u64::MAX - 1` means try again (EAGAIN). Syscall numbers must stay
-//! in sync with `SunlightSyscall` in `kernel/src/arch/x86_64/syscall.rs`.
+//! arguments in `rdi`/`rsi`/`rdx`, return value in `rax`. The raw ABI reserves
+//! the values immediately below `u64::MAX` for structured errors; callers see
+//! those through `Errno`, never as internal numeric diagnostics. Syscall
+//! numbers must stay in sync with `SunlightSyscall` in
+//! `kernel/src/arch/x86_64/syscall.rs`.
 
 // ── Core syscall layer ───────────────────────────────────────────────────────
 pub mod rand;
@@ -79,8 +81,11 @@ pub const SEEK_END: i32 = 2;
 
 /// Copy `bytes` into `buf` as a NUL-terminated C string.
 fn cstr<'a>(buf: &'a mut [u8], bytes: &[u8]) -> Result<*const u8, Errno> {
-    if bytes.is_empty() || bytes.len() >= buf.len() || bytes.contains(&0) {
+    if bytes.is_empty() || bytes.contains(&0) {
         return Err(Errno::Inval);
+    }
+    if bytes.len() >= buf.len() {
+        return Err(Errno::TooBig);
     }
     buf[..bytes.len()].copy_from_slice(bytes);
     buf[bytes.len()] = 0;
@@ -113,6 +118,36 @@ pub fn create(path: &[u8]) -> Result<Fd, Errno> {
 pub fn close(fd: Fd) -> Result<(), Errno> {
     let ret = unsafe { sys::syscall1(sys::SYS_CLOSE, fd.0 as u64) };
     sys::check(ret).map(|_| ())
+}
+
+/// Read the process CWD into a caller-owned, kernel-sized path buffer.
+///
+/// Path resolution remains a kernel responsibility. This wrapper only
+/// marshals the bounded output buffer and validates the kernel's returned
+/// pointer and NUL termination; it does not normalize `.`/`..` or slashes.
+pub fn getcwd(buf: &mut [u8; MAX_PATH]) -> Result<usize, Errno> {
+    let ret = unsafe {
+        sys::syscall2(
+            sys::SYS_GETCWD,
+            buf.as_mut_ptr() as u64,
+            buf.len() as u64,
+        )
+    };
+    let returned = sys::check(ret)?;
+    if returned != buf.as_mut_ptr() as u64 {
+        return Err(Errno::Failed);
+    }
+    bounded_cwd_len(buf)
+}
+
+fn bounded_cwd_len(buf: &[u8]) -> Result<usize, Errno> {
+    let Some(len) = buf.iter().position(|&byte| byte == 0) else {
+        return Err(Errno::TooBig);
+    };
+    if len == 0 {
+        return Err(Errno::Failed);
+    }
+    Ok(len)
 }
 
 pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
@@ -644,7 +679,7 @@ mod fd_contract_tests {
         let mut storage = [0u8; MAX_PATH];
         assert_eq!(cstr(&mut storage, b""), Err(Errno::Inval));
         assert_eq!(cstr(&mut storage, b"a\0b"), Err(Errno::Inval));
-        assert_eq!(cstr(&mut storage, &[b'x'; MAX_PATH]), Err(Errno::Inval));
+        assert_eq!(cstr(&mut storage, &[b'x'; MAX_PATH]), Err(Errno::TooBig));
         assert!(cstr(&mut storage, &[b'x'; MAX_PATH - 1]).is_ok());
     }
 
@@ -653,6 +688,15 @@ mod fd_contract_tests {
         assert_eq!(checked_fd(7), Ok(Fd(7)));
         assert_eq!(checked_fd(u32::MAX as u64), Err(Errno::Failed));
         assert_eq!(checked_fd(u64::MAX), Err(Errno::Failed));
+    }
+
+    #[test]
+    fn cwd_result_requires_a_nonempty_nul_terminated_path() {
+        assert_eq!(bounded_cwd_len(b"/\0unused"), Ok(1));
+        assert_eq!(bounded_cwd_len(b"/etc/sunlight\0"), Ok(13));
+        assert_eq!(bounded_cwd_len(b""), Err(Errno::TooBig));
+        assert_eq!(bounded_cwd_len(b"\0"), Err(Errno::Failed));
+        assert_eq!(bounded_cwd_len(&[b'x'; MAX_PATH]), Err(Errno::TooBig));
     }
 }
 

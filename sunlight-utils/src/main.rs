@@ -86,7 +86,6 @@ fn run(args: &[&str]) -> i32 {
 
     match applet {
         "ls" => cmd_ls(rest),
-        "cat" => cmd_cat(rest),
         "mkdir" => cmd_mkdir(rest),
         "echo" => cmd_echo(rest),
         "whoami" => cmd_whoami(),
@@ -98,7 +97,6 @@ fn run(args: &[&str]) -> i32 {
         "freezram" => cmd_freezram(rest),
         "nice" => cmd_nice(rest),
         "renice" => cmd_renice(rest),
-        "pwd" => cmd_pwd(),
         "stat" => cmd_stat(rest),
         "file" => cmd_file(rest),
         "head" => cmd_head(rest),
@@ -416,40 +414,6 @@ fn cmd_ls(args: &[&str]) -> i32 {
             1
         }
     }
-}
-
-fn cmd_cat(args: &[&str]) -> i32 {
-    if args.is_empty() {
-        let _ = write_all(b"cat: missing file operand\n");
-        return 1;
-    }
-    for path in args {
-        let fd = match libc::open(path.as_bytes()) {
-            Ok(fd) => fd,
-            Err(_) => {
-                print2("cat: cannot open ", path);
-                let _ = write_all(b"\n");
-                return 1;
-            }
-        };
-        let mut buf = [0u8; 512];
-        loop {
-            match read_retry(fd, &mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    let _ = write_all(&buf[..n]);
-                }
-                Err(_) => {
-                    let _ = libc::close(fd);
-                    print2("cat: read error on ", path);
-                    let _ = write_all(b"\n");
-                    return 1;
-                }
-            }
-        }
-        let _ = libc::close(fd);
-    }
-    0
 }
 
 fn cmd_mkdir(args: &[&str]) -> i32 {
@@ -1200,12 +1164,6 @@ fn cmd_renice(args: &[&str]) -> i32 {
             1
         }
     }
-}
-
-fn cmd_pwd() -> i32 {
-    // No per-process cwd yet; every path is absolute.
-    let _ = write_all(b"/\n");
-    0
 }
 
 fn cmd_stat(args: &[&str]) -> i32 {

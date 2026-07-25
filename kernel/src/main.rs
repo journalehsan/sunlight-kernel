@@ -99,6 +99,10 @@ static SUNLIGHT_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-utils");
 static SUNLIGHT_ECHO_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/echo");
+static SUNLIGHT_CAT_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/cat");
+static SUNLIGHT_PWD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/pwd");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =

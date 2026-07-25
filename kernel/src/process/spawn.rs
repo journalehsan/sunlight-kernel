@@ -620,23 +620,26 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
     match path {
         "/bin/sh" | "/bin/ssh" | "/bin/sshl" => Ok(crate::SUNSHELL_ELF_BYTES),
         p if p.starts_with("/bin/sshl") => Ok(crate::SUNSHELL_ELF_BYTES),
-        // POSIX-style command paths: standard applets execute from /bin or
-        // /usr/bin and dispatch by argv[0] inside the multi-call binaries.
-        "/bin/ls" | "/bin/cat" | "/bin/cp" | "/bin/mv" | "/bin/rm" | "/bin/mkdir"
-        | "/bin/rmdir" | "/bin/touch" | "/bin/find" | "/bin/grep" | "/bin/head" | "/bin/tail"
-        | "/bin/wc" | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file" | "/bin/stat"
-        | "/bin/pwd" | "/bin/date" | "/bin/whoami" | "/bin/id" | "/bin/uname"
+        // POSIX-style command paths: the remaining standard applets execute
+        // from /bin or /usr/bin and dispatch by argv[0] inside the multi-call
+        // binary. Native-libc cat and pwd are mapped just below.
+        "/bin/ls" | "/bin/cp" | "/bin/mv" | "/bin/rm" | "/bin/mkdir" | "/bin/rmdir"
+        | "/bin/touch" | "/bin/find" | "/bin/grep" | "/bin/head" | "/bin/tail" | "/bin/wc"
+        | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file" | "/bin/stat" | "/bin/date"
+        | "/bin/whoami" | "/bin/id" | "/bin/uname"
         | "/bin/nice" | "/bin/renice" | "/bin/free" | "/bin/freezram" | "/bin/kill"
-        | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls" | "/usr/bin/cat" | "/usr/bin/cp"
+        | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls" | "/usr/bin/cp"
         | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
         | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep" | "/usr/bin/head"
         | "/usr/bin/tail" | "/usr/bin/wc" | "/usr/bin/sort" | "/usr/bin/uniq" | "/usr/bin/cut"
-        | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/pwd" | "/usr/bin/date"
+        | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/date"
         | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname"
         | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" | "/usr/bin/freezram"
         | "/usr/bin/kill" | "/usr/bin/killall" | "/usr/bin/pkill" => {
             Ok(crate::SUNLIGHT_UTILS_ELF_BYTES)
         }
+        "/bin/cat" | "/usr/bin/cat" | "/sunlight-utils/cat" => Ok(crate::SUNLIGHT_CAT_ELF_BYTES),
+        "/bin/pwd" | "/usr/bin/pwd" | "/sunlight-utils/pwd" => Ok(crate::SUNLIGHT_PWD_ELF_BYTES),
         "/bin/echo" | "/usr/bin/echo" => Ok(crate::SUNLIGHT_ECHO_ELF_BYTES),
         "/bin/ping"
         | "/bin/ifconfig"

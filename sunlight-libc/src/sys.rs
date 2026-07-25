@@ -24,6 +24,8 @@ pub const SYS_MREMAP: u64 = 53;
 pub const SYS_READDIR: u64 = 60;
 pub const SYS_STAT: u64 = 61;
 pub const SYS_MKDIR: u64 = 62;
+pub const SYS_CHDIR: u64 = 63;
+pub const SYS_GETCWD: u64 = 64;
 pub const SYS_UNLINK: u64 = 65;
 pub const SYS_RENAME: u64 = 66;
 pub const SYS_CHMOD: u64 = 67;
@@ -49,6 +51,15 @@ pub const SYS_MINT_AUTH_SESSION_GRANT: u64 = 102;
 pub const ERR_RAW: u64 = u64::MAX;
 /// Raw "try again" return from the kernel.
 pub const EAGAIN_RAW: u64 = u64::MAX - 1;
+/// Structured native filesystem errors. These remain outside successful byte
+/// counts and are decoded before a raw value can reach user code.
+pub const ENOENT_RAW: u64 = u64::MAX - 2;
+pub const EACCES_RAW: u64 = u64::MAX - 3;
+pub const EBADF_RAW: u64 = u64::MAX - 4;
+pub const EINVAL_RAW: u64 = u64::MAX - 5;
+pub const EISDIR_RAW: u64 = u64::MAX - 6;
+pub const ENOTDIR_RAW: u64 = u64::MAX - 7;
+pub const EIO_RAW: u64 = u64::MAX - 8;
 
 /// Largest count that can be represented by the public `ssize_t` result.
 /// Native SunlightOS is currently x86_64, but keep this tied to the Rust ABI
@@ -57,7 +68,7 @@ pub const MAX_IO_COUNT: usize = isize::MAX as usize;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Errno {
-    /// Generic kernel failure (the ABI does not carry a code yet).
+    /// Generic kernel failure with no more specific native result.
     Failed,
     /// Operation would block; retry.
     Again,
@@ -65,12 +76,24 @@ pub enum Errno {
     Inval,
     /// Argument list or path too large for the fixed marshalling buffers.
     TooBig,
+    NoEntry,
+    Access,
+    BadFd,
+    IsDir,
+    NotDir,
 }
 
 pub fn check(ret: u64) -> Result<u64, Errno> {
     match ret {
         ERR_RAW => Err(Errno::Failed),
         EAGAIN_RAW => Err(Errno::Again),
+        ENOENT_RAW => Err(Errno::NoEntry),
+        EACCES_RAW => Err(Errno::Access),
+        EBADF_RAW => Err(Errno::BadFd),
+        EINVAL_RAW => Err(Errno::Inval),
+        EISDIR_RAW => Err(Errno::IsDir),
+        ENOTDIR_RAW => Err(Errno::NotDir),
+        EIO_RAW => Err(Errno::Failed),
         n => Ok(n),
     }
 }
@@ -217,5 +240,15 @@ mod tests {
         assert_eq!(check_io_count(4, 3), Err(Errno::Failed));
         assert_eq!(check_io_count(ERR_RAW, 3), Err(Errno::Failed));
         assert_eq!(check_io_count(EAGAIN_RAW, 3), Err(Errno::Again));
+    }
+
+    #[test]
+    fn structured_filesystem_errors_decode_without_exposing_raw_values() {
+        assert_eq!(check(ENOENT_RAW), Err(Errno::NoEntry));
+        assert_eq!(check(EACCES_RAW), Err(Errno::Access));
+        assert_eq!(check(EBADF_RAW), Err(Errno::BadFd));
+        assert_eq!(check(EINVAL_RAW), Err(Errno::Inval));
+        assert_eq!(check(EISDIR_RAW), Err(Errno::IsDir));
+        assert_eq!(check(ENOTDIR_RAW), Err(Errno::NotDir));
     }
 }
