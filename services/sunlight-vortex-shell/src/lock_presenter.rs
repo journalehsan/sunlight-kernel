@@ -346,8 +346,6 @@ impl App for LockPresenter {
             canvas.fill_rect(Rect::new(0, 0, width, height), Color(0x00101014));
         } else if let Some(ref bg) = self.wallpaper {
             canvas.draw_image_cover(bg);
-            // Light scrim so clock/password chrome stays readable on bright art.
-            canvas.fill_rect(Rect::new(0, 0, width, height), Color(0x40000000));
         } else {
             canvas.fill_rect(Rect::new(0, 0, width, height), theme.bg);
         }
