@@ -84,30 +84,9 @@ use sunlight_ipc::{
 #[cfg(feature = "sunlightos")]
 use sunlight_libc::{self as libc, Fd};
 
-#[cfg(feature = "sunlightos")]
-struct BumpAllocator;
-
-#[cfg(feature = "sunlightos")]
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 768 * 1024] = [0; 768 * 1024];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
-#[cfg(feature = "sunlightos")]
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
+// Rust GlobalAlloc is provided by sunlight-libc (`global-alloc` feature) with
+// the reclaiming free-list heap (`dynamic-heap`, 1 MiB). Do not add a second
+// #[global_allocator] or free pointers across unrelated heaps.
 
 #[cfg(feature = "sunlightos")]
 fn stdout_write(s: &str) {

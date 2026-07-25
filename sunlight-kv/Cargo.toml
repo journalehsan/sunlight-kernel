@@ -418,8 +418,8 @@ host = [
     "dep:crc32fast",
     "dep:log",
 ]
-# SunlightOS target build (no_std + sunlight-ipc + bump allocator).
-# The daemon uses kernel capability IPC + will later use VFS for the backing store.
+# SunlightOS target build (no_std + sunlight-ipc + libc reclaiming allocator).
+# The daemon uses kernel capability IPC; protected persistence goes through sunlight-sm.
 sunlightos = [
     "dep:sunlight-ipc",
     "dep:sunlight-libc",
@@ -437,9 +437,11 @@ env_logger = { version = "0.11", optional = true }
 crc32fast = { version = "1.4", optional = true }
 libc = { version = "0.2", optional = true }
 
-# SunlightOS runtime support (kernel IPC + small fixed-capacity collections)
+# SunlightOS runtime support (kernel IPC + small fixed-capacity collections).
+# global-alloc: single reclaiming Rust GlobalAlloc owned by sunlight-libc.
+# dynamic-heap: 1 MiB demand-mapped heap (capacity >= prior 768 KiB bump; frees reclaim).
 sunlight-ipc = { path = "../ipc", optional = true }
-sunlight-libc = { path = "../sunlight-libc", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["global-alloc", "dynamic-heap"] }
 heapless = { version = "0.8", optional = true }
 
 [dev-dependencies]
