@@ -41,7 +41,9 @@ const KEY_BACKSPACE: u8 = 0x0E;
 const CLOCK_TICK_MS: u64 = 1_000;
 /// How often to re-query service status when idle (not while a sync is in flight).
 const STATUS_REFRESH_MS: u64 = 5_000;
-const SEARCH_VISIBLE: usize = 5;
+/// Result rows that fit the reserved list band without colliding with preview.
+const SEARCH_VISIBLE: usize = 4;
+const RESULT_ROW_H: i32 = 18;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DateTimeAction {
@@ -73,9 +75,11 @@ pub struct DateTimePageState {
     sync_phase: SyncUiPhase,
     sync_feedback: FixedStr<80>,
 
-    // --- Timezone selection (proposed) ---
+    // --- Timezone selection (single authoritative proposed state) ---
+    /// Canonical zone id for Apply (search or map — same owner).
     proposed_zone: FixedStr<64>,
     proposed_city: FixedStr<40>,
+    proposed_country: FixedStr<32>,
     proposed_coord: Option<GeoCoord>,
     search: BoundedSearchField<48>,
     search_hits_zones: [FixedStr<64>; MAX_SEARCH_RESULTS],
@@ -83,7 +87,9 @@ pub struct DateTimePageState {
     search_hits_countries: [FixedStr<32>; MAX_SEARCH_RESULTS],
     search_hits_len: usize,
     selected_result: usize,
-    map_message: FixedStr<64>,
+    /// Transient map/search feedback only (never shares the preview row).
+    map_feedback: FixedStr<64>,
+    /// Apply / set-zone outcome only (dedicated action feedback row).
     apply_feedback: FixedStr<80>,
     tz_error: FixedStr<64>,
 
@@ -108,6 +114,7 @@ impl DateTimePageState {
             sync_feedback: FixedStr::empty(),
             proposed_zone: FixedStr::empty(),
             proposed_city: FixedStr::empty(),
+            proposed_country: FixedStr::empty(),
             proposed_coord: None,
             search: BoundedSearchField::new(),
             search_hits_zones: [FixedStr::empty(); MAX_SEARCH_RESULTS],
@@ -115,7 +122,7 @@ impl DateTimePageState {
             search_hits_countries: [FixedStr::empty(); MAX_SEARCH_RESULTS],
             search_hits_len: 0,
             selected_result: 0,
-            map_message: FixedStr::empty(),
+            map_feedback: FixedStr::empty(),
             apply_feedback: FixedStr::empty(),
             tz_error: FixedStr::empty(),
             next_clock_ms: 0,
@@ -130,20 +137,30 @@ impl DateTimePageState {
         self.sync_phase = SyncUiPhase::Idle;
         self.search.clear();
         self.search.active = false;
-        self.map_message.clear();
+        self.map_feedback.clear();
         self.apply_feedback.clear();
         self.sync_feedback.clear();
         self.refresh_all();
         self.run_search();
         // Seed proposed from applied.
         if self.proposed_zone.is_empty() {
-            self.proposed_zone.set(self.applied_zone.as_str());
-            if let Some(loc) = location_by_zone_id(self.applied_zone.as_str()) {
-                self.proposed_city.set(loc.city);
-                self.proposed_coord = Some(GeoCoord::new(md_to_deg(loc.lon_md), md_to_deg(loc.lat_md)));
-            }
+            self.seed_proposed_from_applied();
         }
         true
+    }
+
+    fn seed_proposed_from_applied(&mut self) {
+        self.proposed_zone.set(self.applied_zone.as_str());
+        if let Some(loc) = location_by_zone_id(self.applied_zone.as_str()) {
+            self.proposed_city.set(loc.city);
+            self.proposed_country.set(loc.country);
+            self.proposed_coord =
+                Some(GeoCoord::new(md_to_deg(loc.lon_md), md_to_deg(loc.lat_md)));
+        } else {
+            self.proposed_city.clear();
+            self.proposed_country.clear();
+            self.proposed_coord = None;
+        }
     }
 
     /// Leave the page: cancel deadlines and drop transient UI state.
@@ -212,15 +229,7 @@ impl DateTimePageState {
                         // Keep proposed only if user already has a pending selection.
                         if !selection_is_pending(self.applied_zone.as_str(), self.proposed_zone.as_str())
                         {
-                            self.proposed_zone.set(id);
-                            if let Some(loc) = location_by_zone_id(id) {
-                                self.proposed_city.set(loc.city);
-                                self.proposed_coord =
-                                    Some(GeoCoord::new(md_to_deg(loc.lon_md), md_to_deg(loc.lat_md)));
-                            } else {
-                                self.proposed_city.clear();
-                                self.proposed_coord = None;
-                            }
+                            self.seed_proposed_from_applied();
                         }
                     }
                     true
@@ -357,8 +366,8 @@ impl DateTimePageState {
     fn propose_location(&mut self, loc: &TzLocation) {
         self.proposed_zone.set(loc.zone_id);
         self.proposed_city.set(loc.city);
+        self.proposed_country.set(loc.country);
         self.proposed_coord = Some(GeoCoord::new(md_to_deg(loc.lon_md), md_to_deg(loc.lat_md)));
-        self.map_message.clear();
         self.apply_feedback.clear();
     }
 
@@ -369,10 +378,16 @@ impl DateTimePageState {
         let zone = self.search_hits_zones[index].as_str();
         if let Some(loc) = location_by_zone_id(zone) {
             self.propose_location(loc);
+            self.map_feedback.clear();
         } else {
+            // Unsupported catalog/zone pairing — keep selection invalid for Apply.
             self.proposed_zone.set(zone);
             self.proposed_city.set(self.search_hits_cities[index].as_str());
+            self.proposed_country
+                .set(self.search_hits_countries[index].as_str());
             self.proposed_coord = None;
+            self.map_feedback.set("Unsupported timezone");
+            self.apply_feedback.clear();
         }
         self.selected_result = index;
     }
@@ -382,29 +397,24 @@ impl DateTimePageState {
         let lon_md = deg_to_md(coord.lon);
         let near = nearest_locations(lat_md, lon_md, 3, DEFAULT_MAX_DISTANCE_MD);
         if near.is_empty() {
-            self.map_message.set("No nearby city in catalog");
+            // Failed map lookup: feedback only — do not clear a valid proposed selection.
+            self.map_feedback.set("No nearby city in catalog");
             return;
         }
-        // Prefer the nearest hit; if multiple are very close, keep the first
-        // (already sorted). Ambiguous close pairs surface a short message.
+        self.propose_location(near.first().unwrap().location);
+        // Optional ambiguity note in the dedicated feedback row (not the preview).
+        self.map_feedback.clear();
         if near.len() > 1 {
             let a = near.get(0).unwrap();
             let b = near.get(1).unwrap();
-            // If second is within ~15% of first distance, note ambiguity.
             if b.dist_sq.saturating_mul(100) < a.dist_sq.saturating_mul(115).max(1) {
-                self.map_message.clear();
                 let _ = write!(
-                    &mut self.map_message,
+                    &mut self.map_feedback,
                     "Near {} / {}",
                     a.location.city, b.location.city
                 );
-            } else {
-                self.map_message.clear();
             }
-        } else {
-            self.map_message.clear();
         }
-        self.propose_location(near.first().unwrap().location);
     }
 
     fn apply_proposed(&mut self) -> bool {
@@ -448,7 +458,15 @@ impl DateTimePageState {
     }
 
     // -----------------------------------------------------------------------
-    // Layout helpers
+    // Layout helpers — fixed non-overlapping bands (WIN 500×560)
+    //
+    //   y 276–302  search field (left) | map top (right)
+    //   y 308–380  result list (left)  | map continues
+    //   y 276–392  map bounds (right)
+    //   y 400–418  proposed preview (full width)
+    //   y 420–436  transient map/search feedback
+    //   y 438–454  apply action feedback
+    //   y 520–548  Back / Apply buttons
     // -----------------------------------------------------------------------
 
     fn back_rect(win_w: u32, win_h: u32) -> Rect {
@@ -466,15 +484,44 @@ impl DateTimePageState {
 
     fn search_rect(win_w: u32) -> Rect {
         let _ = win_w;
-        Rect::new(12, 282, 220, 28)
+        Rect::new(12, 276, 220, 26)
+    }
+
+    fn results_band_rect() -> Rect {
+        // Exactly SEARCH_VISIBLE rows of RESULT_ROW_H.
+        Rect::new(
+            12,
+            308,
+            220,
+            (SEARCH_VISIBLE as i32 * RESULT_ROW_H) as u32,
+        )
     }
 
     fn result_row_rect(index: usize) -> Rect {
-        Rect::new(12, 316 + (index as i32) * 22, 220, 20)
+        let band = Self::results_band_rect();
+        Rect::new(
+            band.x,
+            band.y + index as i32 * RESULT_ROW_H,
+            band.w,
+            RESULT_ROW_H as u32,
+        )
     }
 
     fn map_rect(win_w: u32) -> Rect {
-        Rect::new(246, 282, win_w.saturating_sub(258), 120)
+        // Right column; ends at y=392 so it stays above the preview band.
+        Rect::new(246, 276, win_w.saturating_sub(258), 116)
+    }
+
+    fn preview_rect(win_w: u32) -> Rect {
+        Rect::new(12, 400, win_w.saturating_sub(24), 18)
+    }
+
+    fn map_feedback_rect(win_w: u32) -> Rect {
+        Rect::new(12, 420, win_w.saturating_sub(24), 16)
+    }
+
+    fn apply_feedback_rect(win_w: u32) -> Rect {
+        Rect::new(12, 438, win_w.saturating_sub(24), 16)
     }
 
     fn apply_rect(win_w: u32, win_h: u32) -> Rect {
@@ -698,7 +745,7 @@ impl DateTimePageState {
         win_w: u32,
         win_h: u32,
     ) {
-        // Search field
+        // 1) Search field (left)
         self.search.draw(
             canvas,
             theme,
@@ -707,13 +754,13 @@ impl DateTimePageState {
             Some(&Typography::UI_REGULAR),
         );
 
-        // Result list
+        // 2) Result list (left band — clipped rows)
+        let results_band = Self::results_band_rect();
         if self.search_hits_len == 0 {
-            draw_text(
+            draw_text_clipped(
                 canvas,
-                Rect::new(16, 318, 200, 16),
+                Rect::new(results_band.x + 4, results_band.y + 2, results_band.w - 8, 16),
                 "No matching cities",
-                theme,
                 FontRole::UiSmall,
                 theme.text_dim,
             );
@@ -730,11 +777,10 @@ impl DateTimePageState {
                     self.search_hits_cities[i].as_str(),
                     self.search_hits_countries[i].as_str()
                 );
-                draw_text(
+                draw_text_clipped(
                     canvas,
-                    Rect::new(row.x + 6, row.y + 2, row.w - 12, 16),
+                    Rect::new(row.x + 6, row.y, row.w.saturating_sub(10), row.h),
                     label.as_str(),
-                    theme,
                     FontRole::UiSmall,
                     if i == self.selected_result {
                         theme.accent
@@ -745,7 +791,7 @@ impl DateTimePageState {
             }
         }
 
-        // World map (monochrome orange accent)
+        // 3) World map (right column — monochrome orange)
         let map_rect = Self::map_rect(win_w);
         let mut markers: [MapMarker; 1] = [MapMarker {
             coord: GeoCoord::new(0.0, 0.0),
@@ -771,74 +817,70 @@ impl DateTimePageState {
         }
         map.draw(canvas, theme);
 
-        // Proposed selection preview
-        let preview_y = 410i32;
-        let mut preview = FixedStr::<96>::empty();
+        // 4) Proposed selection preview (full width, single authoritative state)
+        let preview = Self::preview_rect(win_w);
+        let mut preview_text = FixedStr::<120>::empty();
         if self.proposed_zone.is_empty() {
-            preview.set("Select a city or click the map");
+            preview_text.set("Select a city or click the map");
         } else {
-            let city = if self.proposed_city.is_empty() {
-                ""
-            } else {
-                self.proposed_city.as_str()
-            };
-            if city.is_empty() {
-                let _ = write!(&mut preview, "{}", self.proposed_zone.as_str());
-            } else {
-                let _ = write!(
-                    &mut preview,
-                    "{} · {}",
-                    city,
-                    self.proposed_zone.as_str()
-                );
+            // city[, country] · zone → HH:MM
+            if !self.proposed_city.is_empty() {
+                let _ = write!(&mut preview_text, "{}", self.proposed_city.as_str());
+                if !self.proposed_country.is_empty() {
+                    let _ = write!(&mut preview_text, ", {}", self.proposed_country.as_str());
+                }
+                let _ = write!(&mut preview_text, " · ");
             }
-            // Proposed local-time preview from zone DB + current UTC local of applied.
-            if let (Some(entry), Some(lt)) = (tz_by_id(self.proposed_zone.as_str()), self.local) {
-                // Reconstruct approximate UTC from applied local, then project.
-                // Prefer kernel/timed UTC via offset reverse of applied local.
-                let utc_approx = local_to_utc_approx(lt);
-                let proposed_local = local_now(utc_approx, entry);
-                let _ = write!(
-                    &mut preview,
-                    "  →  {:02}:{:02}",
-                    proposed_local.hour, proposed_local.minute
-                );
+            let _ = write!(&mut preview_text, "{}", self.proposed_zone.as_str());
+            if let Some(entry) = tz_by_id(self.proposed_zone.as_str()) {
+                let utc = if let Some(lt) = self.local {
+                    local_to_utc_approx(lt)
+                } else {
+                    0
+                };
+                if utc != 0 && utc != u64::MAX {
+                    let proposed_local = local_now(utc, entry);
+                    let _ = write!(
+                        &mut preview_text,
+                        "  →  {:02}:{:02}",
+                        proposed_local.hour, proposed_local.minute
+                    );
+                }
             }
         }
-        draw_text(
+        draw_text_clipped(
             canvas,
-            Rect::new(16, preview_y, win_w.saturating_sub(40), 16),
-            preview.as_str(),
-            theme,
+            preview,
+            preview_text.as_str(),
             FontRole::UiSmall,
             theme.text,
         );
 
-        if !self.map_message.is_empty() {
-            draw_text(
+        // 5) Transient map/search feedback (never overlaps preview)
+        if !self.map_feedback.is_empty() {
+            draw_text_clipped(
                 canvas,
-                Rect::new(16, preview_y + 16, win_w.saturating_sub(40), 14),
-                self.map_message.as_str(),
-                theme,
+                Self::map_feedback_rect(win_w),
+                self.map_feedback.as_str(),
                 FontRole::UiSmall,
                 theme.text_dim,
             );
         }
 
+        // 6) Apply action feedback (dedicated band above buttons)
         if !self.apply_feedback.is_empty() {
-            draw_text(
+            draw_text_clipped(
                 canvas,
-                Rect::new(100, win_h as i32 - 36, win_w.saturating_sub(230), 16),
+                Self::apply_feedback_rect(win_w),
                 self.apply_feedback.as_str(),
-                theme,
                 FontRole::UiSmall,
                 theme.text_dim,
             );
         }
 
-        // Apply button
+        // 7) Apply button — only for a pending *valid* proposed zone
         let mut apply = Button::new(Self::apply_rect(win_w, win_h), "Apply");
-        if !self.pending() {
+        if !self.pending() || tz_by_id(self.proposed_zone.as_str()).is_none() {
             apply.state = ButtonState::Disabled;
         }
         draw_button(canvas, theme, apply);
@@ -902,7 +944,10 @@ impl DateTimePageState {
                     }
                     return (false, DateTimeAction::None);
                 }
-                if keycode == KEY_ENTER && self.pending() {
+                if keycode == KEY_ENTER
+                    && self.pending()
+                    && tz_by_id(self.proposed_zone.as_str()).is_some()
+                {
                     return (self.apply_proposed(), DateTimeAction::None);
                 }
                 (false, DateTimeAction::None)
@@ -942,7 +987,10 @@ impl DateTimePageState {
                     MapHit::Outside => {}
                 }
 
-                if Self::apply_rect(win_w, win_h).contains(pt) && self.pending() {
+                if Self::apply_rect(win_w, win_h).contains(pt)
+                    && self.pending()
+                    && tz_by_id(self.proposed_zone.as_str()).is_some()
+                {
                     return (self.apply_proposed(), DateTimeAction::None);
                 }
 
@@ -969,14 +1017,61 @@ fn draw_text(
     role: FontRole,
     color: Color,
 ) {
-    sun_font::draw_text_vcenter(
-        canvas,
-        text,
-        rect.x,
-        rect.y,
-        rect.h,
-        &TextStyle::new(role, color),
-    );
+    draw_text_clipped(canvas, rect, text, role, color);
+}
+
+/// Draw left-aligned text vertically centred in `rect`, truncating with an
+/// ellipsis so glyphs never paint outside the allocated band.
+fn draw_text_clipped(
+    canvas: &mut Canvas,
+    rect: Rect,
+    text: &str,
+    role: FontRole,
+    color: Color,
+) {
+    if rect.w == 0 || rect.h == 0 || text.is_empty() {
+        return;
+    }
+    let style = TextStyle::new(role, color);
+    let max_w = rect.w;
+    let fit = fit_text_ellipsis(text, role, max_w);
+    sun_font::draw_text_vcenter(canvas, fit.as_str(), rect.x, rect.y, rect.h, &style);
+}
+
+/// Longest prefix of `text` that fits `max_w`, with "…" when truncated.
+fn fit_text_ellipsis(text: &str, role: FontRole, max_w: u32) -> FixedStr<128> {
+    let mut out = FixedStr::<128>::empty();
+    if sun_font::measure_text(text, role).w <= max_w {
+        out.set(text);
+        return out;
+    }
+    let ell = "…";
+    let ell_w = sun_font::measure_text(ell, role).w;
+    if ell_w >= max_w {
+        return out;
+    }
+    let budget = max_w.saturating_sub(ell_w);
+    let bytes = text.as_bytes();
+    let mut best = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        i += 1;
+        while i < bytes.len() && !text.is_char_boundary(i) {
+            i += 1;
+        }
+        if sun_font::measure_text(&text[..i], role).w <= budget {
+            best = i;
+        } else {
+            break;
+        }
+    }
+    if best == 0 {
+        out.set(ell);
+    } else {
+        out.set(&text[..best]);
+        out.push_str(ell);
+    }
+    out
 }
 
 fn format_offset_line(out: &mut FixedStr<40>, offset_secs: i64, is_dst: bool) {
