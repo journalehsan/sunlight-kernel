@@ -326,9 +326,14 @@ pub extern "C" fn _start() -> ! {
             (kernel_span.frame_count * 4) / 1024
         );
         serial_println!("[PMM] {}/{} MiB free", free * 4 / 1024, total * 4 / 1024);
-        // I ADD THIS TO UNCOMMENT AND SEE OSOD :)
-        // serial_println!(100 / 0);
         splash.set_ram((total * 4 / 1024) as u32);
+        // OSOD smoke test (Rust panic path, not #DE).
+        // Set the static to 1, rebuild/boot, confirm orange screen, then set back to 0.
+        // Uses read_volatile so enabling it does not trip unreachable_code under deny(warnings).
+        static FORCE_OSOD_SMOKE_TEST: u8 = 0;
+        if unsafe { core::ptr::read_volatile(&FORCE_OSOD_SMOKE_TEST) } != 0 {
+            panic!("OSOD smoke test");
+        }
     }
     // Initialize ZRAM metadata early; smoke-fill after heap setup because
     // compressed pages are heap-backed.
