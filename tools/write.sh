@@ -166,6 +166,8 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timed --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tz --features tzutils --bin tzutils --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release

@@ -25,6 +25,8 @@ pub mod NetOp {
     /// Return the executing net stack's current lease without consulting
     /// networkd policy. Intended for networkd's bounded state synchronisation.
     pub const GETIP_LIVE: u64 = 19;
+    /// One-shot UDP request/response via SHM (see ipc::NetOp::UDP_EXCHANGE).
+    pub const UDP_EXCHANGE: u64 = 20;
 }
 
 /// Explicit network operation status values. Legacy replies retain their

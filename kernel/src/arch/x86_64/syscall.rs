@@ -100,6 +100,9 @@ pub enum SunlightSyscall {
     /// UAC-only: mint a short-lived authenticated-session spawn grant.
     MintAuthSessionGrant = 102,
     ClockGetTime = 88,
+    /// Administrative UTC wall-clock step (gated to `timed`). Does not move
+    /// monotonic time. rdi = new Unix UTC seconds.
+    SetTimeUtc = 97,
     NetInfo = 96,
 
     // Shared memory grant (Bite 4)
@@ -553,6 +556,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         94 => sys_shm_free(frame),
         95 => sys_map_telemetry(frame),
         96 => sys_net_info(frame),
+        97 => sys_set_time_utc(frame),
         100 => sys_grant_capability_syscall(frame),
         101 => sys_set_fs_base(frame),
         102 => sys_mint_auth_session_grant(frame),
@@ -5150,6 +5154,29 @@ fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
 /// Returns the current Unix timestamp in seconds (RTC + tick advancement).
 fn sys_get_time_utc() -> u64 {
     crate::arch::x86_64::rtc::unix_time()
+}
+
+/// Syscall: set_time_utc (97)
+///
+/// Step the running UTC wall clock. Restricted to process name `timed`.
+/// Monotonic time, timers, and scheduler accounting are not modified.
+fn sys_set_time_utc(frame: &mut SyscallFrame) -> u64 {
+    {
+        let sched = crate::sched::SCHEDULER.lock();
+        if sched.current_process().name_str() != "timed" {
+            return u64::MAX;
+        }
+    }
+    match crate::arch::x86_64::rtc::set_unix_time(frame.rdi) {
+        Ok(()) => {
+            crate::serial_println!(
+                "wall: ntp_step utc_unix={} (monotonic unchanged)",
+                frame.rdi
+            );
+            0
+        }
+        Err(()) => u64::MAX,
+    }
 }
 
 /// Syscall: monotonic_ms (86). Milliseconds since boot, derived from the

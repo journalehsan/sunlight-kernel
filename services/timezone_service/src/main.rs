@@ -26,12 +26,12 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
+    debug_log, endpoint_create, ipc_call_timeout, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
     nameserver_register, IpcMsg, TzMsg,
 };
 use sunlight_tz::{
-    all_zones, local_now, read_localtime, tz_by_id, tz_count, write_localtime, LocalTimeCfg,
-    TzEntry,
+    all_zones, local_now, ntp_region_from_zone_id, read_localtime, tz_by_id, tz_count,
+    write_localtime, LocalTimeCfg, NtpRegion, TzEntry,
 };
 
 #[panic_handler]
@@ -229,10 +229,13 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
                     }
                     // best-effort notify to timed (do not block on failure)
                     if let Some(timed_cap) = nameserver_lookup("timed") {
-                        let _ = sunlight_ipc::ipc_call(
-                            timed_cap,
-                            IpcMsg::with_label(TzMsg::NOTIFY_CHANGED),
+                        let region = ntp_region_from_zone_id(entry.id);
+                        let notification = pack_str_words(
+                            IpcMsg::with_label(TzMsg::NOTIFY_CHANGED).word(0, region as u64),
+                            1,
+                            entry.id,
                         );
+                        let _ = ipc_call_timeout(timed_cap, notification, 100);
                     }
                     IpcMsg::with_label(TzMsg::REPLY).word(0, 0)
                 }
@@ -269,6 +272,24 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
             reply
         }
 
+        TzMsg::GET_NTP_REGION => {
+            // Static continent → NTP pool region. Does not require synchronized wall time.
+            let cfg = unsafe { &ACTIVE_CFG };
+            let id = cfg.id_str();
+            let region = if let Some(entry) = tz_by_id(id) {
+                ntp_region_from_zone_id(entry.id)
+            } else if !id.is_empty() {
+                ntp_region_from_zone_id(id)
+            } else {
+                NtpRegion::Global
+            };
+            let mut reply = IpcMsg::with_label(TzMsg::REPLY)
+                .word(0, region as u64)
+                .word(1, pack_ascii8(region.as_str()));
+            reply = pack_str_words(reply, 2, if id.is_empty() { "UTC" } else { id });
+            reply
+        }
+
         TzMsg::REPLY | TzMsg::ERROR => {
             // not for server
             IpcMsg::with_label(TzMsg::ERROR)
@@ -276,6 +297,15 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
 
         _ => IpcMsg::with_label(TzMsg::ERROR),
     }
+}
+
+fn pack_ascii8(s: &str) -> u64 {
+    let b = s.as_bytes();
+    let mut w = 0u64;
+    for i in 0..8.min(b.len()) {
+        w |= (b[i] as u64) << (i * 8);
+    }
+    w
 }
 
 fn weekday_name(weekday_iso: u8) -> &'static str {

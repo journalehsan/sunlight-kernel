@@ -50,10 +50,14 @@ pub enum SunlightSyscall {
     ProcessIsAlive = 25,
     WaitPid = 32,
     GetPid = 33,
+    Getuid = 35,
     Kill = 72,
     // NOTE: 50 belongs to sys_mmap in the kernel dispatcher — GetTimeUtc
     // previously sat there and silently invoked mmap.
     GetTimeUtc = 81,
+    /// Administrative UTC wall-clock step. Gated to the `timed` service.
+    /// Does not move the monotonic clock. rdi = new Unix UTC seconds.
+    SetTimeUtc = 97,
     MonotonicMs = 86,
     SysInfo = 82,
     SetNice = 83,
@@ -503,8 +507,7 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::PowerControl.bit() != 0 && name_key == name_to_u64("powerd") {
         return true;
     }
-    if mask & ServiceCapability::ThermalControl.bit() != 0 && name_key == name_to_u64("thermald")
-    {
+    if mask & ServiceCapability::ThermalControl.bit() != 0 && name_key == name_to_u64("thermald") {
         return true;
     }
     if mask & ServiceCapability::SessionLock.bit() != 0 && name_key == name_to_u64("mezzo") {
@@ -526,6 +529,9 @@ fn matches_user_session_service(name_key: u64) -> bool {
         || name_key == name_to_u64("uac")
         || name_key == name_to_u64("rand")
         || name_key == name_to_u64("tz")
+        // timed: status + standard sync requests from tzutils; force policy is
+        // enforced inside the service (uid-based), not at nameserver lookup.
+        || name_key == name_to_u64("timed")
         || name_key == name_to_u64("clipd")
         || name_key == name_to_u64("dialogd")
         || name_key == name_to_u64("thumbd")
@@ -629,10 +635,38 @@ pub mod TimeMsg {
     pub const GET_TIME: u64 = 1; // Query current UTC time
     pub const GET_STATE: u64 = 2; // Get full TimeState (back-compat: tz fields are 0)
     pub const SET_TIMEZONE: u64 = 3; // No-op (timezone moved to "tz")
-    pub const SYNC_NTP: u64 = 4; // Trigger NTP sync
+    /// Trigger NTP sync. word(0) bit0 = force (bypass backoff, allow step).
+    pub const SYNC_NTP: u64 = 4;
     pub const GET_UTC: u64 = 5; // Preferred alias for GET_TIME (pure UTC)
+    /// Extended NTP sync status (see `NtpSyncStatus` packing in timed).
+    pub const GET_SYNC_STATUS: u64 = 6;
     pub const REPLY: u64 = 100;
     pub const ERROR: u64 = 101;
+
+    /// SYNC_NTP / GET_SYNC_STATUS error codes in reply word(0) on ERROR.
+    pub const ERR_FAILED: u64 = 1;
+    pub const ERR_NETWORK: u64 = 2;
+    pub const ERR_DNS: u64 = 3;
+    pub const ERR_TIMEOUT: u64 = 4;
+    pub const ERR_VALIDATION: u64 = 5;
+    pub const ERR_PERMISSION: u64 = 6;
+    pub const ERR_CLOCK_UPDATE: u64 = 7;
+    pub const ERR_BUSY: u64 = 8;
+
+    /// word(0) flags for SYNC_NTP requests.
+    pub const SYNC_FLAG_FORCE: u64 = 1 << 0;
+}
+
+/// NTP synchronization state codes returned by timed `GET_SYNC_STATUS`.
+#[allow(non_snake_case)]
+pub mod NtpSyncState {
+    pub const UNSYNCHRONIZED: u64 = 0;
+    pub const WAITING_NETWORK: u64 = 1;
+    pub const RESOLVING: u64 = 2;
+    pub const SAMPLING: u64 = 3;
+    pub const SYNCHRONIZED: u64 = 4;
+    pub const DEGRADED: u64 = 5;
+    pub const FAILED: u64 = 6;
 }
 
 /// Timezone service opcodes (registered as "tz")
@@ -642,7 +676,12 @@ pub mod TzMsg {
     pub const GET_ZONE: u64 = 0x7002;
     pub const SET_ZONE: u64 = 0x7003; // arg: zone id in data[0..64]
     pub const LIST_ZONES: u64 = 0x7004; // arg: page in word(0), 8 per page (but one zone per reply for packing)
-    pub const NOTIFY_CHANGED: u64 = 0x7005; // sent TO timed after SET_ZONE (best effort)
+                                        // Sent to timed after SET_ZONE (best effort):
+                                        // word(0)=NtpRegion tag, words[1..]=new zone id.
+    pub const NOTIFY_CHANGED: u64 = 0x7005;
+    /// NTP pool region for the active zone. Static metadata; no wall clock needed.
+    /// Reply word(0)=NtpRegion tag, word(1)=region name packed, words[2..]=zone id.
+    pub const GET_NTP_REGION: u64 = 0x7006;
     pub const REPLY: u64 = 0x70FF;
     pub const ERROR: u64 = 0x70FE;
 }
@@ -651,12 +690,26 @@ pub mod TzMsg {
 /// current addressing from net_server without taking a direct dep on sunlight-net).
 #[allow(non_snake_case)]
 pub mod NetOp {
+    pub const RESOLVE: u64 = 9; // DNS lookup(hostname) → ip
     pub const GETIP: u64 = 10;
     pub const GET_BACKEND: u64 = 16;
     /// Return the executing net stack's current lease without consulting
     /// networkd policy.  This breaks the otherwise circular networkd -> net
     /// -> networkd refresh path.
     pub const GETIP_LIVE: u64 = 19;
+    /// One-shot UDP request/response exchange over SHM.
+    ///
+    /// Request:
+    /// - words[0] = destination IPv4 (little-endian packed)
+    /// - words[1] = destination UDP port
+    /// - words[2] = request length (bytes in SHM page)
+    /// - words[3] = timeout milliseconds (monotonic)
+    /// - caps[0]  = SHM page containing the request payload; response overwrites it
+    ///
+    /// Reply:
+    /// - words[0] = response length (0 on failure)
+    /// - words[1] = NetStatus
+    pub const UDP_EXCHANGE: u64 = 20;
 }
 
 /// Random service opcodes (registered as "rand").
@@ -2070,10 +2123,7 @@ impl ThermalState {
 
     /// True when a live controlling temperature was used for classification.
     pub const fn has_valid_controlling_sensor(self) -> bool {
-        matches!(
-            self,
-            Self::Normal | Self::Warm | Self::Hot | Self::Critical
-        )
+        matches!(self, Self::Normal | Self::Warm | Self::Hot | Self::Critical)
     }
 }
 
@@ -3765,6 +3815,12 @@ pub fn waitpid(pid: u64) -> u64 {
     }
 }
 
+pub fn getuid() -> u64 {
+    // SAFETY: Getuid takes no user pointers.
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::Getuid, 0, 0, 0, 0, 0, 0, 0) };
+    ret
+}
+
 pub fn getpid() -> u64 {
     // SAFETY: GetPid takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetPid, 0, 0, 0, 0, 0, 0, 0) };
@@ -3820,10 +3876,7 @@ pub fn pty_caller_credentials(caller_pid: u64) -> Option<PtyCallerCredentials> {
     })
 }
 
-pub fn consume_lock_auth_grant(
-    grant: CapabilityToken,
-    presenter_pid: u64,
-) -> Option<(u32, u32)> {
+pub fn consume_lock_auth_grant(grant: CapabilityToken, presenter_pid: u64) -> Option<(u32, u32)> {
     let (ret, msg) = unsafe {
         raw_syscall(
             SunlightSyscall::LockAuthConsume,
@@ -3910,6 +3963,16 @@ pub fn get_nice(pid: u64) -> i8 {
 pub fn get_time_utc() -> u64 {
     // SAFETY: GetTimeUtc takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::GetTimeUtc, 0, 0, 0, 0, 0, 0, 0) };
+    ret
+}
+
+/// Step the kernel UTC wall clock to `unix_secs` (Unix epoch, UTC).
+///
+/// Returns `0` on success, `u64::MAX` on denial/invalid. Monotonic time is
+/// never affected. Only the `timed` process may call this successfully.
+pub fn set_time_utc(unix_secs: u64) -> u64 {
+    // SAFETY: SetTimeUtc takes a plain integer, no pointers.
+    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::SetTimeUtc, unix_secs, 0, 0, 0, 0, 0, 0) };
     ret
 }
 

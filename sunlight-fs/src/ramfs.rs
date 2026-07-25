@@ -1918,6 +1918,22 @@ StandardOutput=journal\nStandardError=journal\n\n\
         mode::FILE_755,
         b"#!/sunlight/tzctl\n",
     ),
+    RamEntry::file(
+        "/usr/bin/tzutils",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/tzutils\n",
+    ),
+    RamEntry::file(
+        "/etc/sunlight/ntp.conf",
+        0,
+        0,
+        mode::FILE_644,
+        b"# Optional explicit NTP servers (one per line).\n\
+# When present, these override regional pool selection.\n\
+# server 0.pool.ntp.org\n",
+    ),
     RamEntry::file("/usr/bin/top", 0, 0, mode::FILE_755, b"#!/sunlight/top\n"),
     RamEntry::file(
         "/usr/bin/devicectl",

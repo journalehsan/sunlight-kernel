@@ -174,7 +174,7 @@ mod sunlight {
     use sunshell::calc;
 
     use sunlight_ipc::{
-        debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait,
+        debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
         launch_trace::{LaunchSource, LaunchTrace},
         monotonic_millis, nameserver_lookup, nameserver_register, process_yield, sysinfo,
         tty_stdin_push, tty_stdout_pull, unpack_ipv4, CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg,
@@ -213,6 +213,8 @@ mod sunlight {
     const MAX_OUT: usize = 64;
     const LONG_OUT_MAX: usize = 16384;
     const IPC_OUTPUT_BYTES: usize = 16;
+    const TZCTL_QUERY_TIMEOUT_MS: u64 = 75;
+    const TZCTL_SET_TIMEOUT_MS: u64 = 150;
     const OS_NAME: &str = "SunlightOS";
     const KERNEL_NAME: &str = "SunlightX";
     const OS_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -1396,7 +1398,15 @@ mod sunlight {
 
                 if args.is_empty() || args[0] == "get" {
                     // GET_ZONE + local time for display
-                    let r = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_ZONE));
+                    let Ok(r) = ipc_call_timeout(
+                        tz_cap,
+                        IpcMsg::with_label(TzMsg::GET_ZONE),
+                        TZCTL_QUERY_TIMEOUT_MS,
+                    ) else {
+                        let msg = b"tzctl: timezone service timeout\n";
+                        out[..msg.len()].copy_from_slice(msg);
+                        return &out[..msg.len()];
+                    };
                     if r.label == TzMsg::REPLY {
                         let _ = copy_bytes(out, &mut pos, b"Active: ");
                         // simplistic id from first word bytes
@@ -1411,7 +1421,15 @@ mod sunlight {
                             }
                         }
                     }
-                    let r2 = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
+                    let Ok(r2) = ipc_call_timeout(
+                        tz_cap,
+                        IpcMsg::with_label(TzMsg::GET_LOCAL_TIME),
+                        TZCTL_QUERY_TIMEOUT_MS,
+                    ) else {
+                        let msg = b"tzctl: timezone service timeout\n";
+                        out[..msg.len()].copy_from_slice(msg);
+                        return &out[..msg.len()];
+                    };
                     if r2.label == TzMsg::REPLY {
                         let w0 = r2.words[0];
                         let h = ((w0 >> 24) & 0xff) as u8;
@@ -1512,7 +1530,10 @@ mod sunlight {
                     if bi > 0 {
                         req = req.word(wi, w);
                     }
-                    let r = ipc_call(tz_cap, req);
+                    let Ok(r) = ipc_call_timeout(tz_cap, req, TZCTL_SET_TIMEOUT_MS) else {
+                        let _ = copy_bytes(out, &mut pos, b"tzctl: timezone service timeout\n");
+                        return &out[..pos];
+                    };
                     if r.label == TzMsg::REPLY && r.words[0] == 0 {
                         let _ = copy_bytes(out, &mut pos, b"Timezone changed to ");
                         let _ = copy_bytes(out, &mut pos, args[1].as_bytes());
@@ -3081,6 +3102,15 @@ mod sunlight {
                 }
                 if out_len > 0 {
                     debug_log_cmd_output(&cmd_snap[..cmd_snap_len], &out[..out_len]);
+                }
+                // Recover from a missed FG_DONE: if our remembered child is
+                // already dead, clear it and treat this key as normal input.
+                // Otherwise a stalled FG_DONE leaves every keystroke returning
+                // FG_STARTED and the shell appears hung (tty key IPC timeouts).
+                if let Some(pid) = shell.fg_pid {
+                    if !sunlight_ipc::process_is_alive(pid) {
+                        shell.fg_pid = None;
+                    }
                 }
                 if let Some(pid) = shell.fg_pid {
                     // An external command was launched as a foreground job. Tell

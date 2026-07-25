@@ -234,8 +234,14 @@ case "$PHASE" in
         PASS_LABEL="top"
         NEED_DISK=false
         ;;
+    tzctl)
+        EXPECTED_FILE="tools/tests/tzctl.expected"
+        FINAL_MARKER="[TTY]  cmd: tzctl get -> Active: Asia/Tehran"
+        PASS_LABEL="tzctl"
+        NEED_DISK=false
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b mm2d mm2e swap1 sunlightd top"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase_shm phase_sec mm2b mm2d mm2e swap1 sunlightd top tzctl"
         exit 2
         ;;
 esac
@@ -259,6 +265,8 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --relea
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timed --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tz --features tzutils --bin tzutils --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release >>"$BUILD_LOG" 2>&1
@@ -317,7 +325,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "top" ]]; then
+if [[ "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "top" || "$PHASE" == "tzctl" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -340,6 +348,8 @@ elif [[ "$PHASE" == "phase6.5.3" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase6.5.3)
 elif [[ "$PHASE" == "top" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=top)
+elif [[ "$PHASE" == "tzctl" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=tzctl)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
 elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* || "$PHASE" == "dns_hosts" ]]; then

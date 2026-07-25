@@ -85,6 +85,10 @@ static SUNLIGHTD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlightd");
 static TIMEZONE_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/timezone_service");
+static TIMED_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/timed");
+static TZUTILS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/tzutils");
 // Random service (ChaCha20 CSPRNG) launched by sunlightd.
 static RAND_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/rand_service");
@@ -3680,6 +3684,7 @@ fn setup_key_injection() {
         "phase3.9" => build_phase3_9_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "top" => build_top_sequence(),
+        "tzctl" => build_tzctl_sequence(),
         "dns_test" => build_dns_test_sequence(),
         "desktop_login" => build_desktop_login_sequence(),
         _ => build_phase3_8_sequence(),
@@ -3797,6 +3802,26 @@ fn build_top_sequence() -> [u8; 256] {
         0x10, // q
     ];
     s[..codes.len()].copy_from_slice(&codes);
+    s
+}
+
+/// Timezone regression gate: login, change the zone, then query it.
+#[cfg(feature = "key_inject")]
+fn build_tzctl_sequence() -> [u8; 256] {
+    let mut s = [0u8; 256];
+    const START: usize = 160;
+    s[..START].fill(0x9E); // ignored key-release events; wait ~1.6s for UAC
+    let codes: [u8; 42] = [
+        0x1C, // select prefilled root user and focus password
+        0x13, 0x18, 0x18, 0x14, 0x1C, // password: root + Enter
+        0x14, 0x2C, 0x2E, 0x14, 0x26, 0x39, // tzctl<space>
+        0x1F, 0x12, 0x14, 0x39, // set<space>
+        0x2A, 0x1E, 0xAA, 0x1F, 0x17, 0x1E, 0x35, // Asia/
+        0x2A, 0x14, 0xAA, 0x12, 0x23, 0x13, 0x1E, 0x31, 0x1C, // Tehran + Enter
+        0x14, 0x2C, 0x2E, 0x14, 0x26, 0x39, // tzctl<space>
+        0x22, 0x12, 0x14, 0x1C, // get + Enter
+    ];
+    s[START..START + codes.len()].copy_from_slice(&codes);
     s
 }
 

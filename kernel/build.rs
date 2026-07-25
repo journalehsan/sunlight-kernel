@@ -122,6 +122,18 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-timed",
+            output: "timed",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-tz",
+            output: "tzutils",
+            rustflags: service_rustflags,
+            args: &["--release", "--features", "tzutils", "--bin", "tzutils"],
+        },
+        EmbeddedBinary {
             package: "sunlightd",
             output: "sunlightd",
             rustflags: service_rustflags,

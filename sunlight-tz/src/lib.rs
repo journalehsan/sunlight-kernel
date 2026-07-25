@@ -5,14 +5,20 @@
 //! Provides CSV-embedded zone data, integer offset/DST math,
 //! LocalDateTime formatting, and /etc/localtime VFS-backed config.
 
+pub mod cli_flags; // tzutils --sync/-sf parser (host-testable)
 pub mod config; // moved from timed — parse_offset_string, validate_offset
 pub mod csv; // TzEntry, all_zones, tz_by_id, tz_by_display_name
 pub mod localtime;
+pub mod ntp_region; // continent → NTP pool region mapping
 pub mod offset; // local_offset_secs, local_now, LocalDateTime, is_dst_active // LocalTimeCfg, read_localtime, write_localtime, TzError
 
 // Re-export the most commonly used items at crate root
 pub use csv::{all_zones, tz_by_display_name, tz_by_id, tz_count, TzEntry};
 pub use localtime::{read_localtime, write_localtime, LocalTimeCfg, TzError};
+pub use ntp_region::{
+    format_pool_hostname_into, ntp_region_from_parts, ntp_region_from_zone_id, pool_hostnames,
+    NtpRegion, NTP_HOSTNAME_MAX, NTP_POOL_SERVER_COUNT,
+};
 pub use offset::{local_now, local_offset_secs, weekday_iso, weekday_sun0, LocalDateTime};
 
 /// Convenience: look up zone by id (or None), then compute LocalDateTime.

@@ -422,6 +422,33 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // timed.service — authoritative UTC + NTP synchronization
+    let timed_service = r#"[Unit]
+Description=SunlightOS Time Service (UTC + NTP)
+After=timezone_service.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/timed
+Restart=on-failure
+RestartSec=3
+User=root
+Capability=time-sync
+Capability=network
+Capability=vfs
+Capability=secure-random
+Capability=service-lifecycle
+Capability=logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(timed_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     // niced.service
     let niced_service = r#"[Unit]
 Description=SunlightOS Nice Priority Daemon
@@ -1162,6 +1189,7 @@ fn dep_unit_to_ready_name(dep: &str) -> &str {
     let dep = dep.strip_suffix(".service").unwrap_or(dep);
     match dep {
         "timezone_service" => "tz",
+        "timed" => "timed",
         "uac_service" => "uac",
         "sunlight-sm" => "sm",
         "rand_service" => "rand",

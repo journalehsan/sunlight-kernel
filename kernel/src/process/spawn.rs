@@ -679,6 +679,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/sbin/timezone_service" | "/usr/sbin/timezone_service" => {
             Ok(crate::TIMEZONE_SERVICE_ELF_BYTES)
         }
+        "/sbin/timed" | "/usr/sbin/timed" => Ok(crate::TIMED_ELF_BYTES),
+        "/bin/tzutils" | "/usr/bin/tzutils" => Ok(crate::TZUTILS_ELF_BYTES),
         "/sbin/rand_service" | "/usr/sbin/rand_service" => Ok(crate::RAND_SERVICE_ELF_BYTES),
         "/sbin/niced" | "/usr/sbin/niced" => Ok(crate::SUNLIGHT_NICED_ELF_BYTES),
         "/bin/nicectl" | "/usr/bin/nicectl" => Ok(crate::NICECTL_ELF_BYTES),

@@ -143,6 +143,30 @@ pub fn unix_time() -> u64 {
     .unwrap_or(u64::MAX)
 }
 
+/// Rebaseline the running UTC wall clock to `unix_secs` without touching the
+/// monotonic timekeeper.
+///
+/// This is a discrete step (no kernel slew primitive exists). RTC/CMOS is not
+/// rewritten here — CMOS write support is intentionally out of scope for the
+/// NTP slice; local civil time must never be written to the RTC.
+///
+/// Rejects the error sentinel and zero (uninitialized) values.
+pub fn set_unix_time(unix_secs: u64) -> Result<(), ()> {
+    if unix_secs == 0 || unix_secs == u64::MAX {
+        return Err(());
+    }
+    // Reasonable administrative bounds: 2000-01-01 .. 2100-01-01 UTC.
+    const MIN_UNIX: u64 = 946_684_800;
+    const MAX_UNIX: u64 = 4_102_444_800;
+    if unix_secs < MIN_UNIX || unix_secs > MAX_UNIX {
+        return Err(());
+    }
+    BOOT_UNIX_TIME.store(unix_secs, Ordering::Relaxed);
+    BOOT_TICKS.store(crate::timekeeping::global_ticks(), Ordering::Relaxed);
+    RTC_VALID.store(true, Ordering::Release);
+    Ok(())
+}
+
 /// Seconds since boot, derived only from the centralized monotonic timekeeper.
 pub fn uptime_secs() -> u64 {
     crate::timekeeping::uptime_secs()

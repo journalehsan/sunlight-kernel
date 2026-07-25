@@ -45,6 +45,8 @@ static mut SOCKET_STORAGE: [SocketStorage; 128] = [SocketStorage::EMPTY; 128];
 /// Separate backing storage for the DNS SocketSet (RESOLVE handler).
 /// Kept isolated so DNS UDP sockets never alias TCP slots in SOCKET_STORAGE.
 static mut DNS_SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
+/// Isolated storage for one-shot UDP_EXCHANGE (NTP etc.).
+static mut UDP_XCHG_SOCKET_STORAGE: [SocketStorage; 2] = [SocketStorage::EMPTY; 2];
 static mut TCP_MANAGER: Option<sunlight_net::TcpManager> = None;
 static mut WAITERS: Option<alloc::vec::Vec<SocketWaiter>> = None;
 const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [[208, 67, 222, 222], [208, 67, 220, 220]];
@@ -814,6 +816,7 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             }
             IpcMsg::with_label(NetOp::RELOAD_HOSTS).word(0, 1)
         }
+        NetOp::UDP_EXCHANGE => handle_udp_exchange(msg),
         NetOp::PING => {
             // ICMP echo (ping) over the real device.
             // words[0] = packed IPv4, words[1] = count (1..16).
@@ -843,6 +846,143 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             }
         }
         _ => IpcMsg::with_label(0).word(0, 0),
+    }
+}
+
+/// One-shot UDP request/response for clients such as timed (NTP).
+///
+/// Request payload is in the SHM page (`caps[0]`); the response overwrites it.
+/// Timeouts use the monotonic clock so wall-clock steps cannot stall or rush
+/// the exchange.
+fn handle_udp_exchange(msg: IpcMsg) -> IpcMsg {
+    use smoltcp::socket::udp;
+    use smoltcp::time::Instant;
+    use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint, Ipv4Address};
+
+    let dest = unpack_ipv4(msg.words[0]);
+    let port = msg.words[1] as u16;
+    let req_len = (msg.words[2] as usize).min(SHM_PAGE);
+    let timeout_ms = msg.words[3].max(100).min(10_000);
+    let tok = msg.caps[0];
+
+    if tok == CapabilityToken::INVALID || req_len == 0 || port == 0 {
+        return IpcMsg::with_label(NetOp::UDP_EXCHANGE)
+            .word(0, 0)
+            .word(1, NetStatus::INVALID_STATE);
+    }
+
+    let ptr = match shm_map(tok) {
+        Ok(p) => p,
+        Err(_) => {
+            return IpcMsg::with_label(NetOp::UDP_EXCHANGE)
+                .word(0, 0)
+                .word(1, NetStatus::INTERNAL);
+        }
+    };
+
+    // Copy request out of the page so we can reuse the page for the response.
+    let mut req = alloc::vec::Vec::with_capacity(req_len);
+    // SAFETY: caller provided a mapped page of at least SHM_PAGE bytes.
+    unsafe {
+        req.extend_from_slice(core::slice::from_raw_parts(ptr, req_len));
+    }
+
+    static mut RX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
+    static mut RX_PAYLOAD: [u8; 512] = [0u8; 512];
+    static mut TX_META: [udp::PacketMetadata; 2] = [udp::PacketMetadata::EMPTY; 2];
+    static mut TX_PAYLOAD: [u8; 512] = [0u8; 512];
+    static mut LOCAL_PORT_SEQ: u16 = 40_000;
+
+    let result = unsafe {
+        match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+            (Some(iface), Some(device)) => {
+                let mut sockets = SocketSet::new(&mut UDP_XCHG_SOCKET_STORAGE[..]);
+                let (rx_buffer, tx_buffer) = (
+                    udp::PacketBuffer::new(&mut RX_META[..], &mut RX_PAYLOAD[..]),
+                    udp::PacketBuffer::new(&mut TX_META[..], &mut TX_PAYLOAD[..]),
+                );
+                let handle = sockets.add(udp::Socket::new(rx_buffer, tx_buffer));
+                LOCAL_PORT_SEQ = LOCAL_PORT_SEQ.wrapping_add(1);
+                if LOCAL_PORT_SEQ < 40_000 {
+                    LOCAL_PORT_SEQ = 40_000;
+                }
+                let local_port = LOCAL_PORT_SEQ;
+
+                let remote = IpEndpoint::new(
+                    IpAddress::Ipv4(Ipv4Address::new(dest[0], dest[1], dest[2], dest[3])),
+                    port,
+                );
+
+                {
+                    let socket = sockets.get_mut::<udp::Socket>(handle);
+                    if socket
+                        .bind(IpListenEndpoint {
+                            addr: None,
+                            port: local_port,
+                        })
+                        .is_err()
+                    {
+                        sockets.remove(handle);
+                        Err(NetStatus::INTERNAL)
+                    } else if socket.send_slice(&req, remote).is_err() {
+                        sockets.remove(handle);
+                        Err(NetStatus::INTERNAL)
+                    } else {
+                        let deadline = monotonic_millis().saturating_add(timeout_ms);
+                        let mut tick: i64 = 0;
+                        let mut out: Result<alloc::vec::Vec<u8>, u64> = Err(NetStatus::TIMEOUT);
+                        // Poll a few times per yield-burst so we still respond
+                        // quickly, but always yield so interactive services
+                        // (tty/shell) are not starved for the full timeout.
+                        loop {
+                            for _ in 0..4 {
+                                let now = Instant::from_millis(tick);
+                                iface.poll(now, device, &mut sockets);
+                                let socket = sockets.get_mut::<udp::Socket>(handle);
+                                if socket.can_recv() {
+                                    let mut buf = [0u8; 512];
+                                    if let Ok((n, _meta)) = socket.recv_slice(&mut buf) {
+                                        out = Ok(buf[..n.min(512)].to_vec());
+                                        break;
+                                    }
+                                }
+                                tick = tick.wrapping_add(1);
+                            }
+                            if matches!(out, Ok(_)) {
+                                break;
+                            }
+                            if monotonic_millis() >= deadline {
+                                break;
+                            }
+                            sunlight_ipc::process_yield();
+                        }
+                        sockets.remove(handle);
+                        out
+                    }
+                }
+            }
+            _ => Err(NetStatus::INTERNAL),
+        }
+    };
+
+    match result {
+        Ok(data) => {
+            let n = data.len().min(SHM_PAGE);
+            // SAFETY: mapped page is at least SHM_PAGE bytes.
+            unsafe {
+                core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, n);
+            }
+            let _ = shm_free(tok);
+            IpcMsg::with_label(NetOp::UDP_EXCHANGE)
+                .word(0, n as u64)
+                .word(1, NetStatus::OK)
+        }
+        Err(status) => {
+            let _ = shm_free(tok);
+            IpcMsg::with_label(NetOp::UDP_EXCHANGE)
+                .word(0, 0)
+                .word(1, status)
+        }
     }
 }
 

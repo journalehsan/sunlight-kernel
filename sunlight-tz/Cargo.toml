@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-tz"
-version = "0.2.2434-alpha.1"
+version = "0.2.2477-alpha.1"
+
+
+
 
 
 
@@ -419,9 +422,12 @@ edition = "2021"
 default = []
 std = []                 # enable for unit tests and sunlightctl binary
 tzctl = []               # opt-in build of tzctl client bin (prevents host-test link of no_main binary)
+tzutils = ["dep:sunlight-libc", "dep:heapless"]
 
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc", optional = true }
+heapless = { version = "0.8", optional = true }
 
 [dev-dependencies]
 # std is available for tests via cargo test --target x86_64-unknown-linux-gnu
@@ -430,3 +436,8 @@ sunlight-ipc = { path = "../ipc" }
 name = "tzctl"
 path = "src/bin/tzctl.rs"
 required-features = ["tzctl"]
+
+[[bin]]
+name = "tzutils"
+path = "src/bin/tzutils.rs"
+required-features = ["tzutils"]
