@@ -2,7 +2,7 @@ use crate::memory::pmm::PhysicalMemoryManager;
 use crate::process::mm2b_state::{allocate_identity, AddressSpaceIdentity};
 use crate::process::region::{
     LedgerError, MappingKind, MappingRegion, ProtectPlan, RangeLookup, RegionBacking, RegionLedger,
-    RegionPolicy, RegionProtection, RegionReservation, UnmapPlan,
+    RegionPolicy, RegionProtection, RegionReservation, ReplacePlan, UnmapPlan,
 };
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{
@@ -377,6 +377,11 @@ impl AddressSpace {
             .and_then(|result| result.map_err(Self::map_ledger_error))
     }
 
+    pub fn preflight_replace(&self, region: MappingRegion) -> Result<ReplacePlan, MappingError> {
+        self.with_ledger(|ledger| ledger.preflight_replace(region))
+            .and_then(|result| result.map_err(Self::map_ledger_error))
+    }
+
     pub fn preflight_protect(
         &self,
         start: u64,
@@ -396,6 +401,17 @@ impl AddressSpace {
         {
             REGION_PTE_CONSISTENCY_FAILURES.fetch_add(1, Ordering::Relaxed);
             panic!("address-space ledger disappeared during munmap commit");
+        }
+    }
+
+    /// Publish a ledger image staged before MAP_FIXED PTE replacement.
+    pub fn commit_replace(&self, plan: ReplacePlan) {
+        if self
+            .with_ledger_mut(|ledger| ledger.commit_replace(plan))
+            .is_err()
+        {
+            REGION_PTE_CONSISTENCY_FAILURES.fetch_add(1, Ordering::Relaxed);
+            panic!("address-space ledger disappeared during MAP_FIXED commit");
         }
     }
 

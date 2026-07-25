@@ -1,6 +1,8 @@
 use super::mm2a_plan::{checked_page_layout, DeferredCursor};
 use crate::memory::pmm::PhysicalMemoryManager;
-use crate::process::address_space::{ExpectedMapping, MappingError};
+use crate::process::address_space::{
+    ExpectedMapping, MappingError, OwnershipTransition, ReplacementMapping,
+};
 use crate::process::region::{
     MappingKind, MappingRegion, RegionBacking, RegionPolicy, RegionProtection,
 };
@@ -14,6 +16,7 @@ use x86_64::{PhysAddr, VirtAddr};
 pub const MAP_PRIVATE: u32 = 0x02;
 pub const MAP_ANONYMOUS: u32 = 0x20;
 pub const MAP_FIXED: u32 = 0x10;
+pub const MAP_FIXED_NOREPLACE: u32 = 0x100000;
 
 // mprotect flags
 pub const PROT_NONE: u32 = 0;
@@ -117,6 +120,13 @@ enum RemovedOwnership {
 struct RemovedPage {
     address: u64,
     ownership: RemovedOwnership,
+}
+
+#[derive(Clone, Copy)]
+struct InstalledAnonymousPage {
+    page: Page<Size4KiB>,
+    frame: PhysAddr,
+    replaced: Option<ExpectedMapping>,
 }
 
 impl RemovedPage {
@@ -261,7 +271,10 @@ fn map_anonymous_kind(
         result => result?,
     };
 
-    if flags & !(MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED) != 0 {
+    if flags & !(MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_FIXED_NOREPLACE) != 0 {
+        return Err(MmapError::InvalidFlags);
+    }
+    if flags & (MAP_FIXED | MAP_FIXED_NOREPLACE) == (MAP_FIXED | MAP_FIXED_NOREPLACE) {
         return Err(MmapError::InvalidFlags);
     }
 
@@ -282,7 +295,13 @@ fn map_anonymous_kind(
     // cursor; returning a fixed base for every call made successive mmaps
     // alias the same range and corrupted userspace allocators (e.g. musl
     // mallocng), which then page-faulted on the first free().
-    let deferred_cursor = if (flags & MAP_FIXED) != 0 {
+    let fixed = flags & (MAP_FIXED | MAP_FIXED_NOREPLACE) != 0;
+    let noreplace = flags & MAP_FIXED_NOREPLACE != 0;
+    // `map_brk` reuses this mapper for exact placement, but brk growth is not
+    // an mmap replacement operation and must retain its existing collision
+    // behavior.
+    let replace_fixed = fixed && !noreplace && kind == MappingKind::Anonymous;
+    let deferred_cursor = if fixed {
         None
     } else {
         // The native mapper has no safe hint-placement policy. Reject a
@@ -296,7 +315,7 @@ fn map_anonymous_kind(
                 .map_err(|_| MmapError::InvalidAddress)?,
         )
     };
-    let map_addr = if (flags & MAP_FIXED) != 0 {
+    let map_addr = if fixed {
         // Use the provided address (must be page-aligned).
         if addr & 0xFFF != 0 {
             return Err(MmapError::InvalidAddress);
@@ -323,23 +342,26 @@ fn map_anonymous_kind(
         .map(|response| VirtAddr::new(response.offset))
         .ok_or(MmapError::InternalInvariant)?;
 
-    for i in 0..page_count {
-        let page_vaddr = VirtAddr::new(map_addr + i * 4096);
-        let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
-        let process = sched
-            .process_mut_by_pid(pid)
-            .ok_or(MmapError::InternalInvariant)?;
-        if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
-            crate::process::address_space::note_mapping_collision();
-            return Err(MmapError::AlreadyMapped);
+    if !replace_fixed {
+        for i in 0..page_count {
+            let page_vaddr = VirtAddr::new(map_addr + i * 4096);
+            let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
+            let process = sched
+                .process_mut_by_pid(pid)
+                .ok_or(MmapError::InternalInvariant)?;
+            if unsafe { process.address_space.is_occupied(page, hhdm_offset) } {
+                crate::process::address_space::note_mapping_collision();
+                return Err(MmapError::AlreadyMapped);
+            }
         }
     }
 
     let policy = match kind {
         MappingKind::Anonymous => RegionPolicy::MAY_UNMAP
+            .union(RegionPolicy::MAY_REPLACE)
             .union(RegionPolicy::MAY_CHANGE_PROTECTION)
             .union(RegionPolicy::OWNER_MANAGED),
-        MappingKind::Brk => RegionPolicy::OWNER_MANAGED,
+        MappingKind::Brk => RegionPolicy::MAY_REPLACE.union(RegionPolicy::OWNER_MANAGED),
         _ => return Err(MmapError::InternalInvariant),
     };
     let region = MappingRegion::new(
@@ -353,26 +375,41 @@ fn map_anonymous_kind(
         RegionBacking::AnonymousOwner(pid as u32),
     )
     .map_err(|_| MmapError::InvalidAddress)?;
-    let reservation = sched
-        .current_process()
-        .address_space
-        .preflight_region(region)
-        .map_err(mapping_error)?;
+    let replacement_plan = if replace_fixed {
+        Some(
+            sched
+                .current_process()
+                .address_space
+                .preflight_replace(region)
+                .map_err(mapping_error)?,
+        )
+    } else {
+        None
+    };
+    let reservation = if replacement_plan.is_none() {
+        Some(
+            sched
+                .current_process()
+                .address_space
+                .preflight_region(region)
+                .map_err(mapping_error)?,
+        )
+    } else {
+        None
+    };
 
     let page_count_usize = usize::try_from(page_count).map_err(|_| MmapError::InvalidAddress)?;
-    let mut installed: Vec<(Page<Size4KiB>, x86_64::PhysAddr)> = Vec::new();
+    let mut installed: Vec<InstalledAnonymousPage> = Vec::new();
     installed.try_reserve_exact(page_count_usize).map_err(|_| {
-        sched
-            .current_process()
-            .address_space
-            .cancel_region(reservation);
+        if let Some(reservation) = reservation {
+            sched.current_process().address_space.cancel_region(reservation);
+        }
         MmapError::NoMemory
     })?;
     if crate::memory::swap::reserve_candidates(page_count_usize).is_err() {
-        sched
-            .current_process()
-            .address_space
-            .cancel_region(reservation);
+        if let Some(reservation) = reservation {
+            sched.current_process().address_space.cancel_region(reservation);
+        }
         return Err(MmapError::NoMemory);
     }
     for i in 0..page_count {
@@ -394,20 +431,18 @@ fn map_anonymous_kind(
             None => {
                 crate::process::address_space::note_frame_allocation_failure();
                 rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
-                sched
-                    .current_process()
-                    .address_space
-                    .cancel_region(reservation);
+                if let Some(reservation) = reservation {
+                    sched.current_process().address_space.cancel_region(reservation);
+                }
                 return Err(MmapError::NoMemory);
             }
         };
         if !crate::memory::security::sanitize_user_frame(frame_addr, hhdm_offset) {
             pmm.free_frame(frame_addr);
             rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
-            sched
-                .current_process()
-                .address_space
-                .cancel_region(reservation);
+            if let Some(reservation) = reservation {
+                sched.current_process().address_space.cancel_region(reservation);
+            }
             return Err(MmapError::NoMemory);
         }
         let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
@@ -417,23 +452,60 @@ fn map_anonymous_kind(
             None => {
                 pmm.free_frame(frame_addr);
                 rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
-                sched
-                    .current_process()
-                    .address_space
-                    .cancel_region(reservation);
+                if let Some(reservation) = reservation {
+                    sched.current_process().address_space.cancel_region(reservation);
+                }
                 return Err(MmapError::InternalInvariant);
             }
         };
-        if let Err(error) = unsafe {
-            proc.address_space
-                .map_page(page, frame, page_flags, pmm, hhdm_offset)
-        } {
+        let replaced = if replace_fixed {
+            match proc.address_space.lookup_region(page_vaddr.as_u64()) {
+                Some(region) => match expected_replaceable_leaf(
+                    &proc.address_space,
+                    page_vaddr.as_u64(),
+                    region,
+                    pmm,
+                    hhdm_offset,
+                ) {
+                    Ok(expected) => Some(expected),
+                    Err(error) => {
+                        pmm.free_frame(frame_addr);
+                        rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+                        return Err(error);
+                    }
+                },
+                None if unsafe { proc.address_space.is_occupied(page, hhdm_offset) } => {
+                    pmm.free_frame(frame_addr);
+                    rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+                    return Err(MmapError::Protected);
+                }
+                None => None,
+            }
+        } else {
+            None
+        };
+        let install_result = match replaced {
+            Some(expected) => unsafe {
+                proc.address_space.replace_mapping(
+                    page,
+                    expected,
+                    ReplacementMapping::Present {
+                        frame,
+                        flags: page_flags,
+                    },
+                    OwnershipTransition::RetainOld,
+                    pmm,
+                    hhdm_offset,
+                )
+            },
+            None => unsafe { proc.address_space.map_page(page, frame, page_flags, pmm, hhdm_offset) },
+        };
+        if let Err(error) = install_result {
             pmm.free_frame(frame_addr);
             rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
-            sched
-                .current_process()
-                .address_space
-                .cancel_region(reservation);
+            if let Some(reservation) = reservation {
+                sched.current_process().address_space.cancel_region(reservation);
+            }
             return Err(match error {
                 MappingError::AlreadyMapped => MmapError::AlreadyMapped,
                 MappingError::FrameAllocationFailed | MappingError::PageTableAllocationFailed => {
@@ -443,20 +515,27 @@ fn map_anonymous_kind(
                 _ => MmapError::InternalInvariant,
             });
         }
-        installed.push((page, frame_addr));
+        installed.push(InstalledAnonymousPage {
+            page,
+            frame: frame_addr,
+            replaced,
+        });
     }
 
-    if let Err(error) = sched
-        .current_process()
-        .address_space
-        .commit_region(reservation)
-    {
-        rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
-        return Err(mapping_error(error));
+    if let Some(plan) = replacement_plan {
+        sched.current_process().address_space.commit_replace(plan);
+    } else if let Some(reservation) = reservation {
+        if let Err(error) = sched.current_process().address_space.commit_region(reservation) {
+            rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
+            return Err(mapping_error(error));
+        }
     }
 
-    for (page, frame) in &installed {
-        crate::memory::swap::track_anon(pid, page.start_address(), *frame);
+    for installed_page in &installed {
+        if let Some(old) = installed_page.replaced {
+            release_replaced_ownership(old, pmm, hhdm_offset);
+        }
+        crate::memory::swap::track_anon(pid, installed_page.page.start_address(), installed_page.frame);
     }
     if let Some(cursor) = deferred_cursor {
         cursor.commit(&mut sched.current_process_mut().mmap_next);
@@ -482,7 +561,7 @@ fn mapping_error(error: MappingError) -> MmapError {
 }
 
 fn rollback_anonymous(
-    installed: &mut Vec<(Page<Size4KiB>, x86_64::PhysAddr)>,
+    installed: &mut Vec<InstalledAnonymousPage>,
     pid: usize,
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
@@ -492,16 +571,117 @@ fn rollback_anonymous(
         return;
     }
     crate::process::address_space::note_mmap_rollback();
-    while let Some((page, frame)) = installed.pop() {
-        let unmapped = sched.process_mut_by_pid(pid).is_some_and(|process| unsafe {
-            process
-                .address_space
-                .rollback_mapped_page(page, frame, pmm, hhdm_offset)
-                .is_ok()
+    while let Some(installed_page) = installed.pop() {
+        let restored = sched.process_mut_by_pid(pid).is_some_and(|process| unsafe {
+            match installed_page.replaced {
+                Some(expected) => process
+                    .address_space
+                    .replace_mapping(
+                        installed_page.page,
+                        ExpectedMapping::Present {
+                            frame: installed_page.frame,
+                            flags: process
+                                .address_space
+                                .lookup_entry(installed_page.page, hhdm_offset)
+                                .map(|(_, flags)| flags)
+                                .unwrap_or(PageTableFlags::empty()),
+                        },
+                        replacement_for_expected(expected),
+                        OwnershipTransition::RetainOld,
+                        pmm,
+                        hhdm_offset,
+                    )
+                    .is_ok(),
+                None => process
+                    .address_space
+                    .rollback_mapped_page(
+                        installed_page.page,
+                        installed_page.frame,
+                        pmm,
+                        hhdm_offset,
+                    )
+                    .is_ok(),
+            }
         });
-        if unmapped {
+        if restored {
+            pmm.free_frame(installed_page.frame);
+        }
+    }
+}
+
+fn replacement_for_expected(expected: ExpectedMapping) -> ReplacementMapping {
+    match expected {
+        ExpectedMapping::Present { frame, flags } => ReplacementMapping::Present {
+            frame: unsafe { PhysFrame::from_start_address_unchecked(frame) },
+            flags,
+        },
+        ExpectedMapping::Swapped { block_id } => ReplacementMapping::Swapped { block_id },
+    }
+}
+
+fn release_replaced_ownership(
+    expected: ExpectedMapping,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) {
+    match expected {
+        ExpectedMapping::Present { frame, .. } => {
+            crate::memory::swap::untrack(frame);
             pmm.free_frame(frame);
         }
+        ExpectedMapping::Swapped { block_id } => {
+            if crate::memory::zram::discard_block(block_id, pmm, hhdm_offset).is_err() {
+                panic!("MAP_FIXED replacement lost a preflighted ZRAM block");
+            }
+        }
+    }
+}
+
+/// Validate a leaf which MAP_FIXED is allowed to replace. This is stricter
+/// than ordinary occupancy: a ledger record must identify owned, replaceable
+/// user memory, and the PTE must still agree with its ownership and policy.
+fn expected_replaceable_leaf(
+    address_space: &crate::process::address_space::AddressSpace,
+    address: u64,
+    region: MappingRegion,
+    pmm: &PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Result<ExpectedMapping, MmapError> {
+    let owner = match (region.kind, region.policy, region.backing) {
+        (MappingKind::Anonymous | MappingKind::Brk, policy, RegionBacking::AnonymousOwner(owner))
+            if policy.contains(RegionPolicy::MAY_REPLACE) =>
+        {
+            owner
+        }
+        _ => return Err(MmapError::Protected),
+    };
+    let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address))
+        .map_err(|_| MmapError::InternalInvariant)?;
+    let Some((frame_or_marker, flags)) = (unsafe { address_space.lookup_entry(page, hhdm_offset) })
+    else {
+        return Err(MmapError::InternalInvariant);
+    };
+    if flags.contains(PageTableFlags::PRESENT) {
+        if flags.contains(PageTableFlags::USER_ACCESSIBLE) != (region.protection != RegionProtection::NONE)
+            || pmm.owner_of(frame_or_marker) != Some(owner)
+            || crate::process::address_space::AddressSpace::protection_from_pte_flags(flags)
+                .ok()
+                != Some(region.protection)
+        {
+            return Err(MmapError::InternalInvariant);
+        }
+        Ok(ExpectedMapping::Present {
+            frame: frame_or_marker,
+            flags,
+        })
+    } else {
+        let Some(block_id) = (unsafe { address_space.swapped_block_id(page, hhdm_offset) }) else {
+            return Err(MmapError::InternalInvariant);
+        };
+        if !crate::memory::zram::block_exists(block_id) {
+            return Err(MmapError::InternalInvariant);
+        }
+        Ok(ExpectedMapping::Swapped { block_id })
     }
 }
 

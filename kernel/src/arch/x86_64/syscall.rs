@@ -4217,6 +4217,7 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
                     crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),
                     crate::process::mmap::MmapError::NoMemory => linux_errno(12),
                     crate::process::mmap::MmapError::AlreadyMapped => linux_errno(17),
+                    crate::process::mmap::MmapError::Protected => linux_errno(1),
                     _ => linux_errno(22),
                 }
             } else {

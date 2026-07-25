@@ -73,6 +73,8 @@ impl RegionPolicy {
     pub const SHARED: Self = Self(1 << 2);
     pub const SYSTEM: Self = Self(1 << 3);
     pub const OWNER_MANAGED: Self = Self(1 << 4);
+    /// May be atomically displaced by a user MAP_FIXED request.
+    pub const MAY_REPLACE: Self = Self(1 << 5);
 
     pub const fn empty() -> Self {
         Self(0)
@@ -190,6 +192,14 @@ pub struct UnmapPlan {
     records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
     len: usize,
     effects: UnmapEffects,
+}
+
+/// Complete fixed-capacity ledger image staged for a MAP_FIXED replacement.
+/// The replacement is inserted into the image before PTE changes begin, so a
+/// successful PTE transaction never publishes an intermediate ledger hole.
+pub struct ReplacePlan {
+    records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+    len: usize,
 }
 
 /// Complete fixed-capacity ledger image staged before an mprotect publishes
@@ -403,10 +413,64 @@ impl RegionLedger {
         })
     }
 
+    /// Stage a MAP_FIXED replacement. Only mappings which opted in through
+    /// MAY_REPLACE may be displaced; system, shared, and protected ranges are
+    /// rejected before any page-table mutation.
+    pub fn preflight_replace(&self, replacement: MappingRegion) -> Result<ReplacePlan, LedgerError> {
+        Self::validate_region(replacement)?;
+        if self.pending_len != 0 {
+            return Err(LedgerError::Inconsistent);
+        }
+
+        let mut records = [MappingRegion::EMPTY; MAX_REGIONS_PER_ADDRESS_SPACE];
+        let mut output = 0usize;
+        let mut inserted = false;
+        for region in self.records[..self.len].iter().copied() {
+            let overlap_start = region.start.max(replacement.start);
+            let overlap_end = region.end.min(replacement.end);
+            if overlap_start < overlap_end && !region.policy.contains(RegionPolicy::MAY_REPLACE) {
+                return Err(LedgerError::PolicyRejected);
+            }
+            if overlap_start >= overlap_end {
+                if !inserted && replacement.end <= region.start {
+                    Self::append_staged(&mut records, &mut output, replacement)?;
+                    inserted = true;
+                }
+                Self::append_staged(&mut records, &mut output, region)?;
+                continue;
+            }
+            if region.start < overlap_start {
+                let mut left = region;
+                left.end = overlap_start;
+                Self::append_staged(&mut records, &mut output, left)?;
+            }
+            if !inserted {
+                Self::append_staged(&mut records, &mut output, replacement)?;
+                inserted = true;
+            }
+            if overlap_end < region.end {
+                let mut right = region;
+                right.start = overlap_end;
+                Self::append_staged(&mut records, &mut output, right)?;
+            }
+        }
+        if !inserted {
+            Self::append_staged(&mut records, &mut output, replacement)?;
+        }
+        Ok(ReplacePlan { records, len: output })
+    }
+
     /// Publish a fully staged unmap layout. The scheduler serializes mapping
     /// transactions for an address space, and preflight rejects pending ones.
     pub fn commit_unmap(&mut self, plan: UnmapPlan) {
         assert_eq!(self.pending_len, 0, "ledger changed during staged unmap");
+        self.records = plan.records;
+        self.len = plan.len;
+        debug_assert_eq!(self.validate(), Ok(()));
+    }
+
+    pub fn commit_replace(&mut self, plan: ReplacePlan) {
+        assert_eq!(self.pending_len, 0, "ledger changed during staged replacement");
         self.records = plan.records;
         self.len = plan.len;
         debug_assert_eq!(self.validate(), Ok(()));

@@ -426,6 +426,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
 pub const LINUX_MAP_PRIVATE: u64 = 0x02;
 pub const LINUX_MAP_FIXED: u64 = 0x10;
 pub const LINUX_MAP_ANONYMOUS: u64 = 0x20;
+pub const LINUX_MAP_FIXED_NOREPLACE: u64 = 0x10_0000;
 pub const LINUX_MAP_STACK: u64 = 0x20_000;
 
 /// Translate the Linux anonymous-mapping flags supported by Helios into the
@@ -433,7 +434,11 @@ pub const LINUX_MAP_STACK: u64 = 0x20_000;
 /// accepted and removed only after the complete request has been validated.
 pub fn translate_mmap_flags(flags: u64) -> Option<u32> {
     const SUPPORTED: u64 =
-        LINUX_MAP_PRIVATE | LINUX_MAP_FIXED | LINUX_MAP_ANONYMOUS | LINUX_MAP_STACK;
+        LINUX_MAP_PRIVATE
+            | LINUX_MAP_FIXED
+            | LINUX_MAP_ANONYMOUS
+            | LINUX_MAP_FIXED_NOREPLACE
+            | LINUX_MAP_STACK;
 
     if flags & !SUPPORTED != 0
         || flags & (LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS)
@@ -524,6 +529,12 @@ mod tests {
                 LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | LINUX_MAP_FIXED | LINUX_MAP_STACK
             ),
             Some((LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | LINUX_MAP_FIXED) as u32)
+        );
+        assert_eq!(
+            translate_mmap_flags(
+                LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | LINUX_MAP_FIXED_NOREPLACE
+            ),
+            Some((LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS | LINUX_MAP_FIXED_NOREPLACE) as u32)
         );
         assert_eq!(
             translate_mmap_flags(LINUX_MAP_ANONYMOUS | LINUX_MAP_STACK),
