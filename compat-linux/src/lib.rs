@@ -418,6 +418,17 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         264 => -20, // renameat → special Linux rename/renameat shim
         35 => -21,  // nanosleep → special Linux nanosleep shim
 
+        // Tier 7: epoll + pipe for crossterm/mio TUI input (helios-note)
+        // x86_64 numbers from asm/unistd_64.h
+        213 => -22, // epoll_create
+        291 => -22, // epoll_create1
+        233 => -23, // epoll_ctl
+        232 => -24, // epoll_wait
+        281 => -24, // epoll_pwait (mask ignored)
+        22 => 47,   // pipe → SunlightOS Pipe(47)
+        293 => -25, // pipe2 → Pipe with flags
+        53 => -26,  // socketpair → AF_UNIX self-pipe compatibility
+
         // Default: unsupported
         _ => -38, // ENOSYS
     }
@@ -474,6 +485,13 @@ pub fn needs_special_handling(linux_nr: u64) -> bool {
             | 82
             | 264
             | 35
+            | 213
+            | 291
+            | 233
+            | 232
+            | 281
+            | 293
+            | 53
     )
 }
 
@@ -511,6 +529,14 @@ mod tests {
         assert_eq!(translate_syscall(72), 49); // fcntl → SunlightOS Fcntl
         assert_eq!(translate_syscall(257), -15); // openat → frame-shifted sys_open
         assert_eq!(translate_syscall(318), -16); // getrandom
+        assert_eq!(translate_syscall(213), -22); // epoll_create
+        assert_eq!(translate_syscall(291), -22); // epoll_create1
+        assert_eq!(translate_syscall(233), -23); // epoll_ctl
+        assert_eq!(translate_syscall(232), -24); // epoll_wait
+        assert_eq!(translate_syscall(281), -24); // epoll_pwait
+        assert_eq!(translate_syscall(22), 47); // pipe
+        assert_eq!(translate_syscall(293), -25); // pipe2
+        assert_eq!(translate_syscall(53), -26); // socketpair
     }
 
     #[test]

@@ -150,16 +150,21 @@ fn build_exec_image(
 
     // Build auxv for Linux-compat processes so musl's _start doesn't scan
     // past the stack top looking for AT_NULL and fault at USER_STACK_TOP.
-    // Also provides AT_PHDR/AT_PHNUM so musl can locate PT_TLS for TLS init.
+    // AT_PHDR + AT_PHENT + AT_PHNUM are required for musl `__init_tls` to walk
+    // program headers and find PT_TLS. Without AT_PHENT (size of each phdr),
+    // the walk never advances, TLS stays zeroed, and Rust `OnceLock` treats the
+    // all-zero Once state as COMPLETE — e.g. ratatui's layout cache then
+    // null-derefs on first `Layout::split` (helios-note page fault at 0x48).
     let auxv: alloc::vec::Vec<(u64, u64)> = if process.is_linux_compat {
         match sunlight_elf::parse_elf_header(bytes) {
             Ok(hdr) => {
                 let at_phdr = compute_at_phdr(bytes, &hdr);
                 alloc::vec![
-                    (3, at_phdr),          // AT_PHDR
-                    (5, hdr.phnum as u64), // AT_PHNUM
-                    (6, 4096u64),          // AT_PAGESZ
-                    (9, hdr.entry),        // AT_ENTRY
+                    (3, at_phdr),               // AT_PHDR
+                    (4, hdr.phentsize as u64),  // AT_PHENT (ELF64 = 56)
+                    (5, hdr.phnum as u64),      // AT_PHNUM
+                    (6, 4096u64),               // AT_PAGESZ
+                    (9, hdr.entry),             // AT_ENTRY
                 ]
             }
             Err(_) => alloc::vec![],

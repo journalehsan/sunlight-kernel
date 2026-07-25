@@ -1,6 +1,7 @@
 pub mod address_space;
 pub mod elf_loader;
 pub mod env;
+pub mod epoll;
 pub mod fd_table;
 pub mod fork;
 pub mod layout;
@@ -122,6 +123,9 @@ pub struct Process {
     /// Completed receive deadline retained until that receive syscall retries.
     pub ipc_recv_timeout: Option<(u64, u32)>,
     pub ipc_recv_generation: u64,
+    /// Absolute scheduler tick for a Linux poll/epoll timeout. The process
+    /// remains blocked until this tick or until TTY input wakes it early.
+    pub linux_poll_wake_tick: Option<u64>,
     pub pending_reply_wait: Option<(u32, IpcMsg)>,
     pub ipc_reply_target: Option<IpcReplyTarget>,
     pub deferred_reply_targets: VecDeque<DeferredIpcReply>,
@@ -333,6 +337,7 @@ impl Process {
             ipc_recv_deadline: None,
             ipc_recv_timeout: None,
             ipc_recv_generation: 0,
+            linux_poll_wake_tick: None,
             pending_reply_wait: None,
             ipc_reply_target: None,
             deferred_reply_targets: VecDeque::new(),
@@ -492,6 +497,7 @@ impl Process {
             ipc_recv_deadline: None,
             ipc_recv_timeout: None,
             ipc_recv_generation: 0,
+            linux_poll_wake_tick: None,
             pending_reply_wait: None,
             ipc_reply_target: None,
             deferred_reply_targets: VecDeque::new(),

@@ -73,6 +73,10 @@ impl FileHandle {
     /// so `is_pipe`/`is_vfs` stay false for them (see process::tty_io).
     const TTY_STDIN_FLAG: u32 = 0x2000_0000;
     const TTY_STDOUT_FLAG: u32 = 0x1000_0000;
+    /// Helios epoll instance handle. Bits 0..23 carry the epoll pool index.
+    /// Chosen so it does not collide with pipe/vfs/tty tag bits.
+    const EPOLL_FLAG: u32 = 0x0800_0000;
+    const EPOLL_INDEX_MASK: u32 = 0x00FF_FFFF;
     const TTY_TAG_MASK: u32 = 0xF000_0000;
     const TTY_TAB_MASK: u32 = 0x0000_00FF;
 
@@ -121,6 +125,22 @@ impl FileHandle {
     /// Tab index for a TTY stdin/stdout handle.
     pub fn tty_tab(self) -> u8 {
         (self.0 & Self::TTY_TAB_MASK) as u8
+    }
+
+    pub fn epoll(pool_idx: u32) -> Self {
+        Self(Self::EPOLL_FLAG | (pool_idx & Self::EPOLL_INDEX_MASK))
+    }
+
+    pub fn is_epoll(self) -> bool {
+        (self.0 & Self::EPOLL_FLAG) != 0
+            && !self.is_pipe()
+            && !self.is_vfs()
+            && !self.is_tty_stdin()
+            && !self.is_tty_stdout()
+    }
+
+    pub fn epoll_index(self) -> u32 {
+        self.0 & Self::EPOLL_INDEX_MASK
     }
 }
 

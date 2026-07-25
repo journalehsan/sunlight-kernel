@@ -923,6 +923,7 @@ impl Scheduler {
         self.global_tick = self.global_tick.max(global_tick);
         if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID {
             crate::ipc::expire_deadlines(self, self.global_tick);
+            self.expire_linux_poll_timeouts();
         }
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             let mut core = CORE_STATES[cpu_id].lock();
@@ -1633,6 +1634,7 @@ impl Scheduler {
             None => return,
         };
         if self.processes[idx].state == ProcessState::BlockedOnTimer {
+            self.processes[idx].linux_poll_wake_tick = None;
             let ticks_blocked = self
                 .global_tick
                 .saturating_sub(self.processes[idx].block_start_tick);
@@ -1646,6 +1648,62 @@ impl Scheduler {
             } else {
                 self.enqueue_ready(idx);
             }
+        }
+    }
+
+    /// Block the current Linux task until a poll timeout expires. Syscall
+    /// entry runs with interrupts disabled, so the task cannot wait in-place;
+    /// the next timer interrupt deschedules it and this deadline makes it
+    /// runnable again without spinning in userspace.
+    pub fn block_current_linux_poll(&mut self, timeout_ticks: u64) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        let ticks = timeout_ticks.max(1);
+        self.processes[idx].linux_poll_wake_tick =
+            Some(self.global_tick.saturating_add(ticks));
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+    }
+
+    /// Wake poll waiters attached to the TTY tab which just received input.
+    pub fn wake_linux_poll_tty(&mut self, tab: usize) {
+        for idx in 0..self.processes.len() {
+            let waiting_on_tab = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && self.processes[idx].linux_poll_wake_tick.is_some()
+                && self.processes[idx]
+                    .fd_table
+                    .get(0)
+                    .is_some_and(|entry| {
+                        entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab
+                    });
+            if waiting_on_tab {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    fn expire_linux_poll_timeouts(&mut self) {
+        let now = self.global_tick;
+        for idx in 0..self.processes.len() {
+            let expired = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && self.processes[idx]
+                    .linux_poll_wake_tick
+                    .is_some_and(|deadline| deadline <= now);
+            if expired {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    fn wake_linux_poll_index(&mut self, idx: usize) {
+        self.processes[idx].linux_poll_wake_tick = None;
+        self.processes[idx].state = ProcessState::Ready;
+        self.remove_from_ready_queues(idx);
+        if let Some(cpu_id) = self.live_owner_core(idx) {
+            request_reschedule_on(cpu_id);
+        } else {
+            self.enqueue_ready(idx);
         }
     }
 
@@ -1688,6 +1746,7 @@ impl Scheduler {
             | ProcessState::BlockedOnTimer
             | ProcessState::BlockedOnIo
             | ProcessState::Suspended => {
+                self.processes[idx].linux_poll_wake_tick = None;
                 self.processes[idx].state = ProcessState::Ready;
                 self.processes[idx].block_start_tick = self.global_tick;
                 self.remove_from_ready_queues(idx);

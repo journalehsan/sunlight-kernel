@@ -152,6 +152,16 @@ fn free_pipe_if_done(idx: u32) {
     }
 }
 
+/// True if a non-blocking read would not return `WouldBlock`
+/// (data available, or EOF because all writers closed).
+pub fn pipe_has_data_or_eof(pool_idx: u32) -> bool {
+    let pool = PIPE_POOL.lock();
+    match pool.get(pool_idx as usize).and_then(|s| s.as_ref()) {
+        Some(pipe) => pipe.data_len > 0 || pipe.writers == 0,
+        None => true, // closed → treat as readable EOF
+    }
+}
+
 /// Read from a pipe (non-blocking)
 pub fn pipe_read(pool_idx: u32, buf: &mut [u8]) -> PipeResult {
     let mut pool = PIPE_POOL.lock();
