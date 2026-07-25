@@ -572,16 +572,67 @@ pub fn map_telemetry() -> Result<*const u8, Errno> {
     sys::check(ret).map(|addr| addr as *const u8)
 }
 
-/// Write all bytes in `buf` to `fd`, looping over partial writes.
-pub fn write_all(fd: Fd, mut buf: &[u8]) -> Result<(), Errno> {
+/// Write all bytes in `buf` to `fd`, looping over partial writes and retrying
+/// transient `EAGAIN` results.
+pub fn write_all(fd: Fd, buf: &[u8]) -> Result<(), Errno> {
+    write_all_with(buf, |chunk| write(fd, chunk), || yield_now())
+}
+
+fn write_all_with<W, Y>(mut buf: &[u8], mut write_once: W, mut retry: Y) -> Result<(), Errno>
+where
+    W: FnMut(&[u8]) -> Result<usize, Errno>,
+    Y: FnMut(),
+{
     while !buf.is_empty() {
-        let n = write(fd, buf)?;
-        if n == 0 {
-            return Err(Errno::Failed);
+        match write_once(buf) {
+            Ok(n) => {
+                if n == 0 {
+                    return Err(Errno::Failed);
+                }
+                buf = &buf[n..];
+            }
+            Err(Errno::Again) => retry(),
+            Err(error) => return Err(error),
         }
-        buf = &buf[n..];
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod write_all_tests {
+    use super::*;
+
+    #[test]
+    fn retries_again_and_handles_partial_writes() {
+        let mut calls = 0;
+        let mut retries = 0;
+        let mut received = [0u8; 5];
+        let mut received_len = 0;
+        let result = write_all_with(
+            b"hello",
+            |chunk| {
+                calls += 1;
+                if calls == 1 {
+                    return Err(Errno::Again);
+                }
+                let count = chunk.len().min(2);
+                received[received_len..received_len + count].copy_from_slice(&chunk[..count]);
+                received_len += count;
+                Ok(count)
+            },
+            || retries += 1,
+        );
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(retries, 1);
+        assert_eq!(&received[..received_len], b"hello");
+    }
+
+    #[test]
+    fn preserves_non_retryable_write_errors() {
+        let result = write_all_with(b"x", |_| Err(Errno::Failed), || {});
+        assert_eq!(result, Err(Errno::Failed));
+    }
 }
 
 #[cfg(test)]

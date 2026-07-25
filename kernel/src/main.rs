@@ -97,6 +97,8 @@ static SUNSHELL_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-n
 // applet is selected by argv[0].
 static SUNLIGHT_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-utils");
+static SUNLIGHT_ECHO_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/echo");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =

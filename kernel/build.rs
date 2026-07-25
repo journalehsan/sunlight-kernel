@@ -170,6 +170,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "echo",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "echo"],
+        },
+        EmbeddedBinary {
             package: "sunlight-net-utils",
             output: "sunlight-net-utils",
             rustflags: service_rustflags,

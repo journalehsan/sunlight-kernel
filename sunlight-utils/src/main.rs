@@ -17,6 +17,8 @@ use sunlight_ipc::{
 };
 use sunlight_libc as libc;
 
+use sunlight_utils::echo;
+
 const MAX_ARGS: usize = 16;
 const MAX_DIR_ENTRIES: usize = 64;
 const TIME_IPC_TIMEOUT_MS: u64 = 100;
@@ -1090,14 +1092,8 @@ fn parse_octal(s: &str) -> Option<u64> {
 }
 
 fn cmd_echo(args: &[&str]) -> i32 {
-    for (i, arg) in args.iter().enumerate() {
-        if i > 0 {
-            let _ = write_all(b" ");
-        }
-        let _ = write_all(arg.as_bytes());
-    }
-    let _ = write_all(b"\n");
-    0
+    let mut write = |bytes: &[u8]| libc::write_all(STDOUT, bytes).map_err(|_| ());
+    echo::run(args, &mut write)
 }
 
 fn cmd_whoami() -> i32 {
