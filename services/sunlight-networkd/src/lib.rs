@@ -54,6 +54,56 @@ impl InterfaceSnapshot {
     pub const fn is_loopback(&self) -> bool {
         matches!(self.kind, InterfaceKind::Loopback)
     }
+
+    pub const fn is_ethernet_like(&self) -> bool {
+        matches!(
+            self.kind,
+            InterfaceKind::Ethernet | InterfaceKind::VirtioNet | InterfaceKind::Vmxnet3
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConnectionKind {
+    Ethernet,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DerivedConnectionState {
+    Connected,
+    Configuring,
+    CableDisconnected,
+    Unavailable,
+    Error,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NetworkPanelSummary {
+    pub service_generation: u64,
+    pub captured_monotonic_time: u64,
+    pub connection_kind: Option<ConnectionKind>,
+    pub state: DerivedConnectionState,
+    pub interface_name: [u8; 8],
+    pub interface_name_len: u8,
+    pub administrative_state: AdminState,
+    pub operational_state: LinkState,
+    pub configuration_mode: sunlight_ipc::IpConfigMode,
+    pub ipv4_address: Option<([u8; 4], u8)>,
+    pub gateway: Option<[u8; 4]>,
+    pub dns_server: Option<[u8; 4]>,
+    pub is_default: bool,
+    pub priority: i32,
+}
+
+impl NetworkPanelSummary {
+    pub fn interface_name(&self) -> &str {
+        core::str::from_utf8(&self.interface_name[..self.interface_name_len as usize])
+            .unwrap_or("?")
+    }
+
+    pub const fn has_interface(&self) -> bool {
+        self.connection_kind.is_some()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,6 +166,80 @@ impl NetworkClient {
             captured_monotonic_time: monotonic_millis(),
             interfaces,
         })
+    }
+
+    pub fn panel_summary(&self) -> Result<NetworkPanelSummary, SnapshotError> {
+        let snapshot = self.snapshot()?;
+        Ok(NetworkPanelSummary::from_snapshot(&snapshot))
+    }
+}
+
+impl NetworkPanelSummary {
+    pub fn from_snapshot(snapshot: &NetworkSnapshot) -> Self {
+        let primary = snapshot
+            .interfaces
+            .iter()
+            .find(|interface| interface.is_ethernet_like() && interface.is_default)
+            .or_else(|| {
+                snapshot
+                    .interfaces
+                    .iter()
+                    .find(|interface| interface.is_ethernet_like())
+            })
+            .copied();
+        if let Some(interface) = primary {
+            let carrier_present = matches!(
+                interface.operational_state,
+                LinkState::Up | LinkState::Carrier
+            );
+            let address_configured = interface.ipv4_address.is_some();
+            let state = if carrier_present && address_configured {
+                DerivedConnectionState::Connected
+            } else if !carrier_present {
+                DerivedConnectionState::CableDisconnected
+            } else if matches!(
+                interface.configuration_mode,
+                sunlight_ipc::IpConfigMode::Dhcp | sunlight_ipc::IpConfigMode::Static
+            ) || matches!(interface.administrative_state, AdminState::Enabled)
+            {
+                DerivedConnectionState::Configuring
+            } else {
+                DerivedConnectionState::Error
+            };
+            Self {
+                service_generation: snapshot.service_generation,
+                captured_monotonic_time: snapshot.captured_monotonic_time,
+                connection_kind: Some(ConnectionKind::Ethernet),
+                state,
+                interface_name: interface.name,
+                interface_name_len: interface.name_len,
+                administrative_state: interface.administrative_state,
+                operational_state: interface.operational_state,
+                configuration_mode: interface.configuration_mode,
+                ipv4_address: interface.ipv4_address,
+                gateway: interface.gateway,
+                dns_server: interface.dns_server,
+                is_default: interface.is_default,
+                priority: interface.priority,
+            }
+        } else {
+            Self {
+                service_generation: snapshot.service_generation,
+                captured_monotonic_time: snapshot.captured_monotonic_time,
+                connection_kind: None,
+                state: DerivedConnectionState::Unavailable,
+                interface_name: [0; 8],
+                interface_name_len: 0,
+                administrative_state: AdminState::Disabled,
+                operational_state: LinkState::Unknown,
+                configuration_mode: sunlight_ipc::IpConfigMode::None,
+                ipv4_address: None,
+                gateway: None,
+                dns_server: None,
+                is_default: false,
+                priority: 0,
+            }
+        }
     }
 }
 
@@ -223,5 +347,72 @@ mod tests {
             push_summary(&mut values, summary(1, "eth1", 24), 1),
             Err(SnapshotError::Malformed)
         );
+    }
+
+    #[test]
+    fn panel_summary_prefers_default_ethernet_and_derives_connected() {
+        let snapshot = NetworkSnapshot {
+            service_generation: 7,
+            captured_monotonic_time: 11,
+            interfaces: vec![
+                InterfaceSnapshot {
+                    id: 1,
+                    name: *b"eth0\0\0\0\0",
+                    name_len: 4,
+                    kind: InterfaceKind::Ethernet,
+                    administrative_state: AdminState::Enabled,
+                    operational_state: LinkState::Carrier,
+                    configuration_mode: IpConfigMode::Dhcp,
+                    ipv4_address: Some(([192, 168, 1, 24], 24)),
+                    gateway: Some([192, 168, 1, 1]),
+                    dns_server: None,
+                    is_default: true,
+                    priority: 0,
+                },
+                InterfaceSnapshot {
+                    id: 2,
+                    name: *b"eth1\0\0\0\0",
+                    name_len: 4,
+                    kind: InterfaceKind::Ethernet,
+                    administrative_state: AdminState::Enabled,
+                    operational_state: LinkState::NoCarrier,
+                    configuration_mode: IpConfigMode::Dhcp,
+                    ipv4_address: None,
+                    gateway: None,
+                    dns_server: None,
+                    is_default: false,
+                    priority: 10,
+                },
+            ],
+        };
+        let summary = NetworkPanelSummary::from_snapshot(&snapshot);
+        assert_eq!(summary.connection_kind, Some(ConnectionKind::Ethernet));
+        assert_eq!(summary.interface_name(), "eth0");
+        assert_eq!(summary.state, DerivedConnectionState::Connected);
+    }
+
+    #[test]
+    fn panel_summary_reports_unavailable_without_ethernet() {
+        let snapshot = NetworkSnapshot {
+            service_generation: 1,
+            captured_monotonic_time: 2,
+            interfaces: vec![InterfaceSnapshot {
+                id: 1,
+                name: *b"lo\0\0\0\0\0\0",
+                name_len: 2,
+                kind: InterfaceKind::Loopback,
+                administrative_state: AdminState::Enabled,
+                operational_state: LinkState::Up,
+                configuration_mode: IpConfigMode::Static,
+                ipv4_address: Some(([127, 0, 0, 1], 8)),
+                gateway: None,
+                dns_server: None,
+                is_default: false,
+                priority: 0,
+            }],
+        };
+        let summary = NetworkPanelSummary::from_snapshot(&snapshot);
+        assert_eq!(summary.state, DerivedConnectionState::Unavailable);
+        assert!(!summary.has_interface());
     }
 }

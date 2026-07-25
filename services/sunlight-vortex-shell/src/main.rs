@@ -71,11 +71,14 @@ use sunlight_ipc::{
     monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, notification_dnd_enabled,
     notification_kv_get_into, notification_kv_put, notification_set_dnd, process_is_alive,
     process_yield, query_display_metrics, shm_alloc, shm_free, shm_map, show_notification,
-    unpack_iface_summary, CapabilityToken, DisplayMetrics, InterfaceKind, IpcMsg, LinkState,
-    MezzoMsg, NetworkdMsg, NotificationKind, NotificationPriority, ProcessExit, SgpMsg, TzMsg,
-    NOTIFICATION_RECENT_KEY, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SHM_PAGE,
+    CapabilityToken, DisplayMetrics, IpcMsg, MezzoMsg, NotificationKind, NotificationPriority,
+    ProcessExit, SgpMsg, TzMsg, NOTIFICATION_RECENT_KEY, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+    SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
+use sunlight_networkd::{
+    DerivedConnectionState, NetworkClient, NetworkPanelSummary, SnapshotError,
+};
 use sunlight_reminders::{
     by_date_list_key as reminder_due_date_list_key, decode_task,
     parse_id_list as parse_task_id_list, reminder_date_list_key, task_key,
@@ -617,6 +620,83 @@ impl PanelPresentation {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NetworkIndicatorState {
+    Connected,
+    Configuring,
+    Disconnected,
+    Error,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NetworkPopoverState {
+    Connected,
+    Configuring,
+    CableDisconnected,
+    Unavailable,
+    ServiceUnavailable,
+    Error,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct NetworkShellState {
+    summary: Option<NetworkPanelSummary>,
+    last_error: Option<SnapshotError>,
+    stale: bool,
+    indicator: NetworkIndicatorState,
+    popover_state: NetworkPopoverState,
+}
+
+impl NetworkShellState {
+    const fn new() -> Self {
+        Self {
+            summary: None,
+            last_error: None,
+            stale: false,
+            indicator: NetworkIndicatorState::Error,
+            popover_state: NetworkPopoverState::ServiceUnavailable,
+        }
+    }
+
+    fn update_from_summary(&mut self, summary: NetworkPanelSummary) {
+        self.summary = Some(summary);
+        self.last_error = None;
+        self.stale = false;
+        self.popover_state = match summary.state {
+            DerivedConnectionState::Connected => NetworkPopoverState::Connected,
+            DerivedConnectionState::Configuring => NetworkPopoverState::Configuring,
+            DerivedConnectionState::CableDisconnected => NetworkPopoverState::CableDisconnected,
+            DerivedConnectionState::Unavailable => NetworkPopoverState::Unavailable,
+            DerivedConnectionState::Error => NetworkPopoverState::Error,
+        };
+        self.indicator = match self.popover_state {
+            NetworkPopoverState::Connected => NetworkIndicatorState::Connected,
+            NetworkPopoverState::Configuring => NetworkIndicatorState::Configuring,
+            NetworkPopoverState::CableDisconnected | NetworkPopoverState::Unavailable => {
+                NetworkIndicatorState::Disconnected
+            }
+            NetworkPopoverState::ServiceUnavailable | NetworkPopoverState::Error => {
+                NetworkIndicatorState::Error
+            }
+        };
+    }
+
+    fn update_from_error(&mut self, error: SnapshotError) {
+        self.last_error = Some(error);
+        self.stale = self.summary.is_some();
+        if self.summary.is_none() {
+            self.popover_state = match error {
+                SnapshotError::Malformed => NetworkPopoverState::Error,
+                SnapshotError::ServiceUnavailable
+                | SnapshotError::Timeout
+                | SnapshotError::Transport
+                | SnapshotError::Allocation => NetworkPopoverState::ServiceUnavailable,
+            };
+        }
+        self.indicator = NetworkIndicatorState::Error;
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct WindowSnapshot {
     pub(crate) id: u64,
@@ -764,8 +844,9 @@ const ENABLE_RUNNING_TASKBAR: bool = true;
 const SEARCH_BTN: u32 = 36;
 const MAX_RECENT_APPS: usize = 12; // Start Menu "Recent" section cap
 const STATUS_POLL_MS: u64 = 1000;
+const NETWORK_STATUS_POLL_MS: u64 = 5_000;
+const NETWORK_POPOVER_POLL_MS: u64 = 2_000;
 const TIME_IPC_TIMEOUT_MS: u64 = 250;
-const NET_IPC_TIMEOUT_MS: u64 = 50;
 const DISPLAY_IPC_TIMEOUT_MS: u64 = 50;
 const WINDOW_SNAPSHOT_IPC_TIMEOUT_MS: u64 = 250;
 const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
@@ -1320,10 +1401,12 @@ struct VortexShell {
     // Effective locale for formatting (LC_TIME or LANG from /etc/locale.conf)
     locale: [u8; 48],
     locale_len: usize,
-    /// Cached "any non-loopback interface up/carrier".
-    status_net_up: bool,
+    /// Cached bounded summary of the primary Ethernet state.
+    network: NetworkShellState,
     /// Next monotonic deadline for best-effort status polling.
     next_status_poll_ms: u64,
+    /// Next monotonic deadline for network summary refresh.
+    next_network_poll_ms: u64,
     /// Bounds of the power button for future click handling.
     power_zone: Rect,
     /// Bounds of the brand cell on the top-left.
@@ -1403,6 +1486,9 @@ struct VortexShell {
     cal_selected_reminders: Vec<SelectedDayReminderPreview>,
     cal_last_loaded_key: [u8; 10],
     cal_last_loaded_key_len: usize,
+    show_network_popover: bool,
+    network_settings_btn: Rect,
+    network_settings_focused: bool,
     show_notif_panel: bool,
     notif_dnd_toggle_r: Rect,
     notif_mark_seen_r: Rect,
@@ -1530,8 +1616,9 @@ impl VortexShell {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
             locale_len: 7,
-            status_net_up: false,
+            network: NetworkShellState::new(),
             next_status_poll_ms: 0,
+            next_network_poll_ms: 0,
             power_zone: Rect::new(0, 0, 0, 0),
             brand_zone: Rect::new(0, 0, 0, 0),
             settings_zone: Rect::new(0, 0, 0, 0),
@@ -1565,6 +1652,9 @@ impl VortexShell {
             cal_selected_reminders: Vec::new(),
             cal_last_loaded_key: [0; 10],
             cal_last_loaded_key_len: 0,
+            show_network_popover: false,
+            network_settings_btn: Rect::new(0, 0, 0, 0),
+            network_settings_focused: false,
             show_notif_panel: false,
             notif_dnd_toggle_r: Rect::new(0, 0, 0, 0),
             notif_mark_seen_r: Rect::new(0, 0, 0, 0),
@@ -1692,13 +1782,6 @@ impl VortexShell {
             }
         }
 
-        if let Some(net_up) = query_net_up() {
-            if net_up != self.status_net_up {
-                self.status_net_up = net_up;
-                dirty = true;
-            }
-        }
-
         // Load locale infrequently (file read is cheap here; 1/min ok)
         if self.status_min % 5 == 0 || self.locale_len == 0 {
             if let Some(loc) = read_locale_effective() {
@@ -1712,6 +1795,27 @@ impl VortexShell {
         }
 
         dirty
+    }
+
+    fn refresh_network_state(&mut self) -> bool {
+        let previous = self.network;
+        match NetworkClient::new().panel_summary() {
+            Ok(summary) => self.network.update_from_summary(summary),
+            Err(error) => self.network.update_from_error(error),
+        }
+        self.network != previous
+    }
+
+    fn refresh_network_state_if_due(&mut self, now: u64) -> bool {
+        if now < self.next_network_poll_ms {
+            return false;
+        }
+        self.next_network_poll_ms = now.saturating_add(if self.show_network_popover {
+            NETWORK_POPOVER_POLL_MS
+        } else {
+            NETWORK_STATUS_POLL_MS
+        });
+        self.refresh_network_state()
     }
 
     fn reset_calendar_view_to_today(&mut self) {
@@ -2227,6 +2331,8 @@ impl VortexShell {
 
     fn toggle_system_menu_from_panel(&mut self) -> bool {
         self.show_calendar_popover = false;
+        self.show_network_popover = false;
+        self.network_settings_focused = false;
         self.show_notif_panel = false;
         self.show_logout_confirm = false;
         self.show_datetime_tooltip = false;
@@ -2241,13 +2347,45 @@ impl VortexShell {
         true
     }
 
-    fn show_network_status_hint(&mut self) -> bool {
-        let (title, body) = if self.status_net_up {
-            ("Network", "Connected")
-        } else {
-            ("Network", "No active connection")
+    fn toggle_network_popover(&mut self) -> bool {
+        self.show_calendar_popover = false;
+        self.show_notif_panel = false;
+        self.show_logout_confirm = false;
+        self.show_datetime_tooltip = false;
+        self.network_settings_focused = false;
+        self.show_network_popover = !self.show_network_popover;
+        if self.show_network_popover {
+            self.next_network_poll_ms = 0;
+            let _ = self.refresh_network_state();
+            self.next_network_poll_ms = monotonic_millis().saturating_add(NETWORK_POPOVER_POLL_MS);
+        }
+        true
+    }
+
+    fn launch_control_panel_page(&mut self, page: &'static [u8], source: LaunchSource) -> bool {
+        self.note_recent_app(AppId::Settings);
+        let trace = self.next_launch_trace(source);
+        let request = sun_exec::LaunchRequest {
+            trace,
+            source,
+            command: b"settings",
+            args: &[b"--page", page],
+            require_display: true,
         };
-        let _ = show_notification(NotificationKind::Info, title, body, 2200);
+        sun_exec::launch(request).is_ok()
+    }
+
+    fn open_network_settings(&mut self) -> bool {
+        self.show_network_popover = false;
+        self.network_settings_focused = false;
+        self.launch_control_panel_page(b"network", LaunchSource::Shell)
+    }
+
+    fn network_popover_keyboard_toggle(&mut self) -> bool {
+        if !self.show_network_popover || self.top_panel_focus != Some(TOP_ITEM_NETWORK) {
+            return false;
+        }
+        self.network_settings_focused = !self.network_settings_focused;
         true
     }
 
@@ -2261,12 +2399,16 @@ impl VortexShell {
             TOP_ITEM_BRAND => self.toggle_system_menu_from_panel(),
             idx if (TOP_ITEM_WS_FIRST..TOP_ITEM_WS_FIRST + WS_INDICATOR_COUNT).contains(&idx) => {
                 self.show_calendar_popover = false;
+                self.show_network_popover = false;
+                self.network_settings_focused = false;
                 self.show_notif_panel = false;
                 self.show_logout_confirm = false;
                 self.switch_workspace((idx - TOP_ITEM_WS_FIRST + 1) as u8)
             }
             TOP_ITEM_DATETIME => {
                 self.show_datetime_tooltip = false;
+                self.show_network_popover = false;
+                self.network_settings_focused = false;
                 self.show_notif_panel = false;
                 self.show_logout_confirm = false;
                 self.show_calendar_popover = !self.show_calendar_popover;
@@ -2275,9 +2417,11 @@ impl VortexShell {
                 }
                 true
             }
-            TOP_ITEM_NETWORK => self.show_network_status_hint(),
+            TOP_ITEM_NETWORK => self.toggle_network_popover(),
             TOP_ITEM_NOTIFICATIONS => {
                 self.show_calendar_popover = false;
+                self.show_network_popover = false;
+                self.network_settings_focused = false;
                 self.show_logout_confirm = false;
                 if secondary {
                     let next = !notification_dnd_enabled();
@@ -2290,6 +2434,8 @@ impl VortexShell {
             }
             TOP_ITEM_LOGOUT => {
                 self.show_calendar_popover = false;
+                self.show_network_popover = false;
+                self.network_settings_focused = false;
                 self.show_notif_panel = false;
                 self.show_logout_confirm = true;
                 true
@@ -3114,6 +3260,8 @@ impl VortexShell {
         self.show_system_menu = false;
         self.system_menu_hover = None;
         self.show_calendar_popover = false;
+        self.show_network_popover = false;
+        self.network_settings_focused = false;
         self.show_notif_panel = false;
         self.show_datetime_tooltip = false;
         self.sidebar.open();
@@ -3135,6 +3283,8 @@ impl VortexShell {
         self.show_system_menu = false;
         self.system_menu_hover = None;
         self.show_calendar_popover = false;
+        self.show_network_popover = false;
+        self.network_settings_focused = false;
         self.show_notif_panel = false;
         self.show_datetime_tooltip = false;
         self.context_menu = None;
@@ -3155,6 +3305,8 @@ impl VortexShell {
             self.show_system_menu = false;
             self.system_menu_hover = None;
             self.show_calendar_popover = false;
+            self.show_network_popover = false;
+            self.network_settings_focused = false;
             self.show_notif_panel = false;
             self.show_datetime_tooltip = false;
             self.context_menu = None;
@@ -3180,22 +3332,11 @@ impl VortexShell {
             }
             SearchPaletteAction::LaunchPreferences(page) => {
                 let _ = self.search_palette.close();
-                self.note_recent_app(AppId::Settings);
-                let trace = self.next_launch_trace(LaunchSource::Shell);
-                let args: &[&[u8]] = if page == "root" || page.is_empty() {
-                    &[]
+                if page == "root" || page.is_empty() {
+                    let _ = self.open_app_from_ui(AppId::Settings, now, LaunchSource::Shell);
                 } else {
-                    &[b"--page", page.as_bytes()]
-                };
-                let request = sun_exec::LaunchRequest {
-                    trace,
-                    source: LaunchSource::Shell,
-                    command: b"settings",
-                    args,
-                    require_display: true,
-                };
-                let _ = sun_exec::launch(request);
-                let _ = now;
+                    let _ = self.launch_control_panel_page(page.as_bytes(), LaunchSource::Shell);
+                }
                 true
             }
         }
@@ -3426,12 +3567,7 @@ impl VortexShell {
                                     5 => "Lock is already transitioning.",
                                     _ => "Could not lock the session (see serial log).",
                                 };
-                                show_notification(
-                                    NotificationKind::Warning,
-                                    "Lock",
-                                    body,
-                                    4000,
-                                );
+                                show_notification(NotificationKind::Warning, "Lock", body, 4000);
                             }
                             Err(_) => {
                                 debug_log(
@@ -3982,37 +4118,6 @@ pub(crate) fn query_local_full(
     Some((y, mon, d, h, mi, s))
 }
 
-/// Query networkd for any non-loopback interface that is Up or Carrier.
-/// Returns Some(true/false) on success.
-fn query_net_up() -> Option<bool> {
-    let Some(netd) = nameserver_lookup("networkd") else {
-        return None;
-    };
-    let mut idx = 0u64;
-    loop {
-        let Ok(reply) = ipc_call_timeout(
-            netd,
-            IpcMsg::with_label(NetworkdMsg::LIST_INTERFACES).word(0, idx),
-            NET_IPC_TIMEOUT_MS,
-        ) else {
-            return None;
-        };
-        let Some(sum) = unpack_iface_summary(&reply) else {
-            break;
-        };
-        if sum.kind != InterfaceKind::Loopback {
-            if sum.link == LinkState::Up || sum.link == LinkState::Carrier {
-                return Some(true);
-            }
-        }
-        idx += 1;
-        if sum.total > 0 && idx as u16 >= sum.total {
-            break;
-        }
-    }
-    Some(false)
-}
-
 /// Format hour/min (0-23,0-59) into compact "H:MM AM" style in a stack buffer.
 /// Returns the length written.
 fn format_time_12h(h: u8, m: u8, out: &mut [u8; 8]) -> usize {
@@ -4359,14 +4464,19 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
         theme,
         net_hover,
         net_focus,
-        shell.status_net_up,
+        shell.show_network_popover,
     );
-    let net_color = if shell.status_net_up {
-        theme.ok
-    } else if net_hover || net_focus {
-        theme.text
-    } else {
-        theme.text_dim
+    let net_color = match shell.network.indicator {
+        NetworkIndicatorState::Connected => theme.ok,
+        NetworkIndicatorState::Configuring => theme.accent,
+        NetworkIndicatorState::Disconnected => {
+            if net_hover || net_focus || shell.show_network_popover {
+                theme.text
+            } else {
+                theme.text_dim
+            }
+        }
+        NetworkIndicatorState::Error => theme.warn,
     };
     if let Some(tga) = sym.lan {
         let icon_rect = Rect::new(
@@ -4377,14 +4487,13 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
         );
         canvas.draw_tga_icon_tinted(&tga, icon_rect, net_color);
         let dot = Rect::new(net_cell.right() - 6, net_cell.y + 4, 3, 3);
-        canvas.fill_rect(
-            dot,
-            if shell.status_net_up {
-                theme.ok
-            } else {
-                theme.border.lighten(24)
-            },
-        );
+        let dot_color = match shell.network.indicator {
+            NetworkIndicatorState::Connected => theme.ok,
+            NetworkIndicatorState::Configuring => theme.accent,
+            NetworkIndicatorState::Disconnected => theme.border.lighten(24),
+            NetworkIndicatorState::Error => theme.warn,
+        };
+        canvas.fill_rect(dot, dot_color);
     }
     shell.net_zone = net_cell;
     shell.top_panel_item_zones[TOP_ITEM_NETWORK] = net_cell;
@@ -6702,6 +6811,280 @@ impl VortexShell {
         }
     }
 
+    fn network_popover_rect(&self, cw: u32, ch: u32) -> Rect {
+        let pw = 292u32.min(cw.saturating_sub(16));
+        let ph = 194u32.min(ch.saturating_sub(TOP_H + 20));
+        let preferred_x = self.net_zone.right() - pw as i32;
+        let min_x = if self.top_panel_presentation.integrated() {
+            8
+        } else {
+            TOP_PAD
+        };
+        let max_x = (cw as i32 - pw as i32 - min_x).max(min_x);
+        let x = preferred_x.clamp(min_x, max_x);
+        let top = top_bar_rect(cw, self.top_panel_presentation).bottom() + 8;
+        let max_y = (ch as i32 - ph as i32 - 8).max(top);
+        Rect::new(x, top.min(max_y), pw, ph)
+    }
+
+    fn draw_network_popover(&mut self, canvas: &mut Canvas, theme: &Theme, cw: u32, ch: u32) {
+        let panel = self.network_popover_rect(cw, ch);
+        canvas.fill_material(
+            panel,
+            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme)
+                .with_radius(8),
+        );
+
+        let icon_rect = Rect::new(panel.x + 14, panel.y + 12, 18, 18);
+        let icon_tint = match self.network.indicator {
+            NetworkIndicatorState::Connected => theme.ok,
+            NetworkIndicatorState::Configuring => theme.accent,
+            NetworkIndicatorState::Disconnected => theme.text_dim,
+            NetworkIndicatorState::Error => theme.warn,
+        };
+        if let Some(icon) = self.symbols.lan {
+            canvas.draw_tga_icon_tinted(&icon, icon_rect, icon_tint);
+        }
+        draw_text_vcenter(
+            canvas,
+            "Network",
+            panel.x + 40,
+            panel.y + 8,
+            24,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+
+        let state_label = match self.network.popover_state {
+            NetworkPopoverState::Connected => "Connected",
+            NetworkPopoverState::Configuring => "Configuring",
+            NetworkPopoverState::CableDisconnected => "Cable disconnected",
+            NetworkPopoverState::Unavailable => "Unavailable",
+            NetworkPopoverState::ServiceUnavailable => "Network service unavailable",
+            NetworkPopoverState::Error => "Error",
+        };
+        let state_fill = match self.network.popover_state {
+            NetworkPopoverState::Connected => theme.ok.darken(52),
+            NetworkPopoverState::Configuring => theme.accent.darken(44),
+            NetworkPopoverState::CableDisconnected | NetworkPopoverState::Unavailable => {
+                theme.panel_alt
+            }
+            NetworkPopoverState::ServiceUnavailable | NetworkPopoverState::Error => {
+                theme.warn.darken(58)
+            }
+        };
+        let state_color = match self.network.popover_state {
+            NetworkPopoverState::Connected => theme.ok,
+            NetworkPopoverState::Configuring => theme.accent_hover,
+            NetworkPopoverState::CableDisconnected | NetworkPopoverState::Unavailable => {
+                theme.text_dim
+            }
+            NetworkPopoverState::ServiceUnavailable | NetworkPopoverState::Error => theme.warn,
+        };
+        let state_w = measure_text(state_label, FontRole::UiSmall).w as i32 + 16;
+        let state_rect = Rect::new(
+            panel.right() - state_w - 12,
+            panel.y + 10,
+            state_w as u32,
+            20,
+        );
+        canvas.fill_rounded_rect(state_rect, 6, state_fill);
+        draw_text_vcenter(
+            canvas,
+            state_label,
+            state_rect.x + 8,
+            state_rect.y,
+            state_rect.h,
+            &TextStyle::new(FontRole::UiSmall, state_color),
+        );
+
+        let card = Rect::new(panel.x + 12, panel.y + 42, panel.w.saturating_sub(24), 104);
+        canvas.fill_rounded_rect(card, 8, theme.panel_alt);
+        canvas.stroke_rounded_rect(card, 8, 1, theme.border);
+        draw_text_vcenter(
+            canvas,
+            "Ethernet",
+            card.x + 12,
+            card.y + 8,
+            20,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+        draw_text_vcenter(
+            canvas,
+            state_label,
+            card.x + 12,
+            card.y + 30,
+            20,
+            &TextStyle::new(FontRole::UiRegular, state_color),
+        );
+
+        let mut line_y = card.y + 54;
+        if let Some(summary) = self.network.summary {
+            if summary.has_interface() {
+                draw_text_vcenter(
+                    canvas,
+                    summary.interface_name(),
+                    card.x + 12,
+                    line_y,
+                    16,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
+                line_y += 16;
+            }
+            if let Some((address, prefix)) = summary.ipv4_address {
+                let text = alloc::format!(
+                    "{}.{}.{}.{}/{}",
+                    address[0],
+                    address[1],
+                    address[2],
+                    address[3],
+                    prefix
+                );
+                draw_text_vcenter(
+                    canvas,
+                    &text,
+                    card.x + 12,
+                    line_y,
+                    16,
+                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                );
+                line_y += 16;
+            } else if matches!(self.network.popover_state, NetworkPopoverState::Configuring) {
+                let text = match summary.configuration_mode as u64 {
+                    1 => "DHCP",
+                    2 => "Static",
+                    _ => "Waiting for address",
+                };
+                draw_text_vcenter(
+                    canvas,
+                    text,
+                    card.x + 12,
+                    line_y,
+                    16,
+                    &TextStyle::new(FontRole::UiSmall, theme.text),
+                );
+                line_y += 16;
+            }
+            if let Some(gateway) = summary.gateway {
+                let text = alloc::format!(
+                    "Gateway {}.{}.{}.{}",
+                    gateway[0],
+                    gateway[1],
+                    gateway[2],
+                    gateway[3]
+                );
+                draw_text_vcenter(
+                    canvas,
+                    &text,
+                    card.x + 12,
+                    line_y,
+                    16,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
+            } else if summary.has_interface() {
+                let text = match summary.configuration_mode as u64 {
+                    1 => Some("DHCP"),
+                    2 => Some("Static"),
+                    _ => None,
+                };
+                if let Some(text) = text {
+                    draw_text_vcenter(
+                        canvas,
+                        text,
+                        card.x + 12,
+                        line_y,
+                        16,
+                        &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                    );
+                }
+            }
+        } else {
+            draw_text_vcenter(
+                canvas,
+                state_label,
+                card.x + 12,
+                line_y,
+                16,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+        }
+
+        if self.network.stale {
+            draw_text_vcenter(
+                canvas,
+                "Stale",
+                card.right() - 40,
+                card.y + 8,
+                16,
+                &TextStyle::new(FontRole::UiSmall, theme.warn),
+            );
+        } else if let Some(error) = self.network.last_error {
+            let detail = match error {
+                SnapshotError::ServiceUnavailable => "Network service unavailable",
+                SnapshotError::Timeout => "Network service timed out",
+                SnapshotError::Transport => "Network service unavailable",
+                SnapshotError::Allocation => "Network state unavailable",
+                SnapshotError::Malformed => "Network service returned invalid data",
+            };
+            draw_text_vcenter(
+                canvas,
+                detail,
+                card.x + 12,
+                card.bottom() - 22,
+                16,
+                &TextStyle::new(FontRole::UiSmall, theme.warn),
+            );
+        }
+
+        let btn = Rect::new(
+            panel.x + 12,
+            panel.bottom() - 34,
+            panel.w.saturating_sub(24),
+            22,
+        );
+        self.network_settings_btn = btn;
+        let btn_fill = if self.network_settings_focused {
+            theme.accent
+        } else {
+            theme.panel
+        };
+        let btn_text = if self.network_settings_focused {
+            theme.text_on_accent
+        } else {
+            theme.text
+        };
+        canvas.fill_rounded_rect(btn, 6, btn_fill);
+        canvas.stroke_rounded_rect(
+            btn,
+            6,
+            1,
+            if self.network_settings_focused {
+                theme.accent_hover
+            } else {
+                theme.border
+            },
+        );
+        if let Some(icon) = self.symbols.settings {
+            let icon_rect = Rect::new(btn.x + 8, btn.y + 3, 16, 16);
+            canvas.draw_tga_icon_tinted(&icon, icon_rect, btn_text);
+        }
+        draw_text_vcenter(
+            canvas,
+            "Network Settings",
+            btn.x + 30,
+            btn.y,
+            btn.h,
+            &TextStyle::new(FontRole::UiSmall, btn_text),
+        );
+        draw_text_vcenter(
+            canvas,
+            "›",
+            btn.right() - 14,
+            btn.y,
+            btn.h,
+            &TextStyle::new(FontRole::UiSmall, btn_text),
+        );
+    }
+
     fn draw_notif_panel(&mut self, canvas: &mut Canvas, theme: &Theme) {
         let pw = NOTIF_CENTER_W.min(canvas.width.saturating_sub(24));
         let ph = canvas.height.saturating_sub(72).clamp(180, 520);
@@ -7053,6 +7436,9 @@ impl App for VortexShell {
         if self.status_min == 0xff {
             let _ = self.refresh_status();
         }
+        if self.network.summary.is_none() && self.network.last_error.is_none() {
+            let _ = self.refresh_network_state();
+        }
 
         let now = monotonic_millis();
         if now >= self.next_app_poll_ms {
@@ -7122,6 +7508,10 @@ impl App for VortexShell {
         // Calendar popover (small, under center)
         if self.show_calendar_popover {
             self.draw_calendar_popover(canvas, theme, cw, ch);
+        }
+
+        if self.show_network_popover {
+            self.draw_network_popover(canvas, theme, cw, ch);
         }
 
         // Notif placeholder panel
@@ -7616,6 +8006,17 @@ impl App for VortexShell {
                         return true;
                     }
                 }
+                if self.show_network_popover {
+                    if self.network_settings_btn.contains(point) {
+                        return self.open_network_settings();
+                    }
+                    if self
+                        .network_popover_rect(self.screen_w, self.screen_h)
+                        .contains(point)
+                    {
+                        return true;
+                    }
+                }
                 if self.show_notif_panel {
                     if self.notif_dnd_toggle_r.contains(point) {
                         let next = !notification_dnd_enabled();
@@ -7681,6 +8082,11 @@ impl App for VortexShell {
                 let mut closed = false;
                 if self.show_calendar_popover && !self.datetime_zone.contains(point) {
                     self.show_calendar_popover = false;
+                    closed = true;
+                }
+                if self.show_network_popover && !self.net_zone.contains(point) {
+                    self.show_network_popover = false;
+                    self.network_settings_focused = false;
                     closed = true;
                 }
                 if self.show_notif_panel {
@@ -7913,6 +8319,11 @@ impl App for VortexShell {
                     self.show_calendar_popover = false;
                     did = true;
                 }
+                if self.show_network_popover {
+                    self.show_network_popover = false;
+                    self.network_settings_focused = false;
+                    did = true;
+                }
                 if self.show_notif_panel {
                     self.show_notif_panel = false;
                     did = true;
@@ -7938,6 +8349,11 @@ impl App for VortexShell {
                 if self.show_system_menu {
                     self.show_system_menu = false;
                     self.system_menu_hover = None;
+                    dirty = true;
+                }
+                if self.show_network_popover {
+                    self.show_network_popover = false;
+                    self.network_settings_focused = false;
                     dirty = true;
                 }
                 if self.top_panel_hover.take().is_some() {
@@ -7967,23 +8383,39 @@ impl App for VortexShell {
                 pressed: true,
                 shift,
                 ..
-            } => self.top_panel_focus_step(shift),
+            } => {
+                if self.network_popover_keyboard_toggle() {
+                    true
+                } else {
+                    self.top_panel_focus_step(shift)
+                }
+            }
             Event::KeyPress {
                 keycode: KEY_ENTER,
                 pressed: true,
                 ..
-            } => self
-                .top_panel_focus
-                .map(|item| self.activate_top_panel_item(item, false))
-                .unwrap_or(false),
+            } => {
+                if self.show_network_popover && self.network_settings_focused {
+                    self.open_network_settings()
+                } else {
+                    self.top_panel_focus
+                        .map(|item| self.activate_top_panel_item(item, false))
+                        .unwrap_or(false)
+                }
+            }
             Event::KeyPress {
                 keycode: KEY_SPACE,
                 pressed: true,
                 ..
-            } => self
-                .top_panel_focus
-                .map(|item| self.activate_top_panel_item(item, true))
-                .unwrap_or(false),
+            } => {
+                if self.show_network_popover && self.network_settings_focused {
+                    self.open_network_settings()
+                } else {
+                    self.top_panel_focus
+                        .map(|item| self.activate_top_panel_item(item, true))
+                        .unwrap_or(false)
+                }
+            }
             Event::MouseMove { x, y } => {
                 if self.selection_state != DesktopSelectState::Idle {
                     self.update_desktop_marquee(Point::new(x, y));
@@ -8031,10 +8463,15 @@ impl App for VortexShell {
                 self.search_hover = self.search_zone.contains(point);
                 let prev_top_hover = self.top_panel_hover;
                 self.top_panel_hover = self.top_panel_item_at_point(point);
+                let prev_network_focus = self.network_settings_focused;
+                if self.show_network_popover {
+                    self.network_settings_focused = self.network_settings_btn.contains(point);
+                }
                 if self.settings_hover != prev_settings
                     || self.overview_hover != prev_overview
                     || self.search_hover != prev_search
                     || self.top_panel_hover != prev_top_hover
+                    || self.network_settings_focused != prev_network_focus
                     || self.system_menu_hover != previous_system_menu_hover
                 {
                     return true;
@@ -8055,6 +8492,7 @@ impl App for VortexShell {
                     || self.overview_hover != prev_overview
                     || self.search_hover != prev_search
                     || self.top_panel_hover != prev_top_hover
+                    || self.network_settings_focused != prev_network_focus
                     || self.show_datetime_tooltip != prev_tip
             }
             Event::MouseUp { x, y, button } if button == 0 => {
@@ -8084,6 +8522,9 @@ impl App for VortexShell {
                     dirty = true;
                 }
                 if self.refresh_sidebar_telemetry(now) {
+                    dirty = true;
+                }
+                if self.refresh_network_state_if_due(now) {
                     dirty = true;
                 }
                 self.log_diagnostics_if_due(now);
