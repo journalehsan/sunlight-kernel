@@ -64,6 +64,20 @@ impl Signal {
     pub fn default_exit_code(self) -> i32 {
         128 + self.as_u32() as i32
     }
+
+    /// SIGKILL / SIGSTOP: cannot be caught, ignored, or blocked.
+    pub fn is_uncatchable(self) -> bool {
+        matches!(self, Signal::SIGKILL | Signal::SIGSTOP)
+    }
+
+    /// Signals whose default action is process termination (when not ignored).
+    pub fn default_terminates(self) -> bool {
+        match self {
+            Signal::SIGCHLD | Signal::SIGWINCH | Signal::SIGCONT | Signal::SIGSTOP | Signal::SIGTSTP
+            | Signal::SIGTTIN | Signal::SIGTTOU => false,
+            _ => true,
+        }
+    }
 }
 
 /// How a signal is handled
@@ -178,14 +192,9 @@ impl SignalState {
     }
 
     pub fn set_handler(&mut self, signal: Signal, action: SigAction) -> Result<(), SignalError> {
-        // SIGKILL and SIGSTOP cannot be caught
-        match signal {
-            Signal::SIGKILL | Signal::SIGSTOP => {
-                if matches!(action.handler, SigHandler::UserHandler(_)) {
-                    return Err(SignalError::CannotCatch);
-                }
-            }
-            _ => {}
+        // SIGKILL and SIGSTOP cannot be caught, ignored, or replaced.
+        if signal.is_uncatchable() && !matches!(action.handler, SigHandler::Default) {
+            return Err(SignalError::CannotCatch);
         }
 
         let idx = (signal.as_u32() - 1) as usize;
@@ -222,7 +231,11 @@ impl SignalState {
     }
 
     pub fn set_blocked_mask(&mut self, mask: u64) {
-        self.blocked.set_bits(mask);
+        // Uncatchable signals remain unmaskable even if userspace sets bits.
+        let mut bits = mask;
+        bits &= !(1u64 << (Signal::SIGKILL.as_u32() - 1));
+        bits &= !(1u64 << (Signal::SIGSTOP.as_u32() - 1));
+        self.blocked.set_bits(bits);
     }
 
     pub fn get_blocked_mask(&self) -> u64 {
@@ -230,12 +243,141 @@ impl SignalState {
     }
 
     pub fn is_blocked(&self, signal: Signal) -> bool {
+        if signal.is_uncatchable() {
+            return false;
+        }
         self.blocked.contains(signal)
+    }
+
+    /// If a fatal pending signal should terminate now, clear it and return the
+    /// exit code. SIGKILL always wins. Catchable signals honor Ignore / block /
+    /// (stub) user handlers — only Default disposition terminates here.
+    pub fn take_fatal_exit_code(&mut self) -> Option<i32> {
+        // Forced kill first: never blocked, never catchable.
+        if self.pending.contains(Signal::SIGKILL) {
+            self.pending.remove(Signal::SIGKILL);
+            return Some(Signal::SIGKILL.default_exit_code());
+        }
+
+        // Priority order matches syscall delivery: INT then TERM, then other
+        // default-terminating signals that may be pending.
+        const CANDIDATES: [Signal; 10] = [
+            Signal::SIGINT,
+            Signal::SIGTERM,
+            Signal::SIGHUP,
+            Signal::SIGQUIT,
+            Signal::SIGABRT,
+            Signal::SIGPIPE,
+            Signal::SIGALRM,
+            Signal::SIGUSR1,
+            Signal::SIGUSR2,
+            Signal::SIGSEGV,
+        ];
+        for sig in CANDIDATES {
+            if !self.pending.contains(sig) || self.is_blocked(sig) {
+                continue;
+            }
+            match self.get_handler(sig).handler {
+                SigHandler::Default if sig.default_terminates() => {
+                    self.pending.remove(sig);
+                    return Some(sig.default_exit_code());
+                }
+                SigHandler::Ignore => {
+                    self.pending.remove(sig);
+                }
+                SigHandler::UserHandler(_) => {
+                    // Leave pending for the syscall-return delivery path
+                    // (user frame setup is still TODO there).
+                }
+                SigHandler::Default => {
+                    self.pending.remove(sig);
+                }
+            }
+        }
+        None
     }
 }
 
 impl Default for SignalState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sigkill_cannot_be_ignored_or_handled() {
+        let mut state = SignalState::new();
+        assert_eq!(
+            state.set_handler(
+                Signal::SIGKILL,
+                SigAction {
+                    handler: SigHandler::Ignore,
+                    mask: 0,
+                    flags: 0,
+                }
+            ),
+            Err(SignalError::CannotCatch)
+        );
+        assert_eq!(
+            state.set_handler(
+                Signal::SIGKILL,
+                SigAction {
+                    handler: SigHandler::UserHandler(0x1000),
+                    mask: 0,
+                    flags: 0,
+                }
+            ),
+            Err(SignalError::CannotCatch)
+        );
+    }
+
+    #[test]
+    fn sigkill_cannot_be_blocked() {
+        let mut state = SignalState::new();
+        state.set_blocked_mask(1u64 << (Signal::SIGKILL.as_u32() - 1));
+        assert!(!state.is_blocked(Signal::SIGKILL));
+        state.deliver_signal(Signal::SIGKILL);
+        assert_eq!(
+            state.take_fatal_exit_code(),
+            Some(Signal::SIGKILL.default_exit_code())
+        );
+    }
+
+    #[test]
+    fn sigterm_default_is_fatal_and_ignorable() {
+        let mut state = SignalState::new();
+        state.deliver_signal(Signal::SIGTERM);
+        assert_eq!(
+            state.take_fatal_exit_code(),
+            Some(Signal::SIGTERM.default_exit_code())
+        );
+
+        let mut state = SignalState::new();
+        state
+            .set_handler(
+                Signal::SIGTERM,
+                SigAction {
+                    handler: SigHandler::Ignore,
+                    mask: 0,
+                    flags: 0,
+                },
+            )
+            .unwrap();
+        state.deliver_signal(Signal::SIGTERM);
+        assert_eq!(state.take_fatal_exit_code(), None);
+        assert!(!state.is_pending(Signal::SIGTERM));
+    }
+
+    #[test]
+    fn blocked_sigterm_stays_pending() {
+        let mut state = SignalState::new();
+        state.set_blocked_mask(1u64 << (Signal::SIGTERM.as_u32() - 1));
+        state.deliver_signal(Signal::SIGTERM);
+        assert_eq!(state.take_fatal_exit_code(), None);
+        assert!(state.is_pending(Signal::SIGTERM));
     }
 }

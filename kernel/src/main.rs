@@ -2820,6 +2820,94 @@ unsafe fn log_pci_ethernet_controllers() {
     }
 }
 
+/// Termination-path correctness self-test (signal disposition + forced kill of
+/// a "running" slot). Does not spawn user processes or touch sunlightd/KV.
+fn run_termination_path_self_test(hhdm_offset: VirtAddr) {
+    use crate::process::signal::{SigAction, SigHandler, Signal, SignalState};
+    use crate::process::ProcessState;
+
+    let mut ok = true;
+
+    // Default SIGTERM is fatal; Ignore is cooperative and drops the pending bit.
+    {
+        let mut state = SignalState::new();
+        state.deliver_signal(Signal::SIGTERM);
+        ok &= state.take_fatal_exit_code() == Some(Signal::SIGTERM.default_exit_code());
+
+        let mut state = SignalState::new();
+        ok &= state
+            .set_handler(
+                Signal::SIGTERM,
+                SigAction {
+                    handler: SigHandler::Ignore,
+                    mask: 0,
+                    flags: 0,
+                },
+            )
+            .is_ok();
+        state.deliver_signal(Signal::SIGTERM);
+        ok &= state.take_fatal_exit_code().is_none();
+        ok &= !state.is_pending(Signal::SIGTERM);
+    }
+
+    // SIGKILL cannot be ignored, blocked, or handled; forced termination always wins.
+    {
+        let mut state = SignalState::new();
+        ok &= state
+            .set_handler(
+                Signal::SIGKILL,
+                SigAction {
+                    handler: SigHandler::Ignore,
+                    mask: 0,
+                    flags: 0,
+                },
+            )
+            .is_err();
+        state.set_blocked_mask(1u64 << (Signal::SIGKILL.as_u32() - 1));
+        ok &= !state.is_blocked(Signal::SIGKILL);
+        state.deliver_signal(Signal::SIGKILL);
+        ok &= state.take_fatal_exit_code() == Some(Signal::SIGKILL.default_exit_code());
+    }
+
+    // External SIGKILL must accept a task that still has owning_core set (live
+    // on a core). Reaping waits until the owner core drops the task.
+    {
+        let mut victim = {
+            let mut pmm = PMM.lock();
+            unsafe { Process::new(0xBEEF, 0, "kill-test", &mut pmm, hhdm_offset) }
+        };
+        victim.state = ProcessState::Running;
+        victim.owning_core = 0;
+        let mut sched = crate::sched::Scheduler::new();
+        sched.processes.push(victim);
+        let accepted = sched.terminate_process_by_pid(
+            0xBEEF,
+            Signal::SIGKILL.default_exit_code(),
+            "self-test(SIGKILL-live)",
+        );
+        ok &= accepted;
+        ok &= matches!(sched.processes[0].state, ProcessState::Finished);
+        ok &= sched.processes[0].exit_cleanup_pending;
+        // Still "owned" until the owner core deschedules; must not have been
+        // fully reaped while owning_core is set.
+        ok &= sched.processes[0].owning_core == 0;
+        ok &= !matches!(sched.processes[0].state, ProcessState::Reaped);
+
+        // Simulate owner-core deschedule + opportunistic reap (reap frees AS).
+        sched.processes[0].owning_core = u8::MAX;
+        sched.reap_process_resources(0);
+        ok &= matches!(sched.processes[0].state, ProcessState::Reaped);
+        // Drop reaped slot; user space was reclaimed inside reap_process_resources.
+        let _ = sched.processes.pop();
+    }
+
+    if ok {
+        serial_println!("[SIG]  termination-path self-test: OK");
+    } else {
+        serial_println!("[SIG]  termination-path self-test: UNEXPECTED");
+    }
+}
+
 /// Bite 4, Task 0: exercise the IPC/capability hardening paths at boot and
 /// confirm each attack surface is rejected with the expected error.
 fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
@@ -2842,6 +2930,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         memory::security::run_boot_self_tests(&mut pmm, hhdm_offset);
     }
     crate::sched::run_mm0_address_space_lifecycle_test(hhdm_offset);
+    run_termination_path_self_test(hhdm_offset);
     #[cfg(feature = "mm2c_ledger_test")]
     {
         let mut pmm = PMM.lock();

@@ -512,18 +512,54 @@ fn telemetry_page() -> Option<&'static TelemetryPage> {
     (page.magic == TELEMETRY_MAGIC).then_some(page)
 }
 
+/// Parse an optional signal flag.
+///
+/// Contract (SunlightOS):
+/// - Default signal is SIGTERM (15): catchable; success means the termination
+///   *request was accepted* (queued). The target may still be alive if it is
+///   ignoring the signal or has not yet reached a delivery point.
+/// - SIGKILL (9) is forced and uncatchable; success means the kernel accepted
+///   forced termination (process is marked finished / will not return to
+///   userspace). Success is still not a wait/reap confirmation.
 fn parse_signal(args: &[&str]) -> Result<(u32, usize), i32> {
     if args.is_empty() {
         return Ok((SIGTERM, 0));
     }
-    let sig = match args[0] {
-        "-9" | "-KILL" | "-SIGKILL" => Some(SIGKILL),
-        "-15" | "-TERM" | "-SIGTERM" => Some(SIGTERM),
+    let first = args[0];
+    if !first.starts_with('-') || first == "-" {
+        return Ok((SIGTERM, 0));
+    }
+    // Numeric forms: -9, -15, or bare numbers after a single dash.
+    if let Some(num) = first.strip_prefix('-').and_then(|s| {
+        if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
+            None
+        } else {
+            parse_u64(s).map(|n| n as u32)
+        }
+    }) {
+        return match num {
+            SIGKILL | SIGTERM => Ok((num, 1)),
+            0 => {
+                // kill -0 pid: existence check (kernel supports sig==0).
+                Ok((0, 1))
+            }
+            _ => {
+                let _ = write_all(b"kill: unsupported signal (supported: 9/SIGKILL, 15/SIGTERM)\n");
+                Err(1)
+            }
+        };
+    }
+    let sig = match first {
+        "-KILL" | "-SIGKILL" | "-kill" | "-sigkill" => Some(SIGKILL),
+        "-TERM" | "-SIGTERM" | "-term" | "-sigterm" => Some(SIGTERM),
         _ => None,
     };
     match sig {
         Some(signal) => Ok((signal, 1)),
-        None => Ok((SIGTERM, 0)),
+        None => {
+            let _ = write_all(b"kill: unsupported signal (supported: 9/SIGKILL, 15/SIGTERM)\n");
+            Err(1)
+        }
     }
 }
 
@@ -540,11 +576,30 @@ fn cmd_kill(args: &[&str]) -> i32 {
         let _ = write_all(b"kill: invalid pid\n");
         return 1;
     };
-    if libc::kill(pid, signal).is_err() {
-        let _ = write_all(b"kill: signal delivery failed\n");
-        return 1;
+    match libc::kill(pid, signal) {
+        Ok(()) => {
+            // Do not wait/reap here: kill(2) success is "request accepted".
+            // Callers that need confirmed death should poll try_waitpid / process
+            // tables with a bound (see sunlightd stop path).
+            0
+        }
+        Err(_) => {
+            // Kernel returns a single failure code today (no structured errno).
+            // Common causes: unknown/stale pid, already exited, unsupported sig.
+            if signal == 0 {
+                let _ = write_all(b"kill: no such process\n");
+            } else if signal == SIGKILL {
+                let _ = write_all(
+                    b"kill: forced termination failed (no such process or already exited)\n",
+                );
+            } else {
+                let _ = write_all(
+                    b"kill: termination request failed (no such process or already exited)\n",
+                );
+            }
+            1
+        }
     }
-    0
 }
 
 fn cmd_killall(args: &[&str], substring: bool) -> i32 {
@@ -571,7 +626,7 @@ fn cmd_killall(args: &[&str], substring: bool) -> i32 {
     let count = unsafe { core::ptr::read_volatile(core::ptr::addr_of!(page.proc_count)) as usize }
         .min(TELEMETRY_MAX_PROCS);
     let mut matched = 0usize;
-    let mut delivered = 0usize;
+    let mut accepted = 0usize;
     for i in 0..count {
         let stat = unsafe { core::ptr::read_unaligned(core::ptr::addr_of!(page.procs[i])) };
         if stat.pid == 0 || stat.state == 3 {
@@ -587,8 +642,10 @@ fn cmd_killall(args: &[&str], substring: bool) -> i32 {
             continue;
         }
         matched += 1;
+        // Success = kernel accepted the request (queued TERM or forced KILL),
+        // not confirmed death.
         if libc::kill(stat.pid as u64, signal).is_ok() {
-            delivered += 1;
+            accepted += 1;
         }
     }
 
@@ -601,8 +658,8 @@ fn cmd_killall(args: &[&str], substring: bool) -> i32 {
         let _ = write_all(msg);
         return 1;
     }
-    if delivered != matched {
-        let _ = write_all(b"killall: partial delivery failure\n");
+    if accepted != matched {
+        let _ = write_all(b"killall: partial request failure\n");
         return 1;
     }
     0

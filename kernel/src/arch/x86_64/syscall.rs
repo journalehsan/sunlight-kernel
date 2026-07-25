@@ -257,39 +257,51 @@ enum SignalPostAction {
     Exit(i32),
 }
 
-/// Deliver pending signals before returning to user space
+/// Deliver pending signals before returning to user space.
+///
+/// SIGKILL is uncatchable. Default-disposition fatal signals terminate.
+/// Success of `kill(2)` means the request was accepted (queued or force-applied),
+/// not that userspace has already observed death for catchable signals.
 fn deliver_pending_signals(process: &mut crate::process::Process) -> Option<SignalPostAction> {
     use crate::process::signal::{SigHandler, Signal};
 
-    // Check for pending signals (in priority order)
-    let pending = process.signal_state.pending_signals();
+    // Forced kill first — never blocked, never ignorable.
+    if process.signal_state.is_pending(Signal::SIGKILL) {
+        process.signal_state.clear_pending(Signal::SIGKILL);
+        crate::serial_println!("[SIG] 9 delivered: forced termination");
+        return Some(SignalPostAction::Exit(Signal::SIGKILL.default_exit_code()));
+    }
 
-    // Handle a few critical signals
-    for sig_num in [2, 9, 15, 17].iter() {
-        // SIGINT, SIGKILL, SIGTERM, SIGCHLD
-        if let Some(sig) = Signal::try_from_u32(*sig_num) {
-            if pending.contains(sig) && !process.signal_state.is_blocked(sig) {
-                process.signal_state.clear_pending(sig);
+    // Catchable signals in priority order (INT, TERM, CHLD).
+    for sig_num in [2u32, 15, 17] {
+        let Some(sig) = Signal::try_from_u32(sig_num) else {
+            continue;
+        };
+        if !process.signal_state.is_pending(sig) || process.signal_state.is_blocked(sig) {
+            continue;
+        }
+        process.signal_state.clear_pending(sig);
 
-                let action = process.signal_state.get_handler(sig);
-                match action.handler {
-                    SigHandler::Ignore => {
-                        crate::serial_println!("[SIG] {} ignored", sig_num);
-                    }
-                    SigHandler::Default => {
-                        crate::serial_println!("[SIG] {} delivered: terminating process", sig_num);
-                        return Some(SignalPostAction::Exit(sig.default_exit_code()));
-                    }
-                    SigHandler::UserHandler(_handler_addr) => {
-                        // Would need to setup signal frame on user stack
-                        crate::serial_println!(
-                            "[SIG] {} would call user handler at {:#x}",
-                            sig_num,
-                            _handler_addr
-                        );
-                        // TODO: Setup signal frame and jump to handler
-                    }
+        let action = process.signal_state.get_handler(sig);
+        match action.handler {
+            SigHandler::Ignore => {
+                crate::serial_println!("[SIG] {} ignored", sig_num);
+            }
+            SigHandler::Default => {
+                if sig.default_terminates() {
+                    crate::serial_println!("[SIG] {} delivered: terminating process", sig_num);
+                    return Some(SignalPostAction::Exit(sig.default_exit_code()));
                 }
+                crate::serial_println!("[SIG] {} default action (non-fatal)", sig_num);
+            }
+            SigHandler::UserHandler(_handler_addr) => {
+                // Would need to setup signal frame on user stack
+                crate::serial_println!(
+                    "[SIG] {} would call user handler at {:#x}",
+                    sig_num,
+                    _handler_addr
+                );
+                // TODO: Setup signal frame and jump to handler
             }
         }
     }
@@ -312,12 +324,15 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
         return Err(());
     }
 
+    // Self-SIGKILL: exit on this core immediately (never returns).
     let current_idx = sched.current_process_index().unwrap_or(usize::MAX);
     if idx == current_idx && matches!(signal, Signal::SIGKILL) {
         drop(sched);
         process_exit(signal.default_exit_code());
     }
 
+    // Forced kill: mark Finished even if the task is live on another core.
+    // terminate_process_by_pid is idempotent and IPIs the owner core when needed.
     if matches!(signal, Signal::SIGKILL) {
         if !sched.terminate_process_by_pid(pid, signal.default_exit_code(), "signal(SIGKILL)") {
             return Err(());
@@ -325,8 +340,15 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
         return Ok(());
     }
 
+    // Catchable / cooperative signals: queue and wake blocked tasks so they
+    // re-enter a syscall (or timer tick) where Default disposition is applied.
     sched.processes[idx].signal_state.deliver_signal(signal);
     sched.wake_for_signal(pid);
+    // If the target is running, ensure a timer preemption notices fatal
+    // Default disposition without waiting for the next voluntary syscall.
+    if let Some(cpu) = sched.live_owner_core(idx) {
+        crate::sched::request_reschedule_on(cpu);
+    }
     Ok(())
 }
 

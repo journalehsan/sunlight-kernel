@@ -951,6 +951,15 @@ impl Scheduler {
             return;
         }
 
+        // Fatal pending signals (SIGKILL always; Default SIGTERM/SIGINT/…)
+        // must be noticed even when the task never enters a syscall. Timer
+        // preemption is a safe kernel/user return point for that check.
+        if self.apply_pending_fatal_signal(current) {
+            self.set_core_current_ticks(cpu_id, 0);
+            request_reschedule_on(cpu_id);
+            return;
+        }
+
         let quantum = quantum_ticks(&self.processes[current]) as u64;
 
         if self.core_current_ticks(cpu_id) >= quantum {
@@ -2046,6 +2055,13 @@ impl Scheduler {
         }
     }
 
+    /// Force-terminate a process by pid (SIGKILL / external kill path).
+    ///
+    /// Idempotent: returns `false` only when the pid is unknown or already
+    /// Finished/Reaped. A task that is currently executing on a core is marked
+    /// Finished and that core is asked to reschedule; reaping waits until the
+    /// owner core has dropped the task (same pattern as address-space borrower
+    /// teardown). Returns `true` once termination has been accepted.
     pub fn terminate_process_by_pid(&mut self, pid: usize, code: i32, reason: &str) -> bool {
         serial_println!(
             "[SCHED] process_exit_begin external pid={} reason={}",
@@ -2055,14 +2071,10 @@ impl Scheduler {
         let Some(idx) = self.process_index_by_pid(pid) else {
             return false;
         };
-        // Refuse to terminate a task that is currently executing on any core.
-        let is_running_on_core = self.processes[idx].owning_core != u8::MAX;
-        if is_running_on_core
-            || matches!(
-                self.processes[idx].state,
-                ProcessState::Finished | ProcessState::Reaped
-            )
-        {
+        if matches!(
+            self.processes[idx].state,
+            ProcessState::Finished | ProcessState::Reaped
+        ) {
             return false;
         }
 
@@ -2097,7 +2109,66 @@ impl Scheduler {
             self.wake_pid(parent_pid);
         }
 
+        // If still live on a core, leave owning_core set so the owner core's
+        // schedule_tick deschedules it safely; request a preemption.
+        let owning = self.processes[idx].owning_core;
+        if owning != u8::MAX {
+            request_reschedule_on(owning as usize);
+            return true;
+        }
+
         self.reap_process_resources(idx);
+        true
+    }
+
+    /// Apply a fatal pending signal on a live process slot without requiring a
+    /// syscall return. Used from the timer tick so CPU-bound userspace loops
+    /// cannot dodge Default-disposition termination forever.
+    ///
+    /// Returns true if the process was marked Finished.
+    pub fn apply_pending_fatal_signal(&mut self, idx: usize) -> bool {
+        if idx >= self.processes.len() {
+            return false;
+        }
+        if matches!(
+            self.processes[idx].state,
+            ProcessState::Finished | ProcessState::Reaped
+        ) {
+            return false;
+        }
+        let Some(code) = self.processes[idx].signal_state.take_fatal_exit_code() else {
+            return false;
+        };
+        let pid = self.processes[idx].pid;
+        serial_println!(
+            "[SCHED] process_mark_finished pid={} name='{}' reason=pending-fatal-signal code={}",
+            pid,
+            self.processes[idx].name_str(),
+            code
+        );
+        self.processes[idx].exit_code = code;
+        self.processes[idx].state = ProcessState::Finished;
+        self.processes[idx].exit_cleanup_pending = true;
+        if self.processes[idx].native_thread {
+            note_native_borrower_finished();
+        }
+        self.remove_from_ready_queues(idx);
+        note_process_finished(pid, self.processes[idx].name_str());
+
+        let parent_pid = self.processes[idx].ppid;
+        let parent_waiting = self
+            .process_mut_by_pid(parent_pid)
+            .is_some_and(|parent| parent.wait_child == Some(pid));
+        if parent_waiting {
+            self.wake_pid(parent_pid);
+        }
+
+        let owning = self.processes[idx].owning_core;
+        if owning != u8::MAX {
+            request_reschedule_on(owning as usize);
+        } else {
+            self.reap_process_resources(idx);
+        }
         true
     }
 
