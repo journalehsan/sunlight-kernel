@@ -91,7 +91,15 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 #[cfg(feature = "sunlightos")]
-use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg, IPC_REGISTER_WORDS};
+use sunlight_ipc::{
+    ipc_call, nameserver_lookup, shm_free, shm_map, CapabilityToken, IpcMsg, IPC_REGISTER_WORDS,
+};
+
+// Share the fixed stats wire layout with sunlight-kv without linking the full
+// daemon crate (which would pull a second GlobalAlloc into this binary).
+#[cfg(feature = "sunlightos")]
+#[path = "../../sunlight-kv/src/stats_wire.rs"]
+mod stats_wire;
 
 #[cfg(feature = "sunlightos")]
 fn stdout_write(s: &str) {
@@ -230,6 +238,8 @@ const KV_REPLY: u64 = 0x4BFF;
 const KV_ERROR: u64 = 0x4BEE;
 #[cfg(feature = "sunlightos")]
 const KV_VALUE: u64 = 0x4B05;
+#[cfg(feature = "sunlightos")]
+const KV_STATS: u64 = 0x4B0B;
 
 #[cfg(feature = "sunlightos")]
 fn print_usage() {
@@ -240,6 +250,121 @@ fn print_usage() {
     println!("  sunlight-kvctl get KEY");
     println!("  sunlight-kvctl delete KEY");
     println!("  sunlight-kvctl scan");
+    println!("  sunlight-kvctl stats");
+}
+
+#[cfg(feature = "sunlightos")]
+fn print_stats(s: &stats_wire::StatsSnapshotV1) {
+    use stats_wire::*;
+    let started = s.get(F_STARTED_MS);
+    let now = s.get(F_NOW_MS);
+    let uptime = now.saturating_sub(started);
+
+    println!("sunlight-kv stats (schema v{})", s.get(F_VERSION));
+    println!("");
+    println!("runtime (monotonic ms since boot)");
+    println!("  started_ms={}  now_ms={}  uptime_ms={}", started, now, uptime);
+    println!(
+        "  last_activity_ms={}  last_error_ms={}  last_error_code={}",
+        s.get(F_LAST_ACTIVITY_MS),
+        s.get(F_LAST_ERROR_MS),
+        s.get(F_LAST_ERROR_CODE)
+    );
+    println!(
+        "  volatile_only={}  (1=persistence disabled/failed)",
+        s.get(F_VOLATILE_ONLY)
+    );
+
+    println!("");
+    println!("request traffic (lifetime totals)");
+    println!(
+        "  total={}  ok={}  err={}",
+        s.get(F_REQUESTS_TOTAL),
+        s.get(F_REQUESTS_OK),
+        s.get(F_REQUESTS_ERR)
+    );
+    println!(
+        "  by_op put={} get={} delete={} scan={}",
+        s.get(F_OP_PUT),
+        s.get(F_OP_GET),
+        s.get(F_OP_DELETE),
+        s.get(F_OP_SCAN)
+    );
+    println!(
+        "  by_op put_shm={} get_shm={} put_shm2={} get_shm2={} delete_shm2={}",
+        s.get(F_OP_PUT_SHM),
+        s.get(F_OP_GET_SHM),
+        s.get(F_OP_PUT_SHM2),
+        s.get(F_OP_GET_SHM2),
+        s.get(F_OP_DELETE_SHM2)
+    );
+    println!("  by_op stats={}", s.get(F_OP_STATS));
+
+    println!("");
+    println!("event-loop activity (lifetime totals)");
+    println!(
+        "  iterations={}  recv_blocking={}  try_recv_hit={}  try_recv_miss={}",
+        s.get(F_LOOP_ITERATIONS),
+        s.get(F_RECV_BLOCKING),
+        s.get(F_TRY_RECV_HIT),
+        s.get(F_TRY_RECV_MISS)
+    );
+
+    println!("");
+    println!("live resources (current / high-water)");
+    println!(
+        "  key_count={}  payload_bytes={}  mutations_total={}",
+        s.get(F_KEY_COUNT),
+        s.get(F_PAYLOAD_BYTES),
+        s.get(F_MUTATIONS)
+    );
+    println!(
+        "  persist_queue_depth={}  persist_queue_hwm={}",
+        s.get(F_PERSIST_QUEUE_DEPTH),
+        s.get(F_PERSIST_QUEUE_HWM)
+    );
+
+    println!("");
+    println!("cleanup/persistence (lifetime totals)");
+    println!(
+        "  flush_ok={}  flush_fail={}  record_bytes_flushed={}  skipped_volatile={}",
+        s.get(F_PERSIST_FLUSH_OK),
+        s.get(F_PERSIST_FLUSH_FAIL),
+        s.get(F_PERSIST_RECORD_BYTES),
+        s.get(F_PERSIST_SKIPPED_VOLATILE)
+    );
+
+    println!("");
+    println!("errors (lifetime totals)");
+    println!(
+        "  decode_errors={}  reply_error_labels={}  unknown_opcodes={}",
+        s.get(F_DECODE_ERRORS),
+        s.get(F_REPLY_ERROR_LABELS),
+        s.get(F_UNKNOWN_OPCODES)
+    );
+
+    println!("");
+    println!("client attribution (kernel badge PID; fixed {} slots)", STATS_CLIENT_SLOTS);
+    println!(
+        "  slots_used={}  pids_tracked={}  other_client_requests={}",
+        s.get(F_CLIENT_SLOTS_USED),
+        s.get(F_CLIENT_PIDS_TRACKED),
+        s.get(F_OTHER_CLIENT_REQUESTS)
+    );
+    let mut any = false;
+    for i in 0..STATS_CLIENT_SLOTS {
+        let pid = s.client_pid(i);
+        let n = s.client_requests(i);
+        if pid != 0 {
+            any = true;
+            println!("  pid={}  requests={}", pid, n);
+        }
+    }
+    if !any {
+        println!("  (no clients tracked yet)");
+    }
+    println!("");
+    println!("note: sample twice and subtract for rates; counters are saturating u64");
 }
 
 // Kernel sets rdi=argc, rsi=argv, rdx=envp per the SysV x86-64 ABI.
@@ -361,8 +486,61 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
                 sunlight_libc::exit(1);
             }
         }
+        "stats" | "stat" | "status" => {
+            let mut msg = IpcMsg::empty();
+            msg.label = KV_STATS;
+            let reply = ipc_call(kv_cap, msg);
+            if reply.label == KV_ERROR {
+                println!("ERROR: stats failed (daemon error)");
+                sunlight_libc::exit(1);
+            }
+            if reply.label != KV_REPLY {
+                println!("ERROR: unexpected stats reply label={:#x}", reply.label);
+                sunlight_libc::exit(1);
+            }
+            let version = reply.words[0];
+            let nbytes = reply.words[1] as usize;
+            let tok = reply.caps[0];
+            if version != stats_wire::STATS_VERSION {
+                println!(
+                    "ERROR: unsupported stats schema version {} (want {})",
+                    version,
+                    stats_wire::STATS_VERSION
+                );
+                if tok != CapabilityToken::INVALID {
+                    let _ = shm_free(tok);
+                }
+                sunlight_libc::exit(1);
+            }
+            if tok == CapabilityToken::INVALID || nbytes < stats_wire::STATS_BYTES {
+                println!("ERROR: stats reply missing SHM payload");
+                if tok != CapabilityToken::INVALID {
+                    let _ = shm_free(tok);
+                }
+                sunlight_libc::exit(1);
+            }
+            let ptr = match shm_map(tok) {
+                Ok(p) => p,
+                Err(_) => {
+                    println!("ERROR: shm_map failed for stats");
+                    let _ = shm_free(tok);
+                    sunlight_libc::exit(1);
+                }
+            };
+            let bytes = unsafe { core::slice::from_raw_parts(ptr, stats_wire::STATS_BYTES) };
+            let snap = match stats_wire::StatsSnapshotV1::decode(bytes) {
+                Some(s) => s,
+                None => {
+                    println!("ERROR: stats snapshot decode failed");
+                    let _ = shm_free(tok);
+                    sunlight_libc::exit(1);
+                }
+            };
+            let _ = shm_free(tok);
+            print_stats(&snap);
+        }
         _ => {
-            println!("unknown command (try: put get delete scan)");
+            println!("unknown command (try: put get delete scan stats)");
             print_usage();
             sunlight_libc::exit(1);
         }

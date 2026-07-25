@@ -77,9 +77,21 @@ use alloc::vec::Vec;
 
 #[cfg(feature = "sunlightos")]
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_try_recv, nameserver_lookup,
-    nameserver_register, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, SmMsg,
-    IPC_REGISTER_WORDS,
+    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_try_recv, monotonic_millis,
+    nameserver_lookup, nameserver_register, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg,
+    SmMsg, IPC_REGISTER_WORDS,
+};
+#[cfg(feature = "sunlightos")]
+use sunlight_kv::stats_wire::{
+    StatsSnapshotV1, F_CLIENT_PIDS_TRACKED, F_CLIENT_SLOTS_USED, F_CLIENT_TABLE, F_DECODE_ERRORS,
+    F_KEY_COUNT, F_LAST_ACTIVITY_MS, F_LAST_ERROR_CODE, F_LAST_ERROR_MS, F_LOOP_ITERATIONS, F_MAGIC,
+    F_MUTATIONS, F_NOW_MS, F_OP_DELETE, F_OP_DELETE_SHM2, F_OP_GET, F_OP_GET_SHM, F_OP_GET_SHM2,
+    F_OP_PUT, F_OP_PUT_SHM, F_OP_PUT_SHM2, F_OP_SCAN, F_OP_STATS, F_OTHER_CLIENT_REQUESTS,
+    F_PAYLOAD_BYTES, F_PERSIST_FLUSH_FAIL, F_PERSIST_FLUSH_OK, F_PERSIST_QUEUE_DEPTH,
+    F_PERSIST_QUEUE_HWM, F_PERSIST_RECORD_BYTES, F_PERSIST_SKIPPED_VOLATILE, F_RECV_BLOCKING,
+    F_REPLY_ERROR_LABELS, F_REQUESTS_ERR, F_REQUESTS_OK, F_REQUESTS_TOTAL, F_STARTED_MS,
+    F_TRY_RECV_HIT, F_TRY_RECV_MISS, F_UNKNOWN_OPCODES, F_VERSION, F_VOLATILE_ONLY, STATS_BYTES,
+    STATS_CLIENT_SLOTS, STATS_MAGIC, STATS_VERSION,
 };
 #[cfg(feature = "sunlightos")]
 use sunlight_libc::{self as libc, Fd};
@@ -471,8 +483,278 @@ const KV_PUT_SHM2: u64 = 0x4B08;
 const KV_GET_SHM2: u64 = 0x4B09;
 #[cfg(feature = "sunlightos")]
 const KV_DELETE_SHM2: u64 = 0x4B0A;
+/// Read-only diagnostic snapshot (SHM-backed fixed layout). See `stats_wire`.
+#[cfg(feature = "sunlightos")]
+const KV_STATS: u64 = 0x4B0B;
 #[cfg(feature = "sunlightos")]
 const SHM_PAGE: usize = 4096;
+
+// ---- Bounded soak diagnostics (saturating counters; no per-request logs) ----
+#[cfg(feature = "sunlightos")]
+#[derive(Clone, Copy)]
+struct ClientSlot {
+    pid: u64,
+    requests: u64,
+}
+
+#[cfg(feature = "sunlightos")]
+struct KvDiag {
+    started_ms: u64,
+    last_activity_ms: u64,
+    last_error_ms: u64,
+    last_error_code: u64,
+    requests_total: u64,
+    requests_ok: u64,
+    requests_err: u64,
+    decode_errors: u64,
+    reply_error_labels: u64,
+    unknown_opcodes: u64,
+    op_put: u64,
+    op_get: u64,
+    op_delete: u64,
+    op_scan: u64,
+    op_put_shm: u64,
+    op_get_shm: u64,
+    op_put_shm2: u64,
+    op_get_shm2: u64,
+    op_delete_shm2: u64,
+    op_stats: u64,
+    loop_iterations: u64,
+    recv_blocking: u64,
+    try_recv_hit: u64,
+    try_recv_miss: u64,
+    /// Sum of live value lengths only (not ACL/key overhead); maintained on put/delete.
+    payload_bytes: u64,
+    mutations: u64,
+    persist_queue_hwm: u64,
+    persist_flush_ok: u64,
+    persist_flush_fail: u64,
+    persist_record_bytes: u64,
+    persist_skipped_volatile: u64,
+    clients: [ClientSlot; STATS_CLIENT_SLOTS],
+    client_slots_used: u64,
+    other_client_requests: u64,
+    client_pids_tracked: u64,
+}
+
+#[cfg(feature = "sunlightos")]
+impl KvDiag {
+    const fn new() -> Self {
+        Self {
+            started_ms: 0,
+            last_activity_ms: 0,
+            last_error_ms: 0,
+            last_error_code: 0,
+            requests_total: 0,
+            requests_ok: 0,
+            requests_err: 0,
+            decode_errors: 0,
+            reply_error_labels: 0,
+            unknown_opcodes: 0,
+            op_put: 0,
+            op_get: 0,
+            op_delete: 0,
+            op_scan: 0,
+            op_put_shm: 0,
+            op_get_shm: 0,
+            op_put_shm2: 0,
+            op_get_shm2: 0,
+            op_delete_shm2: 0,
+            op_stats: 0,
+            loop_iterations: 0,
+            recv_blocking: 0,
+            try_recv_hit: 0,
+            try_recv_miss: 0,
+            payload_bytes: 0,
+            mutations: 0,
+            persist_queue_hwm: 0,
+            persist_flush_ok: 0,
+            persist_flush_fail: 0,
+            persist_record_bytes: 0,
+            persist_skipped_volatile: 0,
+            clients: [ClientSlot {
+                pid: 0,
+                requests: 0,
+            }; STATS_CLIENT_SLOTS],
+            client_slots_used: 0,
+            other_client_requests: 0,
+            client_pids_tracked: 0,
+        }
+    }
+}
+
+#[cfg(feature = "sunlightos")]
+static mut DIAG: KvDiag = KvDiag::new();
+
+#[cfg(feature = "sunlightos")]
+#[inline]
+fn sat_inc(c: &mut u64) {
+    *c = c.saturating_add(1);
+}
+
+#[cfg(feature = "sunlightos")]
+#[inline]
+fn sat_add(c: &mut u64, n: u64) {
+    *c = c.saturating_add(n);
+}
+
+#[cfg(feature = "sunlightos")]
+fn diag_note_error(code: u64) {
+    unsafe {
+        let d = &mut DIAG;
+        d.last_error_ms = monotonic_millis();
+        d.last_error_code = code;
+    }
+}
+
+#[cfg(feature = "sunlightos")]
+fn diag_note_client(pid: u64) {
+    if pid == 0 {
+        return;
+    }
+    unsafe {
+        let d = &mut DIAG;
+        for slot in d.clients.iter_mut() {
+            if slot.pid == pid {
+                sat_inc(&mut slot.requests);
+                return;
+            }
+        }
+        for slot in d.clients.iter_mut() {
+            if slot.pid == 0 {
+                slot.pid = pid;
+                slot.requests = 1;
+                sat_inc(&mut d.client_slots_used);
+                sat_inc(&mut d.client_pids_tracked);
+                return;
+            }
+        }
+        // Fixed table full: aggregate rather than grow.
+        sat_inc(&mut d.other_client_requests);
+    }
+}
+
+#[cfg(feature = "sunlightos")]
+fn diag_note_request_start(label: u64, badge_pid: u64) {
+    unsafe {
+        let d = &mut DIAG;
+        sat_inc(&mut d.requests_total);
+        sat_inc(&mut d.loop_iterations);
+        d.last_activity_ms = monotonic_millis();
+        match label {
+            KV_PUT => sat_inc(&mut d.op_put),
+            KV_GET => sat_inc(&mut d.op_get),
+            KV_DELETE => sat_inc(&mut d.op_delete),
+            KV_SCAN => sat_inc(&mut d.op_scan),
+            KV_PUT_SHM => sat_inc(&mut d.op_put_shm),
+            KV_GET_SHM => sat_inc(&mut d.op_get_shm),
+            KV_PUT_SHM2 => sat_inc(&mut d.op_put_shm2),
+            KV_GET_SHM2 => sat_inc(&mut d.op_get_shm2),
+            KV_DELETE_SHM2 => sat_inc(&mut d.op_delete_shm2),
+            KV_STATS => sat_inc(&mut d.op_stats),
+            _ => sat_inc(&mut d.unknown_opcodes),
+        }
+    }
+    diag_note_client(badge_pid);
+}
+
+#[cfg(feature = "sunlightos")]
+fn diag_note_outcome(reply_label: u64, decode_error: bool) {
+    unsafe {
+        let d = &mut DIAG;
+        if decode_error {
+            sat_inc(&mut d.decode_errors);
+            sat_inc(&mut d.requests_err);
+            return;
+        }
+        if reply_label == KV_ERROR {
+            sat_inc(&mut d.reply_error_labels);
+            sat_inc(&mut d.requests_err);
+        } else {
+            sat_inc(&mut d.requests_ok);
+        }
+    }
+}
+
+#[cfg(feature = "sunlightos")]
+fn diag_snapshot() -> StatsSnapshotV1 {
+    let mut s = StatsSnapshotV1::zeroed();
+    let now = monotonic_millis();
+    unsafe {
+        let d = &DIAG;
+        let key_count = LIVE.as_ref().map(|m| m.len() as u64).unwrap_or(0);
+        let qdepth = PERSIST_QUEUE
+            .as_ref()
+            .map(|q| q.len() as u64)
+            .unwrap_or(0);
+        let volatile = if VOLATILE_ONLY { 1 } else { 0 };
+
+        s.set(F_MAGIC, STATS_MAGIC);
+        s.set(F_VERSION, STATS_VERSION);
+        s.set(F_STARTED_MS, d.started_ms);
+        s.set(F_NOW_MS, now);
+        s.set(F_LAST_ACTIVITY_MS, d.last_activity_ms);
+        s.set(F_LAST_ERROR_MS, d.last_error_ms);
+        s.set(F_LAST_ERROR_CODE, d.last_error_code);
+        s.set(F_VOLATILE_ONLY, volatile);
+
+        s.set(F_REQUESTS_TOTAL, d.requests_total);
+        s.set(F_REQUESTS_OK, d.requests_ok);
+        s.set(F_REQUESTS_ERR, d.requests_err);
+        s.set(F_DECODE_ERRORS, d.decode_errors);
+        s.set(F_REPLY_ERROR_LABELS, d.reply_error_labels);
+        s.set(F_UNKNOWN_OPCODES, d.unknown_opcodes);
+
+        s.set(F_OP_PUT, d.op_put);
+        s.set(F_OP_GET, d.op_get);
+        s.set(F_OP_DELETE, d.op_delete);
+        s.set(F_OP_SCAN, d.op_scan);
+        s.set(F_OP_PUT_SHM, d.op_put_shm);
+        s.set(F_OP_GET_SHM, d.op_get_shm);
+        s.set(F_OP_PUT_SHM2, d.op_put_shm2);
+        s.set(F_OP_GET_SHM2, d.op_get_shm2);
+        s.set(F_OP_DELETE_SHM2, d.op_delete_shm2);
+        s.set(F_OP_STATS, d.op_stats);
+
+        s.set(F_LOOP_ITERATIONS, d.loop_iterations);
+        s.set(F_RECV_BLOCKING, d.recv_blocking);
+        s.set(F_TRY_RECV_HIT, d.try_recv_hit);
+        s.set(F_TRY_RECV_MISS, d.try_recv_miss);
+
+        s.set(F_KEY_COUNT, key_count);
+        s.set(F_PAYLOAD_BYTES, d.payload_bytes);
+        s.set(F_MUTATIONS, d.mutations);
+        s.set(F_PERSIST_QUEUE_DEPTH, qdepth);
+        s.set(F_PERSIST_QUEUE_HWM, d.persist_queue_hwm);
+        s.set(F_PERSIST_FLUSH_OK, d.persist_flush_ok);
+        s.set(F_PERSIST_FLUSH_FAIL, d.persist_flush_fail);
+        s.set(F_PERSIST_RECORD_BYTES, d.persist_record_bytes);
+        s.set(F_PERSIST_SKIPPED_VOLATILE, d.persist_skipped_volatile);
+
+        s.set(F_CLIENT_SLOTS_USED, d.client_slots_used);
+        s.set(F_OTHER_CLIENT_REQUESTS, d.other_client_requests);
+        s.set(F_CLIENT_PIDS_TRACKED, d.client_pids_tracked);
+
+        for i in 0..STATS_CLIENT_SLOTS {
+            let base = F_CLIENT_TABLE + i * 2;
+            s.set(base, d.clients[i].pid);
+            s.set(base + 1, d.clients[i].requests);
+        }
+    }
+    s
+}
+
+/// Error codes recorded in last_error_code (diagnostic only; not a public API).
+#[cfg(feature = "sunlightos")]
+mod diag_err {
+    pub const EMPTY_KEY: u64 = 1;
+    pub const BAD_SHM: u64 = 2;
+    pub const ACL_OR_MISSING: u64 = 3;
+    pub const SHM_ALLOC: u64 = 4;
+    pub const UNSUPPORTED: u64 = 5;
+    pub const STATS_SHM: u64 = 6;
+    pub const PERSIST_FAIL: u64 = 7;
+}
 
 #[cfg(feature = "sunlightos")]
 static mut LOG_FD: Option<Fd> = None;
@@ -597,6 +879,7 @@ fn build_record_bytes(key: &str, value: &[u8], acl_bytes: &[u8], flags: u16) -> 
 fn queue_persist_record(key: &str, rec: Vec<u8>) {
     unsafe {
         if VOLATILE_ONLY {
+            sat_inc(&mut DIAG.persist_skipped_volatile);
             serial_println!(
                 "[KV][SM] persistence skipped; volatile store updated key={}",
                 key
@@ -611,6 +894,10 @@ fn queue_persist_record(key: &str, rec: Vec<u8>) {
                 key: String::from(key),
                 bytes: rec,
             });
+            let depth = queue.len() as u64;
+            if depth > DIAG.persist_queue_hwm {
+                DIAG.persist_queue_hwm = depth;
+            }
         }
     }
 }
@@ -628,7 +915,12 @@ fn flush_one_persist() {
         return;
     };
 
-    if !sm_append_record(&record.bytes) {
+    if sm_append_record(&record.bytes) {
+        unsafe {
+            sat_inc(&mut DIAG.persist_flush_ok);
+            sat_add(&mut DIAG.persist_record_bytes, record.bytes.len() as u64);
+        }
+    } else {
         unsafe {
             VOLATILE_ONLY = true;
             if PERSIST_QUEUE.is_none() {
@@ -637,7 +929,9 @@ fn flush_one_persist() {
             if let Some(queue) = &mut PERSIST_QUEUE {
                 queue.clear();
             }
+            sat_inc(&mut DIAG.persist_flush_fail);
         }
+        diag_note_error(diag_err::PERSIST_FAIL);
         serial_println!(
             "[KV][SM] persistence failed; volatile store updated key={}",
             record.key
@@ -647,14 +941,15 @@ fn flush_one_persist() {
 
 #[cfg(feature = "sunlightos")]
 fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
-    let acl = if let Some((_, existing_acl)) = unsafe { LIVE.as_ref().and_then(|m| m.get(key)) } {
-        if !existing_acl.allows_write(caller) {
-            return false;
-        }
-        existing_acl.clone()
-    } else {
-        sunlight_kv::Acl::new(caller)
-    };
+    let (acl, old_len) =
+        if let Some((old_val, existing_acl)) = unsafe { LIVE.as_ref().and_then(|m| m.get(key)) } {
+            if !existing_acl.allows_write(caller) {
+                return false;
+            }
+            (existing_acl.clone(), Some(old_val.len() as u64))
+        } else {
+            (sunlight_kv::Acl::new(caller), None)
+        };
 
     let acl_bytes = serialize_acl(&acl);
     let rec = build_record_bytes(key, value, &acl_bytes, FLAG_PUT);
@@ -666,6 +961,12 @@ fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
         if let Some(map) = &mut LIVE {
             map.insert(String::from(key), (value.to_vec(), acl));
         }
+        // Maintain payload_bytes without scanning the keyspace.
+        if let Some(old) = old_len {
+            DIAG.payload_bytes = DIAG.payload_bytes.saturating_sub(old);
+        }
+        sat_add(&mut DIAG.payload_bytes, value.len() as u64);
+        sat_inc(&mut DIAG.mutations);
     }
     queue_persist_record(key, rec);
     true
@@ -714,8 +1015,11 @@ fn do_delete(key: &str, caller: &str) -> bool {
     let rec = build_record_bytes(key, &[], &acl_bytes, FLAG_DELETE);
     unsafe {
         if let Some(map) = &mut LIVE {
-            map.remove(key);
+            if let Some((old_val, _)) = map.remove(key) {
+                DIAG.payload_bytes = DIAG.payload_bytes.saturating_sub(old_val.len() as u64);
+            }
         }
+        sat_inc(&mut DIAG.mutations);
     }
     queue_persist_record(key, rec);
     true
@@ -930,12 +1234,20 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
         serial_println!("[SUNLIGHT-KV] WARNING: kv.store not available, using volatile store");
         (BTreeMap::new(), true)
     };
+    let mut payload_sum: u64 = 0;
+    for (_k, (v, _)) in live_map.iter() {
+        payload_sum = payload_sum.saturating_add(v.len() as u64);
+    }
+    let boot_ms = monotonic_millis();
     unsafe {
         LIVE = Some(live_map);
         VOLATILE_ONLY = volatile_only;
         if PERSIST_QUEUE.is_none() {
             PERSIST_QUEUE = Some(VecDeque::new());
         }
+        DIAG.started_ms = boot_ms;
+        DIAG.last_activity_ms = boot_ms;
+        DIAG.payload_bytes = payload_sum;
     }
 
     serial_println!("[SUNLIGHT-KV] Entering IPC loop");
@@ -953,14 +1265,25 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
     // calculator history save/load produces multiple serial log lines.
     const TRACE_KV: bool = false;
 
+    unsafe {
+        sat_inc(&mut DIAG.recv_blocking);
+    }
     let mut msg = ipc_recv(ep);
     loop {
         if TRACE_KV {
             serial_println!("[KV] request label={:#x}", msg.label);
         }
 
+        // Kernel overwrites badge with the real sender PID (authoritative).
+        let caller_pid = msg.badge;
+        diag_note_request_start(msg.label, caller_pid);
+
         let mut reply = IpcMsg::empty();
         reply.label = KV_REPLY;
+        let mut decode_error = false;
+        // If set, fill this already-mapped SHM page with a stats snapshot after
+        // outcome counters are updated (ptr from shm_alloc; client receives token).
+        let mut stats_page: Option<*mut u8> = None;
 
         match msg.label {
             KV_PUT => {
@@ -968,6 +1291,8 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 let val = unpack_kv_value(&msg);
                 if key.is_empty() {
                     reply.label = KV_ERROR;
+                    decode_error = true;
+                    diag_note_error(diag_err::EMPTY_KEY);
                 } else {
                     let caller = "root";
                     if do_put(&key, &val, caller) {
@@ -978,6 +1303,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     } else {
                         reply.label = KV_ERROR;
                         reply.words[0] = 2;
+                        diag_note_error(diag_err::ACL_OR_MISSING);
                     }
                 }
             }
@@ -985,6 +1311,8 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 let key = unpack_kv_key(&msg);
                 if key.is_empty() {
                     reply.label = KV_ERROR;
+                    decode_error = true;
+                    diag_note_error(diag_err::EMPTY_KEY);
                 } else {
                     let caller = "root";
                     match do_get(&key, caller) {
@@ -1014,6 +1342,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                             }
                             reply.label = KV_ERROR;
                             reply.words[0] = 2;
+                            diag_note_error(diag_err::ACL_OR_MISSING);
                         }
                     }
                 }
@@ -1026,6 +1355,8 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 if key.is_empty() || tok == CapabilityToken::INVALID || vlen > SHM_PAGE {
                     reply.label = KV_ERROR;
                     reply.words[0] = 1;
+                    decode_error = true;
+                    diag_note_error(diag_err::BAD_SHM);
                 } else {
                     match shm_map(tok) {
                         Ok(ptr) => {
@@ -1039,11 +1370,14 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                             } else {
                                 reply.label = KV_ERROR;
                                 reply.words[0] = 2;
+                                diag_note_error(diag_err::ACL_OR_MISSING);
                             }
                         }
                         Err(_) => {
                             reply.label = KV_ERROR;
                             reply.words[0] = 3;
+                            decode_error = true;
+                            diag_note_error(diag_err::BAD_SHM);
                         }
                     }
                 }
@@ -1053,12 +1387,20 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 let key = unpack_str(&msg.words, 2, (IPC_REGISTER_WORDS - 2) * 8);
                 if key.is_empty() {
                     reply.label = KV_ERROR;
+                    decode_error = true;
+                    diag_note_error(diag_err::EMPTY_KEY);
                 } else {
                     match do_get(&key, "root") {
-                        Ok(v) => send_shm_value_reply(&mut reply, &v),
+                        Ok(v) => {
+                            send_shm_value_reply(&mut reply, &v);
+                            if reply.label == KV_ERROR {
+                                diag_note_error(diag_err::SHM_ALLOC);
+                            }
+                        }
                         Err(()) => {
                             reply.label = KV_ERROR;
                             reply.words[0] = 2;
+                            diag_note_error(diag_err::ACL_OR_MISSING);
                         }
                     }
                 }
@@ -1071,21 +1413,25 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 let Some(key_bytes) = read_shm_bytes(key_tok, key_len) else {
                     reply.label = KV_ERROR;
                     reply.words[0] = 1;
+                    decode_error = true;
+                    diag_note_error(diag_err::BAD_SHM);
                     if value_tok != CapabilityToken::INVALID {
                         let _ = shm_free(value_tok);
                     }
                     if key_tok != CapabilityToken::INVALID {
                         let _ = shm_free(key_tok);
                     }
-                    msg = ipc_reply_and_try_recv(ep, reply).unwrap_or_else(|| ipc_recv(ep));
-                    flush_one_persist();
+                    diag_note_outcome(reply.label, decode_error);
+                    finish_reply(ep, reply, &mut msg);
                     continue;
                 };
                 let Some(value) = read_shm_bytes(value_tok, value_len) else {
                     reply.label = KV_ERROR;
                     reply.words[0] = 1;
-                    msg = ipc_reply_and_try_recv(ep, reply).unwrap_or_else(|| ipc_recv(ep));
-                    flush_one_persist();
+                    decode_error = true;
+                    diag_note_error(diag_err::BAD_SHM);
+                    diag_note_outcome(reply.label, decode_error);
+                    finish_reply(ep, reply, &mut msg);
                     continue;
                 };
                 match String::from_utf8(key_bytes) {
@@ -1095,6 +1441,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     _ => {
                         reply.label = KV_ERROR;
                         reply.words[0] = 2;
+                        diag_note_error(diag_err::ACL_OR_MISSING);
                     }
                 }
             }
@@ -1104,21 +1451,31 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 let Some(key_bytes) = read_shm_bytes(key_tok, key_len) else {
                     reply.label = KV_ERROR;
                     reply.words[0] = 1;
-                    msg = ipc_reply_and_try_recv(ep, reply).unwrap_or_else(|| ipc_recv(ep));
-                    flush_one_persist();
+                    decode_error = true;
+                    diag_note_error(diag_err::BAD_SHM);
+                    diag_note_outcome(reply.label, decode_error);
+                    finish_reply(ep, reply, &mut msg);
                     continue;
                 };
                 match String::from_utf8(key_bytes) {
                     Ok(key) if !key.is_empty() => match do_get(&key, "root") {
-                        Ok(v) => send_shm_value_reply(&mut reply, &v),
+                        Ok(v) => {
+                            send_shm_value_reply(&mut reply, &v);
+                            if reply.label == KV_ERROR {
+                                diag_note_error(diag_err::SHM_ALLOC);
+                            }
+                        }
                         Err(()) => {
                             reply.label = KV_ERROR;
                             reply.words[0] = 2;
+                            diag_note_error(diag_err::ACL_OR_MISSING);
                         }
                     },
                     _ => {
                         reply.label = KV_ERROR;
                         reply.words[0] = 2;
+                        decode_error = true;
+                        diag_note_error(diag_err::EMPTY_KEY);
                     }
                 }
             }
@@ -1128,8 +1485,10 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 let Some(key_bytes) = read_shm_bytes(key_tok, key_len) else {
                     reply.label = KV_ERROR;
                     reply.words[0] = 1;
-                    msg = ipc_reply_and_try_recv(ep, reply).unwrap_or_else(|| ipc_recv(ep));
-                    flush_one_persist();
+                    decode_error = true;
+                    diag_note_error(diag_err::BAD_SHM);
+                    diag_note_outcome(reply.label, decode_error);
+                    finish_reply(ep, reply, &mut msg);
                     continue;
                 };
                 match String::from_utf8(key_bytes) {
@@ -1139,6 +1498,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     _ => {
                         reply.label = KV_ERROR;
                         reply.words[0] = 2;
+                        diag_note_error(diag_err::ACL_OR_MISSING);
                     }
                 }
             }
@@ -1146,12 +1506,15 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                 let key = unpack_kv_key(&msg);
                 if key.is_empty() {
                     reply.label = KV_ERROR;
+                    decode_error = true;
+                    diag_note_error(diag_err::EMPTY_KEY);
                 } else {
                     let caller = "root";
                     if do_delete(&key, caller) {
                         reply.words[0] = 0;
                     } else {
                         reply.label = KV_ERROR;
+                        diag_note_error(diag_err::ACL_OR_MISSING);
                     }
                 }
             }
@@ -1170,23 +1533,75 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     wi += 1;
                 }
             }
+            KV_STATS => {
+                // Read-only snapshot: fixed-size SHM blob. Key count is map.len()
+                // (O(1)); payload_bytes is maintained incrementally — no keyspace walk.
+                // The SHM page is filled after outcome accounting so this stats
+                // request itself is visible in the returned totals.
+                match shm_alloc() {
+                    Ok((ptr, token)) => {
+                        stats_page = Some(ptr);
+                        reply.label = KV_REPLY;
+                        reply.words[0] = STATS_VERSION;
+                        reply.words[1] = STATS_BYTES as u64;
+                        reply = reply.with_cap(0, token);
+                    }
+                    Err(_) => {
+                        reply.label = KV_ERROR;
+                        reply.words[0] = 3;
+                        diag_note_error(diag_err::STATS_SHM);
+                    }
+                }
+            }
             _ => {
                 serial_println!("[KV] unsupported label={:#x}", msg.label);
                 reply.label = KV_ERROR;
                 reply.words[0] = 0xff;
+                diag_note_error(diag_err::UNSUPPORTED);
+            }
+        }
+
+        diag_note_outcome(reply.label, decode_error);
+
+        // Fill stats SHM only after counters include this request's outcome.
+        // Do not free the token: client maps and frees (same pattern as GET_SHM).
+        if let Some(ptr) = stats_page {
+            if reply.label == KV_REPLY {
+                let snap = diag_snapshot();
+                let mut buf = [0u8; STATS_BYTES];
+                let _ = snap.encode(&mut buf);
+                unsafe {
+                    core::ptr::copy_nonoverlapping(buf.as_ptr(), ptr, STATS_BYTES);
+                }
             }
         }
 
         if TRACE_KV {
             serial_println!("[KV] reply label={:#x} w0={}", reply.label, reply.words[0]);
         }
-        if let Some(next) = ipc_reply_and_try_recv(ep, reply) {
-            msg = next;
-            continue;
-        }
-        flush_one_persist();
-        msg = ipc_recv(ep);
+        finish_reply(ep, reply, &mut msg);
     }
+}
+
+/// Reply then either take a queued call immediately or flush one persist entry
+/// and block for the next message. Updates event-loop diagnostics only.
+#[cfg(feature = "sunlightos")]
+fn finish_reply(ep: sunlight_ipc::EndpointId, reply: IpcMsg, msg: &mut IpcMsg) {
+    if let Some(next) = ipc_reply_and_try_recv(ep, reply) {
+        unsafe {
+            sat_inc(&mut DIAG.try_recv_hit);
+        }
+        *msg = next;
+        return;
+    }
+    unsafe {
+        sat_inc(&mut DIAG.try_recv_miss);
+    }
+    flush_one_persist();
+    unsafe {
+        sat_inc(&mut DIAG.recv_blocking);
+    }
+    *msg = ipc_recv(ep);
 }
 
 #[cfg(feature = "sunlightos")]
