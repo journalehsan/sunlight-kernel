@@ -450,7 +450,14 @@ fn main() {
 
     for bin in binaries {
         let path = release_dir.join(bin.output);
-        if !path.exists() {
+        let needs_build = !path.exists() || !userspace_elf_looks_valid(&path);
+        if needs_build {
+            if path.exists() {
+                println!(
+                    "cargo:warning=rebuilding embedded binary {} (missing or kernel-linked ELF)",
+                    bin.package
+                );
+            }
             build_package(
                 workspace_root,
                 scratch_target_dir.as_path(),
@@ -461,6 +468,25 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed=build.rs");
+}
+
+/// Reject ELFs linked with the kernel linker script (vaddr in HHDM / -2GiB).
+/// Manual `cargo build -p <svc>` without userspace RUSTFLAGS produces those
+/// and previously stuck forever because build.rs only checked `exists()`.
+fn userspace_elf_looks_valid(path: &Path) -> bool {
+    let Ok(bytes) = fs::read(path) else {
+        return false;
+    };
+    if bytes.len() < 64 || &bytes[0..4] != b"\x7fELF" {
+        return false;
+    }
+    // ELF64 e_entry at offset 24, little-endian.
+    if bytes.len() < 32 {
+        return false;
+    }
+    let entry = u64::from_le_bytes(bytes[24..32].try_into().unwrap_or([0; 8]));
+    // Userspace services link at 0x400000; kernel image lives in high canonical space.
+    entry >= 0x400000 && entry < 0x0000_8000_0000_0000
 }
 
 fn build_package(

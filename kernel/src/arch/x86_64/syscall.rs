@@ -1128,24 +1128,37 @@ fn endpoint_create() -> u64 {
     token.0
 }
 
+/// Derive a public SEND_ONLY capability from an endpoint owner token.
+///
+/// `endpoint_create` returns the owner (SEND_RECV) capability. Callers that
+/// need a shareable send handle (nameserver clients, lock-session authority)
+/// use this to mint a SEND_ONLY derivation — same pattern as nameserver GRANT.
+///
+/// The special `INIT_NAMESERVER_ENDPOINT` constant resolves PID 1's nameserver
+/// endpoint when the process does not yet hold a concrete owner token.
 fn endpoint_bind(token: u64) -> u64 {
-    if token == INIT_NAMESERVER_ENDPOINT as u64 {
-        let mut caps = crate::capability::CAP_BROKER.lock();
+    let mut caps = crate::capability::CAP_BROKER.lock();
+    let source = if token == INIT_NAMESERVER_ENDPOINT as u64 {
         let Some(owner) = caps.token_for_owner_endpoint(1, CapabilityRights::SEND_RECV) else {
             return 0;
         };
-        return caps
-            .derive(owner, CapabilityRights::SEND_ONLY)
-            .map_or(0, |cap| cap.0);
+        owner
+    } else {
+        CapabilityToken(token)
+    };
+    match caps.derive(source, CapabilityRights::SEND_ONLY) {
+        Ok(cap) => cap.0,
+        Err(_) => {
+            // Reject re-binding an already-public SEND_ONLY handle (no escalation).
+            if caps
+                .check(source, CapabilityRights::SEND_ONLY)
+                .is_ok()
+            {
+                crate::ipc::note_send_only_management_reject();
+            }
+            0
+        }
     }
-    let caps = crate::capability::CAP_BROKER.lock();
-    if caps
-        .check(CapabilityToken(token), CapabilityRights::SEND_ONLY)
-        .is_ok()
-    {
-        crate::ipc::note_send_only_management_reject();
-    }
-    0
 }
 
 /// PID 1-only liveness query used for lazy nameserver registry cleanup.

@@ -319,6 +319,11 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
+    # Session lock policy (init-launched) + recovery CLI. Must use SERVICE_RUSTFLAGS
+    # (userspace linker); a kernel-linked mezzo fails spawn with SegmentOutOfRange
+    # and blocks desktop session establish after login.
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzo --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzoctl --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-runner --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-exec --release

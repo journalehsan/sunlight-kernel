@@ -153,7 +153,19 @@ or `/state/sunlight-clipd` directory.
 - **`include_bytes!` staleness.** The kernel embeds service ELFs via
   `include_bytes!` in `kernel/src/main.rs`. Cargo may not rebuild the kernel when
   only a service binary changed, leaving a stale embedded copy. Force it:
-  `touch kernel/src/main.rs` before building the kernel.
+  `touch kernel/src/main.rs` before building the kernel. `tools/runs.sh --build`,
+  `tools/build.sh`, and `tools/write.sh` already `touch` the kernel after the
+  service build step.
+- **Userspace linker (`SERVICE_RUSTFLAGS`).** Every service package in those
+  scripts must be built with
+  `RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static …"`.
+  A bare `cargo build -p <service>` from the workspace root uses the *kernel*
+  linker script and yields `SegmentOutOfRange` at spawn. Session lock (`mezzo`)
+  is especially painful when wrong: init fails to start it, desktop session
+  establish fails, and the shell never launches after login. Prefer
+  `./tools/runs.sh --build` (or the matching lines in `build.sh` / `test.sh` /
+  `write.sh`) so `mezzo` / `mezzoctl` always get the userspace flags. See also
+  [`ADDING_A_BINARY.md`](./ADDING_A_BINARY.md).
 - **QEMU disk lock.** If a run is killed (e.g. by `timeout`), QEMU can leave the
   qcow2 write-lock held and the next run fails with "Failed to get write lock".
   Clear it with `pkill -9 -f qemu-system-x86_64`.

@@ -72,7 +72,7 @@ use sunlight_ipc::{
     notification_kv_get_into, notification_kv_put, notification_set_dnd, process_is_alive,
     process_yield, query_display_metrics, shm_alloc, shm_free, shm_map, show_notification,
     unpack_iface_summary, CapabilityToken, DisplayMetrics, InterfaceKind, IpcMsg, LinkState,
-    NetworkdMsg, NotificationKind, NotificationPriority, ProcessExit, SgpMsg, TzMsg,
+    MezzoMsg, NetworkdMsg, NotificationKind, NotificationPriority, ProcessExit, SgpMsg, TzMsg,
     NOTIFICATION_RECENT_KEY, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
@@ -3399,6 +3399,58 @@ impl VortexShell {
                 body.push_str(" isn't available yet.");
                 show_notification(NotificationKind::Info, "Coming soon", &body, 3500);
             }
+            StartMenuAction::Power(PowerAction::Lock) => {
+                debug_log("[VORTEX] start menu: lock requested\n");
+                // Mezzo may start vortex-lock-presenter via sunlightd; allow seconds.
+                const LOCK_ACTIVATE_TIMEOUT_MS: u64 = 5_000;
+                match nameserver_lookup_timeout("mezzo", 500) {
+                    Some(mezzo) => {
+                        match ipc_call_timeout(
+                            mezzo,
+                            IpcMsg::with_label(MezzoMsg::LOCK_ACTIVATE),
+                            LOCK_ACTIVATE_TIMEOUT_MS,
+                        ) {
+                            Ok(reply) if reply.label == MezzoMsg::REPLY => {
+                                debug_log("[VORTEX] lock activate accepted\n");
+                            }
+                            Ok(reply) => {
+                                debug_log("[VORTEX] lock activate error code=");
+                                debug_log_u64(reply.words[0]);
+                                debug_log("\n");
+                                let body = match reply.words[0] {
+                                    // MezzoMsg::ERR_NO_SESSION
+                                    6 => "No desktop session is registered for lock.",
+                                    // MezzoMsg::ERR_START_FAILED
+                                    4 => "Display rejected lock enter (authority).",
+                                    // MezzoMsg::ERR_BUSY
+                                    5 => "Lock is already transitioning.",
+                                    _ => "Could not lock the session (see serial log).",
+                                };
+                                show_notification(
+                                    NotificationKind::Warning,
+                                    "Lock",
+                                    body,
+                                    4000,
+                                );
+                            }
+                            Err(_) => {
+                                debug_log(
+                                    "[VORTEX] lock activate timed out (mezzo may still proceed)\n",
+                                );
+                            }
+                        }
+                    }
+                    None => {
+                        debug_log("[VORTEX] lock failed: mezzo unavailable\n");
+                        show_notification(
+                            NotificationKind::Warning,
+                            "Lock",
+                            "Session lock service is unavailable.",
+                            4000,
+                        );
+                    }
+                }
+            }
             StartMenuAction::Power(PowerAction::Sleep) => {
                 show_notification(
                     NotificationKind::Info,
@@ -3874,7 +3926,7 @@ fn draw_running_app_button(
 
 /// Query "tz" for full local time + basic zone info. Returns (y,m,d,h,min,s) on success.
 /// Also fills a small tz id buffer from reply or fallback.
-fn query_local_full(
+pub(crate) fn query_local_full(
     out_tz: &mut [u8; 48],
     out_tz_len: &mut usize,
 ) -> Option<(u16, u8, u8, u8, u8, u8)> {
@@ -4825,6 +4877,10 @@ fn notification_history_recent(limit: usize, include_dismissed: bool) -> Vec<Not
     out
 }
 
+pub(crate) fn active_notification_count() -> usize {
+    notification_history_recent(50, false).len()
+}
+
 fn notification_store_record(record: &NotificationRecord) {
     let encoded = encode_notification_record(record);
     let _ = notification_kv_put(&record.storage_key, &encoded);
@@ -4893,7 +4949,7 @@ fn join_path(base: &str, leaf: &str) -> String {
     out
 }
 
-fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<TgaImage>, bool) {
+pub(crate) fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<TgaImage>, bool) {
     let Some(bytes) = read_wallpaper_bytes(cfg.wallpaper.as_bytes()) else {
         debug_log("[VORTEX] wallpaper config path unreadable\n");
         return (None, true);

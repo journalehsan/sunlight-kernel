@@ -77,6 +77,9 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dict --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package cpu-utils --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
+# Session lock: init-launched mezzo + /bin/mezzoctl (must use SERVICE_RUSTFLAGS).
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzo --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzoctl --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-runner --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-exec --release
@@ -84,6 +87,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-open --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-widget-gallery --release

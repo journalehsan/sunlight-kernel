@@ -51,6 +51,8 @@ static ICON_SILICON_ECHOES_TGA: &[u8] =
 
 static ICON_SEARCH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
+static ICON_LOCK_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/system-lock-screen-symbolic.tga");
 static ICON_SLEEP_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/32/system-suspend-symbolic.tga");
 static ICON_RESTART_TGA: &[u8] =
@@ -82,6 +84,7 @@ impl StartMenuIcons {
         Self {
             search: icon(ICON_SEARCH_TGA),
             power: [
+                icon(ICON_LOCK_TGA),
                 icon(ICON_SLEEP_TGA),
                 icon(ICON_RESTART_TGA),
                 icon(ICON_SHUTDOWN_TGA),
@@ -99,9 +102,10 @@ impl StartMenuIcons {
 
     fn power_icon(&self, action: PowerAction) -> Option<TgaImage> {
         let idx = match action {
-            PowerAction::Sleep => 0,
-            PowerAction::Restart => 1,
-            PowerAction::Shutdown => 2,
+            PowerAction::Lock => 0,
+            PowerAction::Sleep => 1,
+            PowerAction::Restart => 2,
+            PowerAction::Shutdown => 3,
         };
         self.power[idx]
     }
@@ -309,6 +313,7 @@ fn contains_ignore_case(haystack: &str, needle_lower: &str) -> bool {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PowerAction {
+    Lock,
     Sleep,
     Restart,
     Shutdown,
@@ -317,6 +322,7 @@ pub(crate) enum PowerAction {
 impl PowerAction {
     fn label(self) -> &'static str {
         match self {
+            Self::Lock => "Lock",
             Self::Sleep => "Sleep",
             Self::Restart => "Restart",
             Self::Shutdown => "Shut Down",
@@ -326,11 +332,12 @@ impl PowerAction {
     /// Destructive actions (never return once issued) require a confirm
     /// click; Sleep is a no-op placeholder today so it fires immediately.
     fn needs_confirm(self) -> bool {
-        !matches!(self, Self::Sleep)
+        !matches!(self, Self::Sleep | Self::Lock)
     }
 }
 
-const POWER_ACTIONS: [PowerAction; 3] = [
+const POWER_ACTIONS: [PowerAction; 4] = [
+    PowerAction::Lock,
     PowerAction::Sleep,
     PowerAction::Restart,
     PowerAction::Shutdown,
@@ -532,7 +539,7 @@ const PINNED_CAP: usize = 6;
 const RANDOM_CAP: usize = 6;
 const RECENT_CAP: usize = 12;
 const SEARCH_RESULTS_CAP: usize = 15;
-const POWER_CAP: usize = 3;
+const POWER_CAP: usize = 4;
 
 struct StartMenuLayout {
     panel: Rect,

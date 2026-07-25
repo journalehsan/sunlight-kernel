@@ -291,6 +291,8 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release 
 
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package cpu-utils --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzo --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzoctl --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-runner --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-exec --release >>"$BUILD_LOG" 2>&1
@@ -298,6 +300,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-open --release >>"$BUIL
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release >>"$BUILD_LOG" 2>&1
 if [[ "$PHASE" != "mm2b" && "$PHASE" != "mm2d" && "$PHASE" != "swap1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release >>"$BUILD_LOG" 2>&1
 fi

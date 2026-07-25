@@ -185,12 +185,15 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzo --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzoctl --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-runner --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-exec --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-widget-gallery --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --release

@@ -120,6 +120,39 @@ both `/sbin/sunlight-clipd` and `/bin/sunlight-clip`, so it needs one package
 build line, two embedded binaries, two spawn resolver arms, a sunlightd unit
 for the daemon, and a RamFS stub for the CLI.
 
+### Session lock reference: `mezzo` + `mezzoctl`
+
+`mezzo` is an **init-launched** session-lock policy service (`/sbin/mezzo` in
+`services/init/src/main.rs`). Desktop login calls it to establish a lock session;
+without a running mezzo, F2/GraphicalDesktop never activates after login.
+
+`mezzoctl` is the recovery CLI (`mezzoctl lock activate|status|recover`).
+
+Wiring checklist for this pair:
+
+| Spot | `mezzo` (daemon) | `mezzoctl` (CLI) |
+|------|:--:|:--:|
+| 1. Workspace | `services/mezzo` | `mezzoctl` |
+| 2. Build scripts | `tools/build.sh`, `test.sh`, `runs.sh --build`, `write.sh` with `SERVICE_RUSTFLAGS` | same |
+| 3. Embed | `MEZZO_ELF_BYTES` | `MEZZOCTL_ELF_BYTES` |
+| 4. Resolver | `/sbin/mezzo` | `/bin/mezzoctl`, `/usr/bin/mezzoctl` |
+| 5. RamFS stub | ❌ (init path-spawns) | ✅ `/bin` + `/usr/bin` |
+| 6. sunlightd unit | ❌ (init owns it) | ❌ |
+| Init list | ✅ `INIT_SERVICES` | ❌ |
+
+**Linker gotcha:** never build these with bare `cargo build -p mezzo` from the
+workspace root. The workspace default `rustflags` use the *kernel* linker script
+and produce `SegmentOutOfRange` at spawn. Always:
+
+```sh
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzo --release
+# SERVICE_RUSTFLAGS includes -Tservices/user-space.ld
+```
+
+`kernel/build.rs` also refuses to embed a kernel-linked userspace ELF (entry
+outside `0x400000..0x0000_8000_0000_0000`) and rebuilds it with the correct
+flags.
+
 ## Chronos DOS bundles
 
 Chronos guest applications are not native ELF binaries. A `.sunapp` bundle

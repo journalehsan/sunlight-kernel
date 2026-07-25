@@ -16,10 +16,14 @@ fn print_status(reply: IpcMsg) -> bool {
         write_line(&output);
         return false;
     }
-    let state = LockState::from_u64(reply.words[0]);
-    let failure = reply.words[4];
-    let attempts = reply.words[5];
-    let safe = reply.words[6] != 0;
+    // Compact status packing (register IPC, 4 words):
+    // word0 = state | (recovery_attempts << 8) | (safe_mode << 16) | (last_failure << 32)
+    // word1 = generation, word2 = presenter_pid, word3 = presenter_generation
+    let packed = reply.words[0];
+    let state = LockState::from_u64(packed & 0xff);
+    let attempts = (packed >> 8) & 0xff;
+    let safe = ((packed >> 16) & 0xff) != 0;
+    let failure = packed >> 32;
     let fallback = matches!(
         state,
         LockState::LockedFallback | LockState::RecoveringPresenter
@@ -65,7 +69,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let action = unsafe { arg(argc, argv, 2) };
     let option = unsafe { arg(argc, argv, 3) };
     if command != "lock" {
-        write_line("usage: mezzoctl lock <activate|status|recover> [--safe]");
+        write_line("usage: mezzoctl lock [activate|status|recover] [--safe]");
         sunlight_libc::exit(2);
     }
     let Some(mezzo) = nameserver_lookup("mezzo") else {
@@ -73,12 +77,12 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         sunlight_libc::exit(1);
     };
     let message = match action {
-        "activate" => IpcMsg::with_label(MezzoMsg::LOCK_ACTIVATE),
+        "" | "activate" => IpcMsg::with_label(MezzoMsg::LOCK_ACTIVATE),
         "status" => IpcMsg::with_label(MezzoMsg::LOCK_STATUS),
         "recover" => IpcMsg::with_label(MezzoMsg::LOCK_RECOVER)
             .word(0, u64::from(option == "--safe") * MezzoMsg::RECOVER_SAFE),
         _ => {
-            write_line("usage: mezzoctl lock <activate|status|recover> [--safe]");
+            write_line("usage: mezzoctl lock [activate|status|recover] [--safe]");
             sunlight_libc::exit(2);
         }
     };

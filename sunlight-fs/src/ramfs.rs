@@ -1189,6 +1189,21 @@ login_timeout_seconds = 30
         b"#!/sunlight/capabilityctl\n",
     ),
     RamEntry::file("/bin/runas", 0, 0, mode::FILE_755, b"#!/sunlight/runas\n"),
+    // Session lock recovery CLI (mezzo daemon is init-launched at /sbin/mezzo).
+    RamEntry::file(
+        "/bin/mezzoctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/mezzoctl\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/mezzoctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/mezzoctl\n",
+    ),
     RamEntry::file("/bin/fetch", 0, 0, mode::FILE_755, b"#!/sunlight/fetch\n"),
     RamEntry::file(
         "/bin/sunlight-sunsay",

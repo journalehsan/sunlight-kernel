@@ -623,6 +623,9 @@ Capability=authentication
 Capability=display
 Capability=session-lock
 Capability=logging
+Capability=vfs
+Capability=time-sync
+Capability=kv-store
 StandardOutput=journal
 StandardError=journal
 

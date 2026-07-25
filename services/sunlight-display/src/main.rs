@@ -18,9 +18,9 @@ use sunlight_ipc::{
     monotonic_millis, nameserver_register,
     sgp::SgpMsg,
     validate_size, CapabilityToken, DisplayMetrics, DisplayMode, DisplayModeManagement,
-    DisplayModeReadOnlyReason, IpcMsg, MouseMsg, NotificationKind, PixelFormat, ScreenBackend,
-    EndpointId, DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES, SAFE_FALLBACK_H,
-    SAFE_FALLBACK_W,
+    DisplayModeReadOnlyReason, IpcMsg, MezzoMsg, MouseMsg, NotificationKind, PixelFormat,
+    ScreenBackend, EndpointId, DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES,
+    SAFE_FALLBACK_H, SAFE_FALLBACK_W, ipc_call_timeout, nameserver_lookup_timeout,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Point, Rect};
@@ -272,6 +272,7 @@ const KEY_PERIOD: u8 = 0x34;
 const KEY_SPACE: u8 = 0x39;
 const KEY_LEFT_SUPER: u8 = 0x5B;
 const KEY_RIGHT_SUPER: u8 = 0x5C;
+const KEY_L: u8 = 0x26;
 const ALT_TAB_REPEAT_MS: u64 = 120;
 const NOTIFICATION_MAX_COUNT: usize = 4;
 const NOTIFICATION_WIDTH: u32 = 320;
@@ -1683,6 +1684,36 @@ fn queue_desktop_search_shortcut(state: &mut CompositorState, ctrl: bool, super_
         KEY_K, true, false, ctrl, false, super_key, None,
     ));
     true
+}
+
+/// Manual lock timeout: mezzo may start the presenter via sunlightd (seconds).
+const MANUAL_LOCK_TIMEOUT_MS: u64 = 5_000;
+
+/// Send an authoritative manual-lock request to Mezzo (Super+L / Ctrl+Alt+L).
+fn request_manual_lock() {
+    debug_log("[DISPLAY] lock shortcut → mezzo LOCK_ACTIVATE\n");
+    let Some(mezzo) = nameserver_lookup_timeout("mezzo", 500) else {
+        debug_log("[DISPLAY] lock failed: mezzo unavailable\n");
+        return;
+    };
+    match ipc_call_timeout(
+        mezzo,
+        IpcMsg::with_label(MezzoMsg::LOCK_ACTIVATE),
+        MANUAL_LOCK_TIMEOUT_MS,
+    ) {
+        Ok(reply) if reply.label == MezzoMsg::REPLY => {
+            debug_log("[DISPLAY] lock activate accepted\n");
+        }
+        Ok(reply) => {
+            debug_log(&alloc::format!(
+                "[DISPLAY] lock activate error code={}\n",
+                reply.words[0]
+            ));
+        }
+        Err(_) => {
+            debug_log("[DISPLAY] lock activate timed out (mezzo may still proceed)\n");
+        }
+    }
 }
 
 /// Whether this transition may be forwarded to the desktop search action.
@@ -7543,7 +7574,16 @@ pub extern "C" fn _start() -> ! {
                 let super_down = state.keyboard.super_down() || super_key;
                 let mut consumed = false;
 
-                if state.lock_generation != 0 {
+                // Super+L or Ctrl+Alt+L → session lock (consumed so apps never see it).
+                let lock_chord = keycode == KEY_L
+                    && ((super_down && !ctrl_down && !alt_down)
+                        || (ctrl_down && alt_down && !super_down));
+                if lock_chord {
+                    if pressed && !was_down && state.lock_generation == 0 {
+                        request_manual_lock();
+                    }
+                    consumed = true;
+                } else if state.lock_generation != 0 {
                     if let Some(index) = focused_window_idx(&state) {
                         state.windows[index].pending_keys.push(packed);
                     }
@@ -8260,18 +8300,23 @@ pub extern "C" fn _start() -> ! {
 
             SgpMsg::LOCK_ENTER => {
                 if !sunlight_ipc::validate_lock_service_pid(msg.badge) {
+                    debug_log("[DISPLAY] LOCK_ENTER rejected: caller is not mezzo\n");
                     let _ = ipc_reply(IpcMsg::with_label(0xA1FE));
                     continue;
                 }
                 let generation = msg.words[0];
                 if generation == 0 || generation < state.lock_generation {
+                    debug_log("[DISPLAY] LOCK_ENTER rejected: stale generation\n");
                     let _ = ipc_reply(IpcMsg::with_label(0xA1FE));
                     continue;
                 }
-                let endpoint = endpoint_create();
-                let authority = endpoint_bind(endpoint.0);
-                if authority == CapabilityToken::INVALID {
-                    let _ = endpoint_destroy(endpoint);
+                // endpoint_create returns the *owner* capability token.
+                // endpoint_bind derives a shareable SEND_ONLY authority cookie.
+                let owner = endpoint_create();
+                let authority = endpoint_bind(owner.0);
+                if authority == CapabilityToken::INVALID || authority.0 == 0 {
+                    debug_log("[DISPLAY] LOCK_ENTER failed: authority mint\n");
+                    let _ = endpoint_destroy(owner);
                     let _ = ipc_reply(IpcMsg::with_label(0xA1FE));
                     continue;
                 }
@@ -8279,7 +8324,7 @@ pub extern "C" fn _start() -> ! {
                     let _ = endpoint_destroy(old_endpoint);
                 }
                 state.lock_generation = generation;
-                state.lock_authority_endpoint = Some(endpoint);
+                state.lock_authority_endpoint = Some(owner);
                 state.lock_authority = authority;
                 state.lock_presenter_pid = 0;
                 state.lock_presenter_window = 0;
@@ -8289,6 +8334,7 @@ pub extern "C" fn _start() -> ! {
                 state.client_pointer_capture = None;
                 mark_dirty_full(&mut state);
                 redraw_scene(&mut state);
+                debug_log("[DISPLAY] LOCK_ENTER ok\n");
                 let reply = IpcMsg::with_label(SgpMsg::REPLY)
                     .word(0, generation)
                     .with_cap(0, authority);

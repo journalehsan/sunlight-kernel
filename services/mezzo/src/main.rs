@@ -107,37 +107,58 @@ fn unpack_username(message: &IpcMsg) -> Option<[u8; LOCK_SESSION_USERNAME_MAX]> 
     (len != 0).then_some(username)
 }
 
+/// Pack PRESENTER_HELLO into the four register-IPC words only.
+///
+/// Layout (register IPC drops words[4..]):
+/// - word0: generation | (safe_mode << 63)
+/// - word1: session_uid | (session_gid << 32)
+/// - word2: username bytes [0..8]
+/// - word3: username bytes [8..16]
+///
+/// Display name is truncated to 16 bytes; unlock auth uses uid/gid.
 fn presenter_hello_reply(session: &LockSession, authority: CapabilityToken) -> IpcMsg {
-    let mut reply = IpcMsg::with_label(MezzoMsg::REPLY)
-        .word(0, session.generation)
-        .word(1, session.safe_mode as u64)
-        .word(2, session.session_uid as u64)
-        .word(3, session.session_gid as u64)
-        .with_cap(0, authority);
-    for word in 0..4 {
-        let offset = word * 8;
-        reply = reply.word(
-            4 + word,
-            u64::from_le_bytes(
-                session.session_username[offset..offset + 8]
-                    .try_into()
-                    .unwrap(),
-            ),
-        );
+    let mut name0 = [0u8; 8];
+    let mut name1 = [0u8; 8];
+    let copy_len = session.session_username_len.min(16);
+    if copy_len > 0 {
+        let first = copy_len.min(8);
+        name0[..first].copy_from_slice(&session.session_username[..first]);
+        if copy_len > 8 {
+            name1[..copy_len - 8].copy_from_slice(&session.session_username[8..copy_len]);
+        }
     }
-    reply
+    IpcMsg::with_label(MezzoMsg::REPLY)
+        .word(
+            0,
+            session.generation | ((session.safe_mode as u64) << 63),
+        )
+        .word(
+            1,
+            (session.session_uid as u64) | ((session.session_gid as u64) << 32),
+        )
+        .word(2, u64::from_le_bytes(name0))
+        .word(3, u64::from_le_bytes(name1))
+        .with_cap(0, authority)
 }
 
+/// Status fits in four register words:
+/// word0 = state | (recovery_attempts << 8) | (safe_mode << 16) | (last_failure_lo << 32)
+/// word1 = generation
+/// word2 = presenter_pid
+/// word3 = presenter_generation | (last_presenter_failure << 32) when pid fits u32
 fn status_reply(session: &LockSession) -> IpcMsg {
+    let failure = session.last_presenter_failure.min(u32::MAX as u64) as u32;
     IpcMsg::with_label(MezzoMsg::REPLY)
-        .word(0, session.state as u64)
+        .word(
+            0,
+            (session.state as u64)
+                | ((session.recovery_attempts as u64) << 8)
+                | ((session.safe_mode as u64) << 16)
+                | ((failure as u64) << 32),
+        )
         .word(1, session.generation)
         .word(2, session.presenter_pid)
         .word(3, session.presenter_generation)
-        .word(4, session.last_presenter_failure)
-        .word(5, session.recovery_attempts as u64)
-        .word(6, session.safe_mode as u64)
-        .word(7, session.transition_deadline_ms)
 }
 
 fn error(code: u64) -> IpcMsg {
@@ -222,21 +243,33 @@ pub extern "C" fn _start() -> ! {
                 }
             }
             MezzoMsg::LOCK_ACTIVATE => {
+                sunlight_ipc::debug_log("[MEZZO] LOCK_ACTIVATE\n");
                 match session.enter(monotonic_millis(), PRESENTER_TRANSITION_TIMEOUT_MS) {
                     Some(generation) => {
                         if let Some(authority) = display_enter(generation) {
                             display_authority = authority;
                             expected_presenter_pid = start_presenter(false).unwrap_or(0);
                             if expected_presenter_pid == 0 {
+                                sunlight_ipc::debug_log(
+                                    "[MEZZO] presenter start failed; locked fallback\n",
+                                );
                                 session.fallback(0);
+                            } else {
+                                sunlight_ipc::debug_log("[MEZZO] presenter start requested\n");
                             }
                             status_reply(&session)
                         } else {
+                            sunlight_ipc::debug_log(
+                                "[MEZZO] display LOCK_ENTER failed; remaining unlocked\n",
+                            );
                             session.state = LockState::Unlocked;
                             error(MezzoMsg::ERR_START_FAILED)
                         }
                     }
-                    None if session.state == LockState::Unlocked => error(MezzoMsg::ERR_NO_SESSION),
+                    None if session.state == LockState::Unlocked => {
+                        sunlight_ipc::debug_log("[MEZZO] LOCK_ACTIVATE: no session established\n");
+                        error(MezzoMsg::ERR_NO_SESSION)
+                    }
                     None => status_reply(&session),
                 }
             }
