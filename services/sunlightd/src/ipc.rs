@@ -1,6 +1,7 @@
 //! IPC control interface for sunlightd
 //! Defines the control opcodes and message handling
 
+use crate::supervisor::{ServiceDiagnostics, ServiceState};
 use sunlight_ipc::IpcMsg;
 
 #[repr(u32)]
@@ -72,13 +73,21 @@ pub fn pack_unit_name(msg: &mut IpcMsg, name: &str) {
     }
 }
 
-/// Status reply (packed into words[0..4]).
+/// Status reply packed into the 4 register-transmitted words only.
 ///
-/// words[0] = state
+/// Register IPC silently drops words[4..]; all fields must fit in words[0..3].
+///
+/// words[0] =
+///   state(u8)
+///   | detail_kind(u8) << 8
+///   | restarts(u16) << 16
+///   | enabled(u1) << 32
+///   | stop_unconfirmed(u1) << 33
+///   | last_op(u8) << 40
+///   | timed_out(u1) << 48
 /// words[1] = pid
-/// words[2] = restarts (low 32) | enabled (bit 32)
-/// words[3] = started_at or transition timestamp
-/// words[4] = detail (exit code / failure reason / startup failure code)
+/// words[2] = started_at / transition timestamp (monotonic ms)
+/// words[3] = detail_value (exit code, secondary code, etc.)
 #[derive(Debug, Clone, Copy)]
 pub struct StatusReply {
     pub state: u32,
@@ -86,16 +95,126 @@ pub struct StatusReply {
     pub restarts: u32,
     pub started_at: u64,
     pub enabled: bool,
-    pub detail: u32,
+    pub detail_kind: u32,
+    pub detail_value: u32,
+    pub last_op: u8,
+    pub termination_unconfirmed: bool,
+    pub stop_timed_out: bool,
 }
 
 impl StatusReply {
+    pub fn from_entry(
+        state: ServiceState,
+        enabled: bool,
+        restart_count: u32,
+        diagnostics: &ServiceDiagnostics,
+        last_status_detail: u32,
+    ) -> Self {
+        let (pid, started_at, stop_timed_out) = match state {
+            ServiceState::Stopped => (0, 0, false),
+            ServiceState::Starting {
+                pid, started_at, ..
+            } => (pid, started_at, false),
+            ServiceState::Running { pid, started_at } => (pid, started_at, false),
+            ServiceState::Stopping {
+                pid,
+                started_at,
+                timed_out,
+                ..
+            } => (pid, started_at, timed_out),
+            ServiceState::Failed {
+                exit_code,
+                crashed_at,
+                restarts,
+            } => {
+                let detail_kind = if diagnostics.last_error_kind != 0 {
+                    diagnostics.last_error_kind
+                } else if last_status_detail != 0 {
+                    last_status_detail
+                } else {
+                    exit_code as u32
+                };
+                return Self {
+                    state: state.wire_code(),
+                    pid: 0,
+                    restarts,
+                    started_at: crashed_at,
+                    enabled,
+                    detail_kind,
+                    detail_value: diagnostics
+                        .last_exit_status
+                        .map(|c| c as u32)
+                        .unwrap_or(exit_code as u32),
+                    last_op: diagnostics.last_op,
+                    termination_unconfirmed: false,
+                    stop_timed_out: false,
+                };
+            }
+            ServiceState::Restarting { at } => (0, at, false),
+        };
+
+        let detail_kind = if diagnostics.last_error_kind != 0 {
+            diagnostics.last_error_kind
+        } else {
+            last_status_detail
+        };
+        let detail_value = diagnostics
+            .last_exit_status
+            .map(|c| c as u32)
+            .unwrap_or(diagnostics.last_error_detail);
+
+        Self {
+            state: state.wire_code(),
+            pid,
+            restarts: restart_count,
+            started_at,
+            enabled,
+            detail_kind,
+            detail_value,
+            last_op: diagnostics.last_op,
+            termination_unconfirmed: diagnostics.termination_unconfirmed
+                || matches!(state, ServiceState::Stopping { .. }),
+            stop_timed_out,
+        }
+    }
+
     pub fn pack(&self, msg: &mut IpcMsg) {
-        msg.words[0] = self.state as u64;
+        let mut w0 = (self.state as u64) & 0xff;
+        w0 |= ((self.detail_kind as u64) & 0xff) << 8;
+        w0 |= ((self.restarts as u64) & 0xffff) << 16;
+        w0 |= (self.enabled as u64) << 32;
+        w0 |= (self.termination_unconfirmed as u64) << 33;
+        w0 |= (self.last_op as u64) << 40;
+        w0 |= (self.stop_timed_out as u64) << 48;
+        msg.words[0] = w0;
         msg.words[1] = self.pid as u64;
-        msg.words[2] = self.restarts as u64 | ((self.enabled as u64) << 32);
-        msg.words[3] = self.started_at;
-        msg.words[4] = self.detail as u64;
+        msg.words[2] = self.started_at;
+        msg.words[3] = self.detail_value as u64;
+        msg.word_count = 4;
+    }
+}
+
+/// Control-operation result packed into words[0..3] (register-safe).
+///
+/// words[0] = result_kind (DETAIL_*)
+/// words[1] = pid (when relevant)
+/// words[2] = detail_value
+/// words[3] = flags (bit0 = termination_unconfirmed)
+#[derive(Debug, Clone, Copy)]
+pub struct ControlReply {
+    pub kind: u32,
+    pub pid: u32,
+    pub detail: u32,
+    pub termination_unconfirmed: bool,
+}
+
+impl ControlReply {
+    pub fn pack(&self, msg: &mut IpcMsg) {
+        msg.words[0] = self.kind as u64;
+        msg.words[1] = self.pid as u64;
+        msg.words[2] = self.detail as u64;
+        msg.words[3] = self.termination_unconfirmed as u64;
+        msg.word_count = 4;
     }
 }
 
@@ -133,5 +252,47 @@ impl ListEntry {
         }
         msg.words[2] = w2;
         msg.words[3] = w3;
+        msg.word_count = 4;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::supervisor::{
+        DETAIL_STOP_TIMEOUT, OP_STOP, ServiceDiagnostics, ServiceState, STATE_STOPPING,
+    };
+
+    #[test]
+    fn status_reply_fits_register_words_and_round_trips_fields() {
+        let diag = ServiceDiagnostics {
+            last_op: OP_STOP,
+            last_result: DETAIL_STOP_TIMEOUT,
+            last_error_kind: DETAIL_STOP_TIMEOUT,
+            last_error_detail: 0,
+            last_exit_status: None,
+            termination_unconfirmed: true,
+        };
+        let status = StatusReply::from_entry(
+            ServiceState::Stopping {
+                pid: 99,
+                started_at: 1000,
+                requested_at: 2000,
+                timed_out: true,
+            },
+            true,
+            2,
+            &diag,
+            DETAIL_STOP_TIMEOUT,
+        );
+        let mut msg = IpcMsg::empty();
+        status.pack(&mut msg);
+        assert_eq!(msg.word_count, 4);
+        assert_eq!((msg.words[0] & 0xff) as u32, STATE_STOPPING);
+        assert_eq!(((msg.words[0] >> 8) & 0xff) as u32, DETAIL_STOP_TIMEOUT);
+        assert_eq!(msg.words[1] as u32, 99);
+        assert_eq!(msg.words[2], 1000);
+        assert_eq!((msg.words[0] >> 33) & 1, 1);
+        assert_eq!((msg.words[0] >> 48) & 1, 1);
     }
 }

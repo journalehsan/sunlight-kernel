@@ -1,6 +1,7 @@
 [package]
 name = "sunlightd"
-version = "0.2.2355-alpha.1"
+version = "0.2.2374-alpha.1"
+
 
 
 
@@ -414,6 +415,12 @@ sunlight-fs = { path = "../../sunlight-fs" }
 sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
+[lib]
+name = "sunlightd"
+path = "src/lib.rs"
+test = true
+
 [[bin]]
 name = "sunlightd"
 path = "src/main.rs"
+test = false

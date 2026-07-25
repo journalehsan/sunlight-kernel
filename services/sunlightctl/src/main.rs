@@ -60,6 +60,35 @@ const OP_LIST: u64 = 11;
 
 const REPLY_OK: u64 = 1;
 const REPLY_NOP: u64 = 2;
+const REPLY_TIMEOUT: u64 = 3;
+
+// Detail kinds (must match sunlightd/src/supervisor.rs)
+const DETAIL_NONE: u32 = 0;
+const DETAIL_SPAWN: u32 = 1;
+const DETAIL_IDENTITY: u32 = 2;
+const DETAIL_STARTUP: u32 = 3;
+const DETAIL_RESTART_LIMIT: u32 = 4;
+const DETAIL_NOT_FOUND: u32 = 5;
+const DETAIL_ALREADY_RUNNING: u32 = 6;
+const DETAIL_ALREADY_STOPPED: u32 = 7;
+const DETAIL_STOP_TIMEOUT: u32 = 8;
+const DETAIL_EXEC_NOT_FOUND: u32 = 9;
+const DETAIL_EXEC_DENIED: u32 = 10;
+const DETAIL_EXEC_LOAD: u32 = 11;
+const DETAIL_SPAWN_NOMEM: u32 = 12;
+const DETAIL_EXITED: u32 = 13;
+const DETAIL_IN_PROGRESS: u32 = 14;
+const DETAIL_TRANSITION_BUSY: u32 = 15;
+const DETAIL_RESTART_ABORTED: u32 = 16;
+const DETAIL_KILL_FAILED: u32 = 17;
+const DETAIL_TERMINATION_UNCONFIRMED: u32 = 18;
+
+const STATE_STOPPED: u32 = 0;
+const STATE_STARTING: u32 = 1;
+const STATE_RUNNING: u32 = 2;
+const STATE_FAILED: u32 = 3;
+const STATE_RESTARTING: u32 = 4;
+const STATE_STOPPING: u32 = 5;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -79,13 +108,66 @@ fn pack_unit_name(msg: &mut IpcMsg, name: &str) {
 
 fn state_str(state: u32) -> &'static str {
     match state {
-        0 => "stopped",
-        1 => "starting",
-        2 => "running",
-        3 => "failed",
-        4 => "restarting",
+        STATE_STOPPED => "stopped",
+        STATE_STARTING => "starting",
+        STATE_RUNNING => "running",
+        STATE_FAILED => "failed",
+        STATE_RESTARTING => "restarting",
+        STATE_STOPPING => "stopping",
         _ => "unknown",
     }
+}
+
+fn last_op_str(op: u8) -> &'static str {
+    match op {
+        1 => "start",
+        2 => "stop",
+        3 => "restart",
+        _ => "none",
+    }
+}
+
+fn detail_str(kind: u32) -> &'static str {
+    match kind {
+        DETAIL_NONE => "none",
+        DETAIL_SPAWN => "spawn-failed",
+        DETAIL_IDENTITY => "identity-resolve-failed",
+        DETAIL_STARTUP => "startup-failed",
+        DETAIL_RESTART_LIMIT => "restart-limit",
+        DETAIL_NOT_FOUND => "not-found",
+        DETAIL_ALREADY_RUNNING => "already-running",
+        DETAIL_ALREADY_STOPPED => "already-stopped",
+        DETAIL_STOP_TIMEOUT => "stop-timeout",
+        DETAIL_EXEC_NOT_FOUND => "executable-not-found",
+        DETAIL_EXEC_DENIED => "permission-denied",
+        DETAIL_EXEC_LOAD => "exec-load-failed",
+        DETAIL_SPAWN_NOMEM => "spawn-out-of-memory",
+        DETAIL_EXITED => "process-exited",
+        DETAIL_IN_PROGRESS => "in-progress",
+        DETAIL_TRANSITION_BUSY => "transition-busy",
+        DETAIL_RESTART_ABORTED => "restart-aborted",
+        DETAIL_KILL_FAILED => "kill-failed",
+        DETAIL_TERMINATION_UNCONFIRMED => "termination-unconfirmed",
+        _ => "unknown",
+    }
+}
+
+fn print_next_action_for_timeout(unit: &str, pid: u32) {
+    println!("   Termination is unconfirmed; service was NOT marked stopped.");
+    println!(
+        "   Next: sunlightctl status {}  (inspect state)",
+        unit
+    );
+    if pid != 0 {
+        println!(
+            "   Next: kill -9 {}  (force, after kill-semantics audit)",
+            pid
+        );
+    }
+    println!(
+        "   Next: sunlightctl restart {}  (only after process is confirmed dead)",
+        unit
+    );
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -129,7 +211,10 @@ fn cmd_list(cap: CapabilityToken) {
         let enabled_s = if enabled { "enabled" } else { "disabled" };
 
         let mut pid_s = heapless::String::<16>::new();
-        if state == 2 {
+        if state == STATE_RUNNING
+            || state == STATE_STARTING
+            || state == STATE_STOPPING
+        {
             use core::fmt::Write;
             let _ = write!(&mut pid_s, "{}", pid);
         } else {
@@ -165,12 +250,19 @@ fn cmd_status(cap: CapabilityToken, unit: &str) {
         return;
     }
 
-    let state = reply.words[0] as u32;
+    // New 4-word status packing (register-IPC safe).
+    let state = (reply.words[0] & 0xff) as u32;
+    let detail_kind = ((reply.words[0] >> 8) & 0xff) as u32;
+    let restarts = ((reply.words[0] >> 16) & 0xffff) as u32;
+    let enabled = ((reply.words[0] >> 32) & 1) != 0;
+    let unconfirmed = ((reply.words[0] >> 33) & 1) != 0;
+    let last_op = ((reply.words[0] >> 40) & 0xff) as u8;
+    let stop_timed_out = ((reply.words[0] >> 48) & 1) != 0;
     let pid = reply.words[1] as u32;
-    let restarts = (reply.words[2] & 0xFFFF_FFFF) as u32;
-    let enabled = (reply.words[2] >> 32) != 0;
-    let since = reply.words[3];
-    let detail = reply.words[4] as u32;
+    let since = reply.words[2];
+    let detail_value = reply.words[3] as u32;
+
+    let healthy = state == STATE_RUNNING && detail_kind == DETAIL_NONE && !unconfirmed;
 
     println!("● {}.service", unit);
     println!("   Active:   {}", state_str(state));
@@ -178,16 +270,36 @@ fn cmd_status(cap: CapabilityToken, unit: &str) {
         "   Enabled:  {}",
         if enabled { "enabled" } else { "disabled" }
     );
-    if state == 1 || state == 2 {
+    if state == STATE_STARTING || state == STATE_RUNNING || state == STATE_STOPPING {
         println!("   PID:      {}", pid);
     }
     if since != 0 {
         println!("   SinceMs:  {}", since);
     }
-    println!("   Restarts: {}", restarts);
-    if state == 3 || detail != 0 {
-        println!("   Detail:   {}", detail);
+    if !healthy {
+        println!("   LastOp:   {}", last_op_str(last_op));
+        if detail_kind != DETAIL_NONE {
+            println!("   Result:   {}", detail_str(detail_kind));
+        }
+        if detail_value != 0 || state == STATE_FAILED {
+            println!("   Detail:   {}", detail_value);
+        }
+        if unconfirmed {
+            println!("   Term:     requested, not confirmed");
+        }
+        if stop_timed_out {
+            println!("   Timeout:  stop deadline expired");
+            print_next_action_for_timeout(unit, pid);
+        }
     }
+    println!("   Restarts: {}", restarts);
+}
+
+fn decode_control_kind(reply: &IpcMsg) -> (u32, u32, bool) {
+    let kind = reply.words[0] as u32;
+    let pid = reply.words[1] as u32;
+    let unconfirmed = reply.words[3] != 0;
+    (kind, pid, unconfirmed)
 }
 
 fn cmd_start(cap: CapabilityToken, unit: &str) {
@@ -195,13 +307,25 @@ fn cmd_start(cap: CapabilityToken, unit: &str) {
     msg.label = OP_START;
     pack_unit_name(&mut msg, unit);
     let reply = ipc_call(cap, msg);
-    if reply.label == REPLY_OK {
-        println!("Started {}.service", unit);
-    } else {
-        println!(
-            "ERROR: Failed to start '{}' (not found or spawn failed)",
-            unit
-        );
+    let (kind, pid, _) = decode_control_kind(&reply);
+    match reply.label {
+        REPLY_OK => {
+            if pid != 0 {
+                println!("Started {}.service (pid={})", unit, pid);
+            } else {
+                println!("Started {}.service", unit);
+            }
+        }
+        REPLY_NOP if kind == DETAIL_ALREADY_RUNNING => {
+            println!("{}.service is already running (pid={})", unit, pid);
+        }
+        _ => {
+            println!(
+                "ERROR: Failed to start '{}': {}",
+                unit,
+                detail_str(kind)
+            );
+        }
     }
 }
 
@@ -210,10 +334,31 @@ fn cmd_stop(cap: CapabilityToken, unit: &str) {
     msg.label = OP_STOP;
     pack_unit_name(&mut msg, unit);
     let reply = ipc_call(cap, msg);
-    if reply.label == REPLY_OK {
-        println!("Stopped {}.service", unit);
-    } else {
-        println!("ERROR: Failed to stop '{}' (not found)", unit);
+    let (kind, pid, unconfirmed) = decode_control_kind(&reply);
+    match reply.label {
+        REPLY_OK => {
+            println!("Stopped {}.service", unit);
+        }
+        REPLY_NOP if kind == DETAIL_ALREADY_STOPPED => {
+            println!("{}.service is already stopped", unit);
+        }
+        REPLY_TIMEOUT => {
+            println!(
+                "ERROR: Stop timed out for '{}' ({})",
+                unit,
+                detail_str(kind)
+            );
+            if unconfirmed {
+                print_next_action_for_timeout(unit, pid);
+            }
+        }
+        _ => {
+            println!(
+                "ERROR: Failed to stop '{}': {}",
+                unit,
+                detail_str(kind)
+            );
+        }
     }
 }
 
@@ -222,13 +367,32 @@ fn cmd_restart(cap: CapabilityToken, unit: &str) {
     msg.label = OP_RESTART;
     pack_unit_name(&mut msg, unit);
     let reply = ipc_call(cap, msg);
-    if reply.label == REPLY_OK {
-        println!("Restarted {}.service", unit);
-    } else {
-        println!(
-            "ERROR: Failed to restart '{}' (not found or spawn failed)",
-            unit
-        );
+    let (kind, pid, unconfirmed) = decode_control_kind(&reply);
+    match reply.label {
+        REPLY_OK => {
+            if pid != 0 {
+                println!("Restarted {}.service (pid={})", unit, pid);
+            } else {
+                println!("Restarted {}.service", unit);
+            }
+        }
+        REPLY_TIMEOUT => {
+            println!(
+                "ERROR: Restart aborted for '{}': {} (old instance not confirmed dead)",
+                unit,
+                detail_str(kind)
+            );
+            if unconfirmed {
+                print_next_action_for_timeout(unit, pid);
+            }
+        }
+        _ => {
+            println!(
+                "ERROR: Failed to restart '{}': {}",
+                unit,
+                detail_str(kind)
+            );
+        }
     }
 }
 
@@ -282,7 +446,7 @@ fn print_usage() {
     println!("  list                       List all managed services");
     println!("  status <service>           Show detailed service status");
     println!("  start <service>            Start a service (even if disabled)");
-    println!("  stop <service>             Stop a running service");
+    println!("  stop <service>             Stop a running service (bounded wait)");
     println!("  restart <service>          Stop then start a service");
     println!("  reboot <service>           Alias for restart");
     println!("  enable [--now] <service>   Mark service enabled for auto-start");

@@ -33,22 +33,21 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
-mod graph;
-mod ipc;
-mod journal;
-mod socket_act;
-mod supervisor;
-mod unit;
-
-use graph::DepGraph;
-use ipc::{extract_unit_name, ListEntry, StatusReply, SunlightdOp};
+use sunlightd::graph::DepGraph;
+use sunlightd::ipc::{extract_unit_name, ControlReply, ListEntry, StatusReply, SunlightdOp};
+use sunlightd::supervisor::{
+    detail_from_spawn_error, ExitDisposition, ServiceEntry, ServiceState, DETAIL_ALREADY_RUNNING,
+    DETAIL_ALREADY_STOPPED, DETAIL_IDENTITY, DETAIL_IN_PROGRESS, DETAIL_KILL_FAILED, DETAIL_NONE,
+    DETAIL_NOT_FOUND, DETAIL_RESTART_ABORTED, DETAIL_SPAWN, DETAIL_STOP_TIMEOUT,
+    DETAIL_TERMINATION_UNCONFIRMED, DETAIL_TRANSITION_BUSY, OP_RESTART, OP_START, OP_STOP,
+};
+use sunlightd::unit::{parse_service_unit, ServiceUnit, SocketUnit, MAX_UNITS};
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, monotonic_millis,
-    nameserver_lookup, nameserver_register, CapabilityToken, IpcMsg, SpawnRequest,
+    nameserver_lookup, nameserver_register, process_is_alive, CapabilityToken, IpcMsg,
+    SpawnRequest,
 };
 use sunlight_libc::{self as libc, Errno, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY};
-use supervisor::{ServiceEntry, ServiceState};
-use unit::{parse_service_unit, ServiceUnit, SocketUnit, MAX_UNITS};
 
 macro_rules! serial_println {
     ($($arg:tt)*) => {{
@@ -65,12 +64,13 @@ const ENABLED_STATE_VERSION: &str = "v1";
 const ENABLED_STATE_MAX_BYTES: usize = 2048;
 const SIGKILL: u32 = 9;
 const SIGTERM: u32 = 15;
+/// Grace period for SIGTERM before existing SIGKILL escalation.
 const STOP_GRACE_MS: u64 = 3_000;
-const FAILURE_UNKNOWN: u32 = 0;
-const FAILURE_SPAWN: u32 = 1;
-const FAILURE_IDENTITY: u32 = 2;
+/// Additional bounded wait after SIGKILL before reporting unconfirmed termination.
+const STOP_FORCE_WAIT_MS: u64 = 2_000;
+/// Total stop deadline (grace + force wait). Requests never block longer than this.
+const STOP_DEADLINE_MS: u64 = STOP_GRACE_MS + STOP_FORCE_WAIT_MS;
 const FAILURE_STARTUP: u32 = 3;
-const FAILURE_RESTART_LIMIT: u32 = 4;
 
 struct ServiceTable {
     services: [Option<ServiceEntry>; MAX_UNITS],
@@ -723,6 +723,34 @@ fn build_dep_graph(
         .map_err(|_| "Topological sort failed")
 }
 
+/// Observation of a managed process. Spawned services are parented to init
+/// (kernel spawn path hardcodes `ppid = 1`), so `waitpid` from sunlightd is
+/// usually not authoritative. Prefer exit codes from wait when available, and
+/// fall back to `process_is_alive` for liveness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProcessObservation {
+    Alive,
+    Exited { code: u64 },
+    /// Process is gone; exit status unavailable (not our waitable child).
+    Gone,
+}
+
+fn observe_managed_process(pid: u32) -> ProcessObservation {
+    match libc::try_waitpid(pid as u64) {
+        Ok(Some(code)) => ProcessObservation::Exited { code },
+        Ok(None) => ProcessObservation::Alive,
+        Err(_) => {
+            // Not a waitable child of sunlightd (common for spawn-IPC services)
+            // or unknown pid. Use the non-reaping liveness probe.
+            if process_is_alive(pid as u64) {
+                ProcessObservation::Alive
+            } else {
+                ProcessObservation::Gone
+            }
+        }
+    }
+}
+
 fn spawn_named_with_identity(
     spawn_cap: CapabilityToken,
     path: &str,
@@ -730,7 +758,7 @@ fn spawn_named_with_identity(
     uid: u32,
     gid: u32,
     capability_mask: u64,
-) -> Result<u32, &'static str> {
+) -> Result<u32, u32> {
     use sunlight_ipc::SpawnMsg;
 
     let req = SpawnRequest::new(path, name)
@@ -743,14 +771,42 @@ fn spawn_named_with_identity(
     if reply.label == SpawnMsg::REPLY {
         Ok(reply.words[0] as u32)
     } else {
-        Err("Spawn failed")
+        // Kernel packs SpawnError discriminant into words[0] on ERROR.
+        Err(detail_from_spawn_error(reply.words[0]))
     }
 }
 
 fn entry_pid(entry: &ServiceEntry) -> Option<u32> {
-    match entry.state {
-        ServiceState::Starting { pid, .. } | ServiceState::Running { pid, .. } => Some(pid),
-        _ => None,
+    entry.state.pid()
+}
+
+fn clear_dead_instance_for_start(
+    services: &mut ServiceTable,
+    idx: usize,
+    exit_code: Option<i32>,
+) {
+    let now = monotonic_millis();
+    if let Some(entry) = services.get_mut(idx) {
+        // Intentional start replaces crash-restart policy for this observation.
+        entry.stop_requested = false;
+        entry.restart_after_stop = false;
+        entry.diagnostics.last_exit_status = exit_code;
+        entry.diagnostics.termination_unconfirmed = false;
+        if let Some(code) = exit_code {
+            entry.record_result(
+                sunlightd::supervisor::DETAIL_EXITED,
+                sunlightd::supervisor::DETAIL_EXITED,
+                code as u32,
+            );
+        } else {
+            entry.record_result(
+                sunlightd::supervisor::DETAIL_EXITED,
+                sunlightd::supervisor::DETAIL_EXITED,
+                0,
+            );
+        }
+        entry.mark_stopped();
+        let _ = now;
     }
 }
 
@@ -758,9 +814,31 @@ fn spawn_service_at(
     services: &mut ServiceTable,
     idx: usize,
     spawn_cap: CapabilityToken,
-) -> Result<(), u32> {
+) -> Result<u32, u32> {
+    // Refuse to spawn a second instance while any prior instance may still live.
+    if let Some(entry) = services.get(idx) {
+        if entry.state.may_still_be_alive() {
+            // Reconcile first: stale Running/Stopping after external death.
+            if let Some(pid) = entry.state.pid() {
+                match observe_managed_process(pid) {
+                    ProcessObservation::Alive => {
+                        return Err(DETAIL_ALREADY_RUNNING);
+                    }
+                    ProcessObservation::Exited { code } => {
+                        clear_dead_instance_for_start(services, idx, Some(code as i32));
+                    }
+                    ProcessObservation::Gone => {
+                        clear_dead_instance_for_start(services, idx, None);
+                    }
+                }
+            } else {
+                return Err(DETAIL_ALREADY_RUNNING);
+            }
+        }
+    }
+
     let Some(unit) = services.get(idx).map(|entry| entry.unit.clone()) else {
-        return Err(FAILURE_SPAWN);
+        return Err(DETAIL_SPAWN);
     };
     let mut path = heapless::String::<256>::new();
     let _ = path.push_str(&unit.exec_start);
@@ -774,10 +852,10 @@ fn spawn_service_at(
             name_buf
         );
         if let Some(entry) = services.get_mut(idx) {
-            entry.last_status_detail = FAILURE_IDENTITY;
+            entry.record_result(DETAIL_IDENTITY, DETAIL_IDENTITY, 0);
             entry.mark_failed(-1, monotonic_millis());
         }
-        return Err(FAILURE_IDENTITY);
+        return Err(DETAIL_IDENTITY);
     };
     serial_println!(
         "[SUNLIGHTD] capability profile {} uid={} gid={} caps={}",
@@ -793,6 +871,27 @@ fn spawn_service_at(
                 entry.mark_starting(pid, now);
             }
             serial_println!("[SUNLIGHTD] spawned {} pid={}", name_buf, pid);
+            // Immediate post-spawn death must not leave Running.
+            match observe_managed_process(pid) {
+                ProcessObservation::Exited { code } => {
+                    serial_println!(
+                        "[SUNLIGHTD] {} exited immediately after spawn code={}",
+                        name_buf,
+                        code
+                    );
+                    apply_confirmed_exit(services, idx, spawn_cap, Some(code as i32));
+                    return Err(sunlightd::supervisor::DETAIL_EXITED);
+                }
+                ProcessObservation::Gone => {
+                    serial_println!(
+                        "[SUNLIGHTD] {} gone immediately after spawn (no exit status)",
+                        name_buf
+                    );
+                    apply_confirmed_exit(services, idx, spawn_cap, None);
+                    return Err(sunlightd::supervisor::DETAIL_EXITED);
+                }
+                ProcessObservation::Alive => {}
+            }
             if let Some(entry) = services.get(idx) {
                 if !matches!(
                     entry.state,
@@ -810,56 +909,46 @@ fn spawn_service_at(
                 serial_println!("[SUNLIGHTD] timezone.service: running (pid={})", pid);
                 serial_println!("[SunlightOS] timezone OK");
             }
-            Ok(())
+            Ok(pid)
         }
-        Err(e) => {
-            serial_println!("[SUNLIGHTD] failed to spawn {}: {}", name_buf, e);
+        Err(kind) => {
+            serial_println!(
+                "[SUNLIGHTD] failed to spawn {} detail={}",
+                name_buf,
+                kind
+            );
             if let Some(entry) = services.get_mut(idx) {
-                entry.last_status_detail = FAILURE_SPAWN;
+                entry.record_result(kind, kind, 0);
                 entry.mark_failed(-1, monotonic_millis());
             }
-            Err(FAILURE_SPAWN)
+            Err(kind)
         }
     }
 }
 
-fn begin_stop(entry: &mut ServiceEntry, restart_after_stop: bool) {
-    entry.stop_requested = true;
-    entry.restart_after_stop = restart_after_stop;
-}
-
-fn finish_stop_or_restart(
+fn apply_confirmed_exit(
     services: &mut ServiceTable,
     idx: usize,
     spawn_cap: CapabilityToken,
-    exit_code: u64,
+    exit_code: Option<i32>,
 ) {
     let now = monotonic_millis();
-    let mut should_restart = false;
-    if let Some(entry) = services.get_mut(idx) {
-        if entry.stop_requested {
-            if entry.restart_after_stop {
-                entry.mark_restarting(now, now);
-                should_restart = true;
-            } else {
-                entry.mark_stopped();
-            }
-        } else if entry.should_restart(exit_code as i32) {
-            if entry.check_restart_limit(now) {
-                entry.last_status_detail = FAILURE_RESTART_LIMIT;
-                entry.mark_failed(exit_code as i32, now);
-            } else {
-                entry.mark_restarting(now, now);
-                should_restart = true;
-            }
-        } else {
-            entry.last_status_detail = FAILURE_UNKNOWN;
-            entry.mark_failed(exit_code as i32, now);
-        }
-    }
-    if should_restart {
+    let disposition = services
+        .get_mut(idx)
+        .map(|entry| entry.observe_confirmed_exit(exit_code, now));
+    if disposition == Some(ExitDisposition::Restart) {
         let _ = spawn_service_at(services, idx, spawn_cap);
     }
+}
+
+/// Outcome of a stop request. Never reports success without confirmed death.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StopOutcome {
+    Confirmed { pid: u32, restarted: bool },
+    AlreadyStopped,
+    Timeout { pid: u32 },
+    KillFailed { pid: u32 },
+    NotFound,
 }
 
 fn stop_service(
@@ -867,55 +956,136 @@ fn stop_service(
     idx: usize,
     spawn_cap: CapabilityToken,
     restart_after_stop: bool,
-) -> Result<(), &'static str> {
+) -> StopOutcome {
+    // Reconcile before deciding; may clear stale active state.
+    if let Some(pid) = services.get(idx).and_then(entry_pid) {
+        match observe_managed_process(pid) {
+            ProcessObservation::Exited { code } => {
+                apply_confirmed_exit(services, idx, spawn_cap, Some(code as i32));
+            }
+            ProcessObservation::Gone => {
+                apply_confirmed_exit(services, idx, spawn_cap, None);
+            }
+            ProcessObservation::Alive => {}
+        }
+    }
+
     let pid = services.get(idx).and_then(entry_pid);
     let Some(pid) = pid else {
         if let Some(entry) = services.get_mut(idx) {
             if restart_after_stop {
+                // Nothing to stop; start replacement.
+                entry.set_last_op(if restart_after_stop {
+                    OP_RESTART
+                } else {
+                    OP_STOP
+                });
                 entry.mark_restarting(monotonic_millis(), monotonic_millis());
-            } else {
-                entry.mark_stopped();
+                return match spawn_service_at(services, idx, spawn_cap) {
+                    Ok(_) => StopOutcome::Confirmed {
+                        pid: 0,
+                        restarted: true,
+                    },
+                    Err(_) => StopOutcome::KillFailed { pid: 0 },
+                };
             }
+            entry.mark_stopped();
+            entry.record_result(DETAIL_ALREADY_STOPPED, DETAIL_ALREADY_STOPPED, 0);
         }
-        if restart_after_stop {
-            return spawn_service_at(services, idx, spawn_cap).map_err(|_| "spawn");
-        }
-        return Ok(());
+        return StopOutcome::AlreadyStopped;
     };
 
-    let Some(entry) = services.get_mut(idx) else {
-        return Err("not-found");
+    let started_at = match services.get(idx).map(|e| e.state) {
+        Some(ServiceState::Starting { started_at, .. })
+        | Some(ServiceState::Running { started_at, .. })
+        | Some(ServiceState::Stopping { started_at, .. }) => started_at,
+        _ => monotonic_millis(),
     };
-    begin_stop(entry, restart_after_stop);
-    let _ = libc::kill(pid as u64, SIGTERM);
+    let now = monotonic_millis();
+    if let Some(entry) = services.get_mut(idx) {
+        entry.set_last_op(if restart_after_stop {
+            OP_RESTART
+        } else {
+            OP_STOP
+        });
+        entry.mark_stopping(pid, started_at, now, restart_after_stop);
+    }
+
+    // Deliver SIGTERM. Kill failures are recorded but we still wait for death
+    // (process may exit for other reasons). Generic kill semantics are out of
+    // scope for this patch — report outcomes truthfully only.
+    if libc::kill(pid as u64, SIGTERM).is_err() {
+        serial_println!(
+            "[SUNLIGHTD] SIGTERM failed for pid={} (process may ignore or kill unsupported)",
+            pid
+        );
+    }
+
     let start = monotonic_millis();
+    let mut sent_sigkill = false;
     loop {
-        match libc::try_waitpid(pid as u64) {
-            Ok(Some(code)) => {
-                finish_stop_or_restart(services, idx, spawn_cap, code);
-                return Ok(());
+        match observe_managed_process(pid) {
+            ProcessObservation::Exited { code } => {
+                let was_restart = services
+                    .get(idx)
+                    .map(|e| e.restart_after_stop)
+                    .unwrap_or(false);
+                apply_confirmed_exit(services, idx, spawn_cap, Some(code as i32));
+                return StopOutcome::Confirmed {
+                    pid,
+                    restarted: was_restart,
+                };
             }
-            Ok(None) => {
-                if monotonic_millis().saturating_sub(start) >= STOP_GRACE_MS {
-                    let _ = libc::kill(pid as u64, SIGKILL);
-                    match libc::waitpid(pid as u64) {
-                        Ok(code) => {
-                            finish_stop_or_restart(services, idx, spawn_cap, code);
-                            return Ok(());
+            ProcessObservation::Gone => {
+                let was_restart = services
+                    .get(idx)
+                    .map(|e| e.restart_after_stop)
+                    .unwrap_or(false);
+                apply_confirmed_exit(services, idx, spawn_cap, None);
+                return StopOutcome::Confirmed {
+                    pid,
+                    restarted: was_restart,
+                };
+            }
+            ProcessObservation::Alive => {
+                let elapsed = monotonic_millis().saturating_sub(start);
+                if !sent_sigkill && elapsed >= STOP_GRACE_MS {
+                    // Existing auto-SIGKILL escalation (preserved, not newly
+                    // introduced). Wait remains bounded; no redesign of kill.
+                    if libc::kill(pid as u64, SIGKILL).is_err() {
+                        serial_println!(
+                            "[SUNLIGHTD] SIGKILL failed for pid={} — termination unconfirmed",
+                            pid
+                        );
+                        if let Some(entry) = services.get_mut(idx) {
+                            // Clear restart intent: must not spawn while old may live.
+                            entry.restart_after_stop = false;
+                            entry.record_result(DETAIL_KILL_FAILED, DETAIL_KILL_FAILED, pid);
+                            entry.mark_stop_timeout(monotonic_millis());
                         }
-                        Err(_) => {
-                            if let Some(entry) = services.get_mut(idx) {
-                                entry.mark_stopped();
-                            }
-                            return Err("waitpid");
-                        }
+                        return StopOutcome::KillFailed { pid };
                     }
+                    sent_sigkill = true;
+                }
+                if elapsed >= STOP_DEADLINE_MS {
+                    if let Some(entry) = services.get_mut(idx) {
+                        // Abort restart: previous instance not confirmed dead.
+                        entry.restart_after_stop = false;
+                        entry.mark_stop_timeout(monotonic_millis());
+                        entry.record_result(
+                            DETAIL_STOP_TIMEOUT,
+                            DETAIL_TERMINATION_UNCONFIRMED,
+                            pid,
+                        );
+                    }
+                    serial_println!(
+                        "[SUNLIGHTD] stop timeout pid={} after {}ms (termination unconfirmed)",
+                        pid,
+                        STOP_DEADLINE_MS
+                    );
+                    return StopOutcome::Timeout { pid };
                 }
                 sunlight_ipc::process_yield();
-            }
-            Err(_) => {
-                finish_stop_or_restart(services, idx, spawn_cap, 0);
-                return Ok(());
             }
         }
     }
@@ -927,10 +1097,14 @@ fn poll_service_exits(services: &mut ServiceTable, spawn_cap: CapabilityToken) {
         let Some(pid) = pid else {
             continue;
         };
-        match libc::try_waitpid(pid as u64) {
-            Ok(Some(code)) => finish_stop_or_restart(services, idx, spawn_cap, code),
-            Ok(None) => {}
-            Err(_) => finish_stop_or_restart(services, idx, spawn_cap, 0),
+        match observe_managed_process(pid) {
+            ProcessObservation::Exited { code } => {
+                apply_confirmed_exit(services, idx, spawn_cap, Some(code as i32));
+            }
+            ProcessObservation::Gone => {
+                apply_confirmed_exit(services, idx, spawn_cap, None);
+            }
+            ProcessObservation::Alive => {}
         }
     }
 }
@@ -1035,7 +1209,18 @@ fn autostart_services(
 /// Reply label codes for control operations.
 const REPLY_OK: u64 = 1;
 const REPLY_NOP: u64 = 2; // already in desired state (enable/disable no-op)
+const REPLY_TIMEOUT: u64 = 3; // stop/restart deadline expired; termination unconfirmed
 const REPLY_ERR: u64 = 0xff;
+
+fn pack_control_err(reply: &mut IpcMsg, kind: u32, pid: u32, detail: u32, unconfirmed: bool) {
+    ControlReply {
+        kind,
+        pid,
+        detail,
+        termination_unconfirmed: unconfirmed,
+    }
+    .pack(reply);
+}
 
 /// Handle control IPC messages
 fn handle_control_message(
@@ -1049,6 +1234,7 @@ fn handle_control_message(
         Some(op) => op,
         None => {
             reply.label = REPLY_ERR;
+            pack_control_err(&mut reply, DETAIL_NONE, 0, 0, false);
             return reply;
         }
     };
@@ -1057,47 +1243,185 @@ fn handle_control_message(
         SunlightdOp::Start => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
-                let already_running = matches!(
-                    services.get(idx).map(|e| &e.state),
-                    Some(ServiceState::Running { .. } | ServiceState::Starting { .. })
-                );
-                if already_running {
-                    reply.label = REPLY_OK;
-                } else {
-                    reply.label = if spawn_service_at(services, idx, spawn_cap).is_ok() {
-                        REPLY_OK
-                    } else {
-                        REPLY_ERR
-                    };
+                if let Some(entry) = services.get_mut(idx) {
+                    entry.set_last_op(OP_START);
+                }
+                // Stopping / timed-out active instances must not be duplicated.
+                if let Some(entry) = services.get(idx) {
+                    if matches!(entry.state, ServiceState::Stopping { .. }) {
+                        let pid = entry.state.pid().unwrap_or(0);
+                        reply.label = REPLY_ERR;
+                        pack_control_err(
+                            &mut reply,
+                            DETAIL_TRANSITION_BUSY,
+                            pid,
+                            DETAIL_IN_PROGRESS,
+                            true,
+                        );
+                        if let Some(entry) = services.get_mut(idx) {
+                            entry.record_result(
+                                DETAIL_TRANSITION_BUSY,
+                                DETAIL_TRANSITION_BUSY,
+                                pid,
+                            );
+                        }
+                        return reply;
+                    }
+                }
+                match spawn_service_at(services, idx, spawn_cap) {
+                    Ok(pid) => {
+                        reply.label = REPLY_OK;
+                        pack_control_err(&mut reply, DETAIL_NONE, pid, 0, false);
+                        if let Some(entry) = services.get_mut(idx) {
+                            entry.record_result(DETAIL_NONE, DETAIL_NONE, 0);
+                        }
+                    }
+                    Err(DETAIL_ALREADY_RUNNING) => {
+                        let pid = services.get(idx).and_then(entry_pid).unwrap_or(0);
+                        reply.label = REPLY_NOP;
+                        pack_control_err(&mut reply, DETAIL_ALREADY_RUNNING, pid, 0, false);
+                    }
+                    Err(kind) => {
+                        reply.label = REPLY_ERR;
+                        pack_control_err(&mut reply, kind, 0, 0, false);
+                    }
                 }
             } else {
                 reply.label = REPLY_ERR;
+                pack_control_err(&mut reply, DETAIL_NOT_FOUND, 0, 0, false);
             }
         }
 
         SunlightdOp::Stop => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
-                reply.label = if stop_service(services, idx, spawn_cap, false).is_ok() {
-                    REPLY_OK
-                } else {
-                    REPLY_ERR
-                };
+                match stop_service(services, idx, spawn_cap, false) {
+                    StopOutcome::Confirmed { pid, .. } => {
+                        reply.label = REPLY_OK;
+                        pack_control_err(&mut reply, DETAIL_NONE, pid, 0, false);
+                    }
+                    StopOutcome::AlreadyStopped => {
+                        reply.label = REPLY_NOP;
+                        pack_control_err(&mut reply, DETAIL_ALREADY_STOPPED, 0, 0, false);
+                    }
+                    StopOutcome::Timeout { pid } => {
+                        reply.label = REPLY_TIMEOUT;
+                        pack_control_err(
+                            &mut reply,
+                            DETAIL_STOP_TIMEOUT,
+                            pid,
+                            DETAIL_TERMINATION_UNCONFIRMED,
+                            true,
+                        );
+                    }
+                    StopOutcome::KillFailed { pid } => {
+                        reply.label = REPLY_TIMEOUT;
+                        pack_control_err(
+                            &mut reply,
+                            DETAIL_KILL_FAILED,
+                            pid,
+                            DETAIL_TERMINATION_UNCONFIRMED,
+                            true,
+                        );
+                    }
+                    StopOutcome::NotFound => {
+                        reply.label = REPLY_ERR;
+                        pack_control_err(&mut reply, DETAIL_NOT_FOUND, 0, 0, false);
+                    }
+                }
             } else {
                 reply.label = REPLY_ERR;
+                pack_control_err(&mut reply, DETAIL_NOT_FOUND, 0, 0, false);
             }
         }
 
         SunlightdOp::Restart => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
-                reply.label = if stop_service(services, idx, spawn_cap, true).is_ok() {
-                    REPLY_OK
-                } else {
-                    REPLY_ERR
-                };
+                match stop_service(services, idx, spawn_cap, true) {
+                    StopOutcome::Confirmed { pid, restarted } => {
+                        if restarted
+                            || services
+                                .get(idx)
+                                .map(|e| e.state.is_active())
+                                .unwrap_or(false)
+                        {
+                            reply.label = REPLY_OK;
+                            pack_control_err(&mut reply, DETAIL_NONE, pid, 0, false);
+                        } else {
+                            // Confirmed stop but replacement spawn failed.
+                            let kind = services
+                                .get(idx)
+                                .map(|e| e.diagnostics.last_error_kind)
+                                .unwrap_or(DETAIL_SPAWN);
+                            reply.label = REPLY_ERR;
+                            pack_control_err(&mut reply, kind, pid, 0, false);
+                        }
+                    }
+                    StopOutcome::AlreadyStopped => {
+                        // stop_service already attempted start when restart_after_stop
+                        // and no pid; if still inactive, report spawn error.
+                        if services
+                            .get(idx)
+                            .map(|e| e.state.is_active())
+                            .unwrap_or(false)
+                        {
+                            reply.label = REPLY_OK;
+                            let pid = services.get(idx).and_then(entry_pid).unwrap_or(0);
+                            pack_control_err(&mut reply, DETAIL_NONE, pid, 0, false);
+                        } else {
+                            let kind = services
+                                .get(idx)
+                                .map(|e| e.diagnostics.last_error_kind)
+                                .filter(|k| *k != DETAIL_NONE && *k != DETAIL_ALREADY_STOPPED)
+                                .unwrap_or(DETAIL_SPAWN);
+                            reply.label = REPLY_ERR;
+                            pack_control_err(&mut reply, kind, 0, 0, false);
+                        }
+                    }
+                    StopOutcome::Timeout { pid } => {
+                        // Must not start a replacement while old instance may live.
+                        if let Some(entry) = services.get_mut(idx) {
+                            entry.record_result(
+                                DETAIL_RESTART_ABORTED,
+                                DETAIL_STOP_TIMEOUT,
+                                pid,
+                            );
+                        }
+                        reply.label = REPLY_TIMEOUT;
+                        pack_control_err(
+                            &mut reply,
+                            DETAIL_RESTART_ABORTED,
+                            pid,
+                            DETAIL_TERMINATION_UNCONFIRMED,
+                            true,
+                        );
+                    }
+                    StopOutcome::KillFailed { pid } => {
+                        if let Some(entry) = services.get_mut(idx) {
+                            entry.record_result(
+                                DETAIL_RESTART_ABORTED,
+                                DETAIL_KILL_FAILED,
+                                pid,
+                            );
+                        }
+                        reply.label = REPLY_TIMEOUT;
+                        pack_control_err(
+                            &mut reply,
+                            DETAIL_RESTART_ABORTED,
+                            pid,
+                            DETAIL_TERMINATION_UNCONFIRMED,
+                            true,
+                        );
+                    }
+                    StopOutcome::NotFound => {
+                        reply.label = REPLY_ERR;
+                        pack_control_err(&mut reply, DETAIL_NOT_FOUND, 0, 0, false);
+                    }
+                }
             } else {
                 reply.label = REPLY_ERR;
+                pack_control_err(&mut reply, DETAIL_NOT_FOUND, 0, 0, false);
             }
         }
 
@@ -1136,6 +1460,7 @@ fn handle_control_message(
                 }
             } else {
                 reply.label = REPLY_ERR;
+                pack_control_err(&mut reply, DETAIL_NOT_FOUND, 0, 0, false);
             }
         }
 
@@ -1165,6 +1490,7 @@ fn handle_control_message(
                 }
             } else {
                 reply.label = REPLY_ERR;
+                pack_control_err(&mut reply, DETAIL_NOT_FOUND, 0, 0, false);
             }
         }
 
@@ -1197,7 +1523,7 @@ fn handle_control_message(
                 let exit_code = msg.words[0] as i32;
                 let detail = (msg.words[1] as u32).max(FAILURE_STARTUP);
                 if let Some(entry) = services.get_mut(idx) {
-                    entry.last_status_detail = detail;
+                    entry.record_result(detail, detail, exit_code as u32);
                     entry.mark_failed(exit_code, monotonic_millis());
                 }
                 reply.label = REPLY_OK;
@@ -1209,64 +1535,32 @@ fn handle_control_message(
         SunlightdOp::Status => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
+                // Cheap liveness reconcile on status so operators see truth.
+                if let Some(pid) = services.get(idx).and_then(entry_pid) {
+                    match observe_managed_process(pid) {
+                        ProcessObservation::Exited { code } => {
+                            apply_confirmed_exit(services, idx, spawn_cap, Some(code as i32));
+                        }
+                        ProcessObservation::Gone => {
+                            apply_confirmed_exit(services, idx, spawn_cap, None);
+                        }
+                        ProcessObservation::Alive => {}
+                    }
+                }
                 if let Some(entry) = services.get(idx) {
-                    let status = match entry.state {
-                        ServiceState::Stopped => StatusReply {
-                            state: 0,
-                            pid: 0,
-                            restarts: entry.restart_count,
-                            started_at: 0,
-                            enabled: entry.enabled,
-                            detail: entry.last_status_detail,
-                        },
-                        ServiceState::Starting {
-                            pid, started_at, ..
-                        } => StatusReply {
-                            state: 1,
-                            pid,
-                            restarts: entry.restart_count,
-                            started_at,
-                            enabled: entry.enabled,
-                            detail: entry.last_status_detail,
-                        },
-                        ServiceState::Running { pid, started_at } => StatusReply {
-                            state: 2,
-                            pid,
-                            restarts: entry.restart_count,
-                            started_at,
-                            enabled: entry.enabled,
-                            detail: entry.last_status_detail,
-                        },
-                        ServiceState::Failed {
-                            exit_code,
-                            crashed_at,
-                            restarts,
-                        } => StatusReply {
-                            state: 3,
-                            pid: 0,
-                            restarts,
-                            started_at: crashed_at,
-                            enabled: entry.enabled,
-                            detail: if entry.last_status_detail == 0 {
-                                exit_code as u32
-                            } else {
-                                entry.last_status_detail
-                            },
-                        },
-                        ServiceState::Restarting { at } => StatusReply {
-                            state: 4,
-                            pid: 0,
-                            restarts: entry.restart_count,
-                            started_at: at,
-                            enabled: entry.enabled,
-                            detail: entry.last_status_detail,
-                        },
-                    };
+                    let status = StatusReply::from_entry(
+                        entry.state,
+                        entry.enabled,
+                        entry.restart_count,
+                        &entry.diagnostics,
+                        entry.last_status_detail,
+                    );
                     status.pack(&mut reply);
                     reply.label = REPLY_OK;
                 }
             } else {
                 reply.label = REPLY_ERR;
+                pack_control_err(&mut reply, DETAIL_NOT_FOUND, 0, 0, false);
             }
         }
 
@@ -1279,18 +1573,8 @@ fn handle_control_message(
                     let _ = name.push_str(binary_name_of(&entry.unit.exec_start));
                     let list_entry = ListEntry {
                         name,
-                        state: match entry.state {
-                            ServiceState::Running { .. } => 2,
-                            ServiceState::Starting { .. } => 1,
-                            ServiceState::Failed { .. } => 3,
-                            ServiceState::Restarting { .. } => 4,
-                            _ => 0,
-                        },
-                        pid: match entry.state {
-                            ServiceState::Running { pid, .. }
-                            | ServiceState::Starting { pid, .. } => pid,
-                            _ => 0,
-                        },
+                        state: entry.state.wire_code(),
+                        pid: entry.state.pid().unwrap_or(0),
                         restarts: entry.restart_count,
                         enabled: entry.enabled,
                     };
