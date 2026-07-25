@@ -1377,6 +1377,14 @@ login_timeout_seconds = 30
     RamEntry::file("/bin/sunbench", 0, 0, mode::FILE_755, b"#!/sunlight/sunbench\n"),
     // GUI calculator client
     RamEntry::file("/bin/calculator", 0, 0, mode::FILE_755, b"#!/sunlight/calculator\n"),
+    // Developer widget gallery (not Control Panel / Lock Screen)
+    RamEntry::file(
+        "/bin/widget-gallery",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/widget-gallery\n",
+    ),
     // GUI file manager client
     RamEntry::file(
         "/bin/sunlight-files",
@@ -2048,6 +2056,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/calculator\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/widget-gallery",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/widget-gallery\n",
     ),
     RamEntry::file(
         "/usr/bin/sunlight-files",

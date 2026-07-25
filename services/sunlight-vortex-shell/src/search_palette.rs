@@ -77,8 +77,28 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
         app_id: AppId::Settings,
         title: "System Preferences",
         aliases: &["settings", "preferences", "control panel", "system"],
-        keywords: &["network", "ethernet", "ip", "display", "تنظیمات", "شبکه"],
+        keywords: &[
+            "network",
+            "ethernet",
+            "ip",
+            "display",
+            "date",
+            "time",
+            "timezone",
+            "clock",
+            "ntp",
+            "تنظیمات",
+            "شبکه",
+        ],
         action: SearchAction::Preferences("root"),
+        category: "System",
+    },
+    SearchEntry {
+        app_id: AppId::Settings,
+        title: "Date & Time",
+        aliases: &["datetime", "date-time", "timezone", "clock", "tz"],
+        keywords: &["ntp", "sync", "solar", "offset", "dst", "time zone"],
+        action: SearchAction::Preferences("date-time"),
         category: "System",
     },
     SearchEntry {
@@ -456,6 +476,8 @@ pub(crate) enum SearchPaletteAction {
     Close,
     /// Launch via central shell path.
     Launch(AppId),
+    /// Open System Preferences, optionally at a page (`control-panel --page`).
+    LaunchPreferences(&'static str),
 }
 
 #[derive(Clone, Copy)]
@@ -809,11 +831,12 @@ impl SearchPaletteState {
             ResultKind::Calculator => SearchPaletteAction::None,
             ResultKind::App { entry_index } => {
                 let entry = &SEARCH_REGISTRY[entry_index];
-                let app_id = match entry.action {
-                    SearchAction::LaunchApp(id) => id,
-                    SearchAction::Preferences(_) => AppId::Settings,
-                };
-                SearchPaletteAction::Launch(app_id)
+                match entry.action {
+                    SearchAction::LaunchApp(id) => SearchPaletteAction::Launch(id),
+                    SearchAction::Preferences(page) => {
+                        SearchPaletteAction::LaunchPreferences(page)
+                    }
+                }
             }
         }
     }

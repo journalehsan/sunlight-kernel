@@ -1,0 +1,18 @@
+[package]
+name = "sunlight-widget-gallery"
+version = "0.2.2557-alpha.1"
+
+
+edition = "2021"
+description = "Developer-only preview surface for reusable sunlight-ui widgets"
+license = "MIT"
+
+[[bin]]
+name = "widget-gallery"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc" }
+sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
+sun-font = { path = "../sun-font" }

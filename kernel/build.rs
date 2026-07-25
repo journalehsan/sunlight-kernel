@@ -375,6 +375,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-widget-gallery",
+            output: "widget-gallery",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-calendar",
             output: "sunlight-calendar",
             rustflags: service_rustflags,

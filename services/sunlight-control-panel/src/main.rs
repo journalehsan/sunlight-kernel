@@ -9,9 +9,10 @@
 //!   • About SunlightOS — OS, kernel, and core component identity.
 //!   • Network — interface snapshot.
 //!   • Power & Thermal — powerd modes + thermald sensors/cooling.
+//!   • Date & Time — solar clock, NTP sync, timezone catalog/map.
 //!
 //! Direct page launch: `control-panel --page <name>` where name is one of
-//! wallpaper, about-computer, about-os, network, power-thermal.
+//! wallpaper, about-computer, about-os, network, power-thermal, date-time.
 //!
 //! Icons: SunlightOS icon theme (Breeze-inspired, TGA format).
 
@@ -22,6 +23,7 @@ extern crate alloc;
 
 mod about;
 mod clipboard;
+mod date_time;
 mod network;
 mod power_thermal;
 mod sysinfo;
@@ -53,6 +55,7 @@ use sunlight_wallpaper::{
 };
 
 use about::{AboutAction, AboutPageState};
+use date_time::{DateTimeAction, DateTimePageState};
 use network::{NetworkAction, NetworkPageState};
 use power_thermal::{PowerThermalAction, PowerThermalPageState};
 use sysinfo::{FixedStr, SystemInfoSnapshot};
@@ -87,6 +90,8 @@ static ICON_NETWORK_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/network-card.tga");
 static ICON_POWER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/battery.tga");
+static ICON_DATETIME_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system-time.tga");
 
 const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO_RAW);
 
@@ -119,6 +124,7 @@ enum Page {
     AboutOs,
     Network,
     PowerThermal,
+    DateTime,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -347,6 +353,7 @@ struct ControlPanelApp {
     icon_logo: Option<TgaImage>,
     icon_network: Option<TgaImage>,
     icon_power: Option<TgaImage>,
+    icon_datetime: Option<TgaImage>,
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
@@ -362,6 +369,7 @@ struct ControlPanelApp {
     display_error: FixedStr<96>,
     network: NetworkPageState,
     power_thermal: PowerThermalPageState,
+    date_time: DateTimePageState,
 }
 
 impl ControlPanelApp {
@@ -406,6 +414,7 @@ impl ControlPanelApp {
             icon_logo: TgaImage::parse(ICON_SUNLIGHT_LOGO_TGA).ok(),
             icon_network: TgaImage::parse(ICON_NETWORK_TGA).ok(),
             icon_power: TgaImage::parse(ICON_POWER_TGA).ok(),
+            icon_datetime: TgaImage::parse(ICON_DATETIME_TGA).ok(),
             wallpaper_items,
             wallpaper_config,
             wallpaper_selected,
@@ -421,6 +430,7 @@ impl ControlPanelApp {
             display_error: FixedStr::empty(),
             network: NetworkPageState::new(),
             power_thermal: PowerThermalPageState::new(),
+            date_time: DateTimePageState::new(),
         }
     }
 
@@ -617,7 +627,7 @@ impl ControlPanelApp {
     // Grid page
     // -----------------------------------------------------------------------
 
-    fn card_rects(&self) -> [Rect; 8] {
+    fn card_rects(&self) -> [Rect; 9] {
         let card_w = 136u32;
         let card_h = 110u32;
         let gap = 14i32;
@@ -634,6 +644,7 @@ impl ControlPanelApp {
             Rect::new(start_x + (card_w as i32 + gap) * 2, row2_y, card_w, card_h),
             Rect::new(start_x, row3_y, card_w, card_h),
             Rect::new(start_x + card_w as i32 + gap, row3_y, card_w, card_h),
+            Rect::new(start_x + (card_w as i32 + gap) * 2, row3_y, card_w, card_h),
         ]
     }
 
@@ -781,6 +792,15 @@ impl ControlPanelApp {
             "Modes, fans, sensors",
             self.icon_power,
         );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[8],
+            theme.accent,
+            "Date & Time",
+            "Clock, sync, timezone",
+            self.icon_datetime,
+        );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
@@ -826,6 +846,10 @@ impl ControlPanelApp {
             if cards[7].contains(pt) {
                 self.page = Page::PowerThermal;
                 return self.power_thermal.refresh();
+            }
+            if cards[8].contains(pt) {
+                self.page = Page::DateTime;
+                return self.date_time.activate();
             }
         }
         false
@@ -940,6 +964,19 @@ impl ControlPanelApp {
                 self.page = Page::Grid;
                 // Drop page-local IPC snapshots when leaving the page.
                 self.power_thermal = PowerThermalPageState::new();
+                true
+            }
+        }
+    }
+
+    fn update_date_time_page(&mut self, event: Event) -> bool {
+        let (redraw, action) = self.date_time.update(event, WIN_W, WIN_H);
+        match action {
+            DateTimeAction::None => redraw,
+            DateTimeAction::Back => {
+                self.page = Page::Grid;
+                // Cancel clock/sync deadlines and drop page-local IPC state.
+                self.date_time.deactivate();
                 true
             }
         }
@@ -1566,6 +1603,7 @@ impl App for ControlPanelApp {
             ),
             Page::Network => self.network.draw(canvas, theme, WIN_W, WIN_H),
             Page::PowerThermal => self.power_thermal.draw(canvas, theme, WIN_W, WIN_H),
+            Page::DateTime => self.date_time.draw(canvas, theme, WIN_W, WIN_H),
         }
     }
 
@@ -1590,6 +1628,7 @@ impl App for ControlPanelApp {
             Page::AboutOs => self.update_about_os_page(event),
             Page::Network => self.update_network_page(event),
             Page::PowerThermal => self.update_power_thermal_page(event),
+            Page::DateTime => self.update_date_time_page(event),
         }
     }
 
@@ -1604,6 +1643,9 @@ impl App for ControlPanelApp {
         if self.page == Page::PowerThermal {
             return self.power_thermal.refresh();
         }
+        if self.page == Page::DateTime {
+            return self.date_time.activate();
+        }
         false
     }
 
@@ -1612,6 +1654,10 @@ impl App for ControlPanelApp {
             250
         } else if self.page == Page::PowerThermal {
             500
+        } else if self.page == Page::DateTime {
+            // Arm Event::Tick so second-ray progress can update once per second
+            // without a continuous full-repaint loop.
+            250
         } else {
             200
         }
@@ -1876,6 +1922,7 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
                 b"about-os" | b"about-sunlightos" | b"about" => return Page::AboutOs,
                 b"network" => return Page::Network,
                 b"power" | b"thermal" | b"power-thermal" => return Page::PowerThermal,
+                b"date-time" | b"datetime" | b"time" | b"timezone" => return Page::DateTime,
                 _ => {}
             }
             i += 2;

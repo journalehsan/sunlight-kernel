@@ -5,7 +5,9 @@
 //! Provides CSV-embedded zone data, integer offset/DST math,
 //! LocalDateTime formatting, and /etc/localtime VFS-backed config.
 
+pub mod catalog; // city location catalog: search + nearest (shared GUI/CLI)
 pub mod cli_flags; // tzutils --sync/-sf parser (host-testable)
+pub mod client; // TimeClient / TzClient IPC (shared GUI/CLI; no text scraping)
 pub mod config; // moved from timed — parse_offset_string, validate_offset
 pub mod csv; // TzEntry, all_zones, tz_by_id, tz_by_display_name
 pub mod localtime;
@@ -13,6 +15,16 @@ pub mod ntp_region; // continent → NTP pool region mapping
 pub mod offset; // local_offset_secs, local_now, LocalDateTime, is_dst_active // LocalTimeCfg, read_localtime, write_localtime, TzError
 
 // Re-export the most commonly used items at crate root
+pub use catalog::{
+    all_locations, location_by_city, location_by_zone_id, nearest_locations, search_locations,
+    selection_is_pending, validate_catalog_zones, MilliDeg, NearestHit, NearestResults, SearchHit,
+    SearchRank, SearchResults, TzLocation, DEFAULT_MAX_DISTANCE_MD, MAX_NEAREST_RESULTS,
+    MAX_SEARCH_RESULTS,
+};
+pub use client::{
+    LocalTimeSnapshot, SyncStatusSnapshot, TimeClient, TimeClientError, TzClient, TzClientError,
+    ZoneSnapshot,
+};
 pub use csv::{all_zones, tz_by_display_name, tz_by_id, tz_count, TzEntry};
 pub use localtime::{read_localtime, write_localtime, LocalTimeCfg, TzError};
 pub use ntp_region::{

@@ -205,6 +205,9 @@ static SUNLIGHT_BENCH_ELF_BYTES: &[u8] =
 // Sunlight Calculator: lightweight graphical calculator.
 static SUNLIGHT_CALCULATOR_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/calculator");
+// Developer widget gallery (DigitalNumber / SolarClock / WorldMap preview).
+static SUNLIGHT_WIDGET_GALLERY_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/widget-gallery");
 // Silicon Echoes: 1993: native graphical narrative-game vertical slice.
 static SILICON_ECHOES_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/silicon-echoes");

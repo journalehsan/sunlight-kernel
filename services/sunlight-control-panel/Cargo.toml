@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-control-panel"
-version = "0.2.2477-alpha.1"
+version = "0.2.2557-alpha.1"
+
+
 
 
 
@@ -287,6 +289,7 @@ sunlight-ipc = { path = "../../ipc" }
 # mmap-backed heap.  The feature is owned only by this native binary.
 sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
 sunlight-networkd = { path = "../sunlight-networkd" }
+sunlight-tz = { path = "../../sunlight-tz" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 sunlight-wallpaper = { path = "../../sunlight-wallpaper" }
 sun-font = { path = "../../sun-font" }

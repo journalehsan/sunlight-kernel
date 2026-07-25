@@ -192,6 +192,7 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-widget-gallery --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release

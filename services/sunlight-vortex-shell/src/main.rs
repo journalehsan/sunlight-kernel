@@ -3178,6 +3178,26 @@ impl VortexShell {
                 let _ = self.search_palette.close();
                 self.open_app_from_ui(app_id, now, LaunchSource::Shell)
             }
+            SearchPaletteAction::LaunchPreferences(page) => {
+                let _ = self.search_palette.close();
+                self.note_recent_app(AppId::Settings);
+                let trace = self.next_launch_trace(LaunchSource::Shell);
+                let args: &[&[u8]] = if page == "root" || page.is_empty() {
+                    &[]
+                } else {
+                    &[b"--page", page.as_bytes()]
+                };
+                let request = sun_exec::LaunchRequest {
+                    trace,
+                    source: LaunchSource::Shell,
+                    command: b"settings",
+                    args,
+                    require_display: true,
+                };
+                let _ = sun_exec::launch(request);
+                let _ = now;
+                true
+            }
         }
     }
 

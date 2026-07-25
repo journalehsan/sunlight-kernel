@@ -1,6 +1,7 @@
 pub mod button;
 pub mod calendar;
 pub mod checkbox;
+pub mod digital_number;
 pub mod disclosure;
 pub mod document_canvas;
 pub mod drive_card;
@@ -11,6 +12,7 @@ pub mod search_palette;
 pub mod sidebar;
 pub mod sidebar_item;
 pub mod slider;
+pub mod solar_clock;
 pub mod status;
 pub mod tabbar;
 pub mod table;
@@ -22,6 +24,7 @@ pub mod text_view;
 pub mod toolbar;
 pub mod tree_view;
 pub mod workspace_switcher;
+pub mod world_map;
 
 // Re-export the most-used types at the widgets level
 pub use button::{Button, ButtonState};
@@ -30,6 +33,10 @@ pub use calendar::{
     FormFieldStyle, StatusTextKind,
 };
 pub use checkbox::Checkbox;
+pub use digital_number::{
+    digit_segment_mask, is_supported_char, measure_digital, DigitalAlign, DigitalNumberWidget,
+    DIGITAL_VALUE_CAP, SUPPORTED_CHARS,
+};
 pub use disclosure::{
     DisclosureEvent, DisclosureGroup, DisclosureState, PropertyGrid, PropertyRow,
 };
@@ -57,6 +64,11 @@ pub use search_palette::{
 pub use sidebar::{ArticleListItem, MetricBar, SegmentedTabs, UnitToggle, WidgetCard};
 pub use sidebar_item::{SidebarGroupHeader, SidebarItem, SidebarState};
 pub use slider::{Slider, SliderOrientation};
+pub use solar_clock::{
+    active_second_rays, format_hhmm, hour_progress_12, is_major_ray, minute_progress, ray_dirty_rect,
+    snapshot_dirty, SolarClockDirty, SolarClockLayout, SolarClockSnapshot, SolarClockWidget,
+    RAY_UNIT,
+};
 pub use status::StatusBar;
 pub use tabbar::TabBar;
 pub use table::{Column, Table};
@@ -74,4 +86,8 @@ pub use workspace_switcher::{
     draw_panel_ambient_shadow, AppIconStack, BoundedOverflowBadge, WorkspaceCard,
     WorkspaceCardState, WorkspaceCardView, WorkspaceSwitcherLayout, WorkspaceSwitcherPanel,
     WORKSPACE_CARD_COUNT, WORKSPACE_ICON_SLOTS,
+};
+pub use world_map::{
+    geo_to_point, hit_test_markers, land_at_texel, land_at_uv, point_to_geo, wrap_lon, GeoCoord,
+    MapHit, MapMarker, WorldMapLayout, WorldMapWidget, WORLD_MAP_BITS, WORLD_MAP_H, WORLD_MAP_W,
 };

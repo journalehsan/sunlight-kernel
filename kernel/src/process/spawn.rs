@@ -744,6 +744,10 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunbench" | "/usr/bin/sunbench" => Ok(crate::SUNLIGHT_BENCH_ELF_BYTES),
         // calculator: lightweight graphical calculator.
         "/bin/calculator" | "/usr/bin/calculator" => Ok(crate::SUNLIGHT_CALCULATOR_ELF_BYTES),
+        // widget-gallery: developer-only reusable widget preview.
+        "/bin/widget-gallery" | "/usr/bin/widget-gallery" => {
+            Ok(crate::SUNLIGHT_WIDGET_GALLERY_ELF_BYTES)
+        }
         // silicon-echoes: native graphical narrative-game vertical slice.
         "/bin/silicon-echoes" | "/usr/bin/silicon-echoes" => Ok(crate::SILICON_ECHOES_ELF_BYTES),
         // sunlight-files: native graphical file manager.

@@ -38,13 +38,11 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
-use sunlight_ipc::{
-    ipc_call_timeout, nameserver_lookup_timeout, IpcMsg, NtpSyncState, ProcessExit, TimeMsg,
-};
+use sunlight_ipc::{NtpSyncState, ProcessExit, TimeMsg};
 use sunlight_tz::cli_flags::{parse_tzutils_args, TzutilsArgs};
+use sunlight_tz::client::{TimeClient, TimeClientError};
 
 const MAX_ARGS: usize = 16;
-const SYNC_TIMEOUT_MS: u64 = 35_000;
 
 fn stdout_write(s: &str) {
     let mut data = s.as_bytes();
@@ -87,7 +85,7 @@ fn run(args: TzutilsArgs) -> i32 {
         return 0;
     }
 
-    let Some(timed) = nameserver_lookup_timeout("timed", 1_000) else {
+    let Ok(client) = TimeClient::connect() else {
         println!("tzutils: timed service not available");
         return 1;
     };
@@ -99,34 +97,29 @@ fn run(args: TzutilsArgs) -> i32 {
         if args.force {
             flags |= TimeMsg::SYNC_FLAG_FORCE;
         }
-        let req = IpcMsg::with_label(TimeMsg::SYNC_NTP).word(0, flags);
-        match ipc_call_timeout(timed, req, SYNC_TIMEOUT_MS) {
-            Ok(reply) if reply.label == TimeMsg::REPLY => {
+        match client.sync_now_with_flags(flags) {
+            Ok(_) => {
                 println!("tzutils: synchronization succeeded");
             }
-            Ok(reply) if reply.label == TimeMsg::ERROR => {
-                println!(
-                    "tzutils: sync failed: {}",
-                    err_name(reply.words[0])
-                );
+            Err(TimeClientError::Failed(code)) => {
+                println!("tzutils: sync failed: {}", err_name(code));
                 exit = 1;
             }
-            Ok(_) => {
-                println!("tzutils: unexpected reply from timed");
+            Err(TimeClientError::Timeout) => {
+                println!("tzutils: sync timed out waiting for timed");
                 exit = 1;
             }
             Err(_) => {
-                println!("tzutils: sync timed out waiting for timed");
+                println!("tzutils: unexpected reply from timed");
                 exit = 1;
             }
         }
     }
 
     if args.status || args.sync {
-        let req = IpcMsg::with_label(TimeMsg::GET_SYNC_STATUS);
-        match ipc_call_timeout(timed, req, 2_000) {
-            Ok(reply) if reply.label == TimeMsg::REPLY => print_status(&reply),
-            _ => {
+        match client.sync_status() {
+            Ok(st) => print_status(&st),
+            Err(_) => {
                 if !args.sync {
                     println!("tzutils: failed to query sync status");
                     exit = 1;
@@ -138,66 +131,41 @@ fn run(args: TzutilsArgs) -> i32 {
     exit
 }
 
-fn print_status(r: &IpcMsg) {
-    let state = r.words[0] & 0xff;
-    let stratum = (r.words[0] >> 8) & 0xff;
-    let region = (r.words[0] >> 16) & 0xff;
-    let server_count = (r.words[0] >> 24) & 0xff;
-    let flags = (r.words[0] >> 32) & 0xff;
-    let ntp_synced = (flags & 1) != 0;
-    let rtc_updated = (flags & 2) != 0;
-    let explicit = (flags & 4) != 0;
-    let offset_ms = r.words[1] as i64;
-    let delay_ms = r.words[2] & 0xffff_ffff_ffff;
-    let last_error = r.words[2] >> 48;
-    let last_sync = r.words[3];
-    let next_attempt = r.words[4];
-    let backoff = r.words[5];
-    let last_server = unpack_cstr(r.words[6]);
-    let zone = unpack_cstr(r.words[7]);
-
-    println!("Synchronization state: {}", state_name(state));
-    println!("NTP region: {}", region_name(region as u8));
+fn print_status(st: &sunlight_tz::client::SyncStatusSnapshot) {
+    println!("Synchronization state: {}", state_name(st.state));
+    println!("NTP region: {}", st.region_label());
+    let zone = core::str::from_utf8(&st.zone_prefix[..st.zone_prefix_len]).unwrap_or("");
     println!("Timezone: {}", zone);
     println!(
         "Configured servers: {} ({})",
-        server_count,
-        if explicit {
+        st.server_count,
+        if st.explicit_servers {
             "explicit"
         } else {
             "regional pool"
         }
     );
-    println!("Last successful server: {}", last_server);
-    println!("Stratum: {}", stratum);
-    println!("Last offset (ms): {}", offset_ms);
-    println!("Last delay (ms): {}", delay_ms);
-    println!("Last successful sync (UTC unix): {}", last_sync);
-    println!("Last error: {}", err_name(last_error));
-    println!("Next attempt (mono ms): {}", next_attempt);
-    println!("Current backoff (ms): {}", backoff);
-    println!("NTP synchronized: {}", if ntp_synced { "yes" } else { "no" });
+    println!("Last successful server: {}", st.last_server_str());
+    println!("Stratum: {}", st.stratum);
+    println!("Last offset (ms): {}", st.last_offset_ms);
+    println!("Last delay (ms): {}", st.last_delay_ms);
+    println!("Last successful sync (UTC unix): {}", st.last_sync_unix);
+    println!("Last error: {}", err_name(st.last_error));
+    println!("Next attempt (mono ms): {}", st.next_attempt_mono_ms);
+    println!("Current backoff (ms): {}", st.backoff_ms);
+    println!(
+        "NTP synchronized: {}",
+        if st.ntp_synced { "yes" } else { "no" }
+    );
     println!(
         "RTC updated: {}",
-        if rtc_updated {
+        if st.rtc_updated {
             "yes"
         } else {
             "no (UTC write API not available)"
         }
     );
     let _ = NtpSyncState::SYNCHRONIZED;
-}
-
-fn unpack_cstr(w: u64) -> heapless::String<16> {
-    let mut s = heapless::String::<16>::new();
-    for i in 0..8 {
-        let ch = ((w >> (i * 8)) & 0xff) as u8;
-        if ch == 0 {
-            break;
-        }
-        let _ = s.push(ch as char);
-    }
-    s
 }
 
 fn state_name(s: u64) -> &'static str {
@@ -213,31 +181,8 @@ fn state_name(s: u64) -> &'static str {
     }
 }
 
-fn region_name(r: u8) -> &'static str {
-    match r {
-        1 => "africa",
-        2 => "asia",
-        3 => "europe",
-        4 => "north-america",
-        5 => "south-america",
-        6 => "oceania",
-        _ => "global",
-    }
-}
-
 fn err_name(e: u64) -> &'static str {
-    match e {
-        0 => "none",
-        TimeMsg::ERR_FAILED => "failed",
-        TimeMsg::ERR_NETWORK => "network",
-        TimeMsg::ERR_DNS => "dns",
-        TimeMsg::ERR_TIMEOUT => "timeout",
-        TimeMsg::ERR_VALIDATION => "validation",
-        TimeMsg::ERR_PERMISSION => "permission",
-        TimeMsg::ERR_CLOCK_UPDATE => "clock-update",
-        TimeMsg::ERR_BUSY => "busy",
-        _ => "unknown",
-    }
+    sunlight_tz::client::SyncStatusSnapshot::error_label(e)
 }
 
 fn print_usage() {

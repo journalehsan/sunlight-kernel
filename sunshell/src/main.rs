@@ -1450,63 +1450,135 @@ mod sunlight {
                     pos += 1;
                     return &out[..pos];
                 } else if args[0] == "list" {
-                    // Local filtering against the embedded zone table — no IPC
-                    // round-trips to the tz service (was up to 600 ipc_call()s,
-                    // each a scheduler round-trip, causing multi-second freezes).
-                    let filter = args.get(1).map(|s| s.to_lowercase());
+                    // Shared city catalog search (same ranking as Control Panel)
+                    // first, then residual IANA table matches. No IPC list
+                    // round-trips (was multi-second freezes).
+                    let filter = args.get(1).copied().unwrap_or("");
                     let _ = copy_bytes(out, &mut pos, b"ID\tDISPLAY\tOFFSET\n");
-                    if filter.is_none() {
+                    if filter.is_empty() {
                         let _ = copy_bytes(out, &mut pos, b"(showing first matches; use 'tzctl list <filter>' to search by id/name)\n");
                     }
                     let mut shown = 0u32;
+                    // Track emitted zone ids (first 32 bytes each) to de-dupe.
+                    let mut seen: [[u8; 32]; 48] = [[0; 32]; 48];
+                    let mut seen_len = 0usize;
+
+                    let already_seen = |zone_id: &str, seen: &[[u8; 32]; 48], seen_len: usize| -> bool {
+                        let zb = zone_id.as_bytes();
+                        for i in 0..seen_len {
+                            let s = &seen[i];
+                            let slen = s.iter().position(|&b| b == 0).unwrap_or(32);
+                            if slen == zb.len() && s[..slen] == zb[..] {
+                                return true;
+                            }
+                        }
+                        false
+                    };
+
+                    let record_seen = |zone_id: &str, seen: &mut [[u8; 32]; 48], seen_len: &mut usize| {
+                        if *seen_len >= seen.len() {
+                            return;
+                        }
+                        let zb = zone_id.as_bytes();
+                        let n = zb.len().min(31);
+                        seen[*seen_len][..n].copy_from_slice(&zb[..n]);
+                        seen[*seen_len][n] = 0;
+                        *seen_len += 1;
+                    };
+
+                    let write_zone_row = |out: &mut [u8],
+                                          pos: &mut usize,
+                                          zone_id: &str,
+                                          display: &str,
+                                          oh: i8,
+                                          om: u8|
+                     -> bool {
+                        let idbuf = zone_id.as_bytes();
+                        let dispbuf = display.as_bytes();
+                        if *pos + idbuf.len() + dispbuf.len() + 10 > out.len() {
+                            return false;
+                        }
+                        let _ = copy_bytes(out, pos, idbuf);
+                        out[*pos] = b'\t';
+                        *pos += 1;
+                        let _ = copy_bytes(out, pos, dispbuf);
+                        out[*pos] = b'\t';
+                        *pos += 1;
+                        out[*pos] = if oh < 0 { b'-' } else { b'+' };
+                        *pos += 1;
+                        let ah = oh.unsigned_abs();
+                        out[*pos] = b'0' + ah / 10;
+                        *pos += 1;
+                        out[*pos] = b'0' + ah % 10;
+                        *pos += 1;
+                        out[*pos] = b':';
+                        *pos += 1;
+                        out[*pos] = b'0' + om / 10;
+                        *pos += 1;
+                        out[*pos] = b'0' + om % 10;
+                        *pos += 1;
+                        out[*pos] = b'\n';
+                        *pos += 1;
+                        true
+                    };
+
+                    if !filter.is_empty() {
+                        let hits = sunlight_tz::search_locations(filter, 12);
+                        for hit in hits.iter() {
+                            let loc = hit.location;
+                            if already_seen(loc.zone_id, &seen, seen_len) {
+                                continue;
+                            }
+                            if let Some(zone) = sunlight_tz::tz_by_id(loc.zone_id) {
+                                if !write_zone_row(
+                                    out,
+                                    &mut pos,
+                                    zone.id,
+                                    zone.display_name,
+                                    zone.utc_offset_hours,
+                                    zone.utc_offset_minutes,
+                                ) {
+                                    break;
+                                }
+                                record_seen(zone.id, &mut seen, &mut seen_len);
+                                shown += 1;
+                            }
+                        }
+                    }
+
+                    let filter_l = filter.to_lowercase();
                     for zone in sunlight_tz::all_zones() {
-                        if let Some(ref f) = filter {
-                            if !zone.id.to_lowercase().contains(f.as_str())
-                                && !zone.display_name.to_lowercase().contains(f.as_str())
+                        if !filter.is_empty() {
+                            let id_l = zone.id.to_lowercase();
+                            let disp_l = zone.display_name.to_lowercase();
+                            let city_l = zone.city.to_lowercase();
+                            if !id_l.contains(filter_l.as_str())
+                                && !disp_l.contains(filter_l.as_str())
+                                && !city_l.contains(filter_l.as_str())
                             {
                                 continue;
                             }
                         }
-
-                        let idbuf = zone.id.as_bytes();
-                        let dispbuf = zone.display_name.as_bytes();
-
-                        // bail out before overflowing the output buffer
-                        if pos + idbuf.len() + dispbuf.len() + 10 > out.len() {
+                        if already_seen(zone.id, &seen, seen_len) {
+                            continue;
+                        }
+                        if !write_zone_row(
+                            out,
+                            &mut pos,
+                            zone.id,
+                            zone.display_name,
+                            zone.utc_offset_hours,
+                            zone.utc_offset_minutes,
+                        ) {
                             break;
                         }
-
-                        let _ = copy_bytes(out, &mut pos, idbuf);
-                        out[pos] = b'\t';
-                        pos += 1;
-                        let _ = copy_bytes(out, &mut pos, dispbuf);
-                        out[pos] = b'\t';
-                        pos += 1;
-
-                        let oh = zone.utc_offset_hours;
-                        let om = zone.utc_offset_minutes;
-                        out[pos] = if oh < 0 { b'-' } else { b'+' };
-                        pos += 1;
-                        let ah = oh.unsigned_abs();
-                        out[pos] = b'0' + ah / 10;
-                        pos += 1;
-                        out[pos] = b'0' + ah % 10;
-                        pos += 1;
-                        out[pos] = b':';
-                        pos += 1;
-                        out[pos] = b'0' + om / 10;
-                        pos += 1;
-                        out[pos] = b'0' + om % 10;
-                        pos += 1;
-                        out[pos] = b'\n';
-                        pos += 1;
-
+                        record_seen(zone.id, &mut seen, &mut seen_len);
                         shown += 1;
-                        if filter.is_none() && shown >= 32 {
+                        if filter.is_empty() && shown >= 32 {
                             break;
                         }
                     }
-                    if filter.is_some() && shown == 0 {
+                    if !filter.is_empty() && shown == 0 {
                         let _ = copy_bytes(out, &mut pos, b"(no matching zones)\n");
                     }
                     return &out[..pos];

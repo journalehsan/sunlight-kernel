@@ -75,6 +75,7 @@ members = [
     "sun-font",
     "sunlight-bench",
     "sunlight-calculator",
+    "sunlight-widget-gallery",
     "sunlight-files",
     "sunlight-light-lens",
     "sunlight-clipman",
