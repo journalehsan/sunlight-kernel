@@ -1,8 +1,10 @@
 //! Checked layout and readable-range validation for 32-bit SHM surfaces.
 //!
-//! Legacy surfaces are XRGB8888. Explicit WindowGlass surfaces use straight
-//! ARGB8888 with the same four-byte layout; format interpretation is a trusted
-//! window property and is never inferred from pixel values.
+//! Legacy surfaces are XRGB8888. The reserved WindowGlass protocol material
+//! still uses straight ARGB8888 with the same four-byte layout so older
+//! clients that leave transparent root pixels compose over the opaque window
+//! body. Format interpretation is a trusted window property and is never
+//! inferred from pixel values.
 
 pub const BYTES_PER_PIXEL: u32 = 4;
 pub const MAX_SURFACE_DIM: u32 = 8192;

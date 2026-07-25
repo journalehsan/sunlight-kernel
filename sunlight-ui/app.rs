@@ -202,13 +202,18 @@ pub struct WindowConfig {
 
 /// Explicit compositor material for a native window surface.
 ///
-/// `Opaque` retains the historical XRGB copy path. `WindowGlass` opts into
-/// straight-alpha ARGB client composition and compositor-owned glass backing;
-/// applications must clear unused root pixels to transparent and keep dense
-/// content opaque themselves.
+/// `Opaque` retains the historical XRGB copy path.
+///
+/// `WindowGlass` is a **reserved compatibility value**. It still requests
+/// straight-alpha ARGB client composition so unused root pixels can be left
+/// transparent, but the compositor maps it to **opaque** window chrome (solid
+/// charcoal body and titlebar). It is **not** background blur, acrylic, or a
+/// live translucent desktop backdrop. Prefer `Opaque` for new windows; keep
+/// dense content opaque either way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WindowMaterial {
     Opaque,
+    /// Reserved: straight-alpha client pixels over opaque compositor chrome.
     WindowGlass,
 }
 
@@ -574,6 +579,11 @@ impl Window {
     }
 
     /// Mark the current framebuffer contents as ready for composition.
+    ///
+    /// Frame publication waits without the generic short window-operation
+    /// deadline. A timed-out state-changing call can be canceled before a busy
+    /// compositor dequeues it, leaving a newly created window permanently
+    /// non-visible. The display server always acknowledges accepted commits.
     pub fn commit(&mut self) {
         let frame_len = self.frame_len();
         let draw_offset = self.draw_buffer_offset();
@@ -584,7 +594,10 @@ impl Window {
                 ptr::copy_nonoverlapping(self.buffer.add(draw_offset), self.buffer, frame_len);
             }
         }
-        let _ = self.display_call(IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, self.win_id));
+        let _ = ipc_call(
+            self.display_ep,
+            IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, self.win_id),
+        );
     }
 
     /// Tell the compositor to remove this window.

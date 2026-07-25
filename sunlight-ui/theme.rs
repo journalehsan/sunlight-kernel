@@ -176,7 +176,7 @@ pub struct Theme {
 /// these roles instead of copying raw ARGB literals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChromeRoles {
-    /// Canonical window root / WindowGlass tint (matches Start menu charcoal).
+    /// Canonical window root / body tint (matches Start menu charcoal).
     pub window_bg: Color,
     /// Active titlebar tint — same hue, slightly denser.
     pub titlebar_active: Color,

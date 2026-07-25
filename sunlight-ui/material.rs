@@ -5,8 +5,10 @@
 //! through [`Canvas::fill_material`](crate::paint::Canvas::fill_material)
 //! without knowing about framebuffer composition.
 //!
-//! Glass is alpha + warm/dark tint + a tiny static noise tile. It is **not**
-//! background blur.
+//! Client-side glass is alpha + warm/dark tint + a tiny static noise tile painted
+//! into the application surface. It is **not** background blur and is **not**
+//! the reserved compositor `WindowGlass` protocol material (which maps to
+//! opaque window chrome with optional straight-alpha client pixels).
 
 use crate::theme::{Color, Theme};
 
@@ -110,15 +112,16 @@ impl MaterialPalette {
                 .with_noise(0)
                 .with_border(chrome.subtle_border)
                 .with_radius(12),
-            // Window root: Start-menu charcoal glass — shared hue with titlebar.
+            // Window-body charcoal for client chrome that still samples this
+            // palette role (compositor chrome is opaque and does not use it).
             window_glass: Material::glass(chrome.window_bg, 232)
                 .with_noise(4)
                 .with_radius(radius),
-            // Active titlebar: same hue family, ~4% denser (higher opacity + darker tint).
+            // Active titlebar density reference — same hue, slightly denser.
             titlebar_active: Material::glass(chrome.titlebar_active, 240)
                 .with_noise(3)
                 .with_radius(radius),
-            // Inactive titlebar: same material family near root density.
+            // Inactive titlebar density reference — near root density.
             titlebar_inactive: Material::glass(chrome.titlebar_inactive, 233)
                 .with_noise(3)
                 .with_radius(radius),

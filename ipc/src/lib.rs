@@ -905,7 +905,11 @@ pub mod sgp {
         // bits [16:15] group_type  (0=None 1=Stacked 2=Tabbed)
         // bits [18:17] decoration  (0=Normal 1=CompactClose 2=CompactCloseMinimize
         //                           3=HiddenOverlay)
-        // bits [20:19] surface material (0=OpaqueXrgb 1=WindowGlassStraightArgb)
+        // bits [20:19] surface material
+        //   0 = OpaqueXrgb (default)
+        //   1 = reserved legacy WindowGlass — accepted for compatibility;
+        //       compositor maps to opaque chrome + straight-alpha client pixels
+        //       (not backdrop blur / acrylic)
         // bits [63:21] reserved
         pub mod config_flags {
             pub const WIN_TYPE_MASK: u64 = 0x3;
@@ -921,10 +925,13 @@ pub mod sgp {
             pub const GROUP_TYPE_SHIFT: u64 = 15;
             pub const DECORATION_MASK: u64 = 0x3 << 17;
             pub const DECORATION_SHIFT: u64 = 17;
-            /// Explicit opt-in material hint. The default remains opaque XRGB;
-            /// the compositor must never infer transparency from pixel colors.
+            /// Explicit material field. Default remains opaque XRGB; the
+            /// compositor must never infer transparency from pixel colors.
             pub const MATERIAL_MASK: u64 = 0x3 << 19;
             pub const MATERIAL_SHIFT: u64 = 19;
+            /// Reserved legacy value. Kept so old clients still connect; the
+            /// display service treats it as opaque chrome with straight-alpha
+            /// client composition, not as a translucent glass/blur effect.
             pub const MATERIAL_WINDOW_GLASS: u64 = 0x1 << MATERIAL_SHIFT;
         }
     }

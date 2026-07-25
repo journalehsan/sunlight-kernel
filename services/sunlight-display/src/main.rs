@@ -375,7 +375,18 @@ enum GroupType {
 enum SurfaceMaterial {
     /// Historical/default path: every client pixel is copied as opaque XRGB.
     OpaqueXrgb = 0,
-    /// Explicit native opt-in: straight-alpha ARGB over shared window glass.
+    /// Reserved protocol value (legacy "WindowGlass").
+    ///
+    /// Previously advertised as compositor-owned translucent glass over the
+    /// desktop. That path was not a real backdrop blur: it only blended a
+    /// near-opaque charcoal tint (+ optional noise) over already-composited
+    /// pixels, which was visually ineffective and paid a full per-pixel cost
+    /// every scene redraw.
+    ///
+    /// Compatibility fallback: opaque window chrome (same charcoal body and
+    /// solid titlebar as OpaqueXrgb) plus straight-alpha client composition so
+    /// clients that clear unused root pixels remain readable over the opaque
+    /// body instead of falling through to the desktop.
     WindowGlassStraightArgb = 1,
 }
 
@@ -389,6 +400,12 @@ impl SurfaceMaterial {
         }
     }
 
+    /// Whether client SHM pixels are interpreted as straight-alpha ARGB.
+    ///
+    /// Only the reserved WindowGlass protocol value uses this path so older
+    /// clients that leave transparent root pixels keep a deterministic opaque
+    /// body underneath. Ordinary per-pixel alpha for icons, cursors, and
+    /// images is handled by separate compositor primitives.
     const fn uses_straight_alpha(self) -> bool {
         matches!(self, Self::WindowGlassStraightArgb)
     }
@@ -2241,7 +2258,7 @@ const TITLE_TEXT_INACTIVE: u32 = SUNLIGHT_THEME.chrome.title_inactive.0 & 0x00FF
 const TITLEBAR_DIVIDER_ACTIVE: u32 = SUNLIGHT_THEME.chrome.titlebar_divider_active.0 & 0x00FF_FFFF;
 const TITLEBAR_DIVIDER_INACTIVE: u32 =
     SUNLIGHT_THEME.chrome.titlebar_divider_inactive.0 & 0x00FF_FFFF;
-/// Legacy opaque window body — same charcoal family as WindowGlass tint.
+/// Opaque window body — shared charcoal family with Start-menu / chrome roles.
 const WINDOW_BODY_OPAQUE: u32 = SUNLIGHT_THEME.chrome.window_bg.0 | 0xFF00_0000;
 const DECORATION_GEOMETRY: sunlight_ui::DecorationGeometry =
     sunlight_ui::DecorationGeometry::SUNLIGHT;
@@ -2280,8 +2297,8 @@ struct SolarDecorationTheme {
 }
 
 const SOLAR_DECORATION: SolarDecorationTheme = SolarDecorationTheme {
-    // Mac-style hairline: only a few steps above the charcoal glass so the
-    // frame reads on bright wallpaper without a hard metal edge on dark glass.
+    // Mac-style hairline: only a few steps above the charcoal body so the
+    // frame reads on bright wallpaper without a hard metal edge on dark chrome.
     structural_outer: 0x00484850,
     structural_light: 0x005E5E66,
     structural_dark: 0x00323238,
@@ -3042,47 +3059,6 @@ fn composite_client_pixel(src: u32, dst: u32, corner_coverage: u8, straight_alph
     blend::blend_straight_alpha_over_xrgb((src & 0x00FF_FFFF) | ((alpha as u32) << 24), dst)
 }
 
-/// Blend one shared material into a sub-rectangle, optionally clipped by the
-/// canonical inner window mask. Material samples remain straight-alpha; mask
-/// coverage is multiplied into alpha exactly once.
-fn blend_window_material(
-    state: &CompositorState,
-    back_buffer: &mut [u32],
-    paint_rect: Rect,
-    inner: Rect,
-    rounded: bool,
-    material: sunlight_ui::Material,
-) {
-    let clipped = clip_to_screen(paint_rect, state.fb_width, state.fb_height);
-    if clipped.w == 0 || clipped.h == 0 {
-        return;
-    }
-    let stride = fb_stride(state);
-    for y in clipped.y..clipped.bottom() {
-        let row = y as usize * stride;
-        for x in clipped.x..clipped.right() {
-            let coverage = if rounded {
-                state.inner_corner_mask.coverage(
-                    x - inner.x,
-                    y - inner.y,
-                    inner.w as i32,
-                    inner.h as i32,
-                )
-            } else {
-                255
-            };
-            if coverage == 0 {
-                continue;
-            }
-            let sample = material.sample_color(x, y);
-            let alpha = blend::mul_u8_div_255_round(sample.a(), coverage);
-            let src = (sample.0 & 0x00FF_FFFF) | ((alpha as u32) << 24);
-            let idx = row + x as usize;
-            back_buffer[idx] = blend::blend_straight_alpha_over_xrgb(src, back_buffer[idx]);
-        }
-    }
-}
-
 #[inline(always)]
 fn blend_decoration_pixel(
     state: &CompositorState,
@@ -3182,8 +3158,8 @@ fn draw_solar_halo(
 ///
 /// Unlike a hard light/dark bevel (top-left light, bottom-right dark), this
 /// draws one continuous rounded stroke so the frame reads as a single thin
-/// border around the glass.  A very restrained top highlight adds slight depth
-/// without looking like a separate slab or cold metal edge.
+/// border around the window body.  A very restrained top highlight adds slight
+/// depth without looking like a separate slab or cold metal edge.
 fn draw_structural_rim(canvas: &mut Canvas<'_>, outer: Rect, radius: u32) {
     if outer.w < 2 || outer.h < 2 {
         return;
@@ -3351,12 +3327,14 @@ fn composite_window(
             (strip_left - (wx as i32 + 12)).max(0) as u32,
             titlebar_h.saturating_sub(2),
         );
-        // Surface alpha is explicit. Legacy buffers retain their opaque XRGB
-        // path; opted-in native clients can leave root pixels transparent over
-        // the compositor-owned glass backing while painting content opaque.
+        // Chrome is always opaque. The reserved WindowGlass material flag no
+        // longer paints a translucent compositor backing (that path was not a
+        // real backdrop blur and was visually ineffective). Clients that still
+        // request it get this same opaque body/titlebar; their SHM may use
+        // straight-alpha so transparent root pixels reveal the body, not the
+        // desktop. Image/icon/cursor alpha is handled separately.
         let _role = surface_role_for_window(win);
 
-        let glass_surface = win.config.surface_material == SurfaceMaterial::WindowGlassStraightArgb;
         {
             let mut canvas = back_buffer_canvas(state, back_buffer);
             // The rim is structural for both focus states; orange no longer
@@ -3366,57 +3344,15 @@ fn composite_window(
                 outer_radius,
                 Color(SOLAR_DECORATION.structural_outer),
             );
-            if !glass_surface {
-                // Legacy/unopted windows: opaque charcoal body, same family as glass.
-                canvas.fill_rounded_rect(inner, inner_radius, Color(WINDOW_BODY_OPAQUE));
-                if win.decorations_visible() {
-                    canvas.fill_top_rounded_rect(
-                        inner,
-                        inner_radius,
-                        // Force opaque XRGB for the solid decoration path.
-                        Color(tb_color | 0xFF00_0000),
-                    );
-                }
-            }
-        }
-        if glass_surface {
-            let palette = sunlight_ui::MaterialPalette::new(&SUNLIGHT_THEME);
+            // Opaque charcoal body for every decorated window, including those
+            // that still advertise the reserved WindowGlass protocol value.
+            canvas.fill_rounded_rect(inner, inner_radius, Color(WINDOW_BODY_OPAQUE));
             if win.decorations_visible() {
-                let titlebar = Rect::new(inner.x, inner.y, inner.w, titlebar_h.min(inner.h));
-                let content = Rect::new(
-                    inner.x,
-                    titlebar.bottom(),
-                    inner.w,
-                    inner.h.saturating_sub(titlebar.h),
-                );
-                blend_window_material(
-                    state,
-                    back_buffer,
-                    content,
+                canvas.fill_top_rounded_rect(
                     inner,
-                    !maximized,
-                    palette.window_glass,
-                );
-                blend_window_material(
-                    state,
-                    back_buffer,
-                    titlebar,
-                    inner,
-                    !maximized,
-                    if is_focused {
-                        palette.titlebar_active
-                    } else {
-                        palette.titlebar_inactive
-                    },
-                );
-            } else {
-                blend_window_material(
-                    state,
-                    back_buffer,
-                    inner,
-                    inner,
-                    !maximized,
-                    palette.window_glass,
+                    inner_radius,
+                    // Force opaque XRGB for the solid decoration path.
+                    Color(tb_color | 0xFF00_0000),
                 );
             }
         }
@@ -5661,25 +5597,31 @@ mod tests {
             WindowConfig::from_ipc_words(&words).surface_material,
             SurfaceMaterial::OpaqueXrgb
         );
+        assert!(!SurfaceMaterial::OpaqueXrgb.uses_straight_alpha());
         let mut glass = words;
         glass[1] = SgpMsg::config_flags::MATERIAL_WINDOW_GLASS;
+        // Reserved value still parses for compatibility, but is not a live
+        // translucent glass / blur effect.
         assert_eq!(
             WindowConfig::from_ipc_words(&glass).surface_material,
             SurfaceMaterial::WindowGlassStraightArgb
         );
+        assert!(SurfaceMaterial::WindowGlassStraightArgb.uses_straight_alpha());
     }
 
     #[test]
-    fn glass_root_and_opaque_content_compose_independently() {
-        let wallpaper = 0xFFFF_7A00;
-        let transparent_root = composite_client_pixel(0x0000_0000, wallpaper, 255, true);
-        assert_eq!(transparent_root, wallpaper);
+    fn reserved_window_glass_falls_back_to_straight_alpha_over_opaque_body() {
+        // Compositor paints an opaque body first; transparent client roots
+        // reveal that body (not the desktop/wallpaper). Content stays opaque.
+        let opaque_body = WINDOW_BODY_OPAQUE;
+        let transparent_root = composite_client_pixel(0x0000_0000, opaque_body, 255, true);
+        assert_eq!(transparent_root, opaque_body);
 
-        let opaque_content = composite_client_pixel(0xFF12_3456, wallpaper, 255, true);
+        let opaque_content = composite_client_pixel(0xFF12_3456, opaque_body, 255, true);
         assert_eq!(opaque_content, 0xFF12_3456);
 
         // Black is a normal opaque color, never a key for transparency.
-        let black = composite_client_pixel(0xFF00_0000, wallpaper, 255, true);
+        let black = composite_client_pixel(0xFF00_0000, opaque_body, 255, true);
         assert_eq!(black, 0xFF00_0000);
     }
 
@@ -5788,7 +5730,8 @@ mod tests {
             palette.window_glass.tint.0 & 0x00FF_FFFF,
             WINDOW_BODY_OPAQUE & 0x00FF_FFFF
         );
-        // Start menu overlay stays at canonical charcoal values.
+        // Toolkit materials remain available for client-drawn chrome; the
+        // compositor no longer samples window_glass as a translucent backing.
         assert_eq!(palette.overlay_glass.tint, SUNLIGHT_THEME.panel);
         assert_eq!(palette.overlay_glass.opacity, 232);
     }
