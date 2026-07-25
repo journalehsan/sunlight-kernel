@@ -414,8 +414,10 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         80 => 63,   // chdir → SunlightOS Chdir(63)
         318 => -16, // getrandom → Linux ABI shim backed by kernel entropy
         228 => -19, // clock_gettime → special Linux clock_gettime shim
-        82 => -20,  // rename → special Linux rename/renameat shim
+        82 => 66,   // rename → SunlightOS Rename(66) (same argument layout)
         264 => -20, // renameat → special Linux rename/renameat shim
+        87 => 65,   // unlink → SunlightOS Unlink(65) (same argument layout)
+        263 => -27, // unlinkat → special Linux unlinkat shim
         35 => -21,  // nanosleep → special Linux nanosleep shim
 
         // Tier 7: epoll + pipe for crossterm/mio TUI input (helios-note)
@@ -529,6 +531,10 @@ mod tests {
         assert_eq!(translate_syscall(72), 49); // fcntl → SunlightOS Fcntl
         assert_eq!(translate_syscall(257), -15); // openat → frame-shifted sys_open
         assert_eq!(translate_syscall(318), -16); // getrandom
+        assert_eq!(translate_syscall(82), 66); // rename → native Rename
+        assert_eq!(translate_syscall(264), -20); // renameat → ABI shim
+        assert_eq!(translate_syscall(87), 65); // unlink → native Unlink
+        assert_eq!(translate_syscall(263), -27); // unlinkat → ABI shim
         assert_eq!(translate_syscall(213), -22); // epoll_create
         assert_eq!(translate_syscall(291), -22); // epoll_create1
         assert_eq!(translate_syscall(233), -23); // epoll_ctl

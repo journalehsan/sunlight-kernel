@@ -468,8 +468,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                     }
                 }
                 -20 => {
-                    if linux_num == 82 || linux_num == 264 {
-                        num = 1018; // Linux rename / renameat
+                    if linux_num == 264 {
+                        num = 1018; // Linux renameat
                     }
                 }
                 -21 => {
@@ -505,6 +505,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 -26 => {
                     if linux_num == 53 {
                         num = 1024; // Linux socketpair
+                    }
+                }
+                -27 => {
+                    if linux_num == 263 {
+                        num = 1025; // Linux unlinkat
                     }
                 }
                 -38 => {
@@ -660,6 +665,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1022 => sys_linux_epoll_wait(frame),
         1023 => sys_linux_pipe2(frame),
         1024 => sys_linux_socketpair(frame),
+        1025 => sys_linux_unlinkat(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -693,6 +699,22 @@ const USER_PATH_MAX: usize = 256;
 const USER_ARG_MAX: usize = 256;
 const USER_ARG_COUNT_MAX: usize = 16;
 const USER_ARG_TOTAL_MAX: usize = 4096;
+
+/// Resolve a userspace pathname against the calling process's current
+/// directory. The VFS accepts absolute paths only, while Linux file APIs also
+/// accept paths relative to CWD.
+fn resolve_current_path(path: &str) -> alloc::string::String {
+    if path.starts_with('/') {
+        return alloc::string::String::from(path);
+    }
+
+    let cwd = crate::sched::with_scheduler(|sched| sched.current_process().cwd.clone());
+    if cwd == "/" {
+        alloc::format!("/{}", path)
+    } else {
+        alloc::format!("{}/{}", cwd, path)
+    }
+}
 
 fn read_user_cstr(
     ptr: u64,
@@ -3238,6 +3260,25 @@ fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
     sys_rename(&mut rename_frame)
 }
 
+fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
+    let dirfd = frame.rdi as i32;
+    let path_ptr = frame.rsi;
+    let flags = frame.rdx;
+
+    const AT_FDCWD: i32 = -100;
+    // Removing directories via AT_REMOVEDIR is deliberately outside this
+    // small compatibility surface. Relative paths are resolved by sys_unlink.
+    if (dirfd != AT_FDCWD && dirfd != 0) || flags != 0 {
+        return linux_errno(38); // ENOSYS
+    }
+
+    let mut unlink_frame = SyscallFrame {
+        rdi: path_ptr,
+        ..*frame
+    };
+    sys_unlink(&mut unlink_frame)
+}
+
 fn sys_linux_nanosleep(frame: &mut SyscallFrame) -> u64 {
     let req_ptr = frame.rdi;
     let rem_ptr = frame.rsi;
@@ -3793,10 +3834,12 @@ fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
         Ok(bytes) => bytes,
         Err(error) => return user_memory_failure(error),
     };
-    let path = match core::str::from_utf8(&path_bytes) {
+    let raw_path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
         Err(_) => return u64::MAX,
     };
+    let path_buf = resolve_current_path(raw_path);
+    let path = path_buf.as_str();
 
     let (_, _, actor) = current_fs_actor();
     let decision =
@@ -3826,14 +3869,18 @@ fn sys_rename(frame: &mut SyscallFrame) -> u64 {
         Ok(bytes) => bytes,
         Err(error) => return user_memory_failure(error),
     };
-    let old_path = match core::str::from_utf8(&old_bytes) {
+    let old_raw = match core::str::from_utf8(&old_bytes) {
         Ok(s) => s,
         Err(_) => return u64::MAX,
     };
-    let new_path = match core::str::from_utf8(&new_bytes) {
+    let new_raw = match core::str::from_utf8(&new_bytes) {
         Ok(s) => s,
         Err(_) => return u64::MAX,
     };
+    let old_path_buf = resolve_current_path(old_raw);
+    let new_path_buf = resolve_current_path(new_raw);
+    let old_path = old_path_buf.as_str();
+    let new_path = new_path_buf.as_str();
 
     let (_, _, actor) = current_fs_actor();
     // Require Delete permission on source and Create permission on destination.

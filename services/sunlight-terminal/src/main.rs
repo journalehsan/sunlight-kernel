@@ -1029,7 +1029,10 @@ impl TerminalTab {
             };
             let byte = match ch {
                 '\t' => b'\t',
-                '\n' => b'\n',
+                // POSIX terminals deliver Enter as carriage return in raw
+                // mode. Crossterm treats LF as a character while raw mode is
+                // active, so forwarding LF made Enter a no-op in Helios Note.
+                '\n' => b'\r',
                 '\u{8}' => 0x08,
                 c if c.is_ascii() => c as u8,
                 _ => 0,
@@ -1779,6 +1782,14 @@ mod tests {
         assert_eq!(buf[0], b'\t');
     }
 
+    #[test]
+    fn translate_special_key_maps_enter_to_raw_terminal_carriage_return() {
+        let mut buf = [0u8; 4];
+        let n = translate_special_key(KEY_ENTER, &mut buf);
+        assert_eq!(n, 1);
+        assert_eq!(buf[0], b'\r');
+    }
+
     // ---- Regression coverage for the new-tab hang fix -------------------
     //
     // These are the key regression tests for this bug: `spawn_tab` (the
@@ -2184,7 +2195,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 fn translate_special_key(keycode: u8, buf: &mut [u8; 4]) -> usize {
     match keycode {
         KEY_ENTER => {
-            buf[0] = b'\n';
+            buf[0] = b'\r';
             1
         }
         KEY_TAB => {
