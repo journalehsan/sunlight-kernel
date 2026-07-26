@@ -99,6 +99,7 @@ members = [
     "sunlight-silicon-echoes",
     "sunlight-shell-appstate",
     "mezzoctl",
+    "wiseowl-memory",
 ]
 
 [workspace.dependencies]
