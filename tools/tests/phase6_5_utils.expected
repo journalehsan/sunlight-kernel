@@ -1,4 +1,5 @@
 # Focused native libc utility gate: echo, pwd, cat, and directory re-entry.
+# Phase 2B.2 adds head, cmp, cksum.
 [TTY]  cmd: /bin/pwd -> /\n
 [TTY]  exit: /bin/pwd -> 0
 [TTY]  cmd: echo -> \n
@@ -23,3 +24,9 @@
 [TTY]  exit: cat ../../tests/cat-nonewline -> 0
 [TTY]  exit: cat /tests/cat-big -> 0
 [TTY]  exit: cat /tests/missing -> 1
+# Phase 2B.2: head, cmp, cksum
+[TTY]  exit: head /tests/ho -> 0
+[TTY]  exit: head -n 2 /tests/hm -> 0
+[TTY]  exit: cmp /tests/ia /tests/ib -> 0
+[TTY]  exit: cmp -s /tests/da /tests/db -> 1
+[TTY]  exit: cksum /tests/ho -> 0

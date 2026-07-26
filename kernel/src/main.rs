@@ -111,6 +111,12 @@ static SUNLIGHT_BASENAME_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/basename");
 static SUNLIGHT_DIRNAME_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/dirname");
+static SUNLIGHT_HEAD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/head");
+static SUNLIGHT_CMP_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/cmp");
+static SUNLIGHT_CKSUM_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/cksum");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
@@ -3845,20 +3851,18 @@ fn build_phase6_5_3_sequence() -> [u8; 4096] {
 
 /// Phase 6.5 utility migration gate: exercise native echo, pwd, cat, and the
 /// complete newly-created-directory lifecycle through the real shell and TTY.
+/// Phase 2B.2: adds head, cmp, cksum acceptance through the same harness.
 #[cfg(feature = "key_inject")]
 fn build_phase6_5_utils_sequence() -> [u8; 4096] {
     let mut s = [0u8; 4096];
     let mut len = 0usize;
 
-    // Keep the existing injection architecture's deterministic login grace
-    // period. Release events are ignored by the keyboard translator.
-    // Select the prefilled root account's password field and authenticate.
     append_injected_delay(&mut s, &mut len, 96);
     append_injected_scancode(&mut s, &mut len, 0x1c);
     for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
         append_injected_scancode(&mut s, &mut len, scancode);
     }
-    append_injected_delay(&mut s, &mut len, 1024);
+    append_injected_delay(&mut s, &mut len, 512);
 
     for command in [
         b"cd /".as_slice(),
@@ -3881,11 +3885,15 @@ fn build_phase6_5_utils_sequence() -> [u8; 4096] {
         b"cat ../../tests/cat-nonewline".as_slice(),
         b"cat /tests/cat-big".as_slice(),
         b"cat /tests/missing".as_slice(),
+        // Phase 2B.2:
+        b"head /tests/ho".as_slice(),
+        b"head -n 2 /tests/hm".as_slice(),
+        b"cmp /tests/ia /tests/ib".as_slice(),
+        b"cmp -s /tests/da /tests/db".as_slice(),
+        b"cksum /tests/ho".as_slice(),
     ] {
-        if command == b"echo hello world".as_slice() {
-            append_injected_delay(&mut s, &mut len, 512);
-        }
-        append_injected_delay(&mut s, &mut len, 96);
+        let extra = if command == b"echo hello world".as_slice() { 0 } else { 0 };
+        append_injected_delay(&mut s, &mut len, 48 + extra);
         append_injected_command(&mut s, &mut len, command);
     }
     s
@@ -3956,6 +3964,16 @@ fn injected_scancode(byte: u8) -> (u8, bool) {
         b'.' => 0x34,
         b'/' => 0x35,
         b'-' => 0x0c,
+        b'0' => 0x0b,
+        b'1' => 0x02,
+        b'2' => 0x03,
+        b'3' => 0x04,
+        b'4' => 0x05,
+        b'5' => 0x06,
+        b'6' => 0x07,
+        b'7' => 0x08,
+        b'8' => 0x09,
+        b'9' => 0x0a,
         _ => 0,
     };
     (scancode, shifted)

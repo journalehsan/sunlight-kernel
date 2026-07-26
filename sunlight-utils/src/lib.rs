@@ -9,3 +9,6 @@ pub mod native;
 pub mod pathname;
 pub mod pwd;
 pub mod true_cmd;
+pub mod head;
+pub mod cmp;
+pub mod cksum;

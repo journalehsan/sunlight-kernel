@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-utils"
-version = "0.2.2702-alpha.1"
+version = "0.2.2725-alpha.1"
+
 
 
 
@@ -477,6 +478,18 @@ path = "src/bin/basename.rs"
 [[bin]]
 name = "dirname"
 path = "src/bin/dirname.rs"
+
+[[bin]]
+name = "head"
+path = "src/bin/head.rs"
+
+[[bin]]
+name = "cmp"
+path = "src/bin/cmp.rs"
+
+[[bin]]
+name = "cksum"
+path = "src/bin/cksum.rs"
 
 [dependencies]
 sunlight-libc = { path = "../sunlight-libc" }

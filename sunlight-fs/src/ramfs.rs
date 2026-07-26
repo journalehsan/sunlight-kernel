@@ -564,6 +564,19 @@ pub const STANDARD_HOME_DIRS: &[&str] = &[
 
 static CAT_BIG_BYTES: [u8; 513] = [b'x'; 513];
 
+static HEAD_MULTILINE: &[u8] = b"line1\nline2\nline3\nline4\nline5\n\
+line6\nline7\nline8\nline9\nline10\n\
+line11\nline12\nline13\nline14\nline15\n\
+line16\nline17\nline18\nline19\nline20\n";
+
+static HEAD_ONELINE: &[u8] = b"just one line\n";
+
+static CMP_IDENTICAL: &[u8] = b"hello world\nthis is a test file\n";
+
+static CMP_DIFF_A: &[u8] = b"hello world\nthis is file a\n";
+
+static CMP_DIFF_B: &[u8] = b"hello world\nthis is file b\n";
+
 pub static INITRAMFS: &[RamEntry] = &[
     // Directories
     RamEntry::dir("/", 0, 0, mode::DIR_755),
@@ -650,6 +663,12 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file("/tests/cat-hello", 0, 0, mode::FILE_644, b"hello from cat\n"),
     RamEntry::file("/tests/cat-nonewline", 0, 0, mode::FILE_644, b"nonewline"),
     RamEntry::file("/tests/cat-big", 0, 0, mode::FILE_644, &CAT_BIG_BYTES),
+    RamEntry::file("/tests/ho", 0, 0, mode::FILE_644, HEAD_ONELINE),
+    RamEntry::file("/tests/hm", 0, 0, mode::FILE_644, HEAD_MULTILINE),
+    RamEntry::file("/tests/ia", 0, 0, mode::FILE_644, CMP_IDENTICAL),
+    RamEntry::file("/tests/ib", 0, 0, mode::FILE_644, CMP_IDENTICAL),
+    RamEntry::file("/tests/da", 0, 0, mode::FILE_644, CMP_DIFF_A),
+    RamEntry::file("/tests/db", 0, 0, mode::FILE_644, CMP_DIFF_B),
 
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),
@@ -1106,6 +1125,20 @@ login_timeout_seconds = 30
     ),
     RamEntry::file(
         "/bin/dirname",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/cmp",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/cksum",
         0,
         0,
         mode::FILE_755,

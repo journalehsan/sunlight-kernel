@@ -624,14 +624,14 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         // from /bin or /usr/bin and dispatch by argv[0] inside the multi-call
         // binary. Native-libc cat and pwd are mapped just below.
         "/bin/ls" | "/bin/cp" | "/bin/mv" | "/bin/rm" | "/bin/mkdir" | "/bin/rmdir"
-        | "/bin/touch" | "/bin/find" | "/bin/grep" | "/bin/head" | "/bin/tail" | "/bin/wc"
+        | "/bin/touch" | "/bin/find" | "/bin/grep" | "/bin/tail" | "/bin/wc"
         | "/bin/sort" | "/bin/uniq" | "/bin/cut" | "/bin/file" | "/bin/stat" | "/bin/date"
         | "/bin/whoami" | "/bin/id" | "/bin/uname"
         | "/bin/nice" | "/bin/renice" | "/bin/free" | "/bin/freezram" | "/bin/kill"
         | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls" | "/usr/bin/cp"
         | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
-        | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep" | "/usr/bin/head"
-        | "/usr/bin/tail" | "/usr/bin/wc" | "/usr/bin/sort" | "/usr/bin/uniq" | "/usr/bin/cut"
+        | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep" | "/usr/bin/tail"
+        | "/usr/bin/wc" | "/usr/bin/sort" | "/usr/bin/uniq" | "/usr/bin/cut"
         | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/date"
         | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname"
         | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" | "/usr/bin/freezram"
@@ -652,6 +652,15 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         }
         "/bin/dirname" | "/usr/bin/dirname" | "/sunlight-utils/dirname" => {
             Ok(crate::SUNLIGHT_DIRNAME_ELF_BYTES)
+        }
+        "/bin/head" | "/usr/bin/head" | "/sunlight-utils/head" => {
+            Ok(crate::SUNLIGHT_HEAD_ELF_BYTES)
+        }
+        "/bin/cmp" | "/usr/bin/cmp" | "/sunlight-utils/cmp" => {
+            Ok(crate::SUNLIGHT_CMP_ELF_BYTES)
+        }
+        "/bin/cksum" | "/usr/bin/cksum" | "/sunlight-utils/cksum" => {
+            Ok(crate::SUNLIGHT_CKSUM_ELF_BYTES)
         }
         "/bin/ping"
         | "/bin/ifconfig"
