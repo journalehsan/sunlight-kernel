@@ -723,6 +723,7 @@ const ERR_EINVAL: u64 = u64::MAX - 5;
 const ERR_EISDIR: u64 = u64::MAX - 6;
 const ERR_ENOTDIR: u64 = u64::MAX - 7;
 const ERR_EIO: u64 = u64::MAX - 8;
+const ERR_ERANGE: u64 = u64::MAX - 9;
 
 fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
     match error {
@@ -2669,6 +2670,9 @@ fn sys_getcwd(frame: &mut SyscallFrame) -> u64 {
     }
     let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
     let bytes = cwd.as_bytes();
+    if bytes.len() >= buf_len {
+        return ERR_ERANGE;
+    }
     let copy_len = bytes.len().min(buf_len - 1);
     let mut output = alloc::vec::Vec::new();
     if output.try_reserve_exact(copy_len + 1).is_err() {
