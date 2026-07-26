@@ -528,6 +528,30 @@ path = "src/bin/uniq.rs"
 name = "comm"
 path = "src/bin/comm.rs"
 
+[[bin]]
+name = "tee"
+path = "src/bin/tee.rs"
+
+[[bin]]
+name = "nl"
+path = "src/bin/nl.rs"
+
+[[bin]]
+name = "od"
+path = "src/bin/od.rs"
+
+[[bin]]
+name = "split"
+path = "src/bin/split.rs"
+
+[[bin]]
+name = "find"
+path = "src/bin/find.rs"
+
+[[bin]]
+name = "xargs"
+path = "src/bin/xargs.rs"
+
 [dependencies]
 sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ipc = { path = "../ipc" }

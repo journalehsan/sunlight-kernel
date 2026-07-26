@@ -141,6 +141,18 @@ static SUNLIGHT_JOIN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/join");
 static SUNLIGHT_PRINTF_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/printf");
+static SUNLIGHT_TEE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/tee");
+static SUNLIGHT_NL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/nl");
+static SUNLIGHT_OD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/od");
+static SUNLIGHT_SPLIT_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/split");
+static SUNLIGHT_FIND_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/find");
+static SUNLIGHT_XARGS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/xargs");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
@@ -3989,10 +4001,14 @@ fn build_phase2b5_sequence() -> [u8; 4096] {
         b"printf %03d 7".as_slice(),
         b"printf %b a\\nb".as_slice(),
         b"printf %d bad".as_slice(),
+        b"nl /tests/paste-a".as_slice(),
+        b"od -An -tx1 /tests/paste-a".as_slice(),
+        b"split -l 1 /tests/paste-a /tmp/phase2b7".as_slice(),
+        b"tee /tmp/phase2b7-tee".as_slice(),
     ] {
         append_injected_delay(&mut s, &mut len, 64);
         append_injected_command(&mut s, &mut len, command);
-        if command == b"abc" || command == b"xoxo" {
+        if command == b"abc" || command == b"xoxo" || command == b"tee /tmp/phase2b7-tee" {
             // stdin-only tr remains active after a newline; send the normal
             // terminal EOF sequence before returning control to the shell.
             append_injected_ctrl_d(&mut s, &mut len);

@@ -206,8 +206,8 @@ case "$PHASE" in
         ;;
     phase2b5)
         EXPECTED_FILE="tools/tests/phase2b5.expected"
-        FINAL_MARKER="[TTY]  exit: printf %d bad -> 1"
-        PASS_LABEL="Phase 2B.5 utilities"
+        FINAL_MARKER="[TTY]  exit: tee /tmp/phase2b7-tee -> 0"
+        PASS_LABEL="Phase 2B.7A utilities"
         NEED_DISK=false
         ;;
     phase_shm)

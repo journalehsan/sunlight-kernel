@@ -249,3 +249,56 @@ RamEntry::file("/bin/printf", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils
 Without these entries, the shell reports the command as **not found** even
 though the ELF is present in `target/x86_64-unknown-none/release/` and the
 kernel has a matching resolver arm.
+
+## Phase 2B.7A utility batch
+
+The POSIX-oriented `tee`, `nl`, `od`, and `split` commands are standalone
+bins in the `sunlight-utils` package. Adding one of these commands requires
+the same five command spots:
+
+1. Add a `[[bin]]` entry and source module under `sunlight-utils/src/`.
+2. Keep the package build in `tools/build.sh`, `tools/test.sh`, `tools/runs.sh
+   --build`, and `tools/write.sh`; one package build produces all four ELFs.
+3. Add its `include_bytes!` entry to `kernel/src/main.rs` and its explicit
+   recovery build entry to `kernel/build.rs`.
+4. Map `/bin/<name>`, `/usr/bin/<name>`, and `/sunlight-utils/<name>` in
+   `kernel/src/process/spawn.rs`.
+5. Add the executable `/bin/<name>` RamFS stub in `sunlight-fs/src/ramfs.rs`.
+
+Each utility keeps its behavior in a testable library module and uses the
+shared bounded native-argv startup path. The current supported baseline is:
+
+| Binary | Baseline behavior |
+|--------|-------------------|
+| `tee` | stdin to stdout and files; `-a` append |
+| `nl` | numbered input; `-ba`, `-n`, `-s`, `-v`, `-i`, `-w` |
+| `od` | byte/word display; `-b`, `-c`, `-d`, `-o`, `-x`, `-t`, `-A`, `-j`, `-N` |
+| `split` | line/byte chunks; `-l`, `-b`, `-a`, input and prefix operands |
+
+The Phase 2B.5 expected-output file remains the deterministic boot gate for
+this batch; add command exit markers there whenever the injected sequence is
+extended.
+
+## Phase 2B.7B pipeline batch: find → xargs → grep → sort → uniq
+
+These five utilities form the common search/filter/order pipeline. `grep`,
+`sort`, and `uniq` were already standalone from Phase 2B.4. `find` and `xargs`
+are new standalone bins in `sunlight-utils` and need the same five command spots:
+
+1. `[[bin]]` + library module under `sunlight-utils/src/`
+2. Package build line (one package build emits all ELFs)
+3. `include_bytes!` in `kernel/src/main.rs` + recovery entry in `kernel/build.rs`
+4. Resolver arms for `/bin/<name>`, `/usr/bin/<name>`, `/sunlight-utils/<name>`
+5. Executable `/bin/<name>` RamFS stub in `sunlight-fs/src/ramfs.rs`
+
+| Binary | Baseline behavior |
+|--------|-------------------|
+| `find` | path walk; `-name`, `-type f\|d`, `-print`, `-maxdepth` |
+| `xargs` | stdin tokens to command; `-n`, `-0`/`-d`, `-r`; default `/bin/echo` |
+| `grep` | pattern search (Phase 2B.4) |
+| `sort` | line ordering (Phase 2B.4) |
+| `uniq` | adjacent dedup (Phase 2B.4) |
+
+`find` must **not** remain on the multicall `SUNLIGHT_UTILS_ELF_BYTES` arm once
+the dedicated binary exists — the shell PATH probe still uses the RamFS stub,
+but `exec` resolves through the dedicated `FIND_ELF_BYTES` mapping.

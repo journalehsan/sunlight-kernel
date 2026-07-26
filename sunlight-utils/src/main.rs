@@ -114,7 +114,13 @@ fn run(args: &[&str]) -> i32 {
         "cut" => cmd_cut(rest),
         "fold" => cmd_fold(rest),
         "expand" => cmd_expand(rest),
-        "find" | "tail" => {
+        "find" => {
+            // Standalone `/bin/find` is the maintained entry point; multicall
+            // keeps a thin note so old `sunlight-utils find` invocations fail clearly.
+            print2(applet, ": use /bin/find (standalone binary)\n");
+            1
+        }
+        "tail" => {
             print2(applet, ": not implemented yet\n");
             1
         }

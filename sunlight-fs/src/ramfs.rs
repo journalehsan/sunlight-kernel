@@ -1057,6 +1057,13 @@ login_timeout_seconds = 30
         b"#!/sunlight/sunlight-utils\n",
     ),
     RamEntry::file(
+        "/bin/xargs",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
         "/bin/grep",
         0,
         0,
@@ -1121,6 +1128,34 @@ login_timeout_seconds = 30
     ),
     RamEntry::file(
         "/bin/printf",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/tee",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/nl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/od",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/split",
         0,
         0,
         mode::FILE_755,
@@ -3131,7 +3166,34 @@ mod tests {
 
     #[test]
     fn phase_2b5_utilities_have_path_visible_stubs() {
-        for path in ["/bin/tr", "/bin/paste", "/bin/join", "/bin/printf"] {
+        for path in [
+            "/bin/tr",
+            "/bin/paste",
+            "/bin/join",
+            "/bin/printf",
+            "/bin/tee",
+            "/bin/nl",
+            "/bin/od",
+            "/bin/split",
+        ] {
+            assert!(
+                INITRAMFS.iter().any(|entry| {
+                    entry.path == path && !entry.is_dir && entry.mode == mode::FILE_755
+                }),
+                "missing executable stub for {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn find_xargs_pipeline_utilities_have_path_visible_stubs() {
+        for path in [
+            "/bin/find",
+            "/bin/xargs",
+            "/bin/grep",
+            "/bin/sort",
+            "/bin/uniq",
+        ] {
             assert!(
                 INITRAMFS.iter().any(|entry| {
                     entry.path == path && !entry.is_dir && entry.mode == mode::FILE_755
