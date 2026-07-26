@@ -8,6 +8,7 @@ use sunlight_utils::pwd;
 
 const MAX_ARG_LENGTH: usize = 256;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let _ = write_all(STDERR, b"pwd: panic\n");
@@ -30,6 +31,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         pwd::user_args(&args[..count]),
         &mut |buf: &mut [u8; MAX_PATH]| getcwd(buf),
         &mut stdout,
+        &mut |bytes: &[u8]| write_all(STDERR, bytes),
     );
     exit(status as u64);
 }

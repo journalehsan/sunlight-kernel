@@ -1022,6 +1022,9 @@ mod sunlight {
             if !stat_is_dir(&next) {
                 return b"cd: no such directory\n";
             }
+            if sunlight_libc::chdir(next.as_bytes()).is_err() {
+                return b"cd: no such directory\n";
+            }
 
             self.env.set("OLDPWD", &self.cwd);
             self.cwd = next;
@@ -3160,7 +3163,7 @@ mod sunlight {
                 }
                 shell.env.set("?", &alloc::format!("{}", code));
                 long_out_reset();
-                msg = ipc_reply_and_wait(ep, pack_output(&[]));
+                msg = ipc_reply_and_wait(ep, IpcMsg::with_label(FG_DONE_LABEL).word(0, code));
                 debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
                 continue;
             }

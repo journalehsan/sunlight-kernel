@@ -23,6 +23,7 @@ const MAX_ARGS: usize = 16;
 const MAX_DIR_ENTRIES: usize = 64;
 const TIME_IPC_TIMEOUT_MS: u64 = 100;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let _ = write_all(b"sunlight-utils: panic\n");

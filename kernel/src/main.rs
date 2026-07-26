@@ -3694,9 +3694,10 @@ fn setup_key_injection() {
     // (when no env var is set) is the phase 3.8 sequence used by the boot gate.
     let phase = option_env!("SUNLIGHT_INJECT_PHASE").unwrap_or("phase3.8");
 
-    let sequence: [u8; 256] = match phase {
+    let sequence: [u8; 4096] = match phase {
         "phase3.9" => build_phase3_9_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
+        "phase6.5.utils" => build_phase6_5_utils_sequence(),
         "top" => build_top_sequence(),
         "tzctl" => build_tzctl_sequence(),
         "dns_test" => build_dns_test_sequence(),
@@ -3715,7 +3716,6 @@ fn setup_key_injection() {
         keyboard::KEY_INJECT_IDX = 0;
         keyboard::KEY_INJECT_ENABLED = true;
     }
-
     serial_println!(
         "[KBD]  Key injection enabled (phase={}, {} scancodes)",
         phase,
@@ -3734,8 +3734,8 @@ fn setup_key_injection() {
 ///   id testuser+Enter
 ///   userdel testuser+Enter
 #[cfg(feature = "key_inject")]
-fn build_phase3_8_sequence() -> [u8; 256] {
-    let mut s = [0u8; 256];
+fn build_phase3_8_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
     let codes: [u8; 66] = [
         0x1C, // select prefilled root user and focus password
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
@@ -3754,8 +3754,8 @@ fn build_phase3_8_sequence() -> [u8; 256] {
 
 /// Phase 3.9 injection: phase 3.8 baseline + sysfetch + hostnamectl.
 #[cfg(feature = "key_inject")]
-fn build_phase3_9_sequence() -> [u8; 256] {
-    let mut s = [0u8; 256];
+fn build_phase3_9_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
     let p38 = build_phase3_8_sequence();
     let p38_len = p38.iter().position(|&b| b == 0).unwrap_or(p38.len());
     s[..p38_len].copy_from_slice(&p38[..p38_len]);
@@ -3775,8 +3775,8 @@ fn build_phase3_9_sequence() -> [u8; 256] {
 /// password, Tab to the session dropdown, Space to toggle Tty→Desktop, Enter
 /// to log in. Used to verify the login → SESSION_ACTIVATE → desktop handover.
 #[cfg(feature = "key_inject")]
-fn build_desktop_login_sequence() -> [u8; 256] {
-    let mut s = [0u8; 256];
+fn build_desktop_login_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
     let codes: [u8; 8] = [
         0x1C, // Enter -> commit user slot "root", focus password
         0x13, 0x18, 0x18, 0x14, // password: r,o,o,t
@@ -3793,8 +3793,8 @@ fn build_desktop_login_sequence() -> [u8; 256] {
 ///   mkdir /tmp/x    (spawns /sunlight-utils/mkdir)
 ///   ls /tmp         (shows the new directory)
 #[cfg(feature = "key_inject")]
-fn build_phase6_5_3_sequence() -> [u8; 256] {
-    let mut s = [0u8; 256];
+fn build_phase6_5_3_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
     let codes: [u8; 31] = [
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
         0x26, 0x1F, 0x39, 0x35, 0x1C, // ls /
@@ -3806,10 +3806,128 @@ fn build_phase6_5_3_sequence() -> [u8; 256] {
     s
 }
 
+/// Phase 6.5 utility migration gate: exercise native echo, pwd, cat, and the
+/// complete newly-created-directory lifecycle through the real shell and TTY.
+#[cfg(feature = "key_inject")]
+fn build_phase6_5_utils_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
+    let mut len = 0usize;
+
+    // Keep the existing injection architecture's deterministic login grace
+    // period. Release events are ignored by the keyboard translator.
+    // Select the prefilled root account's password field and authenticate.
+    append_injected_delay(&mut s, &mut len, 96);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 1024);
+
+    for command in [
+        b"cd /".as_slice(),
+        b"/bin/pwd".as_slice(),
+        b"echo".as_slice(),
+        b"echo hi".as_slice(),
+        b"echo hello world".as_slice(),
+        b"cd /root".as_slice(),
+        b"/bin/pwd".as_slice(),
+        b"mkdir New".as_slice(),
+        b"cd New".as_slice(),
+        b"/bin/pwd".as_slice(),
+        b"touch a.txt".as_slice(),
+        b"ls".as_slice(),
+        b"cd ..".as_slice(),
+        b"cd New".as_slice(),
+        b"ls".as_slice(),
+        b"cat /tests/cat-empty".as_slice(),
+        b"cat /tests/cat-hello".as_slice(),
+        b"cat ../../tests/cat-nonewline".as_slice(),
+        b"cat /tests/cat-big".as_slice(),
+        b"cat /tests/missing".as_slice(),
+    ] {
+        if command == b"echo hello world".as_slice() {
+            append_injected_delay(&mut s, &mut len, 512);
+        }
+        append_injected_delay(&mut s, &mut len, 96);
+        append_injected_command(&mut s, &mut len, command);
+    }
+    s
+}
+
+#[cfg(feature = "key_inject")]
+fn append_injected_command(out: &mut [u8], len: &mut usize, command: &[u8]) {
+    for &byte in command {
+        let (scancode, shifted) = injected_scancode(byte);
+        if shifted {
+            append_injected_scancode(out, len, 0x2a);
+        }
+        append_injected_scancode(out, len, scancode);
+        if shifted {
+            append_injected_scancode(out, len, 0xaa);
+        }
+    }
+    append_injected_scancode(out, len, 0x1c);
+}
+
+#[cfg(feature = "key_inject")]
+fn append_injected_scancode(out: &mut [u8], len: &mut usize, scancode: u8) {
+    if *len < out.len() {
+        out[*len] = scancode;
+        *len += 1;
+    }
+}
+
+#[cfg(feature = "key_inject")]
+fn append_injected_delay(out: &mut [u8], len: &mut usize, count: usize) {
+    for _ in 0..count {
+        append_injected_scancode(out, len, 0x9e);
+    }
+}
+
+#[cfg(feature = "key_inject")]
+fn injected_scancode(byte: u8) -> (u8, bool) {
+    let shifted = byte.is_ascii_uppercase();
+    let lower = byte.to_ascii_lowercase();
+    let scancode = match lower {
+        b'a' => 0x1e,
+        b'b' => 0x30,
+        b'c' => 0x2e,
+        b'd' => 0x20,
+        b'e' => 0x12,
+        b'f' => 0x21,
+        b'g' => 0x22,
+        b'h' => 0x23,
+        b'i' => 0x17,
+        b'j' => 0x24,
+        b'k' => 0x25,
+        b'l' => 0x26,
+        b'm' => 0x32,
+        b'n' => 0x31,
+        b'o' => 0x18,
+        b'p' => 0x19,
+        b'q' => 0x10,
+        b'r' => 0x13,
+        b's' => 0x1f,
+        b't' => 0x14,
+        b'u' => 0x16,
+        b'v' => 0x2f,
+        b'w' => 0x11,
+        b'x' => 0x2d,
+        b'y' => 0x15,
+        b'z' => 0x2c,
+        b' ' => 0x39,
+        b'.' => 0x34,
+        b'/' => 0x35,
+        b'-' => 0x0c,
+        _ => 0,
+    };
+    (scancode, shifted)
+}
+
 /// top gate injection: login, run `top`, then send `q` to exit.
 #[cfg(feature = "key_inject")]
-fn build_top_sequence() -> [u8; 256] {
-    let mut s = [0u8; 256];
+fn build_top_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
     let codes: [u8; 10] = [
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
         0x14, 0x18, 0x19, 0x1C, // top + Enter
@@ -3821,8 +3939,8 @@ fn build_top_sequence() -> [u8; 256] {
 
 /// Timezone regression gate: login, change the zone, then query it.
 #[cfg(feature = "key_inject")]
-fn build_tzctl_sequence() -> [u8; 256] {
-    let mut s = [0u8; 256];
+fn build_tzctl_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
     const START: usize = 160;
     s[..START].fill(0x9E); // ignored key-release events; wait ~1.6s for UAC
     let codes: [u8; 42] = [
@@ -3842,8 +3960,8 @@ fn build_tzctl_sequence() -> [u8; 256] {
 /// DNS resolver debug injection: login, then `ping google.com` twice (second
 /// run should be served from the resolver's TTL cache).
 #[cfg(feature = "key_inject")]
-fn build_dns_test_sequence() -> [u8; 256] {
-    let mut s = [0u8; 256];
+fn build_dns_test_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
     let codes: [u8; 37] = [
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
         // ping google.com + Enter

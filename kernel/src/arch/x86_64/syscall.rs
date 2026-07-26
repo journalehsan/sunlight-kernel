@@ -2639,17 +2639,16 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
         resolved_buf.as_str()
     };
 
-    // Verify the path exists in VFS.
+    // Verify the path resolves to a directory. Directories are not regular
+    // file handles, so VFS::open intentionally rejects them.
     {
         let mut guard = crate::KERNEL_VFS.lock();
         let Some(vfs) = guard.as_mut() else {
             return u64::MAX;
         };
-        match vfs.open(abs_path) {
-            Ok(h) => {
-                let _ = vfs.close(h);
-            }
-            Err(_) => {
+        match vfs.stat(abs_path) {
+            Ok(stat) if stat.file_type == sunlight_fs::vfs::FileType::Directory => {}
+            _ => {
                 crate::serial_println!("[HELIOS] chdir({}) -> not found", abs_path);
                 return u64::MAX;
             }

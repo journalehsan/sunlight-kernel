@@ -1,0 +1,25 @@
+# Focused native libc utility gate: echo, pwd, cat, and directory re-entry.
+[TTY]  cmd: /bin/pwd -> /\n
+[TTY]  exit: /bin/pwd -> 0
+[TTY]  cmd: echo -> \n
+[TTY]  exit: echo -> 0
+[TTY]  cmd: echo hi -> hi\n
+[TTY]  exit: echo hi -> 0
+[TTY]  cmd: echo hello world -> hello world\n
+[TTY]  exit: echo hello world -> 0
+[TTY]  cmd: /bin/pwd -> /root\n
+[TTY]  exit: /bin/pwd -> 0
+[TTY]  exit: mkdir New -> 0
+[TTY]  cmd: ls -> a.txt\n
+[TTY]  exit: ls -> 0
+[TTY]  cmd: /bin/pwd -> /root/New\n
+[TTY]  exit: /bin/pwd -> 0
+[TTY]  exit: touch a.txt -> 0
+[TTY]  exit: ls -> 0
+[TTY]  exit: cat /tests/cat-empty -> 0
+[TTY]  cmd: cat /tests/cat-hello -> hello from cat\n
+[TTY]  exit: cat /tests/cat-hello -> 0
+[TTY]  cmd: cat ../../tests/cat-nonewline -> nonewline
+[TTY]  exit: cat ../../tests/cat-nonewline -> 0
+[TTY]  exit: cat /tests/cat-big -> 0
+[TTY]  exit: cat /tests/missing -> 1

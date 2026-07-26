@@ -140,6 +140,15 @@ pub fn getcwd(buf: &mut [u8; MAX_PATH]) -> Result<usize, Errno> {
     bounded_cwd_len(buf)
 }
 
+/// Change the current process CWD using the kernel's path-resolution contract.
+/// The path is bounded and NUL-checked here; `.`/`..` resolution remains in the kernel.
+pub fn chdir(path: &[u8]) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall1(sys::SYS_CHDIR, path_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
 fn bounded_cwd_len(buf: &[u8]) -> Result<usize, Errno> {
     let Some(len) = buf.iter().position(|&byte| byte == 0) else {
         return Err(Errno::TooBig);

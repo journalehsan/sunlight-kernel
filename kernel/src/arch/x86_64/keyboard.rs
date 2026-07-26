@@ -41,7 +41,7 @@ static IRQ_COUNT: AtomicUsize = AtomicUsize::new(0);
 /// IRQ1. The userspace driver then performs the same translation path as real
 /// hardware input.
 #[cfg(feature = "key_inject")]
-pub static mut KEY_INJECT_DATA: [u8; 256] = [0; 256];
+pub static mut KEY_INJECT_DATA: [u8; 4096] = [0; 4096];
 #[cfg(feature = "key_inject")]
 pub static mut KEY_INJECT_LEN: usize = 0;
 #[cfg(feature = "key_inject")]
@@ -483,7 +483,6 @@ pub fn poll_inject_buffer() {
         if KBD_DRIVER_ENDPOINT.load(Ordering::Acquire) == 0 {
             return;
         }
-
         let scancode = unsafe {
             if !KEY_INJECT_ENABLED || KEY_INJECT_IDX >= KEY_INJECT_LEN {
                 return;

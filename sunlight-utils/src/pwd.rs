@@ -8,12 +8,13 @@ pub fn run(
     _args: &[&[u8]],
     getcwd: &mut impl FnMut(&mut [u8; MAX_PATH]) -> Result<usize, Errno>,
     write_stdout: &mut impl FnMut(&[u8]) -> Result<(), Errno>,
+    write_stderr: &mut impl FnMut(&[u8]) -> Result<(), Errno>,
 ) -> i32 {
     let mut path = [0u8; MAX_PATH];
     let len = match getcwd(&mut path) {
         Ok(len) if len <= path.len() => len,
         _ => {
-            let _ = write_stdout(b"pwd: cannot determine current directory\n");
+            let _ = write_stderr(b"pwd: cannot determine current directory\n");
             return 1;
         }
     };
@@ -48,6 +49,7 @@ mod tests {
                     output.extend_from_slice(bytes);
                     Ok(())
                 },
+                &mut |_| Ok(()),
             );
             assert_eq!(status, 0);
             let mut wanted = expected.to_vec();
@@ -58,16 +60,17 @@ mod tests {
 
     #[test]
     fn ignores_arguments_and_reports_cwd_failure() {
-        let mut output = Vec::new();
+        let mut errors = Vec::new();
         let status = run(
             &[b"-P", b"ignored"],
             &mut |_| Err(Errno::Failed),
+            &mut |_| Ok(()),
             &mut |bytes| {
-                output.extend_from_slice(bytes);
+                errors.extend_from_slice(bytes);
                 Ok(())
             },
         );
         assert_eq!(status, 1);
-        assert_eq!(output, b"pwd: cannot determine current directory\n".to_vec());
+        assert_eq!(errors, b"pwd: cannot determine current directory\n".to_vec());
     }
 }

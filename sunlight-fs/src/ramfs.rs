@@ -562,6 +562,8 @@ pub const STANDARD_HOME_DIRS: &[&str] = &[
     "Videos",
 ];
 
+static CAT_BIG_BYTES: [u8; 513] = [b'x'; 513];
+
 pub static INITRAMFS: &[RamEntry] = &[
     // Directories
     RamEntry::dir("/", 0, 0, mode::DIR_755),
@@ -633,6 +635,7 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/home", 0, 0, mode::DIR_755),
     RamEntry::dir("/root/.config", 0, 0, mode::DIR_700),
     RamEntry::dir("/root/.config/sunlight", 0, 0, mode::DIR_700),
+    RamEntry::dir("/tests", 0, 0, mode::DIR_755),
     RamEntry::dir("/home/user", 1000, 1000, mode::DIR_755),
     // Default unprivileged user's standard folders (uid/gid 1000).
     RamEntry::dir("/home/user/Desktop", 1000, 1000, mode::DIR_755),
@@ -642,6 +645,11 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/home/user/Music", 1000, 1000, mode::DIR_755),
     RamEntry::dir("/home/user/Videos", 1000, 1000, mode::DIR_755),
     // -- End standard home directory layout ---------------------------------
+
+    RamEntry::file("/tests/cat-empty", 0, 0, mode::FILE_644, b""),
+    RamEntry::file("/tests/cat-hello", 0, 0, mode::FILE_644, b"hello from cat\n"),
+    RamEntry::file("/tests/cat-nonewline", 0, 0, mode::FILE_644, b"nonewline"),
+    RamEntry::file("/tests/cat-big", 0, 0, mode::FILE_644, &CAT_BIG_BYTES),
 
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),

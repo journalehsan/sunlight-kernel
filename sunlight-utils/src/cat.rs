@@ -1,6 +1,6 @@
 //! Byte-preserving `cat` behavior for the native libc utility.
 
-use sunlight_libc::{Errno, Fd, STDOUT};
+use sunlight_libc::{Errno, Fd, STDERR, STDOUT};
 
 const READ_RETRY_LIMIT: usize = 8;
 
@@ -11,6 +11,7 @@ pub trait Io {
     fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno>;
     fn close(&mut self, fd: Fd) -> Result<(), Errno>;
     fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno>;
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno>;
     fn yield_now(&mut self);
 }
 
@@ -27,7 +28,7 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
         let fd = match io.open(path) {
             Ok(fd) => fd,
             Err(_) => {
-                report(io, b"cat: cannot open ", path);
+                report_stderr(io, b"cat: cannot open ", path);
                 return 1;
             }
         };
@@ -52,7 +53,7 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
 
         let _ = io.close(fd);
         if result.is_err() {
-            report(io, b"cat: read error on ", path);
+            report_stderr(io, b"cat: read error on ", path);
             return 1;
         }
     }
@@ -60,10 +61,10 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     0
 }
 
-fn report(io: &mut impl Io, prefix: &[u8], path: &[u8]) {
-    let _ = io.write_stdout(prefix);
-    let _ = io.write_stdout(path);
-    let _ = io.write_stdout(b"\n");
+fn report_stderr(io: &mut impl Io, prefix: &[u8], path: &[u8]) {
+    let _ = io.write_stderr(prefix);
+    let _ = io.write_stderr(path);
+    let _ = io.write_stderr(b"\n");
 }
 
 /// Remove argv[0] from the raw native argument vector.
@@ -92,6 +93,10 @@ impl Io for NativeIo {
         sunlight_libc::write_all(STDOUT, bytes)
     }
 
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        sunlight_libc::write_all(STDERR, bytes)
+    }
+
     fn yield_now(&mut self) {
         sunlight_libc::yield_now();
     }
@@ -104,11 +109,16 @@ mod tests {
     use super::*;
     use std::vec::Vec;
 
-    static LARGE_FILE: [u8; 513] = [b'x'; 513];
+    static ONE_BYTE: [u8; 1] = [b'a'];
+    static BELOW_BUFFER: [u8; 511] = [b'b'; 511];
+    static EXACT_BUFFER: [u8; 512] = [b'c'; 512];
+    static ONE_OVER_BUFFER: [u8; 513] = [b'd'; 513];
+    static SEVERAL_BUFFERS: [u8; 1537] = [b'e'; 1537];
 
     struct Mock {
         files: Vec<(&'static [u8], &'static [u8])>,
         output: Vec<u8>,
+        errors: Vec<u8>,
         opens: usize,
         closes: usize,
         reads: usize,
@@ -124,6 +134,7 @@ mod tests {
             Self {
                 files,
                 output: Vec::new(),
+                errors: Vec::new(),
                 opens: 0,
                 closes: 0,
                 reads: 0,
@@ -182,6 +193,17 @@ mod tests {
             }
         }
 
+        fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+            if !self.fail_write {
+                self.errors.extend_from_slice(bytes);
+            }
+            if self.fail_write {
+                Err(Errno::Failed)
+            } else {
+                Ok(())
+            }
+        }
+
         fn yield_now(&mut self) {}
     }
 
@@ -203,11 +225,29 @@ mod tests {
 
     #[test]
     fn streams_files_larger_than_the_fixed_buffer() {
-        let mut mock = Mock::new(std::vec![(b"large", &LARGE_FILE)]);
+        let mut mock = Mock::new(std::vec![(b"large", &ONE_OVER_BUFFER)]);
         assert_eq!(run(&[b"large"], &mut mock), 0);
-        assert_eq!(mock.output.len(), LARGE_FILE.len());
-        assert_eq!(mock.output.as_slice(), LARGE_FILE);
+        assert_eq!(mock.output.len(), ONE_OVER_BUFFER.len());
+        assert_eq!(mock.output.as_slice(), ONE_OVER_BUFFER);
         assert_eq!(mock.closes, 1);
+    }
+
+    #[test]
+    fn preserves_empty_single_and_exact_boundary_sizes() {
+        let cases = [
+            (b"empty".as_slice(), b"".as_slice()),
+            (b"one".as_slice(), ONE_BYTE.as_slice()),
+            (b"below".as_slice(), BELOW_BUFFER.as_slice()),
+            (b"exact".as_slice(), EXACT_BUFFER.as_slice()),
+            (b"several".as_slice(), SEVERAL_BUFFERS.as_slice()),
+        ];
+
+        for (name, data) in cases {
+            let mut mock = Mock::new(std::vec![(name, data)]);
+            assert_eq!(run(&[name], &mut mock), 0);
+            assert_eq!(mock.output.as_slice(), data);
+            assert_eq!(mock.closes, 1);
+        }
     }
 
     #[test]
@@ -216,7 +256,8 @@ mod tests {
         assert_eq!(run(&[b"ok", b"missing"], &mut mock), 1);
         assert_eq!(mock.opens, 2);
         assert_eq!(mock.closes, 1);
-        assert_eq!(mock.output, b"okcat: cannot open missing\n".to_vec());
+        assert_eq!(mock.output, b"ok".to_vec());
+        assert_eq!(mock.errors, b"cat: cannot open missing\n".to_vec());
     }
 
     #[test]
@@ -225,7 +266,8 @@ mod tests {
         mock.fail_read = true;
         assert_eq!(run(&[b"x"], &mut mock), 1);
         assert_eq!(mock.closes, 1);
-        assert_eq!(mock.output, b"cat: read error on x\n".to_vec());
+        assert_eq!(mock.output, b"".to_vec());
+        assert_eq!(mock.errors, b"cat: read error on x\n".to_vec());
     }
 
     #[test]

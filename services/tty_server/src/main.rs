@@ -98,6 +98,7 @@ const TERM_OUTPUT_MAX: usize = 64 * 1024;
 const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
 const PENDING_INPUT_MAX: usize = 128;
+const FG_CAPTURE_MAX: usize = 1024;
 const MAX_TABS: usize = 10;
 const DISPLAY_IPC_TIMEOUT_MS: u64 = 100;
 const DISPLAY_ACTIVATION_TIMEOUT_MS: u64 = 2_000;
@@ -394,6 +395,13 @@ struct ShellTab {
     /// title. Empty (`fg_app_name_len == 0`) means the tab shows "SHELL".
     fg_app_name: [u8; 24],
     fg_app_name_len: usize,
+    /// Full command line that launched the current foreground app.
+    fg_cmd: [u8; INPUT_LINE_MAX],
+    fg_cmd_len: usize,
+    /// Bounded capture of the foreground app's user-visible output bytes.
+    fg_capture: [u8; FG_CAPTURE_MAX],
+    fg_capture_len: usize,
+    fg_capture_truncated: bool,
 }
 
 /// Global scrollback state for all tabs (indexed by active_tab)
@@ -533,6 +541,11 @@ impl ShellTab {
             fg_pid: None,
             fg_app_name: [0; 24],
             fg_app_name_len: 0,
+            fg_cmd: [0; INPUT_LINE_MAX],
+            fg_cmd_len: 0,
+            fg_capture: [0; FG_CAPTURE_MAX],
+            fg_capture_len: 0,
+            fg_capture_truncated: false,
         }
     }
 }
@@ -1233,6 +1246,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
                                     // Record in history; reset the edit state.
                                     history_push(&line[..line_len]);
+                                    tab.fg_cmd[..line_len].copy_from_slice(&line[..line_len]);
+                                    tab.fg_cmd_len = line_len;
+                                    tab.fg_capture_len = 0;
+                                    tab.fg_capture_truncated = false;
                                     tab.input_line_len = 0;
                                     tab.input_cursor = 0;
                                     tab.hist_pos = 0;
@@ -1285,7 +1302,9 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 tab.fg_app_name = name;
                                                 tab.fg_app_name_len = name_len;
                                             }
-                                            ShellKeyResult::Continue => {}
+                                            ShellKeyResult::Continue => {
+                                                tab.fg_cmd_len = 0;
+                                            }
                                         }
                                     } else {
                                         // Shell not resolved yet: buffer raw bytes.
@@ -1390,17 +1409,18 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     // apps redraw in place (their alt-screen enter resets the
                     // buffer in append_term), streaming output simply scrolls.
                     let mut drained = false;
-                    if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
-                        let mut buf = [0u8; 1024];
-                        loop {
-                            let n = tty_stdout_pull(tab.shell_id as u32, &mut buf);
-                            if n == 0 {
-                                break;
+                        if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                            let mut buf = [0u8; 1024];
+                            loop {
+                                let n = tty_stdout_pull(tab.shell_id as u32, &mut buf);
+                                if n == 0 {
+                                    break;
+                                }
+                                capture_foreground_bytes(tab, &buf[..n]);
+                                append_term(&mut tab.output, &mut tab.output_len, &buf[..n]);
+                                drained = true;
                             }
-                            append_term(&mut tab.output, &mut tab.output_len, &buf[..n]);
-                            drained = true;
                         }
-                    }
 
                     if !process_is_alive(pid) {
                         // The app exited. Final drain to catch any output written
@@ -1412,6 +1432,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                 if n == 0 {
                                     break;
                                 }
+                                capture_foreground_bytes(tab, &buf[..n]);
                                 append_term(&mut tab.output, &mut tab.output_len, &buf[..n]);
                             }
                         }
@@ -1423,6 +1444,15 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             debug_ipc_msg("[TTY-IPC] before shell ipc_call FG_DONE_LABEL", &done);
                             match ipc_call_timeout(cap, done, SHELL_IPC_TIMEOUT_MS) {
                                 Ok(reply) => {
+                                    let exit_code = reply.words[0];
+                                    if let Some(tab) = active_shell_tab(&tabs, active_tab) {
+                                        debug_log_foreground_command(
+                                            &tab.fg_cmd[..tab.fg_cmd_len],
+                                            &tab.fg_capture[..tab.fg_capture_len],
+                                            tab.fg_capture_truncated,
+                                            exit_code,
+                                        );
+                                    }
                                     debug_ipc_msg("[TTY-IPC] after shell FG_DONE reply", &reply);
                                 }
                                 Err(_) => {
@@ -1433,6 +1463,9 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
                             tab.fg_pid = None;
                             tab.fg_app_name_len = 0;
+                            tab.fg_cmd_len = 0;
+                            tab.fg_capture_len = 0;
+                            tab.fg_capture_truncated = false;
                         }
                         render_active_shell_fb(
                             fb_addr, fb32_w, fb32_h, fb32_p, &tabs, tab_count, active_tab, true,
@@ -2223,6 +2256,54 @@ fn debug_log_spawn(_username: &[u8], pid: u64) {
     if let Ok(s) = core::str::from_utf8(&buf[..pos]) {
         debug_log(s);
     }
+}
+
+fn capture_foreground_bytes(tab: &mut ShellTab, bytes: &[u8]) {
+    let remaining = FG_CAPTURE_MAX.saturating_sub(tab.fg_capture_len);
+    let copy_len = bytes.len().min(remaining);
+    if copy_len != 0 {
+        tab.fg_capture[tab.fg_capture_len..tab.fg_capture_len + copy_len]
+            .copy_from_slice(&bytes[..copy_len]);
+        tab.fg_capture_len += copy_len;
+    }
+    if copy_len != bytes.len() {
+        tab.fg_capture_truncated = true;
+    }
+}
+
+fn debug_log_foreground_command(cmd: &[u8], output: &[u8], truncated: bool, exit_code: u64) {
+    let mut rendered = alloc::string::String::new();
+    if output.is_empty() {
+        rendered.push_str("<empty>");
+    } else {
+        for &byte in output {
+            match byte {
+                b'\n' => rendered.push_str("\\n"),
+                b'\r' => rendered.push_str("\\r"),
+                b'\t' => rendered.push_str("\\t"),
+                b'\\' => rendered.push_str("\\\\"),
+                0x20..=0x7e => rendered.push(byte as char),
+                _ => {
+                    let hex = [
+                        b"0123456789abcdef"[(byte >> 4) as usize] as char,
+                        b"0123456789abcdef"[(byte & 0x0f) as usize] as char,
+                    ];
+                    rendered.push_str("\\x");
+                    rendered.push(hex[0]);
+                    rendered.push(hex[1]);
+                }
+            }
+        }
+    }
+    if truncated {
+        rendered.push_str("...");
+    }
+
+    let cmd_text = core::str::from_utf8(cmd).unwrap_or("<non-utf8>");
+    let line = alloc::format!("[TTY]  cmd: {} -> {}", cmd_text, rendered);
+    debug_log(&line);
+    let exit = alloc::format!("[TTY]  exit: {} -> {}", cmd_text, exit_code);
+    debug_log(&exit);
 }
 
 fn fmt_u32(buf: &mut [u8], val: u32) -> usize {

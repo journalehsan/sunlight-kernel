@@ -8,6 +8,7 @@ use sunlight_utils::cat::{self, NativeIo};
 
 const MAX_ARG_LENGTH: usize = 256;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     let _ = write_all(STDERR, b"cat: panic\n");
