@@ -1019,10 +1019,7 @@ mod sunlight {
                 return b"cd: invalid path\n";
             };
 
-            let Some(vfs_cap) = nameserver_lookup("vfs") else {
-                return b"cd: VFS not available\n";
-            };
-            if !stat_is_dir(vfs_cap, &next) {
+            if !stat_is_dir(&next) {
                 return b"cd: no such directory\n";
             }
 
@@ -1170,12 +1167,11 @@ mod sunlight {
         }
 
         /// Search the colon-separated $PATH for `cmd`, probing each candidate
-        /// with a VFS STAT. First match wins. Paths containing '/' bypass the
-        /// search and are probed directly.
+        /// with the native StatPath syscall. First match wins. Paths containing
+        /// '/' bypass the search and are probed directly.
         fn resolve_in_path(&self, cmd: &str) -> Option<alloc::string::String> {
-            let vfs_cap = nameserver_lookup("vfs")?;
             if cmd.contains('/') {
-                return if stat_is_file(vfs_cap, cmd) {
+                return if stat_is_file(cmd) {
                     Some(alloc::string::String::from(cmd))
                 } else {
                     None
@@ -1187,7 +1183,7 @@ mod sunlight {
                 } else {
                     alloc::format!("{}/{}", dir, cmd)
                 };
-                if stat_is_file(vfs_cap, &candidate) {
+                if stat_is_file(&candidate) {
                     return Some(candidate);
                 }
             }
@@ -1890,17 +1886,13 @@ mod sunlight {
             }
 
             // If the single arg looks like an existing absolute directory, cd there.
-            if args.len() == 1 && args[0].starts_with('/') && args[0].len() <= 32 {
-                if let Some(vfs_cap) = nameserver_lookup("vfs") {
-                    if stat_is_dir(vfs_cap, args[0]) {
-                        self.env.set("OLDPWD", &self.cwd);
-                        self.cwd = alloc::string::String::from(args[0]);
-                        self.env.set("PWD", &self.cwd);
-                        let p = self.cwd.clone();
-                        self.z_spawn_add(&p);
-                        return b"";
-                    }
-                }
+            if args.len() == 1 && args[0].starts_with('/') && stat_is_dir(args[0]) {
+                self.env.set("OLDPWD", &self.cwd);
+                self.cwd = alloc::string::String::from(args[0]);
+                self.env.set("PWD", &self.cwd);
+                let p = self.cwd.clone();
+                self.z_spawn_add(&p);
+                return b"";
             }
 
             // Search the zoxide history database.
@@ -2074,24 +2066,21 @@ mod sunlight {
         alloc::format!("{}h {}m {}s", h, m, s)
     }
 
-    /// STAT a path on the VFS and check it is a regular file.
-    /// The IPC path encoding carries at most 32 bytes (4 words).
-    fn stat_is_file(vfs_cap: CapabilityToken, path: &str) -> bool {
-        const FILE_TYPE_FILE: u64 = 1; // vfs_server file_type_code(FileType::File)
-        if path.len() > 32 {
-            return false;
+    /// STAT a path through the kernel VFS and check it is a regular file.
+    fn stat_is_file(path: &str) -> bool {
+        const FILE_TYPE_FILE: u8 = 1;
+        match sunlight_libc::stat(path.as_bytes()) {
+            Ok(stat) => stat.file_type == FILE_TYPE_FILE,
+            Err(_) => false,
         }
-        let reply = ipc_call(vfs_cap, path_msg(VfsMsg::STAT, path));
-        reply.label == VfsMsg::REPLY && reply.words[0] == 0 && reply.words[2] == FILE_TYPE_FILE
     }
 
-    fn stat_is_dir(vfs_cap: CapabilityToken, path: &str) -> bool {
-        const FILE_TYPE_DIR: u64 = 2; // vfs_server file_type_code(FileType::Directory)
-        if path.len() > 32 {
-            return false;
+    fn stat_is_dir(path: &str) -> bool {
+        const FILE_TYPE_DIR: u8 = 2;
+        match sunlight_libc::stat(path.as_bytes()) {
+            Ok(stat) => stat.file_type == FILE_TYPE_DIR,
+            Err(_) => false,
         }
-        let reply = ipc_call(vfs_cap, path_msg(VfsMsg::STAT, path));
-        reply.label == VfsMsg::REPLY && reply.words[0] == 0 && reply.words[2] == FILE_TYPE_DIR
     }
 
     fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {
