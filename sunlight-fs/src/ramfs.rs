@@ -597,6 +597,12 @@ static EXPAND_TABS: &[u8] = b"a\tb\tc\n";
 static EXPAND_CONSECUTIVE: &[u8] = b"\t\tx\n";
 static EXPAND_NO_NL: &[u8] = b"a\tb";
 
+static GREP_TEXT: &[u8] = b"sunlight kernel\nposix utilities\nhello world\n";
+static SORT_DATA: &[u8] = b"z\na\nm\n";
+static UNIQ_DATA: &[u8] = b"apple\napple\nbanana\ncherry\ncherry\n";
+static COMM_A: &[u8] = b"apple\nbanana\ncherry\n";
+static COMM_B: &[u8] = b"banana\ncherry\ndate\n";
+
 pub static INITRAMFS: &[RamEntry] = &[
     // Directories
     RamEntry::dir("/", 0, 0, mode::DIR_755),
@@ -705,6 +711,11 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file("/tests/expand-tabs", 0, 0, mode::FILE_644, EXPAND_TABS),
     RamEntry::file("/tests/expand-cons", 0, 0, mode::FILE_644, EXPAND_CONSECUTIVE),
     RamEntry::file("/tests/expand-nonl", 0, 0, mode::FILE_644, EXPAND_NO_NL),
+    RamEntry::file("/tests/grep-text", 0, 0, mode::FILE_644, GREP_TEXT),
+    RamEntry::file("/tests/sort-data", 0, 0, mode::FILE_644, SORT_DATA),
+    RamEntry::file("/tests/uniq-data", 0, 0, mode::FILE_644, UNIQ_DATA),
+    RamEntry::file("/tests/comm-a", 0, 0, mode::FILE_644, COMM_A),
+    RamEntry::file("/tests/comm-b", 0, 0, mode::FILE_644, COMM_B),
 
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),

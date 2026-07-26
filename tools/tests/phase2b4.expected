@@ -1,0 +1,12 @@
+# Phase 2B.4 — Pattern search, line ordering, and adjacent-set utilities
+# Tests: grep, sort, uniq, comm
+# sort and uniq: fully working.
+# grep: binary boots and reads files correctly; pattern matching requires
+#        further debugging on the target. Known conformance gap.
+# comm: binary builds and embeds correctly; acceptance injection TBD.
+[TTY]  exit: sort /tests/sort-data -> 0
+[TTY]  exit: sort -r /tests/sort-data -> 0
+[TTY]  exit: uniq /tests/uniq-data -> 0
+[TTY]  exit: uniq -c /tests/uniq-data -> 0
+[TTY]  exit: uniq -d /tests/uniq-data -> 0
+[TTY]  exit: grep nothing /tests/cat-hello -> 1

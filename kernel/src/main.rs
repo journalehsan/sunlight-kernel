@@ -125,6 +125,14 @@ static SUNLIGHT_FOLD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/fold");
 static SUNLIGHT_EXPAND_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/expand");
+static SUNLIGHT_GREP_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/grep");
+static SUNLIGHT_SORT_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sort");
+static SUNLIGHT_UNIQ_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/uniq");
+static SUNLIGHT_COMM_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/comm");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
@@ -3721,6 +3729,7 @@ fn setup_key_injection() {
         "phase2b1" => build_phase2b1_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "phase6.5.utils" => build_phase6_5_utils_sequence(),
+        "phase2b4" => build_phase2b4_sequence(),
         "top" => build_top_sequence(),
         "tzctl" => build_tzctl_sequence(),
         "dns_test" => build_dns_test_sequence(),
@@ -3909,6 +3918,37 @@ fn build_phase6_5_utils_sequence() -> [u8; 4096] {
     ] {
         let extra = if command == b"echo hello world".as_slice() { 0 } else { 0 };
         append_injected_delay(&mut s, &mut len, 48 + extra);
+        append_injected_command(&mut s, &mut len, command);
+    }
+    s
+}
+
+#[cfg(feature = "key_inject")]
+fn build_phase2b4_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
+    let mut len = 0usize;
+
+    append_injected_delay(&mut s, &mut len, 96);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 512);
+
+    for command in [
+        b"grep -F hello /tests/cat-hello".as_slice(),
+        b"grep hello /tests/cat-hello".as_slice(),
+        b"grep -c hello /tests/cat-hello".as_slice(),
+        b"grep -n hello /tests/cat-hello".as_slice(),
+        b"grep nothing /tests/cat-hello".as_slice(),
+        b"sort /tests/sort-data".as_slice(),
+        b"sort -r /tests/sort-data".as_slice(),
+        b"uniq /tests/uniq-data".as_slice(),
+        b"uniq -c /tests/uniq-data".as_slice(),
+        b"uniq -d /tests/uniq-data".as_slice(),
+        b"comm /tests/comm-a /tests/comm-b".as_slice(),
+    ] {
+        append_injected_delay(&mut s, &mut len, 48);
         append_injected_command(&mut s, &mut len, command);
     }
     s

@@ -624,14 +624,13 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         // from /bin or /usr/bin and dispatch by argv[0] inside the multi-call
         // binary. Native-libc cat and pwd are mapped just below.
         "/bin/ls" | "/bin/cp" | "/bin/mv" | "/bin/rm" | "/bin/mkdir" | "/bin/rmdir"
-        | "/bin/touch" | "/bin/find" | "/bin/grep" | "/bin/tail"
-        | "/bin/sort" | "/bin/uniq" | "/bin/file" | "/bin/stat" | "/bin/date"
+        | "/bin/touch" | "/bin/find" | "/bin/tail"
+        | "/bin/file" | "/bin/stat" | "/bin/date"
         | "/bin/whoami" | "/bin/id" | "/bin/uname"
         | "/bin/nice" | "/bin/renice" | "/bin/free" | "/bin/freezram" | "/bin/kill"
         | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls" | "/usr/bin/cp"
         | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
-        | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/grep" | "/usr/bin/tail"
-        | "/usr/bin/sort" | "/usr/bin/uniq"
+        | "/usr/bin/touch" | "/usr/bin/find" | "/usr/bin/tail"
         | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/date"
         | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname"
         | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" | "/usr/bin/freezram"
@@ -673,6 +672,18 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         }
         "/bin/cksum" | "/usr/bin/cksum" | "/sunlight-utils/cksum" => {
             Ok(crate::SUNLIGHT_CKSUM_ELF_BYTES)
+        }
+        "/bin/grep" | "/usr/bin/grep" | "/sunlight-utils/grep" => {
+            Ok(crate::SUNLIGHT_GREP_ELF_BYTES)
+        }
+        "/bin/sort" | "/usr/bin/sort" | "/sunlight-utils/sort" => {
+            Ok(crate::SUNLIGHT_SORT_ELF_BYTES)
+        }
+        "/bin/uniq" | "/usr/bin/uniq" | "/sunlight-utils/uniq" => {
+            Ok(crate::SUNLIGHT_UNIQ_ELF_BYTES)
+        }
+        "/bin/comm" | "/usr/bin/comm" | "/sunlight-utils/comm" => {
+            Ok(crate::SUNLIGHT_COMM_ELF_BYTES)
         }
         "/bin/ping"
         | "/bin/ifconfig"

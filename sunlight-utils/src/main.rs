@@ -114,10 +114,13 @@ fn run(args: &[&str]) -> i32 {
         "cut" => cmd_cut(rest),
         "fold" => cmd_fold(rest),
         "expand" => cmd_expand(rest),
-        "find" | "sort" | "uniq" | "tail" => {
+        "find" | "tail" => {
             print2(applet, ": not implemented yet\n");
             1
         }
+        "sort" => cmd_sort(rest),
+        "uniq" => cmd_uniq(rest),
+        "comm" => cmd_comm(rest),
         "grep" => cmd_grep(rest),
         "display-status" => cmd_display_status(),
         _ => {
@@ -1268,121 +1271,16 @@ fn cmd_head(args: &[&str]) -> i32 {
 }
 
 // ---------------------------------------------------------------------------
-// High-performance grep (memchr SIMD, fixed 64KB buffer, no per-line alloc)
+// grep (delegated to sunlight-utils::grep library module)
 // ---------------------------------------------------------------------------
 
 fn cmd_grep(args: &[&str]) -> i32 {
-    if args.is_empty() {
-        let _ = write_all(b"grep: missing pattern\n");
-        return 2;
-    }
-
-    // First arg is pattern (literal bytes). Remaining are optional files.
-    let pattern = args[0].as_bytes();
-    let files = &args[1..];
-
-    let finder = memchr::memmem::Finder::new(pattern);
-    let mut found_any = false;
-
-    if files.is_empty() {
-        // Read from stdin (fd 0). Critical for pipelines: cmd | grep pat
-        if let Ok(code) = grep_fd(libc::Fd(0), &finder, &mut found_any) {
-            return code;
-        } else {
-            return 1;
-        }
-    }
-
-    let mut overall = 0i32;
-    for &path in files {
-        let fd = match libc::open(path.as_bytes()) {
-            Ok(f) => f,
-            Err(_) => {
-                print2("grep: cannot open ", path);
-                let _ = write_all(b"\n");
-                overall = 1;
-                continue;
-            }
-        };
-        let mut local_found = false;
-        match grep_fd(fd, &finder, &mut local_found) {
-            Ok(_) => {
-                if local_found {
-                    found_any = true;
-                }
-            }
-            Err(_) => {
-                overall = 1;
-            }
-        }
-        let _ = libc::close(fd);
-    }
-
-    if overall != 0 {
-        overall
-    } else if found_any {
-        0
-    } else {
-        1
-    }
-}
-
-/// Core fast grep over an open fd using 64KiB buffer + tail carry + memchr.
-fn grep_fd(fd: libc::Fd, finder: &memchr::memmem::Finder, found_any: &mut bool) -> Result<i32, ()> {
-    const BUFSZ: usize = 64 * 1024;
-    let mut buffer = [0u8; BUFSZ];
-    let mut tail_len = 0usize;
-
-    loop {
-        let bytes_read = match read_retry(fd, &mut buffer[tail_len..]) {
-            Ok(n) => n,
-            Err(_) => break,
-        };
-        if bytes_read == 0 {
-            break; // EOF
-        }
-
-        let end = tail_len + bytes_read;
-        let chunk = &buffer[..end];
-
-        let mut last_line_end = 0usize;
-
-        while let Some(nl_rel) = memchr::memchr(b'\n', &chunk[last_line_end..]) {
-            let line_start = last_line_end;
-            let line_end = last_line_end + nl_rel;
-            let line = &chunk[line_start..line_end];
-
-            if finder.find(line).is_some() {
-                // Write the matching line + newline
-                let _ = write_all(line);
-                let _ = write_all(b"\n");
-                *found_any = true;
-            }
-
-            last_line_end = line_end + 1;
-        }
-
-        // Carry over the incomplete final line (no trailing \n yet)
-        tail_len = end - last_line_end;
-        if tail_len > 0 {
-            // memmove the tail to start of buffer
-            if last_line_end > 0 {
-                buffer.copy_within(last_line_end..end, 0);
-            }
-        }
-    }
-
-    // Handle final tail without newline
-    if tail_len > 0 {
-        let tail = &buffer[..tail_len];
-        if finder.find(tail).is_some() {
-            let _ = write_all(tail);
-            let _ = write_all(b"\n");
-            *found_any = true;
-        }
-    }
-
-    Ok(0)
+    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
+        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
+    });
+    let count = args.len().min(MAX_ARGS);
+    let mut io = MultiCallIo;
+    sunlight_utils::grep::run(&byte_args[..count], &mut io)
 }
 
 fn cmd_wc(args: &[&str]) -> i32 {
@@ -1421,6 +1319,33 @@ fn cmd_expand(args: &[&str]) -> i32 {
     sunlight_utils::expand::run(&byte_args[..count], &mut io)
 }
 
+fn cmd_sort(args: &[&str]) -> i32 {
+    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
+        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
+    });
+    let count = args.len().min(MAX_ARGS);
+    let mut io = MultiCallIo;
+    sunlight_utils::sort::run(&byte_args[..count], &mut io)
+}
+
+fn cmd_uniq(args: &[&str]) -> i32 {
+    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
+        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
+    });
+    let count = args.len().min(MAX_ARGS);
+    let mut io = MultiCallIo;
+    sunlight_utils::uniq::run(&byte_args[..count], &mut io)
+}
+
+fn cmd_comm(args: &[&str]) -> i32 {
+    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
+        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
+    });
+    let count = args.len().min(MAX_ARGS);
+    let mut io = MultiCallIo;
+    sunlight_utils::comm::run(&byte_args[..count], &mut io)
+}
+
 struct MultiCallIo;
 
 impl sunlight_utils::wc::Io for MultiCallIo {
@@ -1451,6 +1376,42 @@ impl sunlight_utils::fold::Io for MultiCallIo {
 }
 
 impl sunlight_utils::expand::Io for MultiCallIo {
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
+    fn yield_now(&mut self) { libc::yield_now(); }
+}
+
+impl sunlight_utils::grep::Io for MultiCallIo {
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
+    fn yield_now(&mut self) { libc::yield_now(); }
+}
+
+impl sunlight_utils::sort::Io for MultiCallIo {
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
+    fn yield_now(&mut self) { libc::yield_now(); }
+}
+
+impl sunlight_utils::uniq::Io for MultiCallIo {
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
+    fn yield_now(&mut self) { libc::yield_now(); }
+}
+
+impl sunlight_utils::comm::Io for MultiCallIo {
     fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
     fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
     fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
