@@ -2696,6 +2696,12 @@ fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
         "wiseowl-memoryd" => sunlight_fs::Actor::Service {
             name: "wiseowl-memoryd",
         },
+        "wiseowl-memorydb" => sunlight_fs::Actor::Service {
+            name: "wiseowl-memorydb",
+        },
+        "wiseowl-indexd" => sunlight_fs::Actor::Service {
+            name: "wiseowl-indexd",
+        },
         "sunlightd" => sunlight_fs::Actor::Service { name: "sunlightd" },
         "sunlight-tls" => sunlight_fs::Actor::Service {
             name: "sunlight-tls",

@@ -887,6 +887,18 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/wiseowl-memoryctl" | "/usr/bin/wiseowl-memoryctl" => {
             Ok(crate::WISEOWL_MEMORYCTL_ELF_BYTES)
         }
+        "/sbin/wiseowl-memorydb" | "/usr/sbin/wiseowl-memorydb" => {
+            Ok(crate::WISEOWL_MEMORYDB_ELF_BYTES)
+        }
+        "/bin/wiseowl-memorydbctl" | "/usr/bin/wiseowl-memorydbctl" => {
+            Ok(crate::WISEOWL_MEMORYDBCTL_ELF_BYTES)
+        }
+        "/sbin/wiseowl-indexd" | "/usr/sbin/wiseowl-indexd" => {
+            Ok(crate::WISEOWL_INDEXD_ELF_BYTES)
+        }
+        "/bin/wiseowl-indexctl" | "/usr/bin/wiseowl-indexctl" => {
+            Ok(crate::WISEOWL_INDEXCTL_ELF_BYTES)
+        }
         "/bin/sunlight-clipman" | "/usr/bin/sunlight-clipman" => {
             Ok(crate::SUNLIGHT_CLIPMAN_ELF_BYTES)
         }

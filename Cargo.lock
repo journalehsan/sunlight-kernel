@@ -3338,6 +3338,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
+name = "wiseowl-index"
+version = "0.2.2839-alpha.1"
+dependencies = [
+ "bincode",
+ "heapless",
+ "log",
+ "serde",
+ "sunlight-ipc",
+ "sunlight-libc",
+ "tempfile",
+ "thiserror 1.0.69",
+ "wiseowl-memory",
+ "wiseowl-memorydb",
+]
+
+[[package]]
 name = "wiseowl-memory"
 version = "0.2.2839-alpha.1"
 dependencies = [
@@ -3350,6 +3366,22 @@ dependencies = [
  "sunlight-libc",
  "tempfile",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "wiseowl-memorydb"
+version = "0.2.2839-alpha.1"
+dependencies = [
+ "bincode",
+ "heapless",
+ "log",
+ "lz4_flex",
+ "serde",
+ "sunlight-ipc",
+ "sunlight-libc",
+ "tempfile",
+ "thiserror 1.0.69",
+ "wiseowl-memory",
 ]
 
 [[package]]

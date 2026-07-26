@@ -616,6 +616,58 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // wiseowl-memorydb.service — Wise Owl Phase 2 durable long-term memory DB.
+    // Independent of short-term wiseowl-memoryd. Uses /state/wiseowl-memorydb.
+    let wiseowl_memorydb_service = r#"[Unit]
+Description=Wise Owl Long-Term Memory Database
+After=vfs_server.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/wiseowl-memorydb
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+User=root
+Capability=logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(wiseowl_memorydb_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
+    // wiseowl-indexd.service — Wise Owl Phase 3 document indexer.
+    // Separate from memorydb; consumes memorydb transactional APIs. Bounded
+    // restart avoids restart storms on database outage.
+    let wiseowl_index_service = r#"[Unit]
+Description=Wise Owl Document Indexer
+After=wiseowl-memorydb.service vfs_server.service
+Wants=wiseowl-memorydb.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/wiseowl-indexd
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+User=root
+Capability=logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(wiseowl_index_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     let dialogd_service = r#"[Unit]
 Description=SunlightOS Dialog Host
 After=sunlight-display.service

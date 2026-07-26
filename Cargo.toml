@@ -100,6 +100,8 @@ members = [
     "sunlight-shell-appstate",
     "mezzoctl",
     "wiseowl-memory",
+    "wiseowl-memorydb",
+    "wiseowl-index",
 ]
 
 [workspace.dependencies]

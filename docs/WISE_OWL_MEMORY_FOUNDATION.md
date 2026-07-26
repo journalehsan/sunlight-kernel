@@ -5,7 +5,9 @@ Bounded short-term cognitive memory contracts and service for SunlightOS.
 **Status:** Phase 0 contracts, Phase 1 short-term engine, and Phase 1.1 native SunlightOS landing implemented.  
 **Service name:** `wiseowl-memoryd`  
 **CLI:** `wiseowl-memoryctl`  
-**Crate:** `wiseowl-memory`
+**Crate:** `wiseowl-memory`  
+
+**Phase 2 (long-term DB)** is a separate service — see [`WISE_OWL_LONG_TERM_MEMORY.md`](./WISE_OWL_LONG_TERM_MEMORY.md) (`wiseowl-memorydb` / `wiseowl-memorydbctl`).
 
 ---
 
@@ -40,7 +42,7 @@ This foundation provides:
 | Pattern recognition / candidate/known patterns | Out of scope |
 | Muscle-memory execution | Out of scope |
 | Online AI providers / HTTP connectors | Out of scope |
-| Long-term memory database / SQL / OwlQL | Out of scope (Phase 2+) |
+| Long-term memory database / SQL / OwlQL | Phase 2 — see `WISE_OWL_LONG_TERM_MEMORY.md` |
 | Autonomous actions / self-healing | Out of scope |
 | Response alignment / NL response generation | Out of scope |
 | Placeholder daemons for later phases | Not created |

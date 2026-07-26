@@ -1,0 +1,52 @@
+[package]
+name = "wiseowl-index"
+version = "0.2.2839-alpha.1"
+edition = "2021"
+description = "Wise Owl Phase 3.5: strong digests, independent MemoryDB client, document ingestion"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "wiseowl_index"
+path = "src/lib.rs"
+
+[[bin]]
+name = "wiseowl-indexd"
+path = "src/bin/wiseowl-indexd.rs"
+
+[[bin]]
+name = "wiseowl-indexctl"
+path = "src/bin/wiseowl-indexctl.rs"
+
+[features]
+default = ["host"]
+# Host / development: std filesystem discovery, UDS daemon, full tests.
+host = [
+    "dep:serde",
+    "dep:bincode",
+    "dep:thiserror",
+    "dep:log",
+    "wiseowl-memory/host",
+    "wiseowl-memorydb/host",
+]
+# Native SunlightOS daemon + CLI (no_std + alloc + sunlight-ipc).
+sunlightos = [
+    "dep:sunlight-ipc",
+    "dep:sunlight-libc",
+    "dep:heapless",
+    "wiseowl-memory/sunlightos",
+    "wiseowl-memorydb/sunlightos",
+]
+
+[dependencies]
+wiseowl-memory = { path = "../wiseowl-memory", default-features = false }
+wiseowl-memorydb = { path = "../wiseowl-memorydb", default-features = false }
+serde = { version = "1", features = ["derive"], optional = true }
+bincode = { version = "1.3", optional = true }
+thiserror = { version = "1", optional = true }
+log = { version = "0.4", optional = true }
+sunlight-ipc = { path = "../ipc", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["global-alloc", "dynamic-heap"] }
+heapless = { version = "0.8", optional = true }
+
+[dev-dependencies]
+tempfile = "3"

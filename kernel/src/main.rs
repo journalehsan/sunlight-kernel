@@ -313,6 +313,16 @@ static WISEOWL_MEMORYD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memoryd");
 static WISEOWL_MEMORYCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memoryctl");
+// Wise Owl Phase 2: durable long-term memory database + diagnostic CLI.
+static WISEOWL_MEMORYDB_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memorydb");
+static WISEOWL_MEMORYDBCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memorydbctl");
+// Wise Owl Phase 3: document indexer + diagnostic CLI.
+static WISEOWL_INDEXD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexd");
+static WISEOWL_INDEXCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexctl");
 static SUNLIGHT_CLIPMAN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
 static EMOJI_PICKER_ELF_BYTES: &[u8] =

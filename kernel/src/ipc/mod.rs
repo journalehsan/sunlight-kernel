@@ -884,6 +884,8 @@ fn registration_identity_matches(process_name: &str, registered_name: u64) -> bo
         name if name == name_hash("rand") => "rand_service",
         name if name == name_hash("clipd") => "sunlight-clipd",
         name if name == name_hash("wiseowl-memoryd") => "wiseowl-memoryd",
+        name if name == name_hash("wiseowl-memorydb") => "wiseowl-memorydb",
+        name if name == name_hash("wiseowl-indexd") => "wiseowl-indexd",
         name if name == name_hash("dialogd") => "sunlight-dialogd",
         name if name == name_hash("thumbd") => "sunlight-thumbd",
         name if name == name_hash("gcd") || name == name_hash("proc") => "gcd",
