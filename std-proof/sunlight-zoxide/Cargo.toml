@@ -403,4 +403,7 @@ name = "z"
 path = "src/main.rs"
 
 [dependencies]
-sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc"] }
+# Use libc's reclaiming GlobalAlloc with a demand-mapped 1 MiB heap.  The
+# database and fuzzy-match working sets are unbounded at compile time, so the
+# static 256 KiB heap is unnecessarily easy to exhaust.
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap"] }

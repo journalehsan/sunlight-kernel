@@ -20,9 +20,11 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use sunlight_libc::{
-    close, create, env, exit, mkdir_recursive, open, read, stat, write, write_all, Fd, STDERR,
-    STDOUT,
+    close, env, exit, fstat, mkdir_recursive, open, open_with_flags, read, stat, write, write_all,
+    Fd, MAX_ARGS, O_CREAT, O_TRUNC, O_WRONLY, STDERR, STDOUT,
 };
+
+const MAX_ARG_LEN: usize = 1024;
 
 // ── panic handler ────────────────────────────────────────────────────────────
 
@@ -53,32 +55,11 @@ fn println_str(fd: Fd, s: &str) {
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, envp: *const *const u8) -> ! {
     env::init(envp);
-    let args = collect_args(argc, argv);
-    let code = run(&args);
+    let mut args = [""; MAX_ARGS];
+    let count =
+        unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, MAX_ARG_LEN) };
+    let code = run(&args[..count]);
     exit(code);
-}
-
-// ── argument collection ───────────────────────────────────────────────────────
-
-fn collect_args(argc: u64, argv: *const *const u8) -> Vec<String> {
-    let mut args: Vec<String> = Vec::new();
-    if argv.is_null() {
-        return args;
-    }
-    for i in 0..(argc as usize) {
-        let ptr = unsafe { *argv.add(i) };
-        if ptr.is_null() {
-            break;
-        }
-        let mut len = 0usize;
-        while unsafe { *ptr.add(len) } != 0 {
-            len += 1;
-        }
-        let bytes = unsafe { core::slice::from_raw_parts(ptr, len) };
-        let s = core::str::from_utf8(bytes).unwrap_or("").to_string();
-        args.push(s);
-    }
-    args
 }
 
 // ── database path ─────────────────────────────────────────────────────────────
@@ -102,6 +83,14 @@ fn db_path(buf: &mut String) {
 fn read_file(path: &str) -> Option<String> {
     let fd = open(path.as_bytes()).ok()?;
     let mut content: Vec<u8> = Vec::new();
+    if let Ok(metadata) = fstat(fd) {
+        if let Ok(size) = usize::try_from(metadata.size) {
+            if content.try_reserve_exact(size).is_err() {
+                let _ = close(fd);
+                return None;
+            }
+        }
+    }
     let mut buf = [0u8; 4096];
     loop {
         match read(fd, &mut buf) {
@@ -118,7 +107,7 @@ fn read_file(path: &str) -> Option<String> {
 }
 
 fn write_file(path: &str, content: &str) -> bool {
-    match create(path.as_bytes()) {
+    match open_with_flags(path.as_bytes(), O_WRONLY | O_CREAT | O_TRUNC) {
         Ok(fd) => {
             let ok = write_all(fd, content.as_bytes()).is_ok();
             let _ = close(fd);
@@ -157,9 +146,12 @@ fn parse_db(text: &str) -> Vec<Entry> {
 }
 
 fn serialize_db(entries: &[Entry]) -> String {
-    let mut out = String::new();
+    let capacity = entries.iter().fold(0usize, |total, entry| {
+        total.saturating_add(21 + 1 + entry.path.len() + 1)
+    });
+    let mut out = String::with_capacity(capacity);
     for e in entries {
-        out.push_str(&u64_to_str(e.score));
+        push_u64(&mut out, e.score);
         out.push('\t');
         out.push_str(&e.path);
         out.push('\n');
@@ -217,13 +209,12 @@ fn cmd_resolve(terms: &[&str]) -> u64 {
     let entries = load_db();
 
     // Collect all entries whose path contains every term (case-insensitive).
+    let lower_terms: Vec<String> = terms.iter().map(|term| to_lower_string(term)).collect();
     let mut matches: Vec<&Entry> = entries
         .iter()
         .filter(|e| {
             let lower = to_lower_string(&e.path);
-            terms
-                .iter()
-                .all(|t| lower.contains(&to_lower_string(t) as &str))
+            lower_terms.iter().all(|term| lower.contains(term.as_str()))
         })
         .collect();
 
@@ -234,14 +225,26 @@ fn cmd_resolve(terms: &[&str]) -> u64 {
 
     // Score: visit_score * 100 - path_length
     matches.sort_by(|a, b| {
-        let sa = a.score * 100 - a.path.len() as u64;
-        let sb = b.score * 100 - b.path.len() as u64;
+        let sa = a
+            .score
+            .saturating_mul(100)
+            .saturating_sub(a.path.len() as u64);
+        let sb = b
+            .score
+            .saturating_mul(100)
+            .saturating_sub(b.path.len() as u64);
         sb.cmp(&sa)
     });
 
     if matches.len() >= 2 {
-        let sa = matches[0].score * 100 - matches[0].path.len() as u64;
-        let sb = matches[1].score * 100 - matches[1].path.len() as u64;
+        let sa = matches[0]
+            .score
+            .saturating_mul(100)
+            .saturating_sub(matches[0].path.len() as u64);
+        let sb = matches[1]
+            .score
+            .saturating_mul(100)
+            .saturating_sub(matches[1].path.len() as u64);
         if sa == sb {
             println(STDERR, b"z: ambiguous match - be more specific");
             print(STDERR, b"  ");
@@ -265,7 +268,8 @@ fn cmd_list() -> u64 {
     println(STDOUT, b"score   path");
     println(STDOUT, b"-------------------------------");
     for e in &entries {
-        let mut line = u64_to_str(e.score);
+        let mut line = String::with_capacity(8 + e.path.len());
+        push_u64(&mut line, e.score);
         // Pad score to 8 chars.
         while line.len() < 8 {
             line.push(' ');
@@ -313,30 +317,26 @@ fn cmd_doctor() -> u64 {
 
 // ── command dispatch ──────────────────────────────────────────────────────────
 
-fn run(args: &[String]) -> u64 {
+fn run(args: &[&str]) -> u64 {
     if args.len() < 2 {
         usage();
         return 1;
     }
-    let cmd = &args[1];
-    match cmd.as_str() {
+    let cmd = args[1];
+    match cmd {
         "--add" => {
             if args.len() < 3 {
                 println(STDERR, b"z: --add requires a path argument");
                 return 1;
             }
-            cmd_add(&args[2])
+            cmd_add(args[2])
         }
-        "--resolve" => {
-            let terms: Vec<&str> = args[2..].iter().map(|s| s.as_str()).collect();
-            cmd_resolve(&terms)
-        }
+        "--resolve" => cmd_resolve(&args[2..]),
         "--list" => cmd_list(),
         "--doctor" => cmd_doctor(),
         _ => {
             // Treat a bare argument as --resolve for shell integration convenience.
-            let terms: Vec<&str> = args[1..].iter().map(|s| s.as_str()).collect();
-            cmd_resolve(&terms)
+            cmd_resolve(&args[1..])
         }
     }
 }
@@ -376,17 +376,28 @@ fn parse_u64(s: &str) -> Option<u64> {
     Some(v)
 }
 
-fn u64_to_str(mut n: u64) -> String {
+fn u64_to_str(n: u64) -> String {
+    let mut out = String::with_capacity(20);
+    push_u64(&mut out, n);
+    out
+}
+
+fn push_u64(out: &mut String, mut n: u64) {
+    let mut digits = [0u8; 20];
+    let mut len = 0usize;
     if n == 0 {
-        return "0".to_string();
+        out.push('0');
+        return;
     }
-    let mut digits: Vec<u8> = Vec::new();
     while n > 0 {
-        digits.push(b'0' + (n % 10) as u8);
+        digits[len] = b'0' + (n % 10) as u8;
+        len += 1;
         n /= 10;
     }
-    digits.reverse();
-    String::from_utf8(digits).unwrap_or_else(|_| "0".to_string())
+    while len > 0 {
+        len -= 1;
+        out.push(digits[len] as char);
+    }
 }
 
 fn to_lower_string(s: &str) -> String {

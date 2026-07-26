@@ -1890,6 +1890,9 @@ mod sunlight {
 
             // If the single arg looks like an existing absolute directory, cd there.
             if args.len() == 1 && args[0].starts_with('/') && stat_is_dir(args[0]) {
+                if sunlight_libc::chdir(args[0].as_bytes()).is_err() {
+                    return b"z: unable to enter directory\n";
+                }
                 self.env.set("OLDPWD", &self.cwd);
                 self.cwd = alloc::string::String::from(args[0]);
                 self.env.set("PWD", &self.cwd);
@@ -1934,6 +1937,9 @@ mod sunlight {
 
             match best_path {
                 Some(path) => {
+                    if sunlight_libc::chdir(path.as_bytes()).is_err() {
+                        return b"z: unable to enter directory\n";
+                    }
                     self.env.set("OLDPWD", &self.cwd);
                     self.cwd = path.clone();
                     self.env.set("PWD", &self.cwd);
@@ -1969,7 +1975,13 @@ mod sunlight {
         fn z_spawn_add(&self, path: &str) {
             use sunlight_libc as ulibc;
             let argv: [&[u8]; 3] = [b"z", b"--add", path.as_bytes()];
-            let _ = ulibc::spawn(b"/bin/z", &argv, None);
+            if let Ok(pid) = ulibc::spawn(b"/bin/z", &argv, None) {
+                // Ensure the next `z` query observes this visit instead of
+                // racing the asynchronous database update.
+                let _ = ulibc::waitpid(pid);
+            } else {
+                debug_log("[TTY] z: failed to update history");
+            }
         }
     }
 
