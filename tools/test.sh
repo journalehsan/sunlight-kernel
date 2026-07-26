@@ -204,6 +204,12 @@ case "$PHASE" in
         PASS_LABEL="Phase 2B.4 utilities"
         NEED_DISK=false
         ;;
+    phase2b5)
+        EXPECTED_FILE="tools/tests/phase2b5.expected"
+        FINAL_MARKER="[TTY]  exit: printf %d bad -> 1"
+        PASS_LABEL="Phase 2B.5 utilities"
+        NEED_DISK=false
+        ;;
     phase_shm)
         EXPECTED_FILE="tools/tests/phase_shm.expected"
         FINAL_MARKER="[SHM]  Shared memory grant: PASSED"
@@ -347,7 +353,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "top" || "$PHASE" == "tzctl" ]]; then
+if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -374,6 +380,8 @@ elif [[ "$PHASE" == "phase6.5.utils" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase6.5.utils)
 elif [[ "$PHASE" == "phase2b4" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase2b4)
+elif [[ "$PHASE" == "phase2b5" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase2b5)
 elif [[ "$PHASE" == "top" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=top)
 elif [[ "$PHASE" == "tzctl" ]]; then

@@ -278,6 +278,30 @@ fn main() {
             args: &["--release", "--bin", "comm"],
         },
         EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "tr",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "tr"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "paste",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "paste"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "join",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "join"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "printf",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "printf"],
+        },
+        EmbeddedBinary {
             package: "sunlight-net-utils",
             output: "sunlight-net-utils",
             rustflags: service_rustflags,

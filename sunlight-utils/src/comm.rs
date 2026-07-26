@@ -413,7 +413,7 @@ mod tests {
         }
         fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
             if self.fail_read {
-                return Err(Errno::IO);
+                return Err(Errno::Failed);
             }
             if self.eagain_count > 0 {
                 self.eagain_count -= 1;

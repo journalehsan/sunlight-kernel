@@ -603,6 +603,13 @@ static UNIQ_DATA: &[u8] = b"apple\napple\nbanana\ncherry\ncherry\n";
 static COMM_A: &[u8] = b"apple\nbanana\ncherry\n";
 static COMM_B: &[u8] = b"banana\ncherry\ndate\n";
 
+// Phase 2B.5 fixtures — deliberately small, ordered, and byte-visible.
+static PASTE_A: &[u8] = b"a1\na2\n";
+static PASTE_B: &[u8] = b"b1\n";
+static PASTE_SERIAL: &[u8] = b"one\ntwo";
+static JOIN_A: &[u8] = b"a x\na y\nb z\n";
+static JOIN_B: &[u8] = b"a p\na q\nc r\n";
+
 pub static INITRAMFS: &[RamEntry] = &[
     // Directories
     RamEntry::dir("/", 0, 0, mode::DIR_755),
@@ -716,6 +723,11 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file("/tests/uniq-data", 0, 0, mode::FILE_644, UNIQ_DATA),
     RamEntry::file("/tests/comm-a", 0, 0, mode::FILE_644, COMM_A),
     RamEntry::file("/tests/comm-b", 0, 0, mode::FILE_644, COMM_B),
+    RamEntry::file("/tests/paste-a", 0, 0, mode::FILE_644, PASTE_A),
+    RamEntry::file("/tests/paste-b", 0, 0, mode::FILE_644, PASTE_B),
+    RamEntry::file("/tests/paste-serial", 0, 0, mode::FILE_644, PASTE_SERIAL),
+    RamEntry::file("/tests/join-a", 0, 0, mode::FILE_644, JOIN_A),
+    RamEntry::file("/tests/join-b", 0, 0, mode::FILE_644, JOIN_B),
 
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),

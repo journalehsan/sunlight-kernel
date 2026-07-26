@@ -595,8 +595,8 @@ mod tests {
 
     #[test]
     fn one_buffer_boundary() {
-        let data = [b'x'; BUF_SIZE];
-        let mut m = Mock::new(std::vec![(b"exact", &data)]);
+        static DATA: [u8; BUF_SIZE] = [b'x'; BUF_SIZE];
+        let mut m = Mock::new(std::vec![(b"exact", &DATA)]);
         assert_eq!(run(&[b"exact"], &mut m), 0);
         let s = output_as_str(&m.output);
         assert!(s.contains(&format!("0 1 {} exact", BUF_SIZE)), "got: {s}");
@@ -604,8 +604,8 @@ mod tests {
 
     #[test]
     fn one_buffer_plus_one() {
-        let data = [b'x'; BUF_SIZE + 1];
-        let mut m = Mock::new(std::vec![(b"over", &data)]);
+        static DATA: [u8; BUF_SIZE + 1] = [b'x'; BUF_SIZE + 1];
+        let mut m = Mock::new(std::vec![(b"over", &DATA)]);
         assert_eq!(run(&[b"over"], &mut m), 0);
         let s = output_as_str(&m.output);
         assert!(s.contains(&format!("0 1 {} over", BUF_SIZE + 1)), "got: {s}");

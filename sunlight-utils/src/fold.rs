@@ -360,8 +360,8 @@ mod tests {
 
     #[test]
     fn no_final_newline_added() {
-        let text = [b'x'; 5];
-        let mut m = Mock::new(std::vec![(b"f", &text)]);
+        static TEXT: [u8; 5] = [b'x'; 5];
+        let mut m = Mock::new(std::vec![(b"f", &TEXT)]);
         assert_eq!(run(&[b"f"], &mut m), 0);
         // POSIX: fold adds newline at end if input doesn't end with one
         assert_eq!(m.output, b"xxxxx\n".to_vec());

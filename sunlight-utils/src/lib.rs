@@ -1,5 +1,9 @@
 #![no_std]
 
+#[cfg(test)]
+#[macro_use]
+extern crate std;
+
 pub mod cat;
 pub mod basename;
 pub mod dirname;
@@ -22,3 +26,7 @@ pub mod grep;
 pub mod sort;
 pub mod uniq;
 pub mod comm;
+pub mod tr;
+pub mod paste;
+pub mod join;
+pub mod printf;

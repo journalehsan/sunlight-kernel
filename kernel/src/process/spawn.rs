@@ -685,6 +685,18 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/comm" | "/usr/bin/comm" | "/sunlight-utils/comm" => {
             Ok(crate::SUNLIGHT_COMM_ELF_BYTES)
         }
+        "/bin/tr" | "/usr/bin/tr" | "/sunlight-utils/tr" => {
+            Ok(crate::SUNLIGHT_TR_ELF_BYTES)
+        }
+        "/bin/paste" | "/usr/bin/paste" | "/sunlight-utils/paste" => {
+            Ok(crate::SUNLIGHT_PASTE_ELF_BYTES)
+        }
+        "/bin/join" | "/usr/bin/join" | "/sunlight-utils/join" => {
+            Ok(crate::SUNLIGHT_JOIN_ELF_BYTES)
+        }
+        "/bin/printf" | "/usr/bin/printf" | "/sunlight-utils/printf" => {
+            Ok(crate::SUNLIGHT_PRINTF_ELF_BYTES)
+        }
         "/bin/ping"
         | "/bin/ifconfig"
         | "/bin/wget"

@@ -133,6 +133,14 @@ static SUNLIGHT_UNIQ_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uniq");
 static SUNLIGHT_COMM_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/comm");
+static SUNLIGHT_TR_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/tr");
+static SUNLIGHT_PASTE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/paste");
+static SUNLIGHT_JOIN_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/join");
+static SUNLIGHT_PRINTF_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/printf");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
@@ -3730,6 +3738,7 @@ fn setup_key_injection() {
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "phase6.5.utils" => build_phase6_5_utils_sequence(),
         "phase2b4" => build_phase2b4_sequence(),
+        "phase2b5" => build_phase2b5_sequence(),
         "top" => build_top_sequence(),
         "tzctl" => build_tzctl_sequence(),
         "dns_test" => build_dns_test_sequence(),
@@ -3954,6 +3963,44 @@ fn build_phase2b4_sequence() -> [u8; 4096] {
     s
 }
 
+/// Phase 2B.5: exercise the maintained character, line-composition, join,
+/// and formatted-output utilities through the ordinary shell lookup path.
+#[cfg(feature = "key_inject")]
+fn build_phase2b5_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
+    let mut len = 0usize;
+
+    append_injected_delay(&mut s, &mut len, 96);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 512);
+
+    for command in [
+        b"tr a-z A-Z".as_slice(),
+        b"abc".as_slice(),
+        b"tr -d x".as_slice(),
+        b"xoxo".as_slice(),
+        b"paste /tests/paste-a /tests/paste-b".as_slice(),
+        b"paste -s /tests/paste-serial".as_slice(),
+        b"join /tests/join-a /tests/join-b".as_slice(),
+        b"join -a 1 /tests/join-a /tests/join-b".as_slice(),
+        b"printf %03d 7".as_slice(),
+        b"printf %b a\\nb".as_slice(),
+        b"printf %d bad".as_slice(),
+    ] {
+        append_injected_delay(&mut s, &mut len, 64);
+        append_injected_command(&mut s, &mut len, command);
+        if command == b"abc" || command == b"xoxo" {
+            // stdin-only tr remains active after a newline; send the normal
+            // terminal EOF sequence before returning control to the shell.
+            append_injected_ctrl_d(&mut s, &mut len);
+        }
+    }
+    s
+}
+
 #[cfg(feature = "key_inject")]
 fn append_injected_command(out: &mut [u8], len: &mut usize, command: &[u8]) {
     for &byte in command {
@@ -3975,6 +4022,13 @@ fn append_injected_scancode(out: &mut [u8], len: &mut usize, scancode: u8) {
         out[*len] = scancode;
         *len += 1;
     }
+}
+
+#[cfg(feature = "key_inject")]
+fn append_injected_ctrl_d(out: &mut [u8], len: &mut usize) {
+    append_injected_scancode(out, len, 0x1d);
+    append_injected_scancode(out, len, 0x20);
+    append_injected_scancode(out, len, 0x9d);
 }
 
 #[cfg(feature = "key_inject")]
@@ -4019,6 +4073,8 @@ fn injected_scancode(byte: u8) -> (u8, bool) {
         b'.' => 0x34,
         b'/' => 0x35,
         b'-' => 0x0c,
+        b'%' => return (0x06, true),
+        b'\\' => 0x2b,
         b'0' => 0x0b,
         b'1' => 0x02,
         b'2' => 0x03,
