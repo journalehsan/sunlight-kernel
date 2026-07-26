@@ -641,6 +641,18 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/cat" | "/usr/bin/cat" | "/sunlight-utils/cat" => Ok(crate::SUNLIGHT_CAT_ELF_BYTES),
         "/bin/pwd" | "/usr/bin/pwd" | "/sunlight-utils/pwd" => Ok(crate::SUNLIGHT_PWD_ELF_BYTES),
         "/bin/echo" | "/usr/bin/echo" => Ok(crate::SUNLIGHT_ECHO_ELF_BYTES),
+        "/bin/true" | "/usr/bin/true" | "/sunlight-utils/true" => {
+            Ok(crate::SUNLIGHT_TRUE_ELF_BYTES)
+        }
+        "/bin/false" | "/usr/bin/false" | "/sunlight-utils/false" => {
+            Ok(crate::SUNLIGHT_FALSE_ELF_BYTES)
+        }
+        "/bin/basename" | "/usr/bin/basename" | "/sunlight-utils/basename" => {
+            Ok(crate::SUNLIGHT_BASENAME_ELF_BYTES)
+        }
+        "/bin/dirname" | "/usr/bin/dirname" | "/sunlight-utils/dirname" => {
+            Ok(crate::SUNLIGHT_DIRNAME_ELF_BYTES)
+        }
         "/bin/ping"
         | "/bin/ifconfig"
         | "/bin/wget"

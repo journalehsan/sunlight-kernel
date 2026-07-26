@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-utils"
-version = "0.2.2687-alpha.1"
+version = "0.2.2702-alpha.1"
+
 
 
 
@@ -460,6 +461,22 @@ path = "src/bin/cat.rs"
 [[bin]]
 name = "pwd"
 path = "src/bin/pwd.rs"
+
+[[bin]]
+name = "true"
+path = "src/bin/true.rs"
+
+[[bin]]
+name = "false"
+path = "src/bin/false.rs"
+
+[[bin]]
+name = "basename"
+path = "src/bin/basename.rs"
+
+[[bin]]
+name = "dirname"
+path = "src/bin/dirname.rs"
 
 [dependencies]
 sunlight-libc = { path = "../sunlight-libc" }

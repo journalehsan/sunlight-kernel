@@ -188,6 +188,30 @@ fn main() {
             args: &["--release", "--bin", "pwd"],
         },
         EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "true",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "true"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "false",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "false"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "basename",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "basename"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "dirname",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "dirname"],
+        },
+        EmbeddedBinary {
             package: "sunlight-net-utils",
             output: "sunlight-net-utils",
             rustflags: service_rustflags,
@@ -526,6 +550,10 @@ fn build_package(
     let mut cmd = Command::new("cargo");
     cmd.current_dir(workspace_root)
         .env("CARGO_TARGET_DIR", scratch_target_dir)
+        // The parent Cargo process exports its target-specific encoded flags
+        // to build scripts. Do not let those kernel linker flags override the
+        // explicit user-space flags below in the child Cargo invocation.
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
         .env("RUSTFLAGS", bin.rustflags)
         .arg("build")
         .arg("--package")

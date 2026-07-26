@@ -103,6 +103,14 @@ static SUNLIGHT_CAT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/cat");
 static SUNLIGHT_PWD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/pwd");
+static SUNLIGHT_TRUE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/true");
+static SUNLIGHT_FALSE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/false");
+static SUNLIGHT_BASENAME_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/basename");
+static SUNLIGHT_DIRNAME_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/dirname");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
@@ -3696,6 +3704,7 @@ fn setup_key_injection() {
 
     let sequence: [u8; 4096] = match phase {
         "phase3.9" => build_phase3_9_sequence(),
+        "phase2b1" => build_phase2b1_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "phase6.5.utils" => build_phase6_5_utils_sequence(),
         "top" => build_top_sequence(),
@@ -3785,6 +3794,34 @@ fn build_desktop_login_sequence() -> [u8; 4096] {
         0x1C, // Enter -> login
     ];
     s[..codes.len()].copy_from_slice(&codes);
+    s
+}
+
+/// Phase 2B.1 injection: login, then exercise the four foundational native
+/// process/pathname utilities through the normal shell lookup path.
+#[cfg(feature = "key_inject")]
+fn build_phase2b1_sequence() -> [u8; 4096] {
+    let mut s = [0u8; 4096];
+    let mut len = 0usize;
+
+    append_injected_delay(&mut s, &mut len, 96);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 96);
+
+    for command in [
+        b"true".as_slice(),
+        b"false".as_slice(),
+        b"basename /root/projects/sunlight/kernel".as_slice(),
+        b"dirname /root/projects/sunlight/kernel".as_slice(),
+        b"basename /tmp/path/name.txt .txt".as_slice(),
+        b"dirname /tmp/path/name///".as_slice(),
+    ] {
+        append_injected_delay(&mut s, &mut len, 96);
+        append_injected_command(&mut s, &mut len, command);
+    }
     s
 }
 
