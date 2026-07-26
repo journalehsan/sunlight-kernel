@@ -194,7 +194,7 @@ case "$PHASE" in
         ;;
     phase6.5.utils)
         EXPECTED_FILE="tools/tests/phase6_5_utils.expected"
-        FINAL_MARKER="[TTY]  exit: cat /tests/missing -> 1"
+        FINAL_MARKER="[TTY]  exit: expand /tests/expand-tabs -> 0"
         PASS_LABEL="Phase 6.5 utilities"
         NEED_DISK=false
         ;;

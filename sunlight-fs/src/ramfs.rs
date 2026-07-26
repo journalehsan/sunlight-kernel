@@ -577,6 +577,26 @@ static CMP_DIFF_A: &[u8] = b"hello world\nthis is file a\n";
 
 static CMP_DIFF_B: &[u8] = b"hello world\nthis is file b\n";
 
+// Phase 2B.3 test fixtures — wc, cut, fold, expand
+static WC_TEXT: &[u8] = b"hello world\nline two\n  line three  \n";
+static WC_EMPTY: &[u8] = b"";
+static WC_NO_NL: &[u8] = b"no newline here";
+static WC_SPACES: &[u8] = b"   \t  \n";
+static WC_UTF8: &[u8] = &[0x68, 0xC3, 0xA9, 0x6C, 0x6C, 0x6F, 0x0A, 0x77, 0xC3, 0xB6, 0x72, 0x6C, 0x64, 0x0A];
+
+static CUT_DELIM: &[u8] = b"a:b:c:d\n1:2:3:4\n";
+static CUT_NO_DELIM: &[u8] = b"no delimiters here\n";
+static CUT_BYTES: &[u8] = b"abcdefghij\n";
+
+static FOLD_LONG: &[u8] = b"this is a very long line that should be folded at the specified width\n";
+static FOLD_EXACT: &[u8] = b"1234567890\n";
+static FOLD_OVER: &[u8] = b"12345678901\n";
+static FOLD_TABS: &[u8] = b"hello\tworld\t!\n";
+
+static EXPAND_TABS: &[u8] = b"a\tb\tc\n";
+static EXPAND_CONSECUTIVE: &[u8] = b"\t\tx\n";
+static EXPAND_NO_NL: &[u8] = b"a\tb";
+
 pub static INITRAMFS: &[RamEntry] = &[
     // Directories
     RamEntry::dir("/", 0, 0, mode::DIR_755),
@@ -669,6 +689,22 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file("/tests/ib", 0, 0, mode::FILE_644, CMP_IDENTICAL),
     RamEntry::file("/tests/da", 0, 0, mode::FILE_644, CMP_DIFF_A),
     RamEntry::file("/tests/db", 0, 0, mode::FILE_644, CMP_DIFF_B),
+    // Phase 2B.3: wc, cut, fold, expand
+    RamEntry::file("/tests/wc-text", 0, 0, mode::FILE_644, WC_TEXT),
+    RamEntry::file("/tests/wc-empty", 0, 0, mode::FILE_644, WC_EMPTY),
+    RamEntry::file("/tests/wc-nonl", 0, 0, mode::FILE_644, WC_NO_NL),
+    RamEntry::file("/tests/wc-spaces", 0, 0, mode::FILE_644, WC_SPACES),
+    RamEntry::file("/tests/wc-utf8", 0, 0, mode::FILE_644, WC_UTF8),
+    RamEntry::file("/tests/cut-delim", 0, 0, mode::FILE_644, CUT_DELIM),
+    RamEntry::file("/tests/cut-nodelim", 0, 0, mode::FILE_644, CUT_NO_DELIM),
+    RamEntry::file("/tests/cut-bytes", 0, 0, mode::FILE_644, CUT_BYTES),
+    RamEntry::file("/tests/fold-long", 0, 0, mode::FILE_644, FOLD_LONG),
+    RamEntry::file("/tests/fold-exact", 0, 0, mode::FILE_644, FOLD_EXACT),
+    RamEntry::file("/tests/fold-over", 0, 0, mode::FILE_644, FOLD_OVER),
+    RamEntry::file("/tests/fold-tabs", 0, 0, mode::FILE_644, FOLD_TABS),
+    RamEntry::file("/tests/expand-tabs", 0, 0, mode::FILE_644, EXPAND_TABS),
+    RamEntry::file("/tests/expand-cons", 0, 0, mode::FILE_644, EXPAND_CONSECUTIVE),
+    RamEntry::file("/tests/expand-nonl", 0, 0, mode::FILE_644, EXPAND_NO_NL),
 
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),
@@ -1041,6 +1077,20 @@ login_timeout_seconds = 30
     ),
     RamEntry::file(
         "/bin/cut",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/fold",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/expand",
         0,
         0,
         mode::FILE_755,
@@ -1810,6 +1860,20 @@ login_timeout_seconds = 30
     ),
     RamEntry::file(
         "/sunlight-utils/cut",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/sunlight-utils/fold",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/sunlight-utils/expand",
         0,
         0,
         mode::FILE_755,

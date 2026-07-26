@@ -117,6 +117,14 @@ static SUNLIGHT_CMP_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/cmp");
 static SUNLIGHT_CKSUM_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/cksum");
+static SUNLIGHT_WC_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wc");
+static SUNLIGHT_CUT_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/cut");
+static SUNLIGHT_FOLD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/fold");
+static SUNLIGHT_EXPAND_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/expand");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
@@ -1433,7 +1441,7 @@ pub extern "C" fn _start() -> ! {
         // Userland growth: sunlight-utils
         if test_phase >= "phase5x.5" {
             serial_println!("[UTIL] sunlight-utils v0.1 loaded");
-            serial_println!("[UTIL] Commands available: ls cat cp mv rm mkdir rmdir touch chmod find grep wc head tail sort uniq cut date id whoami");
+            serial_println!("[UTIL] Commands available: ls cat cp mv rm mkdir rmdir touch chmod find grep wc head tail sort uniq cut fold expand date id whoami");
             serial_println!("[UTIL] OK");
         }
 
@@ -3891,6 +3899,13 @@ fn build_phase6_5_utils_sequence() -> [u8; 4096] {
         b"cmp /tests/ia /tests/ib".as_slice(),
         b"cmp -s /tests/da /tests/db".as_slice(),
         b"cksum /tests/ho".as_slice(),
+        // Phase 2B.3:
+        b"wc /tests/wc-empty".as_slice(),
+        b"wc -l /tests/wc-text".as_slice(),
+        b"cut -f 2 -d : /tests/cut-delim".as_slice(),
+        b"cut -b 2-4 /tests/cut-bytes".as_slice(),
+        b"fold -w 10 /tests/fold-long".as_slice(),
+        b"expand /tests/expand-tabs".as_slice(),
     ] {
         let extra = if command == b"echo hello world".as_slice() { 0 } else { 0 };
         append_injected_delay(&mut s, &mut len, 48 + extra);
@@ -3974,6 +3989,9 @@ fn injected_scancode(byte: u8) -> (u8, bool) {
         b'7' => 0x08,
         b'8' => 0x09,
         b'9' => 0x0a,
+        b':' => { return (0x27, true); }
+        b';' => 0x27,
+        b'=' => 0x0d,
         _ => 0,
     };
     (scancode, shifted)

@@ -1,5 +1,6 @@
 # Focused native libc utility gate: echo, pwd, cat, and directory re-entry.
 # Phase 2B.2 adds head, cmp, cksum.
+# Phase 2B.3 adds wc, cut, fold, expand.
 [TTY]  cmd: /bin/pwd -> /\n
 [TTY]  exit: /bin/pwd -> 0
 [TTY]  cmd: echo -> \n
@@ -30,3 +31,10 @@
 [TTY]  exit: cmp /tests/ia /tests/ib -> 0
 [TTY]  exit: cmp -s /tests/da /tests/db -> 1
 [TTY]  exit: cksum /tests/ho -> 0
+# Phase 2B.3: wc, cut, fold, expand
+[TTY]  exit: wc /tests/wc-empty -> 0
+[TTY]  exit: wc -l /tests/wc-text -> 0
+[TTY]  exit: cut -f 2 -d : /tests/cut-delim -> 0
+[TTY]  exit: cut -b 2-4 /tests/cut-bytes -> 0
+[TTY]  exit: fold -w 10 /tests/fold-long -> 0
+[TTY]  exit: expand /tests/expand-tabs -> 0

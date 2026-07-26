@@ -12,3 +12,7 @@ pub mod true_cmd;
 pub mod head;
 pub mod cmp;
 pub mod cksum;
+pub mod wc;
+pub mod cut;
+pub mod fold;
+pub mod expand;
