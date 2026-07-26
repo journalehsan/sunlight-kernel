@@ -1099,6 +1099,34 @@ login_timeout_seconds = 30
         b"#!/sunlight/sunlight-utils\n",
     ),
     RamEntry::file(
+        "/bin/tr",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/paste",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/join",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
+        "/bin/printf",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-utils\n",
+    ),
+    RamEntry::file(
         "/bin/cut",
         0,
         0,
@@ -3097,6 +3125,18 @@ mod tests {
                     .iter()
                     .any(|entry| entry.path == path && !entry.is_dir),
                 "missing {path} in INITRAMFS"
+            );
+        }
+    }
+
+    #[test]
+    fn phase_2b5_utilities_have_path_visible_stubs() {
+        for path in ["/bin/tr", "/bin/paste", "/bin/join", "/bin/printf"] {
+            assert!(
+                INITRAMFS.iter().any(|entry| {
+                    entry.path == path && !entry.is_dir && entry.mode == mode::FILE_755
+                }),
+                "missing executable stub for {path}"
             );
         }
     }

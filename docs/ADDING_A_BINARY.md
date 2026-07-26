@@ -223,3 +223,29 @@ embedded at all). The fix:
 
 (`capabilityctl` and `runas` already had spots 3 and 4 from the `sunlight-uac`
 crate extraction; they only needed the stub.)
+
+## Phase 2B.5 utility example
+
+The standalone `tr`, `paste`, `join`, and `printf` utilities are already built,
+embedded, and mapped by the kernel resolver. They still need `/bin` RamFS
+stubs so the shell's PATH probe can find them:
+
+| Binary | Release ELF size |
+|--------|------------------:|
+| `tr` | 24,944 bytes |
+| `paste` | 20,856 bytes |
+| `join` | 24,952 bytes |
+| `printf` | 20,840 bytes |
+
+Add one executable stub per utility to `sunlight-fs/src/ramfs.rs`:
+
+```rust
+RamEntry::file("/bin/tr", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+RamEntry::file("/bin/paste", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+RamEntry::file("/bin/join", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+RamEntry::file("/bin/printf", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+```
+
+Without these entries, the shell reports the command as **not found** even
+though the ELF is present in `target/x86_64-unknown-none/release/` and the
+kernel has a matching resolver arm.
