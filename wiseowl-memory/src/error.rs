@@ -39,6 +39,14 @@ pub enum MemoryError {
     WorkBudgetExceeded,
     SpillCorrupt,
     SpillIncomplete,
+    /// KV key exists but version/checksum/metadata do not match the local record.
+    PromotionConflict {
+        key: &'static str,
+    },
+    /// Service health is failed and cannot accept the request.
+    ServiceFailed,
+    /// Read lease or SHM mapping not found / expired.
+    LeaseNotFound,
 }
 
 #[cfg(feature = "host")]
@@ -90,6 +98,9 @@ impl<'de> serde::Deserialize<'de> for MemoryError {
             22 => Self::WorkBudgetExceeded,
             23 => Self::SpillCorrupt,
             24 => Self::SpillIncomplete,
+            25 => Self::PromotionConflict { key: "conflict" },
+            26 => Self::ServiceFailed,
+            27 => Self::LeaseNotFound,
             _ => Self::InvalidRequest("unknown error code"),
         })
     }
@@ -123,6 +134,9 @@ impl MemoryError {
             Self::WorkBudgetExceeded => 22,
             Self::SpillCorrupt => 23,
             Self::SpillIncomplete => 24,
+            Self::PromotionConflict { .. } => 25,
+            Self::ServiceFailed => 26,
+            Self::LeaseNotFound => 27,
         }
     }
 
@@ -153,6 +167,9 @@ impl MemoryError {
             Self::WorkBudgetExceeded => "work_budget_exceeded",
             Self::SpillCorrupt => "spill_corrupt",
             Self::SpillIncomplete => "spill_incomplete",
+            Self::PromotionConflict { .. } => "promotion_conflict",
+            Self::ServiceFailed => "service_failed",
+            Self::LeaseNotFound => "lease_not_found",
         }
     }
 }
@@ -192,6 +209,11 @@ impl fmt::Display for MemoryError {
             Self::WorkBudgetExceeded => write!(f, "maintenance work budget exceeded"),
             Self::SpillCorrupt => write!(f, "spill record corrupt"),
             Self::SpillIncomplete => write!(f, "spill record incomplete"),
+            Self::PromotionConflict { key } => {
+                write!(f, "promotion conflict for key context: {key}")
+            }
+            Self::ServiceFailed => write!(f, "service failed"),
+            Self::LeaseNotFound => write!(f, "read lease not found"),
         }
     }
 }

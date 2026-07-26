@@ -1,5 +1,10 @@
 //! Memory entry headers and lifecycle state.
 
+extern crate alloc;
+
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use crate::error::MemoryError;
 use crate::ids::{MemoryId, SessionId, TokenStreamId};
 use crate::kinds::{MemoryClass, MemoryKind};

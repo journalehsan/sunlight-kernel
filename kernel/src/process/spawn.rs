@@ -881,6 +881,12 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         }
         "/sbin/sunlight-clipd" | "/usr/sbin/sunlight-clipd" => Ok(crate::SUNLIGHT_CLIPD_ELF_BYTES),
         "/bin/sunlight-clip" | "/usr/bin/sunlight-clip" => Ok(crate::SUNLIGHT_CLIP_ELF_BYTES),
+        "/sbin/wiseowl-memoryd" | "/usr/sbin/wiseowl-memoryd" => {
+            Ok(crate::WISEOWL_MEMORYD_ELF_BYTES)
+        }
+        "/bin/wiseowl-memoryctl" | "/usr/bin/wiseowl-memoryctl" => {
+            Ok(crate::WISEOWL_MEMORYCTL_ELF_BYTES)
+        }
         "/bin/sunlight-clipman" | "/usr/bin/sunlight-clipman" => {
             Ok(crate::SUNLIGHT_CLIPMAN_ELF_BYTES)
         }

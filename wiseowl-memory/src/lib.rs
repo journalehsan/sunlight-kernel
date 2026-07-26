@@ -13,20 +13,28 @@
 #[cfg(feature = "host")]
 extern crate std;
 
+extern crate alloc;
+
+pub mod caller;
 pub mod caps;
 pub mod compression;
 pub mod entry;
 pub mod error;
+pub mod health;
 pub mod ids;
 pub mod kinds;
 pub mod lifecycle;
+pub mod native_ipc;
 pub mod protocol;
 pub mod provenance;
 pub mod quotas;
 pub mod segments;
+#[cfg(feature = "host")]
 pub mod service;
+#[cfg(feature = "host")]
 pub mod spill;
 pub mod stats;
+pub mod sunlightos_engine;
 
 pub use caps::{CapabilitySet, MemoryCapability};
 pub use compression::{compress_lz4, decompress_lz4_checked, COMPRESSION_LZ4, COMPRESSION_NONE};
@@ -47,6 +55,19 @@ pub use protocol::{
 pub use provenance::{Provenance, MAX_PROVENANCE_PARENTS};
 pub use quotas::{QuotaConfig, QuotaSnapshot};
 pub use segments::{ColdSegmentHeader, Segment, SegmentState, SEGMENT_FORMAT_VERSION};
-pub use service::{CallerIdentity, MemoryService, ServiceConfig};
-pub use spill::{SpillStore, SpillRecordMeta};
+pub use caller::CallerIdentity;
+pub use health::{degraded, ServiceHealth};
+#[cfg(feature = "host")]
+pub use service::{
+    InMemoryKv, KvBackend, KvPutOutcome, MemoryService, ServiceConfig, PROMOTION_RECORD_VERSION,
+};
+#[cfg(feature = "host")]
+pub use spill::{
+    QuarantineConfig, SpillRecordMeta, SpillStore, MAX_QUARANTINE_BYTES, MAX_QUARANTINE_FILES,
+};
 pub use stats::ServiceStats;
+pub use ids::{pack_id, unpack_id, IdAllocator, COUNTER_BITS, GENERATION_BITS};
+pub use segments::{
+    encode_record_v2, parse_records_v2, RecoveredRecord, RECORD_FORMAT_VERSION,
+};
+pub use sunlightos_engine::{NativeKvBackend, NativeKvPut, NativeMemoryEngine, RamKv};

@@ -1,8 +1,13 @@
 //! LZ4 compression helpers for cold segments.
 //!
 //! Reuses `lz4_flex` (same crate as SIMG v2 / kernel ZRAM) when the `host`
-//! feature is enabled. Decompression always validates the configured maximum
-//! uncompressed size **before** allocating.
+//! or `sunlightos` feature is enabled. Decompression always validates the
+//! configured maximum uncompressed size **before** allocating.
+
+extern crate alloc;
+
+use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::error::MemoryError;
 
@@ -12,7 +17,7 @@ pub const COMPRESSION_NONE: u8 = 0;
 pub const COMPRESSION_LZ4: u8 = 1;
 
 /// Compress `input` with LZ4. Returns compressed bytes.
-#[cfg(feature = "host")]
+#[cfg(any(feature = "host", feature = "sunlightos"))]
 pub fn compress_lz4(input: &[u8]) -> Result<Vec<u8>, MemoryError> {
     if input.is_empty() {
         return Ok(Vec::new());
@@ -25,7 +30,7 @@ pub fn compress_lz4(input: &[u8]) -> Result<Vec<u8>, MemoryError> {
     Ok(out)
 }
 
-#[cfg(not(feature = "host"))]
+#[cfg(not(any(feature = "host", feature = "sunlightos")))]
 pub fn compress_lz4(_input: &[u8]) -> Result<Vec<u8>, MemoryError> {
     Err(MemoryError::CompressionFailure)
 }
@@ -34,7 +39,7 @@ pub fn compress_lz4(_input: &[u8]) -> Result<Vec<u8>, MemoryError> {
 ///
 /// **Security:** `uncompressed_len` is checked against `max_allowed` before
 /// any allocation. Never pass attacker-controlled lengths without this check.
-#[cfg(feature = "host")]
+#[cfg(any(feature = "host", feature = "sunlightos"))]
 pub fn decompress_lz4_checked(
     input: &[u8],
     uncompressed_len: u32,
@@ -58,7 +63,7 @@ pub fn decompress_lz4_checked(
     Ok(out)
 }
 
-#[cfg(not(feature = "host"))]
+#[cfg(not(any(feature = "host", feature = "sunlightos")))]
 pub fn decompress_lz4_checked(
     _input: &[u8],
     uncompressed_len: u32,

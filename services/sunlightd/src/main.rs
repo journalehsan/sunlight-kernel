@@ -588,6 +588,34 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // wiseowl-memoryd.service — Wise Owl Phase 1.1 short-term cognitive memory.
+    // Optional cognitive service: depends on sunlight-kv for promotion; degrades
+    // to RAM-only when KV is unavailable. Bounded restart avoids restart storms.
+    let wiseowl_memory_service = r#"[Unit]
+Description=Wise Owl Short-Term Memory Service
+After=sunlight-kv.service
+Wants=sunlight-kv.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/wiseowl-memoryd
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+User=root
+Capability=kv-store
+Capability=logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(wiseowl_memory_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     let dialogd_service = r#"[Unit]
 Description=SunlightOS Dialog Host
 After=sunlight-display.service

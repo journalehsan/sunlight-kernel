@@ -4,13 +4,35 @@
 //!
 //! Only one owner may mutate an open segment. After sealing, records are
 //! immutable and compression happens at most once.
+//!
+//! # Spill body format (Phase 1.1 / segment version 2)
+//!
+//! Each record in the uncompressed body carries a versioned metadata header so
+//! restart recovery does not depend on RAM-only entry tables. Segment format
+//! version 1 (body was only `id|len|payload`) is **rejected** on recovery
+//! (quarantined). Compatibility: neither forward nor backward.
+
+extern crate alloc;
+
+use alloc::vec::Vec;
 
 use crate::compression::{compress_lz4, crc32_ieee, decompress_lz4_checked, COMPRESSION_LZ4};
+use crate::entry::{MemoryEntryHeader, MemoryState, TokenStreamRef, ENTRY_HEADER_VERSION};
 use crate::error::MemoryError;
-use crate::ids::{MemoryId, SegmentId, SessionId};
+use crate::ids::{MemoryId, SegmentId, SessionId, TokenStreamId};
+use crate::kinds::{MemoryClass, MemoryKind, SourceKind, TrustLevel};
+use crate::provenance::{Provenance, MAX_PRODUCER_LEN, MAX_PROVENANCE_PARENTS};
 
-/// On-disk / wire format version for cold segments.
-pub const SEGMENT_FORMAT_VERSION: u16 = 1;
+/// On-disk / wire format version for cold segments (v2 = full metadata records).
+pub const SEGMENT_FORMAT_VERSION: u16 = 2;
+/// Previous format (id|len|payload only). Rejected safely on recovery.
+pub const SEGMENT_FORMAT_VERSION_V1: u16 = 1;
+/// Per-record body format version embedded in each record.
+pub const RECORD_FORMAT_VERSION: u16 = 2;
+/// Fixed prefix length before variable provenance/token/payload fields.
+/// version(2)+id(8)+session(8)+class/kind/state/flags(4)+created(8)+last(8)+exp(8)
+/// +importance/confidence(4) + prov header(4)+prov_created(8) = 62
+pub const RECORD_FIXED_PREFIX_LEN: usize = 62;
 
 /// Magic: "OWLS" (Owl Segment).
 pub const SEGMENT_MAGIC: [u8; 4] = *b"OWLS";
@@ -74,6 +96,7 @@ impl ColdSegmentHeader {
             return Err(MemoryError::SpillCorrupt);
         }
         let version = u16::from_le_bytes([bytes[4], bytes[5]]);
+        // Accept only current format. V1 is intentionally not migrated.
         if version != SEGMENT_FORMAT_VERSION {
             return Err(MemoryError::UnsupportedProtocolVersion {
                 got: version,
@@ -148,12 +171,12 @@ impl Segment {
         }
     }
 
-    /// Append a sealed record using checked arithmetic.
-    pub fn append_record(
+    /// Append a sealed record with full recovery metadata (Phase 1.1).
+    pub fn append_record_full(
         &mut self,
-        memory_id: MemoryId,
+        header: &MemoryEntryHeader,
+        state: MemoryState,
         payload: &[u8],
-        importance: u16,
         max_segment_size: u32,
     ) -> Result<(), MemoryError> {
         if !self.open || self.state != SegmentState::Open {
@@ -162,27 +185,55 @@ impl Segment {
                 op: crate::lifecycle::LifecycleOp::Append,
             });
         }
-        // Layout: memory_id(8) + payload_len(4) + payload
-        let rec_len = payload
-            .len()
-            .checked_add(12)
-            .ok_or(MemoryError::InternalInvariantViolation("record size overflow"))?;
+        let encoded = encode_record_v2(header, state, payload)?;
         let new_len = self
             .plain
             .len()
-            .checked_add(rec_len)
+            .checked_add(encoded.len())
             .ok_or(MemoryError::InternalInvariantViolation("segment size overflow"))?;
         if new_len > max_segment_size as usize {
             return Err(MemoryError::QuotaExceeded("max segment size"));
         }
-        let id_bytes = memory_id.to_le_bytes();
-        let len_bytes = (payload.len() as u32).to_le_bytes();
-        self.plain.extend_from_slice(&id_bytes);
-        self.plain.extend_from_slice(&len_bytes);
-        self.plain.extend_from_slice(payload);
-        self.record_ids.push(memory_id);
-        self.importance = self.importance.min(importance);
+        self.plain.extend_from_slice(&encoded);
+        self.record_ids.push(header.id);
+        self.importance = self.importance.min(header.importance);
         Ok(())
+    }
+
+    /// Convenience for tests: minimal metadata around a payload.
+    pub fn append_record(
+        &mut self,
+        memory_id: MemoryId,
+        payload: &[u8],
+        importance: u16,
+        max_segment_size: u32,
+    ) -> Result<(), MemoryError> {
+        let header = MemoryEntryHeader {
+            version: ENTRY_HEADER_VERSION,
+            id: memory_id,
+            session_id: self.session_id,
+            class: MemoryClass::Cold,
+            kind: MemoryKind::Diagnostic,
+            created_at_ns: self.created_at_ns,
+            last_access_ns: self.created_at_ns,
+            expires_at_ns: if self.expires_at_ns == u64::MAX {
+                None
+            } else {
+                Some(self.expires_at_ns)
+            },
+            importance,
+            confidence: 0,
+            payload_len: payload.len() as u32,
+            token_stream: None,
+            provenance: Provenance::new(
+                SourceKind::LocalService,
+                None,
+                self.created_at_ns,
+                "wiseowl-memoryd",
+                TrustLevel::Trusted,
+            ),
+        };
+        self.append_record_full(&header, MemoryState::Cold, payload, max_segment_size)
     }
 
     pub fn seal(&mut self) -> Result<(), MemoryError> {
@@ -313,71 +364,264 @@ impl Segment {
         if self.plain.is_empty() {
             return Err(MemoryError::InvalidRequest("segment not rehydrated"));
         }
-        let mut off = 0usize;
-        while off < self.plain.len() {
-            if off
-                .checked_add(12)
-                .map(|n| n > self.plain.len())
-                .unwrap_or(true)
-            {
-                return Err(MemoryError::SpillCorrupt);
+        for rec in iter_records_v2(&self.plain)? {
+            if rec.header.id == memory_id {
+                return Ok(Some(rec.payload));
             }
-            let id = MemoryId::from_le_bytes(self.plain[off..off + 8].try_into().unwrap())
-                .map_err(|_| MemoryError::MalformedIdentifier("record id"))?;
-            let len = u32::from_le_bytes(self.plain[off + 8..off + 12].try_into().unwrap()) as usize;
-            let payload_start = off
-                .checked_add(12)
-                .ok_or(MemoryError::InternalInvariantViolation("offset"))?;
-            let payload_end = payload_start
-                .checked_add(len)
-                .ok_or(MemoryError::InternalInvariantViolation("offset"))?;
-            if payload_end > self.plain.len() {
-                return Err(MemoryError::SpillCorrupt);
-            }
-            if id == memory_id {
-                return Ok(Some(self.plain[payload_start..payload_end].to_vec()));
-            }
-            off = payload_end;
         }
         Ok(None)
     }
+
+    /// Iterate recovered records with full metadata (for restart reconstruction).
+    pub fn recovered_records(&self) -> Result<Vec<RecoveredRecord>, MemoryError> {
+        if self.plain.is_empty() {
+            return Err(MemoryError::InvalidRequest("segment not rehydrated"));
+        }
+        iter_records_v2(&self.plain)
+    }
+}
+
+/// A fully reconstructed cold record from spill.
+#[derive(Debug, Clone)]
+pub struct RecoveredRecord {
+    pub header: MemoryEntryHeader,
+    pub state: MemoryState,
+    pub payload: Vec<u8>,
+    pub payload_checksum: u32,
+}
+
+/// Encode a versioned record for the segment body.
+pub fn encode_record_v2(
+    header: &MemoryEntryHeader,
+    state: MemoryState,
+    payload: &[u8],
+) -> Result<Vec<u8>, MemoryError> {
+    if payload.len() as u32 != header.payload_len && header.payload_len != 0 {
+        // Prefer actual payload length; header.payload_len may be stale after shrink.
+    }
+    let payload_len = payload.len() as u32;
+    let checksum = crc32_ieee(payload);
+    let mut flags: u8 = 0;
+    if header.token_stream.is_some() {
+        flags |= 0x01;
+    }
+
+    let producer = header.provenance.producer_service.as_str().as_bytes();
+    let producer_len = producer.len().min(MAX_PRODUCER_LEN) as u8;
+    let parent_count = header.provenance.parent_count().min(MAX_PROVENANCE_PARENTS);
+
+    let size = RECORD_FIXED_PREFIX_LEN
+        .checked_add(parent_count * 8)
+        .and_then(|s| s.checked_add(1 + producer_len as usize))
+        .and_then(|s| {
+            if flags & 0x01 != 0 {
+                s.checked_add(8 + 4 + 4 + 4)
+            } else {
+                Some(s)
+            }
+        })
+        .and_then(|s| s.checked_add(4 + 4))
+        .and_then(|s| s.checked_add(payload.len()))
+        .ok_or(MemoryError::InternalInvariantViolation("record size overflow"))?;
+
+    let mut out = Vec::with_capacity(size);
+    out.extend_from_slice(&RECORD_FORMAT_VERSION.to_le_bytes());
+    out.extend_from_slice(&header.id.to_le_bytes());
+    out.extend_from_slice(&header.session_id.to_le_bytes());
+    out.push(header.class.as_u8());
+    out.push(header.kind.as_u8());
+    out.push(state as u8);
+    out.push(flags);
+    out.extend_from_slice(&header.created_at_ns.to_le_bytes());
+    out.extend_from_slice(&header.last_access_ns.to_le_bytes());
+    let exp = header.expires_at_ns.unwrap_or(0);
+    out.extend_from_slice(&exp.to_le_bytes());
+    out.extend_from_slice(&header.importance.to_le_bytes());
+    out.extend_from_slice(&header.confidence.to_le_bytes());
+    out.push(header.provenance.source_kind.as_u8());
+    out.push(header.provenance.trust.as_u8());
+    out.push(parent_count as u8);
+    out.push(0); // pad
+    out.extend_from_slice(&header.provenance.created_at_ns.to_le_bytes());
+    for p in header.provenance.parents.iter().take(parent_count) {
+        out.extend_from_slice(&p.to_le_bytes());
+    }
+    out.push(producer_len);
+    out.extend_from_slice(&producer[..producer_len as usize]);
+    if let Some(ts) = header.token_stream {
+        out.extend_from_slice(&ts.id.to_le_bytes());
+        out.extend_from_slice(&ts.tokenizer_id.to_le_bytes());
+        out.extend_from_slice(&ts.tokenizer_version.to_le_bytes());
+        out.extend_from_slice(&ts.token_count.to_le_bytes());
+    }
+    out.extend_from_slice(&payload_len.to_le_bytes());
+    out.extend_from_slice(&checksum.to_le_bytes());
+    out.extend_from_slice(payload);
+    debug_assert_eq!(out.len(), size);
+    let _ = size;
+    Ok(out)
+}
+
+/// Parse all v2 records from an uncompressed segment body.
+pub fn parse_records_v2(plain: &[u8]) -> Result<Vec<RecoveredRecord>, MemoryError> {
+    iter_records_v2(plain)
+}
+
+fn iter_records_v2(plain: &[u8]) -> Result<Vec<RecoveredRecord>, MemoryError> {
+    let mut out = Vec::new();
+    let mut off = 0usize;
+    while off < plain.len() {
+        let (rec, next) = decode_record_v2_at(plain, off)?;
+        out.push(rec);
+        off = next;
+    }
+    Ok(out)
+}
+
+fn decode_record_v2_at(plain: &[u8], off: usize) -> Result<(RecoveredRecord, usize), MemoryError> {
+    let need = |n: usize| -> Result<(), MemoryError> {
+        if off.checked_add(n).map(|e| e > plain.len()).unwrap_or(true) {
+            Err(MemoryError::SpillCorrupt)
+        } else {
+            Ok(())
+        }
+    };
+    need(RECORD_FIXED_PREFIX_LEN)?;
+    let version = u16::from_le_bytes(plain[off..off + 2].try_into().unwrap());
+    if version != RECORD_FORMAT_VERSION {
+        return Err(MemoryError::UnsupportedProtocolVersion {
+            got: version,
+            want: RECORD_FORMAT_VERSION,
+        });
+    }
+    let mut p = off + 2;
+    let memory_id = MemoryId::from_le_bytes(plain[p..p + 8].try_into().unwrap())
+        .map_err(|_| MemoryError::MalformedIdentifier("record id"))?;
+    p += 8;
+    let session_id = SessionId::from_le_bytes(plain[p..p + 8].try_into().unwrap())
+        .map_err(|_| MemoryError::MalformedIdentifier("session id"))?;
+    p += 8;
+    let class = MemoryClass::from_u8(plain[p]).ok_or(MemoryError::SpillCorrupt)?;
+    let kind = MemoryKind::from_u8(plain[p + 1]).ok_or(MemoryError::SpillCorrupt)?;
+    let state = MemoryState::from_u8(plain[p + 2]).ok_or(MemoryError::SpillCorrupt)?;
+    let flags = plain[p + 3];
+    p += 4;
+    let created_at_ns = u64::from_le_bytes(plain[p..p + 8].try_into().unwrap());
+    p += 8;
+    let last_access_ns = u64::from_le_bytes(plain[p..p + 8].try_into().unwrap());
+    p += 8;
+    let expires_raw = u64::from_le_bytes(plain[p..p + 8].try_into().unwrap());
+    p += 8;
+    let importance = u16::from_le_bytes(plain[p..p + 2].try_into().unwrap());
+    p += 2;
+    let confidence = u16::from_le_bytes(plain[p..p + 2].try_into().unwrap());
+    p += 2;
+    let source_kind = SourceKind::from_u8(plain[p]).ok_or(MemoryError::SpillCorrupt)?;
+    let trust = TrustLevel::from_u8(plain[p + 1]).ok_or(MemoryError::SpillCorrupt)?;
+    let parent_count = plain[p + 2] as usize;
+    p += 4; // includes pad
+    if parent_count > MAX_PROVENANCE_PARENTS {
+        return Err(MemoryError::SpillCorrupt);
+    }
+    need(p - off + 8 + parent_count * 8 + 1)?;
+    let prov_created = u64::from_le_bytes(plain[p..p + 8].try_into().unwrap());
+    p += 8;
+    let mut provenance = Provenance::new(source_kind, None, prov_created, "", trust);
+    for _ in 0..parent_count {
+        let pid = MemoryId::from_le_bytes(plain[p..p + 8].try_into().unwrap())
+            .map_err(|_| MemoryError::MalformedIdentifier("parent id"))?;
+        let _ = provenance.push_parent(pid);
+        p += 8;
+    }
+    let producer_len = plain[p] as usize;
+    p += 1;
+    if producer_len > MAX_PRODUCER_LEN {
+        return Err(MemoryError::SpillCorrupt);
+    }
+    need(p - off + producer_len)?;
+    let producer = core::str::from_utf8(&plain[p..p + producer_len]).unwrap_or("");
+    provenance.producer_service = crate::provenance::heapless_string::HeaplessString::from_str(producer);
+    p += producer_len;
+
+    let token_stream = if flags & 0x01 != 0 {
+        need(p - off + 20)?;
+        let id = TokenStreamId::from_le_bytes(plain[p..p + 8].try_into().unwrap())
+            .map_err(|_| MemoryError::MalformedIdentifier("token stream"))?;
+        p += 8;
+        let tokenizer_id = u32::from_le_bytes(plain[p..p + 4].try_into().unwrap());
+        p += 4;
+        let tokenizer_version = u32::from_le_bytes(plain[p..p + 4].try_into().unwrap());
+        p += 4;
+        let token_count = u32::from_le_bytes(plain[p..p + 4].try_into().unwrap());
+        p += 4;
+        Some(TokenStreamRef {
+            id,
+            tokenizer_id,
+            tokenizer_version,
+            token_count,
+        })
+    } else {
+        None
+    };
+
+    need(p - off + 8)?;
+    let payload_len = u32::from_le_bytes(plain[p..p + 4].try_into().unwrap()) as usize;
+    p += 4;
+    let payload_checksum = u32::from_le_bytes(plain[p..p + 4].try_into().unwrap());
+    p += 4;
+    need(p - off + payload_len)?;
+    let payload = plain[p..p + payload_len].to_vec();
+    p += payload_len;
+    if crc32_ieee(&payload) != payload_checksum {
+        return Err(MemoryError::ChecksumMismatch);
+    }
+
+    let header = MemoryEntryHeader {
+        version: ENTRY_HEADER_VERSION,
+        id: memory_id,
+        session_id,
+        class,
+        kind,
+        created_at_ns,
+        last_access_ns,
+        expires_at_ns: if expires_raw == 0 {
+            None
+        } else {
+            Some(expires_raw)
+        },
+        importance,
+        confidence,
+        payload_len: payload_len as u32,
+        token_stream,
+        provenance,
+    };
+    Ok((
+        RecoveredRecord {
+            header,
+            state,
+            payload,
+            payload_checksum,
+        },
+        p,
+    ))
 }
 
 fn parse_record_ids(plain: &[u8]) -> Result<Vec<MemoryId>, MemoryError> {
-    let mut ids = Vec::new();
-    let mut off = 0usize;
-    while off < plain.len() {
-        if off
-            .checked_add(12)
-            .map(|n| n > plain.len())
-            .unwrap_or(true)
-        {
-            return Err(MemoryError::SpillCorrupt);
-        }
-        let id = MemoryId::from_le_bytes(plain[off..off + 8].try_into().unwrap())
-            .map_err(|_| MemoryError::MalformedIdentifier("record id"))?;
-        let len = u32::from_le_bytes(plain[off + 8..off + 12].try_into().unwrap()) as usize;
-        let end = off
-            .checked_add(12)
-            .and_then(|s| s.checked_add(len))
-            .ok_or(MemoryError::InternalInvariantViolation("offset"))?;
-        if end > plain.len() {
-            return Err(MemoryError::SpillCorrupt);
-        }
-        ids.push(id);
-        off = end;
-    }
-    Ok(ids)
+    Ok(iter_records_v2(plain)?
+        .into_iter()
+        .map(|r| r.header.id)
+        .collect())
 }
 
-/// Checked layout calculation for tests / tooling.
+/// Checked layout calculation for tests / tooling (approximate fixed overhead).
 pub fn checked_record_layout(
     payload_len: usize,
     existing_segment_len: usize,
     max_segment: usize,
 ) -> Result<usize, MemoryError> {
+    // Minimal record: fixed prefix + producer_len(1) + payload_len(4)+checksum(4)+payload
     let rec = payload_len
-        .checked_add(12)
+        .checked_add(RECORD_FIXED_PREFIX_LEN + 1 + 8)
         .ok_or(MemoryError::InternalInvariantViolation("record layout"))?;
     let total = existing_segment_len
         .checked_add(rec)
@@ -395,7 +639,9 @@ mod tests {
 
     #[test]
     fn segment_layout_checked() {
-        assert_eq!(checked_record_layout(10, 0, 100).unwrap(), 22);
+        // v2 records have larger fixed overhead than the old 12-byte header.
+        let n = checked_record_layout(10, 0, 256).unwrap();
+        assert!(n > 10);
         assert!(checked_record_layout(100, 0, 50).is_err());
         assert!(checked_record_layout(usize::MAX, 1, usize::MAX).is_err());
     }

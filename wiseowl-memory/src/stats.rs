@@ -6,7 +6,7 @@
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
 pub struct ServiceStats {
-    // Gauges
+    // Gauges — logical accounting (authoritative for quotas)
     pub working_bytes: u64,
     pub hot_bytes: u64,
     pub cold_compressed_bytes: u64,
@@ -14,6 +14,14 @@ pub struct ServiceStats {
     pub entry_count: u64,
     pub segment_count: u64,
     pub active_sessions: u64,
+
+    // Phase 1.1 extended gauges
+    pub logical_payload_bytes: u64,
+    pub logical_metadata_bytes: u64,
+    pub logical_total_bytes: u64,
+    pub shared_memory_leased_bytes: u64,
+    pub compression_scratch_peak: u64,
+    pub active_read_leases: u64,
 
     // Counters (saturating)
     pub creates: u64,

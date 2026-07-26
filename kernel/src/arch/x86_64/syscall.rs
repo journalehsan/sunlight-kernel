@@ -2693,6 +2693,9 @@ fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
         "sunlight-kv" => sunlight_fs::Actor::Service {
             name: "sunlight-kv",
         },
+        "wiseowl-memoryd" => sunlight_fs::Actor::Service {
+            name: "wiseowl-memoryd",
+        },
         "sunlightd" => sunlight_fs::Actor::Service { name: "sunlightd" },
         "sunlight-tls" => sunlight_fs::Actor::Service {
             name: "sunlight-tls",

@@ -3342,9 +3342,12 @@ name = "wiseowl-memory"
 version = "0.2.2839-alpha.1"
 dependencies = [
  "bincode",
+ "heapless",
  "log",
  "lz4_flex",
  "serde",
+ "sunlight-ipc",
+ "sunlight-libc",
  "tempfile",
  "thiserror 1.0.69",
 ]

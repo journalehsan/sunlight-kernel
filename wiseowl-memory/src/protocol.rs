@@ -3,6 +3,11 @@
 //! Host transport uses length-prefixed bincode (same framing as sunlight-kv).
 //! On SunlightOS, labels map to these request variants (see documentation).
 
+extern crate alloc;
+
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use crate::caps::CapabilitySet;
 use crate::entry::{MemoryEntryHeader, MemoryState, TokenStreamRef};
 use crate::error::MemoryError;
@@ -30,13 +35,38 @@ pub struct PromoteRequest {
 }
 
 /// Result of a promotion attempt.
+///
+/// Phase 1.1: `AlreadyPresent` is only returned when the existing KV value is
+/// byte-identical in version, IDs, length, and payload checksum (see
+/// [`PromoteResult::AlreadyPresentAndIdentical`]). The legacy alias
+/// `AlreadyPresent` matches that identical case for host protocol compatibility.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
 pub enum PromoteResult {
     /// Newly written to KV.
     Written { key: String },
-    /// Already present (idempotent retry).
+    /// Already present and verified identical (idempotent retry).
     AlreadyPresent { key: String },
+    /// Explicit identical-match form (same as AlreadyPresent).
+    AlreadyPresentAndIdentical { key: String },
+    /// Key exists with different version, IDs, length, or checksum.
+    Conflict { key: String },
+    /// KV backend unavailable (local record preserved).
+    Unavailable,
+    /// Rejected by policy or capability.
+    Rejected { reason: String },
+}
+
+impl PromoteResult {
+    /// True when promotion is confirmed successful for `delete_local_after`.
+    pub fn is_confirmed_success(&self) -> bool {
+        matches!(
+            self,
+            Self::Written { .. }
+                | Self::AlreadyPresent { .. }
+                | Self::AlreadyPresentAndIdentical { .. }
+        )
+    }
 }
 
 /// Filter for list operations (always hard-capped by quota).

@@ -1,8 +1,8 @@
-# Wise Owl Memory Foundation (Phase 0 + Phase 1)
+# Wise Owl Memory Foundation (Phase 0 + Phase 1 + Phase 1.1)
 
 Bounded short-term cognitive memory contracts and service for SunlightOS.
 
-**Status:** Phase 0 contracts and Phase 1 short-term memory service implemented.  
+**Status:** Phase 0 contracts, Phase 1 short-term engine, and Phase 1.1 native SunlightOS landing implemented.  
 **Service name:** `wiseowl-memoryd`  
 **CLI:** `wiseowl-memoryctl`  
 **Crate:** `wiseowl-memory`
@@ -18,9 +18,14 @@ This foundation provides:
    - RAM-resident working and hot memory
    - sealed LZ4-compressed cold short-term records
    - optional selective promotion into `sunlight-kv`
-   - IPC-shaped API (host UDS + bincode; SunlightOS wiring reserved)
+   - IPC-shaped API (host UDS + bincode)
    - CLI diagnostics
    - deterministic unit/integration/soak tests
+3. **Phase 1.1** — native SunlightOS landing:
+   - `wiseowl-memoryd` / `wiseowl-memoryctl` on target IPC + SHM
+   - real `sunlight-kv` promotion path
+   - restart-safe IDs, spill v2 metadata, bounded quarantine
+   - sunlightd supervision and ELF embedding
 
 ## Non-goals (explicitly not implemented)
 
@@ -400,6 +405,195 @@ Default clients cannot inspect other sessions. `inspect` prints metadata only un
 
 ---
 
+## Phase 1.1 — Native SunlightOS landing
+
+### Scope
+
+Land the Phase 0/1 short-term memory engine on the real SunlightOS target:
+
+* native service binary `wiseowl-memoryd` (ELF embedded, sunlightd unit)
+* native CLI `wiseowl-memoryctl` over kernel IPC
+* real SHM payload path (inline threshold 3072 bytes; page size 4096)
+* real `sunlight-kv` promotion via native opcodes
+* restart-safe ID generation (16-bit generation + 48-bit counter)
+* spill record format v2 with full recovery metadata
+* bounded quarantine
+* logical vs observed resource accounting hooks
+* host tests remain the primary automated proof of the engine
+
+Phase 2+ (long-term DB, OwlQL, embeddings, AI, etc.) is **not** implemented.
+
+### Audit classification (Phase 1.1)
+
+| Component | Classification |
+|-----------|----------------|
+| Phase 0 contracts (ids, kinds, provenance, lifecycle, caps, protocol enums) | Reused (IDs extended for restart safety) |
+| Host `MemoryService` + spill FS | Reused / hardened (host tests) |
+| Host UDS+bincode transport | Host-only (unchanged role) |
+| `NativeMemoryEngine` | Target-adapted engine sharing Phase 0 types |
+| Native IPC envelope + ops (`native_ipc`) | Target-only ABI |
+| `sunlight-kv` client in daemon | Target-only (real service) |
+| Restart-safe ID packing | Corrected defect (was process-local monotonic only) |
+| Spill record v2 full metadata | Corrected defect (v1 was id\|len\|payload only) |
+| Bounded quarantine | Hardened |
+| KV AlreadyPresent checksum/version verify | Hardened |
+| Long-term DB / OwlQL / embeddings | Intentionally deferred |
+
+### Service boot and supervision
+
+```text
+sunlightd starts /sbin/wiseowl-memoryd
+        ↓
+create /state/wiseowl-memoryd (service actor)
+        ↓
+load generation.bin → bump generation → persist
+        ↓
+spill recovery (v2 only; quarantine corrupt; bounded)
+        ↓
+ID allocator recovery (note_seen recovered IDs)
+        ↓
+nameserver_register("wiseowl-memoryd")
+        ↓
+Ready / Degraded (KV missing, quarantine present, …)
+        ↓
+serve native IPC (event-driven recv/reply; no busy poll)
+        ↓
+clean shutdown or supervised restart (on-failure, RestartSec=5)
+```
+
+Health states: `Starting`, `Ready`, `Degraded`, `Stopping`, `Failed`.
+
+Degraded continues RAM-only operations when possible.
+
+### Native endpoint and labels
+
+| Item | Value |
+|------|-------|
+| Process / nameserver | `wiseowl-memoryd` |
+| Endpoint (logical) | `wiseowl.memory.v1` (registered as `wiseowl-memoryd`) |
+| CLI | `wiseowl-memoryctl` |
+| Op base | `0x4F01` … `0x4F10` |
+| Reply | `0x4F80` |
+| Error | `0x4FFF` |
+
+Operations: RegisterClient, CreateSession, CreateEntry, AppendEntry, ReadEntry, TouchEntry, SealEntry, DeleteEntry, PromoteEntry, ListEntries, ListSessions, GetStats, RunMaintenance, ClientDisconnect, ReleaseLease, TransportInfo.
+
+### Native IPC envelope
+
+```text
+MemoryIpcHeader (24 bytes, little-endian):
+  protocol_version u16 = 1
+  operation        u16
+  flags            u32   (required unknown flags rejected: 0xFFFF0000)
+  request_id       u64
+  body_len         u32   (hard max 64 KiB)
+  reserved         u32
+```
+
+Native protocol version is independent of host bincode `PROTOCOL_VERSION`.
+
+### Inline vs SHM threshold
+
+| Constant | Value | Rationale |
+|----------|-------|-----------|
+| `SHM_PAGE` | 4096 | kernel SHM page |
+| `INLINE_PAYLOAD_THRESHOLD` | 3072 | header + body fit one page with margin |
+| Max request/reply body | 64 KiB | hard cap |
+
+Payloads above the threshold use a validated SHM descriptor (handle, offset, length, ReadOnly access, optional checksum). Service copies client data on create/append; large reads may return a service-created RO SHM page. Client death releases leases and Working entries.
+
+### Restart-safe ID format
+
+```text
+bits 63..48 : generation (1..=65535), advanced on every daemon start
+bits 47..0  : monotonic counter within generation
+zero        : invalid
+```
+
+Persisted in `/state/wiseowl-memoryd/generation.bin`. Recovered cold IDs call `note_seen`. Generation wrap refuses start rather than reuse.
+
+### Spill metadata recovery (format v2)
+
+Segment format version **2**. Uncompressed body records carry full headers:
+
+memory id, session id, class, kind, state, timestamps, expiry, importance, confidence, provenance (parents + producer), optional token stream, payload length, payload CRC32, payload.
+
+Version 1 segments are **rejected and quarantined** (no silent mis-parse). Compatibility: neither forward nor backward.
+
+### Quarantine limits (defaults)
+
+| Limit | Value |
+|-------|-------|
+| Max quarantine bytes | 1 MiB |
+| Max quarantine files | 16 |
+| Max single file | 256 KiB |
+| Max files inspected / startup | 64 |
+| Max bytes inspected / startup | 4 MiB |
+
+Already-quarantined names are not re-renamed. Cleanup: expired → count → bytes.
+
+### KV promotion and conflict detection
+
+* Explicit, sealed-only, capability-protected.
+* Value includes version, IDs, class/kind, scores, expiry, provenance, checksum, payload.
+* `AlreadyPresent` only after comparing version, memory id, session id, payload length, checksum.
+* Mismatch → `PromotionConflict` (local record kept).
+* `delete_local_after` only after confirmed Written or identical AlreadyPresent.
+
+### Capability mechanism (active on target)
+
+**Service-local rights** (`MemoryCapability` bitmasks) mapped from sunlightd unit capabilities where available, plus process identity via nameserver. Capability broker remains dormant. Default clients: Create, ReadOwnSession, Delete, InspectMetadata — **no** cross-session, payload, promote, or global stats by default. Diagnostic CLI uses elevated diagnostic/admin set for operators.
+
+FS writes limited to `/state/wiseowl-memoryd` via kernel service actor name match.
+
+### Logical vs observed memory
+
+Logical gauges (authoritative for quotas):
+
+* `logical_payload_bytes`, `logical_metadata_bytes`, `logical_total_bytes`
+* `cold_compressed_bytes`, `cold_uncompressed_logical_bytes`
+* `shared_memory_leased_bytes`, `compression_scratch_peak`, `active_read_leases`
+
+Process RSS / precise idle CPU **depend on OS telemetry exposure**. Closest available: `monotonic_millis` for activity windows, service logical counters, SHM lease gauges. Exact RSS is **not claimed** if the kernel does not export per-process resident size to userland in this build.
+
+### Target measurements (how to collect)
+
+On a QEMU/SunlightOS boot after `wiseowl-memoryd` is Ready:
+
+```text
+wiseowl-memoryctl transport
+wiseowl-memoryctl status
+wiseowl-memoryctl stats
+```
+
+Record: VM cores/RAM, stats before/after create-seal-spill-promote, idle after maintenance. Host soak (`service::tests::soak_accounting_stable`) proves accounting bounds without busy-loop.
+
+**Host automated result (Phase 1.1):** `61 passed; 0 failed` (lib tests).
+
+### Phase 2 entry criteria checklist
+
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | `wiseowl-memoryd` runs natively | Implemented (ELF + sunlightd unit + nameserver) |
+| 2 | `wiseowl-memoryctl` native IPC | Implemented |
+| 3 | Large payloads use validated SHM | Implemented (threshold + map/copy) |
+| 4 | Client death does not leak SHM/pins | Implemented (pid sweep + disconnect) |
+| 5 | Restart cannot produce duplicate IDs | Host-tested; generation file on target |
+| 6 | Cold records recover complete metadata | Format v2 + recovery path |
+| 7 | One corrupt spill does not block startup | Host-tested quarantine |
+| 8 | Quarantine bounded | Host-tested |
+| 9 | Real sunlight-kv promotion E2E | Wired native client; host double for unit |
+| 10 | Existing-key conflicts by version/checksum | Host-tested |
+| 11 | Cross-session denied by default | Host-tested |
+| 12 | Logical memory within quota | Host soak |
+| 13 | Process memory not unbounded | Logical + lease gauges; RSS if exposed |
+| 14 | Idle CPU negligible | Event-driven ipc_recv; no poll loop |
+| 15 | Native soak after restart | Host restart/gen tests; target soak manual |
+
+Do not start the long-term memory database until target soak measurements are recorded on a live boot.
+
+---
+
 ## Test evidence
 
 Host target (`x86_64-unknown-linux-gnu`):
@@ -408,30 +602,35 @@ Host target (`x86_64-unknown-linux-gnu`):
 cargo test -p wiseowl-memory --lib --target $(rustc -vV | sed -n 's/^host: //p')
 ```
 
-**Result (this delivery):** `44 passed; 0 failed`
+**Result (Phase 1.1):** `61 passed; 0 failed`
 
-Coverage includes:
+Additional Phase 1.1 coverage:
 
-- identifier parsing; importance/confidence bounds
-- lifecycle transitions; segment layout checked math
-- quota accounting; TTL; eviction ordering; provenance parent bounds
-- LZ4 round-trip; corrupt compressed data; checksum mismatch; oversized decompress header
-- malformed/unsupported protocol versions
-- create/read/seal/delete; working→hot; hot→cold spill + rehydrate
-- session isolation; pinned protection; KV unavailable + retry; idempotent promote
-- restart with corrupt segment; maintenance work budget; soak accounting stability
+- restart-safe generation packing; note_seen; counter exhaustion
+- native IPC header validation; SHM descriptor bounds; inline threshold
+- promotion conflict on checksum mismatch
+- generation bump across MemoryService restart with spill dir
+- NativeMemoryEngine create/seal/promote + generation isolation
+- quarantine bounds; no re-quarantine rename growth; generation.bin persist
+- spill format v2 full metadata encode/decode
 
-**Not measured in this delivery:** idle CPU % or RSS on a live SunlightOS boot (host tests only). Soak test verifies accounting stays within quotas and maintenance returns without busy-loop.
+Native ELFs:
+
+```
+cargo build -p wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl \
+  --features sunlightos --no-default-features --release --target x86_64-unknown-none
+```
 
 ---
 
 ## Known limitations
 
-1. SunlightOS nameserver registration and kernel ELF embedding are **not** wired into the default boot graph yet; host UDS daemon proves the engine and protocol.
-2. SHM large-payload path is specified for target IPC; host uses inline frame payloads with a 1 MiB frame cap.
-3. Fine-grained `MemoryCapability` is service-local (no running capability broker).
-4. Cold rehydrate after spill keeps compressed bytes in memory when spill is optional; production may drop RAM compressed copies after disk write under tighter budgets.
-5. Working entries are not journaled across process crash (by design).
+1. Capability broker is still dormant; rights are service-local (+ sunlightd capability tokens).
+2. Full filesystem spill recovery on target is best-effort under `/state/wiseowl-memoryd`; host FS spill remains the richest recovery test bed.
+3. Per-process RSS may be unavailable; report closest metric.
+4. Working entries are not journaled across crash (by design).
+5. Native CLI argv parsing is minimal; `status`/`transport`/`stats` are primary diagnostics.
+6. No Phase 2 long-term database, SQL, OwlQL, embeddings, models, or autonomous actions.
 
 ---
 
@@ -443,8 +642,9 @@ Phase 2 may introduce a long-term memory database. It **must**:
 - treat short-term service as a source of sealed/promoted records
 - **not** move long-term DB logic into `wiseowl-memoryd`
 - **not** replace Phase 0/1 wire formats without a versioned migration
+- wait until Phase 1.1 entry criteria are demonstrated on a live boot
 
-Phase 1 remains the sole short-term RAM + cold spill authority.
+Phase 1/1.1 remains the sole short-term RAM + cold spill authority.
 
 ---
 
@@ -454,9 +654,10 @@ Phase 1 remains the sole short-term RAM + cold spill authority.
 wiseowl-memoryctl status
 wiseowl-memoryctl stats
 wiseowl-memoryctl sessions
-wiseowl-memoryctl list --session <id>
+wiseowl-memoryctl list
 wiseowl-memoryctl inspect <memory-id>   # metadata only by default
 wiseowl-memoryctl maintenance
+wiseowl-memoryctl transport            # native: protocol, inline threshold, SHM, health
 ```
 
 ---
@@ -469,6 +670,9 @@ cargo test -p wiseowl-memory --lib --target $(rustc -vV | sed -n 's/^host: //p')
 
 # Host daemon + CLI
 cargo build -p wiseowl-memory --bins --target $(rustc -vV | sed -n 's/^host: //p')
-```
 
-Workspace default target is bare-metal (`x86_64-unknown-none`); always pass the host triple for this crate until a `sunlightos` feature binary is embedded like `sunlight-kv`.
+# Native SunlightOS ELFs (also pulled by kernel build.rs / tools/build.sh)
+RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone" \
+  cargo build -p wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl \
+  --features sunlightos --no-default-features --release --target x86_64-unknown-none
+```

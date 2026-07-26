@@ -430,6 +430,33 @@ fn main() {
                 "--release",
             ],
         },
+        // Wise Owl Phase 1.1: native short-term cognitive memory service + CLI.
+        EmbeddedBinary {
+            package: "wiseowl-memory",
+            output: "wiseowl-memoryd",
+            rustflags: service_rustflags,
+            args: &[
+                "--bin",
+                "wiseowl-memoryd",
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        EmbeddedBinary {
+            package: "wiseowl-memory",
+            output: "wiseowl-memoryctl",
+            rustflags: service_rustflags,
+            args: &[
+                "--bin",
+                "wiseowl-memoryctl",
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
         EmbeddedBinary {
             package: "sunlight-tls",
             output: "sunlight-tls",

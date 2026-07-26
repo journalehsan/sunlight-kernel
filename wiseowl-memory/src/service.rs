@@ -21,7 +21,7 @@ use crate::protocol::{
     PromoteResult, ProtocolRequest, ProtocolResponse, RequestContext, PROTOCOL_VERSION,
 };
 use crate::quotas::{QuotaConfig, QuotaSnapshot, SessionQuota};
-use crate::segments::{Segment, SegmentState};
+use crate::segments::{parse_records_v2, Segment, SegmentState};
 use crate::spill::SpillStore;
 use crate::stats::ServiceStats;
 
@@ -36,6 +36,8 @@ pub enum KvPutOutcome {
     Written,
     AlreadyPresent,
 }
+
+pub use crate::health::{degraded, ServiceHealth};
 
 /// In-memory KV for tests and host demos when sunlight-kv is unavailable.
 #[derive(Debug, Default)]
@@ -105,31 +107,7 @@ impl Default for ServiceConfig {
     }
 }
 
-/// Caller identity for authorization.
-#[derive(Debug, Clone)]
-pub struct CallerIdentity {
-    pub client_id: Option<ClientId>,
-    pub caps: CapabilitySet,
-    pub owned_sessions: Vec<SessionId>,
-}
-
-impl CallerIdentity {
-    pub fn admin() -> Self {
-        Self {
-            client_id: None,
-            caps: CapabilitySet::admin(),
-            owned_sessions: Vec::new(),
-        }
-    }
-
-    pub fn client(client_id: ClientId, caps: CapabilitySet) -> Self {
-        Self {
-            client_id: Some(client_id),
-            caps,
-            owned_sessions: Vec::new(),
-        }
-    }
-}
+pub use crate::caller::CallerIdentity;
 
 struct SessionRec {
     owner: Option<ClientId>,
@@ -155,6 +133,10 @@ pub struct MemoryService<K: KvBackend = InMemoryKv> {
     now_ns: u64,
     /// Wall clock for diagnostics only.
     shutting_down: bool,
+    /// Supervisor-facing health.
+    health: ServiceHealth,
+    /// Degraded reason flags (bitmask).
+    degraded_flags: u32,
 }
 
 impl MemoryService<InMemoryKv> {
@@ -172,9 +154,27 @@ impl<K: KvBackend> MemoryService<K> {
             }
             None => None,
         };
+
+        // Restart-safe ID strategy: persistent generation + monotonic counter.
+        // Load prior generation from spill dir (if any), bump, and persist.
+        let mut ids = IdAllocator::new();
+        if let Some(store) = &spill {
+            let prev = store.load_generation();
+            let next = prev.saturating_add(1).max(1);
+            // On u16 wrap, refuse to start rather than reuse generations.
+            if prev == u16::MAX {
+                return Err(MemoryError::InternalInvariantViolation(
+                    "id generation space exhausted",
+                ));
+            }
+            ids.set_generation(next)
+                .map_err(|_| MemoryError::InternalInvariantViolation("id generation"))?;
+            let _ = store.store_generation(next);
+        }
+
         let mut svc = Self {
             cfg,
-            ids: IdAllocator::new(),
+            ids,
             sessions: BTreeMap::new(),
             entries: BTreeMap::new(),
             segments: BTreeMap::new(),
@@ -185,20 +185,23 @@ impl<K: KvBackend> MemoryService<K> {
             stats: ServiceStats::default(),
             now_ns: 1,
             shutting_down: false,
+            health: ServiceHealth::Starting,
+            degraded_flags: 0,
         };
         if let Some(spill) = &svc.spill {
             ServiceStats::add(
                 &mut svc.stats.quarantined_spill_records,
                 spill.quarantined.len() as u64,
             );
-            // Restore valid cold segment metadata (not RAM working entries).
-            let ids: Vec<SegmentId> = spill.segment_ids().collect();
-            for sid in ids {
+            if !spill.quarantined.is_empty() {
+                svc.degraded_flags |= degraded::SPILL_QUARANTINED;
+            }
+            // Restore valid cold segments and reconstruct entry metadata.
+            let ids_list: Vec<SegmentId> = spill.segment_ids().collect();
+            for sid in ids_list {
                 if let Ok(blob) = spill.read_blob(sid) {
                     match Segment::from_spill_blob(&blob, svc.cfg.quotas.max_decompress_bytes) {
-                        Ok((seg, _plain)) => {
-                            // Drop plain after restore validation — keep compressed only.
-                            let mut seg = seg;
+                        Ok((mut seg, plain)) => {
                             let plain_len = seg
                                 .header
                                 .as_ref()
@@ -209,6 +212,37 @@ impl<K: KvBackend> MemoryService<K> {
                                 .as_ref()
                                 .map(|h| h.compressed_size as u64)
                                 .unwrap_or(0);
+                            // Reconstruct MemoryEntry objects from v2 records.
+                            if let Ok(recs) = parse_records_v2(&plain) {
+                                for rec in recs {
+                                    svc.ids.note_seen(rec.header.id.get());
+                                    svc.ids.note_seen(rec.header.session_id.get());
+                                    svc.sessions
+                                        .entry(rec.header.session_id)
+                                        .or_insert_with(|| SessionRec {
+                                            owner: None,
+                                            quota: SessionQuota::default(),
+                                            open_segment: None,
+                                        });
+                                    // Cold entry without RAM payload (rehydrate on read).
+                                    let payload_len = rec.payload.len() as u32;
+                                    let mut entry = MemoryEntry {
+                                        header: rec.header.clone(),
+                                        state: MemoryState::Cold,
+                                        payload: Vec::new(),
+                                        pin_count: 0,
+                                        segment_id: Some(sid),
+                                        kv_key: None,
+                                        promoted: false,
+                                        owner_client: None,
+                                    };
+                                    // Keep logical payload_len for accounting/diagnostics.
+                                    entry.header.payload_len = payload_len;
+                                    entry.header.class = MemoryClass::Cold;
+                                    svc.entries.insert(rec.header.id, entry);
+                                }
+                            }
+                            svc.ids.note_seen(sid.get());
                             seg.plain.clear();
                             seg.state = SegmentState::Spilled;
                             svc.stats.cold_compressed_bytes =
@@ -228,7 +262,14 @@ impl<K: KvBackend> MemoryService<K> {
                     }
                 }
             }
+            svc.stats.active_sessions = svc.sessions.len() as u64;
+            svc.stats.entry_count = svc.entries.len() as u64;
         }
+        svc.health = if svc.degraded_flags != 0 {
+            ServiceHealth::Degraded
+        } else {
+            ServiceHealth::Ready
+        };
         Ok(svc)
     }
 
@@ -258,10 +299,46 @@ impl<K: KvBackend> MemoryService<K> {
 
     pub fn begin_shutdown(&mut self) {
         self.shutting_down = true;
+        self.health = ServiceHealth::Stopping;
     }
 
     pub fn is_shutting_down(&self) -> bool {
         self.shutting_down
+    }
+
+    pub fn health(&self) -> ServiceHealth {
+        self.health
+    }
+
+    pub fn degraded_flags(&self) -> u32 {
+        self.degraded_flags
+    }
+
+    pub fn set_kv_available(&mut self, available: bool) {
+        if available {
+            self.degraded_flags &= !degraded::KV_UNAVAILABLE;
+        } else {
+            self.degraded_flags |= degraded::KV_UNAVAILABLE;
+        }
+        self.refresh_health();
+    }
+
+    fn refresh_health(&mut self) {
+        if self.shutting_down {
+            self.health = ServiceHealth::Stopping;
+        } else if self.degraded_flags != 0 {
+            self.health = ServiceHealth::Degraded;
+        } else {
+            self.health = ServiceHealth::Ready;
+        }
+    }
+
+    pub fn id_generation(&self) -> u16 {
+        self.ids.generation()
+    }
+
+    pub fn allocator(&self) -> &IdAllocator {
+        &self.ids
     }
 
     fn quota_snapshot(&self) -> QuotaSnapshot {
@@ -984,15 +1061,7 @@ impl<K: KvBackend> MemoryService<K> {
                 e.header.session_id.get(),
                 e.header.id.get()
             );
-            // Idempotent: if already promoted with same key, report present
-            if e.promoted {
-                if let Some(existing) = &e.kv_key {
-                    if existing == &key {
-                        return Ok(PromoteResult::AlreadyPresent { key });
-                    }
-                }
-            }
-            // Encode versioned record: version | header fields | provenance summary | checksum | payload
+            // Encode versioned record: version | header fields | provenance | checksum | payload
             let value = encode_promotion_blob(e, req.expected_record_version)?;
             (key, value, e.header.session_id)
         };
@@ -1001,6 +1070,8 @@ impl<K: KvBackend> MemoryService<K> {
             Ok(o) => o,
             Err(MemoryError::KvUnavailable) => {
                 ServiceStats::inc(&mut self.stats.kv_promotion_failures);
+                self.degraded_flags |= degraded::KV_UNAVAILABLE;
+                self.refresh_health();
                 return Err(MemoryError::KvUnavailable);
             }
             Err(e) => {
@@ -1008,6 +1079,42 @@ impl<K: KvBackend> MemoryService<K> {
                 return Err(e);
             }
         };
+
+        // Phase 1.1: AlreadyPresent must verify version, IDs, length, checksum.
+        let result = match outcome {
+            KvPutOutcome::Written => PromoteResult::Written { key: key.clone() },
+            KvPutOutcome::AlreadyPresent => {
+                match self.kv.get(&key) {
+                    Ok(Some(existing)) => {
+                        if promotion_blobs_identical(&existing, &value) {
+                            PromoteResult::AlreadyPresentAndIdentical { key: key.clone() }
+                        } else {
+                            ServiceStats::inc(&mut self.stats.kv_promotion_failures);
+                            return Err(MemoryError::PromotionConflict { key: "mismatch" });
+                        }
+                    }
+                    Ok(None) => {
+                        // Race: reported present but get missed — treat as unavailable.
+                        ServiceStats::inc(&mut self.stats.kv_promotion_failures);
+                        return Err(MemoryError::KvUnavailable);
+                    }
+                    Err(MemoryError::KvUnavailable) => {
+                        ServiceStats::inc(&mut self.stats.kv_promotion_failures);
+                        return Err(MemoryError::KvUnavailable);
+                    }
+                    Err(e) => {
+                        ServiceStats::inc(&mut self.stats.kv_promotion_failures);
+                        return Err(e);
+                    }
+                }
+            }
+        };
+
+        // Only mark promoted after confirmed Written or identical AlreadyPresent.
+        if !result.is_confirmed_success() {
+            ServiceStats::inc(&mut self.stats.kv_promotion_failures);
+            return Ok(result);
+        }
 
         let e = self.entries.get_mut(&req.memory_id).unwrap();
         e.kv_key = Some(key.clone());
@@ -1017,20 +1124,22 @@ impl<K: KvBackend> MemoryService<K> {
         }
         ServiceStats::inc(&mut self.stats.kv_promotion_successes);
 
-        let result = match outcome {
-            KvPutOutcome::Written => PromoteResult::Written { key: key.clone() },
-            KvPutOutcome::AlreadyPresent => PromoteResult::AlreadyPresent { key: key.clone() },
-        };
-
         if req.delete_local_after {
-            // Only delete after confirmed write
+            // Only delete after confirmed write / identical present.
             let class = e.header.class;
             let len = e.payload.len() as u64;
             e.state = MemoryState::Deleted;
             e.payload.clear();
             self.unaccount(session_id, class, len, MemoryState::Deleted);
         }
-        Ok(result)
+        // Map AlreadyPresentAndIdentical to legacy AlreadyPresent for host CLI compat
+        // when callers match on AlreadyPresent — both are confirmed success.
+        Ok(match result {
+            PromoteResult::AlreadyPresentAndIdentical { key } => {
+                PromoteResult::AlreadyPresent { key }
+            }
+            other => other,
+        })
     }
 
     fn list_entries(
@@ -1151,28 +1260,38 @@ impl<K: KvBackend> MemoryService<K> {
             }
         };
 
+        // Snapshot header/state for full metadata spill (Phase 1.1).
+        let (header_snap, state_snap) = {
+            let e = self
+                .entries
+                .get(&memory_id)
+                .ok_or(MemoryError::EntryNotFound)?;
+            let mut h = e.header.clone();
+            h.payload_len = payload.len() as u32;
+            h.class = MemoryClass::Cold;
+            (h, MemoryState::Cold)
+        };
+        let _ = importance;
+
         // Append; if full, seal/compress old and open new
         let append_result = {
             let seg = self.segments.get_mut(&seg_id).unwrap();
-            seg.append_record(
-                memory_id,
+            seg.append_record_full(
+                &header_snap,
+                state_snap,
                 &payload,
-                importance,
                 self.cfg.quotas.max_segment_size,
             )
         };
         if matches!(append_result, Err(MemoryError::QuotaExceeded(_))) {
             self.finalize_segment(seg_id)?;
             let new_id = self.alloc_open_segment(session_id, expires)?;
-            self.segments
-                .get_mut(&new_id)
-                .unwrap()
-                .append_record(
-                    memory_id,
-                    &payload,
-                    importance,
-                    self.cfg.quotas.max_segment_size,
-                )?;
+            self.segments.get_mut(&new_id).unwrap().append_record_full(
+                &header_snap,
+                state_snap,
+                &payload,
+                self.cfg.quotas.max_segment_size,
+            )?;
             self.attach_entry_to_segment(memory_id, new_id, payload.len() as u64)?;
             return Ok(new_id);
         }
@@ -1593,35 +1712,24 @@ fn parse_payload_from_plain(
     plain: &[u8],
     memory_id: MemoryId,
 ) -> Result<Option<Vec<u8>>, MemoryError> {
-    let mut off = 0usize;
-    while off < plain.len() {
-        if off.checked_add(12).map(|n| n > plain.len()).unwrap_or(true) {
-            return Err(MemoryError::SpillCorrupt);
+    for rec in parse_records_v2(plain)? {
+        if rec.header.id == memory_id {
+            return Ok(Some(rec.payload));
         }
-        let id = MemoryId::from_le_bytes(plain[off..off + 8].try_into().unwrap())
-            .map_err(|_| MemoryError::MalformedIdentifier("record id"))?;
-        let len = u32::from_le_bytes(plain[off + 8..off + 12].try_into().unwrap()) as usize;
-        let start = off + 12;
-        let end = start
-            .checked_add(len)
-            .ok_or(MemoryError::InternalInvariantViolation("offset"))?;
-        if end > plain.len() {
-            return Err(MemoryError::SpillCorrupt);
-        }
-        if id == memory_id {
-            return Ok(Some(plain[start..end].to_vec()));
-        }
-        off = end;
     }
     Ok(None)
 }
+
+/// Promotion record format version (Phase 1.1).
+pub const PROMOTION_RECORD_VERSION: u16 = 1;
 
 fn encode_promotion_blob(
     entry: &MemoryEntry,
     record_version: u16,
 ) -> Result<Vec<u8>, MemoryError> {
     // version(2) + id(8) + session(8) + class(1) + kind(1) + importance(2) + confidence(2)
-    // + payload_len(4) + checksum(4) + created(8) + payload
+    // + payload_len(4) + checksum(4) + created(8) + provenance + payload
+    // + service_version marker (producer name) for source service version.
     let payload = &entry.payload;
     let checksum = crate::compression::crc32_ieee(payload);
     let mut out = Vec::new();
@@ -1635,6 +1743,9 @@ fn encode_promotion_blob(
     out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
     out.extend_from_slice(&checksum.to_le_bytes());
     out.extend_from_slice(&entry.header.created_at_ns.to_le_bytes());
+    // Retention / expiry metadata
+    let exp = entry.header.expires_at_ns.unwrap_or(0);
+    out.extend_from_slice(&exp.to_le_bytes());
     // Provenance: source_kind, trust, parent count, parents
     out.push(entry.header.provenance.source_kind.as_u8());
     out.push(entry.header.provenance.trust.as_u8());
@@ -1643,8 +1754,27 @@ fn encode_promotion_blob(
     for p in entry.header.provenance.parents.iter() {
         out.extend_from_slice(&p.to_le_bytes());
     }
+    let producer = entry.header.provenance.producer_service.as_str().as_bytes();
+    let plen = producer.len().min(32) as u8;
+    out.push(plen);
+    out.extend_from_slice(&producer[..plen as usize]);
     out.extend_from_slice(payload);
     Ok(out)
+}
+
+/// Compare promotion identity fields (version, IDs, length, checksum).
+/// Does not require full payload equality if headers match — checksum covers payload.
+fn promotion_blobs_identical(existing: &[u8], expected: &[u8]) -> bool {
+    // Minimum header: version(2)+id(8)+session(8)+class(1)+kind(1)+imp(2)+conf(2)
+    // +len(4)+checksum(4)+created(8) = 40
+    if existing.len() < 40 || expected.len() < 40 {
+        return existing == expected;
+    }
+    // Compare version, memory id, session id, payload_len, checksum.
+    // Offsets: 0..2 version, 2..10 id, 10..18 session, 18 class, 19 kind,
+    // 20..22 imp, 22..24 conf, 24..28 len, 28..32 checksum
+    existing[0..18] == expected[0..18]
+        && existing[24..32] == expected[24..32]
 }
 
 // Silence unused import for RequestContext in this module
@@ -1903,6 +2033,94 @@ mod tests {
         }
         // local still present
         assert!(svc.entry_state(mid).unwrap().is_live() || svc.entry_payload_len(mid).is_some());
+    }
+
+    #[test]
+    fn kv_promotion_conflict_on_checksum() {
+        let mut svc = setup();
+        let sid = match svc.handle(
+            &admin(),
+            ProtocolRequest::CreateSession {
+                protocol_version: PROTOCOL_VERSION,
+            },
+        ) {
+            ProtocolResponse::SessionCreated { session_id } => session_id,
+            _ => panic!(),
+        };
+        let mid = create_simple(&mut svc, sid, b"original-payload");
+        svc.handle(
+            &admin(),
+            ProtocolRequest::SealEntry {
+                protocol_version: PROTOCOL_VERSION,
+                memory_id: mid,
+                promote_class_to_hot: true,
+            },
+        );
+        // Pre-seed conflicting KV value under the promotion key.
+        let key = format!("owl.v1.shortterm.{}.{}", sid.get(), mid.get());
+        svc.kv_mut()
+            .map
+            .insert(key, b"different-content-checksum".to_vec());
+        let resp = svc.handle(
+            &admin(),
+            ProtocolRequest::PromoteEntry {
+                protocol_version: PROTOCOL_VERSION,
+                request: PromoteRequest {
+                    memory_id: mid,
+                    namespace: "owl.v1.shortterm".into(),
+                    expected_record_version: 1,
+                    retention_hint: "".into(),
+                    reason: "t".into(),
+                    delete_local_after: false,
+                },
+            },
+        );
+        assert!(
+            matches!(resp, ProtocolResponse::Error(MemoryError::PromotionConflict { .. })),
+            "got {resp:?}"
+        );
+        // Local record preserved
+        assert_eq!(svc.entry_state(mid), Some(MemoryState::Sealed));
+    }
+
+    #[test]
+    fn restart_generation_no_id_collision() {
+        let dir = tempdir().unwrap();
+        let mut cfg = ServiceConfig::default();
+        cfg.spill_dir = Some(dir.path().to_path_buf());
+        cfg.default_working_ttl_ns = None;
+        let mut svc1 = MemoryService::new(cfg.clone()).unwrap();
+        let g1 = svc1.id_generation();
+        let sid = match svc1.handle(
+            &admin(),
+            ProtocolRequest::CreateSession {
+                protocol_version: PROTOCOL_VERSION,
+            },
+        ) {
+            ProtocolResponse::SessionCreated { session_id } => session_id,
+            _ => panic!(),
+        };
+        let mid1 = create_simple(&mut svc1, sid, b"gen1");
+        assert_eq!(mid1.generation(), g1);
+        drop(svc1);
+
+        let svc2 = MemoryService::new(cfg).unwrap();
+        let g2 = svc2.id_generation();
+        assert!(g2 > g1);
+        // New allocator generation must not reuse mid1's packed value.
+        let mut svc2 = svc2;
+        let sid2 = match svc2.handle(
+            &admin(),
+            ProtocolRequest::CreateSession {
+                protocol_version: PROTOCOL_VERSION,
+            },
+        ) {
+            ProtocolResponse::SessionCreated { session_id } => session_id,
+            _ => panic!(),
+        };
+        let mid2 = create_simple(&mut svc2, sid2, b"gen2");
+        assert_ne!(mid1.get(), mid2.get());
+        assert_eq!(mid2.generation(), g2);
     }
 
     #[test]

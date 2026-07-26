@@ -308,6 +308,11 @@ static SUNLIGHT_CLIPD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipd");
 static SUNLIGHT_CLIP_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clip");
+// Wise Owl Phase 1.1: short-term cognitive memory service + diagnostic CLI.
+static WISEOWL_MEMORYD_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memoryd");
+static WISEOWL_MEMORYCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memoryctl");
 static SUNLIGHT_CLIPMAN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
 static EMOJI_PICKER_ELF_BYTES: &[u8] =
