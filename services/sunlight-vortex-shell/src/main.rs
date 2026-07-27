@@ -187,8 +187,14 @@ fn request_session_action(action: SessionAction) -> bool {
     )
     .is_ok_and(|reply| reply.label == SessionMsg::REPLY)
 }
-static ICON_TRASH_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/places/16/user-trash.tga");
+/// Monochrome dock trash (empty) — tinted at draw time.
+static ICON_TRASH_TGA: &[u8] = include_bytes!(
+    "../../../docs/icons/SunlightOS/actions/scalable/xsi-user-trash-symbolic.tga"
+);
+/// Monochrome dock trash (full) — tinted at draw time.
+static ICON_TRASH_FULL_TGA: &[u8] = include_bytes!(
+    "../../../docs/icons/SunlightOS/places/symbolic/user-trash-full-symbolic.tga"
+);
 static ICON_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.tga");
 static ICON_INODE_DIRECTORY_TGA: &[u8] =
@@ -196,7 +202,7 @@ static ICON_INODE_DIRECTORY_TGA: &[u8] =
 static ICON_DRIVE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/drive-harddisk.tga");
 static ICON_NETWORK_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/network-card.tga");
+    include_bytes!("../../../docs/icons/SunlightOS/preferences/22/yast-nfs-server.tga");
 static ICON_FILE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
 static ICON_IMAGE_FILE_TGA: &[u8] =
@@ -297,7 +303,6 @@ static ICON_SYM_DND_OFF_TGA: &[u8] =
 struct DesktopTheme {
     computer: Option<TgaImage>,
     home: Option<TgaImage>,
-    trash: Option<TgaImage>,
     folder: Option<TgaImage>,
     inode_directory: Option<TgaImage>,
     drive: Option<TgaImage>,
@@ -320,7 +325,6 @@ impl DesktopTheme {
         Self {
             computer: TgaImage::parse(ICON_COMPUTER_TGA).ok(),
             home: TgaImage::parse(ICON_HOME_TGA).ok(),
-            trash: TgaImage::parse(ICON_TRASH_TGA).ok(),
             folder: TgaImage::parse(ICON_FOLDER_TGA).ok(),
             inode_directory: TgaImage::parse(ICON_INODE_DIRECTORY_TGA).ok(),
             drive: TgaImage::parse(ICON_DRIVE_TGA).ok(),
@@ -343,7 +347,6 @@ impl DesktopTheme {
         match kind {
             DesktopIconKind::Computer => self.computer,
             DesktopIconKind::Home => self.home,
-            DesktopIconKind::Trash => self.trash,
             DesktopIconKind::Folder => self.folder,
             DesktopIconKind::Image => self.image,
             DesktopIconKind::File | DesktopIconKind::DesktopEntry => self.file,
@@ -357,7 +360,6 @@ impl DesktopTheme {
             kind,
             DesktopIconKind::Computer
                 | DesktopIconKind::Home
-                | DesktopIconKind::Trash
                 | DesktopIconKind::Drive
                 | DesktopIconKind::Network
         ) {
@@ -418,6 +420,10 @@ struct DockTheme {
     editor: Option<TgaImage>,
     writer: Option<TgaImage>,
     rabbit: Option<TgaImage>,
+    /// Monochrome shelf trash (empty).
+    trash: Option<TgaImage>,
+    /// Monochrome shelf trash (has items).
+    trash_full: Option<TgaImage>,
 }
 
 impl DockTheme {
@@ -431,6 +437,16 @@ impl DockTheme {
             editor: TgaImage::parse(ICON_TEXT_EDITOR_TGA).ok(),
             writer: TgaImage::parse(ICON_WRITER_TGA).ok(),
             rabbit: TgaImage::parse(ICON_RABBIT_TGA).ok(),
+            trash: TgaImage::parse(ICON_TRASH_TGA).ok(),
+            trash_full: TgaImage::parse(ICON_TRASH_FULL_TGA).ok(),
+        }
+    }
+
+    fn trash_icon(&self, full: bool) -> Option<TgaImage> {
+        if full {
+            self.trash_full.or(self.trash)
+        } else {
+            self.trash.or(self.trash_full)
         }
     }
 
@@ -1341,7 +1357,6 @@ const ICON16_W: u32 = 16;
 enum DesktopIconKind {
     Computer,
     Home,
-    Trash,
     Network,
     Drive,
     Folder,
@@ -1467,6 +1482,10 @@ struct VortexShell {
     search_hover: bool,
     /// True between press and release while the pointer is held on Search.
     search_pressed: bool,
+    /// Tracks hover on the bottom-shelf Trash control.
+    trash_hover: bool,
+    /// True when Trash contains items (drives empty vs full monochrome glyph).
+    trash_full: bool,
     /// Cached local hour/min for the status clock.
     status_hour: u8,
     status_min: u8,
@@ -1501,6 +1520,8 @@ struct VortexShell {
     launcher_zone: Rect,
     /// Bounds of the bottom-right Search control — toggles the Search Palette.
     search_zone: Rect,
+    /// Bounds of the bottom-right Trash control (next to Search).
+    trash_zone: Rect,
     /// TGA icon theme for desktop shortcuts.
     desktop_theme: DesktopTheme,
     /// TGA icon theme for the bottom dock.
@@ -1682,6 +1703,8 @@ impl VortexShell {
             overview_hover: false,
             search_hover: false,
             search_pressed: false,
+            trash_hover: false,
+            trash_full: false,
             status_hour: 0xff,
             status_min: 0xff,
             status_year: 1970,
@@ -1708,6 +1731,7 @@ impl VortexShell {
             overview_zone: Rect::new(0, 0, 0, 0),
             launcher_zone: Rect::new(0, 0, 0, 0),
             search_zone: Rect::new(0, 0, 0, 0),
+            trash_zone: Rect::new(0, 0, 0, 0),
             desktop_theme,
             dock_theme,
             symbols,
@@ -1968,6 +1992,7 @@ impl VortexShell {
 
     fn reload_desktop_icons(&mut self) {
         self.desktop_icons = load_desktop_icons(&self.desktop_paths);
+        self.trash_full = trash_has_items(&self.desktop_paths.trash_dir);
         self.selected_icons
             .retain(|idx| *idx < self.desktop_icons.len());
         self.last_desktop_click_idx = None;
@@ -2188,7 +2213,6 @@ impl VortexShell {
             }
             DesktopIconKind::Computer
             | DesktopIconKind::Home
-            | DesktopIconKind::Trash
             | DesktopIconKind::Drive
             | DesktopIconKind::Folder => {
                 self.open_app_from_ui(AppId::Files, now, LaunchSource::Shortcut)
@@ -5403,12 +5427,8 @@ fn load_desktop_icons(paths: &DesktopPaths) -> Vec<DesktopIcon> {
         paths.home_dir.clone(),
         DesktopIconKind::Home,
     ));
-    icons.push(make_desktop_icon(
-        String::from("Trash"),
-        "Trash",
-        paths.trash_dir.clone(),
-        DesktopIconKind::Trash,
-    ));
+    // Trash is a monochrome control on the bottom shelf (next to Search), not
+    // a desktop shortcut — matches macOS Dock / Windows taskbar placement.
     icons.push(make_desktop_icon(
         String::from("Network"),
         "Network locations",
@@ -5418,6 +5438,26 @@ fn load_desktop_icons(paths: &DesktopPaths) -> Vec<DesktopIcon> {
     icons.extend(load_drive_icons());
     icons.extend(load_desktop_dir_icons(&paths.desktop_dir));
     icons
+}
+
+/// True when the free-desktop Trash has recoverable items.
+fn trash_has_items(trash_dir: &str) -> bool {
+    let mut entries = [DirEntry::zeroed(); 8];
+    // Prefer the FreeDesktop `files/` subdir; fall back to the trash root.
+    let files_dir = join_path(trash_dir, "files");
+    if let Ok(count) = libc::read_dir(files_dir.as_bytes(), &mut entries) {
+        return count > 0;
+    }
+    if let Ok(count) = libc::read_dir(trash_dir.as_bytes(), &mut entries) {
+        // Ignore well-known empty scaffolding dirs when present as only entries.
+        for entry in entries.iter().take(count) {
+            let name = sanitize_ascii(entry.name_bytes());
+            if name != "files" && name != "info" && !name.is_empty() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn desktop_area(screen_w: u32, screen_h: u32, presentation: PanelPresentation) -> Rect {
@@ -5456,7 +5496,6 @@ fn desktop_icon_visual(kind: DesktopIconKind, theme: &Theme) -> (&'static [u16; 
     match kind {
         DesktopIconKind::Computer => (&COMPUTER_ROWS, theme.accent),
         DesktopIconKind::Home => (&HOME_ROWS, theme.ok),
-        DesktopIconKind::Trash => (&TRASH_ROWS, theme.text_dim),
         DesktopIconKind::Network => (&NET_ON_ROWS, theme.text),
         DesktopIconKind::Drive => (&DRIVE_ROWS, theme.warn),
         DesktopIconKind::Folder => (&FOLDER_ROWS, theme.accent_hover),
@@ -5485,34 +5524,19 @@ fn draw_desktop_icons(
         }
         let slot = icon.rect;
         let is_selected = selected.contains(&idx);
-        let tile = Rect::new(
-            slot.x + 8,
-            slot.y + 2,
-            slot.w.saturating_sub(16),
-            slot.h.saturating_sub(10),
-        );
-        canvas.fill_rounded_rect(
-            tile,
-            10,
-            if is_selected {
-                theme.panel
-            } else {
-                theme.panel_alt
-            },
-        );
-        canvas.stroke_rounded_rect(
-            tile,
-            10,
-            1,
-            if is_selected {
-                theme.accent
-            } else {
-                theme.border
-            },
-        );
+
+        // macOS / Windows 11 style: no chrome when idle; a single translucent
+        // selection plate when selected (no double outline, no always-on bg).
         if is_selected {
-            let highlight = slot.inset(4);
-            canvas.stroke_rounded_rect(highlight, 8, 1, theme.accent);
+            let plate = Rect::new(
+                slot.x + 6,
+                slot.y + 2,
+                slot.w.saturating_sub(12),
+                slot.h.saturating_sub(6),
+            );
+            // Soft accent wash only — one plate, no concentric strokes.
+            let fill = Color::rgba(theme.accent.r(), theme.accent.g(), theme.accent.b(), 78);
+            canvas.blend_rounded_rect(plate, 12, fill);
         }
 
         let icon_rect = Rect::new(slot.x + 18, slot.y + 6, 48, 40);
@@ -5528,25 +5552,22 @@ fn draw_desktop_icons(
         let icon_color = if is_selected {
             theme.text
         } else {
-            theme.text_dim.lighten(90)
+            // Bright label for wallpaper readability without a solid label chip.
+            theme.text.lighten(20)
         };
         let label_w = measure_text(&icon.label, FontRole::UiSmall).w;
         let label_x = slot.x + (slot.w as i32 - label_w as i32) / 2;
         let label_h = sun_font::line_height(FontRole::UiSmall) + 4;
         let label_rect_y = slot.y + 58;
-        canvas.fill_rounded_rect(
-            Rect::new(
-                slot.x + 12,
-                label_rect_y - 2,
-                slot.w.saturating_sub(24),
-                label_h + 4,
-            ),
-            6,
-            if is_selected {
-                theme.panel
-            } else {
-                theme.panel_alt
-            },
+        // Subtle drop shadow so labels stay legible over busy wallpapers
+        // without the old opaque label background.
+        draw_text_vcenter(
+            canvas,
+            &icon.label,
+            label_x + 1,
+            label_rect_y + 1,
+            label_h,
+            &TextStyle::new(FontRole::UiSmall, Color::rgb(0, 0, 0)),
         );
         draw_text_vcenter(
             canvas,
@@ -6167,8 +6188,21 @@ fn bottom_left_cluster_width() -> u32 {
     CLUSTER_PAD as u32 * 2 + OVERVIEW_BTN + ICON_BTN * 2 + ICON_GAP as u32 * 2
 }
 
+/// Bottom-right shelf: Trash + Search side by side.
+fn bot_right_cluster_width() -> u32 {
+    CLUSTER_PAD as u32 * 2 + SEARCH_BTN * 2 + ICON_GAP as u32
+}
+
 fn search_cluster_width() -> u32 {
-    SEARCH_BTN + CLUSTER_PAD as u32 * 2
+    // Kept as an alias for layout math that reserved room for the right shelf.
+    bot_right_cluster_width()
+}
+
+/// Click zones for the independent controls in the bottom-right cluster.
+#[derive(Clone, Copy)]
+struct BottomRightZones {
+    trash: Rect,
+    search: Rect,
 }
 
 /// Draw the bottom-left cluster: overview | sidebar | settings.
@@ -7365,57 +7399,104 @@ impl VortexShell {
 
 // (stash fields live in VortexShell)
 
-/// Draw the bottom-right Search Palette trigger. Returns its hit target.
-fn draw_bot_right(
+/// Draw one monochrome shelf control cell (Trash / Search style).
+fn draw_shelf_icon_cell(
     canvas: &mut Canvas,
     theme: &Theme,
-    by: i32,
-    screen_w: u32,
-    sym: SymbolTheme,
-    search_open: bool,
-    search_hover: bool,
-    search_pressed: bool,
-) -> Rect {
-    let cluster = Rect::new(
-        screen_w as i32 - TOP_PAD - (SEARCH_BTN as i32 + CLUSTER_PAD * 2),
-        by,
-        search_cluster_width(),
-        BOT_H,
-    );
-    draw_dock_surface(canvas, theme, cluster, RADIUS);
-    let search_rect = Rect::new(
-        cluster.x + CLUSTER_PAD,
-        cluster.y + (BOT_H as i32 - SEARCH_BTN as i32) / 2,
-        SEARCH_BTN,
-        SEARCH_BTN,
-    );
-    let (fill, border, tint) = if search_pressed {
+    cell: Rect,
+    active: bool,
+    hover: bool,
+    pressed: bool,
+) -> Color {
+    let (fill, border, tint) = if pressed {
         (
             theme.accent_hover.darken(35),
             theme.accent_hover,
             theme.text,
         )
-    } else if search_open {
+    } else if active {
         (theme.accent.darken(34), theme.accent, theme.accent)
-    } else if search_hover {
+    } else if hover {
         (theme.panel_alt, theme.border.lighten(18), theme.text)
     } else {
         (theme.panel, theme.border, theme.text_dim)
     };
-    canvas.fill_rounded_rect(search_rect, 6, fill);
-    canvas.stroke_rounded_rect(search_rect, 6, 1, border);
+    canvas.fill_rounded_rect(cell, 6, fill);
+    canvas.stroke_rounded_rect(cell, 6, 1, border);
+    tint
+}
 
+/// Draw the bottom-right cluster: Trash (monochrome) + Search Palette trigger.
+fn draw_bot_right(
+    canvas: &mut Canvas,
+    theme: &Theme,
+    by: i32,
+    screen_w: u32,
+    dock: DockTheme,
+    sym: SymbolTheme,
+    trash_full: bool,
+    trash_hover: bool,
+    search_open: bool,
+    search_hover: bool,
+    search_pressed: bool,
+) -> BottomRightZones {
+    let cluster_w = bot_right_cluster_width();
+    let cluster = Rect::new(
+        screen_w as i32 - TOP_PAD - cluster_w as i32,
+        by,
+        cluster_w,
+        BOT_H,
+    );
+    draw_dock_surface(canvas, theme, cluster, RADIUS);
+
+    let cell_y = cluster.y + (BOT_H as i32 - SEARCH_BTN as i32) / 2;
+    let trash_rect = Rect::new(cluster.x + CLUSTER_PAD, cell_y, SEARCH_BTN, SEARCH_BTN);
+    let search_rect = Rect::new(
+        trash_rect.right() + ICON_GAP,
+        cell_y,
+        SEARCH_BTN,
+        SEARCH_BTN,
+    );
+
+    // Trash — monochrome symbolic glyph, empty vs full.
+    let trash_tint = draw_shelf_icon_cell(canvas, theme, trash_rect, false, trash_hover, false);
     let icon_size = 20u32;
-    let icon = Rect::new(
+    let trash_icon = Rect::new(
+        trash_rect.x + (SEARCH_BTN as i32 - icon_size as i32) / 2,
+        trash_rect.y + (SEARCH_BTN as i32 - icon_size as i32) / 2,
+        icon_size,
+        icon_size,
+    );
+    if let Some(tga) = dock.trash_icon(trash_full) {
+        // Prefer alpha-tint path so white symbolic art picks up shelf color.
+        canvas.draw_tga_icon_tinted(&tga, trash_icon, trash_tint);
+    } else {
+        draw_icon16(canvas, trash_icon, &TRASH_ROWS, trash_tint);
+    }
+
+    // Search
+    let search_tint = draw_shelf_icon_cell(
+        canvas,
+        theme,
+        search_rect,
+        search_open,
+        search_hover,
+        search_pressed,
+    );
+    let search_icon = Rect::new(
         search_rect.x + (SEARCH_BTN as i32 - icon_size as i32) / 2,
         search_rect.y + (SEARCH_BTN as i32 - icon_size as i32) / 2,
         icon_size,
         icon_size,
     );
     if let Some(tga) = sym.search {
-        draw_tga_tinted_orange(canvas, &tga, icon, tint);
+        draw_tga_tinted_orange(canvas, &tga, search_icon, search_tint);
     }
-    search_rect
+
+    BottomRightZones {
+        trash: trash_rect,
+        search: search_rect,
+    }
 }
 
 /// Compact shelf tooltip shared by icon-only desktop controls.
@@ -7457,8 +7538,10 @@ mod shelf_control_tests {
 
         for screen_w in [1366u32, 1920] {
             let left_end = TOP_PAD + bottom_left_cluster_width() as i32;
-            let search_x = screen_w as i32 - TOP_PAD - search_cluster_width() as i32;
-            assert!(left_end < search_x, "controls must fit at {screen_w}px");
+            let right_x = screen_w as i32 - TOP_PAD - bot_right_cluster_width() as i32;
+            assert!(left_end < right_x, "controls must fit at {screen_w}px");
+            // Trash sits left of Search inside the right shelf cluster.
+            assert!(bot_right_cluster_width() > SEARCH_BTN + CLUSTER_PAD as u32 * 2);
         }
     }
 }
@@ -7610,19 +7693,31 @@ impl App for VortexShell {
             now,
         );
         self.launcher_zone = launcher_rect;
-        self.search_zone = draw_bot_right(
+        let bot_right = draw_bot_right(
             canvas,
             theme,
             by,
             cw,
+            dock_theme,
             self.symbols,
+            self.trash_full,
+            self.trash_hover,
             self.search_palette.is_open(),
             self.search_hover,
             self.search_pressed,
         );
+        self.trash_zone = bot_right.trash;
+        self.search_zone = bot_right.search;
 
         if self.overview_hover {
             draw_shelf_tooltip(canvas, theme, self.overview_zone, "Show Workspaces", cw);
+        } else if self.trash_hover {
+            let tip = if self.trash_full {
+                "Trash (has items)"
+            } else {
+                "Trash"
+            };
+            draw_shelf_tooltip(canvas, theme, self.trash_zone, tip, cw);
         } else if self.search_hover {
             draw_shelf_tooltip(
                 canvas,
@@ -8194,6 +8289,14 @@ impl App for VortexShell {
                 if self.search_zone.contains(point) {
                     return self.open_search_palette();
                 }
+                if self.trash_zone.contains(point) {
+                    // Open Files at the trash path (same action as the old desktop icon).
+                    return self.open_app_from_ui(
+                        AppId::Files,
+                        monotonic_millis(),
+                        LaunchSource::Shortcut,
+                    );
+                }
                 if self.overview_zone.contains(point) {
                     return self.toggle_workspace_switcher();
                 }
@@ -8256,6 +8359,9 @@ impl App for VortexShell {
                 }
                 self.set_top_panel_focus(None);
                 if self.search_zone.contains(point) {
+                    return true;
+                }
+                if self.trash_zone.contains(point) {
                     return true;
                 }
                 if self.overview_zone.contains(point) {
@@ -8507,6 +8613,8 @@ impl App for VortexShell {
                 self.overview_hover = self.overview_zone.contains(point);
                 let prev_search = self.search_hover;
                 self.search_hover = self.search_zone.contains(point);
+                let prev_trash = self.trash_hover;
+                self.trash_hover = self.trash_zone.contains(point);
                 let prev_top_hover = self.top_panel_hover;
                 self.top_panel_hover = self.top_panel_item_at_point(point);
                 let prev_network_focus = self.network_settings_focused;
@@ -8516,6 +8624,7 @@ impl App for VortexShell {
                 if self.settings_hover != prev_settings
                     || self.overview_hover != prev_overview
                     || self.search_hover != prev_search
+                    || self.trash_hover != prev_trash
                     || self.top_panel_hover != prev_top_hover
                     || self.network_settings_focused != prev_network_focus
                     || self.system_menu_hover != previous_system_menu_hover
@@ -8537,6 +8646,7 @@ impl App for VortexShell {
                     || self.running_hover != prev_running
                     || self.overview_hover != prev_overview
                     || self.search_hover != prev_search
+                    || self.trash_hover != prev_trash
                     || self.top_panel_hover != prev_top_hover
                     || self.network_settings_focused != prev_network_focus
                     || self.show_datetime_tooltip != prev_tip
