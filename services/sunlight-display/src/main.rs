@@ -13,14 +13,15 @@ use sunlight_libc as libc;
 
 use sunlight_ipc::debug_log;
 use sunlight_ipc::{
-    endpoint_bind, endpoint_create, endpoint_destroy, ipc_recv, ipc_recv_timeout, ipc_reply, kill,
+    endpoint_bind, endpoint_create, endpoint_destroy, ipc_call_timeout, ipc_recv, ipc_recv_timeout,
+    ipc_reply, kill,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, nameserver_register,
+    monotonic_millis, nameserver_lookup_timeout, nameserver_register,
     sgp::SgpMsg,
     validate_size, CapabilityToken, DisplayMetrics, DisplayMode, DisplayModeManagement,
-    DisplayModeReadOnlyReason, IpcMsg, MezzoMsg, MouseMsg, NotificationKind, PixelFormat,
-    ScreenBackend, EndpointId, DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES,
-    SAFE_FALLBACK_H, SAFE_FALLBACK_W, ipc_call_timeout, nameserver_lookup_timeout,
+    DisplayModeReadOnlyReason, EndpointId, IpcMsg, MezzoMsg, MouseMsg, NotificationKind,
+    PixelFormat, ScreenBackend, DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES,
+    SAFE_FALLBACK_H, SAFE_FALLBACK_W,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Point, Rect};
@@ -2574,6 +2575,40 @@ fn clear_back_buffer(state: &mut CompositorState) {
     }
 }
 
+/// Return true when the first visible layer deterministically overwrites every
+/// compositor pixel.  In the normal graphical session this is Vortex's opaque,
+/// fullscreen Desktop surface.  Skipping the wallpaper reconstruction avoids
+/// a full-screen scaled TGA decode immediately before that surface replaces it.
+fn first_visible_layer_replaces_background(state: &CompositorState) -> bool {
+    let Some(win) = state
+        .windows
+        .iter()
+        .find(|win| is_window_visible(state, win))
+    else {
+        return false;
+    };
+    if win.buffer.is_null()
+        || win.config.window_type != WindowType::Desktop
+        || win.config.state != WindowState::Fullscreen
+        || win.config.border != BorderStyle::None
+        || win.config.surface_material != SurfaceMaterial::OpaqueXrgb
+    {
+        return false;
+    }
+    let Ok(layout) = surface::SurfaceLayout::validate(
+        win.surface_width_pixels,
+        win.surface_height_rows,
+        win.surface_stride_bytes,
+        win.surface_len_bytes,
+    ) else {
+        return false;
+    };
+    matches!(
+        layout.readable_rect(0, 0, state.fb_width, state.fb_height),
+        Ok(rect) if rect.width == state.fb_width && rect.height == state.fb_height
+    )
+}
+
 fn back_buffer_canvas<'a>(state: &CompositorState, pixels: &'a mut [u32]) -> Canvas<'a> {
     Canvas::new(
         pixels,
@@ -3920,7 +3955,9 @@ fn redraw_scene(state: &mut CompositorState) {
     // Upload a new hardware cursor image if the shape changed (no-op when sw cursor).
     let _ = upload_hw_cursor_if_needed(state);
 
-    clear_back_buffer(state);
+    if !first_visible_layer_replaces_background(state) {
+        clear_back_buffer(state);
+    }
     let mut back_buffer = core::mem::take(&mut state.back_buffer);
     if state.lock_generation == 0 {
         let focused_idx = focused_window_idx(state);

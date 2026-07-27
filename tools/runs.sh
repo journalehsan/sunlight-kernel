@@ -59,9 +59,10 @@ Display Options (QEMU only):
                         then 1024x768 if the QEMU video device exposes xres/yres
 
 QEMU Options:
-  -m, --memory MB       Set RAM size (default: 2048)
-  --cpus N              Set virtual CPU count (default: 4)
+  -m, --memory MB       Set RAM size (default: 4096)
+  --cpus N              Set virtual CPU count (default: 12)
   --cpu MODEL           Set QEMU CPU model. Use x86_64-v3 to map to Haswell-v1
+  --accel MODE          QEMU accelerator: auto, kvm, or tcg (default: auto)
   --disk PATH           Disk image to attach (default: ~/vmware/sunlight.qcow2,
                         auto-created as 10G qcow2 if missing)
   --no-disk             Don't attach a disk
@@ -93,6 +94,7 @@ DISPLAY_TYPE="gtk"
 MEMORY="4096"
 CPU_COUNT="12"
 CPU_MODEL=""
+ACCEL_MODE="auto"
 DISK_PATH="$HOME/vmware/sunlight.qcow2"
 DISK_SIZE="10G"
 USE_DISK=true
@@ -203,6 +205,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --cpu)
             CPU_MODEL="$2"
+            shift 2
+            ;;
+        --accel)
+            case "${2:-}" in
+                auto|kvm|tcg)
+                    ACCEL_MODE="$2"
+                    ;;
+                *)
+                    echo -e "${RED}Error: invalid accelerator '${2:-}' (expected auto, kvm, or tcg)${NC}"
+                    exit 1
+                    ;;
+            esac
             shift 2
             ;;
         --disk)
@@ -389,13 +403,29 @@ fi
 echo -e "${GREEN}✓${NC} QEMU: $(qemu-system-x86_64 --version | head -1)"
 echo ""
 
+KVM_USABLE="no"
+if [[ -r /dev/kvm && -w /dev/kvm ]] \
+    && qemu-system-x86_64 -accel help 2>/dev/null | rg -qx 'kvm'; then
+    KVM_USABLE="yes"
+fi
+if ! SELECTED_ACCEL="$(sunlight_select_qemu_accel "$ACCEL_MODE" "$KVM_USABLE")"; then
+    echo -e "${RED}✗ Error: KVM was requested but /dev/kvm is unavailable or inaccessible${NC}"
+    echo -e "${YELLOW}  Check that virtualization is enabled and your user can access /dev/kvm, or use --accel tcg.${NC}"
+    exit 1
+fi
+
 case "$CPU_MODEL" in
     x86_64-v3|x86-64-v3)
         CPU_MODEL="Haswell-v1"
         CPU_MODEL_LABEL="Haswell-v1 (x86-64-v3 class)"
         ;;
     "")
-        CPU_MODEL_LABEL="QEMU default"
+        if [[ "$SELECTED_ACCEL" == "kvm" ]]; then
+            CPU_MODEL="host"
+            CPU_MODEL_LABEL="host"
+        else
+            CPU_MODEL_LABEL="QEMU default (TCG)"
+        fi
         ;;
     *)
         CPU_MODEL_LABEL="$CPU_MODEL"
@@ -405,6 +435,17 @@ esac
 CPU_ARGS=()
 if [ -n "$CPU_MODEL" ]; then
     CPU_ARGS=(-cpu "$CPU_MODEL")
+fi
+
+if [[ "$SELECTED_ACCEL" == "kvm" ]]; then
+    ACCEL_ARGS=(-accel kvm)
+    ACCEL_LABEL="KVM hardware virtualization"
+else
+    ACCEL_ARGS=(-accel tcg,thread=multi)
+    ACCEL_LABEL="TCG software emulation (multi-threaded)"
+fi
+if [[ "$ACCEL_MODE" == "auto" && "$SELECTED_ACCEL" == "tcg" ]]; then
+    echo -e "${YELLOW}Warning:${NC} KVM is unavailable; QEMU will use slower TCG software emulation"
 fi
 
 if [ "$USE_DISK" = true ] && [ ! -f "$DISK_PATH" ]; then
@@ -502,6 +543,7 @@ QEMU_CMD=(
     -cdrom "$ISO_PATH"
     -m "${MEMORY}M"
     -smp "$CPU_COUNT"
+    "${ACCEL_ARGS[@]}"
     "${CPU_ARGS[@]}"
     -serial stdio
     -no-reboot
@@ -532,9 +574,13 @@ if [ "$LIMINE_ONLY_MODE" = true ]; then
     QEMU_CMD+=(-vga std)
 elif [ "$DUAL_GPU_MODE" = true ]; then
     if [[ -n "$QEMU_RESOLUTION" ]]; then
+        VIDEO_SPEC="$(sunlight_qemu_video_device_spec \
+            virtio-gpu-pci "$QEMU_RESOLUTION_X" "$QEMU_RESOLUTION_Y" \
+            "$([[ "$QEMU_RESOLUTION_SOURCE" == "override" ]] && printf yes || printf no)" \
+            "$([[ "$SELECTED_ACCEL" == "kvm" ]] && printf yes || printf no)")"
         QEMU_CMD+=(
             -vga std
-            -device "virtio-gpu-pci,xres=${QEMU_RESOLUTION_X},yres=${QEMU_RESOLUTION_Y}"
+            -device "$VIDEO_SPEC"
         )
     else
         QEMU_CMD+=(
@@ -544,9 +590,13 @@ elif [ "$DUAL_GPU_MODE" = true ]; then
     fi
 else
     if [[ -n "$QEMU_RESOLUTION" ]]; then
+        VIDEO_SPEC="$(sunlight_qemu_video_device_spec \
+            virtio-vga "$QEMU_RESOLUTION_X" "$QEMU_RESOLUTION_Y" \
+            "$([[ "$QEMU_RESOLUTION_SOURCE" == "override" ]] && printf yes || printf no)" \
+            "$([[ "$SELECTED_ACCEL" == "kvm" ]] && printf yes || printf no)")"
         QEMU_CMD+=(
             -vga none
-            -device "virtio-vga,xres=${QEMU_RESOLUTION_X},yres=${QEMU_RESOLUTION_Y}"
+            -device "$VIDEO_SPEC"
         )
     else
         QEMU_CMD+=(-vga virtio)
@@ -604,6 +654,7 @@ esac
 
 echo -e "${BLUE}Memory:${NC}  ${MEMORY} MiB"
 echo -e "${BLUE}vCPUs:${NC}   ${CPU_COUNT}"
+echo -e "${BLUE}Accel:${NC}   ${ACCEL_LABEL}"
 echo -e "${BLUE}CPU:${NC}     ${CPU_MODEL_LABEL}"
 if [ "$LIMINE_ONLY_MODE" = true ]; then
     echo -e "${BLUE}Video:${NC}   standard VGA (Limine-only backend)"
@@ -615,6 +666,9 @@ else
 fi
 if [[ -n "$QEMU_RESOLUTION" ]]; then
     echo -e "${BLUE}Resolution:${NC} ${QEMU_RESOLUTION} (${QEMU_RESOLUTION_SOURCE})"
+    if [[ "$QEMU_RESOLUTION_SOURCE" == "override" ]]; then
+        echo -e "${BLUE}Resize:${NC}  pinned (VirtIO EDID disabled)"
+    fi
 else
     echo -e "${BLUE}Resolution:${NC} backend default"
 fi

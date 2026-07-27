@@ -179,3 +179,55 @@ sunlight_qemu_device_supports_resolution() {
     qemu-system-x86_64 -device "$device,help" 2>/dev/null \
         | grep -q "xres=<uint32>"
 }
+
+# Resolve the QEMU accelerator without letting an "auto" launch silently look
+# like KVM while it is actually using TCG.  The caller performs the host probe
+# and passes "yes" only when /dev/kvm is accessible and QEMU advertises KVM.
+sunlight_select_qemu_accel() {
+    local requested="${1:-auto}"
+    local kvm_usable="${2:-no}"
+
+    case "$requested" in
+        auto)
+            if [[ "$kvm_usable" == "yes" ]]; then
+                printf '%s\n' kvm
+            else
+                printf '%s\n' tcg
+            fi
+            ;;
+        kvm)
+            [[ "$kvm_usable" == "yes" ]] || return 1
+            printf '%s\n' kvm
+            ;;
+        tcg)
+            printf '%s\n' tcg
+            ;;
+        *)
+            return 2
+            ;;
+    esac
+}
+
+# An explicit resolution is a fixed guest policy, not a suggestion to the SDL
+# window.  Disabling EDID prevents QEMU's UI size from replacing xres/yres.
+# Auto-selected modes retain EDID so future resize support can opt into it.
+sunlight_qemu_video_device_spec() {
+    local device="$1"
+    local width="${2:-}"
+    local height="${3:-}"
+    local pin_mode="${4:-no}"
+    local ioeventfd="${5:-no}"
+    local spec="$device"
+
+    if [[ "$ioeventfd" == "yes" ]]; then
+        spec+=",ioeventfd=on"
+    fi
+
+    if [[ -z "$width" || -z "$height" ]]; then
+        printf '%s\n' "$spec"
+    elif [[ "$pin_mode" == "yes" ]]; then
+        printf '%s,edid=off,xres=%s,yres=%s\n' "$spec" "$width" "$height"
+    else
+        printf '%s,xres=%s,yres=%s\n' "$spec" "$width" "$height"
+    fi
+}

@@ -86,4 +86,22 @@ assert_false "hardware is not treated as vm" sunlight_is_vm_environment "hardwar
 assert_true "valid resolution parses" sunlight_parse_resolution "1366x768"
 assert_false "invalid resolution rejected" sunlight_parse_resolution "1366-768"
 
+assert_eq "kvm" "$(sunlight_select_qemu_accel auto yes)" \
+    "auto accelerator prefers usable KVM"
+assert_eq "tcg" "$(sunlight_select_qemu_accel auto no)" \
+    "auto accelerator falls back to TCG"
+assert_eq "tcg" "$(sunlight_select_qemu_accel tcg yes)" \
+    "explicit TCG stays TCG"
+assert_false "explicit unavailable KVM fails" sunlight_select_qemu_accel kvm no
+
+assert_eq "virtio-vga,edid=off,xres=1280,yres=720" \
+    "$(sunlight_qemu_video_device_spec virtio-vga 1280 720 yes)" \
+    "explicit QEMU mode disables EDID"
+assert_eq "virtio-vga,xres=1280,yres=800" \
+    "$(sunlight_qemu_video_device_spec virtio-vga 1280 800 no)" \
+    "automatic QEMU mode retains EDID"
+assert_eq "virtio-vga,ioeventfd=on,edid=off,xres=1280,yres=720" \
+    "$(sunlight_qemu_video_device_spec virtio-vga 1280 720 yes yes)" \
+    "KVM VirtIO mode enables ioeventfd"
+
 echo "[PASS] vm display policy"

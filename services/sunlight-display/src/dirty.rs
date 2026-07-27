@@ -30,15 +30,25 @@ impl DirtyList {
         if self.full || r.w == 0 || r.h == 0 {
             return;
         }
-        // Merge with any overlapping-or-adjacent existing rect.
-        for i in 0..self.count {
-            if overlaps_or_adjacent(self.rects[i], r) {
-                self.rects[i] = union_rect(self.rects[i], r);
-                return;
+        // Merge transitively with every overlapping-or-adjacent rectangle.
+        // Merging only the first match leaves chains such as A<->new<->B as
+        // two GPU transfers even though their union is one dirty region.
+        let mut merged = r;
+        let mut i = 0;
+        while i < self.count {
+            if overlaps_or_adjacent(self.rects[i], merged) {
+                merged = union_rect(self.rects[i], merged);
+                self.count -= 1;
+                self.rects[i] = self.rects[self.count];
+                // The larger union may now touch an earlier rectangle. Start
+                // over; capacity is eight, so this stays tightly bounded.
+                i = 0;
+            } else {
+                i += 1;
             }
         }
         if self.count < 8 {
-            self.rects[self.count] = r;
+            self.rects[self.count] = merged;
             self.count += 1;
         } else {
             self.mark_full();
@@ -65,4 +75,31 @@ fn union_rect(a: Rect, b: Rect) -> Rect {
     let x1 = a.right().max(b.right());
     let y1 = a.bottom().max(b.bottom());
     Rect::new(x0, y0, (x1 - x0) as u32, (y1 - y0) as u32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn merges_touching_chain_into_one_transfer_region() {
+        let mut dirty = DirtyList::new();
+        dirty.mark(Rect::new(0, 0, 10, 10));
+        dirty.mark(Rect::new(20, 0, 10, 10));
+        dirty.mark(Rect::new(10, 0, 10, 10));
+
+        assert_eq!(dirty.count, 1);
+        assert_eq!(dirty.rects[0], Rect::new(0, 0, 30, 10));
+        assert!(!dirty.full);
+    }
+
+    #[test]
+    fn keeps_separated_regions_separate() {
+        let mut dirty = DirtyList::new();
+        dirty.mark(Rect::new(0, 0, 8, 8));
+        dirty.mark(Rect::new(100, 100, 8, 8));
+
+        assert_eq!(dirty.count, 2);
+        assert!(!dirty.full);
+    }
 }
