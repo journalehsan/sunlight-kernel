@@ -276,6 +276,39 @@ pub extern "C" fn _start() -> ! {
                     error(MezzoMsg::ERR_UNAUTHORIZED)
                 }
             }
+            MezzoMsg::SESSION_FORCE_UNLOCK_TRUSTED => {
+                // Trusted reattach after Login: clear lock authority even when
+                // the presenter is missing (fallback) so display can resume.
+                if !validate_session_caller(message.badge, SESSION_CALLER_SESSION_SERVICE) {
+                    error(MezzoMsg::ERR_UNAUTHORIZED)
+                } else if session.state == LockState::Unlocked {
+                    status_reply(&session)
+                } else {
+                    let generation = session.generation;
+                    let authority = if display_authority != CapabilityToken::INVALID {
+                        display_authority
+                    } else {
+                        display_enter(generation).unwrap_or(CapabilityToken::INVALID)
+                    };
+                    if authority != CapabilityToken::INVALID {
+                        let _ = display_presenter(
+                            SgpMsg::LOCK_LEAVE,
+                            generation,
+                            0,
+                            authority,
+                        );
+                    }
+                    // Always clear local lock state after a trusted Login reattach
+                    // so desktop input is not permanently stuck behind lock.
+                    session.finish_leave();
+                    display_authority = CapabilityToken::INVALID;
+                    expected_presenter_pid = 0;
+                    sunlight_ipc::debug_log(
+                        "[MEZZO] SESSION_FORCE_UNLOCK_TRUSTED: unlocked\n",
+                    );
+                    status_reply(&session)
+                }
+            }
             MezzoMsg::LOCK_ACTIVATE => {
                 sunlight_ipc::debug_log("[MEZZO] LOCK_ACTIVATE\n");
                 match session.enter(monotonic_millis(), PRESENTER_TRANSITION_TIMEOUT_MS) {

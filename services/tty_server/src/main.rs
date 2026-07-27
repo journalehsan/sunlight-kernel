@@ -101,6 +101,10 @@ const DISPLAY_IPC_TIMEOUT_MS: u64 = 100;
 const DISPLAY_ACTIVATION_TIMEOUT_MS: u64 = 2_000;
 const SHELL_IPC_TIMEOUT_MS: u64 = 1_000;
 const SHELL_SLOW_PATH_TIMEOUT_MS: u64 = 5_000;
+/// Session status queries must tolerate guest load (VMware, busy desktop). A
+/// short timeout here used to be treated as "session ended", which returned the
+/// user to Login while sessiond still held the live desktop session.
+const SESSION_QUERY_TIMEOUT_MS: u64 = 1_000;
 /// SESSION_CREATE is synchronous on sessiond: mezzo establish + spawn of the
 /// desktop shell (currently ~17 MiB Vortex). 100 ms is enough on fast QEMU/KVM
 /// but fails under VMware and other slower guests; give the handoff real room.
@@ -689,7 +693,9 @@ impl CreateDesktopError {
                 "Session policy unavailable; login stayed secure."
             }
             Self::Policy(SessionMsg::ERR_BUSY) => {
-                "Desktop session already active; try again."
+                // Reattach is preferred; this is only shown when the live
+                // session belongs to a different user or is non-reattachable.
+                "Desktop session already active for another user."
             }
             Self::Policy(SessionMsg::ERR_UNAUTHORIZED)
             | Self::Policy(SessionMsg::ERR_INVALID_STATE) => {
@@ -786,6 +792,75 @@ fn query_desktop_session(
     SessionState::from_u64((reply.words[2] >> 32) & 0xff)
 }
 
+/// Whether a session state means the managed desktop is still live.
+fn desktop_session_is_live(state: SessionState) -> bool {
+    matches!(
+        state,
+        SessionState::Created
+            | SessionState::Preparing
+            | SessionState::StartingRequiredComponents
+            | SessionState::Running
+            | SessionState::Degraded
+            | SessionState::Locking
+            | SessionState::Locked
+    )
+}
+
+/// Activate (or re-activate) the graphical desktop for a live session handle.
+fn activate_desktop_session(
+    handle: DesktopSessionHandle,
+    display_cap: &mut Option<CapabilityToken>,
+    active_vt: &mut VirtualTerminal,
+    desktop_pointer_release_gate: &mut bool,
+    desktop_session: &mut Option<DesktopSessionHandle>,
+    desktop_unlocked: &mut bool,
+    mouse: &mut PointerSurface,
+    login: &mut LoginScreen,
+    has_fb: bool,
+    fb_addr: u64,
+    fb32_w: u32,
+    fb32_h: u32,
+    fb32_p: u32,
+    login_bg: &Option<(u32, u32, alloc::vec::Vec<u32>)>,
+) {
+    // If the session was locked (idle/manual lock), clear sessiond Locked
+    // after a fresh UAC success so status queries report Running again.
+    if query_desktop_session(handle, SESSION_QUERY_TIMEOUT_MS) == Some(SessionState::Locked) {
+        let _ = session_action(
+            handle,
+            SessionAction::UnlockCompleted,
+            SESSION_QUERY_TIMEOUT_MS,
+        );
+    }
+    *desktop_session = Some(handle);
+    *desktop_unlocked = true;
+    if has_fb {
+        erase_tui_pointer(fb_addr, fb32_w, fb32_h, fb32_p, mouse);
+    }
+    if send_display_request(display_cap, IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE)) {
+        debug_log("[SESSION] switched to F2 GraphicalDesktop");
+        *active_vt = VirtualTerminal::Desktop;
+        *desktop_pointer_release_gate = true;
+        mouse.deactivate();
+        login.message = "Desktop session launched.";
+    } else {
+        *active_vt = VirtualTerminal::Tty;
+        login.message = "Desktop unavailable; TTY retained.";
+        debug_log("[SESSION] desktop activation failed; TTY retains framebuffer");
+        if has_fb {
+            render_login_fb(
+                login,
+                fb_addr,
+                fb32_w,
+                fb32_h,
+                fb32_p,
+                mouse,
+                login_bg,
+            );
+        }
+    }
+}
+
 fn query_desktop_component(
     handle: DesktopSessionHandle,
     timeout_ms: u64,
@@ -812,8 +887,8 @@ fn query_desktop_component(
 fn wait_for_desktop_session_running(handle: DesktopSessionHandle, timeout_ms: u64) -> bool {
     let deadline = monotonic_millis().saturating_add(timeout_ms);
     while monotonic_millis() < deadline {
-        match query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) {
-            Some(SessionState::Running) => return true,
+        match query_desktop_session(handle, SESSION_QUERY_TIMEOUT_MS) {
+            Some(SessionState::Running) | Some(SessionState::Locked) => return true,
             Some(SessionState::Failed) | Some(SessionState::Stopped) => return false,
             // Transient lookup/IPC miss (slow guest): keep polling until deadline.
             Some(_) | None => {}
@@ -1478,6 +1553,9 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 session_foundation_baseline =
                                                     telemetry_baseline(&mut session_telemetry);
                                             }
+                                            // CREATE is idempotent for the same uid when a
+                                            // desktop session is already live (sessiond
+                                            // reattaches and consumes the auth grant).
                                             let handle = match create_desktop_session(
                                                 &username[..username_len],
                                                 uid,
@@ -1489,9 +1567,14 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     login.message = err.message();
                                                     if has_fb {
                                                         render_login_fb(
-                                                            &login, fb_addr, fb32_w, fb32_h,
-                                                            fb32_p, &mut mouse,
-                                    &login_bg);
+                                                            &login,
+                                                            fb_addr,
+                                                            fb32_w,
+                                                            fb32_h,
+                                                            fb32_p,
+                                                            &mut mouse,
+                                                            &login_bg,
+                                                        );
                                                     }
                                                     break 'kbd;
                                                 }
@@ -1501,45 +1584,36 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     "Desktop session failed before shell ready.";
                                                 if has_fb {
                                                     render_login_fb(
-                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                        &login,
+                                                        fb_addr,
+                                                        fb32_w,
+                                                        fb32_h,
+                                                        fb32_p,
                                                         &mut mouse,
-                                    &login_bg);
+                                                        &login_bg,
+                                                    );
                                                 }
                                                 break 'kbd;
                                             }
                                             if session_foundation_gate_enabled() {
                                                 session_foundation_log("LOGIN_HANDOFF PASS");
                                             }
-                                            desktop_session = Some(handle);
-                                            desktop_unlocked = true;
-                                            if has_fb {
-                                                erase_tui_pointer(
-                                                    fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
-                                                );
-                                            }
-                                            if send_display_request(
+                                            activate_desktop_session(
+                                                handle,
                                                 &mut display_cap,
-                                                IpcMsg::with_label(SgpMsg::SESSION_ACTIVATE),
-                                            ) {
-                                                debug_log(
-                                                    "[SESSION] switched to F2 GraphicalDesktop",
-                                                );
-                                                active_vt = VirtualTerminal::Desktop;
-                                                desktop_pointer_release_gate = true;
-                                                mouse.deactivate();
-                                                login.message = "Desktop session launched.";
-                                            } else {
-                                                active_vt = VirtualTerminal::Tty;
-                                                login.message =
-                                                    "Desktop unavailable; TTY retained.";
-                                                debug_log("[SESSION] desktop activation failed; TTY retains framebuffer");
-                                                if has_fb {
-                                                    render_login_fb(
-                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
-                                                        &mut mouse,
-                                    &login_bg);
-                                                }
-                                            }
+                                                &mut active_vt,
+                                                &mut desktop_pointer_release_gate,
+                                                &mut desktop_session,
+                                                &mut desktop_unlocked,
+                                                &mut mouse,
+                                                &mut login,
+                                                has_fb,
+                                                fb_addr,
+                                                fb32_w,
+                                                fb32_h,
+                                                fb32_p,
+                                                &login_bg,
+                                            );
                                         }
                                     }
                                     logged_in = true;
@@ -2118,9 +2192,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             }
             if let Some(handle) = desktop_session {
                 static mut LAST_SESSION_POLL_MS: u64 = 0;
+                static mut LAST_SESSION_MISS_LOG_MS: u64 = 0;
                 let now = monotonic_millis();
                 let should_poll = unsafe {
-                    if now.saturating_sub(LAST_SESSION_POLL_MS) >= 100 {
+                    if now.saturating_sub(LAST_SESSION_POLL_MS) >= 250 {
                         LAST_SESSION_POLL_MS = now;
                         true
                     } else {
@@ -2128,8 +2203,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
                 };
                 if should_poll {
-                    match query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) {
-                        Some(SessionState::Failed) | Some(SessionState::Stopped) | None => {
+                    match query_desktop_session(handle, SESSION_QUERY_TIMEOUT_MS) {
+                        // Only end the local login handoff on definitive terminal
+                        // states. IPC timeout/None used to drop a live session and
+                        // leave sessiond busy, blocking the next Desktop login.
+                        Some(SessionState::Failed) | Some(SessionState::Stopped) => {
                             let _ = send_display_request(
                                 &mut display_cap,
                                 IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
@@ -2148,10 +2226,28 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     fb32_h,
                                     fb32_p,
                                     &mut mouse,
-                                    &login_bg);
+                                    &login_bg,
+                                );
                             }
                         }
-                        _ => {}
+                        Some(state) if desktop_session_is_live(state) => {}
+                        None => {
+                            // Transient miss under load — keep the handle.
+                            let should_log = unsafe {
+                                if now.saturating_sub(LAST_SESSION_MISS_LOG_MS) >= 5_000 {
+                                    LAST_SESSION_MISS_LOG_MS = now;
+                                    true
+                                } else {
+                                    false
+                                }
+                            };
+                            if should_log {
+                                debug_log(
+                                    "[SESSION] poll miss (timeout/lookup); keeping desktop session\n",
+                                );
+                            }
+                        }
+                        Some(_) => {}
                     }
                 }
             }

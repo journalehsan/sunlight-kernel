@@ -1,6 +1,6 @@
 use sunlight_ipc::{
-    ipc_call, nameserver_lookup, process_yield, CapabilityToken, IpcMsg, MezzoMsg, SgpMsg,
-    LOCK_SESSION_USERNAME_MAX,
+    ipc_call, nameserver_lookup, process_yield, CapabilityToken, IpcMsg, MezzoMsg, SessionAction,
+    SessionMsg, SgpMsg, LOCK_SESSION_USERNAME_MAX, SESSION_ENDPOINT,
 };
 use sunlight_uac::auth::{authenticate_password_for_session, MAX_PASSWORD_LEN};
 use sunlight_ui::image::{decode_simg, RgbaImage};
@@ -122,6 +122,22 @@ impl LockPresenter {
                 .with_cap(0, success.session_grant),
         );
         if reply.label == MezzoMsg::REPLY && reply.words[0] == 0 {
+            // Keep sessiond state in sync with mezzo unlock (Start Menu / Super+L).
+            if let Some(sessiond) = nameserver_lookup(SESSION_ENDPOINT) {
+                let list = ipc_call(
+                    sessiond,
+                    IpcMsg::with_label(SessionMsg::SESSION_LIST).word(0, 0),
+                );
+                if list.label == SessionMsg::REPLY {
+                    let _ = ipc_call(
+                        sessiond,
+                        IpcMsg::with_label(SessionMsg::SESSION_ACTION)
+                            .word(0, list.words[0])
+                            .word(1, list.words[1])
+                            .word(2, SessionAction::UnlockCompleted as u64),
+                    );
+                }
+            }
             request_close();
         } else {
             self.message = "Unlock rejected. Try again.";

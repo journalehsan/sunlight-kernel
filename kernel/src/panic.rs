@@ -39,11 +39,10 @@ fn panic(info: &PanicInfo) -> ! {
 
             writer.set_scale(2);
             writer.set_color(WHITE);
+            let _ = writer
+                .write_str("Your SunlightOS system ran into a problem and needs to restart.\n");
             let _ = writer.write_str(
-                "Your SunlightOS system ran into a problem and needs to restart.\n",
-            );
-            let _ = writer.write_str(
-                "We're just collecting error info, and then system will halt.\n\n",
+                "Diagnostic information is shown below. The system has been halted safely.\n\n",
             );
 
             writer.set_scale(1);
@@ -647,9 +646,15 @@ impl QrCode25 {
                 col -= 1;
             }
             let rows: [usize; 25] = if up {
-                [24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+                [
+                    24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4,
+                    3, 2, 1, 0,
+                ]
             } else {
-                [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+                [
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                    22, 23, 24,
+                ]
             };
 
             for &r in &rows {
@@ -678,10 +683,16 @@ impl QrCode25 {
         Self { modules }
     }
 
-    fn place_finder(modules: &mut [[bool; 25]; 25], is_func: &mut [[bool; 25]; 25], r0: usize, c0: usize) {
+    fn place_finder(
+        modules: &mut [[bool; 25]; 25],
+        is_func: &mut [[bool; 25]; 25],
+        r0: usize,
+        c0: usize,
+    ) {
         for r in 0..7 {
             for c in 0..7 {
-                let is_black = r == 0 || r == 6 || c == 0 || c == 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4);
+                let is_black =
+                    r == 0 || r == 6 || c == 0 || c == 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4);
                 if r0 + r < 25 && c0 + c < 25 {
                     modules[r0 + r][c0 + c] = is_black;
                     is_func[r0 + r][c0 + c] = true;
@@ -700,7 +711,12 @@ impl QrCode25 {
         }
     }
 
-    fn place_alignment(modules: &mut [[bool; 25]; 25], is_func: &mut [[bool; 25]; 25], r0: usize, c0: usize) {
+    fn place_alignment(
+        modules: &mut [[bool; 25]; 25],
+        is_func: &mut [[bool; 25]; 25],
+        r0: usize,
+        c0: usize,
+    ) {
         for r in 0..5 {
             for c in 0..5 {
                 let is_black = r == 0 || r == 4 || c == 0 || c == 4 || (r == 2 && c == 2);
@@ -712,12 +728,39 @@ impl QrCode25 {
 
     fn place_format_info(modules: &mut [[bool; 25]; 25], format_bits: u16) {
         let coords1 = [
-            (8, 0), (8, 1), (8, 2), (8, 3), (8, 4), (8, 5), (8, 7), (8, 8),
-            (7, 8), (5, 8), (4, 8), (3, 8), (2, 8), (1, 8), (0, 8),
+            (8, 0),
+            (8, 1),
+            (8, 2),
+            (8, 3),
+            (8, 4),
+            (8, 5),
+            (8, 7),
+            (8, 8),
+            (7, 8),
+            (5, 8),
+            (4, 8),
+            (3, 8),
+            (2, 8),
+            (1, 8),
+            (0, 8),
         ];
         let coords2 = [
-            (24, 8), (23, 8), (22, 8), (21, 8), (20, 8), (19, 8), (18, 8), (17, 8),
-            (8, 17), (8, 18), (8, 19), (8, 20), (8, 21), (8, 22), (8, 23), (8, 24),
+            (24, 8),
+            (23, 8),
+            (22, 8),
+            (21, 8),
+            (20, 8),
+            (19, 8),
+            (18, 8),
+            (17, 8),
+            (8, 17),
+            (8, 18),
+            (8, 19),
+            (8, 20),
+            (8, 21),
+            (8, 22),
+            (8, 23),
+            (8, 24),
         ];
         for i in 0..15 {
             let bit = ((format_bits >> i) & 1) != 0;

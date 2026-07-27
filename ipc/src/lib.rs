@@ -1529,6 +1529,9 @@ impl LockState {
 pub mod MezzoMsg {
     pub const SESSION_ESTABLISH: u64 = 0xB0FF;
     pub const SESSION_ESTABLISH_TRUSTED: u64 = 0xB106;
+    /// Session-manager-only: force unlock after a fresh authenticated Login
+    /// reattach (e.g. lock presenter unavailable, TTY re-auth).
+    pub const SESSION_FORCE_UNLOCK_TRUSTED: u64 = 0xB107;
     pub const LOCK_ACTIVATE: u64 = 0xB100;
     pub const LOCK_STATUS: u64 = 0xB101;
     pub const LOCK_RECOVER: u64 = 0xB102;

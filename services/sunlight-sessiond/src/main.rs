@@ -227,6 +227,24 @@ fn establish_lock_session(username: &[u8], uid: u32, gid: u32) -> bool {
     }
 }
 
+/// After Login reattach, clear mezzo lock so display input returns to desktop.
+fn force_unlock_lock_session() {
+    let Some(mezzo) = nameserver_lookup("mezzo") else {
+        return;
+    };
+    match ipc_call_timeout(
+        mezzo,
+        IpcMsg::with_label(MezzoMsg::SESSION_FORCE_UNLOCK_TRUSTED),
+        MEZZO_ESTABLISH_TIMEOUT_MS,
+    ) {
+        Ok(reply) if reply.label == MezzoMsg::REPLY => {
+            write_log("[SESSION-FOUNDATION] mezzo force unlock PASS\n");
+        }
+        Ok(_) => write_log("[SESSION-FOUNDATION] mezzo force unlock rejected\n"),
+        Err(_) => write_log("[SESSION-FOUNDATION] mezzo force unlock timeout\n"),
+    }
+}
+
 fn session_summary_reply(record: &SessionRecord) -> IpcMsg {
     IpcMsg::with_label(SessionMsg::REPLY)
         .word(0, record.session_id.get())
@@ -613,12 +631,60 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         state.stats.login_handoff_failures = state.stats.login_handoff_failures.saturating_add(1);
         return error(SessionMsg::ERR_INVALID_ARGUMENT);
     };
+    // Same-user reattach: Login may return to the secure form while a desktop
+    // session is still live (transient status poll miss, Ctrl+F1, or lock exit).
+    // Do not spawn a second shell — consume the fresh grant and hand back the
+    // existing session so tty_server can re-activate the display.
     if let Some(active) = state.active.as_ref() {
         if active.request_id == request_id && active.record.uid == requested_uid {
             return create_reply(&active.record);
         }
-        write_log("[SESSION-FOUNDATION] CREATE fail: busy\n");
-        return error(SessionMsg::ERR_BUSY);
+        let reattachable = active.record.uid == requested_uid
+            && matches!(
+                active.record.state,
+                SessionState::Created
+                    | SessionState::Preparing
+                    | SessionState::StartingRequiredComponents
+                    | SessionState::Running
+                    | SessionState::Degraded
+                    | SessionState::Locking
+                    | SessionState::Locked
+            );
+        if !reattachable {
+            write_log("[SESSION-FOUNDATION] CREATE fail: busy\n");
+            return error(SessionMsg::ERR_BUSY);
+        }
+        let Some((uid, gid)) = session_consume_auth_grant(msg.caps[0], msg.badge) else {
+            write_log("[SESSION-FOUNDATION] CREATE reattach fail: auth grant\n");
+            state.stats.login_handoff_failures =
+                state.stats.login_handoff_failures.saturating_add(1);
+            return error(SessionMsg::ERR_UNAUTHORIZED);
+        };
+        if uid != requested_uid || gid != requested_gid {
+            write_log("[SESSION-FOUNDATION] CREATE reattach fail: uid/gid mismatch\n");
+            state.stats.login_handoff_failures =
+                state.stats.login_handoff_failures.saturating_add(1);
+            return error(SessionMsg::ERR_UNAUTHORIZED);
+        }
+        if let Some(active) = state.active.as_mut() {
+            active.username = username;
+            active.username_len = username_len;
+            active.request_id = request_id;
+            if matches!(
+                active.record.state,
+                SessionState::Locked | SessionState::Locking
+            ) {
+                // Fresh authenticated Login resumes a locked desktop session.
+                active.record.state = SessionState::Running;
+                write_log("[SESSION-FOUNDATION] CREATE reattach unlock PASS\n");
+            }
+        }
+        // Always clear mezzo lock on reattach: Super+L may lock mezzo without
+        // flipping sessiond state, and TTY re-auth must restore desktop input.
+        force_unlock_lock_session();
+        let _ = establish_lock_session(&username[..username_len], uid, gid);
+        write_log("[SESSION-FOUNDATION] CREATE reattach PASS\n");
+        return create_reply(&state.active.as_ref().unwrap().record);
     }
     let Some((uid, gid)) = session_consume_auth_grant(msg.caps[0], msg.badge) else {
         write_log("[SESSION-FOUNDATION] CREATE fail: auth grant\n");
