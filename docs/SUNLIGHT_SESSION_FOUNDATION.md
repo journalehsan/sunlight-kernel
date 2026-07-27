@@ -21,8 +21,8 @@ Phase 0 introduces a native desktop session manager:
 
 This phase does not implement:
 
-- startup-app configuration
-- `.sunapp` selection UI
+- startup-app configuration (see `docs/SUNLIGHT_SESSION_CONFIGURATION.md` Phase 1)
+- `.sunapp` selection UI (Phase 1 Session Configuration)
 - Wise Owl Welcome
 - Session Restore / checkpoints / hibernation
 - multi-user switching

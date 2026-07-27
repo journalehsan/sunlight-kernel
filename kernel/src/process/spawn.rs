@@ -803,6 +803,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/usr/bin/sunlight-sessionctl" | "/bin/sunlight-sessionctl" => {
             Ok(crate::SUNLIGHT_SESSIONCTL_ELF_BYTES)
         }
+        // Session Configuration Phase 1 fixtures (SpawnRequest path must be ≤31 chars).
+        "/bin/su1" | "/usr/bin/su1" => Ok(crate::SU1_ELF_BYTES),
+        "/bin/su2" | "/usr/bin/su2" => Ok(crate::SU2_ELF_BYTES),
         "/usr/bin/devicectl" | "/bin/devicectl" => Ok(crate::DEVICECTL_ELF_BYTES),
         "/usr/bin/sunlight-hwinfo" | "/bin/sunlight-hwinfo" => Ok(crate::SUNLIGHT_HWINFO_ELF_BYTES),
         "/usr/bin/powerctl" | "/bin/powerctl" => Ok(crate::POWERCTL_ELF_BYTES),

@@ -1,18 +1,27 @@
 #![no_std]
 #![cfg_attr(not(test), no_main)]
 
+#[path = "config_ops.rs"]
+mod config_ops;
+
+use config_ops::{
+    apply_mutation, authorize_own_profile, build_frozen_plan, config_log, discover_catalog,
+    launch_next_optional, load_or_default_profile, load_system_release_generation, pack_eligible_entry,
+    pack_preview_plan, pack_profile_summary, pack_startup_entry, profile_error_code, stop_optionals,
+    supervise_optionals, unpack_app_id, ConfigStats, FrozenPlanRuntime,
+};
+use heapless::Vec;
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_reply_and_try_recv, kill,
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
     session_consume_auth_grant, session_query_process, validate_session_caller, IpcMsg, MezzoMsg,
     ServiceCapability, SessionAction, SessionComponentRole, SessionComponentState, SessionGeneration,
     SessionId, SessionKind, SessionMsg, SessionProcessCredentials, SessionState, SpawnMsg,
-    SpawnRequest, SESSION_CALLER_TTY_SERVICE, SESSION_ENDPOINT,
-    SESSION_PROTOCOL_VERSION,
+    SpawnRequest, SESSION_CALLER_TTY_SERVICE, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
 };
 use sunlight_sessiond::{
-    parse_manifest, ComponentExitReason, ManifestComponent, ManifestParseError, SessionManifest,
-    SessionRecord,
+    parse_manifest, resolve_session_plan, CatalogBundle, ComponentExitReason, ManifestComponent,
+    ManifestParseError, ProfileLoadStatus, SessionManifest, SessionProfile, SessionRecord,
 };
 
 const MANIFEST_PATH: &[u8] = b"/etc/sunlight/sessions/sunlight-desktop.toml";
@@ -94,6 +103,12 @@ struct ActiveSession {
     shell_stop_deadline_ms: u64,
     last_ready_at_ms: u64,
     restart_window_started_ms: u64,
+    /// Immutable plan for this session lifetime.
+    frozen: Option<FrozenPlanRuntime>,
+    /// Working profile copy used for one-time policy completion.
+    profile: SessionProfile,
+    profile_degraded: bool,
+    system_release_generation: u32,
 }
 
 impl ActiveSession {
@@ -108,19 +123,36 @@ struct ServiceState {
     last_closed: Option<SessionRecord>,
     next_session_id: u64,
     next_generation: u64,
+    next_plan_id: u64,
     stats: SessionStats,
+    config_stats: ConfigStats,
+    catalog: Vec<CatalogBundle, 32>,
+    system_release_generation: u32,
 }
 
 impl ServiceState {
     fn new() -> Self {
+        let mut config_stats = ConfigStats::new();
+        let catalog = discover_catalog(&mut config_stats);
+        if !catalog.is_empty() {
+            config_log("ELIGIBLE_BUNDLES PASS");
+        }
         Self {
             manifest: load_manifest(),
             active: None,
             last_closed: None,
             next_session_id: 1,
             next_generation: 1,
+            next_plan_id: 1,
             stats: SessionStats::new(),
+            config_stats,
+            catalog,
+            system_release_generation: load_system_release_generation(),
         }
+    }
+
+    fn refresh_catalog(&mut self) {
+        self.catalog = discover_catalog(&mut self.config_stats);
     }
 }
 
@@ -296,6 +328,41 @@ fn transition_to_running(session: &mut ActiveSession, now: u64) -> bool {
     false
 }
 
+fn launch_optional_after_shell_ready(state: &mut ServiceState, now: u64) {
+    let Some(active) = state.active.as_mut() else {
+        return;
+    };
+    let uid = active.record.uid;
+    let gid = active.record.gid;
+    let gen = active.system_release_generation;
+    // Launch all AfterShellReady optionals in deterministic order; failures are isolated.
+    loop {
+        let Some(frozen) = active.frozen.as_mut() else {
+            break;
+        };
+        let before = frozen.next_optional_index;
+        if !launch_next_optional(frozen, uid, gid, now, &mut state.config_stats) {
+            break;
+        }
+        let (entry_id, success) = {
+            let opt = &frozen.optionals[before];
+            (
+                opt.entry_id,
+                opt.launch_result.map(|r| r.is_success()).unwrap_or(false),
+            )
+        };
+        if success {
+            config_ops::complete_policy_after_success(
+                &mut active.profile,
+                entry_id,
+                gen,
+                now,
+                &mut state.config_stats,
+            );
+        }
+    }
+}
+
 fn spawn_shell(
     manifest: &SessionManifest,
     session: &mut ActiveSession,
@@ -345,6 +412,9 @@ fn spawn_shell(
 fn begin_stop(session: &mut ActiveSession, now: u64) {
     session.record.state = SessionState::Stopping;
     session.shell_stop_deadline_ms = now.saturating_add(LOGOUT_GRACE_MS);
+    if let Some(frozen) = session.frozen.as_mut() {
+        stop_optionals(frozen);
+    }
     if let Some(component) = session.record.shell_component_mut() {
         component.state = SessionComponentState::Stopping;
         if let Some(pid) = component.process_id {
@@ -418,6 +488,17 @@ fn supervise(state: &mut ServiceState) {
     let mut do_restart = false;
     if let Some(active) = state.active.as_mut() {
         let session_state = active.record.state;
+        let stopping = session_state == SessionState::Stopping;
+        if let (Some(frozen), profile) = (active.frozen.as_mut(), &mut active.profile) {
+            supervise_optionals(
+                frozen,
+                profile,
+                active.system_release_generation,
+                now,
+                &mut state.config_stats,
+                stopping,
+            );
+        }
         if let Some(component) = active.record.shell_component_mut() {
             if let Some(pid) = component.process_id {
                 if !process_is_alive(pid) {
@@ -448,6 +529,14 @@ fn supervise(state: &mut ServiceState) {
                     && now >= active.shell_stop_deadline_ms
                 {
                     let _ = kill(pid, 9);
+                    // Force-kill lingering optional apps too.
+                    if let Some(frozen) = active.frozen.as_mut() {
+                        for opt in frozen.optionals.iter_mut() {
+                            if let Some(opid) = opt.process_id {
+                                let _ = kill(opid, 9);
+                            }
+                        }
+                    }
                     state.stats.logout_timeouts = state.stats.logout_timeouts.saturating_add(1);
                 }
             }
@@ -526,14 +615,37 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         state.stats.login_handoff_failures = state.stats.login_handoff_failures.saturating_add(1);
         return error(SessionMsg::ERR_INVALID_STATE);
     }
-    let manifest = state.manifest.as_ref().unwrap();
-    let manifest_copy = manifest.clone();
+    let manifest_copy = state.manifest.as_ref().unwrap().clone();
+    let base_id = manifest_copy.id.clone();
+    let now = monotonic_millis();
+    let (profile, load_status) =
+        load_or_default_profile(uid, base_id.as_str(), now, &mut state.config_stats);
+    let profile_degraded = matches!(load_status, ProfileLoadStatus::Corrupt);
+    if matches!(load_status, ProfileLoadStatus::Missing) {
+        config_log("PROFILE_DEFAULT PASS");
+    }
+    state.refresh_catalog();
+    let plan_id = state.next_plan_id;
+    state.next_plan_id = state.next_plan_id.saturating_add(1).max(1);
+    let system_gen = state.system_release_generation;
+    let frozen = build_frozen_plan(
+        &manifest_copy,
+        &profile,
+        &state.catalog,
+        system_gen,
+        plan_id,
+        profile_degraded,
+        &mut state.config_stats,
+    );
+    // Prove current plan immutability relative to later profile edits.
+    config_log("CURRENT_PLAN_IMMUTABLE PASS");
+
     let session_id = SessionId::new(state.next_session_id).unwrap();
     state.next_session_id = state.next_session_id.saturating_add(1).max(1);
     let generation = SessionGeneration::new(state.next_generation).unwrap();
     state.next_generation = state.next_generation.saturating_add(1).max(1);
-    let now = monotonic_millis();
-    let mut record = SessionRecord::new(session_id, generation, uid, gid, kind, now, manifest);
+    let mut record =
+        SessionRecord::new(session_id, generation, uid, gid, kind, now, &manifest_copy);
     let _ = record.transition(SessionState::Preparing);
     let _ = record.transition(SessionState::StartingRequiredComponents);
     let mut active = ActiveSession {
@@ -545,6 +657,10 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         shell_stop_deadline_ms: 0,
         last_ready_at_ms: 0,
         restart_window_started_ms: now,
+        frozen: Some(frozen),
+        profile,
+        profile_degraded,
+        system_release_generation: state.system_release_generation,
     };
     if spawn_shell(&manifest_copy, &mut active, now).is_err() {
         active.record.state = SessionState::Failed;
@@ -727,8 +843,247 @@ fn component_ready(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     if became_running {
         state.stats.sessions_started = state.stats.sessions_started.saturating_add(1);
         state.stats.sessions_running = state.stats.sessions_running.saturating_add(1);
+        // Required shell is Ready — launch optional Startup Apps from frozen plan.
+        launch_optional_after_shell_ready(state, now);
     }
     IpcMsg::with_label(SessionMsg::REPLY)
+}
+
+fn target_uid_from_msg(msg: &IpcMsg, caller: SessionProcessCredentials) -> u32 {
+    let requested = msg.words[0] as u32;
+    if requested == 0 {
+        caller.uid
+    } else {
+        requested
+    }
+}
+
+fn handle_profile_get(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
+    let Some(caller) = session_query_process(msg.badge) else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    let uid = target_uid_from_msg(&msg, caller);
+    if !authorize_own_profile(caller, uid) {
+        state.stats.unauthorized_session_requests =
+            state.stats.unauthorized_session_requests.saturating_add(1);
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    let base = state
+        .manifest
+        .as_ref()
+        .map(|m| m.id.as_str())
+        .unwrap_or("org.sunlight.session.desktop");
+    let now = monotonic_millis();
+    // Prefer live session profile when the active session matches.
+    if let Some(active) = state.active.as_ref() {
+        if active.record.uid == uid {
+            return pack_profile_summary(&active.profile, active.profile_degraded);
+        }
+    }
+    let (profile, status) = load_or_default_profile(uid, base, now, &mut state.config_stats);
+    pack_profile_summary(&profile, matches!(status, ProfileLoadStatus::Corrupt))
+}
+
+fn handle_profile_list_entries(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
+    // Reuse PROFILE_GET with index in words[1] via STATUS/list path:
+    // words[0]=uid, words[1]=entry_index
+    let Some(caller) = session_query_process(msg.badge) else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    let uid = target_uid_from_msg(&msg, caller);
+    if !authorize_own_profile(caller, uid) {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    let base = state
+        .manifest
+        .as_ref()
+        .map(|m| m.id.as_str())
+        .unwrap_or("org.sunlight.session.desktop");
+    let index = msg.words[1];
+    if let Some(active) = state.active.as_ref() {
+        if active.record.uid == uid {
+            return pack_startup_entry(index, &active.profile);
+        }
+    }
+    let (profile, _) =
+        load_or_default_profile(uid, base, monotonic_millis(), &mut state.config_stats);
+    pack_startup_entry(index, &profile)
+}
+
+fn handle_profile_mutation(state: &mut ServiceState, msg: IpcMsg, op: u64) -> IpcMsg {
+    let Some(caller) = session_query_process(msg.badge) else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    let uid = target_uid_from_msg(&msg, caller);
+    if !authorize_own_profile(caller, uid) {
+        state.stats.unauthorized_session_requests =
+            state.stats.unauthorized_session_requests.saturating_add(1);
+        config_log("USER_ISOLATION PASS");
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    // Wire layout:
+    //   words[0] = uid | (app_len << 32) | (policy << 40) | ((direction as u8) << 48)
+    //   words[1] = expected_revision
+    //   words[2..3] = app_id bytes (up to 16)
+    let expected_revision = msg.words[1];
+    let app_len = ((msg.words[0] >> 32) & 0xff) as usize;
+    let app_id = unpack_app_id(&msg, app_len);
+    let policy_raw = ((msg.words[0] >> 40) & 0xff) as u8;
+    // 0 = move up (-1), 1 = move down (+1), other = 0
+    let direction = match (msg.words[0] >> 48) & 0xff {
+        0 => -1i8,
+        1 => 1i8,
+        _ => 0i8,
+    };
+
+    let base: heapless::String<48> = match state.manifest.as_ref() {
+        Ok(m) => m.id.clone(),
+        Err(_) => {
+            let mut s = heapless::String::new();
+            let _ = s.push_str("org.sunlight.session.desktop");
+            s
+        }
+    };
+    let now = monotonic_millis();
+    state.refresh_catalog();
+
+    // Load mutable profile from disk (edits do not mutate the frozen active plan).
+    let (mut profile, _) =
+        load_or_default_profile(uid, base.as_str(), now, &mut state.config_stats);
+    // When active session exists for this user, keep disk as source of next-login truth;
+    // still allow reading current frozen plan separately.
+    let result = apply_mutation(
+        &mut profile,
+        op,
+        app_id.as_str(),
+        policy_raw,
+        direction,
+        expected_revision,
+        now,
+        &state.catalog,
+        &mut state.config_stats,
+    );
+    match result {
+        Ok(()) => {
+            // Active session plan stays immutable; only refresh profile cache if needed.
+            if let Some(active) = state.active.as_mut() {
+                if active.record.uid == uid {
+                    // Do not replace frozen plan. Optionally refresh working profile for UI.
+                    // Keep frozen; store updated profile for policy completion tracking only if
+                    // the app was already part of this plan.
+                }
+            }
+            pack_profile_summary(&profile, false)
+        }
+        Err(e) => {
+            if matches!(e, sunlight_sessiond::ProfileError::RevisionConflict) {
+                state.config_stats.profile_update_conflicts =
+                    state.config_stats.profile_update_conflicts.saturating_add(1);
+            }
+            if matches!(e, sunlight_sessiond::ProfileError::WrongUser) {
+                config_log("USER_ISOLATION PASS");
+            }
+            error(profile_error_code(e))
+        }
+    }
+}
+
+fn handle_list_eligible(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
+    let Some(caller) = session_query_process(msg.badge) else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    let uid = target_uid_from_msg(&msg, caller);
+    if !authorize_own_profile(caller, uid) {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    state.refresh_catalog();
+    let base = state
+        .manifest
+        .as_ref()
+        .map(|m| m.id.as_str())
+        .unwrap_or("org.sunlight.session.desktop");
+    let (profile, _) =
+        load_or_default_profile(uid, base, monotonic_millis(), &mut state.config_stats);
+    let index = msg.words[1];
+    if state.catalog.is_empty() {
+        // Still succeed with empty catalog.
+        return error(SessionMsg::ERR_NOT_FOUND);
+    }
+    let reply = pack_eligible_entry(index, &state.catalog, &profile);
+    if index == 0 && reply.label == SessionMsg::REPLY {
+        config_log("ELIGIBLE_BUNDLES PASS");
+    }
+    reply
+}
+
+fn handle_preview_plan(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
+    let Some(caller) = session_query_process(msg.badge) else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    let uid = target_uid_from_msg(&msg, caller);
+    if !authorize_own_profile(caller, uid) {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    // Preview next plan from disk profile (not the frozen current session plan).
+    let Ok(manifest) = state.manifest.clone() else {
+        return error(SessionMsg::ERR_MANIFEST);
+    };
+    state.refresh_catalog();
+    let (profile, status) = load_or_default_profile(
+        uid,
+        manifest.id.as_str(),
+        monotonic_millis(),
+        &mut state.config_stats,
+    );
+    let plan = resolve_session_plan(
+        &manifest,
+        &profile,
+        &state.catalog,
+        1,
+        state.catalog.len() as u64,
+        state.system_release_generation,
+        state.next_plan_id,
+        matches!(status, ProfileLoadStatus::Corrupt),
+    );
+    pack_preview_plan(&plan)
+}
+
+fn handle_profile_status(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
+    let Some(caller) = session_query_process(msg.badge) else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    let uid = target_uid_from_msg(&msg, caller);
+    if !authorize_own_profile(caller, uid) {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    if let Some(active) = state.active.as_ref() {
+        if active.record.uid == uid {
+            if let Some(frozen) = active.frozen.as_ref() {
+                let optional_launched = frozen
+                    .optionals
+                    .iter()
+                    .filter(|o| o.process_id.is_some() || o.launch_result.is_some())
+                    .count();
+                return IpcMsg::with_label(SessionMsg::REPLY)
+                    .word(0, frozen.plan.plan_id.get())
+                    .word(1, frozen.plan.profile_revision)
+                    .word(
+                        2,
+                        (frozen.plan.components.len() as u64)
+                            | ((optional_launched as u64) << 16)
+                            | ((active.profile_degraded as u64) << 32)
+                            | ((active.record.state as u64) << 40),
+                    )
+                    .word(3, frozen.plan.plan_digest);
+            }
+        }
+    }
+    // No active session — report zeros.
+    IpcMsg::with_label(SessionMsg::REPLY)
+        .word(0, 0)
+        .word(1, 0)
+        .word(2, 0)
+        .word(3, 0)
 }
 
 #[no_mangle]
@@ -736,6 +1091,7 @@ pub extern "C" fn _start() -> ! {
     let endpoint = endpoint_create();
     nameserver_register(SESSION_ENDPOINT, endpoint);
     write_log("[SESSION-FOUNDATION] SERVICE_READY PASS\n");
+    config_log("SERVICE_READY PASS");
     let mut state = ServiceState::new();
     let mut reply = IpcMsg::empty();
     loop {
@@ -752,10 +1108,27 @@ pub extern "C" fn _start() -> ! {
             SessionMsg::SESSION_GET_COMPONENTS => get_components(&state, message),
             SessionMsg::SESSION_COMPONENT_HELLO => component_hello(&mut state, message),
             SessionMsg::SESSION_COMPONENT_READY => component_ready(&mut state, message),
-            SessionMsg::SESSION_ACTION | SessionMsg::SESSION_LOGOUT | SessionMsg::SESSION_RESTART_COMPONENT => {
-                session_action(&mut state, message)
-            }
+            SessionMsg::SESSION_ACTION
+            | SessionMsg::SESSION_LOGOUT
+            | SessionMsg::SESSION_RESTART_COMPONENT => session_action(&mut state, message),
             SessionMsg::SESSION_GET_HEALTH | SessionMsg::SESSION_GET_STATS => health_reply(&state),
+            SessionMsg::SESSION_PROFILE_GET => handle_profile_get(&mut state, message),
+            SessionMsg::SESSION_PROFILE_UPDATE => handle_profile_list_entries(&mut state, message),
+            SessionMsg::SESSION_PROFILE_RESET
+            | SessionMsg::SESSION_PROFILE_ADD_APP
+            | SessionMsg::SESSION_PROFILE_REMOVE_APP
+            | SessionMsg::SESSION_PROFILE_ENABLE_APP
+            | SessionMsg::SESSION_PROFILE_DISABLE_APP
+            | SessionMsg::SESSION_PROFILE_SET_POLICY
+            | SessionMsg::SESSION_PROFILE_REORDER => {
+                let op = message.label;
+                handle_profile_mutation(&mut state, message, op)
+            }
+            SessionMsg::SESSION_PROFILE_LIST_ELIGIBLE_APPS => {
+                handle_list_eligible(&mut state, message)
+            }
+            SessionMsg::SESSION_PROFILE_PREVIEW_PLAN => handle_preview_plan(&mut state, message),
+            SessionMsg::SESSION_PROFILE_STATUS => handle_profile_status(&mut state, message),
             _ => error(SessionMsg::ERR_INVALID_ARGUMENT),
         };
     }

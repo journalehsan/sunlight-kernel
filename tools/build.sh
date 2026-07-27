@@ -56,6 +56,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tz --features tzut
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessionctl --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-startup-fixture --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-gcd --release

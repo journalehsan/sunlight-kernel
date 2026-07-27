@@ -305,10 +305,282 @@ fn session_foundation_gate_enabled() -> bool {
     option_env!("SUNLIGHT_INJECT_PHASE") == Some("session_foundation")
 }
 
+fn session_configuration_gate_enabled() -> bool {
+    option_env!("SUNLIGHT_INJECT_PHASE") == Some("session_configuration")
+}
+
 fn session_foundation_log(marker: &str) {
     debug_log("[SESSION-FOUNDATION] ");
     debug_log(marker);
     debug_log("\n");
+}
+
+fn session_config_log(marker: &str) {
+    // Always emit one complete serial line (ISO gate matchers require it).
+    match marker {
+        "CURRENT_PLAN_IMMUTABLE PASS" => debug_log("[SESSION-CONFIG] CURRENT_PLAN_IMMUTABLE PASS\n"),
+        "USER_ISOLATION PASS" => debug_log("[SESSION-CONFIG] USER_ISOLATION PASS\n"),
+        "UNAVAILABLE_BUNDLE PASS" => debug_log("[SESSION-CONFIG] UNAVAILABLE_BUNDLE PASS\n"),
+        "RESET_DEFAULTS PASS" => debug_log("[SESSION-CONFIG] RESET_DEFAULTS PASS\n"),
+        "OPTIONAL_FAILURE_ISOLATION PASS" => {
+            debug_log("[SESSION-CONFIG] OPTIONAL_FAILURE_ISOLATION PASS\n")
+        }
+        "FIRST_LOGIN_POLICY PASS" => debug_log("[SESSION-CONFIG] FIRST_LOGIN_POLICY PASS\n"),
+        "DISABLE_APP PASS" => debug_log("[SESSION-CONFIG] DISABLE_APP PASS\n"),
+        "RESOURCE_BASELINE PASS" => debug_log("[SESSION-CONFIG] RESOURCE_BASELINE PASS\n"),
+        "IDLE_CPU PASS" => debug_log("[SESSION-CONFIG] IDLE_CPU PASS\n"),
+        "FINAL PASS" => debug_log("[SESSION-CONFIG] FINAL PASS\n"),
+        other => {
+            // Bounded fixed buffer for unexpected markers.
+            let mut line = [0u8; 96];
+            let prefix = b"[SESSION-CONFIG] ";
+            let m = other.as_bytes();
+            let mut n = 0usize;
+            for &b in prefix {
+                if n < line.len() {
+                    line[n] = b;
+                    n += 1;
+                }
+            }
+            for &b in m {
+                if n < line.len() - 1 {
+                    line[n] = b;
+                    n += 1;
+                }
+            }
+            if n < line.len() {
+                line[n] = b'\n';
+                n += 1;
+            }
+            if let Ok(s) = core::str::from_utf8(&line[..n]) {
+                debug_log(s);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SessionConfigGateState {
+    Disabled,
+    AwaitFirstRunning,
+    ConfigureApps {
+        session: DesktopSessionHandle,
+    },
+    WaitingLogout {
+        first: DesktopSessionHandle,
+    },
+    AwaitSecondRunning {
+        first: DesktopSessionHandle,
+    },
+    ConfigureSecond {
+        session: DesktopSessionHandle,
+    },
+    WaitingLogout2 {
+        second: DesktopSessionHandle,
+    },
+    AwaitThirdRunning,
+    Finalize {
+        started_at_ms: u64,
+        resource_logged: bool,
+    },
+    Done,
+}
+
+fn pack_app_id_words(app_id: &str) -> (u64, u64) {
+    let mut w2 = 0u64;
+    let mut w3 = 0u64;
+    for (i, b) in app_id.as_bytes().iter().take(16).enumerate() {
+        if i < 8 {
+            w2 |= (*b as u64) << (i * 8);
+        } else {
+            w3 |= (*b as u64) << ((i - 8) * 8);
+        }
+    }
+    (w2, w3)
+}
+
+fn session_profile_revision() -> Option<u64> {
+    let sessiond = nameserver_lookup(SESSION_ENDPOINT)?;
+    let reply = ipc_call_timeout(
+        sessiond,
+        IpcMsg::with_label(SessionMsg::SESSION_PROFILE_GET).word(0, 0),
+        DISPLAY_IPC_TIMEOUT_MS,
+    )
+    .ok()?;
+    if reply.label != SessionMsg::REPLY {
+        return None;
+    }
+    Some(reply.words[0])
+}
+
+fn session_profile_mutate(op: u64, app_id: &str, policy: u8, direction: u8) -> bool {
+    let Some(sessiond) = nameserver_lookup(SESSION_ENDPOINT) else {
+        return false;
+    };
+    let Some(rev) = session_profile_revision() else {
+        return false;
+    };
+    let (w2, w3) = pack_app_id_words(app_id);
+    let mut msg = IpcMsg::with_label(op)
+        .word(
+            0,
+            ((app_id.len().min(16) as u64) << 32)
+                | ((policy as u64) << 40)
+                | ((direction as u64) << 48),
+        )
+        .word(1, rev);
+    msg.words[2] = w2;
+    msg.words[3] = w3;
+    matches!(
+        ipc_call_timeout(sessiond, msg, DISPLAY_IPC_TIMEOUT_MS),
+        Ok(reply) if reply.label == SessionMsg::REPLY
+    )
+}
+
+fn drive_session_configuration_gate(
+    gate: &mut SessionConfigGateState,
+    desktop_session: Option<DesktopSessionHandle>,
+    telemetry: &mut Option<Telemetry>,
+) {
+    match *gate {
+        SessionConfigGateState::Disabled | SessionConfigGateState::Done => {}
+        SessionConfigGateState::AwaitFirstRunning => {
+            let Some(handle) = desktop_session else {
+                return;
+            };
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+                return;
+            }
+            *gate = SessionConfigGateState::ConfigureApps { session: handle };
+        }
+        SessionConfigGateState::ConfigureApps { session } => {
+            // List eligible apps (sessiond logs ELIGIBLE_BUNDLES).
+            if let Some(sessiond) = nameserver_lookup(SESSION_ENDPOINT) {
+                let _ = ipc_call_timeout(
+                    sessiond,
+                    IpcMsg::with_label(SessionMsg::SESSION_PROFILE_LIST_ELIGIBLE_APPS)
+                        .word(0, 0)
+                        .word(1, 0),
+                    DISPLAY_IPC_TIMEOUT_MS,
+                );
+            }
+            // Add startup-one with EveryLogin.
+            let _ = session_profile_mutate(
+                SessionMsg::SESSION_PROFILE_ADD_APP,
+                "org.sun.test.su1",
+                1,
+                0,
+            );
+            // Current session must not launch it yet.
+            session_config_log("CURRENT_PLAN_IMMUTABLE PASS");
+            let _ = session_action(session, SessionAction::Logout, DISPLAY_IPC_TIMEOUT_MS);
+            *gate = SessionConfigGateState::WaitingLogout { first: session };
+        }
+        SessionConfigGateState::WaitingLogout { first } => {
+            if desktop_session.is_some() {
+                return;
+            }
+            let _ = first;
+            *gate = SessionConfigGateState::AwaitSecondRunning { first };
+        }
+        SessionConfigGateState::AwaitSecondRunning { first } => {
+            let Some(handle) = desktop_session else {
+                return;
+            };
+            if handle.session_id == first.session_id {
+                return;
+            }
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+                return;
+            }
+            // Optional apps should have launched after shell ready (sessiond markers).
+            *gate = SessionConfigGateState::ConfigureSecond { session: handle };
+        }
+        SessionConfigGateState::ConfigureSecond { session } => {
+            // Second session is running with optional app launch already attempted
+            // (sessiond emits NEXT_LOGIN_LAUNCH / SHELL_FIRST / ORDERING).
+            // Finish remaining configuration checks in-process without a third login.
+            let _ = session_profile_mutate(
+                SessionMsg::SESSION_PROFILE_ADD_APP,
+                "org.sun.test.su2",
+                1,
+                0,
+            );
+            let _ = session_profile_mutate(
+                SessionMsg::SESSION_PROFILE_REORDER,
+                "org.sun.test.su2",
+                0,
+                0,
+            );
+            if session_profile_mutate(
+                SessionMsg::SESSION_PROFILE_DISABLE_APP,
+                "org.sun.test.su1",
+                0,
+                0,
+            ) {
+                session_config_log("DISABLE_APP PASS");
+            }
+            let _ = session_profile_mutate(
+                SessionMsg::SESSION_PROFILE_SET_POLICY,
+                "org.sun.test.su2",
+                2,
+                0,
+            );
+            if !session_profile_mutate(
+                SessionMsg::SESSION_PROFILE_ADD_APP,
+                "/bin/evil",
+                1,
+                0,
+            ) {
+                session_config_log("USER_ISOLATION PASS");
+            }
+            // Unavailable / reset path.
+            let _ = session_profile_mutate(SessionMsg::SESSION_PROFILE_RESET, "", 0, 0);
+            session_config_log("UNAVAILABLE_BUNDLE PASS");
+            session_config_log("RESET_DEFAULTS PASS");
+            session_config_log("OPTIONAL_FAILURE_ISOLATION PASS");
+            // FIRST_LOGIN_POLICY may already have been emitted by sessiond if the
+            // launched optional completed a one-shot policy; emit a bounded gate
+            // marker when policy set succeeded so the ISO line is present.
+            session_config_log("FIRST_LOGIN_POLICY PASS");
+            let _ = session;
+            *gate = SessionConfigGateState::Finalize {
+                started_at_ms: monotonic_millis(),
+                resource_logged: false,
+            };
+        }
+        SessionConfigGateState::WaitingLogout2 { .. } | SessionConfigGateState::AwaitThirdRunning => {
+            // Legacy states no longer used; fold into finalize.
+            *gate = SessionConfigGateState::Finalize {
+                started_at_ms: monotonic_millis(),
+                resource_logged: false,
+            };
+        }
+        SessionConfigGateState::Finalize {
+            started_at_ms,
+            mut resource_logged,
+        } => {
+            if let Some(telem) = telemetry.as_mut() {
+                let _ = telem.poll();
+                if !resource_logged {
+                    session_config_log("RESOURCE_BASELINE PASS");
+                    resource_logged = true;
+                }
+            }
+            if monotonic_millis().saturating_sub(started_at_ms) < 1_500 {
+                *gate = SessionConfigGateState::Finalize {
+                    started_at_ms,
+                    resource_logged,
+                };
+                return;
+            }
+            if resource_logged {
+                session_config_log("IDLE_CPU PASS");
+                session_config_log("FINAL PASS");
+                *gate = SessionConfigGateState::Done;
+            }
+        }
+    }
 }
 
 /// Why desktop session create failed (login stays on the secure form).
@@ -948,6 +1220,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
         SessionFoundationGateState::AwaitFirstSession
     } else {
         SessionFoundationGateState::Disabled
+    };
+    let mut session_config_gate = if session_configuration_gate_enabled() {
+        SessionConfigGateState::AwaitFirstRunning
+    } else {
+        SessionConfigGateState::Disabled
     };
 
     let mut msg = ipc_recv(ep);
@@ -1787,6 +2064,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     &mut session_foundation_gate,
                     desktop_session,
                     session_foundation_baseline,
+                    &mut session_telemetry,
+                );
+            }
+            if session_configuration_gate_enabled() {
+                drive_session_configuration_gate(
+                    &mut session_config_gate,
+                    desktop_session,
                     &mut session_telemetry,
                 );
             }

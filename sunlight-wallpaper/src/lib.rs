@@ -10,7 +10,9 @@ pub const LEGACY_WALLPAPER_DIR: &str = "/var/sunlightos/wallpapers";
 pub const USER_WALLPAPER_DIR: &str = "/root/.local/share/sunlight/wallpapers";
 pub const CONFIG_PATH: &str = "/root/.config/sunlight/desktop.toml";
 pub const CONFIG_TMP_PATH: &str = "/root/.config/sunlight/desktop.toml.tmp";
-pub const DEFAULT_WALLPAPER_PATH: &str = "/var/sunlightos/wallpapers/wallpaper.tga";
+/// Empty path means solid desktop color (no image). Avoids loading the multi-MiB
+/// default TGA into the shell process at every login.
+pub const DEFAULT_WALLPAPER_PATH: &str = "";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WallpaperMode {
@@ -352,6 +354,7 @@ mod tests {
 
     #[test]
     fn missing_config_defaults() {
+        assert_eq!(DesktopConfig::default().wallpaper, "");
         assert_eq!(DesktopConfig::default().wallpaper, DEFAULT_WALLPAPER_PATH);
     }
 

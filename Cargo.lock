@@ -2548,6 +2548,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-startup-fixture"
+version = "0.2.3247-alpha.1"
+dependencies = [
+ "sunlight-ipc",
+ "sunlight-libc",
+]
+
+[[package]]
 name = "sunlight-sunsay"
 version = "0.2.3247-alpha.1"
 dependencies = [

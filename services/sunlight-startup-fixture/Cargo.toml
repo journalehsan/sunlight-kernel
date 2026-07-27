@@ -1,0 +1,17 @@
+[package]
+name = "sunlight-startup-fixture"
+version = "0.2.3247-alpha.1"
+edition = "2021"
+publish = false
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+
+[[bin]]
+name = "su1"
+path = "src/su1.rs"
+
+[[bin]]
+name = "su2"
+path = "src/su2.rs"

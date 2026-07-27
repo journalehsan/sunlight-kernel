@@ -60,7 +60,7 @@ mod sidebar;
 mod start_menu;
 mod workspace_switcher;
 
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_calendar::{
     build_selected_day_previews, SelectedDayReminderPreview, SelectedDayTaskPreview,
@@ -956,6 +956,8 @@ static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 // Native reclaiming heap telemetry
 // ---------------------------------------------------------------------------
 
+/// Cap for optional user-selected wallpapers. Loaded on demand via heap only
+/// when a non-empty config path is set — the default desktop is solid color.
 const WALLPAPER_MAX_BYTES: usize = 8 * 1024 * 1024;
 const SHELL_DIAGNOSTIC_INTERVAL_MS: u64 = 30_000;
 
@@ -1633,8 +1635,10 @@ impl VortexShell {
         ensure_directory(&desktop_paths.desktop_dir);
         if wallpaper.is_some() {
             debug_log("[VORTEX] wallpaper loaded\n");
+        } else if wallpaper_config.wallpaper.is_empty() {
+            debug_log("[VORTEX] solid desktop color (no wallpaper image)\n");
         } else {
-            debug_log("[VORTEX] wallpaper unavailable — using fallback\n");
+            debug_log("[VORTEX] wallpaper unavailable — using solid fallback\n");
         }
         let desktop_theme = DesktopTheme::load();
         let dock_theme = DockTheme::load();
@@ -5101,12 +5105,17 @@ fn join_path(base: &str, leaf: &str) -> String {
 }
 
 pub(crate) fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<TgaImage>, bool) {
+    // Empty path = solid desktop color (default). Saves the multi-MiB TGA that
+    // used to live in a permanent 8 MiB BSS buffer even when unused.
+    if cfg.wallpaper.is_empty() {
+        return (None, false);
+    }
     let Some(bytes) = read_wallpaper_bytes(cfg.wallpaper.as_bytes()) else {
         debug_log("[VORTEX] wallpaper config path unreadable\n");
         return (None, true);
     };
     if bytes.is_empty() {
-        return (None, true);
+        return (None, false);
     }
     if !is_supported_wallpaper(bytes) {
         debug_log("[VORTEX] wallpaper unsupported or corrupt\n");
@@ -5121,49 +5130,16 @@ pub(crate) fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<TgaImag
     }
 }
 
+/// Load wallpaper file into a heap buffer and leak it for `TgaImage`'s
+/// `'static` view. Only called when the user explicitly selects an image.
+/// Reloads on path change may leak prior selections; that is rare vs. the
+/// permanent 8 MiB BSS reservation this replaces.
 fn read_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {
-    static mut WALLPAPER_BUF: [u8; WALLPAPER_MAX_BYTES] = [0u8; WALLPAPER_MAX_BYTES];
-
-    let fd = libc::open(path).ok()?;
-    let mut len = 0usize;
-    loop {
-        let remaining = WALLPAPER_MAX_BYTES.saturating_sub(len);
-        if remaining == 0 {
-            break;
-        }
-        let take = remaining.min(4096);
-        let chunk = unsafe {
-            core::slice::from_raw_parts_mut(
-                core::ptr::addr_of_mut!(WALLPAPER_BUF).cast::<u8>().add(len),
-                take,
-            )
-        };
-        let n = match libc::read(fd, chunk) {
-            Ok(n) => n,
-            // This is a regular-file loader, not an event source.  Retrying
-            // EAGAIN here used to spin the shell main thread indefinitely;
-            // close the consumed descriptor once and let the caller retain
-            // its already-valid wallpaper/fallback instead.
-            Err(libc::sys::Errno::Again) => {
-                let _ = libc::close(fd);
-                return None;
-            }
-            Err(_) => {
-                let _ = libc::close(fd);
-                return None;
-            }
-        };
-        if n == 0 {
-            break;
-        }
-        // `sunlight-libc::read` rejects impossible counts, and `take` is at
-        // most the remaining static-buffer capacity.
-        len += n;
+    let data = read_file_bytes(path, WALLPAPER_MAX_BYTES)?;
+    if data.is_empty() {
+        return None;
     }
-    let _ = libc::close(fd);
-    Some(unsafe {
-        core::slice::from_raw_parts(core::ptr::addr_of!(WALLPAPER_BUF).cast::<u8>(), len)
-    })
+    Some(Box::leak(data.into_boxed_slice()))
 }
 
 fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {

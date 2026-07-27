@@ -497,6 +497,19 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release"],
         },
+        // Session Configuration Phase 1 test fixtures (short native startup apps).
+        EmbeddedBinary {
+            package: "sunlight-startup-fixture",
+            output: "su1",
+            rustflags: service_rustflags,
+            args: &["--bin", "su1", "--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-startup-fixture",
+            output: "su2",
+            rustflags: service_rustflags,
+            args: &["--bin", "su2", "--release"],
+        },
         EmbeddedBinary {
             package: "sunlight-sm",
             output: "sunlight-sm",

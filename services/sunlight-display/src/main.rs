@@ -26,9 +26,10 @@ use sunlight_ipc::{
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Point, Rect};
 
-/// Wallpaper asset staged at /var/sunlightos/wallpapers/wallpaper.tga.
-/// Embedded directly so the compositor can decode without a VFS read at startup.
-static WALLPAPER_TGA_BYTES: &[u8] = include_bytes!("../../../docs/images/wallpaper.tga");
+// Compositor backdrop is a solid color only. The desktop shell owns optional
+// wallpapers; embedding a multi-MiB TGA here previously doubled RAM use and
+// produced a second full-screen image behind an out-of-date shell surface after
+// modeset (shell stayed at the old resolution while this layer resized).
 static ICON_SYM_CLOSE_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_close.tga"));
 
 mod app_lifecycle;
@@ -1010,9 +1011,6 @@ struct CompositorState {
     dirty: dirty::DirtyList,
     /// Focused diagnostics for cursor motion vs. redraw behavior.
     debug_counters: DebugCounters,
-    /// Decoded-on-demand wallpaper view.  `None` when the asset was absent or
-    /// could not be parsed; the compositor falls back to DESKTOP_COLOR fill.
-    wallpaper: Option<TgaImage>,
     notifications: Vec<Notification>,
     next_notification_id: u64,
     /// True after spawning Vortex and before a Desktop-layer window appears.
@@ -2530,31 +2528,16 @@ fn cursor_origin(shape: CursorShape, cx: u32, cy: u32) -> (i32, i32) {
 // ---------------------------------------------------------------------------
 
 fn clear_back_buffer(state: &mut CompositorState) {
-    if let Some(wp) = state.wallpaper {
-        let fw = state.fb_width as usize;
-        let fh = state.fb_height as usize;
-        let iw = wp.width as usize;
-        let ih = wp.height as usize;
-        let stride = fb_stride(state);
-        for y in 0..fh {
-            let src_y = (y * ih / fh) as u32;
-            let row_off = y * stride;
-            for x in 0..fw {
-                let src_x = (x * iw / fw) as u32;
-                state.back_buffer[row_off + x] = wp.pixel_xrgb(src_x, src_y);
-            }
-        }
-    } else {
-        for pixel in state.back_buffer.iter_mut() {
-            *pixel = DESKTOP_COLOR;
-        }
+    // Solid fill only — shell paints the user-visible desktop backdrop.
+    for pixel in state.back_buffer.iter_mut() {
+        *pixel = DESKTOP_COLOR;
     }
 }
 
 /// Return true when the first visible layer deterministically overwrites every
 /// compositor pixel.  In the normal graphical session this is Vortex's opaque,
-/// fullscreen Desktop surface.  Skipping the wallpaper reconstruction avoids
-/// a full-screen scaled TGA decode immediately before that surface replaces it.
+/// fullscreen Desktop surface.  Skipping the solid backdrop reconstruction avoids
+/// a full-screen fill immediately before that surface replaces it.
 fn first_visible_layer_replaces_background(state: &CompositorState) -> bool {
     let Some(win) = state
         .windows
@@ -4376,13 +4359,57 @@ fn mode_management(
     }
 }
 
+/// After a successful modeset the shell's Desktop SHM surface is still sized to
+/// the previous resolution (clients cannot grow their buffer via CONFIGURE).
+/// Kill the desktop-shell process so sessiond respawns it against the new
+/// metrics; that is what makes the shell fill the new framebuffer instead of
+/// leaving a dual-layer "old shell + new backdrop" composition.
 fn restart_desktop_shell(state: &mut CompositorState) {
-    let _ = state;
+    let mut desktop_pids: Vec<u64> = Vec::new();
+    for window in &state.windows {
+        if window.config.window_type != WindowType::Desktop {
+            continue;
+        }
+        if window.owner_pid > 1 && !desktop_pids.iter().any(|pid| *pid == window.owner_pid) {
+            desktop_pids.push(window.owner_pid);
+        }
+    }
+    if desktop_pids.is_empty() {
+        return;
+    }
+
+    let win_ids: Vec<u64> = state
+        .windows
+        .iter()
+        .filter(|window| desktop_pids.iter().any(|pid| *pid == window.owner_pid))
+        .map(|window| window.id)
+        .collect();
+    for win_id in win_ids {
+        // Drop the stale desktop surface before the process exit is observed so
+        // composition never keeps painting an undersized shell layer.
+        let _ = close_window(state, win_id, None);
+    }
+
+    for pid in desktop_pids {
+        if sunlight_ipc::process_is_alive(pid) {
+            debug_log("[DISPLAY] mode change: restarting desktop shell pid=");
+            debug_dec_u64(pid);
+            debug_log("\n");
+            let _ = kill(pid, 15);
+        }
+    }
 }
 
 fn clamp_windows_after_mode_change(state: &mut CompositorState) {
     for window in state.windows.iter_mut() {
         if window.config.window_type == WindowType::Desktop {
+            // Keep desktop fullscreen geometry aligned with the new FB even if
+            // the client surface is still being replaced by a shell restart.
+            window.x = 0;
+            window.y = 0;
+            window.width = state.fb_width;
+            window.height = state.fb_height;
+            window.config.state = WindowState::Fullscreen;
             continue;
         }
         let chrome_width = window.width.saturating_add(BORDER_W * 2);
@@ -5031,7 +5058,6 @@ mod tests {
             inner_corner_mask: mask::CornerMask::new(CHROME_RADIUS.saturating_sub(BORDER_W)),
             dirty: dirty::DirtyList::new(),
             debug_counters: DebugCounters::new(),
-            wallpaper: None,
             notifications: Vec::new(),
             next_notification_id: 1,
             vortex_launch_pending: false,
@@ -6646,7 +6672,6 @@ pub extern "C" fn _start() -> ! {
         inner_corner_mask: mask::CornerMask::new(CHROME_RADIUS.saturating_sub(BORDER_W)),
         dirty: dirty::DirtyList::new(),
         debug_counters: DebugCounters::new(),
-        wallpaper: TgaImage::parse(WALLPAPER_TGA_BYTES).ok(),
         notifications: Vec::new(),
         next_notification_id: 1,
         vortex_launch_pending: false,
@@ -7257,16 +7282,17 @@ pub extern "C" fn _start() -> ! {
                     transaction.token == msg.words[0] && transaction.owner_pid == msg.badge
                 });
                 let accepted = if token_valid {
+                    // Commit the live modeset immediately. Persistence is best-effort
+                    // so a transient KV failure cannot roll the display back when the
+                    // confirmation dialog closes (UiClosed used to revert on keep-fail).
                     let mut value = [0u8; 24];
                     let len = format_mode_preference(state.fb_width, state.fb_height, &mut value);
                     let persisted =
                         sunlight_ipc::notification_kv_put("display.vmware.mode", &value[..len]);
                     debug_log("[DISPLAY-MODE] confirmed persisted=");
-                    debug_log(if persisted { "yes\n" } else { "no\n" });
-                    if persisted {
-                        state.mode_transaction = None;
-                    }
-                    persisted
+                    debug_log(if persisted { "yes\n" } else { "no (best-effort)\n" });
+                    state.mode_transaction = None;
+                    true
                 } else {
                     false
                 };

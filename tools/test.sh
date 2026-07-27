@@ -285,8 +285,15 @@ case "$PHASE" in
         NEED_DISK=false
         TIMEOUT=180
         ;;
+    session-configuration)
+        EXPECTED_FILE="tools/tests/session_configuration.expected"
+        FINAL_MARKER="[SESSION-CONFIG] FINAL PASS"
+        PASS_LABEL="Session Configuration"
+        NEED_DISK=false
+        TIMEOUT=300
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation sunlightd top tzctl"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration sunlightd top tzctl"
         exit 2
         ;;
 esac
@@ -308,6 +315,8 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thermald --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
 if [[ "$PHASE" == "session-foundation" ]]; then
     SUNLIGHT_INJECT_PHASE=session_foundation RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "session-configuration" ]]; then
+    SUNLIGHT_INJECT_PHASE=session_configuration RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 fi
@@ -319,6 +328,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tz --features tzut
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessionctl --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-startup-fixture --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-gcd --release >>"$BUILD_LOG" 2>&1
@@ -391,7 +401,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" ]]; then
+if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -430,6 +440,8 @@ elif [[ "$PHASE" == "tzctl" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=tzctl)
 elif [[ "$PHASE" == "session-foundation" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=session_foundation)
+elif [[ "$PHASE" == "session-configuration" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=session_configuration)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
 elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* || "$PHASE" == "dns_hosts" ]]; then

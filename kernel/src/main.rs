@@ -208,6 +208,9 @@ static UAC_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
 static SUNLIGHT_SESSIOND_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessiond");
+// Session Configuration Phase 1 optional-startup test fixtures.
+static SU1_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/su1");
+static SU2_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/su2");
 static MEZZO_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/mezzo");
 static CAPABILITYCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
@@ -3768,6 +3771,7 @@ fn setup_key_injection() {
         "wiseowl3.75" => build_wiseowl_phase375_sequence(),
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
         "session_foundation" => build_session_foundation_sequence(),
+        "session_configuration" => build_session_configuration_sequence(),
         "phase2b1" => build_phase2b1_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "phase6.5.utils" => build_phase6_5_utils_sequence(),
@@ -4004,6 +4008,33 @@ fn build_session_foundation_sequence() -> [u8; 12288] {
         append_injected_scancode(&mut s, &mut len, code);
     }
 
+    s
+}
+
+/// Session Configuration Phase 1: two desktop logins (configure on first,
+/// observe next-login launch on second).
+#[cfg(feature = "key_inject")]
+fn build_session_configuration_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
+    let mut len = 0usize;
+    // Wait for sessiond/login UI to be ready before consuming the password keys.
+    // Without this lead-in, inject can complete before the presenter is listening.
+    append_injected_delay(&mut s, &mut len, 768);
+    for code in build_desktop_login_sequence()
+        .into_iter()
+        .take_while(|code| *code != 0)
+    {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+    // Wait for first session configure + logout (driven by tty_server gate).
+    append_injected_delay(&mut s, &mut len, 1024);
+    for code in build_desktop_login_sequence()
+        .into_iter()
+        .take_while(|code| *code != 0)
+    {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+    append_injected_delay(&mut s, &mut len, 768);
     s
 }
 

@@ -825,73 +825,10 @@ pub static INITRAMFS: &[RamEntry] = &[
         mode::FILE_644,
         include_bytes!("../../docs/icons/SunlightOS/apps/48/applications-system.tga"),
     ),
-    RamEntry::file(
-        "/system/share/wallpapers/default.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/wallpaper.tga"),
-    ),
-    RamEntry::file(
-        "/system/share/wallpapers/dark.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/sunlight-login-background.tga"),
-    ),
-    // Vortex Shell desktop wallpaper (TGA type-2, 1672×941, 24 bpp BGR).
-    RamEntry::file(
-        "/var/sunlightos/wallpapers/wallpaper.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/wallpaper.tga"),
-    ),
-    // Locally bundled wallpapers available in Wallpaper Settings.
-    // Converted from docs/images/wallpaper{1..6}.{jpg,png} to render-ready
-    // TGA type-2 24 bpp BGR (the desktop renderer is TGA-only).
-    RamEntry::file(
-        "/var/sunlightos/wallpapers/wallpaper1.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/wallpaper1.tga"),
-    ),
-    RamEntry::file(
-        "/var/sunlightos/wallpapers/wallpaper2.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/wallpaper2.tga"),
-    ),
-    RamEntry::file(
-        "/var/sunlightos/wallpapers/wallpaper3.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/wallpaper3.tga"),
-    ),
-    RamEntry::file(
-        "/var/sunlightos/wallpapers/wallpaper4.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/wallpaper4.tga"),
-    ),
-    RamEntry::file(
-        "/var/sunlightos/wallpapers/wallpaper5.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/wallpaper5.tga"),
-    ),
-    RamEntry::file(
-        "/var/sunlightos/wallpapers/wallpaper6.tga",
-        0,
-        0,
-        mode::FILE_644,
-        include_bytes!("../../docs/images/wallpaper6.tga"),
-    ),
+    // Desktop backdrop is solid color by default (see desktop.toml). Wallpaper
+    // TGA assets are intentionally not staged into ramfs: each was multi-MiB
+    // and was also embedded by the compositor, doubling RAM and leaving a
+    // second full-screen image behind the shell after modeset.
     // System config files (world-readable)
     RamEntry::file(
         "/etc/passwd",
@@ -968,7 +905,7 @@ pub static INITRAMFS: &[RamEntry] = &[
         0,
         0,
         mode::FILE_644,
-        b"[desktop]\nwallpaper = \"/var/sunlightos/wallpapers/wallpaper.tga\"\nwallpaper_mode = \"cover\"\n",
+        b"[desktop]\nwallpaper = \"\"\nwallpaper_mode = \"cover\"\n",
     ),
     RamEntry::file(
         "/etc/sunlight/session.toml",
@@ -1006,12 +943,56 @@ required = true
 enabled = true
 launch_policy = "session-start"
 restart_policy = "on-failure"
-restart_limit = 3
-restart_window_seconds = 30
+restart_limit = 8
+restart_window_seconds = 120
 readiness_timeout_seconds = 10
 order = 0
 "#,
     ),
+    // Stable onboarding/release generation for FirstLoginAfterSystemUpgrade.
+    RamEntry::file(
+        "/etc/sunlight/release-generation",
+        0,
+        0,
+        mode::FILE_644,
+        b"1\n",
+    ),
+    RamEntry::dir("/var/lib/sunlight-sessiond", 0, 0, mode::DIR_755),
+    // Session Configuration Phase 1 eligible test .sunapp fixtures.
+    RamEntry::dir("/Applications/StartupOne.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/StartupOne.sunapp/Resources", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/Applications/StartupOne.sunapp/Manifest.toml",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../StartupOne.sunapp/Manifest.toml"),
+    ),
+    RamEntry::file(
+        "/Applications/StartupOne.sunapp/Resources/icon.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../StartupOne.sunapp/Resources/icon.tga"),
+    ),
+    RamEntry::dir("/Applications/StartupTwo.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/StartupTwo.sunapp/Resources", 0, 0, mode::DIR_755),
+    RamEntry::file(
+        "/Applications/StartupTwo.sunapp/Manifest.toml",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../StartupTwo.sunapp/Manifest.toml"),
+    ),
+    RamEntry::file(
+        "/Applications/StartupTwo.sunapp/Resources/icon.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../StartupTwo.sunapp/Resources/icon.tga"),
+    ),
+    RamEntry::file("/bin/su1", 0, 0, mode::FILE_755, b"#!/sunlight/su1\n"),
+    RamEntry::file("/bin/su2", 0, 0, mode::FILE_755, b"#!/sunlight/su2\n"),
     RamEntry::file(
         "/etc/sunlight/ssh.toml",
         0,

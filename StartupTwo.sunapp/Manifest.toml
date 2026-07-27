@@ -1,0 +1,22 @@
+[bundle]
+format = 1
+
+[application]
+id = "org.sun.test.su2"
+name = "Startup Two"
+version = "1.0.0"
+kind = "session-utility"
+icon = "Resources/icon.tga"
+
+[runtime]
+type = "native"
+
+[entry]
+executable = "/bin/su2"
+
+[session]
+startup_eligible = true
+default_enabled = false
+default_policy = "every-login"
+single_instance = true
+launch_path = "/bin/su2"

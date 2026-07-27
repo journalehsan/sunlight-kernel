@@ -3,13 +3,18 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod profile;
+
+pub use profile::*;
+
 use heapless::{String, Vec};
 use sunlight_ipc::{
     SessionComponentId, SessionComponentRole, SessionComponentState, SessionGeneration, SessionId,
     SessionKind, SessionLaunchPolicy, SessionRestartPolicy, SessionState,
 };
 
-pub const MAX_COMPONENTS: usize = 4;
+/// Required system components + optional startup apps.
+pub const MAX_COMPONENTS: usize = profile::MAX_SESSION_COMPONENTS;
 pub const MAX_MANIFEST_ID: usize = 48;
 pub const MAX_MANIFEST_NAME: usize = 48;
 pub const MAX_COMPONENT_NAME: usize = 32;
@@ -424,8 +429,8 @@ required = true
 enabled = true
 launch_policy = "session-start"
 restart_policy = "on-failure"
-restart_limit = 3
-restart_window_seconds = 30
+restart_limit = 8
+restart_window_seconds = 120
 readiness_timeout_seconds = 10
 order = 0
 "#;
@@ -442,7 +447,7 @@ order = 0
         let manifest = parse_manifest(VALID.as_bytes()).unwrap();
         assert_eq!(manifest.format_version, 1);
         assert_eq!(manifest.components.len(), 1);
-        assert_eq!(manifest.components[0].restart_limit, 3);
+        assert_eq!(manifest.components[0].restart_limit, 8);
     }
 
     #[test]

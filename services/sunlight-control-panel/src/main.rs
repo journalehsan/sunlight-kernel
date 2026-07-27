@@ -26,6 +26,7 @@ mod clipboard;
 mod date_time;
 mod network;
 mod power_thermal;
+mod session;
 mod sysinfo;
 
 use alloc::vec::Vec;
@@ -58,6 +59,7 @@ use about::{AboutAction, AboutPageState};
 use date_time::{DateTimeAction, DateTimePageState};
 use network::{NetworkAction, NetworkPageState};
 use power_thermal::{PowerThermalAction, PowerThermalPageState};
+use session::{SessionAction, SessionPageState};
 use sysinfo::{FixedStr, SystemInfoSnapshot};
 
 // ---------------------------------------------------------------------------
@@ -92,6 +94,9 @@ static ICON_POWER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/battery.tga");
 static ICON_DATETIME_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system-time.tga");
+static ICON_SESSION_TGA: &[u8] = include_bytes!(
+    "../../../docs/icons/SunlightOS/apps/48/preferences-system-session-services.tga"
+);
 
 const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO_RAW);
 
@@ -125,6 +130,7 @@ enum Page {
     Network,
     PowerThermal,
     DateTime,
+    LoginSession,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -354,6 +360,7 @@ struct ControlPanelApp {
     icon_network: Option<TgaImage>,
     icon_power: Option<TgaImage>,
     icon_datetime: Option<TgaImage>,
+    icon_session: Option<TgaImage>,
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
@@ -370,6 +377,7 @@ struct ControlPanelApp {
     network: NetworkPageState,
     power_thermal: PowerThermalPageState,
     date_time: DateTimePageState,
+    login_session: SessionPageState,
 }
 
 impl ControlPanelApp {
@@ -415,6 +423,7 @@ impl ControlPanelApp {
             icon_network: TgaImage::parse(ICON_NETWORK_TGA).ok(),
             icon_power: TgaImage::parse(ICON_POWER_TGA).ok(),
             icon_datetime: TgaImage::parse(ICON_DATETIME_TGA).ok(),
+            icon_session: TgaImage::parse(ICON_SESSION_TGA).ok(),
             wallpaper_items,
             wallpaper_config,
             wallpaper_selected,
@@ -431,6 +440,7 @@ impl ControlPanelApp {
             network: NetworkPageState::new(),
             power_thermal: PowerThermalPageState::new(),
             date_time: DateTimePageState::new(),
+            login_session: SessionPageState::new(),
         }
     }
 
@@ -504,9 +514,20 @@ impl ControlPanelApp {
                 let result =
                     run_display_confirmation_dialog(display_ep, transaction, previous_mode);
                 self.refresh_display_modes();
-                if matches!(result, DisplayConfirmationResult::Failed) {
-                    self.display_error
-                        .set("Could not show display confirmation");
+                match result {
+                    DisplayConfirmationResult::Kept => {
+                        self.display_error.clear();
+                    }
+                    DisplayConfirmationResult::Reverted
+                    | DisplayConfirmationResult::TimedOut
+                    | DisplayConfirmationResult::Closed => {
+                        self.display_error
+                            .set("Display mode restored to previous setting");
+                    }
+                    DisplayConfirmationResult::Failed => {
+                        self.display_error
+                            .set("Could not show display confirmation");
+                    }
                 }
             }
             None => {
@@ -627,14 +648,15 @@ impl ControlPanelApp {
     // Grid page
     // -----------------------------------------------------------------------
 
-    fn card_rects(&self) -> [Rect; 9] {
+    fn card_rects(&self) -> [Rect; 10] {
         let card_w = 136u32;
-        let card_h = 110u32;
+        let card_h = 96u32;
         let gap = 14i32;
         let start_x = (WIN_W as i32 - (card_w * 3) as i32 - gap * 2) / 2;
         let card_y = 52i32;
-        let row2_y = card_y + card_h as i32 + 12;
-        let row3_y = row2_y + card_h as i32 + 12;
+        let row2_y = card_y + card_h as i32 + 10;
+        let row3_y = row2_y + card_h as i32 + 10;
+        let row4_y = row3_y + card_h as i32 + 10;
         [
             Rect::new(start_x, card_y, card_w, card_h),
             Rect::new(start_x + card_w as i32 + gap, card_y, card_w, card_h),
@@ -645,6 +667,7 @@ impl ControlPanelApp {
             Rect::new(start_x, row3_y, card_w, card_h),
             Rect::new(start_x + card_w as i32 + gap, row3_y, card_w, card_h),
             Rect::new(start_x + (card_w as i32 + gap) * 2, row3_y, card_w, card_h),
+            Rect::new(start_x, row4_y, card_w, card_h),
         ]
     }
 
@@ -801,6 +824,15 @@ impl ControlPanelApp {
             "Clock, sync, timezone",
             self.icon_datetime,
         );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[9],
+            theme.accent,
+            "Login & Session",
+            "Startup Apps",
+            self.icon_session,
+        );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
@@ -850,6 +882,10 @@ impl ControlPanelApp {
             if cards[8].contains(pt) {
                 self.page = Page::DateTime;
                 return self.date_time.activate();
+            }
+            if cards[9].contains(pt) {
+                self.page = Page::LoginSession;
+                return self.login_session.activate();
             }
         }
         false
@@ -1604,6 +1640,7 @@ impl App for ControlPanelApp {
             Page::Network => self.network.draw(canvas, theme, WIN_W, WIN_H),
             Page::PowerThermal => self.power_thermal.draw(canvas, theme, WIN_W, WIN_H),
             Page::DateTime => self.date_time.draw(canvas, theme, WIN_W, WIN_H),
+            Page::LoginSession => self.login_session.draw(canvas, theme, WIN_W, WIN_H),
         }
     }
 
@@ -1629,6 +1666,13 @@ impl App for ControlPanelApp {
             Page::Network => self.update_network_page(event),
             Page::PowerThermal => self.update_power_thermal_page(event),
             Page::DateTime => self.update_date_time_page(event),
+            Page::LoginSession => match self.login_session.update(event, WIN_W, WIN_H) {
+                SessionAction::None => false,
+                SessionAction::Back => {
+                    self.page = Page::Grid;
+                    true
+                }
+            },
         }
     }
 
@@ -1923,6 +1967,9 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
                 b"network" => return Page::Network,
                 b"power" | b"thermal" | b"power-thermal" => return Page::PowerThermal,
                 b"date-time" | b"datetime" | b"time" | b"timezone" => return Page::DateTime,
+                b"login-session" | b"session" | b"startup" | b"startup-apps" => {
+                    return Page::LoginSession
+                }
                 _ => {}
             }
             i += 2;

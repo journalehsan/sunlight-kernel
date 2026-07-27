@@ -1791,6 +1791,19 @@ pub mod SessionMsg {
     pub const SESSION_RESTART_COMPONENT: u64 = 0xC109;
     pub const SESSION_GET_STATS: u64 = 0xC10A;
     pub const SESSION_GET_HEALTH: u64 = 0xC10B;
+    /// Session Configuration Phase 1 — per-user profile operations.
+    pub const SESSION_PROFILE_GET: u64 = 0xC110;
+    pub const SESSION_PROFILE_UPDATE: u64 = 0xC111;
+    pub const SESSION_PROFILE_RESET: u64 = 0xC112;
+    pub const SESSION_PROFILE_ADD_APP: u64 = 0xC113;
+    pub const SESSION_PROFILE_REMOVE_APP: u64 = 0xC114;
+    pub const SESSION_PROFILE_ENABLE_APP: u64 = 0xC115;
+    pub const SESSION_PROFILE_DISABLE_APP: u64 = 0xC116;
+    pub const SESSION_PROFILE_SET_POLICY: u64 = 0xC117;
+    pub const SESSION_PROFILE_REORDER: u64 = 0xC118;
+    pub const SESSION_PROFILE_LIST_ELIGIBLE_APPS: u64 = 0xC119;
+    pub const SESSION_PROFILE_PREVIEW_PLAN: u64 = 0xC11A;
+    pub const SESSION_PROFILE_STATUS: u64 = 0xC11B;
     pub const REPLY: u64 = 0xC1FF;
     pub const ERROR: u64 = 0xC1FE;
 
@@ -1803,6 +1816,11 @@ pub mod SessionMsg {
     pub const ERR_INVALID_ARGUMENT: u64 = 7;
     pub const ERR_MANIFEST: u64 = 8;
     pub const ERR_RESTART_EXHAUSTED: u64 = 9;
+    pub const ERR_PROFILE_REVISION: u64 = 10;
+    pub const ERR_PROFILE_CORRUPT: u64 = 11;
+    pub const ERR_INELIGIBLE: u64 = 12;
+    pub const ERR_DUPLICATE: u64 = 13;
+    pub const ERR_LIMIT: u64 = 14;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
