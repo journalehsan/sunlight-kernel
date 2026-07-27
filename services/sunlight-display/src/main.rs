@@ -836,6 +836,11 @@ impl KeyEventQueue {
         self.len -= 1;
         Some(event)
     }
+
+    fn clear(&mut self) {
+        self.head = 0;
+        self.len = 0;
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -870,6 +875,10 @@ impl PointerButtonEventQueue {
 
     fn pop(&mut self) -> Option<PointerButtonEvent> {
         self.events.pop_front()
+    }
+
+    fn clear(&mut self) {
+        self.events.clear();
     }
 
     #[cfg(test)]
@@ -1366,9 +1375,15 @@ fn focused_window_id(state: &CompositorState) -> Option<u64> {
 }
 
 fn event_poll_window_idx(state: &CompositorState, requested_id: u64) -> Option<usize> {
-    if state.lock_generation != 0 && requested_id != state.lock_presenter_window {
-        return None;
-    }
+    // Lock must not report non-presenter windows as "gone". Clients (including
+    // Vortex Shell) treat EVENT_FLAG_WINDOW_VALID=0 as permanent destruction and
+    // exit. That used to crash-restart the shell while locked, then exhaust
+    // restarts into a gray empty compositor after unlock.
+    //
+    // Input isolation stays elsewhere: focus, hit-testing, and key routing only
+    // target the lock presenter while lock_generation != 0. Non-presenter polls
+    // still return WINDOW_VALID with empty/unowned input.
+    let _ = state.lock_generation;
     state.windows.iter().position(|win| win.id == requested_id)
 }
 
@@ -5508,8 +5523,12 @@ mod tests {
 
         assert_eq!(focused_window_id(&state), Some(2));
         assert_eq!(topmost_window_id_at(&state, 100, 100), Some(2));
-        assert!(event_poll_window_idx(&state, 1).is_none());
+        // Non-presenter windows remain addressable for EVENT_POLL so apps do not
+        // interpret lock isolation as window destruction and exit.
+        assert_eq!(event_poll_window_idx(&state, 1), Some(0));
         assert_eq!(event_poll_window_idx(&state, 2), Some(1));
+        // Pointer hit-testing still only reaches the presenter.
+        assert_eq!(topmost_window_id_at(&state, 50, 50), Some(2));
     }
 
     #[test]
@@ -7478,6 +7497,8 @@ pub extern "C" fn _start() -> ! {
                 state.debug_counters.display_poll_count =
                     state.debug_counters.display_poll_count.wrapping_add(1);
                 if let Some(win_idx) = event_poll_window_idx(&state, win_id) {
+                    let lock_isolates_this = state.lock_generation != 0
+                        && state.windows[win_idx].id != state.lock_presenter_window;
                     let (cx, cy) = {
                         let win = &state.windows[win_idx];
                         match win.config.state {
@@ -7500,9 +7521,16 @@ pub extern "C" fn _start() -> ! {
                             win.focus_press_pending,
                         )
                     };
+                    // While locked, only the presenter may receive keys. Drop any
+                    // stale queued keys on other windows without marking them gone.
                     let key_event = {
                         let win = &mut state.windows[win_idx];
-                        win.pending_keys.pop()
+                        if lock_isolates_this {
+                            win.pending_keys.clear();
+                            None
+                        } else {
+                            win.pending_keys.pop()
+                        }
                     };
                     if let Some(packed) = key_event {
                         let (keycode, pressed, _, ctrl, _, _, ascii) =
@@ -7517,8 +7545,20 @@ pub extern "C" fn _start() -> ! {
                             ));
                         }
                     }
-                    let (mouse_word, button_word, button_event_dequeued) =
-                        mouse_poll_words_for_window(&mut state, win_idx);
+                    let (mouse_word, button_word, button_event_dequeued) = if lock_isolates_this {
+                        // Keep WINDOW_VALID, but never deliver pointer ownership or
+                        // queued button edges under the lock overlay.
+                        let win = &mut state.windows[win_idx];
+                        win.pending_pointer_buttons.clear();
+                        win.focus_press_pending = false;
+                        (
+                            (win.last_mouse_x as u64) | ((win.last_mouse_y as u64) << 16),
+                            win.last_buttons as u64,
+                            false,
+                        )
+                    } else {
+                        mouse_poll_words_for_window(&mut state, win_idx)
+                    };
                     if button_event_dequeued {
                         state.debug_counters.pointer_button_dequeued_count = state
                             .debug_counters
@@ -7530,7 +7570,7 @@ pub extern "C" fn _start() -> ! {
                     let delivered_buttons = (button_word & 0xff) as u8;
                     let pointer_owned = button_word & SgpMsg::EVENT_FLAG_POINTER_OWNED != 0;
                     let event_available = key_event.is_some()
-                        || focus_press
+                        || (!lock_isolates_this && focus_press)
                         || button_event_dequeued
                         || (pointer_owned
                             && (delivered_mouse_x != previous_mouse_x
