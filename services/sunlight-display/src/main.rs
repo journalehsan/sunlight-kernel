@@ -231,29 +231,8 @@ fn toggle_emoji_picker(state: &mut CompositorState) {
 }
 
 fn launch_vortex_shell(state: &mut CompositorState) -> bool {
-    match libc::spawn(
-        b"/bin/sunlight-vortex-shell",
-        &[b"sunlight-vortex-shell"],
-        None,
-    ) {
-        Ok(_pid) => {
-            debug_log("[DISPLAY] launched Vortex Shell\n");
-            true
-        }
-        Err(_) => {
-            debug_log("[DISPLAY] failed to launch Vortex Shell\n");
-            push_notification(
-                state,
-                NotificationKind::Error,
-                String::from("Launch failed"),
-                String::from("Could not start /bin/sunlight-vortex-shell"),
-                NOTIFICATION_TIMEOUT_MS,
-            );
-            mark_dirty_full(state);
-            redraw_scene(state);
-            false
-        }
-    }
+    let _ = state;
+    false
 }
 
 /// Set to true to log every RAW_MOTION packet (dx/dy, cursor before/after).
@@ -1741,10 +1720,7 @@ fn desktop_search_shortcut_eligible(
 }
 
 fn ensure_vortex_shell(state: &mut CompositorState) {
-    if has_desktop_window(state) || state.vortex_launch_pending {
-        return;
-    }
-    state.vortex_launch_pending = launch_vortex_shell(state);
+    let _ = state;
 }
 
 fn notification_color(kind: NotificationKind) -> Color {
@@ -4401,22 +4377,7 @@ fn mode_management(
 }
 
 fn restart_desktop_shell(state: &mut CompositorState) {
-    let desktop_windows: Vec<(u64, u64)> = state
-        .windows
-        .iter()
-        .filter(|window| window.config.window_type == WindowType::Desktop)
-        .map(|window| (window.id, window.owner_pid))
-        .collect();
-    let session_active = state.session_active;
-    state.session_active = false;
-    for (window_id, owner_pid) in desktop_windows {
-        let _ = kill(owner_pid, 15);
-        close_window(state, window_id, None);
-    }
-    state.session_active = session_active;
-    if session_active {
-        ensure_vortex_shell(state);
-    }
+    let _ = state;
 }
 
 fn clamp_windows_after_mode_change(state: &mut CompositorState) {

@@ -66,14 +66,14 @@ use sunlight_calendar::{
     build_selected_day_previews, SelectedDayReminderPreview, SelectedDayTaskPreview,
 };
 use sunlight_ipc::{
-    debug_log, get_time_utc, ipc_call_timeout,
+    current_process_generation, debug_log, get_time_utc, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, notification_dnd_enabled,
     notification_kv_get_into, notification_kv_put, notification_set_dnd, process_is_alive,
     process_yield, query_display_metrics, shm_alloc, shm_free, shm_map, show_notification,
     CapabilityToken, DisplayMetrics, IpcMsg, MezzoMsg, NotificationKind, NotificationPriority,
-    ProcessExit, SgpMsg, TzMsg, NOTIFICATION_RECENT_KEY, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
-    SHM_PAGE,
+    ProcessExit, SessionAction, SessionMsg, SgpMsg, TzMsg, NOTIFICATION_RECENT_KEY,
+    SAFE_FALLBACK_H, SAFE_FALLBACK_W, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
 use sunlight_networkd::{
@@ -114,6 +114,79 @@ static ICON_COMPUTER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/devices/64/computer.tga");
 static ICON_HOME_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/user-home.tga");
+
+#[derive(Clone, Copy)]
+struct SessionBinding {
+    session_id: u64,
+    generation: u64,
+    component_id: u64,
+    process_generation: u64,
+}
+
+static mut SESSION_BINDING: Option<SessionBinding> = None;
+
+fn session_binding() -> Option<SessionBinding> {
+    unsafe { SESSION_BINDING }
+}
+
+fn set_session_binding(binding: SessionBinding) {
+    unsafe {
+        SESSION_BINDING = Some(binding);
+    }
+}
+
+fn session_component_hello() -> Option<SessionBinding> {
+    let sessiond = nameserver_lookup(SESSION_ENDPOINT)?;
+    let process_generation = current_process_generation();
+    let reply = ipc_call_timeout(
+        sessiond,
+        IpcMsg::with_label(SessionMsg::SESSION_COMPONENT_HELLO)
+            .word(0, SESSION_PROTOCOL_VERSION as u64)
+            .word(1, process_generation),
+        1_000,
+    )
+    .ok()?;
+    (reply.label == SessionMsg::REPLY).then_some(SessionBinding {
+        session_id: reply.words[0],
+        generation: reply.words[1],
+        component_id: reply.words[2],
+        process_generation,
+    })
+}
+
+fn session_component_ready(binding: SessionBinding) -> bool {
+    let Some(sessiond) = nameserver_lookup(SESSION_ENDPOINT) else {
+        return false;
+    };
+    ipc_call_timeout(
+        sessiond,
+        IpcMsg::with_label(SessionMsg::SESSION_COMPONENT_READY)
+            .word(0, binding.session_id)
+            .word(1, binding.generation)
+            .word(2, binding.component_id)
+            .word(3, binding.process_generation),
+        1_000,
+    )
+    .is_ok_and(|reply| reply.label == SessionMsg::REPLY)
+}
+
+fn request_session_action(action: SessionAction) -> bool {
+    let Some(binding) = session_binding() else {
+        return false;
+    };
+    let Some(sessiond) = nameserver_lookup(SESSION_ENDPOINT) else {
+        return false;
+    };
+    ipc_call_timeout(
+        sessiond,
+        IpcMsg::with_label(SessionMsg::SESSION_ACTION)
+            .word(0, binding.session_id)
+            .word(1, binding.generation)
+            .word(2, action as u64),
+        2_000,
+    )
+    .is_ok_and(|reply| reply.label == SessionMsg::REPLY)
+}
 static ICON_TRASH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/user-trash.tga");
 static ICON_FOLDER_TGA: &[u8] =
@@ -3542,49 +3615,16 @@ impl VortexShell {
             }
             StartMenuAction::Power(PowerAction::Lock) => {
                 debug_log("[VORTEX] start menu: lock requested\n");
-                // Mezzo may start vortex-lock-presenter via sunlightd; allow seconds.
-                const LOCK_ACTIVATE_TIMEOUT_MS: u64 = 5_000;
-                match nameserver_lookup_timeout("mezzo", 500) {
-                    Some(mezzo) => {
-                        match ipc_call_timeout(
-                            mezzo,
-                            IpcMsg::with_label(MezzoMsg::LOCK_ACTIVATE),
-                            LOCK_ACTIVATE_TIMEOUT_MS,
-                        ) {
-                            Ok(reply) if reply.label == MezzoMsg::REPLY => {
-                                debug_log("[VORTEX] lock activate accepted\n");
-                            }
-                            Ok(reply) => {
-                                debug_log("[VORTEX] lock activate error code=");
-                                debug_log_u64(reply.words[0]);
-                                debug_log("\n");
-                                let body = match reply.words[0] {
-                                    // MezzoMsg::ERR_NO_SESSION
-                                    6 => "No desktop session is registered for lock.",
-                                    // MezzoMsg::ERR_START_FAILED
-                                    4 => "Display rejected lock enter (authority).",
-                                    // MezzoMsg::ERR_BUSY
-                                    5 => "Lock is already transitioning.",
-                                    _ => "Could not lock the session (see serial log).",
-                                };
-                                show_notification(NotificationKind::Warning, "Lock", body, 4000);
-                            }
-                            Err(_) => {
-                                debug_log(
-                                    "[VORTEX] lock activate timed out (mezzo may still proceed)\n",
-                                );
-                            }
-                        }
-                    }
-                    None => {
-                        debug_log("[VORTEX] lock failed: mezzo unavailable\n");
-                        show_notification(
-                            NotificationKind::Warning,
-                            "Lock",
-                            "Session lock service is unavailable.",
-                            4000,
-                        );
-                    }
+                if request_session_action(SessionAction::Lock) {
+                    debug_log("[VORTEX] lock action accepted by sessiond\n");
+                } else {
+                    debug_log("[VORTEX] lock action failed\n");
+                    show_notification(
+                        NotificationKind::Warning,
+                        "Lock",
+                        "Session lock request failed.",
+                        4000,
+                    );
                 }
             }
             StartMenuAction::Power(PowerAction::Sleep) => {
@@ -8116,12 +8156,11 @@ impl App for VortexShell {
                     }
                     if self.logout_confirm_r.contains(point) {
                         self.show_logout_confirm = false;
-                        // Safe logout path (no display stop):
-                        // close shell windows + user apps, return toward login.
-                        // TODO(session): call into sunlight-uac / session manager when ready.
-                        debug_log("[VORTEX] logout confirmed (safe stub: close shell context)\n");
-                        // For this task we just close overlays and let higher level handle session end.
-                        // Do not kill critical services.
+                        if request_session_action(SessionAction::Logout) {
+                            debug_log("[VORTEX] logout requested via sessiond\n");
+                        } else {
+                            debug_log("[VORTEX] logout request failed\n");
+                        }
                         return true;
                     }
                     // click elsewhere on confirm open: close it
@@ -8651,6 +8690,16 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     };
 
     window.configure_flags(DESKTOP_LAYER_FLAGS);
+    if let Some(binding) = session_component_hello() {
+        if session_component_ready(binding) {
+            set_session_binding(binding);
+            debug_log("[VORTEX] session component ready\n");
+        } else {
+            debug_log("[VORTEX] session ready notify failed\n");
+        }
+    } else {
+        debug_log("[VORTEX] session hello unavailable\n");
+    }
     debug_log("[VORTEX] desktop layer registered, entering event loop\n");
 
     window.run(&mut shell);

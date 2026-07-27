@@ -517,6 +517,30 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    let sessiond_service = r#"[Unit]
+Description=SunlightOS Session Manager
+After=sunlight-display.service uac_service.service
+Requires=uac_service.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/sunlight-sessiond
+Restart=on-failure
+RestartSec=1
+User=root
+Capability=logging
+Capability=spawn-user
+Capability=session-lock
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(sessiond_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     // sunlight-sm.service - Storage Manager for controlled writes to protected paths (whitelist)
     let sm_service = r#"[Unit]
 Description=SunlightOS Storage Manager (controlled persistent writes)
@@ -1280,6 +1304,8 @@ fn dep_unit_to_ready_name(dep: &str) -> &str {
         "net_server" => "net",
         "vfs_server" => "vfs",
         "sunlight-thumbd" => "thumbd",
+        // init-launched compositor; nameserver id is display_server, not the unit stem.
+        "sunlight-display" => "display_server",
         other => other,
     }
 }

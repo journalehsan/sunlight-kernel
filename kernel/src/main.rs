@@ -163,6 +163,8 @@ static SUNLIGHTCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlightctl");
 static MEZZOCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/mezzoctl");
+static SUNLIGHT_SESSIONCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessionctl");
 static DEVICECTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/devicectl");
 static SUNLIGHT_HWINFO_ELF_BYTES: &[u8] =
@@ -204,6 +206,8 @@ static CERTIFICATECTL_ELF_BYTES: &[u8] =
 // User Access Control: daemon spawned by sunlightd + its control client.
 static UAC_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
+static SUNLIGHT_SESSIOND_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessiond");
 static MEZZO_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/mezzo");
 static CAPABILITYCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
@@ -3763,6 +3767,7 @@ fn setup_key_injection() {
         "phase3.9" => build_phase3_9_sequence(),
         "wiseowl3.75" => build_wiseowl_phase375_sequence(),
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
+        "session_foundation" => build_session_foundation_sequence(),
         "phase2b1" => build_phase2b1_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "phase6.5.utils" => build_phase6_5_utils_sequence(),
@@ -3960,14 +3965,45 @@ fn build_phase3_9_sequence() -> [u8; 12288] {
 #[cfg(feature = "key_inject")]
 fn build_desktop_login_sequence() -> [u8; 12288] {
     let mut s = [0u8; 12288];
-    let codes: [u8; 8] = [
-        0x1C, // Enter -> commit user slot "root", focus password
-        0x13, 0x18, 0x18, 0x14, // password: r,o,o,t
-        0x0F, // Tab -> session dropdown
-        0x39, // Space -> toggle session to Desktop
-        0x1C, // Enter -> login
-    ];
-    s[..codes.len()].copy_from_slice(&codes);
+    let mut len = 0usize;
+    append_injected_delay(&mut s, &mut len, 512);
+    append_injected_scancode(&mut s, &mut len, 0x1C);
+    append_injected_delay(&mut s, &mut len, 96);
+    for code in [0x13, 0x18, 0x18, 0x14] {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+    append_injected_delay(&mut s, &mut len, 96);
+    append_injected_scancode(&mut s, &mut len, 0x0F);
+    append_injected_delay(&mut s, &mut len, 32);
+    append_injected_scancode(&mut s, &mut len, 0x39);
+    append_injected_delay(&mut s, &mut len, 32);
+    append_injected_scancode(&mut s, &mut len, 0x1C);
+    s
+}
+
+/// Session foundation injection: first desktop login, long bounded wait while
+/// tty_server drives shell crash/logout/resource checks, then a second desktop
+/// login so stale-session rejection can be verified on the live system.
+#[cfg(feature = "key_inject")]
+fn build_session_foundation_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
+    let mut len = 0usize;
+    for code in build_desktop_login_sequence()
+        .into_iter()
+        .take_while(|code| *code != 0)
+    {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+
+    append_injected_delay(&mut s, &mut len, 1536);
+
+    for code in build_desktop_login_sequence()
+        .into_iter()
+        .take_while(|code| *code != 0)
+    {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+
     s
 }
 

@@ -174,6 +174,8 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-gcd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-uac --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessionctl --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sm --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kv --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kvctl --features sunlightos --no-default-features --release

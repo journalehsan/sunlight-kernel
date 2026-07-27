@@ -64,6 +64,8 @@ members = [
     "services/sunlight-tasks",
     "services/sunlight-runner",
     "services/sunlight-vortex-shell",
+    "services/sunlight-sessiond",
+    "services/sunlight-sessionctl",
     "services/mezzo",
     "services/pty_server",
     "services/sunlight-deviced",

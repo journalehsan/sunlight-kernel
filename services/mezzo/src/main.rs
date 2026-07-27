@@ -5,8 +5,9 @@ use mezzo::LockSession;
 use sunlight_ipc::{
     consume_lock_auth_grant, endpoint_create, ipc_call_timeout, ipc_reply_and_try_recv,
     monotonic_millis, nameserver_lookup_timeout, nameserver_register, process_is_alive,
-    process_yield, validate_lock_caller, CapabilityToken, IpcMsg, LockState, MezzoMsg, SgpMsg,
-    LOCK_CALLER_AUTHENTICATED_TTY, LOCK_CALLER_TTY_SERVICE, LOCK_SESSION_USERNAME_MAX,
+    process_yield, validate_lock_caller, validate_session_caller, CapabilityToken, IpcMsg,
+    LockState, MezzoMsg, SgpMsg, LOCK_CALLER_AUTHENTICATED_TTY, LOCK_CALLER_TTY_SERVICE,
+    LOCK_SESSION_USERNAME_MAX, SESSION_CALLER_SESSION_SERVICE,
 };
 
 const SUNLIGHTD_START: u64 = 1;
@@ -96,9 +97,23 @@ fn display_presenter(
 }
 
 fn unpack_username(message: &IpcMsg) -> Option<[u8; LOCK_SESSION_USERNAME_MAX]> {
+    unpack_username_words(message, 0, 4)
+}
+
+fn unpack_username_words(
+    message: &IpcMsg,
+    start_word: usize,
+    word_count: usize,
+) -> Option<[u8; LOCK_SESSION_USERNAME_MAX]> {
     let mut username = [0u8; LOCK_SESSION_USERNAME_MAX];
-    for word in 0..4 {
-        username[word * 8..word * 8 + 8].copy_from_slice(&message.words[word].to_le_bytes());
+    for word in 0..word_count.min(4) {
+        let index = start_word + word;
+        let start = word * 8;
+        let end = start + 8;
+        if index >= message.words.len() || end > username.len() {
+            break;
+        }
+        username[start..end].copy_from_slice(&message.words[index].to_le_bytes());
     }
     let len = username
         .iter()
@@ -237,6 +252,25 @@ pub extern "C" fn _start() -> ! {
                         }
                     } else {
                         error(MezzoMsg::ERR_UNAUTHORIZED)
+                    }
+                } else {
+                    error(MezzoMsg::ERR_UNAUTHORIZED)
+                }
+            }
+            MezzoMsg::SESSION_ESTABLISH_TRUSTED => {
+                if !validate_session_caller(message.badge, SESSION_CALLER_SESSION_SERVICE) {
+                    error(MezzoMsg::ERR_UNAUTHORIZED)
+                } else if let Some(username) = unpack_username_words(&message, 1, 3) {
+                    let username_len = username
+                        .iter()
+                        .position(|byte| *byte == 0)
+                        .unwrap_or(username.len());
+                    let uid = message.words[0] as u32;
+                    let gid = (message.words[0] >> 32) as u32;
+                    if session.establish_session(uid, gid, &username[..username_len]) {
+                        status_reply(&session)
+                    } else {
+                        error(MezzoMsg::ERR_BUSY)
                     }
                 } else {
                     error(MezzoMsg::ERR_UNAUTHORIZED)

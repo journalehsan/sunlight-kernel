@@ -99,6 +99,14 @@ pub enum SunlightSyscall {
     SecureEntropyReady = 89,
     /// UAC-only: mint a short-lived authenticated-session spawn grant.
     MintAuthSessionGrant = 102,
+    /// Session-manager-only: consume a UAC grant bound to the login caller PID.
+    SessionAuthConsume = 138,
+    /// Session-manager-only validation of trusted login/session callers.
+    ValidateSessionCaller = 139,
+    /// Session-manager-only credentials + generation lookup for a live process PID.
+    SessionGetCredentials = 140,
+    /// Current process generation (address-space identity generation).
+    GetProcessGeneration = 141,
     ClockGetTime = 88,
     /// Administrative UTC wall-clock step (gated to `timed`). Does not move
     /// monotonic time. rdi = new Unix UTC seconds.
@@ -653,6 +661,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         135 => sys_lock_auth_consume(frame),
         136 => sys_validate_lock_service_pid(frame),
         137 => sys_validate_lock_caller(frame),
+        138 => sys_session_auth_consume(frame),
+        139 => sys_validate_session_caller(frame),
+        140 => sys_session_get_credentials(frame),
+        141 => sys_get_process_generation(),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -1060,6 +1072,67 @@ fn sys_validate_lock_caller(frame: &mut SyscallFrame) -> u64 {
         ),
         _ => 0,
     }
+}
+
+fn sys_session_auth_consume(frame: &mut SyscallFrame) -> u64 {
+    let grant = CapabilityToken(frame.rdi);
+    let owner_pid = frame.rsi as usize;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_session_service {
+        return u64::MAX;
+    }
+    let now_tick = sched.global_tick;
+    drop(sched);
+    match crate::capability::CAP_BROKER
+        .lock()
+        .consume_auth_session_grant(grant, owner_pid, now_tick)
+    {
+        Some((uid, gid)) => {
+            frame.r8 = gid as u64;
+            uid as u64
+        }
+        None => u64::MAX,
+    }
+}
+
+fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
+    let target_pid = frame.rdi as usize;
+    let kind = frame.rsi;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_session_service {
+        return 0;
+    }
+    let Some(target) = sched
+        .processes
+        .iter()
+        .find(|process| process.pid == target_pid)
+    else {
+        return 0;
+    };
+    match kind {
+        ::sunlight_ipc::SESSION_CALLER_TTY_SERVICE => u64::from(target.trusted_tty_session_service),
+        ::sunlight_ipc::SESSION_CALLER_SESSION_SERVICE => {
+            u64::from(target.trusted_session_service)
+        }
+        _ => 0,
+    }
+}
+
+fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
+    let target_pid = frame.rdi as usize;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_session_service {
+        return u64::MAX;
+    }
+    let Some(target) = sched.processes.iter().find(|process| {
+        process.pid == target_pid
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    }) else {
+        return u64::MAX;
+    };
+    frame.r8 = target.pid as u64;
+    frame.r9 = target.address_space.identity().generation;
+    target.uid as u64 | ((target.gid as u64) << 32)
 }
 
 /// Decode a path from the first 4 IPC words (32 bytes max).
@@ -2099,6 +2172,10 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: Getpid (33)
 fn sys_getpid() -> u64 {
     sched::with_scheduler(|s| s.current_process().pid as u64)
+}
+
+fn sys_get_process_generation() -> u64 {
+    sched::with_scheduler(|s| s.current_process().address_space.identity().generation)
 }
 
 /// Syscall: Getppid (34)

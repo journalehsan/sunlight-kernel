@@ -486,6 +486,18 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-sessiond",
+            output: "sunlight-sessiond",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-sessionctl",
+            output: "sunlight-sessionctl",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-sm",
             output: "sunlight-sm",
             rustflags: service_rustflags,

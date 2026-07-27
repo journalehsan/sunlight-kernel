@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-tty-server"
-version = "0.2.2839-alpha.1"
+version = "0.2.3244-alpha.1"
+
+
 
 
 
@@ -458,4 +460,5 @@ sunlight-ipc = { path = "../../ipc" }
 sunlight-fs  = { path = "../../sunlight-fs" }
 sunlight-tty = { path = "../../sunlight-tty" }
 sunlight-tui = { path = "../../sunlight-tui" }
-sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc"] }
+sunlight-telemetry = { path = "../../sunlight-telemetry" }

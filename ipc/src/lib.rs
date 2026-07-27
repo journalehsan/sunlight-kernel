@@ -105,6 +105,14 @@ pub enum SunlightSyscall {
     ValidateLockServicePid = 136,
     /// Mezzo-only validation of trusted session and authenticated TTY callers.
     ValidateLockCaller = 137,
+    /// Session-manager-only: consume a UAC grant bound to the login caller PID.
+    SessionAuthConsume = 138,
+    /// Session-manager-only validation of trusted login/session callers.
+    ValidateSessionCaller = 139,
+    /// Session-manager-only credentials + generation lookup for a live process PID.
+    SessionGetCredentials = 140,
+    /// Current process generation (address-space identity generation).
+    GetProcessGeneration = 141,
     DebugLog = 99,
     /// Trusted PTY service credential lookup for an IPC caller PID.
     PtyGetCredentials = 103,
@@ -549,6 +557,7 @@ fn matches_user_session_service(name_key: u64) -> bool {
         || name_key == name_to_u64("sunlight-kv")
         || name_key == name_to_u64("sunlight-tls")
         || name_key == name_to_u64("mezzo")
+        || name_key == name_to_u64(SESSION_ENDPOINT)
         || name_key == name_to_u64("wiseowl-memoryd")
         || name_key == name_to_u64("wiseowl-memorydb")
         || name_key == name_to_u64("wiseowl.memorydb.v1")
@@ -1517,6 +1526,7 @@ impl LockState {
 #[allow(non_snake_case)]
 pub mod MezzoMsg {
     pub const SESSION_ESTABLISH: u64 = 0xB0FF;
+    pub const SESSION_ESTABLISH_TRUSTED: u64 = 0xB106;
     pub const LOCK_ACTIVATE: u64 = 0xB100;
     pub const LOCK_STATUS: u64 = 0xB101;
     pub const LOCK_RECOVER: u64 = 0xB102;
@@ -1538,6 +1548,268 @@ pub mod MezzoMsg {
 pub const LOCK_CALLER_TTY_SERVICE: u64 = 1;
 pub const LOCK_CALLER_AUTHENTICATED_TTY: u64 = 2;
 pub const LOCK_SESSION_USERNAME_MAX: usize = 32;
+pub const SESSION_CALLER_TTY_SERVICE: u64 = 1;
+pub const SESSION_CALLER_SESSION_SERVICE: u64 = 2;
+pub const SESSION_PROTOCOL_VERSION: u16 = 1;
+pub const SESSION_ENDPOINT: &str = "sunlight.session.v1";
+pub const SESSION_COMPONENT_APP_ID_MAX: usize = 32;
+pub const SESSION_CLIENT_NAME_MAX: usize = 16;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SessionId(u64);
+
+impl SessionId {
+    pub const fn new(raw: u64) -> Option<Self> {
+        if raw == 0 {
+            None
+        } else {
+            Some(Self(raw))
+        }
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SessionGeneration(u64);
+
+impl SessionGeneration {
+    pub const fn new(raw: u64) -> Option<Self> {
+        if raw == 0 {
+            None
+        } else {
+            Some(Self(raw))
+        }
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SessionComponentId(u64);
+
+impl SessionComponentId {
+    pub const fn new(raw: u64) -> Option<Self> {
+        if raw == 0 {
+            None
+        } else {
+            Some(Self(raw))
+        }
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SessionClientId(u64);
+
+impl SessionClientId {
+    pub const fn new(raw: u64) -> Option<Self> {
+        if raw == 0 {
+            None
+        } else {
+            Some(Self(raw))
+        }
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionKind {
+    Desktop = 1,
+    SafeDesktop = 2,
+}
+
+impl SessionKind {
+    pub const fn from_u64(raw: u64) -> Option<Self> {
+        match raw {
+            1 => Some(Self::Desktop),
+            2 => Some(Self::SafeDesktop),
+            _ => None,
+        }
+    }
+}
+
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionState {
+    Created = 1,
+    Preparing = 2,
+    StartingRequiredComponents = 3,
+    Running = 4,
+    Degraded = 5,
+    Locking = 6,
+    Locked = 7,
+    Stopping = 8,
+    Stopped = 9,
+    Failed = 10,
+}
+
+impl SessionState {
+    pub const fn from_u64(raw: u64) -> Option<Self> {
+        match raw {
+            1 => Some(Self::Created),
+            2 => Some(Self::Preparing),
+            3 => Some(Self::StartingRequiredComponents),
+            4 => Some(Self::Running),
+            5 => Some(Self::Degraded),
+            6 => Some(Self::Locking),
+            7 => Some(Self::Locked),
+            8 => Some(Self::Stopping),
+            9 => Some(Self::Stopped),
+            10 => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionComponentRole {
+    Shell = 1,
+    StartupApplication = 2,
+    SessionService = 3,
+    WelcomeApplication = 4,
+}
+
+impl SessionComponentRole {
+    pub const fn from_u64(raw: u64) -> Option<Self> {
+        match raw {
+            1 => Some(Self::Shell),
+            2 => Some(Self::StartupApplication),
+            3 => Some(Self::SessionService),
+            4 => Some(Self::WelcomeApplication),
+            _ => None,
+        }
+    }
+}
+
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionLaunchPolicy {
+    SessionStart = 1,
+    OnDemand = 2,
+    Disabled = 3,
+}
+
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionRestartPolicy {
+    Never = 1,
+    OnFailure = 2,
+    Always = 3,
+}
+
+impl SessionRestartPolicy {
+    pub const fn from_u64(raw: u64) -> Option<Self> {
+        match raw {
+            1 => Some(Self::Never),
+            2 => Some(Self::OnFailure),
+            3 => Some(Self::Always),
+            _ => None,
+        }
+    }
+}
+
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionComponentState {
+    Pending = 1,
+    Starting = 2,
+    Ready = 3,
+    Running = 4,
+    RestartPending = 5,
+    Stopping = 6,
+    Exited = 7,
+    Failed = 8,
+    Disabled = 9,
+}
+
+impl SessionComponentState {
+    pub const fn from_u64(raw: u64) -> Option<Self> {
+        match raw {
+            1 => Some(Self::Pending),
+            2 => Some(Self::Starting),
+            3 => Some(Self::Ready),
+            4 => Some(Self::Running),
+            5 => Some(Self::RestartPending),
+            6 => Some(Self::Stopping),
+            7 => Some(Self::Exited),
+            8 => Some(Self::Failed),
+            9 => Some(Self::Disabled),
+            _ => None,
+        }
+    }
+}
+
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionAction {
+    Lock = 1,
+    UnlockCompleted = 2,
+    Logout = 3,
+    RestartShell = 4,
+    QueryStatus = 5,
+}
+
+impl SessionAction {
+    pub const fn from_u64(raw: u64) -> Option<Self> {
+        match raw {
+            1 => Some(Self::Lock),
+            2 => Some(Self::UnlockCompleted),
+            3 => Some(Self::Logout),
+            4 => Some(Self::RestartShell),
+            5 => Some(Self::QueryStatus),
+            _ => None,
+        }
+    }
+}
+
+#[allow(non_snake_case)]
+pub mod SessionMsg {
+    pub const SESSION_CREATE: u64 = 0xC100;
+    pub const SESSION_GET: u64 = 0xC101;
+    pub const SESSION_LIST: u64 = 0xC102;
+    pub const SESSION_GET_COMPONENTS: u64 = 0xC103;
+    pub const SESSION_COMPONENT_HELLO: u64 = 0xC104;
+    pub const SESSION_COMPONENT_READY: u64 = 0xC105;
+    pub const SESSION_COMPONENT_STOPPING: u64 = 0xC106;
+    pub const SESSION_ACTION: u64 = 0xC107;
+    pub const SESSION_LOGOUT: u64 = 0xC108;
+    pub const SESSION_RESTART_COMPONENT: u64 = 0xC109;
+    pub const SESSION_GET_STATS: u64 = 0xC10A;
+    pub const SESSION_GET_HEALTH: u64 = 0xC10B;
+    pub const REPLY: u64 = 0xC1FF;
+    pub const ERROR: u64 = 0xC1FE;
+
+    pub const ERR_INVALID_VERSION: u64 = 1;
+    pub const ERR_UNAUTHORIZED: u64 = 2;
+    pub const ERR_BUSY: u64 = 3;
+    pub const ERR_INVALID_STATE: u64 = 4;
+    pub const ERR_NOT_FOUND: u64 = 5;
+    pub const ERR_STALE: u64 = 6;
+    pub const ERR_INVALID_ARGUMENT: u64 = 7;
+    pub const ERR_MANIFEST: u64 = 8;
+    pub const ERR_RESTART_EXHAUSTED: u64 = 9;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SessionProcessCredentials {
+    pub pid: u64,
+    pub uid: u32,
+    pub gid: u32,
+    pub generation: u64,
+}
 
 /// IPC protocol between `tty_server` and a native `sshl` process.
 #[allow(non_snake_case)]
@@ -3942,6 +4214,82 @@ pub fn validate_lock_caller(pid: u64, kind: u64) -> bool {
         )
     };
     ret == 1
+}
+
+pub fn session_consume_auth_grant(grant: CapabilityToken, owner_pid: u64) -> Option<(u32, u32)> {
+    let (ret, msg) = unsafe {
+        raw_syscall(
+            SunlightSyscall::SessionAuthConsume,
+            grant.0,
+            owner_pid,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if ret == u64::MAX {
+        None
+    } else {
+        Some((ret as u32, msg.words[0] as u32))
+    }
+}
+
+pub fn validate_session_caller(pid: u64, kind: u64) -> bool {
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::ValidateSessionCaller,
+            pid,
+            kind,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 1
+}
+
+pub fn session_query_process(pid: u64) -> Option<SessionProcessCredentials> {
+    let (packed, msg) = unsafe {
+        raw_syscall(
+            SunlightSyscall::SessionGetCredentials,
+            pid,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if packed == u64::MAX {
+        return None;
+    }
+    Some(SessionProcessCredentials {
+        pid: msg.words[0],
+        uid: packed as u32,
+        gid: (packed >> 32) as u32,
+        generation: msg.words[1],
+    })
+}
+
+pub fn current_process_generation() -> u64 {
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::GetProcessGeneration,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret
 }
 
 pub fn kill(pid: u64, sig: u32) -> bool {

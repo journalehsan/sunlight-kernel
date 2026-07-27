@@ -3,45 +3,19 @@
 
 extern crate alloc;
 
-struct BumpAllocator;
-
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 4 * 1024 * 1024] = [0; 4 * 1024 * 1024];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            debug_log("[ALLOC] HEAP EXHAUSTED! Requested allocation would overflow.");
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {
-        // NOTE: Bump allocator cannot free memory. The real fix is in render_active_shell_fb()
-        // which reuses TerminalGrid instead of allocating a new one every frame.
-        // See GRID_REUSE logic below.
-    }
-}
-
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
-
 use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_call_timeout, ipc_recv,
     ipc_reply_and_try_recv,
     launch_trace::{LaunchSource, LaunchTrace},
-    monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
-    sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
-    MezzoMsg, MouseMsg, PointerReport, SgpMsg, ShellMsg, SpawnMsg, TzMsg,
-    LOCK_SESSION_USERNAME_MAX,
+    kill, monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive,
+    process_yield, sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken,
+    IpcMsg, KbdMsg, MouseMsg, PointerReport, SessionAction, SessionComponentState, SessionKind,
+    SessionMsg, SessionState, SgpMsg, ShellMsg, SpawnMsg, TzMsg, SESSION_ENDPOINT,
+    SESSION_PROTOCOL_VERSION,
 };
 use sunlight_libc::sun_exec;
+use sunlight_telemetry::Telemetry;
 use sunlight_tty::login::{
     login_display_name, login_user_icon, FocusArea, LoginResult, LoginScreen, LoginUserIcon,
     SessionType, MAX_USERS,
@@ -106,6 +80,10 @@ const SHELL_IPC_TIMEOUT_MS: u64 = 1_000;
 const SHELL_SLOW_PATH_TIMEOUT_MS: u64 = 5_000;
 const TZ_IPC_TIMEOUT_MS: u64 = 100;
 const DISPLAY_TIMEOUT_LOG_INTERVAL: u64 = 32;
+const SESSION_FOUNDATION_IDLE_WINDOW_MS: u64 = 1_500;
+const SESSION_FOUNDATION_IDLE_CPU_BP_MAX: u16 = 1_500;
+const SESSION_FOUNDATION_RAM_DELTA_KB_MAX: u64 = 2_048;
+const SESSION_FOUNDATION_PROC_DELTA_MAX: usize = 1;
 
 struct GeometryLogLine {
     bytes: [u8; 320],
@@ -277,22 +255,303 @@ fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) 
     }
 }
 
-fn establish_desktop_session(username: &[u8], session_grant: CapabilityToken) -> bool {
-    let Some(mezzo) = nameserver_lookup("mezzo") else {
-        return false;
-    };
-    let mut message = IpcMsg::with_label(MezzoMsg::SESSION_ESTABLISH).with_cap(0, session_grant);
-    for (index, byte) in username
-        .iter()
-        .copied()
-        .take(LOCK_SESSION_USERNAME_MAX)
-        .enumerate()
-    {
-        message.words[index / 8] |= (byte as u64) << ((index % 8) * 8);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DesktopSessionHandle {
+    session_id: u64,
+    generation: u64,
+}
+
+#[derive(Clone, Copy)]
+struct DesktopComponentSnapshot {
+    pid: u64,
+    generation: u64,
+    state: SessionComponentState,
+}
+
+#[derive(Clone, Copy)]
+struct SessionFoundationBaseline {
+    used_ram_kb: u64,
+    proc_count: usize,
+}
+
+#[derive(Clone, Copy)]
+enum SessionFoundationGateState {
+    Disabled,
+    AwaitFirstSession,
+    CrashInjected {
+        first: DesktopSessionHandle,
+        old_pid: u64,
+    },
+    WaitingForLogout {
+        first: DesktopSessionHandle,
+    },
+    MeasuringIdle {
+        first: DesktopSessionHandle,
+        started_at_ms: u64,
+        max_cpu_used_bp: u16,
+        resource_logged: bool,
+    },
+    AwaitSecondSession {
+        first: DesktopSessionHandle,
+    },
+    Done,
+}
+
+fn session_foundation_gate_enabled() -> bool {
+    option_env!("SUNLIGHT_INJECT_PHASE") == Some("session_foundation")
+}
+
+fn session_foundation_log(marker: &str) {
+    debug_log("[SESSION-FOUNDATION] ");
+    debug_log(marker);
+    debug_log("\n");
+}
+
+fn create_desktop_session(
+    username: &[u8],
+    uid: u32,
+    gid: u32,
+    session_grant: CapabilityToken,
+) -> Option<DesktopSessionHandle> {
+    let sessiond = nameserver_lookup(SESSION_ENDPOINT)?;
+    let request_id = monotonic_millis();
+    let mut msg = IpcMsg::with_label(SessionMsg::SESSION_CREATE)
+        .with_cap(0, session_grant)
+        .word(0, request_id)
+        .word(1, (uid as u64) | ((gid as u64) << 32));
+    for (index, byte) in username.iter().copied().take(12).enumerate() {
+        if index < 8 {
+            msg.words[2] |= (byte as u64) << (index * 8);
+        } else {
+            msg.words[3] |= (byte as u64) << ((index - 8 + 4) * 8);
+        }
     }
-    message.word_count = 4;
-    ipc_call_timeout(mezzo, message, DISPLAY_IPC_TIMEOUT_MS)
-        .is_ok_and(|reply| reply.label == MezzoMsg::REPLY)
+    msg.words[3] |= (SESSION_PROTOCOL_VERSION as u64)
+        | ((SessionKind::Desktop as u64) << 16)
+        | ((username.len().min(12) as u64) << 24);
+    let reply = ipc_call_timeout(sessiond, msg, DISPLAY_IPC_TIMEOUT_MS).ok()?;
+    (reply.label == SessionMsg::REPLY).then_some(DesktopSessionHandle {
+        session_id: reply.words[0],
+        generation: reply.words[1],
+    })
+}
+
+fn session_action(
+    handle: DesktopSessionHandle,
+    action: SessionAction,
+    timeout_ms: u64,
+) -> Option<IpcMsg> {
+    let sessiond = nameserver_lookup(SESSION_ENDPOINT)?;
+    ipc_call_timeout(
+        sessiond,
+        IpcMsg::with_label(SessionMsg::SESSION_ACTION)
+            .word(0, handle.session_id)
+            .word(1, handle.generation)
+            .word(2, action as u64),
+        timeout_ms,
+    )
+    .ok()
+}
+
+fn query_desktop_session(
+    handle: DesktopSessionHandle,
+    timeout_ms: u64,
+) -> Option<SessionState> {
+    let sessiond = nameserver_lookup(SESSION_ENDPOINT)?;
+    let reply = ipc_call_timeout(
+        sessiond,
+        IpcMsg::with_label(SessionMsg::SESSION_GET)
+            .word(0, handle.session_id)
+            .word(1, handle.generation),
+        timeout_ms,
+    )
+    .ok()?;
+    if reply.label != SessionMsg::REPLY {
+        return None;
+    }
+    SessionState::from_u64((reply.words[2] >> 32) & 0xff)
+}
+
+fn query_desktop_component(
+    handle: DesktopSessionHandle,
+    timeout_ms: u64,
+) -> Option<DesktopComponentSnapshot> {
+    let sessiond = nameserver_lookup(SESSION_ENDPOINT)?;
+    let reply = ipc_call_timeout(
+        sessiond,
+        IpcMsg::with_label(SessionMsg::SESSION_GET_COMPONENTS)
+            .word(0, handle.session_id)
+            .word(1, handle.generation),
+        timeout_ms,
+    )
+    .ok()?;
+    if reply.label != SessionMsg::REPLY {
+        return None;
+    }
+    Some(DesktopComponentSnapshot {
+        pid: reply.words[1],
+        generation: reply.words[2],
+        state: SessionComponentState::from_u64(reply.words[3] & 0xff)?,
+    })
+}
+
+fn wait_for_desktop_session_running(handle: DesktopSessionHandle, timeout_ms: u64) -> bool {
+    let deadline = monotonic_millis().saturating_add(timeout_ms);
+    while monotonic_millis() < deadline {
+        match query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) {
+            Some(SessionState::Running) => return true,
+            Some(SessionState::Failed) | Some(SessionState::Stopped) => return false,
+            Some(_) => {}
+            None => return false,
+        }
+        process_yield();
+    }
+    false
+}
+
+fn telemetry_baseline(telemetry: &mut Option<Telemetry>) -> Option<SessionFoundationBaseline> {
+    let telem = telemetry.as_mut()?;
+    let _ = telem.poll();
+    let snapshot = telem.snapshot();
+    Some(SessionFoundationBaseline {
+        used_ram_kb: snapshot.used_ram_kb,
+        proc_count: snapshot.proc_count,
+    })
+}
+
+fn drive_session_foundation_gate(
+    gate_state: &mut SessionFoundationGateState,
+    desktop_session: Option<DesktopSessionHandle>,
+    baseline: Option<SessionFoundationBaseline>,
+    telemetry: &mut Option<Telemetry>,
+) {
+    match *gate_state {
+        SessionFoundationGateState::Disabled | SessionFoundationGateState::Done => {}
+        SessionFoundationGateState::AwaitFirstSession => {
+            let Some(handle) = desktop_session else {
+                return;
+            };
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+                return;
+            }
+            let Some(component) = query_desktop_component(handle, DISPLAY_IPC_TIMEOUT_MS) else {
+                return;
+            };
+            if component.pid == 0 {
+                return;
+            }
+            if component.state != SessionComponentState::Ready
+                && component.state != SessionComponentState::Running
+            {
+                return;
+            }
+            let _ = kill(component.pid, 9);
+            *gate_state = SessionFoundationGateState::CrashInjected {
+                first: handle,
+                old_pid: component.pid,
+            };
+        }
+        SessionFoundationGateState::CrashInjected { first, old_pid } => {
+            if desktop_session != Some(first) {
+                return;
+            }
+            if query_desktop_session(first, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+                return;
+            }
+            let Some(component) = query_desktop_component(first, DISPLAY_IPC_TIMEOUT_MS) else {
+                return;
+            };
+            if component.pid == 0 || component.pid == old_pid || process_is_alive(old_pid) {
+                return;
+            }
+            session_foundation_log("SINGLE_SHELL PASS");
+            let _ = session_action(first, SessionAction::Logout, DISPLAY_IPC_TIMEOUT_MS);
+            *gate_state = SessionFoundationGateState::WaitingForLogout { first };
+        }
+        SessionFoundationGateState::WaitingForLogout { first } => {
+            if desktop_session.is_some() {
+                return;
+            }
+            session_foundation_log("LOGIN_RETURN PASS");
+            let mut max_cpu_used_bp = 0u16;
+            if let Some(telem) = telemetry.as_mut() {
+                let _ = telem.poll();
+                max_cpu_used_bp = telem.snapshot().cpu_used_bp;
+            }
+            *gate_state = SessionFoundationGateState::MeasuringIdle {
+                first,
+                started_at_ms: monotonic_millis(),
+                max_cpu_used_bp,
+                resource_logged: false,
+            };
+        }
+        SessionFoundationGateState::MeasuringIdle {
+            first,
+            started_at_ms,
+            mut max_cpu_used_bp,
+            mut resource_logged,
+        } => {
+            if let Some(telem) = telemetry.as_mut() {
+                let _ = telem.poll();
+                let snapshot = telem.snapshot();
+                max_cpu_used_bp = max_cpu_used_bp.max(snapshot.cpu_used_bp);
+                if !resource_logged {
+                    if let Some(base) = baseline {
+                        let ram_delta = snapshot.used_ram_kb.abs_diff(base.used_ram_kb);
+                        let proc_delta = snapshot.proc_count.abs_diff(base.proc_count);
+                        if ram_delta <= SESSION_FOUNDATION_RAM_DELTA_KB_MAX
+                            && proc_delta <= SESSION_FOUNDATION_PROC_DELTA_MAX
+                        {
+                            session_foundation_log("RESOURCE_BASELINE PASS");
+                            resource_logged = true;
+                        }
+                    }
+                }
+            }
+            if monotonic_millis().saturating_sub(started_at_ms)
+                < SESSION_FOUNDATION_IDLE_WINDOW_MS
+            {
+                *gate_state = SessionFoundationGateState::MeasuringIdle {
+                    first,
+                    started_at_ms,
+                    max_cpu_used_bp,
+                    resource_logged,
+                };
+                return;
+            }
+            if resource_logged && max_cpu_used_bp <= SESSION_FOUNDATION_IDLE_CPU_BP_MAX {
+                session_foundation_log("IDLE_CPU PASS");
+                *gate_state = SessionFoundationGateState::AwaitSecondSession { first };
+            } else {
+                *gate_state = SessionFoundationGateState::MeasuringIdle {
+                    first,
+                    started_at_ms: monotonic_millis(),
+                    max_cpu_used_bp: 0,
+                    resource_logged,
+                };
+            }
+        }
+        SessionFoundationGateState::AwaitSecondSession { first } => {
+            let Some(handle) = desktop_session else {
+                return;
+            };
+            if handle.session_id == first.session_id {
+                return;
+            }
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+                return;
+            }
+            session_foundation_log("SECOND_SESSION PASS");
+            let stale = session_action(first, SessionAction::RestartShell, DISPLAY_IPC_TIMEOUT_MS);
+            if stale.is_some_and(|reply| {
+                reply.label == SessionMsg::ERROR && reply.words[0] == SessionMsg::ERR_STALE
+            }) {
+                session_foundation_log("STALE_HANDLE_REJECT PASS");
+                session_foundation_log("FINAL PASS");
+                *gate_state = SessionFoundationGateState::Done;
+            }
+        }
+    }
 }
 
 fn forward_pointer_to_display(
@@ -628,6 +887,14 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     // while this is false so an unauthenticated user cannot bypass the login
     // screen by switching to the graphical desktop session.
     let mut desktop_unlocked = false;
+    let mut desktop_session: Option<DesktopSessionHandle> = None;
+    let mut session_telemetry = Telemetry::init().ok();
+    let mut session_foundation_baseline = None;
+    let mut session_foundation_gate = if session_foundation_gate_enabled() {
+        SessionFoundationGateState::AwaitFirstSession
+    } else {
+        SessionFoundationGateState::Disabled
+    };
 
     let mut msg = ipc_recv(ep);
     let mut phase3_6_done = false;
@@ -779,10 +1046,18 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             }
                                         }
                                         SessionType::Desktop => {
-                                            if !establish_desktop_session(
+                                            if session_foundation_gate_enabled()
+                                                && session_foundation_baseline.is_none()
+                                            {
+                                                session_foundation_baseline =
+                                                    telemetry_baseline(&mut session_telemetry);
+                                            }
+                                            let Some(handle) = create_desktop_session(
                                                 &username[..username_len],
+                                                uid,
+                                                gid,
                                                 session_grant,
-                                            ) {
+                                            ) else {
                                                 login.message =
                                                     "Session policy unavailable; login stayed secure.";
                                                 if has_fb {
@@ -792,7 +1067,22 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     );
                                                 }
                                                 break 'kbd;
+                                            };
+                                            if !wait_for_desktop_session_running(handle, 10_000) {
+                                                login.message =
+                                                    "Desktop session failed before shell ready.";
+                                                if has_fb {
+                                                    render_login_fb(
+                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                        &mut mouse,
+                                                    );
+                                                }
+                                                break 'kbd;
                                             }
+                                            if session_foundation_gate_enabled() {
+                                                session_foundation_log("LOGIN_HANDOFF PASS");
+                                            }
+                                            desktop_session = Some(handle);
                                             desktop_unlocked = true;
                                             if has_fb {
                                                 erase_tui_pointer(
@@ -1396,6 +1686,53 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             if let Some(m) = ipc_reply_and_try_recv(ep, reply) {
                 msg = m;
                 break;
+            }
+            if let Some(handle) = desktop_session {
+                static mut LAST_SESSION_POLL_MS: u64 = 0;
+                let now = monotonic_millis();
+                let should_poll = unsafe {
+                    if now.saturating_sub(LAST_SESSION_POLL_MS) >= 100 {
+                        LAST_SESSION_POLL_MS = now;
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if should_poll {
+                    match query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) {
+                        Some(SessionState::Failed) | Some(SessionState::Stopped) | None => {
+                            let _ = send_display_request(
+                                &mut display_cap,
+                                IpcMsg::with_label(SgpMsg::SESSION_DEACTIVATE),
+                            );
+                            active_vt = VirtualTerminal::Tty;
+                            desktop_pointer_release_gate = false;
+                            desktop_session = None;
+                            desktop_unlocked = false;
+                            mouse.activate(fb32_w, fb32_h);
+                            login.message = "Desktop session ended.";
+                            if has_fb {
+                                render_login_fb(
+                                    &login,
+                                    fb_addr,
+                                    fb32_w,
+                                    fb32_h,
+                                    fb32_p,
+                                    &mut mouse,
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if session_foundation_gate_enabled() {
+                drive_session_foundation_gate(
+                    &mut session_foundation_gate,
+                    desktop_session,
+                    session_foundation_baseline,
+                    &mut session_telemetry,
+                );
             }
             if has_fb
                 && matches!(state, TtyState::Shell)

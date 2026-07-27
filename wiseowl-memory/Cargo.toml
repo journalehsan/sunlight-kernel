@@ -1,6 +1,8 @@
 [package]
 name = "wiseowl-memory"
-version = "0.2.2839-alpha.1"
+version = "0.2.3244-alpha.1"
+
+
 edition = "2021"
 description = "Wise Owl Phase 0/1/1.1: cognitive memory contracts and bounded short-term memory service"
 license = "MIT OR Apache-2.0"

@@ -36,6 +36,13 @@ pub fn is_trusted_lock_service_path(path: &str) -> bool {
     matches!(path, "/sbin/mezzo" | "/usr/sbin/mezzo")
 }
 
+pub fn is_trusted_session_service_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/sbin/sunlight-sessiond" | "/usr/sbin/sunlight-sessiond"
+    )
+}
+
 const LOCK_PRESENTER_ENTRY_MAGIC: u64 = 0x4C4F_434B_5052_4553;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +76,7 @@ pub fn exec_into_process(
     let old_trusted_swap_admin = process.trusted_swap_admin_service;
     let old_trusted_zram_diagnostic = process.trusted_zram_diagnostic;
     let old_trusted_pty_service = process.trusted_pty_service;
+    let old_trusted_session_service = process.trusted_session_service;
     let old_linux_compat = process.is_linux_compat;
     let old_brk_base = process.brk_base;
     let old_brk_current = process.brk_current;
@@ -76,6 +84,7 @@ pub fn exec_into_process(
     process.trusted_swap_admin_service = false;
     process.trusted_zram_diagnostic = false;
     process.trusted_pty_service = false;
+    process.trusted_session_service = false;
 
     // Phase 4.5: Detect if this is a Linux-compatible ELF binary
     process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
@@ -98,6 +107,7 @@ pub fn exec_into_process(
             process.trusted_swap_admin_service = old_trusted_swap_admin;
             process.trusted_zram_diagnostic = old_trusted_zram_diagnostic;
             process.trusted_pty_service = old_trusted_pty_service;
+            process.trusted_session_service = old_trusted_session_service;
             process.is_linux_compat = old_linux_compat;
             process.brk_base = old_brk_base;
             process.brk_current = old_brk_current;
@@ -593,6 +603,7 @@ pub fn spawn_from_path_with_restrictions(
     process.trusted_zram_diagnostic = is_trusted_zram_diagnostic_path(path);
     process.trusted_pty_service = is_trusted_pty_service_path(path);
     process.trusted_lock_service = is_trusted_lock_service_path(path);
+    process.trusted_session_service = is_trusted_session_service_path(path);
     process.set_initial_args(
         if matches!(
             path,
@@ -780,12 +791,18 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/certificatectl" | "/usr/bin/certificatectl" => Ok(crate::CERTIFICATECTL_ELF_BYTES),
         // User Access Control daemon (spawned by sunlightd) + control client.
         "/sbin/uac_service" | "/usr/sbin/uac_service" => Ok(crate::UAC_SERVICE_ELF_BYTES),
+        "/sbin/sunlight-sessiond" | "/usr/sbin/sunlight-sessiond" => {
+            Ok(crate::SUNLIGHT_SESSIOND_ELF_BYTES)
+        }
         "/sbin/mezzo" | "/usr/sbin/mezzo" => Ok(crate::MEZZO_ELF_BYTES),
         "/bin/capabilityctl" | "/usr/bin/capabilityctl" => Ok(crate::CAPABILITYCTL_ELF_BYTES),
         "/bin/runas" | "/usr/bin/runas" => Ok(crate::RUNAS_ELF_BYTES),
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
         "/usr/bin/sunlightctl" | "/bin/sunlightctl" => Ok(crate::SUNLIGHTCTL_ELF_BYTES),
         "/usr/bin/mezzoctl" | "/bin/mezzoctl" => Ok(crate::MEZZOCTL_ELF_BYTES),
+        "/usr/bin/sunlight-sessionctl" | "/bin/sunlight-sessionctl" => {
+            Ok(crate::SUNLIGHT_SESSIONCTL_ELF_BYTES)
+        }
         "/usr/bin/devicectl" | "/bin/devicectl" => Ok(crate::DEVICECTL_ELF_BYTES),
         "/usr/bin/sunlight-hwinfo" | "/bin/sunlight-hwinfo" => Ok(crate::SUNLIGHT_HWINFO_ELF_BYTES),
         "/usr/bin/powerctl" | "/bin/powerctl" => Ok(crate::POWERCTL_ELF_BYTES),

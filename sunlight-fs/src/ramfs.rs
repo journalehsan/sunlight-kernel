@@ -990,6 +990,29 @@ max_ttys = 6
 "#,
     ),
     RamEntry::file(
+        "/etc/sunlight/sessions/sunlight-desktop.toml",
+        0,
+        0,
+        mode::FILE_644,
+        br#"format_version = 1
+id = "org.sunlight.session.desktop"
+name = "Sunlight Desktop"
+kind = "desktop"
+
+[[components]]
+id = "org.sunlight.vortex-shell"
+role = "shell"
+required = true
+enabled = true
+launch_policy = "session-start"
+restart_policy = "on-failure"
+restart_limit = 3
+restart_window_seconds = 30
+readiness_timeout_seconds = 10
+order = 0
+"#,
+    ),
+    RamEntry::file(
         "/etc/sunlight/ssh.toml",
         0,
         0,
@@ -1431,6 +1454,20 @@ login_timeout_seconds = 30
         0,
         mode::FILE_755,
         b"#!/sunlight/mezzoctl\n",
+    ),
+    RamEntry::file(
+        "/bin/sunlight-sessionctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-sessionctl\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/sunlight-sessionctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-sessionctl\n",
     ),
     RamEntry::file("/bin/fetch", 0, 0, mode::FILE_755, b"#!/sunlight/fetch\n"),
     RamEntry::file(
@@ -2153,6 +2190,7 @@ login_timeout_seconds = 30
     RamEntry::dir("/etc/zoneinfo", 0, 0, mode::DIR_755),
     RamEntry::dir("/usr/share/zoneinfo", 0, 0, mode::DIR_755),
     RamEntry::dir("/etc/sunlight/services", 0, 0, mode::DIR_755),
+    RamEntry::dir("/etc/sunlight/sessions", 0, 0, mode::DIR_755),
     RamEntry::file(
         "/etc/localtime",
         0,

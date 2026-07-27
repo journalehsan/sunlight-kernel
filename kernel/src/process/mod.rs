@@ -146,6 +146,8 @@ pub struct Process {
     pub trusted_lock_service: bool,
     /// Set only for the kernel-loaded TTY/login session service.
     pub trusted_tty_session_service: bool,
+    /// Set only for the native desktop session manager service.
+    pub trusted_session_service: bool,
     /// Trust-chain markers used only for the authenticated-session broker.
     pub trusted_service_manager: bool,
     pub trusted_auth_broker: bool,
@@ -352,6 +354,7 @@ impl Process {
             trusted_pty_service: false,
             trusted_lock_service: false,
             trusted_tty_session_service: false,
+            trusted_session_service: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
             service_lookup_restrictions: None,
@@ -512,6 +515,7 @@ impl Process {
             trusted_pty_service: false,
             trusted_lock_service: false,
             trusted_tty_session_service: false,
+            trusted_session_service: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
             service_lookup_restrictions: None,

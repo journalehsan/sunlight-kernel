@@ -1,6 +1,8 @@
 [package]
 name = "wiseowl-index"
-version = "0.2.2839-alpha.1"
+version = "0.2.3244-alpha.1"
+
+
 edition = "2021"
 description = "Wise Owl Phase 3.5: strong digests, independent MemoryDB client, document ingestion"
 license = "MIT OR Apache-2.0"

@@ -1,0 +1,14 @@
+[package]
+name = "sunlight-sessionctl"
+version = "0.2.3244-alpha.1"
+
+edition = "2021"
+
+[dependencies]
+heapless = "0.8"
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc"] }
+
+[[bin]]
+name = "sunlight-sessionctl"
+path = "src/main.rs"

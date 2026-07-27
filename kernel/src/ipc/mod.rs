@@ -894,6 +894,7 @@ fn registration_identity_matches(process_name: &str, registered_name: u64) -> bo
         name if name == name_hash("solar") => "solar",
         name if name == name_hash("sunlight-kv") => "sunlight-kv",
         name if name == name_hash("mezzo") => "mezzo",
+        name if name == name_hash("sunlight.session.v1") => "sunlight-sessiond",
         name if name == name_hash("sunlight-tls") => "sunlight-tls",
         name if name == name_hash("sunlightd") => "sunlightd",
         name if name == name_hash("niced") => "niced",
