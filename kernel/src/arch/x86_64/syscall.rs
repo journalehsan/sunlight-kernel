@@ -1099,7 +1099,10 @@ fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
     let target_pid = frame.rdi as usize;
     let kind = frame.rsi;
     let sched = crate::sched::SCHEDULER.lock();
-    if !sched.current_process().trusted_session_service {
+    let caller = sched.current_process();
+    // sessiond validates tty callers; mezzo validates sessiond on
+    // SESSION_ESTABLISH_TRUSTED (trusted_lock_service).
+    if !caller.trusted_session_service && !caller.trusted_lock_service {
         return 0;
     }
     let Some(target) = sched

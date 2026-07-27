@@ -454,17 +454,20 @@ fn decode_create(msg: &IpcMsg) -> Result<(u64, u32, u32, SessionKind, [u8; USERN
 fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     state.stats.login_handoffs = state.stats.login_handoffs.saturating_add(1);
     if !validate_session_caller(msg.badge, SESSION_CALLER_TTY_SERVICE) {
+        write_log("[SESSION-FOUNDATION] CREATE fail: tty caller unauthorized\n");
         state.stats.unauthorized_session_requests =
             state.stats.unauthorized_session_requests.saturating_add(1);
         return error(SessionMsg::ERR_UNAUTHORIZED);
     }
     if state.manifest.is_err() {
+        write_log("[SESSION-FOUNDATION] CREATE fail: manifest\n");
         state.stats.session_create_failures = state.stats.session_create_failures.saturating_add(1);
         return error(SessionMsg::ERR_MANIFEST);
     }
     let Ok((request_id, requested_uid, requested_gid, kind, username, username_len)) =
         decode_create(&msg)
     else {
+        write_log("[SESSION-FOUNDATION] CREATE fail: decode\n");
         state.stats.login_handoff_failures = state.stats.login_handoff_failures.saturating_add(1);
         return error(SessionMsg::ERR_INVALID_ARGUMENT);
     };
@@ -472,17 +475,21 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         if active.request_id == request_id && active.record.uid == requested_uid {
             return create_reply(&active.record);
         }
+        write_log("[SESSION-FOUNDATION] CREATE fail: busy\n");
         return error(SessionMsg::ERR_BUSY);
     }
     let Some((uid, gid)) = session_consume_auth_grant(msg.caps[0], msg.badge) else {
+        write_log("[SESSION-FOUNDATION] CREATE fail: auth grant\n");
         state.stats.login_handoff_failures = state.stats.login_handoff_failures.saturating_add(1);
         return error(SessionMsg::ERR_UNAUTHORIZED);
     };
     if uid != requested_uid || gid != requested_gid {
+        write_log("[SESSION-FOUNDATION] CREATE fail: uid/gid mismatch\n");
         state.stats.login_handoff_failures = state.stats.login_handoff_failures.saturating_add(1);
         return error(SessionMsg::ERR_UNAUTHORIZED);
     }
     if !establish_lock_session(&username[..username_len], uid, gid) {
+        write_log("[SESSION-FOUNDATION] CREATE fail: mezzo establish\n");
         state.stats.login_handoff_failures = state.stats.login_handoff_failures.saturating_add(1);
         return error(SessionMsg::ERR_INVALID_STATE);
     }

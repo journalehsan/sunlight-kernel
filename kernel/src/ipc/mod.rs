@@ -851,10 +851,12 @@ fn mediate_nameserver_lookup(
     if sunlight_ipc::service_capability_allows_hashed_name(mask, msg.words[0]) {
         return Ok(());
     }
+    // msg.words[0] is the FNV name hash; process.name is the caller, not the target.
     crate::serial_println!(
-        "[IPC] denied nameserver lookup pid={} name='{}' mask={:#x}",
+        "[IPC] denied nameserver lookup pid={} caller='{}' name_hash={:#x} mask={:#x}",
         caller_pid,
         process.name_str(),
+        msg.words[0],
         mask
     );
     Err(IpcError::InvalidCapability)

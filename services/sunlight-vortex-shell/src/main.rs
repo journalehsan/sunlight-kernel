@@ -921,7 +921,9 @@ const NETWORK_STATUS_POLL_MS: u64 = 5_000;
 const NETWORK_POPOVER_POLL_MS: u64 = 2_000;
 const TIME_IPC_TIMEOUT_MS: u64 = 250;
 const DISPLAY_IPC_TIMEOUT_MS: u64 = 50;
-const WINDOW_SNAPSHOT_IPC_TIMEOUT_MS: u64 = 250;
+// LIST_WINDOWS can take longer right after SESSION_ACTIVATE while the
+// compositor is doing a full-desktop present (1856×1065 ≈ 7.9 MiB).
+const WINDOW_SNAPSHOT_IPC_TIMEOUT_MS: u64 = 1_000;
 const KV_LOOKUP_TIMEOUT_MS: u64 = 250;
 const KV_IPC_TIMEOUT_MS: u64 = 250;
 const KV_VALUE: u64 = 0x4B05;
@@ -7686,6 +7688,14 @@ impl App for VortexShell {
         }
     }
 
+    fn on_ready(&mut self) -> bool {
+        // First frame may commit before SESSION_ACTIVATE enables the compositor
+        // redraw path. Request one full repaint so dock/top bar land after the
+        // desktop owns the framebuffer.
+        debug_log("[VORTEX] on_ready: force shell chrome repaint\n");
+        true
+    }
+
     fn update(&mut self, event: Event) -> bool {
         self.note_event_progress(event);
         let sidebar_top = top_bar_rect(self.screen_w, self.top_panel_presentation).bottom() + 8;
@@ -8675,20 +8685,25 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     debug_log_u32(metrics.height_px);
     debug_log("\n");
 
-    // Create window at the exact physical screen size.
-    // The SHM buffer will match canvas.width/height so panel positions are correct.
+    // Create the desktop-layer window in one shot (Desktop + Fullscreen + no chrome).
+    // Creating as Normal first used to place the window at y=titlebar (50) and only
+    // later reconfigure it; that race left incomplete chrome after session activate.
     let mut window = loop {
-        match Window::connect(WindowConfig {
-            width: screen_w,
-            height: screen_h,
-            title: "Vortex Shell",
-            decoration: sunlight_ui::WindowDecoration::Normal,
-        }) {
+        match Window::connect_with_flags(
+            WindowConfig {
+                width: screen_w,
+                height: screen_h,
+                title: "Vortex Shell",
+                decoration: sunlight_ui::WindowDecoration::Normal,
+            },
+            DESKTOP_LAYER_FLAGS,
+        ) {
             Some(w) => break w,
             None => process_yield(),
         }
     };
 
+    // Keep configure as a belt-and-suspenders reassert of desktop-layer flags.
     window.configure_flags(DESKTOP_LAYER_FLAGS);
     if let Some(binding) = session_component_hello() {
         if session_component_ready(binding) {

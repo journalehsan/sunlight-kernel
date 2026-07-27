@@ -537,11 +537,15 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
 
 /// Brokers ordinary interactive applications may resolve. Keep privileged
 /// control-plane services out of this list: notably spawn, sm, deviced,
-/// sunlightd, networkd, powerd, thermald, gcd/proc, niced, and timed.
+/// sunlightd, powerd, thermald, gcd/proc, and niced.
+///
+/// `networkd` is allowed for **read-only** desktop panel status (LIST_INTERFACES).
+/// Mutating network ops remain enforced inside networkd.
 fn matches_user_session_service(name_key: u64) -> bool {
     name_key == name_to_u64("vfs")
         || name_key == name_to_u64("display_server")
         || name_key == name_to_u64("net")
+        || name_key == name_to_u64("networkd")
         || name_key == name_to_u64("resolved")
         || name_key == name_to_u64("pty")
         || name_key == name_to_u64("tty")
@@ -605,19 +609,17 @@ mod service_capability_tests {
     #[test]
     fn ordinary_user_session_still_cannot_resolve_control_plane_services() {
         let session = ServiceCapability::UserSession.bit();
-        for name in [
-            "networkd",
-            "deviced",
-            "powerd",
-            "thermald",
-            "sunlightd",
-            "niced",
-        ] {
+        for name in ["deviced", "powerd", "thermald", "sunlightd", "niced"] {
             assert!(!service_capability_allows_hashed_name(
                 session,
                 name_to_u64(name)
             ));
         }
+        // Read-only network panel status goes through networkd.
+        assert!(service_capability_allows_hashed_name(
+            session,
+            name_to_u64("networkd")
+        ));
         assert!(service_capability_allows_hashed_name(
             session,
             name_to_u64("net")
