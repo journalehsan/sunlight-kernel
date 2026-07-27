@@ -11,8 +11,9 @@ extern crate alloc;
 use core::fmt::Write;
 use sun_font::{draw_text, FontRole, TextStyle, Typography, VecFont};
 use sunlight_ipc::{
-    debug_log, ipc_call, monotonic_millis, nameserver_lookup, process_yield, query_display_metrics,
-    CapabilityToken, IpcMsg, ProcessExit, SessionMsg, SESSION_ENDPOINT,
+    debug_log, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_yield,
+    query_display_metrics, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit,
+    SessionMsg, SESSION_ENDPOINT, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, crt0, sun_exec};
 use sunlight_ui::{
@@ -23,7 +24,15 @@ use sunlight_ui::{
 use sunlight_welcome::{
     should_mark_onboarding_complete, ActionCard, ActionKind, CompletionOutcome, GreetingSource,
     LaunchMode, WizardPage, WizardState, ACTION_CARDS, BUNDLE_ID, DISPLAY_NAME, SLIDE_COUNT,
-    SLIDES,
+    SLIDES, MAX_GREETING, MAX_NAME,
+};
+use wiseowl_brain::native_ipc::{
+    BrainIpcHeader, BrainOp, NATIVE_PROTOCOL_VERSION, BRAIN_ENDPOINT,
+    BRAIN_IPC_HEADER_LEN, INLINE_PAYLOAD_THRESHOLD, SHM_PAGE_SIZE,
+};
+use wiseowl_brain::protocol::{
+    BrainRequestWire, BrainResponseWire, GreetingRequestWire,
+    MAX_DEVICE_CLASS_LEN, MAX_MODEL_LEN, MAX_VERSION_LEN,
 };
 
 const WIN_W: u32 = 640;
@@ -170,6 +179,127 @@ fn open_action(card: &ActionCard) -> Result<(), &'static str> {
     }
 }
 
+/// Try requesting a greeting from wiseowl-braind via native IPC.
+/// Returns Some(greeting_text) on success, None on any failure.
+fn try_brain_greeting(state: &WizardState) -> Option<heapless::String<MAX_GREETING>> {
+    use heapless::String as HString;
+
+    let ep = nameserver_lookup(BRAIN_ENDPOINT)?;
+
+    let mut display_name: HString<MAX_NAME> = HString::new();
+    let mut version: HString<MAX_VERSION_LEN> = HString::new();
+    let _ = version.push_str(state.sunlight_version.as_str());
+    let mut dc: HString<MAX_DEVICE_CLASS_LEN> = HString::new();
+    let _ = dc.push_str("desktop");
+    if let Some(ref dn) = state.machine.device_class {
+        dc.clear();
+        for c in dn.chars().take(MAX_DEVICE_CLASS_LEN) {
+            let _ = dc.push(c);
+        }
+    }
+    let mut mn: HString<MAX_MODEL_LEN> = HString::new();
+    if let Some(ref model) = state.machine.model_name {
+        for c in model.chars().take(MAX_MODEL_LEN) {
+            let _ = mn.push(c);
+        }
+    }
+
+    let req = BrainRequestWire {
+        request_id: 1,
+        caller_uid: unsafe { libc::getuid() } as u64,
+        user_id: unsafe { libc::getuid() } as u64,
+        session_id: 0,
+        locale_len: 0,
+        locale: HString::new(),
+        request_kind: 1,
+        greeting: Some(GreetingRequestWire {
+            welcome_mode: if state.first_login { 1 } else if state.first_after_upgrade { 2 } else { 3 },
+            first_login: if state.first_login { 1 } else { 0 },
+            first_after_upgrade: if state.first_after_upgrade { 1 } else { 0 },
+            machine_summary_requested: 1,
+            display_name,
+            sunlight_version: version,
+            cpu_cores: state.machine.cpu_cores.unwrap_or(0),
+            ram_mib: state.machine.ram_mib.unwrap_or(0) as u32,
+            device_class: dc,
+            model_name: mn,
+            screen_w: state.machine.screen_w.unwrap_or(0),
+            screen_h: state.machine.screen_h.unwrap_or(0),
+        }),
+    };
+
+    let body = req.encode();
+
+    let mut msg = IpcMsg::with_label(BrainOp::Greeting.label());
+    msg.words[0] = body.len() as u64;
+    for (i, chunk) in body.chunks(8).enumerate().take(7) {
+        let mut word: u64 = 0;
+        for (j, &b) in chunk.iter().enumerate() {
+            word |= (b as u64) << (j * 8);
+        }
+        msg.words[1 + i] = word;
+    }
+    msg.word_count = 1 + (body.len().div_ceil(8)) as u32;
+    if msg.word_count > 8 {
+        msg.word_count = 8;
+    }
+
+    let reply = ipc_call_timeout(ep, msg, 100).ok()?;
+
+    let resp_body_len = if reply.word_count >= 1 { reply.words[0] as usize } else { 0 };
+    let mut resp_bytes: heapless::Vec<u8, 1024> = heapless::Vec::new();
+    if resp_body_len > 0 {
+        for i in 0..resp_body_len.min(56) {
+            let word_idx = 1 + i / 8;
+            let byte_idx = i % 8;
+            let byte = (reply.words[word_idx] >> (byte_idx * 8)) as u8;
+            let _ = resp_bytes.push(byte);
+        }
+    } else if reply.cap_count > 0 {
+        if let Ok(ptr) = shm_map(reply.caps[0]) {
+            let slice = unsafe { core::slice::from_raw_parts(ptr as *const u8, SHM_PAGE_SIZE as usize) };
+            let hdr_end = BRAIN_IPC_HEADER_LEN;
+            let body_len = if slice.len() >= 20 {
+                let mut bl = [0u8; 4];
+                bl.copy_from_slice(&slice[16..20]);
+                u32::from_le_bytes(bl) as usize
+            } else { 0 };
+            let copy_len = (hdr_end + body_len).min(SHM_PAGE_SIZE as usize).min(1024);
+            for &b in &slice[hdr_end..copy_len] {
+                let _ = resp_bytes.push(b);
+            }
+        }
+    }
+
+    let (resp, _) = BrainResponseWire::decode(&resp_bytes).ok()?;
+
+    if resp.response_kind == 1 {
+        if let Some(g) = resp.greeting {
+            let mut text: HString<MAX_GREETING> = HString::new();
+            if !g.title.is_empty() && !g.body.is_empty() {
+                let _ = text.push_str(&g.title);
+                let _ = text.push_str(". ");
+                let _ = text.push_str(&g.body);
+
+                if !g.highlights.is_empty() {
+                    let _ = text.push_str(" ");
+                    for h in &g.highlights {
+                        let mut hl: HString<128> = HString::new();
+                        let _ = write!(&mut hl, "{}: {}; ", h.label, h.value);
+                        let _ = text.push_str(&hl);
+                    }
+                }
+
+                debug_log("[WISEOWL-BRAIN] WELCOME_INTEGRATION PASS\n");
+                return Some(text);
+            }
+        }
+    }
+
+    debug_log("[WISEOWL-BRAIN] FALLBACK PASS\n");
+    None
+}
+
 // ── App ──────────────────────────────────────────────────────────────────────
 
 struct WelcomeApp {
@@ -257,6 +387,13 @@ impl WelcomeApp {
             WizardPage::ImmediateWelcome => {
                 self.state.begin();
                 self.state.ensure_greeting();
+                if let Some(brain_text) = try_brain_greeting(&self.state) {
+                    self.state.greeting = Some(sunlight_welcome::WelcomeGreeting {
+                        text: brain_text,
+                        source: GreetingSource::WiseOwl,
+                    });
+                    debug_log("[WISEOWL-BRAIN] WELCOME_INTEGRATION PASS\n");
+                }
                 if self
                     .state
                     .greeting

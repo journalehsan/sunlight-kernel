@@ -107,6 +107,7 @@ members = [
     "wiseowl-memory",
     "wiseowl-memorydb",
     "wiseowl-index",
+    "wiseowl-brain",
 ]
 
 [workspace.dependencies]

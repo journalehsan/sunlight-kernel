@@ -8,8 +8,10 @@ The root `Cargo.toml` lists four members: `kernel/`, `ipc/`, `drivers/`, and
 x86_64 code under `kernel/src/arch/x86_64/`, memory management under
 `kernel/src/memory/`, and scheduler code under `kernel/src/sched/`. Shared IPC
 types belong in `ipc/src/`; driver framework code belongs in `drivers/src/`;
-Linux compatibility work belongs in `compat-linux/src/`. Build and boot helper
-scripts are in `tools/`, and bootloader configuration is in `limine.cfg`.
+Linux compatibility work belongs in `compat-linux/src/`. Wise Owl cognitive
+services live in `wiseowl-memory/`, `wiseowl-memorydb/`, `wiseowl-index/`, and
+`wiseowl-brain/`. Build and boot helper scripts are in `tools/`, and bootloader
+configuration is in `limine.cfg`.
 
 ## Build, Test, and Development Commands
 
