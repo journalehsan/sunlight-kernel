@@ -157,6 +157,8 @@ static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-top");
+static MEMORYCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/memoryctl");
 static SUNLIGHT_FETCH_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/fetch");
 static SUNLIGHTCTL_ELF_BYTES: &[u8] =
@@ -405,6 +407,21 @@ pub extern "C" fn _start() -> ! {
         );
         serial_println!("[PMM] {}/{} MiB free", free * 4 / 1024, total * 4 / 1024);
         splash.set_ram((total * 4 / 1024) as u32);
+        // Physical memory accounting Phase 1: measure static INITRAMFS file data
+        // embedded in the kernel image. No second copy is created at mount time.
+        let ramfs_bytes =
+            sunlight_fs::initramfs_static_file_data_bytes(sunlight_fs::INITRAMFS);
+        memory::accounting::set_ramfs_static_file_bytes(ramfs_bytes);
+        // Boot-image residency: static assets live inside the kernel image only.
+        // retained_boot_image_bytes = 0 (measured): no separate retained copy.
+        memory::accounting::set_retained_boot_image_bytes(0);
+        serial_println!(
+            "[MEMORY-ACCOUNTING] RAMFS static file data={} KiB (embedded in kernel image)",
+            ramfs_bytes / 1024
+        );
+        serial_println!(
+            "[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)"
+        );
         // OSOD smoke test (Rust panic path, not #DE).
         // Set the static to 1, rebuild/boot, confirm orange screen, then set back to 0.
         // Uses read_volatile so enabling it does not trip unreachable_code under deny(warnings).
@@ -3046,6 +3063,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let mut pmm = PMM.lock();
         memory::security::run_swap1_gate(&mut pmm, hhdm_offset);
     }
+    #[cfg(feature = "memory_accounting_test")]
+    {
+        let mut pmm = PMM.lock();
+        memory::accounting::run_memory_accounting_gate(&mut pmm);
+    }
 
     // 1. Token forge: a token that was never minted must be rejected as NotFound.
     {
@@ -4011,14 +4033,13 @@ fn build_session_foundation_sequence() -> [u8; 12288] {
     s
 }
 
-/// Session Configuration Phase 1: two desktop logins (configure on first,
-/// observe next-login launch on second).
+/// Session Configuration Phase 1: one desktop login is sufficient for the
+/// inject-seeded Startup App path; the gate finishes remaining markers in-session.
 #[cfg(feature = "key_inject")]
 fn build_session_configuration_sequence() -> [u8; 12288] {
     let mut s = [0u8; 12288];
     let mut len = 0usize;
-    // Wait for sessiond/login UI to be ready before consuming the password keys.
-    // Without this lead-in, inject can complete before the presenter is listening.
+    // Lead-in so login UI / sessiond are ready before password keys are consumed.
     append_injected_delay(&mut s, &mut len, 768);
     for code in build_desktop_login_sequence()
         .into_iter()
@@ -4026,15 +4047,8 @@ fn build_session_configuration_sequence() -> [u8; 12288] {
     {
         append_injected_scancode(&mut s, &mut len, code);
     }
-    // Wait for first session configure + logout (driven by tty_server gate).
-    append_injected_delay(&mut s, &mut len, 1024);
-    for code in build_desktop_login_sequence()
-        .into_iter()
-        .take_while(|code| *code != 0)
-    {
-        append_injected_scancode(&mut s, &mut len, code);
-    }
-    append_injected_delay(&mut s, &mut len, 768);
+    // Settle while the gate drives profile ops and finalize markers.
+    append_injected_delay(&mut s, &mut len, 1536);
     s
 }
 

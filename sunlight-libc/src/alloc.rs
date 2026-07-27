@@ -13,7 +13,10 @@ use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 #[cfg(not(feature = "dynamic-heap"))]
 const STATIC_HEAP_SIZE: usize = 256 * 1024;
 #[cfg(feature = "dynamic-heap")]
-const DYNAMIC_HEAP_SIZE: usize = if cfg!(feature = "dynamic-heap-8m") {
+const DYNAMIC_HEAP_SIZE: usize = if cfg!(feature = "dynamic-heap-16m") {
+    // Shell / image viewers: SIMG wallpaper peak ≈ file + decoded ARGB (~10 MiB).
+    16 * 1024 * 1024
+} else if cfg!(feature = "dynamic-heap-8m") {
     8 * 1024 * 1024
 } else {
     1024 * 1024

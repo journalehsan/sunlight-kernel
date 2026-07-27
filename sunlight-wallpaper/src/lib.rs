@@ -10,9 +10,9 @@ pub const LEGACY_WALLPAPER_DIR: &str = "/var/sunlightos/wallpapers";
 pub const USER_WALLPAPER_DIR: &str = "/root/.local/share/sunlight/wallpapers";
 pub const CONFIG_PATH: &str = "/root/.config/sunlight/desktop.toml";
 pub const CONFIG_TMP_PATH: &str = "/root/.config/sunlight/desktop.toml.tmp";
-/// Empty path means solid desktop color (no image). Avoids loading the multi-MiB
-/// default TGA into the shell process at every login.
-pub const DEFAULT_WALLPAPER_PATH: &str = "";
+/// Default desktop image (SIMG v2 in ramfs). Empty path in config still means
+/// solid desktop color if the user clears the wallpaper in settings.
+pub const DEFAULT_WALLPAPER_PATH: &str = "/var/sunlightos/wallpapers/wallpaper.simg";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WallpaperMode {
@@ -152,7 +152,14 @@ pub fn scan_wallpapers(active_path: &str) -> Vec<WallpaperEntry> {
     out
 }
 
+/// True when `bytes` are a renderable desktop wallpaper.
+///
+/// Preferred: **SIMG v2** (`SIMG` magic). Legacy TGA type-2 (and historical
+/// TGA-bytes `.simg`) remain accepted for compatibility.
 pub fn is_supported_wallpaper(bytes: &[u8]) -> bool {
+    if sun_img::is_simg_v2(bytes) {
+        return sun_img::parse_simg_v2_header(bytes).is_ok();
+    }
     if bytes.len() < 18 {
         return false;
     }
@@ -227,12 +234,10 @@ fn scan_dir(dir: &str, source: WallpaperSource, active_path: &str, out: &mut Vec
         if !is_wallpaper_candidate(&name) {
             continue;
         }
-        // The desktop renderer is TGA-only. `.jpg`/`.jpeg`/`.png` are recognised
-        // as wallpaper asset types (is_wallpaper_candidate), but only render-ready
-        // `.tga` entries are surfaced here: a bundled image is expected to ship
-        // alongside its converted `.tga` sidecar, which is what gets listed and
-        // applied. This keeps `apply_path`/`preview_path` always TGA-safe.
-        if !has_ext(&name, "tga") {
+        // Prefer SIMG v2 wallpapers; keep legacy TGA for older installs.
+        // Source-only formats (jpg/png) are candidates for conversion tools but
+        // are not listed until a render-ready `.simg`/`.tga` exists.
+        if !(has_ext(&name, "simg") || has_ext(&name, "tga")) {
             continue;
         }
         let path = join_path(dir, &name);
@@ -255,7 +260,8 @@ fn is_wallpaper_candidate(name: &str) -> bool {
     if lower.ends_with(".tmp") || lower.ends_with(".part") {
         return false;
     }
-    lower.ends_with(".tga")
+    lower.ends_with(".simg")
+        || lower.ends_with(".tga")
         || lower.ends_with(".jpg")
         || lower.ends_with(".jpeg")
         || lower.ends_with(".png")
@@ -305,7 +311,7 @@ fn wallpaper_label(name: &str) -> String {
 
 /// Strip a recognised image extension (case-insensitive) to get the display stem.
 fn wallpaper_stem(name: &str) -> &str {
-    const EXTS: [&str; 4] = [".tga", ".jpg", ".jpeg", ".png"];
+    const EXTS: [&str; 5] = [".simg", ".tga", ".jpg", ".jpeg", ".png"];
     for &ext in EXTS.iter() {
         if name.len() >= ext.len() && name[name.len() - ext.len()..].eq_ignore_ascii_case(ext) {
             return &name[..name.len() - ext.len()];
@@ -354,7 +360,10 @@ mod tests {
 
     #[test]
     fn missing_config_defaults() {
-        assert_eq!(DesktopConfig::default().wallpaper, "");
+        assert_eq!(
+            DesktopConfig::default().wallpaper,
+            "/var/sunlightos/wallpapers/wallpaper.simg"
+        );
         assert_eq!(DesktopConfig::default().wallpaper, DEFAULT_WALLPAPER_PATH);
     }
 
@@ -413,6 +422,8 @@ mod tests {
 
     #[test]
     fn scan_filters_names() {
+        assert!(is_wallpaper_candidate("default.simg"));
+        assert!(is_wallpaper_candidate("DEFAULT.SIMG"));
         assert!(is_wallpaper_candidate("default.tga"));
         assert!(is_wallpaper_candidate("DEFAULT.TGA"));
         assert!(is_wallpaper_candidate("wallpaper1.jpg"));
@@ -428,45 +439,41 @@ mod tests {
 
     #[test]
     fn wallpaper_label_humanizes_names() {
-        assert_eq!(wallpaper_label("default.tga"), "Default");
+        assert_eq!(wallpaper_label("default.simg"), "Default");
         assert_eq!(
-            wallpaper_label("sunlight-login-background.tga"),
+            wallpaper_label("sunlight-login-background.simg"),
             "Sunlight Login Background"
         );
         assert_eq!(wallpaper_label("dark_mode.tga"), "Dark Mode");
-        assert_eq!(wallpaper_label("wallpaper.tga"), "Wallpaper");
-        assert_eq!(wallpaper_label("wallpaper1.tga"), "Wallpaper 1");
-        assert_eq!(wallpaper_label("wallpaper6.tga"), "Wallpaper 6");
+        assert_eq!(wallpaper_label("wallpaper.simg"), "Wallpaper");
+        assert_eq!(wallpaper_label("wallpaper1.simg"), "Wallpaper 1");
+        assert_eq!(wallpaper_label("wallpaper4.simg"), "Wallpaper 4");
     }
 
     #[test]
     fn wallpaper_sort_keeps_original_before_numbered() {
         // Byte comparison puts '.' (0x2E) before '1' (0x31), so the original
-        // wallpaper.tga sorts ahead of wallpaper1.tga..wallpaper6.tga.
+        // wallpaper.simg sorts ahead of wallpaper1.simg..wallpaper4.simg.
         let mut paths = [
-            String::from("/var/sunlightos/wallpapers/wallpaper1.tga"),
-            String::from("/var/sunlightos/wallpapers/wallpaper2.tga"),
-            String::from("/var/sunlightos/wallpapers/wallpaper3.tga"),
-            String::from("/var/sunlightos/wallpapers/wallpaper4.tga"),
-            String::from("/var/sunlightos/wallpapers/wallpaper5.tga"),
-            String::from("/var/sunlightos/wallpapers/wallpaper6.tga"),
-            String::from("/var/sunlightos/wallpapers/wallpaper.tga"),
+            String::from("/var/sunlightos/wallpapers/wallpaper1.simg"),
+            String::from("/var/sunlightos/wallpapers/wallpaper2.simg"),
+            String::from("/var/sunlightos/wallpapers/wallpaper3.simg"),
+            String::from("/var/sunlightos/wallpapers/wallpaper4.simg"),
+            String::from("/var/sunlightos/wallpapers/wallpaper.simg"),
         ];
         paths.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
         let expected = [
-            "/var/sunlightos/wallpapers/wallpaper.tga",
-            "/var/sunlightos/wallpapers/wallpaper1.tga",
-            "/var/sunlightos/wallpapers/wallpaper2.tga",
-            "/var/sunlightos/wallpapers/wallpaper3.tga",
-            "/var/sunlightos/wallpapers/wallpaper4.tga",
-            "/var/sunlightos/wallpapers/wallpaper5.tga",
-            "/var/sunlightos/wallpapers/wallpaper6.tga",
+            "/var/sunlightos/wallpapers/wallpaper.simg",
+            "/var/sunlightos/wallpapers/wallpaper1.simg",
+            "/var/sunlightos/wallpapers/wallpaper2.simg",
+            "/var/sunlightos/wallpapers/wallpaper3.simg",
+            "/var/sunlightos/wallpapers/wallpaper4.simg",
         ];
         assert_eq!(paths, expected);
     }
 
     #[test]
-    fn supported_wallpaper_requires_type2_and_dimensions() {
+    fn supported_wallpaper_accepts_legacy_tga_and_rejects_rle() {
         let valid = [
             0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0,

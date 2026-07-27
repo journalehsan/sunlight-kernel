@@ -193,10 +193,12 @@ impl AddressSpace {
         pmm: &mut PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<Self, MappingError> {
-        let pml4_phys = pmm.alloc_frame().ok_or_else(|| {
-            PAGE_TABLE_ALLOCATION_FAILURES.fetch_add(1, Ordering::Relaxed);
-            MappingError::PageTableAllocationFailed
-        })?;
+        let pml4_phys = pmm
+            .alloc_frame_class(crate::memory::accounting::PhysicalMemoryClass::PageTable)
+            .ok_or_else(|| {
+                PAGE_TABLE_ALLOCATION_FAILURES.fetch_add(1, Ordering::Relaxed);
+                MappingError::PageTableAllocationFailed
+            })?;
 
         // Map the PML4 via HHDM to initialize it.
         let pml4_virt = hhdm_offset + pml4_phys.as_u64();
@@ -1466,7 +1468,9 @@ impl AddressSpace {
         created: &mut Option<(*mut PageTableEntry, PhysAddr)>,
     ) -> Result<&'static mut PageTable, MappingError> {
         if entry.is_unused() {
-            let frame_addr = match pmm.alloc_frame() {
+            let frame_addr = match pmm.alloc_frame_class(
+                crate::memory::accounting::PhysicalMemoryClass::PageTable,
+            ) {
                 Some(frame) => frame,
                 None => {
                     PAGE_TABLE_ALLOCATION_FAILURES.fetch_add(1, Ordering::Relaxed);

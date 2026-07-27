@@ -978,7 +978,7 @@ pub unsafe fn render_login_grid_interactive(
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
-    bg_tga: Option<&[u8]>,
+    bg: Option<LoginBackground<'_>>,
     user_bufs: &[[u8; 64]],
     user_lens: &[usize],
     user_labels: &[&str],
@@ -1001,17 +1001,7 @@ pub unsafe fn render_login_grid_interactive(
     let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
     let layout = layout::Layout::new(fb_width, fb_height);
 
-    // Background: wallpaper + dark overlay, or solid dark
-    if let Some(tga_data) = bg_tga {
-        if let Some(img) = tga::TgaImage::parse(tga_data) {
-            tga::draw_tga_background(&mut fb, &img, 110);
-        } else {
-            fb.fill_rect(0, 0, fb_width, fb_height, layout::palette::BG);
-        }
-        layout.draw_chrome_overlay(&mut fb);
-    } else {
-        layout.draw_chrome(&mut fb);
-    }
+    paint_login_background(&mut fb, &layout, bg, 110);
 
     // ── Top bar ─────────────────────────────────────────────────────────────
     font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
@@ -1396,7 +1386,7 @@ pub unsafe fn render_login_grid(
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
-    bg_tga: Option<&[u8]>,
+    bg: Option<LoginBackground<'_>>,
     user_bufs: &[[u8; 64]],
     user_lens: &[usize],
     user_labels: &[&str],
@@ -1415,7 +1405,7 @@ pub unsafe fn render_login_grid(
             fb_width,
             fb_height,
             fb_pitch,
-            bg_tga,
+            bg,
             user_bufs,
             user_lens,
             user_labels,
@@ -1437,7 +1427,7 @@ pub unsafe fn render_login_dynamic(
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
-    bg_tga: Option<&[u8]>,
+    bg: Option<LoginBackground<'_>>,
     username: &[u8],
     password_len: usize,
     focused_password: bool,
@@ -1446,16 +1436,7 @@ pub unsafe fn render_login_dynamic(
     let mut fb = framebuffer::Framebuffer::from_limine(fb_addr, fb_width, fb_height, fb_pitch);
     let layout = layout::Layout::new(fb_width, fb_height);
 
-    if let Some(tga_data) = bg_tga {
-        if let Some(img) = tga::TgaImage::parse(tga_data) {
-            tga::draw_tga_background(&mut fb, &img, 100);
-        } else {
-            fb.fill_rect(0, 0, fb_width, fb_height, layout::palette::BG);
-        }
-        layout.draw_chrome_overlay(&mut fb);
-    } else {
-        layout.draw_chrome(&mut fb);
-    }
+    paint_login_background(&mut fb, &layout, bg, 100);
 
     font::draw_str(&mut fb, 16, 16, "*", layout::palette::ACCENT, 1);
     font::draw_str(&mut fb, 32, 16, "SunlightOS", layout::palette::TEXT, 1);
@@ -1572,10 +1553,50 @@ pub unsafe fn render_login_dynamic(
     );
 }
 
+/// Login wallpaper source. Prefer [`LoginBackground::Argb`] for SIMG v2
+/// (decoded by the caller — this crate stays heap-free).
+#[derive(Clone, Copy)]
+pub enum LoginBackground<'a> {
+    /// Legacy TGA type-2 bytes (zero-alloc view).
+    Tga(&'a [u8]),
+    /// Pre-decoded ARGB8888 top-down buffer (SIMG v2 path).
+    Argb {
+        width: u32,
+        height: u32,
+        pixels: &'a [u32],
+    },
+}
+
+fn paint_login_background(
+    fb: &mut framebuffer::Framebuffer,
+    layout: &layout::Layout,
+    bg: Option<LoginBackground<'_>>,
+    overlay_alpha: u8,
+) {
+    match bg {
+        Some(LoginBackground::Tga(tga_data)) => {
+            if let Some(img) = tga::TgaImage::parse(tga_data) {
+                tga::draw_tga_background(fb, &img, overlay_alpha);
+            } else {
+                fb.fill_rect(0, 0, fb.width(), fb.height(), layout::palette::BG);
+            }
+            layout.draw_chrome_overlay(fb);
+        }
+        Some(LoginBackground::Argb {
+            width,
+            height,
+            pixels,
+        }) => {
+            tga::draw_argb_background(fb, width, height, pixels, overlay_alpha);
+            layout.draw_chrome_overlay(fb);
+        }
+        None => {
+            layout.draw_chrome(fb);
+        }
+    }
+}
+
 /// Render the initial static login screen (before any input).
-///
-/// If `bg_tga` is `Some(raw_tga_bytes)` the image is decoded and rendered as
-/// the background.  Fallback is the plain dark background.
 ///
 /// SAFETY: `fb_addr` must point to a valid writable framebuffer mapping with
 /// the provided dimensions and pitch.
@@ -1584,7 +1605,7 @@ pub unsafe fn render_login_screen(
     fb_width: u32,
     fb_height: u32,
     fb_pitch: u32,
-    bg_tga: Option<&[u8]>,
+    bg: Option<LoginBackground<'_>>,
 ) {
     let mut users = [[0u8; 64]; 6];
     users[0][..4].copy_from_slice(b"root");
@@ -1605,7 +1626,7 @@ pub unsafe fn render_login_screen(
         fb_width,
         fb_height,
         fb_pitch,
-        bg_tga,
+        bg,
         &users,
         &user_lens,
         &user_labels,

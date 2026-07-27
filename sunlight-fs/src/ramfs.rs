@@ -17,6 +17,23 @@ pub struct RamEntry {
     pub is_dir: bool,
 }
 
+/// Exact sum of static INITRAMFS file payload bytes (directories contribute 0).
+/// These payloads are embedded in the kernel image via `include_bytes!` and
+/// remain resident there; there is no second physical copy after mount.
+pub fn initramfs_static_file_data_bytes(entries: &[RamEntry]) -> u64 {
+    let mut total: u64 = 0;
+    for e in entries {
+        if !e.is_dir {
+            total = total.saturating_add(e.data.len() as u64);
+        }
+    }
+    total
+}
+
+/// True when static RAMFS file data is embedded in the kernel/boot image
+/// (include_bytes) rather than allocated as separate PMM frames.
+pub const INITRAMFS_EMBEDDED_IN_KERNEL_IMAGE: bool = true;
+
 impl RamEntry {
     pub const fn file(
         path: &'static str,
@@ -825,10 +842,43 @@ pub static INITRAMFS: &[RamEntry] = &[
         mode::FILE_644,
         include_bytes!("../../docs/icons/SunlightOS/apps/48/applications-system.tga"),
     ),
-    // Desktop backdrop is solid color by default (see desktop.toml). Wallpaper
-    // TGA assets are intentionally not staged into ramfs: each was multi-MiB
-    // and was also embedded by the compositor, doubling RAM and leaving a
-    // second full-screen image behind the shell after modeset.
+    // Desktop wallpapers as SIMG v2 (sub+lz4). Default desktop.toml points at
+    // wallpaper.simg so Vortex loads an image on first boot. See docs/SIMG_V2.md.
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper.simg",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper.simg"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper1.simg",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper1.simg"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper2.simg",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper2.simg"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper3.simg",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper3.simg"),
+    ),
+    RamEntry::file(
+        "/var/sunlightos/wallpapers/wallpaper4.simg",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../docs/images/wallpaper4.simg"),
+    ),
     // System config files (world-readable)
     RamEntry::file(
         "/etc/passwd",
@@ -905,7 +955,7 @@ pub static INITRAMFS: &[RamEntry] = &[
         0,
         0,
         mode::FILE_644,
-        b"[desktop]\nwallpaper = \"\"\nwallpaper_mode = \"cover\"\n",
+        b"[desktop]\nwallpaper = \"/var/sunlightos/wallpapers/wallpaper.simg\"\nwallpaper_mode = \"cover\"\n",
     ),
     RamEntry::file(
         "/etc/sunlight/session.toml",
@@ -1357,6 +1407,13 @@ login_timeout_seconds = 30
         b"#!/sunlight/sunlight-utils\n",
     ),
     RamEntry::file("/bin/top", 0, 0, mode::FILE_755, b"#!/sunlight/top\n"),
+    RamEntry::file(
+        "/bin/memoryctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/memoryctl\n",
+    ),
     RamEntry::file(
         "/bin/sunlightctl",
         0,
@@ -2248,6 +2305,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
     ),
     RamEntry::file("/usr/bin/top", 0, 0, mode::FILE_755, b"#!/sunlight/top\n"),
     RamEntry::file(
+        "/usr/bin/memoryctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/memoryctl\n",
+    ),
+    RamEntry::file(
         "/usr/bin/devicectl",
         0,
         0,
@@ -2498,15 +2562,15 @@ StandardOutput=journal\nStandardError=journal\n\n\
     // same file data — no extra memory cost since data pointers are shared).
     RamEntry::dir("/usr/share", 0, 0, mode::DIR_755),
     RamEntry::dir("/usr/share/sunlightos", 0, 0, mode::DIR_755),
-    // Login background image (TGA type-2).  The tty_server also embeds this
-    // image at compile time; the VFS path is provided for other consumers.
+    // Login background (SIMG v2). tty_server / lock presenter also embed this
+    // at compile time; the VFS path is for other consumers.
     RamEntry::dir("/usr/share/sunlightos/backgrounds", 0, 0, mode::DIR_755),
     RamEntry::file(
-        "/usr/share/sunlightos/backgrounds/login-background.tga",
+        "/usr/share/sunlightos/backgrounds/login-background.simg",
         0,
         0,
         mode::FILE_644,
-        include_bytes!("../../docs/images/sunlight-login-background.tga"),
+        include_bytes!("../../docs/images/sunlight-login-background.simg"),
     ),
     // MiniType fonts (standalone .mtf) for dynamic font loader / future OS image use.
     // Generated via assets/fonts/minitype/generate.sh (and sun-font/build.rs).

@@ -60,7 +60,7 @@ mod sidebar;
 mod start_menu;
 mod workspace_switcher;
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_calendar::{
     build_selected_day_previews, SelectedDayReminderPreview, SelectedDayTaskPreview,
@@ -90,7 +90,7 @@ use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
     image::{
         icon_theme::{self, category as icon_category, name as icon_name},
-        mime_icon, TgaImage,
+        decode_simg, mime_icon, RgbaImage, TgaImage,
     },
     set_client_cursor, App, Canvas, Color, CursorShape, Event, EventPollCounters, Point, Rect,
     Theme, Window, WindowConfig,
@@ -956,8 +956,8 @@ static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 // Native reclaiming heap telemetry
 // ---------------------------------------------------------------------------
 
-/// Cap for optional user-selected wallpapers. Loaded on demand via heap only
-/// when a non-empty config path is set — the default desktop is solid color.
+/// Cap for desktop wallpaper file reads (SIMG v2 compressed). Peak decode RAM
+/// is separate (~decoded ARGB); shell heap is 16 MiB for that path.
 const WALLPAPER_MAX_BYTES: usize = 8 * 1024 * 1024;
 const SHELL_DIAGNOSTIC_INTERVAL_MS: u64 = 30_000;
 
@@ -1437,7 +1437,7 @@ enum DesktopSelectState {
 // ---------------------------------------------------------------------------
 
 struct VortexShell {
-    wallpaper: Option<TgaImage>,
+    wallpaper: Option<RgbaImage>,
     wallpaper_config: DesktopConfig,
     wallpaper_error: bool,
     wallpaper_last_reload_ms: u64,
@@ -5104,42 +5104,39 @@ fn join_path(base: &str, leaf: &str) -> String {
     out
 }
 
-pub(crate) fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<TgaImage>, bool) {
-    // Empty path = solid desktop color (default). Saves the multi-MiB TGA that
-    // used to live in a permanent 8 MiB BSS buffer even when unused.
+pub(crate) fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<RgbaImage>, bool) {
+    // Empty path = solid desktop color (user cleared wallpaper in settings).
     if cfg.wallpaper.is_empty() {
         return (None, false);
     }
-    let Some(bytes) = read_wallpaper_bytes(cfg.wallpaper.as_bytes()) else {
+    let Some(bytes) = read_file_bytes(cfg.wallpaper.as_bytes(), WALLPAPER_MAX_BYTES) else {
         debug_log("[VORTEX] wallpaper config path unreadable\n");
         return (None, true);
     };
     if bytes.is_empty() {
         return (None, false);
     }
-    if !is_supported_wallpaper(bytes) {
+    if !is_supported_wallpaper(&bytes) {
         debug_log("[VORTEX] wallpaper unsupported or corrupt\n");
         return (None, true);
     }
-    match TgaImage::parse(bytes) {
-        Ok(img) => (Some(img), false),
+    // SIMG v2 (preferred) or legacy TGA type-2 / historical TGA-bytes `.simg`.
+    // Peak RAM ≈ compressed file Vec + decoded ARGB (can exceed 8 MiB for
+    // full-resolution wallpapers — shell heap is 16 MiB for this reason).
+    match decode_simg(&bytes) {
+        Ok(img) => {
+            if img.width == 0 || img.height == 0 {
+                debug_log("[VORTEX] wallpaper decode empty dimensions\n");
+                return (None, true);
+            }
+            debug_log("[VORTEX] wallpaper decode ok\n");
+            (Some(img), false)
+        }
         Err(_) => {
-            debug_log("[VORTEX] wallpaper parse failed\n");
+            debug_log("[VORTEX] wallpaper decode failed (OOM or corrupt)\n");
             (None, true)
         }
     }
-}
-
-/// Load wallpaper file into a heap buffer and leak it for `TgaImage`'s
-/// `'static` view. Only called when the user explicitly selects an image.
-/// Reloads on path change may leak prior selections; that is rare vs. the
-/// permanent 8 MiB BSS reservation this replaces.
-fn read_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {
-    let data = read_file_bytes(path, WALLPAPER_MAX_BYTES)?;
-    if data.is_empty() {
-        return None;
-    }
-    Some(Box::leak(data.into_boxed_slice()))
 }
 
 fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {
@@ -7470,9 +7467,12 @@ impl App for VortexShell {
         self.screen_h = ch;
 
         // ── Wallpaper ────────────────────────────────────────────────────────
-        canvas.fill_rect(Rect::new(0, 0, cw, ch), Color(FALLBACK_BG));
+        // Opaque solid underlay. FALLBACK_BG alone looks gray when wallpaper
+        // decode failed (historically 8 MiB heap OOM on full SIMG assets).
+        canvas.fill_rect(Rect::new(0, 0, cw, ch), Color(FALLBACK_BG | 0xFF00_0000));
         if let Some(ref wp) = self.wallpaper {
-            canvas.draw_image_cover(wp);
+            // Cover blit forces A=0xFF so glass/compositor never shows a gray hole.
+            canvas.draw_rgba_cover(wp);
         }
 
         let desktop_rect = desktop_area(cw, ch, self.top_panel_presentation);

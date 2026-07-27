@@ -13,9 +13,12 @@ pub const HEAP_PAGES: usize = HEAP_SIZE / Size4KiB::SIZE as usize;
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 pub fn init_heap(vmm: &mut VirtualMemoryManager, pmm: &mut PhysicalMemoryManager) {
+    use super::accounting::PhysicalMemoryClass;
     for i in 0..HEAP_PAGES {
         let page = Page::from_start_address(HEAP_START + i as u64 * Size4KiB::SIZE).unwrap();
-        let frame = pmm.alloc_frame().expect("heap allocation failed");
+        let frame = pmm
+            .alloc_frame_class(PhysicalMemoryClass::KernelHeap)
+            .expect("heap allocation failed");
         // SAFETY: frame address is valid and page-aligned; mapping new pages is safe.
         let phys = unsafe { PhysFrame::from_start_address_unchecked(frame) };
         vmm.map_page(

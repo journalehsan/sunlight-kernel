@@ -7,7 +7,8 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
-pub const TELEMETRY_VERSION: u32 = 2;
+/// Version 3: adds PhysicalMemoryAccountingSnapshotV1 after the core page.
+pub const TELEMETRY_VERSION: u32 = 3;
 pub const MAX_PROCESSES: usize = 64;
 pub const MAX_CORES: usize = 64;
 
@@ -21,7 +22,8 @@ pub struct ProcessStat {
     pub name: [u8; 32],
     pub cpu_ticks: u64,
     pub mem_pages: u32,
-    pub _pad2: u32,
+    /// Low 32 bits of address-space generation (PID reuse discrimination).
+    pub generation: u32,
 }
 
 #[repr(C, packed)]
@@ -73,6 +75,11 @@ pub struct TelemetryPage {
     pub monotonic_ns: u64,
     pub uptime_seconds: u64,
     pub ticks_per_core: [u64; MAX_CORES],
+
+    /// Physical memory accounting Phase 1 (versioned nested snapshot).
+    pub mem_acct_version: u32,
+    pub _mem_acct_pad: u32,
+    pub mem_acct: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1,
 }
 
 const ZERO_PROC: ProcessStat = ProcessStat {
@@ -83,7 +90,7 @@ const ZERO_PROC: ProcessStat = ProcessStat {
     name: [0; 32],
     cpu_ticks: 0,
     mem_pages: 0,
-    _pad2: 0,
+    generation: 0,
 };
 
 const ZERO_CORE: CoreStat = CoreStat {
@@ -134,6 +141,41 @@ pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
     monotonic_ns: 0,
     uptime_seconds: 0,
     ticks_per_core: [0; MAX_CORES],
+
+    mem_acct_version: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1::VERSION,
+    _mem_acct_pad: 0,
+    mem_acct: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1 {
+        sample_generation: 0,
+        sampled_at_ticks: 0,
+        installed_bytes: 0,
+        usable_bytes: 0,
+        managed_bytes: 0,
+        free_bytes: 0,
+        reserved_bytes: 0,
+        active_task_count: 0,
+        active_user_task_count: 0,
+        active_service_count: 0,
+        _pad0: 0,
+        task_private_unique_bytes: 0,
+        shared_memory_unique_bytes: 0,
+        kernel_core_bytes: 0,
+        kernel_heap_bytes: 0,
+        kernel_stack_bytes: 0,
+        page_table_bytes: 0,
+        ramfs_file_data_bytes: 0,
+        ramfs_metadata_bytes: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1::RAMFS_METADATA_UNAVAILABLE,
+        retained_boot_image_bytes: 0,
+        filesystem_cache_bytes: 0,
+        other_reclaimable_cache_bytes: 0,
+        graphics_buffer_bytes: 0,
+        device_dma_bytes: 0,
+        zram_physical_bytes: 0,
+        zram_logical_bytes: 0,
+        other_accounted_bytes: 0,
+        unclassified_bytes: 0,
+        flags: 0,
+        conservation_delta_bytes: 0,
+    },
 };
 
 pub fn record_net_rx(bytes: u64) {
@@ -154,6 +196,7 @@ pub struct ProcSnap {
     pub name: [u8; 32],
     pub cpu_ticks: u64,
     pub pml4_phys: x86_64::PhysAddr,
+    pub generation: u32,
     pub is_finished_or_cleanup: bool,
 }
 
@@ -188,6 +231,7 @@ pub struct TelemetrySnapshot {
     pub global_timekeeper_ticks: u64,
     pub monotonic_ns: u64,
     pub ticks_per_core: [u64; MAX_CORES],
+    pub mem_acct: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1,
 }
 
 /// Capture only stable scalar data while holding SCHEDULER lock (cheap copy).
@@ -201,6 +245,7 @@ pub fn capture_telemetry_snapshot(
 
     let (total_frames, free_frames) = pmm.stats();
     let (_swap_total, swap_used_blocks, swap_used_bytes) = crate::memory::zram::stats();
+    let zram_agg = crate::memory::zram::aggregate_stats();
     let net_rx = NET_RX_BYTES.load(Ordering::Relaxed);
     let net_tx = NET_TX_BYTES.load(Ordering::Relaxed);
 
@@ -208,6 +253,9 @@ pub fn capture_telemetry_snapshot(
     let gpu_count = unsafe { TELEMETRY.gpu_count };
 
     let mut procs = Vec::new();
+    let mut active_task_count = 0u32;
+    let mut active_user_task_count = 0u32;
+    let mut active_service_count = 0u32;
     for idx in 0..sched.processes.len() {
         if procs.len() >= MAX_PROCESSES {
             break;
@@ -225,6 +273,13 @@ pub fn capture_telemetry_snapshot(
             crate::process::ProcessState::BlockedOnIo => 6,
         };
         let is_finished_or_cleanup = proc_state == 3 || proc.exit_cleanup_pending;
+        if !is_finished_or_cleanup && proc_state != 7 {
+            active_task_count = active_task_count.saturating_add(1);
+            // Heuristic: services typically have lower PIDs and long-lived names;
+            // for Phase 1 we treat all non-finished tasks as tasks; service count
+            // is the same pool (honest: no process-name attribution required).
+            active_user_task_count = active_user_task_count.saturating_add(1);
+        }
         procs.push(ProcSnap {
             pid: proc.pid as u32,
             ppid: proc.ppid as u32,
@@ -232,9 +287,25 @@ pub fn capture_telemetry_snapshot(
             name: proc.name,
             cpu_ticks: runtime,
             pml4_phys: proc.address_space.pml4_phys,
+            generation: (proc.address_space.identity().generation & 0xFFFF_FFFF) as u32,
             is_finished_or_cleanup,
         });
     }
+    // Service count left at 0 unless we gain an honest service tag; do not
+    // invent ownership from process names (Phase 1 discipline).
+    let _ = &mut active_service_count;
+
+    let mem_acct = crate::memory::accounting::capture_snapshot(
+        total_frames as u64,
+        free_frames as u64,
+        active_task_count,
+        active_user_task_count,
+        active_service_count,
+        global_timekeeper_ticks,
+        // ZRAM logical = stored pages * page size; physical = allocator consumed.
+        zram_agg.stored_pages.saturating_mul(4096),
+        zram_agg.allocator_consumed_bytes,
+    );
 
     let online = sched.online_cores.min(MAX_CORES);
     let mut cores = Vec::with_capacity(online);
@@ -298,6 +369,7 @@ pub fn capture_telemetry_snapshot(
         global_timekeeper_ticks,
         monotonic_ns: sample_now,
         ticks_per_core,
+        mem_acct,
     }
 }
 
@@ -353,6 +425,7 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
                         0
                     } else {
                         // Walk happens here, outside SCHEDULER lock.
+                        // Counts present mapped user pages (shared counted per map).
                         unsafe { aspace.count_user_pages(hhdm) }.min(u32::MAX as usize) as u32
                     }
                 }
@@ -360,7 +433,7 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
             }
         };
         entry._pad = [0; 3];
-        entry._pad2 = 0;
+        entry.generation = ps.generation;
 
         count += 1;
     }
@@ -387,6 +460,10 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
         TELEMETRY.cores[c] = ZERO_CORE;
         TELEMETRY.ticks_per_core[c] = 0;
     }
+
+    TELEMETRY.mem_acct_version =
+        crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1::VERSION;
+    TELEMETRY.mem_acct = snap.mem_acct;
 
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
     TELEMETRY.sequence = seq.wrapping_add(1);

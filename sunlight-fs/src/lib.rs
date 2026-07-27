@@ -27,7 +27,10 @@ pub use policy::{
     broker_mint_fs_capability, can_write, Actor, CapabilityRights, Decision, FsCapability,
     FsOperation, PolicyReason,
 };
-pub use ramfs::{RamEntry, RamFs, INITRAMFS};
+pub use ramfs::{
+    initramfs_static_file_data_bytes, RamEntry, RamFs, INITRAMFS,
+    INITRAMFS_EMBEDDED_IN_KERNEL_IMAGE,
+};
 pub use vfs::{
     mode, FatFs, FileHandle, FileStat, FileSystem, FileType, FsNode, Vfs, VfsDirEntry, VFS_NAME_MAX,
 };

@@ -44,7 +44,7 @@ use sunlight_ipc::{
 };
 use sunlight_libc::crt0;
 use sunlight_ui::{
-    image::{draw_mono_icon, MonoIcon, TgaImage},
+    image::{decode_simg, draw_mono_icon, MonoIcon, RgbaImage, TgaImage},
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, Slider},
     App, Canvas, Color, Event, HBox, MaterialPalette, Point, Rect, Theme, VBox, Window,
@@ -364,7 +364,7 @@ struct ControlPanelApp {
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
-    wallpaper_preview: Option<TgaImage>,
+    wallpaper_preview: Option<RgbaImage>,
     wallpaper_pending_item: Option<usize>,
     sysinfo: SystemInfoSnapshot,
     about: AboutPageState,
@@ -602,11 +602,11 @@ impl ControlPanelApp {
             self.set_wallpaper_status("Selected wallpaper missing");
             return;
         };
-        if !is_supported_wallpaper(bytes) {
+        if !is_supported_wallpaper(&bytes) {
             self.set_wallpaper_status("Unsupported or corrupt wallpaper");
             return;
         }
-        match TgaImage::parse(bytes) {
+        match decode_simg(&bytes) {
             Ok(img) => {
                 self.wallpaper_preview = Some(img);
                 self.wallpaper_status_len = 0;
@@ -1441,9 +1441,10 @@ impl ControlPanelApp {
         let preview = Self::wallpaper_preview_rect();
         canvas.fill_rect(preview, theme.panel_alt);
         canvas.draw_rect(preview, theme.border);
-        if let Some(img) = self.wallpaper_preview {
+        if let Some(ref img) = self.wallpaper_preview {
             let dst = fit_image_rect(img.width, img.height, preview.inset(4));
-            canvas.draw_tga_icon(&img, dst);
+            // Force-opaque samples (same fix as Light Lens / Files SIMG gray hole).
+            draw_wallpaper_preview_opaque(canvas, img, dst);
         } else {
             Label::new(
                 Rect::new(preview.x + 8, preview.y + 8, preview.w - 16, preview.h - 16),
@@ -1826,26 +1827,22 @@ fn fmt_countdown<'a>(previous_mode: DisplayMode, seconds: u32, buf: &'a mut [u8;
     core::str::from_utf8(&buf[..pos]).unwrap_or("Reverting automatically.")
 }
 
-fn read_preview_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {
+fn read_preview_wallpaper_bytes(path: &[u8]) -> Option<alloc::vec::Vec<u8>> {
     use sunlight_libc as libc;
 
-    static mut PREVIEW_BUF: [u8; WALLPAPER_PREVIEW_MAX_BYTES] = [0u8; WALLPAPER_PREVIEW_MAX_BYTES];
-
     let fd = libc::open(path).ok()?;
-    let mut len = 0usize;
+    let reserve = libc::fstat(fd)
+        .ok()
+        .map(|stat| (stat.size as usize).min(WALLPAPER_PREVIEW_MAX_BYTES))
+        .unwrap_or(0);
+    let mut out = alloc::vec::Vec::new();
+    if out.try_reserve_exact(reserve).is_err() {
+        let _ = libc::close(fd);
+        return None;
+    }
+    let mut buf = [0u8; 4096];
     loop {
-        let remaining = WALLPAPER_PREVIEW_MAX_BYTES.saturating_sub(len);
-        if remaining == 0 {
-            break;
-        }
-        let take = remaining.min(4096);
-        let chunk = unsafe {
-            core::slice::from_raw_parts_mut(
-                core::ptr::addr_of_mut!(PREVIEW_BUF).cast::<u8>().add(len),
-                take,
-            )
-        };
-        let n = match libc::read(fd, chunk) {
+        let n = match libc::read(fd, &mut buf) {
             Ok(n) => n,
             Err(libc::sys::Errno::Again) => continue,
             Err(_) => {
@@ -1856,10 +1853,49 @@ fn read_preview_wallpaper_bytes(path: &[u8]) -> Option<&'static [u8]> {
         if n == 0 {
             break;
         }
-        len = len.saturating_add(n);
+        let take = (WALLPAPER_PREVIEW_MAX_BYTES - out.len()).min(n);
+        out.extend_from_slice(&buf[..take]);
+        if out.len() >= WALLPAPER_PREVIEW_MAX_BYTES || take < n {
+            break;
+        }
     }
     let _ = libc::close(fd);
-    Some(unsafe { core::slice::from_raw_parts(core::ptr::addr_of!(PREVIEW_BUF).cast::<u8>(), len) })
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
+/// Fit-blit a decoded wallpaper with forced opaque ARGB (no gray alpha hole).
+fn draw_wallpaper_preview_opaque(canvas: &mut Canvas, img: &RgbaImage, dst: Rect) {
+    if img.width == 0 || img.height == 0 || dst.w == 0 || dst.h == 0 {
+        return;
+    }
+    let cx0 = dst.x.max(0) as u32;
+    let cy0 = dst.y.max(0) as u32;
+    let cx1 = dst.right().min(canvas.width as i32).max(0) as u32;
+    let cy1 = dst.bottom().min(canvas.height as i32).max(0) as u32;
+    if cx0 >= cx1 || cy0 >= cy1 {
+        return;
+    }
+    let dw = dst.w.max(1) as u64;
+    let dh = dst.h.max(1) as u64;
+    let sw = img.width as u64;
+    let sh = img.height as u64;
+    for dy in cy0..cy1 {
+        let ly = (dy as i32 - dst.y) as u64;
+        let sy = ((ly * sh) / dh) as u32;
+        let row_off = dy as usize * canvas.stride as usize;
+        for dx in cx0..cx1 {
+            let lx = (dx as i32 - dst.x) as u64;
+            let sx = ((lx * sw) / dw) as u32;
+            let idx = row_off + dx as usize;
+            if idx < canvas.pixels.len() {
+                canvas.pixels[idx] = 0xFF00_0000 | (img.pixel(sx, sy) & 0x00FF_FFFF);
+            }
+        }
+    }
 }
 
 fn fit_image_rect(img_w: u32, img_h: u32, bounds: Rect) -> Rect {

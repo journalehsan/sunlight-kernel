@@ -1,7 +1,7 @@
 # SIMG v2 representative proof assets
 
 These files were converted with `sun-imgc to-simg --verify` for SIMG v2
-integration testing. **They are not a mass migration** of the asset tree.
+integration testing.
 
 | File | Source | Method |
 |------|--------|--------|
@@ -11,9 +11,11 @@ integration testing. **They are not a mass migration** of the asset tree.
 | `applications-system.simg` | `docs/icons/SunlightOS/apps/48/applications-system.tga` | lz4 |
 | `wallpaper.simg` | `docs/images/wallpaper.tga` | sub+lz4 |
 
-Each file was verified byte-for-byte against the decoded legacy source at encode
-time (`--verify`).
+Desktop wallpapers and the login background live next to their sources as
+`docs/images/wallpaper{,1-4}.simg` and
+`docs/images/sunlight-login-background.simg` (also staged into ramfs / embedded
+for boot). Each was verified byte-for-byte against the decoded legacy TGA at
+encode time (`--verify`).
 
-Runtime loaders (`decode_simg`, Light Lens, File Manager preview, thumbd) accept
-these beside legacy TGA/SIMG. Full desktop screenshot verification requires a
-bootable graphical session; host tests prove lossless decode only.
+Runtime loaders (`decode_simg`, Vortex wallpaper, lock presenter, tty login)
+accept SIMG v2 beside legacy TGA.

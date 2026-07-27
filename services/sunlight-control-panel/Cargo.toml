@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-control-panel"
-version = "0.2.3247-alpha.1"
+version = "0.2.3396-alpha.1"
+
+
+
 
 
 
@@ -321,7 +324,9 @@ path = "src/main.rs"
 sunlight-ipc = { path = "../../ipc" }
 # Replaces the former private 8 MiB bump allocator with libc's reclaiming
 # mmap-backed heap.  The feature is owned only by this native binary.
-sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
+# 16 MiB so Wallpaper page can decode full SIMG assets for the live preview
+# (same peak as vortex-shell desktop wallpaper load).
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-16m"] }
 sunlight-networkd = { path = "../sunlight-networkd" }
 sunlight-tz = { path = "../../sunlight-tz" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }

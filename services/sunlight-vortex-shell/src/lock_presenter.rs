@@ -3,7 +3,7 @@ use sunlight_ipc::{
     LOCK_SESSION_USERNAME_MAX,
 };
 use sunlight_uac::auth::{authenticate_password_for_session, MAX_PASSWORD_LEN};
-use sunlight_ui::image::TgaImage;
+use sunlight_ui::image::{decode_simg, RgbaImage};
 use sunlight_ui::widgets::{SolarClockSnapshot, SolarClockWidget};
 use sunlight_ui::{
     request_close, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
@@ -12,10 +12,11 @@ use sunlight_ui::{
 const SECURE_FULLSCREEN_FLAGS: u64 = (3 << 2) | (1 << 4) | (1 << 5) | (100 << 6);
 const LOCK_PRESENTER_ENTRY_MAGIC: u64 = 0x4C4F_434B_5052_4553;
 
-/// Same asset as the TTY login screen (`services/tty_server` → `login_bg_data`).
+/// Same asset as the TTY login screen (`services/tty_server` → `login_bg_simg`).
 /// Used for both glance (clock) and password surfaces so lock matches login.
-static LOGIN_BG_TGA: &[u8] =
-    include_bytes!("../../../docs/images/sunlight-login-background.tga");
+/// SIMG v2 (sub+lz4) — see `docs/SIMG_V2.md`.
+static LOGIN_BG_SIMG: &[u8] =
+    include_bytes!("../../../docs/images/sunlight-login-background.simg");
 
 pub fn requested(argc: u64, argv: *const *const u8) -> bool {
     if argc == LOCK_PRESENTER_ENTRY_MAGIC {
@@ -57,7 +58,7 @@ struct LockPresenter {
     state: PresenterState,
     message: &'static str,
     notif_count: usize,
-    wallpaper: Option<TgaImage>,
+    wallpaper: Option<RgbaImage>,
     width: u32,
     height: u32,
     last_second: u8,
@@ -345,7 +346,7 @@ impl App for LockPresenter {
         if self.safe_mode {
             canvas.fill_rect(Rect::new(0, 0, width, height), Color(0x00101014));
         } else if let Some(ref bg) = self.wallpaper {
-            canvas.draw_image_cover(bg);
+            canvas.draw_rgba_cover(bg);
         } else {
             canvas.fill_rect(Rect::new(0, 0, width, height), theme.bg);
         }
@@ -553,13 +554,13 @@ pub fn run() -> ! {
     }
     sunlight_ipc::debug_log("[LOCK] presenter registered with display\n");
     let notif_count = crate::active_notification_count();
-    let wallpaper = match TgaImage::parse(LOGIN_BG_TGA) {
+    let wallpaper = match decode_simg(LOGIN_BG_SIMG) {
         Ok(img) => {
-            sunlight_ipc::debug_log("[LOCK] login background loaded\n");
+            sunlight_ipc::debug_log("[LOCK] login background loaded (simg-v2)\n");
             Some(img)
         }
         Err(_) => {
-            sunlight_ipc::debug_log("[LOCK] login background parse failed; solid fallback\n");
+            sunlight_ipc::debug_log("[LOCK] login background decode failed; solid fallback\n");
             None
         }
     };

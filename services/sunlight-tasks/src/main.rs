@@ -21,11 +21,12 @@ static F_MED: VecFont = VecFont(FontRole::UiMedium);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 const WIN_W: u32 = 720;
-const WIN_H: u32 = 540;
+const WIN_H: u32 = 600;
 const STATUS_H: u32 = 18;
 const TITLE_H: u32 = 22;
 const TOOLBAR_H: u32 = 32;
-const SUMMARY_H: u32 = 102;
+/// Extra height for physical-memory accounting breakdown (Phase 1).
+const SUMMARY_H: u32 = 168;
 const CONTENT_MARGIN: i32 = 12;
 const ACTION_GAP: i32 = 8;
 const ACTION_WIDTHS: [u32; 4] = [92, 104, 96, 92];
@@ -91,7 +92,8 @@ const TABLE_COLUMNS: [Column<'static>; TABLE_COLS] = [
         right_align: true,
     },
     Column {
-        header: "RAM",
+        // Mapped present user pages (not unique private; shared counted per map).
+        header: "Mapped",
         width: 120,
         right_align: true,
     },
@@ -490,11 +492,13 @@ impl TasksApp {
 
     fn summary_card_rects(&self) -> (Rect, Rect) {
         let summary = self.summary_rect();
+        // Top row: two metric cards; leave room for accounting breakdown below.
+        let cards_h = 56u32;
         let inner = Rect::new(
             summary.x + 12,
             summary.y + 32,
             summary.w.saturating_sub(24),
-            summary.h.saturating_sub(44),
+            cards_h,
         );
         let gap = 12;
         let card_w = inner.w.saturating_sub(gap) / 2;
@@ -506,6 +510,19 @@ impl TasksApp {
                 card_w,
                 inner.h,
             ),
+        )
+    }
+
+    fn mem_breakdown_rect(&self) -> Rect {
+        let summary = self.summary_rect();
+        let (_cpu, ram) = self.summary_card_rects();
+        Rect::new(
+            summary.x + 12,
+            ram.bottom() + 6,
+            summary.w.saturating_sub(24),
+            summary
+                .bottom()
+                .saturating_sub(ram.bottom() + 10) as u32,
         )
     }
 
@@ -601,6 +618,65 @@ impl TasksApp {
             rect.h,
             text,
         );
+    }
+
+    fn draw_memory_breakdown(&self, canvas: &mut sunlight_ui::Canvas, theme: &Theme) {
+        let rect = self.mem_breakdown_rect();
+        if rect.h < 20 {
+            return;
+        }
+        let acct = &self.snapshot.mem_acct;
+        let task_n = if acct.active_task_count > 0 {
+            acct.active_task_count
+        } else {
+            self.snapshot.proc_count as u32
+        };
+
+        // Line 1: unique task private + shared + kernel + page tables
+        let mut line1 = [0u8; 120];
+        let mut n = 0usize;
+        n += copy_tail(b"Tasks&svc ", &mut line1[n..]);
+        n += write_mib_bytes_into(acct.task_private_unique_bytes, &mut line1[n..]);
+        n += copy_tail(b"  Shared ", &mut line1[n..]);
+        n += write_mib_bytes_into(acct.shared_memory_unique_bytes, &mut line1[n..]);
+        n += copy_tail(b"  Kernel ", &mut line1[n..]);
+        n += write_mib_bytes_into(acct.kernel_total_bytes(), &mut line1[n..]);
+        n += copy_tail(b"  PT ", &mut line1[n..]);
+        n += write_mib_bytes_into(acct.page_table_bytes, &mut line1[n..]);
+        let s1 = core::str::from_utf8(&line1[..n]).unwrap_or("");
+        F_SMALL.draw_vcenter(canvas, s1, rect.x, rect.y, 14, theme.text_muted);
+
+        // Line 2: RAMFS + cache + graphics + other/unclassified + free
+        let mut line2 = [0u8; 120];
+        n = 0;
+        n += copy_tail(b"RAMFS ", &mut line2[n..]);
+        n += write_mib_bytes_into(acct.ramfs_file_data_bytes, &mut line2[n..]);
+        n += copy_tail(b"  Cache ", &mut line2[n..]);
+        n += write_mib_bytes_into(acct.cache_total_bytes(), &mut line2[n..]);
+        n += copy_tail(b"  Gfx/dev ", &mut line2[n..]);
+        n += write_mib_bytes_into(acct.graphics_and_device_bytes(), &mut line2[n..]);
+        n += copy_tail(b"  Other ", &mut line2[n..]);
+        n += write_mib_bytes_into(
+            acct.other_accounted_bytes
+                .saturating_add(acct.unclassified_bytes),
+            &mut line2[n..],
+        );
+        n += copy_tail(b"  Free ", &mut line2[n..]);
+        n += write_mib_bytes_into(acct.free_bytes, &mut line2[n..]);
+        let s2 = core::str::from_utf8(&line2[..n]).unwrap_or("");
+        F_SMALL.draw_vcenter(canvas, s2, rect.x, rect.y + 14, 14, theme.text_dim);
+
+        // Line 3: task count + honesty notes
+        let mut line3 = [0u8; 120];
+        n = 0;
+        n += copy_tail(b"Tasks: ", &mut line3[n..]);
+        n += write_num_into(task_n, &mut line3[n..]);
+        n += copy_tail(b"  Unique private physical (shared counted once)", &mut line3[n..]);
+        if acct.unclassified_bytes > 0 {
+            n += copy_tail(b"  Unclass>0", &mut line3[n..]);
+        }
+        let s3 = core::str::from_utf8(&line3[..n]).unwrap_or("");
+        F_SMALL.draw_vcenter(canvas, s3, rect.x, rect.y + 28, 14, theme.text_dim);
     }
 
     fn draw_metric_card(
@@ -753,19 +829,26 @@ impl App for TasksApp {
             write_bp_into(self.snapshot.cpu_idle_bp, &mut cpu_detail[cpu_detail_len..]);
         let cpu_detail_str = core::str::from_utf8(&cpu_detail[..cpu_detail_len]).unwrap_or("");
 
-        let ram_usage_bp = ram_usage_bp(self.snapshot.used_ram_kb, self.snapshot.total_ram_kb);
+        let acct = &self.snapshot.mem_acct;
+        let usable_kb = if acct.usable_bytes > 0 {
+            acct.usable_bytes / 1024
+        } else {
+            self.snapshot.total_ram_kb
+        };
+        let used_kb = if acct.managed_bytes > 0 {
+            acct.used_bytes() / 1024
+        } else {
+            self.snapshot.used_ram_kb
+        };
+        let ram_usage_bp = ram_usage_bp(used_kb, usable_kb);
         let mut ram_value = [0u8; 16];
         let ram_value_len = write_bp_into(ram_usage_bp, &mut ram_value);
         let ram_value_str = core::str::from_utf8(&ram_value[..ram_value_len]).unwrap_or("");
-        let mut ram_detail = [0u8; 40];
-        let mut ram_detail_len = copy_tail(b"Using ", &mut ram_detail);
-        ram_detail_len +=
-            write_mb_into(self.snapshot.used_ram_kb, &mut ram_detail[ram_detail_len..]);
-        ram_detail_len += copy_tail(b" of ", &mut ram_detail[ram_detail_len..]);
-        ram_detail_len += write_mb_into(
-            self.snapshot.total_ram_kb,
-            &mut ram_detail[ram_detail_len..],
-        );
+        let mut ram_detail = [0u8; 48];
+        let mut ram_detail_len = 0usize;
+        ram_detail_len += write_mb_into(used_kb, &mut ram_detail[ram_detail_len..]);
+        ram_detail_len += copy_tail(b" used of ", &mut ram_detail[ram_detail_len..]);
+        ram_detail_len += write_mb_into(usable_kb, &mut ram_detail[ram_detail_len..]);
         let ram_detail_str = core::str::from_utf8(&ram_detail[..ram_detail_len]).unwrap_or("");
 
         let (cpu_card, ram_card) = self.summary_card_rects();
@@ -787,6 +870,9 @@ impl App for TasksApp {
             ram_detail_str,
             ram_usage_bp,
         );
+
+        // Physical memory accounting breakdown (unique classes, not residual cache).
+        self.draw_memory_breakdown(canvas, theme);
 
         let table_rect = self.table_rect();
         // Dense readable surface for the process/core table.
@@ -1179,6 +1265,14 @@ fn write_mb_into(kb: u64, dst: &mut [u8]) -> usize {
     dst[n + 2] = b' ';
     n += 3;
     n + copy_tail(b"MB", &mut dst[n..])
+}
+
+/// Format byte counts as whole MiB for the accounting breakdown.
+fn write_mib_bytes_into(bytes: u64, dst: &mut [u8]) -> usize {
+    let mib = bytes / (1024 * 1024);
+    let mut n = write_num_into(mib.min(u32::MAX as u64) as u32, dst);
+    n += copy_tail(b"MiB", &mut dst[n..]);
+    n
 }
 
 fn copy_tail_mb(kb: u64, dst: &mut [u8]) -> usize {

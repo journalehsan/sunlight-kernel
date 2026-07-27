@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.3247-alpha.1"
+version = "0.2.3396-alpha.1"
+
+
+
 
 
 
@@ -498,6 +501,8 @@ mm2d_munmap_test = ["mm2b_smp_test"]
 mm2e_mprotect_test = ["mm2b_smp_test"]
 # Focused SWAP-1 multi-pool pressure/recovery gate.
 swap1_test = ["mm2b_smp_test"]
+# Physical memory accounting Phase 1 native ISO gate.
+memory_accounting_test = []
 # Verbose per-tick / per-alloc diagnostics over the serial port. OFF by default:
 # these logs are written while the global scheduler lock is held and block the
 # UART, stalling every core. Enable only for debugging.

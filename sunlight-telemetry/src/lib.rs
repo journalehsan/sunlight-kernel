@@ -6,7 +6,132 @@ pub use topology::{CoreSnapshot, CpuTelemetry, TaskStats, TopologyInfo, MAX_CORE
 use sunlight_ipc::{ipc_call, map_telemetry, nameserver_lookup, IpcMsg, TzMsg};
 
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
+pub const TELEMETRY_VERSION_MEM_ACCT: u32 = 3;
 pub const MAX_PROCESSES: usize = 64;
+pub const MEM_ACCT_VERSION: u32 = 1;
+pub const RAMFS_METADATA_UNAVAILABLE: u64 = u64::MAX;
+pub const RETAINED_BOOT_UNMEASURED: u64 = u64::MAX;
+
+/// Matches kernel `PhysicalMemoryAccountingSnapshotV1` (native ABI).
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct MemoryAccountingSnapshot {
+    pub sample_generation: u64,
+    pub sampled_at_ticks: u64,
+
+    pub installed_bytes: u64,
+    pub usable_bytes: u64,
+    pub managed_bytes: u64,
+    pub free_bytes: u64,
+    pub reserved_bytes: u64,
+
+    pub active_task_count: u32,
+    pub active_user_task_count: u32,
+    pub active_service_count: u32,
+    pub _pad0: u32,
+
+    pub task_private_unique_bytes: u64,
+    pub shared_memory_unique_bytes: u64,
+
+    pub kernel_core_bytes: u64,
+    pub kernel_heap_bytes: u64,
+    pub kernel_stack_bytes: u64,
+    pub page_table_bytes: u64,
+
+    pub ramfs_file_data_bytes: u64,
+    pub ramfs_metadata_bytes: u64,
+    pub retained_boot_image_bytes: u64,
+
+    pub filesystem_cache_bytes: u64,
+    pub other_reclaimable_cache_bytes: u64,
+
+    pub graphics_buffer_bytes: u64,
+    pub device_dma_bytes: u64,
+
+    pub zram_physical_bytes: u64,
+    pub zram_logical_bytes: u64,
+
+    pub other_accounted_bytes: u64,
+    pub unclassified_bytes: u64,
+
+    pub flags: u32,
+    pub conservation_delta_bytes: u32,
+}
+
+impl Default for MemoryAccountingSnapshot {
+    fn default() -> Self {
+        Self {
+            sample_generation: 0,
+            sampled_at_ticks: 0,
+            installed_bytes: 0,
+            usable_bytes: 0,
+            managed_bytes: 0,
+            free_bytes: 0,
+            reserved_bytes: 0,
+            active_task_count: 0,
+            active_user_task_count: 0,
+            active_service_count: 0,
+            _pad0: 0,
+            task_private_unique_bytes: 0,
+            shared_memory_unique_bytes: 0,
+            kernel_core_bytes: 0,
+            kernel_heap_bytes: 0,
+            kernel_stack_bytes: 0,
+            page_table_bytes: 0,
+            ramfs_file_data_bytes: 0,
+            ramfs_metadata_bytes: RAMFS_METADATA_UNAVAILABLE,
+            retained_boot_image_bytes: RETAINED_BOOT_UNMEASURED,
+            filesystem_cache_bytes: 0,
+            other_reclaimable_cache_bytes: 0,
+            graphics_buffer_bytes: 0,
+            device_dma_bytes: 0,
+            zram_physical_bytes: 0,
+            zram_logical_bytes: 0,
+            other_accounted_bytes: 0,
+            unclassified_bytes: 0,
+            flags: 0,
+            conservation_delta_bytes: 0,
+        }
+    }
+}
+
+impl MemoryAccountingSnapshot {
+    pub const FLAG_RAMFS_METADATA_UNAVAILABLE: u32 = 1 << 0;
+    pub const FLAG_RETAINED_BOOT_IMAGE_MEASURED: u32 = 1 << 1;
+    pub const FLAG_CACHE_IS_REAL_OWNERSHIP: u32 = 1 << 2;
+    pub const FLAG_GRAPHICS_PARTIAL: u32 = 1 << 3;
+    pub const FLAG_LARGE_UNCLASSIFIED: u32 = 1 << 4;
+    pub const FLAG_CONSERVATION_OK: u32 = 1 << 5;
+    pub const FLAG_SNAPSHOT_CONSISTENT: u32 = 1 << 6;
+
+    pub fn used_bytes(&self) -> u64 {
+        self.managed_bytes.saturating_sub(self.free_bytes)
+    }
+
+    pub fn kernel_total_bytes(&self) -> u64 {
+        self.kernel_core_bytes
+            .saturating_add(self.kernel_heap_bytes)
+            .saturating_add(self.kernel_stack_bytes)
+    }
+
+    pub fn cache_total_bytes(&self) -> u64 {
+        self.filesystem_cache_bytes
+            .saturating_add(self.other_reclaimable_cache_bytes)
+    }
+
+    pub fn graphics_and_device_bytes(&self) -> u64 {
+        self.graphics_buffer_bytes
+            .saturating_add(self.device_dma_bytes)
+    }
+
+    pub fn ramfs_metadata_available(&self) -> bool {
+        self.ramfs_metadata_bytes != RAMFS_METADATA_UNAVAILABLE
+    }
+
+    pub fn conservation_ok(&self) -> bool {
+        self.flags & Self::FLAG_CONSERVATION_OK != 0
+    }
+}
 
 #[repr(C, packed)]
 #[derive(Clone, Copy, Default)]
@@ -18,7 +143,8 @@ pub struct ProcessStat {
     pub name: [u8; 32],
     pub cpu_ticks: u64,
     pub mem_pages: u32,
-    pub _pad2: u32,
+    /// Low 32 bits of address-space generation (PID reuse discrimination).
+    pub generation: u32,
 }
 
 #[repr(C, packed)]
@@ -64,6 +190,10 @@ pub struct TelemetryPage {
     pub monotonic_ns: u64,
     pub uptime_seconds: u64,
     pub ticks_per_core: [u64; MAX_CORES],
+
+    pub mem_acct_version: u32,
+    pub _mem_acct_pad: u32,
+    pub mem_acct: MemoryAccountingSnapshot,
 }
 
 const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 8192);
@@ -90,7 +220,10 @@ pub struct ProcessSnapshot {
     pub name: [u8; 32],
     pub cpu_ticks: u64,
     pub cpu_bp: u16,
+    /// Mapped present user pages in KiB (not unique private physical).
     pub mem_kb: u32,
+    /// Address-space generation low 32 bits (with pid, identifies identity).
+    pub generation: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -156,6 +289,8 @@ pub struct SystemSnapshot {
     pub task_stats: TaskStats,
     /// Optional SMP-safe timekeeping diagnostics.
     pub time_diagnostics: TimeDiagnostics,
+    /// Physical memory accounting Phase 1 breakdown (same snapshot generation).
+    pub mem_acct: MemoryAccountingSnapshot,
 }
 
 impl Default for SystemSnapshot {
@@ -181,6 +316,7 @@ impl Default for SystemSnapshot {
             cpu_telemetry: CpuTelemetry::default(),
             task_stats: TaskStats::default(),
             time_diagnostics: TimeDiagnostics::default(),
+            mem_acct: MemoryAccountingSnapshot::default(),
         }
     }
 }
@@ -328,6 +464,7 @@ impl Telemetry {
                 cpu_ticks: raw.cpu_ticks,
                 cpu_bp: 0,
                 mem_kb: raw.mem_pages.saturating_mul(4),
+                generation: raw.generation,
             };
         }
         ts.commit();
@@ -347,6 +484,12 @@ impl Telemetry {
             snap.procs[i] = ProcessSnapshot::default();
         }
         snap.proc_count = write_idx;
+
+        // Memory accounting (telemetry version >= 3).
+        let mem_ver = unsafe { vread(core::ptr::addr_of!(page.mem_acct_version)) };
+        if mem_ver == MEM_ACCT_VERSION {
+            snap.mem_acct = unsafe { vread(core::ptr::addr_of!(page.mem_acct)) };
+        }
 
         snap
     }

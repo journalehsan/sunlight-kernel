@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-vortex-shell"
-version = "0.2.3247-alpha.1"
+version = "0.2.3396-alpha.1"
+
+
+
 
 
 
@@ -338,7 +341,9 @@ edition = "2021"
 # proof compile the same shell against libc's static heap with
 # `--no-default-features --features stress`.
 default = ["dynamic-heap"]
-dynamic-heap = ["sunlight-libc/dynamic-heap-8m"]
+# 16 MiB: SIMG wallpapers need ~file+decoded ARGB peak (~10 MiB). 8 MiB OOM'd
+# the decode and left the solid gray FALLBACK_BG desktop.
+dynamic-heap = ["sunlight-libc/dynamic-heap-16m"]
 # Opt-in accelerated allocation churn used by QEMU soak verification. Normal
 # desktop builds do not execute this path.
 stress = []

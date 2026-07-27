@@ -502,6 +502,69 @@ impl<'fb> Canvas<'fb> {
         }
     }
 
+    /// Full-screen cover blit from an owned SIMG/TGA decode ([`crate::image::RgbaImage`]).
+    pub fn draw_rgba_cover(&mut self, img: &crate::image::RgbaImage) {
+        let fw = self.width as usize;
+        let fh = self.height as usize;
+        let iw = img.width as usize;
+        let ih = img.height as usize;
+        if iw == 0 || ih == 0 || fw == 0 || fh == 0 {
+            return;
+        }
+        for y in 0..fh {
+            let src_y = (y * ih / fh) as u32;
+            let row_off = y * self.stride as usize;
+            for x in 0..fw {
+                let src_x = (x * iw / fw) as u32;
+                let idx = row_off + x;
+                if idx < self.pixels.len() {
+                    self.pixels[idx] = 0xFF00_0000 | (img.pixel(src_x, src_y) & 0x00FF_FFFF);
+                }
+            }
+        }
+    }
+
+    /// Fit an owned ARGB image into `dst` (nearest-neighbor, opaque samples).
+    pub fn draw_rgba_image(&mut self, img: &crate::image::RgbaImage, dst: Rect) {
+        if img.width == 0 || img.height == 0 || dst.w == 0 || dst.h == 0 {
+            return;
+        }
+        let cx0 = dst.x.max(0) as u32;
+        let cy0 = dst.y.max(0) as u32;
+        let cx1 = dst.right().min(self.width as i32).max(0) as u32;
+        let cy1 = dst.bottom().min(self.height as i32).max(0) as u32;
+        if cx0 >= cx1 || cy0 >= cy1 {
+            return;
+        }
+        let dw = dst.w.max(1) as u64;
+        let dh = dst.h.max(1) as u64;
+        let sw = img.width as u64;
+        let sh = img.height as u64;
+        for dy in cy0..cy1 {
+            let ly = (dy as i32 - dst.y) as u64;
+            let sy = ((ly * sh) / dh) as u32;
+            let row_off = dy as usize * self.stride as usize;
+            for dx in cx0..cx1 {
+                let lx = (dx as i32 - dst.x) as u64;
+                let sx = ((lx * sw) / dw) as u32;
+                let idx = row_off + dx as usize;
+                if idx < self.pixels.len() {
+                    let p = img.pixel(sx, sy);
+                    let a = (p >> 24) as u8;
+                    if a == 0 {
+                        continue;
+                    }
+                    if a == 255 {
+                        self.pixels[idx] = p;
+                    } else {
+                        self.pixels[idx] =
+                            crate::image::blit::blend_source_over(p, self.pixels[idx]);
+                    }
+                }
+            }
+        }
+    }
+
     /// Create a sub-canvas clipped to `rect`.
     /// NOTE: This is a zero-copy view — the sub-canvas writes into the same
     /// pixel buffer, using the original stride, just starting at a different offset.

@@ -202,14 +202,50 @@ pub fn draw_tga_icon(
 /// After drawing the image a translucent black overlay is applied
 /// (`overlay_alpha` in 0–255, where 128 ≈ 50 % opaque).
 pub fn draw_tga_background(fb: &mut Framebuffer, img: &TgaImage, overlay_alpha: u8) {
-    let fb_w = fb.width();
-    let fb_h = fb.height();
-    if fb_w == 0 || fb_h == 0 {
+    draw_cover_background(fb, img.width(), img.height(), |sx, sy| img.pixel(sx, sy), overlay_alpha);
+}
+
+/// Aspect-fill ARGB8888 buffer (row-major, top-down) with optional dark overlay.
+///
+/// Used for pre-decoded SIMG v2 login backgrounds (decode happens outside this
+/// no-heap crate).
+pub fn draw_argb_background(
+    fb: &mut Framebuffer,
+    width: u32,
+    height: u32,
+    pixels: &[u32],
+    overlay_alpha: u8,
+) {
+    if width == 0 || height == 0 {
         return;
     }
-    let img_w = img.width();
-    let img_h = img.height();
-    if img_w == 0 || img_h == 0 {
+    let stride = width as usize;
+    draw_cover_background(
+        fb,
+        width,
+        height,
+        |sx, sy| {
+            let sx = sx.min(width.saturating_sub(1));
+            let sy = sy.min(height.saturating_sub(1));
+            let idx = sy as usize * stride + sx as usize;
+            pixels.get(idx).copied().unwrap_or(0) & 0x00FF_FFFF
+        },
+        overlay_alpha,
+    );
+}
+
+fn draw_cover_background<F>(
+    fb: &mut Framebuffer,
+    img_w: u32,
+    img_h: u32,
+    mut sample: F,
+    overlay_alpha: u8,
+) where
+    F: FnMut(u32, u32) -> u32,
+{
+    let fb_w = fb.width();
+    let fb_h = fb.height();
+    if fb_w == 0 || fb_h == 0 || img_w == 0 || img_h == 0 {
         return;
     }
 
@@ -223,13 +259,6 @@ pub fn draw_tga_background(fb: &mut Framebuffer, img: &TgaImage, overlay_alpha: 
 
     if fit_height {
         // Image is proportionally wider than the screen → fit by height.
-        // Source Y maps linearly, source X is cropped and centred.
-        //
-        //   sy   = dy * img_h / fb_h
-        //   sx   = off_x + dx * crop_w / fb_w
-        //   where:
-        //     crop_w = fb_w * img_h / fb_h   (source width that fills the screen)
-        //     off_x  = (img_w - crop_w) / 2   (crop offset, centred)
         let crop_w = (fb_w as u64) * (img_h as u64) / (fb_h as u64);
         let off_x = (img_w as u64).saturating_sub(crop_w) / 2;
 
@@ -237,7 +266,7 @@ pub fn draw_tga_background(fb: &mut Framebuffer, img: &TgaImage, overlay_alpha: 
             let sy = ((dy as u64) * (img_h as u64) / (fb_h as u64)) as u32;
             for dx in 0..fb_w {
                 let sx = (off_x + (dx as u64) * crop_w / (fb_w as u64)) as u32;
-                let p = img.pixel(sx, sy);
+                let p = sample(sx, sy);
                 let r = ((p >> 16) & 0xFF) * bg_factor / 256;
                 let g = ((p >> 8) & 0xFF) * bg_factor / 256;
                 let b = (p & 0xFF) * bg_factor / 256;
@@ -246,13 +275,6 @@ pub fn draw_tga_background(fb: &mut Framebuffer, img: &TgaImage, overlay_alpha: 
         }
     } else {
         // Image is proportionally taller or matches → fit by width.
-        // Source X maps linearly, source Y is cropped and centred.
-        //
-        //   sx   = dx * img_w / fb_w
-        //   sy   = off_y + dy * crop_h / fb_h
-        //   where:
-        //     crop_h = fb_h * img_w / fb_w
-        //     off_y  = (img_h - crop_h) / 2
         let crop_h = (fb_h as u64) * (img_w as u64) / (fb_w as u64);
         let off_y = (img_h as u64).saturating_sub(crop_h) / 2;
 
@@ -260,7 +282,7 @@ pub fn draw_tga_background(fb: &mut Framebuffer, img: &TgaImage, overlay_alpha: 
             let sy = (off_y + (dy as u64) * crop_h / (fb_h as u64)) as u32;
             for dx in 0..fb_w {
                 let sx = ((dx as u64) * (img_w as u64) / (fb_w as u64)) as u32;
-                let p = img.pixel(sx, sy);
+                let p = sample(sx, sy);
                 let r = ((p >> 16) & 0xFF) * bg_factor / 256;
                 let g = ((p >> 8) & 0xFF) * bg_factor / 256;
                 let b = (p & 0xFF) * bg_factor / 256;

@@ -84,7 +84,12 @@ pub fn alloc_shared_region(
         .try_reserve_exact(num_pages)
         .map_err(|_| SharedMemError::OutOfMemory)?;
     for _ in 0..num_pages {
-        let phys = match pmm.alloc_frame_owned(caller.pid as u32) {
+        // SharedMemory is the unique global primary class: one charge regardless
+        // of how many processes map the object.
+        let phys = match pmm.alloc_frame_owned_class(
+            caller.pid as u32,
+            crate::memory::accounting::PhysicalMemoryClass::SharedMemory,
+        ) {
             Some(phys) => phys,
             None => {
                 crate::process::address_space::note_frame_allocation_failure();

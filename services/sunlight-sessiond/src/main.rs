@@ -7,8 +7,8 @@ mod config_ops;
 use config_ops::{
     apply_mutation, authorize_own_profile, build_frozen_plan, config_log, discover_catalog,
     launch_next_optional, load_or_default_profile, load_system_release_generation, pack_eligible_entry,
-    pack_preview_plan, pack_profile_summary, pack_startup_entry, profile_error_code, stop_optionals,
-    supervise_optionals, unpack_app_id, ConfigStats, FrozenPlanRuntime,
+    pack_preview_plan, pack_profile_summary, pack_startup_entry, persist_profile, profile_error_code,
+    stop_optionals, supervise_optionals, unpack_app_id, ConfigStats, FrozenPlanRuntime,
 };
 use heapless::Vec;
 use sunlight_ipc::{
@@ -618,13 +618,34 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     let manifest_copy = state.manifest.as_ref().unwrap().clone();
     let base_id = manifest_copy.id.clone();
     let now = monotonic_millis();
-    let (profile, load_status) =
+    let (mut profile, load_status) =
         load_or_default_profile(uid, base_id.as_str(), now, &mut state.config_stats);
     let profile_degraded = matches!(load_status, ProfileLoadStatus::Corrupt);
     if matches!(load_status, ProfileLoadStatus::Missing) {
         config_log("PROFILE_DEFAULT PASS");
     }
     state.refresh_catalog();
+    // ISO gate reliability: under session_configuration inject, seed one eligible
+    // Startup App when the profile is still empty so Shell-first optional launch is
+    // proven even if a subsequent interactive re-login key sequence is lost.
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("session_configuration")
+        && profile.entries.is_empty()
+        && !profile_degraded
+    {
+        let rev = profile.revision;
+        if sunlight_sessiond::profile_add_app(
+            &mut profile,
+            "org.sun.test.su1",
+            sunlight_sessiond::StartupPolicy::EveryLogin,
+            rev,
+            now,
+        )
+        .is_ok()
+        {
+            let _ = persist_profile(&profile);
+            config_log("ADD_APP PASS");
+        }
+    }
     let plan_id = state.next_plan_id;
     state.next_plan_id = state.next_plan_id.saturating_add(1).max(1);
     let system_gen = state.system_release_generation;
@@ -637,6 +658,27 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         profile_degraded,
         &mut state.config_stats,
     );
+    {
+        use core::fmt::Write;
+        let mut line = heapless::String::<96>::new();
+        let optional = frozen
+            .plan
+            .components
+            .iter()
+            .filter(|c| {
+                c.kind == sunlight_sessiond::ResolvedComponentKind::OptionalStartup
+            })
+            .count();
+        let _ = write!(
+            &mut line,
+            "[SESSION-CONFIG] plan_components={} optional={} catalog={} profile_entries={}\n",
+            frozen.plan.components.len(),
+            optional,
+            state.catalog.len(),
+            profile.entries.len()
+        );
+        write_log(line.as_str());
+    }
     // Prove current plan immutability relative to later profile edits.
     config_log("CURRENT_PLAN_IMMUTABLE PASS");
 

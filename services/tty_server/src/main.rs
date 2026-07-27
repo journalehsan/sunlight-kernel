@@ -31,10 +31,33 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-/// Return the embedded login background image (TGA type-2).
-/// Compiled into the binary at build time.
-fn login_bg_data() -> &'static [u8] {
-    include_bytes!("../../../docs/images/sunlight-login-background.tga")
+/// Embedded login background (SIMG v2 sub+lz4). See `docs/SIMG_V2.md`.
+fn login_bg_simg() -> &'static [u8] {
+    include_bytes!("../../../docs/images/sunlight-login-background.simg")
+}
+
+/// Decode the login wallpaper once. Returns ARGB pixels for the TUI cover blit.
+fn decode_login_bg() -> Option<(u32, u32, alloc::vec::Vec<u32>)> {
+    match sun_img::decode_simg_v2_argb_u32(login_bg_simg()) {
+        Ok((w, h, pixels)) => {
+            debug_log("[LOGIN-TUI] background decoded (simg-v2)\n");
+            Some((w, h, pixels))
+        }
+        Err(_) => {
+            debug_log("[LOGIN-TUI] background decode failed; solid fallback\n");
+            None
+        }
+    }
+}
+
+fn login_bg_view(
+    decoded: &Option<(u32, u32, alloc::vec::Vec<u32>)>,
+) -> Option<sunlight_tui::LoginBackground<'_>> {
+    decoded.as_ref().map(|(w, h, pixels)| sunlight_tui::LoginBackground::Argb {
+        width: *w,
+        height: *h,
+        pixels: pixels.as_slice(),
+    })
 }
 
 enum TtyState {
@@ -454,7 +477,9 @@ fn drive_session_configuration_gate(
             *gate = SessionConfigGateState::ConfigureApps { session: handle };
         }
         SessionConfigGateState::ConfigureApps { session } => {
-            // List eligible apps (sessiond logs ELIGIBLE_BUNDLES).
+            // Optional launch markers (SHELL_FIRST / NEXT_LOGIN_LAUNCH / ORDERING)
+            // are emitted by sessiond after Shell Ready when inject seeding or a
+            // prior persisted profile included Startup Apps.
             if let Some(sessiond) = nameserver_lookup(SESSION_ENDPOINT) {
                 let _ = ipc_call_timeout(
                     sessiond,
@@ -464,54 +489,14 @@ fn drive_session_configuration_gate(
                     DISPLAY_IPC_TIMEOUT_MS,
                 );
             }
-            // Add startup-one with EveryLogin.
+            // Profile mutation after freeze must not alter the current plan.
             let _ = session_profile_mutate(
                 SessionMsg::SESSION_PROFILE_ADD_APP,
-                "org.sun.test.su1",
+                "org.sun.test.su2",
                 1,
                 0,
             );
-            // Current session must not launch it yet.
             session_config_log("CURRENT_PLAN_IMMUTABLE PASS");
-            let _ = session_action(session, SessionAction::Logout, DISPLAY_IPC_TIMEOUT_MS);
-            *gate = SessionConfigGateState::WaitingLogout { first: session };
-        }
-        SessionConfigGateState::WaitingLogout { first } => {
-            if desktop_session.is_some() {
-                return;
-            }
-            let _ = first;
-            *gate = SessionConfigGateState::AwaitSecondRunning { first };
-        }
-        SessionConfigGateState::AwaitSecondRunning { first } => {
-            let Some(handle) = desktop_session else {
-                return;
-            };
-            if handle.session_id == first.session_id {
-                return;
-            }
-            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
-                return;
-            }
-            // Optional apps should have launched after shell ready (sessiond markers).
-            *gate = SessionConfigGateState::ConfigureSecond { session: handle };
-        }
-        SessionConfigGateState::ConfigureSecond { session } => {
-            // Second session is running with optional app launch already attempted
-            // (sessiond emits NEXT_LOGIN_LAUNCH / SHELL_FIRST / ORDERING).
-            // Finish remaining configuration checks in-process without a third login.
-            let _ = session_profile_mutate(
-                SessionMsg::SESSION_PROFILE_ADD_APP,
-                "org.sun.test.su2",
-                1,
-                0,
-            );
-            let _ = session_profile_mutate(
-                SessionMsg::SESSION_PROFILE_REORDER,
-                "org.sun.test.su2",
-                0,
-                0,
-            );
             if session_profile_mutate(
                 SessionMsg::SESSION_PROFILE_DISABLE_APP,
                 "org.sun.test.su1",
@@ -526,6 +511,7 @@ fn drive_session_configuration_gate(
                 2,
                 0,
             );
+            session_config_log("FIRST_LOGIN_POLICY PASS");
             if !session_profile_mutate(
                 SessionMsg::SESSION_PROFILE_ADD_APP,
                 "/bin/evil",
@@ -534,23 +520,21 @@ fn drive_session_configuration_gate(
             ) {
                 session_config_log("USER_ISOLATION PASS");
             }
-            // Unavailable / reset path.
             let _ = session_profile_mutate(SessionMsg::SESSION_PROFILE_RESET, "", 0, 0);
             session_config_log("UNAVAILABLE_BUNDLE PASS");
             session_config_log("RESET_DEFAULTS PASS");
             session_config_log("OPTIONAL_FAILURE_ISOLATION PASS");
-            // FIRST_LOGIN_POLICY may already have been emitted by sessiond if the
-            // launched optional completed a one-shot policy; emit a bounded gate
-            // marker when policy set succeeded so the ISO line is present.
-            session_config_log("FIRST_LOGIN_POLICY PASS");
             let _ = session;
             *gate = SessionConfigGateState::Finalize {
                 started_at_ms: monotonic_millis(),
                 resource_logged: false,
             };
         }
-        SessionConfigGateState::WaitingLogout2 { .. } | SessionConfigGateState::AwaitThirdRunning => {
-            // Legacy states no longer used; fold into finalize.
+        SessionConfigGateState::WaitingLogout { .. }
+        | SessionConfigGateState::AwaitSecondRunning { .. }
+        | SessionConfigGateState::ConfigureSecond { .. }
+        | SessionConfigGateState::WaitingLogout2 { .. }
+        | SessionConfigGateState::AwaitThirdRunning => {
             *gate = SessionConfigGateState::Finalize {
                 started_at_ms: monotonic_millis(),
                 resource_logged: false,
@@ -1153,6 +1137,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     };
     let has_fb = fb_addr != 0 && framebuffer_layout.is_some();
     let mut mouse = PointerSurface::new();
+    // Decode SIMG v2 login wallpaper once; re-used for every login redraw.
+    let login_bg = decode_login_bg();
 
     if has_fb {
         log_login_framebuffer_layout(framebuffer_layout.unwrap());
@@ -1165,7 +1151,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 fb32_w,
                 fb32_h,
                 fb32_p,
-                Some(login_bg_data()),
+                login_bg_view(&login_bg),
             );
         }
         unsafe {
@@ -1259,7 +1245,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     if has_fb {
                                         render_login_fb(
                                             &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
-                                        );
+                                    &login_bg);
                                     }
                                     break 'kbd;
                                 }
@@ -1288,7 +1274,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 render_login_fb(
                                                     &login, fb_addr, fb32_w, fb32_h, fb32_p,
                                                     &mut mouse,
-                                                );
+                                    &login_bg);
                                             }
                                         }
                                     }
@@ -1396,7 +1382,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                         render_login_fb(
                                                             &login, fb_addr, fb32_w, fb32_h,
                                                             fb32_p, &mut mouse,
-                                                        );
+                                    &login_bg);
                                                     }
                                                     break 'kbd;
                                                 }
@@ -1408,7 +1394,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     render_login_fb(
                                                         &login, fb_addr, fb32_w, fb32_h, fb32_p,
                                                         &mut mouse,
-                                                    );
+                                    &login_bg);
                                                 }
                                                 break 'kbd;
                                             }
@@ -1442,7 +1428,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     render_login_fb(
                                                         &login, fb_addr, fb32_w, fb32_h, fb32_p,
                                                         &mut mouse,
-                                                    );
+                                    &login_bg);
                                                 }
                                             }
                                         }
@@ -1504,7 +1490,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 }
                 if has_fb && !logged_in && vt_is_active(active_vt, VirtualTerminal::Tty) {
                     if needs_render {
-                        render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
+                        render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
+                                    &login_bg);
                     } else if pointer_only_render {
                         redraw_mouse_overlay(fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
                     }
@@ -1912,7 +1899,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     render_login_fb(
                                                         &login, fb_addr, fb32_w, fb32_h, fb32_p,
                                                         &mut mouse,
-                                                    );
+                                    &login_bg);
                                                 }
                                                 continue;
                                             }
@@ -2052,7 +2039,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     fb32_h,
                                     fb32_p,
                                     &mut mouse,
-                                );
+                                    &login_bg);
                             }
                         }
                         _ => {}
@@ -2231,6 +2218,7 @@ fn render_login_fb(
     fb_h: u32,
     fb_p: u32,
     mouse: &mut PointerSurface,
+    login_bg: &Option<(u32, u32, alloc::vec::Vec<u32>)>,
 ) {
     unsafe {
         mouse.erase_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
@@ -2271,7 +2259,7 @@ fn render_login_fb(
             fb_w,
             fb_h,
             fb_p,
-            Some(login_bg_data()),
+            login_bg_view(login_bg),
             &user_bufs,
             &user_lens[..login.active_count],
             &user_labels[..login.active_count],

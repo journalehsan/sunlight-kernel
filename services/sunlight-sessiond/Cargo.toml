@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-sessiond"
-version = "0.2.3247-alpha.1"
+version = "0.2.3396-alpha.1"
+
+
+
 
 
 
@@ -17,3 +20,8 @@ path = "src/main.rs"
 
 [lib]
 path = "src/lib.rs"
+
+[features]
+default = []
+# Optional: enable ISO inject-phase seeding of a test Startup App.
+session-configuration-inject = []

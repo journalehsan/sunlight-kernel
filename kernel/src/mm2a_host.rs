@@ -15,6 +15,9 @@ pub mod zram_codec;
 #[path = "memory/swap_slot.rs"]
 pub mod swap_slot;
 
+#[path = "memory/accounting_host.rs"]
+pub mod accounting_host;
+
 #[cfg(test)]
 mod tests {
     use super::mm2a_plan::{checked_page_layout, DeferredCursor, PlanError};

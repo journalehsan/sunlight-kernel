@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-wallpaper"
-version = "0.2.3247-alpha.1"
+version = "0.2.3396-alpha.1"
+
+
+
 
 
 
@@ -231,3 +234,5 @@ license = "MIT"
 
 [dependencies]
 sunlight-libc = { path = "../sunlight-libc" }
+# SIMG v2 header validation (no_std + alloc).
+sun-img = { path = "../sun-img", default-features = false }

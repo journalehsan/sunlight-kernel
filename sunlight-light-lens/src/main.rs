@@ -16,11 +16,11 @@ use sunlight_ipc::{
     process_yield, ProcessExit,
 };
 use sunlight_libc::{self as libc, crt0, DirEntry, FT_FILE};
-use sunlight_ui::image::{decode_simg, TgaImage};
+use sunlight_ui::image::{decode_simg, RgbaImage, TgaImage};
 use sunlight_ui::widgets::StatusBar;
 use sunlight_ui::{
     request_close, App, Canvas, Color, Event, Point, Rect, Theme, UiSymbol, Window, WindowConfig,
-    WindowDecoration,
+    WindowDecoration, WindowMaterial,
 };
 
 const WIN_W: u32 = 1220;
@@ -264,7 +264,10 @@ struct LightLensApp {
     sibling_count: usize,
     current_index: usize,
     has_current_index: bool,
-    image: Option<TgaImage>,
+    /// Decoded photo pixels (straight ARGB u32). Prefer this over a TGA view so
+/// we can force-opaque blit the same way the File Manager preview fixed the
+/// gray SIMG v2 hole on alpha-capable surfaces.
+    image: Option<RgbaImage>,
     info: ImageInfo,
     load_state: LoadState,
     message: TextBuf<MSG_LEN>,
@@ -467,18 +470,18 @@ impl LightLensApp {
         y + 18
     }
 
-    fn preview_fit_rect(viewport: Rect, img: TgaImage) -> Rect {
+    fn preview_fit_rect(viewport: Rect, width: u32, height: u32) -> Rect {
         let area = viewport.inset(16);
-        if img.width == 0 || img.height == 0 || area.w == 0 || area.h == 0 {
+        if width == 0 || height == 0 || area.w == 0 || area.h == 0 {
             return area;
         }
-        let scale_w = area.w as u64 * img.height as u64;
-        let scale_h = area.h as u64 * img.width as u64;
+        let scale_w = area.w as u64 * height as u64;
+        let scale_h = area.h as u64 * width as u64;
         let (fit_w, fit_h) = if scale_w <= scale_h {
-            let h = (area.w as u64 * img.height as u64 / img.width as u64) as u32;
+            let h = (area.w as u64 * height as u64 / width as u64) as u32;
             (area.w.max(1), h.max(1))
         } else {
-            let w = (area.h as u64 * img.width as u64 / img.height as u64) as u32;
+            let w = (area.h as u64 * width as u64 / height as u64) as u32;
             (w.max(1), area.h.max(1))
         };
         Rect::new(
@@ -487,6 +490,43 @@ impl LightLensApp {
             fit_w,
             fit_h,
         )
+    }
+
+    /// Fit-blit decoded photo pixels with **forced opaque ARGB**.
+    ///
+    /// Same class of fix as File Manager preview: on alpha-capable window
+    /// surfaces, samples without a solid alpha byte show as a flat gray
+    /// panel hole under glass/compositor blend. Photo content is always
+    /// treated as opaque for display (source alpha is ignored for RGB).
+    fn draw_photo(canvas: &mut Canvas, img: &RgbaImage, dst: Rect) {
+        if img.width == 0 || img.height == 0 || dst.w == 0 || dst.h == 0 {
+            return;
+        }
+        let cx0 = dst.x.max(0) as u32;
+        let cy0 = dst.y.max(0) as u32;
+        let cx1 = dst.right().min(canvas.width as i32).max(0) as u32;
+        let cy1 = dst.bottom().min(canvas.height as i32).max(0) as u32;
+        if cx0 >= cx1 || cy0 >= cy1 {
+            return;
+        }
+        let dw = dst.w.max(1) as u64;
+        let dh = dst.h.max(1) as u64;
+        let sw = img.width as u64;
+        let sh = img.height as u64;
+        for dy in cy0..cy1 {
+            let ly = (dy as i32 - dst.y) as u64;
+            let sy = ((ly * sh) / dh) as u32;
+            let row_off = dy as usize * canvas.stride as usize;
+            for dx in cx0..cx1 {
+                let lx = (dx as i32 - dst.x) as u64;
+                let sx = ((lx * sw) / dw) as u32;
+                let idx = row_off + dx as usize;
+                if idx < canvas.pixels.len() {
+                    // Force opaque so glass surfaces never composite a gray hole.
+                    canvas.pixels[idx] = 0xFF00_0000 | (img.pixel(sx, sy) & 0x00FF_FFFF);
+                }
+            }
+        }
     }
 
     fn has_previous(&self) -> bool {
@@ -599,20 +639,23 @@ impl LightLensApp {
             IMAGE_LEN = total;
         }
 
-        if total < 18 {
+        // SIMG v2 needs only 4 magic bytes to detect; legacy TGA needs 18.
+        if total < 4 {
+            self.set_error("Unsupported or broken image.");
+            return;
+        }
+        if total < 18 && unsafe { IMAGE_BUF[..4] != *b"SIMG" } {
             self.set_error("Unsupported or broken image.");
             return;
         }
 
-        let parsed = unsafe { parse_runtime_tga(total) };
-        match parsed {
-            Some((image, width, height, bpp, kind)) => {
-                self.image = Some(image);
-                self.info.width = width;
-                self.info.height = height;
-                self.info.bpp = bpp;
-                // Prefer content-based format over extension-only guess.
+        match unsafe { decode_runtime_image(total) } {
+            Some((image, kind)) => {
+                self.info.width = image.width;
+                self.info.height = image.height;
+                self.info.bpp = 32;
                 self.info.format = kind;
+                self.image = Some(image);
                 self.load_state = LoadState::Ready;
                 self.message.set_str("Ready");
             }
@@ -872,11 +915,12 @@ impl LightLensApp {
         Self::draw_checkerboard(canvas, content, theme.bg, theme.bg.lighten(7), 18);
         canvas.draw_rect(content, theme.border);
 
-        match (self.load_state, self.image) {
+        match (self.load_state, self.image.as_ref()) {
             (LoadState::Ready, Some(image)) => {
-                let fit = Self::preview_fit_rect(content, image);
-                canvas.fill_rect(fit, theme.bg);
-                canvas.draw_tga_icon(&image, fit);
+                let fit = Self::preview_fit_rect(content, image.width, image.height);
+                // Opaque backdrop under the photo (not alpha-hole gray).
+                canvas.fill_rect(fit, Color::rgb(theme.bg.r(), theme.bg.g(), theme.bg.b()));
+                Self::draw_photo(canvas, image, fit);
                 canvas.draw_rect(fit, theme.border);
                 let outer = fit.inset(-1);
                 canvas.draw_rect(outer, theme.border);
@@ -1144,12 +1188,17 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
     let initial_path = parse_user_path_arg(argc, argv);
     let mut app = LightLensApp::new(initial_path);
-    let mut window = match Window::connect(WindowConfig {
-        width: WIN_W,
-        height: WIN_H,
-        title: "Light Lens",
-        decoration: WindowDecoration::Normal,
-    }) {
+    let mut window = match Window::connect_with_material(
+        WindowConfig {
+            width: WIN_W,
+            height: WIN_H,
+            title: "Light Lens",
+            decoration: WindowDecoration::Normal,
+        },
+        // Match Files / Control Panel so photo pixels use the same
+        // alpha-capable surface path (opaque ARGB samples).
+        WindowMaterial::WindowGlass,
+    ) {
         Some(window) => window,
         None => {
             debug_log("[LIGHT-LENS] failed to connect window\n");
@@ -1196,66 +1245,30 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         .position(|window| window == needle)
 }
 
-/// Parse runtime image bytes in `IMAGE_BUF`.
+/// Decode runtime image bytes from `IMAGE_BUF` into an owned ARGB buffer.
 ///
-/// - SIMG v2: decode (allocates once), rewrite as top-down TGA-32 into `IMAGE_BUF`,
-///   then expose via zero-alloc `TgaImage` for the existing blit path.
-/// - Legacy TGA / historical `.simg`: parse in place.
-unsafe fn parse_runtime_tga(total: usize) -> Option<(TgaImage, u32, u32, u8, FormatKind)> {
+/// Uses the shared `decode_simg` path (SIMG v2 strict, else TGA type-2) so
+/// Light Lens matches File Manager preview decode. Drawing forces opaque
+/// ARGB (see [`LightLensApp::draw_photo`]) to avoid the gray alpha-hole that
+/// previously affected the Files preview pane on glass surfaces.
+unsafe fn decode_runtime_image(total: usize) -> Option<(RgbaImage, FormatKind)> {
     if total < 4 {
         return None;
     }
-    if IMAGE_BUF[..4] == *b"SIMG" {
-        // Borrow ends before we rewrite IMAGE_BUF as a TGA view.
-        let decoded = {
-            let src = &IMAGE_BUF[..total];
-            decode_simg(src).ok()?
-        };
-        let pixel_count = decoded.pixel_count();
-        let need = 18usize.checked_add(pixel_count.checked_mul(4)?)?;
-        if need > MAX_IMAGE_BYTES {
-            return None;
-        }
-        // Uncompressed TGA type-2, 32 bpp, top-down, BGRA.
-        IMAGE_BUF[0..12].copy_from_slice(&[
-            0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ]);
-        IMAGE_BUF[12..14].copy_from_slice(&(decoded.width as u16).to_le_bytes());
-        IMAGE_BUF[14..16].copy_from_slice(&(decoded.height as u16).to_le_bytes());
-        IMAGE_BUF[16] = 32;
-        IMAGE_BUF[17] = 0x28; // alpha bits + top-down origin
-        let mut off = 18usize;
-        for px in &decoded.pixels {
-            IMAGE_BUF[off] = *px as u8;
-            IMAGE_BUF[off + 1] = (*px >> 8) as u8;
-            IMAGE_BUF[off + 2] = (*px >> 16) as u8;
-            IMAGE_BUF[off + 3] = (*px >> 24) as u8;
-            off += 4;
-        }
-        IMAGE_LEN = need;
-        let bytes: &'static [u8] = &IMAGE_BUF[..need];
-        let image = TgaImage::parse(bytes).ok()?;
-        return Some((image, decoded.width, decoded.height, 32, FormatKind::SimgV2));
-    }
-    if total < 18 {
+    let kind = if IMAGE_BUF[..4] == *b"SIMG" {
+        FormatKind::SimgV2
+    } else {
+        FormatKind::Tga
+    };
+    let src = &IMAGE_BUF[..total];
+    let decoded = decode_simg(src).ok()?;
+    if decoded.width == 0 || decoded.height == 0 {
         return None;
     }
-    if IMAGE_BUF[2] != 2 {
-        return None;
-    }
-    let bpp = IMAGE_BUF[16];
-    if bpp != 24 && bpp != 32 {
-        return None;
-    }
-    let width = u16::from_le_bytes([IMAGE_BUF[12], IMAGE_BUF[13]]) as u32;
-    let height = u16::from_le_bytes([IMAGE_BUF[14], IMAGE_BUF[15]]) as u32;
-    if width == 0 || height == 0 {
-        return None;
-    }
-    let bytes: &'static [u8] = &IMAGE_BUF[..total];
-    let image = TgaImage::parse(bytes).ok()?;
-    // Extension may say .simg while content is still legacy TGA.
-    Some((image, width, height, bpp, FormatKind::Tga))
+    // Drop the source file bytes from the static buffer after a successful
+    // decode — the owned RgbaImage is the display source of truth.
+    IMAGE_LEN = 0;
+    Some((decoded, kind))
 }
 
 fn format_from_name(name: &[u8]) -> FormatKind {

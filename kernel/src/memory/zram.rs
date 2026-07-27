@@ -261,7 +261,9 @@ impl PoolState {
                 .try_reserve(1)
                 .map_err(|_| ZramError::AllocationFailure)?;
         }
-        let frame = pmm.alloc_frame().ok_or(ZramError::AllocationFailure)?;
+        let frame = pmm
+            .alloc_frame_class(crate::memory::accounting::PhysicalMemoryClass::CompressedMemory)
+            .ok_or(ZramError::AllocationFailure)?;
         let page_index = reusable_index.unwrap_or(self.storage_pages.len());
         let mask = chunk_mask(0, chunk_count);
         if page_index == self.storage_pages.len() {

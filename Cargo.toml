@@ -6,6 +6,7 @@ members = [
     "drivers",
     "compat-linux",
     "sunlight-top",
+    "memoryctl",
     "sunlight-telemetry",
     "services/init",
     "services/timer_server",

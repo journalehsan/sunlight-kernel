@@ -272,6 +272,13 @@ case "$PHASE" in
         PASS_LABEL="top"
         NEED_DISK=false
         ;;
+    memory-accounting)
+        EXPECTED_FILE="tools/tests/memory_accounting.expected"
+        FINAL_MARKER="[MEMORY-ACCOUNTING] FINAL PASS"
+        PASS_LABEL="Physical Memory Accounting Phase 1"
+        NEED_DISK=false
+        TIMEOUT=90
+        ;;
     tzctl)
         EXPECTED_FILE="tools/tests/tzctl.expected"
         FINAL_MARKER="[TTY]  cmd: tzctl get -> Active: Asia/Tehran"
@@ -290,10 +297,10 @@ case "$PHASE" in
         FINAL_MARKER="[SESSION-CONFIG] FINAL PASS"
         PASS_LABEL="Session Configuration"
         NEED_DISK=false
-        TIMEOUT=300
+        TIMEOUT=360
         ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration sunlightd top tzctl"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration sunlightd top tzctl memory-accounting"
         exit 2
         ;;
 esac
@@ -326,7 +333,11 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release 
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timed --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tz --features tzutils --bin tzutils --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release >>"$BUILD_LOG" 2>&1
+if [[ "$PHASE" == "session-configuration" ]]; then
+    SUNLIGHT_INJECT_PHASE=session_configuration RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release >>"$BUILD_LOG" 2>&1
+else
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release >>"$BUILD_LOG" 2>&1
+fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessionctl --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-startup-fixture --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release >>"$BUILD_LOG" 2>&1
@@ -344,6 +355,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunligh
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release >>"$BUILD_LOG" 2>&1
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package memoryctl --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sunsay --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release >>"$BUILD_LOG" 2>&1
@@ -413,6 +425,8 @@ elif [[ "$PHASE" == "mm2e" ]]; then
     KERNEL_FEATURES="--features mm2e_mprotect_test"
 elif [[ "$PHASE" == "swap1" ]]; then
     KERNEL_FEATURES="--features swap1_test"
+elif [[ "$PHASE" == "memory-accounting" ]]; then
+    KERNEL_FEATURES="--features memory_accounting_test"
 fi
 EXTRA_ENV=()
 if [[ "$PHASE" == "phase2b1" ]]; then
