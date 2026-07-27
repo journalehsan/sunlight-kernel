@@ -14,8 +14,9 @@ use wiseowl_memory::SourceId;
 use wiseowl_memorydb::record::{MemoryScope, OwnerId};
 
 use crate::config::RootId;
-use crate::digest::{ContentDigest, FastFingerprint};
+use crate::digest::{ContentDigest, FastFingerprint, LegacyFnvContentHash};
 use crate::hash::StablePathHash;
+use crate::import_key::ImportKey;
 
 /// Optional filesystem identity (inode + device) when available.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -100,6 +101,19 @@ pub enum SourceFailureKind {
 }
 
 impl SourceFailureKind {
+    pub const fn from_u8(v: u8) -> Option<Self> {
+        match v {
+            1 => Some(Self::PermissionDenied), 2 => Some(Self::FileTooLarge),
+            3 => Some(Self::UnsupportedFormat), 4 => Some(Self::InvalidUtf8),
+            5 => Some(Self::BinaryContent), 6 => Some(Self::ChangedDuringRead),
+            7 => Some(Self::ParseFailed), 8 => Some(Self::TokenizationFailed),
+            9 => Some(Self::DatabaseUnavailable), 10 => Some(Self::TransactionRejected),
+            11 => Some(Self::QuotaExceeded), 12 => Some(Self::SourceDisappeared),
+            13 => Some(Self::PathRejected), 14 => Some(Self::ImportConflict),
+            15 => Some(Self::DigestMigrationFailed), _ => None,
+        }
+    }
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PermissionDenied => "permission_denied",
@@ -121,6 +135,10 @@ impl SourceFailureKind {
     }
 
     /// Permanent failures are not retried until content/metadata identity changes.
+    ///
+    /// Content-stable rejections (`QuotaExceeded`, parse/tokenize failures with a
+    /// stored strong digest) must not re-enter the parser on every unchanged
+    /// scan. Digest or policy change still forces reclassification.
     pub const fn is_permanent(self) -> bool {
         matches!(
             self,
@@ -130,34 +148,78 @@ impl SourceFailureKind {
                 | Self::FileTooLarge
                 | Self::PathRejected
                 | Self::ImportConflict
+                | Self::QuotaExceeded
+                | Self::ParseFailed
+                | Self::TokenizationFailed
         )
     }
 }
 
-/// Failure tracking record.
+/// Failure tracking record (rejection identity without raw source content).
+///
+/// Durable rejected-source cache identity is the combination of:
+/// - strong content digest on the parent [`SourceManifest`]
+/// - size_bytes on the parent manifest
+/// - pipeline versions (validator / parser / tokenizer / ignore) on the parent
+/// - this failure kind
+///
+/// Confirmation bookkeeping lives here so unchanged rejected files can be
+/// reconfirmed without re-running the parser or tokenizer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
 pub struct SourceFailure {
     pub kind: SourceFailureKind,
     pub first_failure_ns: u64,
     pub latest_failure_ns: u64,
+    /// Total classification attempts (new + cached confirmations).
     pub attempt_count: u32,
-    /// Hash of relevant source metadata at failure (not payload).
+    /// Cached rejection confirmations after the first durable rejection.
+    pub confirmation_count: u32,
+    /// Hash of relevant source metadata at failure (path / size identity; not payload).
     pub metadata_hash: u64,
     pub retry_after_ns: u64,
+    /// Validator version active when this rejection was recorded.
+    pub validator_version: u32,
 }
 
 /// Pending import metadata persisted before MemoryDB commit (crash window).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
 pub struct PendingImport {
-    /// Stable import identity (hex of ImportKey digest).
-    pub import_key_hex: String,
-    pub source_revision: u32,
+    pub format_version: u16,
+    pub import_key: ImportKey,
+    pub source_id: SourceId,
+    pub expected_revision: u32,
     pub content_digest: ContentDigest,
-    pub started_at_ns: u64,
-    /// Process-local tx id when known (not sole idempotency key).
-    pub local_tx_id: Option<u64>,
+    pub pipeline_versions: PipelineVersions,
+    pub state: PendingImportState,
+    pub created_at: u64,
+    pub latest_attempt_at: u64,
+    pub attempt_count: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum PendingImportState {
+    Prepared = 1,
+    TransactionStarted = 2,
+    CommitSent = 3,
+    ReconcileRequired = 4,
+    Committed = 5,
+    Aborted = 6,
+    Conflict = 7,
+}
+
+impl PendingImportState {
+    pub const fn from_u8(v: u8) -> Option<Self> {
+        match v {
+            1 => Some(Self::Prepared), 2 => Some(Self::TransactionStarted),
+            3 => Some(Self::CommitSent), 4 => Some(Self::ReconcileRequired),
+            5 => Some(Self::Committed), 6 => Some(Self::Aborted),
+            7 => Some(Self::Conflict), _ => None,
+        }
+    }
 }
 
 /// Durable source manifest (indexer operational state + identity).
@@ -178,7 +240,7 @@ pub struct SourceManifest {
     /// Optional FNV prefilter fingerprint only.
     pub fast_fingerprint: Option<FastFingerprint>,
     /// Historical Phase 3 FNV content hash (never treated as strong identity).
-    pub legacy_content_hash: Option<u64>,
+    pub legacy_content_hash: Option<LegacyFnvContentHash>,
     /// True when v1 manifest needs controlled strong-digest upgrade.
     pub needs_digest_upgrade: bool,
     pub size_bytes: u64,
@@ -257,10 +319,10 @@ impl SourceManifest {
     /// Does not claim a strong digest until rehash completes.
     pub fn mark_for_digest_upgrade(mut self, legacy_fnv: u64) -> Self {
         self.manifest_version = Self::MANIFEST_VERSION;
-        self.legacy_content_hash = Some(legacy_fnv);
+        self.legacy_content_hash = Some(LegacyFnvContentHash::new(legacy_fnv));
         self.content_digest = ContentDigest::unset();
         self.needs_digest_upgrade = true;
-        self.fast_fingerprint = Some(legacy_fnv);
+        self.fast_fingerprint = Some(FastFingerprint::new(legacy_fnv));
         self
     }
 
@@ -281,6 +343,7 @@ impl SourceManifest {
 
 /// Pipeline versions that force re-index when any changes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
 pub struct PipelineVersions {
     pub parser_id: u32,
     pub parser_version: u32,
@@ -309,7 +372,33 @@ impl SourceManifest {
             && self.content_digest.equals(digest)
             && self.pipeline_matches(v)
     }
+
+    /// Durable rejected-source cache hit: same strong digest, size, policy versions,
+    /// and permanent failure kind. Does not authorize parse/tokenize skip for accepted files.
+    pub fn can_reuse_rejection(
+        &self,
+        digest: &ContentDigest,
+        size_bytes: u64,
+        v: &PipelineVersions,
+        validator_version: u32,
+    ) -> bool {
+        if self.state != SourceState::Failed {
+            return false;
+        }
+        let Some(ref f) = self.failure else {
+            return false;
+        };
+        f.kind.is_permanent()
+            && self.has_strong_digest()
+            && self.content_digest.equals(digest)
+            && self.size_bytes == size_bytes
+            && self.pipeline_matches(v)
+            && f.validator_version == validator_version
+    }
 }
+
+/// Text validator identity version (bump when UTF-8/binary heuristics change).
+pub const VALIDATOR_VERSION: u32 = 1;
 
 #[cfg(test)]
 mod tests {
@@ -321,6 +410,52 @@ mod tests {
     fn permanent_failures() {
         assert!(SourceFailureKind::InvalidUtf8.is_permanent());
         assert!(!SourceFailureKind::ChangedDuringRead.is_permanent());
+    }
+
+    #[test]
+    fn rejection_reuse_requires_strong_digest_and_policy() {
+        let dig = digest_bytes(b"\xff\xfe");
+        let mut m = SourceManifest::new_v2(
+            SourceId::from_raw_unchecked(2),
+            1,
+            MemoryScope::User,
+            1,
+            String::from("bad.txt"),
+            2,
+            dig,
+            None,
+        );
+        m.state = SourceState::Failed;
+        m.size_bytes = 2;
+        m.parser_id = 1;
+        m.parser_version = 1;
+        m.tokenizer_id = 1;
+        m.tokenizer_version = 1;
+        m.chunking_id = 1;
+        m.chunking_version = 1;
+        m.ignore_config_version = 1;
+        m.failure = Some(SourceFailure {
+            kind: SourceFailureKind::InvalidUtf8,
+            first_failure_ns: 1,
+            latest_failure_ns: 1,
+            attempt_count: 1,
+            confirmation_count: 0,
+            metadata_hash: 0,
+            retry_after_ns: u64::MAX,
+            validator_version: VALIDATOR_VERSION,
+        });
+        let v = PipelineVersions {
+            parser_id: 1,
+            parser_version: 1,
+            tokenizer_id: 1,
+            tokenizer_version: 1,
+            chunking_id: 1,
+            chunking_version: 1,
+            ignore_config_version: 1,
+        };
+        assert!(m.can_reuse_rejection(&dig, 2, &v, VALIDATOR_VERSION));
+        assert!(!m.can_reuse_rejection(&digest_bytes(b"ok"), 2, &v, VALIDATOR_VERSION));
+        assert!(!m.can_reuse_rejection(&dig, 3, &v, VALIDATOR_VERSION));
     }
 
     #[test]
@@ -336,7 +471,7 @@ mod tests {
             canonical_path_hash: 1,
             file_identity: None,
             content_digest: dig,
-            fast_fingerprint: Some(99),
+            fast_fingerprint: Some(FastFingerprint::new(99)),
             legacy_content_hash: None,
             needs_digest_upgrade: false,
             size_bytes: 10,
@@ -385,6 +520,6 @@ mod tests {
         .mark_for_digest_upgrade(0xdead);
         assert!(m.needs_digest_upgrade);
         assert!(!m.has_strong_digest());
-        assert_eq!(m.legacy_content_hash, Some(0xdead));
+        assert_eq!(m.legacy_content_hash, Some(LegacyFnvContentHash::new(0xdead)));
     }
 }

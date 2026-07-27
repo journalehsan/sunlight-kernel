@@ -14,7 +14,9 @@ use crate::config::{
 };
 use crate::digest::{ContentDigest, CONTENT_DIGEST_FORMAT_VERSION};
 use crate::error::IndexError;
-use crate::health::{DegradedReason, HealthState, IndexHealth};
+use crate::health::{
+    DegradedReason, HealthState, IndexHealth, MemoryDbConnectionState, MemoryDbDegradedReason,
+};
 use crate::ingest::delete_source_bounded;
 use crate::memorydb_backend::{HostMemoryDbBackend, IndexMemoryDb, MemoryDbHealth};
 use crate::protocol::{SearchHit, SourceListItem, TokenWire, TransportInfo};
@@ -130,35 +132,61 @@ impl<B: IndexMemoryDb> IndexerService<B> {
         self.now_ns = ns.max(1);
     }
 
-    /// Probe MemoryDB and update health (Ready vs Degraded:MemoryDbUnavailable).
+    /// Probe MemoryDB and update the authoritative connection-health state.
     pub fn refresh_memorydb_health(&mut self) {
         IndexStats::sat_add(&mut self.stats.memorydb_connection_attempts, 1);
+        let endpoint_gen = self.backend_endpoint_generation();
         match self.backend.health() {
             Ok(h) if h.ready => {
                 IndexStats::sat_add(&mut self.stats.memorydb_connection_successes, 1);
-                self.health.memorydb_connection = String::from("Ready");
-                self.health.memorydb_generation = h.database_generation;
+                self.health.memorydb.observe_success(
+                    endpoint_gen,
+                    h.database_generation,
+                    self.now_ns,
+                );
                 self.health.clear_reason(DegradedReason::MemoryDbUnavailable);
+                self.health.clear_reason(DegradedReason::MemoryDbRecovering);
                 if self.health.state == HealthState::Starting {
                     self.health.state = HealthState::Ready;
                     self.health.ready = true;
                 }
                 self.reconnect.attempts_this_interval = 0;
+                if self.state.pending_import_count() != 0 {
+                    let _ = self.engine.reconcile_pending(
+                        &mut self.state,
+                        &mut self.backend,
+                        &mut self.stats,
+                        self.now_ns,
+                        32,
+                    );
+                }
             }
-            Ok(h) => {
-                self.health.memorydb_connection = h.state;
-                self.health.memorydb_generation = h.database_generation;
+            Ok(_h) => {
+                self.health.memorydb.observe_failure(
+                    MemoryDbDegradedReason::Recovering,
+                    self.now_ns,
+                    Some(self.reconnect.next_attempt_ns),
+                );
                 self.health
                     .set_degraded(DegradedReason::MemoryDbRecovering);
             }
             Err(_) => {
                 IndexStats::sat_add(&mut self.stats.memorydb_disconnects, 1);
-                self.health.memorydb_connection = String::from("Unavailable");
+                self.health.memorydb.observe_failure(
+                    MemoryDbDegradedReason::Unavailable,
+                    self.now_ns,
+                    Some(self.reconnect.next_attempt_ns),
+                );
                 self.health
                     .set_degraded(DegradedReason::MemoryDbUnavailable);
             }
         }
         self.health.pending_imports = self.state.pending_import_count();
+    }
+
+    /// Endpoint generation when the backend exposes one (native); 0 on host.
+    fn backend_endpoint_generation(&self) -> u64 {
+        0
     }
 
     /// Bounded MemoryDB reconnect attempt (no busy loop).
@@ -167,7 +195,9 @@ impl<B: IndexMemoryDb> IndexerService<B> {
             return false;
         }
         if self.reconnect.attempts_this_interval >= self.reconnect.max_attempts_per_interval {
-            return false;
+            // The previous bounded interval has elapsed. Start a fresh bounded
+            // interval; never permanently suppress recovery after a long outage.
+            self.reconnect.attempts_this_interval = 0;
         }
         self.reconnect.attempts_this_interval =
             self.reconnect.attempts_this_interval.saturating_add(1);
@@ -181,15 +211,15 @@ impl<B: IndexMemoryDb> IndexerService<B> {
             .saturating_add(backoff_ms.saturating_mul(1_000_000));
         IndexStats::sat_add(&mut self.stats.memorydb_reconnects, 1);
         self.refresh_memorydb_health();
-        self.health.memorydb_connection == "Ready"
+        self.health.memorydb_ready()
     }
 
     pub fn transport_info(&self) -> TransportInfo {
         TransportInfo {
             indexer_endpoint: String::from(crate::protocol::ENDPOINT_NAME),
             memorydb_endpoint: String::from(wiseowl_memorydb::ENDPOINT_NAME),
-            memorydb_generation: self.health.memorydb_generation,
-            connection: self.health.memorydb_connection.clone(),
+            memorydb_generation: self.health.memorydb_generation(),
+            connection: String::from(self.health.memorydb_connection_label()),
             ipc_protocol: String::from("v1"),
             shm: String::from("Available"),
             content_digest: self.health.content_digest_label.clone(),
@@ -296,7 +326,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
         caller.caps.require(IndexCapability::ScanOwnRoots)?;
 
         self.refresh_memorydb_health();
-        if self.health.memorydb_connection != "Ready" {
+        if !self.health.memorydb_ready() {
             IndexStats::sat_add(&mut self.stats.memorydb_unavailable_operations, 1);
             // Degraded: control ops work; indexing pauses.
             return Err(IndexError::DatabaseUnavailable);
@@ -440,7 +470,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
                 } else {
                     String::from("")
                 },
-                fast_fingerprint: m.fast_fingerprint.unwrap_or(0),
+                fast_fingerprint: m.fast_fingerprint.map(|v| v.get()).unwrap_or(0),
                 chunk_count: m.chunk_count,
                 manifest_version: m.manifest_version,
             })
@@ -471,9 +501,14 @@ impl<B: IndexMemoryDb> IndexerService<B> {
         &self,
         caller: &IndexCaller,
         source_id: u64,
-    ) -> Result<(ContentDigest, u32, u16), IndexError> {
+    ) -> Result<(ContentDigest, u32, u16, bool), IndexError> {
         let m = self.inspect_source(caller, source_id)?;
-        Ok((m.content_digest, m.source_revision, m.manifest_version))
+        Ok((
+            m.content_digest,
+            m.source_revision,
+            m.manifest_version,
+            m.legacy_content_hash.is_some(),
+        ))
     }
 
     pub fn forget_source(
@@ -532,7 +567,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
     pub fn reconcile(&mut self, caller: &IndexCaller) -> Result<u32, IndexError> {
         caller.caps.require(IndexCapability::AdminIndexer)?;
         self.refresh_memorydb_health();
-        if self.health.memorydb_connection != "Ready" {
+        if !self.health.memorydb_ready() {
             return Err(IndexError::DatabaseUnavailable);
         }
         self.engine.reconcile_pending(
@@ -587,7 +622,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
     ) -> Result<Vec<SearchHit>, IndexError> {
         caller.caps.require(IndexCapability::SearchLexical)?;
         self.refresh_memorydb_health();
-        if self.health.memorydb_connection != "Ready" {
+        if !self.health.memorydb_ready() {
             return Err(IndexError::DatabaseUnavailable);
         }
         let (tid, tver, tokens) = self.tokenize_text(caller, text)?;
@@ -609,6 +644,8 @@ impl<B: IndexMemoryDb> IndexerService<B> {
             ..Default::default()
         };
         let res = self.backend.query(q)?;
+        IndexStats::sat_add(&mut self.stats.native_lexical_queries, 1);
+        IndexStats::sat_add(&mut self.stats.native_lexical_hits, res.ids.len() as u64);
         let mut hits = Vec::new();
         for id in res.ids {
             let rec = match self.backend.get_record(id, true) {
@@ -724,10 +761,33 @@ mod tests {
             .reasons
             .iter()
             .any(|r| r == "MemoryDbUnavailable"));
+        assert!(!svc.health.memorydb_ready());
+        assert_eq!(svc.health.memorydb.memorydb_ready_flag(), 0);
         let caller = IndexCaller::admin();
         assert!(matches!(
             svc.start_scan(&caller, None),
             Err(IndexError::DatabaseUnavailable)
         ));
+    }
+
+    #[test]
+    fn direct_health_success_matches_memorydb_ready_flag() {
+        let db = Database::<MemoryStore>::open_memory(DbQuotaConfig::default()).unwrap();
+        let mut svc = IndexerService::new(db, IndexerConfig::default());
+        svc.refresh_memorydb_health();
+        let direct = svc.memorydb_health().unwrap();
+        assert!(direct.ready);
+        assert!(svc.health.memorydb_ready());
+        assert_eq!(svc.health.memorydb.memorydb_ready_flag(), 1);
+        assert_eq!(
+            svc.health.memorydb_generation(),
+            direct.database_generation
+        );
+        // Health and transport report the same readiness snapshot.
+        let h = svc.health();
+        let t = svc.transport_info();
+        assert_eq!(h.memorydb_ready(), t.connection == "Ready");
+        assert_eq!(h.memorydb_generation(), t.memorydb_generation);
+        let _ = MemoryDbConnectionState::Unknown;
     }
 }

@@ -22,7 +22,7 @@ use crate::error::IndexError;
 use crate::import_key::{build_import_key, ImportKey, ImportState};
 use crate::memorydb_backend::IndexMemoryDb;
 use crate::quotas::IndexQuotaConfig;
-use crate::source::{PendingImport, SourceManifest};
+use crate::source::{PendingImport, PendingImportState, PipelineVersions, SourceManifest};
 use crate::tokenize::{to_indexed_tokens, TokenSink};
 
 /// Producer service name stored in provenance.
@@ -134,7 +134,7 @@ fn document_attrs(
         ("import_key", AttributeValue::Text(String::from(import_key_hex))),
         (
             "fast_fingerprint",
-            AttributeValue::Unsigned(manifest.fast_fingerprint.unwrap_or(0)),
+            AttributeValue::Unsigned(manifest.fast_fingerprint.map(|v| v.get()).unwrap_or(0)),
         ),
         (
             "manifest_version",
@@ -179,6 +179,7 @@ pub fn ingest_source_atomic<B: IndexMemoryDb>(
         manifest.chunking_version,
         manifest.scope,
         manifest.owner,
+        manifest.ignore_config_version,
     );
 
     // Reconcile before starting a replacement transaction.
@@ -210,7 +211,10 @@ pub fn ingest_source_atomic<B: IndexMemoryDb>(
 
     let prev_doc = manifest.document_memory_id.and_then(|id| MemoryId::from_raw(id).ok());
     let key_hex = import_key.key_hex();
-    let legacy_fnv = manifest.fast_fingerprint.or(manifest.legacy_content_hash);
+    let legacy_fnv = manifest
+        .legacy_content_hash
+        .map(|v| v.get())
+        .or_else(|| manifest.fast_fingerprint.map(|v| v.get()));
 
     let tx = backend.begin_transaction()?;
 
@@ -354,14 +358,27 @@ pub fn ingest_source_atomic<B: IndexMemoryDb>(
 pub fn pending_for_manifest(
     import_key: &ImportKey,
     now_ns: u64,
-    local_tx_id: Option<u64>,
+    _local_tx_id: Option<u64>,
 ) -> PendingImport {
     PendingImport {
-        import_key_hex: import_key.key_hex(),
-        source_revision: import_key.source_revision,
+        format_version: 1,
+        import_key: import_key.clone(),
+        source_id: import_key.source_id,
+        expected_revision: import_key.source_revision,
         content_digest: import_key.content_digest,
-        started_at_ns: now_ns,
-        local_tx_id,
+        pipeline_versions: PipelineVersions {
+            parser_id: import_key.parser_id,
+            parser_version: import_key.parser_version,
+            tokenizer_id: import_key.tokenizer_id,
+            tokenizer_version: import_key.tokenizer_version,
+            chunking_id: import_key.chunking_id,
+            chunking_version: import_key.chunking_version,
+            ignore_config_version: import_key.ingestion_config_generation,
+        },
+        state: PendingImportState::Prepared,
+        created_at: now_ns,
+        latest_attempt_at: now_ns,
+        attempt_count: 1,
     }
 }
 

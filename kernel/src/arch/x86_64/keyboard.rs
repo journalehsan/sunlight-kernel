@@ -41,7 +41,7 @@ static IRQ_COUNT: AtomicUsize = AtomicUsize::new(0);
 /// IRQ1. The userspace driver then performs the same translation path as real
 /// hardware input.
 #[cfg(feature = "key_inject")]
-pub static mut KEY_INJECT_DATA: [u8; 4096] = [0; 4096];
+pub static mut KEY_INJECT_DATA: [u8; 12288] = [0; 12288];
 #[cfg(feature = "key_inject")]
 pub static mut KEY_INJECT_LEN: usize = 0;
 #[cfg(feature = "key_inject")]
@@ -495,6 +495,14 @@ pub fn poll_inject_buffer() {
             }
             scancode
         };
+
+        // Test-sequence delay marker. Consume one injector polling interval
+        // without forwarding a synthetic key-release event to userspace. The
+        // old behavior could flood the bounded TTY queue and drop the command
+        // immediately following a long delay.
+        if scancode == 0x9e {
+            return;
+        }
 
         if push_scancode(scancode) {
             notify_driver(KBD_DRIVER_ENDPOINT.load(Ordering::Acquire), scancode);

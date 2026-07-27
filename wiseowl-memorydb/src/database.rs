@@ -402,6 +402,27 @@ impl<S: DurableStore> Database<S> {
         self.stats.clone()
     }
 
+    /// Bounded document-generation census (no payload materialization beyond in-memory records).
+    pub fn generation_census(
+        &self,
+        source_filter: Option<SourceId>,
+        max_sources: u32,
+    ) -> (
+        crate::census::DatabaseGenerationCensus,
+        alloc::vec::Vec<crate::census::SourceGenerationCensus>,
+    ) {
+        crate::census::census_from_records(
+            &self.records,
+            source_filter,
+            max_sources.min(4096) as usize,
+        )
+    }
+
+    /// Verify generation invariants; returns structured failure when violated.
+    pub fn verify_generations(&self) -> crate::census::GenerationVerifyResult {
+        crate::census::verify_generations(&self.records, 4096)
+    }
+
     pub fn quotas(&self) -> &DbQuotaConfig {
         &self.quotas
     }

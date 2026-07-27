@@ -445,7 +445,8 @@ Run on a booted SunlightOS ISO with **separate** `wiseowl-memorydb` and `wiseowl
 5. **Host** daemon uses explicit `HostMemoryDbBackend` (in-process) for tests/dev only. **Native production has no embedded MemoryDB.**
 6. `.wiseowlignore` is a small subset of ignore grammars.
 7. No PDF/DOCX/OCR.
-8. Native lexical `Query` over IPC is still simplified; host path has full query fidelity. Insert/tx/health/source_lookup/delete use production wire.
+8. Native lexical IPC intentionally exposes only the Phase 3.75 lexical subset
+   of the typed Phase 2 query core; it does not expose semantic retrieval.
 
 ---
 
@@ -486,3 +487,259 @@ Phase 4 may consume indexed observations and lexical tokens with provenance. It 
 ## Explicit confirmation
 
 **No pattern recognition, model inference, model training, embeddings, vector search, online AI, natural-language answer generation, or self-healing was implemented in Phase 3.5.**
+
+---
+
+## Phase 3.75 final Phase 4 gate (authoritative addendum)
+
+This section supersedes earlier build- or design-based “Pass” labels. A gate is
+passed only by the kind of evidence it requests; host tests and successful
+compilation do not substitute for a target run.
+
+### Identity and migration
+
+Final content identity is `StrongContentDigest { algorithm, version, bytes }`.
+`FastFingerprint` and `LegacyFnvContentHash` are separate nominal types with
+private fields and no conversion into a strong digest. New manifests, unchanged
+proof, rename confirmation, exact deduplication, chunk identity, and `ImportKey`
+all require the full SHA-256 digest. A migrated v1 FNV match is only a candidate
+and forces strong-digest verification; it cannot return Unchanged, skip parsing
+or tokenization, confirm a rename, or commit/deduplicate an import.
+
+The in-tree streaming SHA-256 has known-answer tests for the empty string,
+`abc`, the FIPS multi-block message, and one million `a` bytes. The same vectors
+are exercised with chunk sizes 1, 7, 31, 63, 64, 65, and 4096, unaligned
+boundaries, and empty updates. Digest wire decoding rejects unknown algorithms,
+unsupported algorithms, versions, and malformed lengths.
+
+### Native topology and recovery
+
+The production topology is:
+
+```text
+wiseowl-indexctl -> wiseowl-indexd -> wiseowl-memorydb
+                                      native IPC + SHM
+wiseowl-memoryctl -> wiseowl-memoryd
+```
+
+All three are separate sunlightd-supervised ELF processes. The native indexer
+contains only `NativeMemoryDbClient`; there is no embedded or fallback database.
+It discovers `wiseowl.memorydb.v1`, validates protocol health and endpoint
+generation, degrades when unavailable, uses bounded call timeouts, and
+reconciles durable pending imports before returning Ready. Operational state and
+prepared import state use bounded, checksummed formats and temp-file rename.
+The test-only commit hooks force exits immediately before commit or after durable
+commit and are excluded without `phase375-test`.
+
+`ImportKey` wire version 1 includes SourceId, revision, strong digest, parser,
+tokenizer and chunker identities/versions, scope, owner, and ingestion
+configuration generation. Its encoding is fixed and deterministic; malformed
+or differently versioned keys are rejected.
+
+### Native lexical retrieval
+
+The native MemoryDB request uses the Phase 2 `MemoryQuery`/token index. It
+supports Any, All, and MinimumCount, tokenizer identity/version, bounded token
+IDs, scope/owner filters, maximum results and a generation-bound cursor.
+Ordering is deterministic; stale cursors fail; normal queries filter tombstones
+and superseded records. Results are labeled lexical relevance only. No semantic
+search is present.
+
+### SHM ownership contract
+
+The only insert model is owner retained: the indexer allocates and owns the SHM,
+shares it with MemoryDB, MemoryDB maps and consumes before replying, MemoryDB
+releases its mapping/share, and the indexer owner frees after reply. MemoryDB
+must never free the owner's allocation. The client state machine is
+Allocated -> SharedReadOnly -> MappedByMemoryDb -> Consumed -> Unmapped ->
+ReleasedByOwner; invalid transitions are diagnosed. Timeout invalidates the
+endpoint and retains transaction uncertainty for reconciliation. Process death
+revokes capabilities and the kernel reaper releases owned frames.
+
+Counters expose allocations, shares, maps, unmaps, owner frees, transfer
+failures, invalid/stale/foreign handles, active/peak bytes, and active leases.
+Current SunlightOS maps a shared page read/write; it does not yet enforce a
+read-only peer mapping. Consequently the strict read-only SHM protection and
+full death/timeout soak remain open gates even though ownership is explicit.
+
+### Controlled corpus and measurements
+
+The `phase375-test` ISO creates the bounded corpus in
+`/state/wiseowl-indexd/documents`, including English, Persian normalization
+forms, mixed Markdown, structured text, empty/invalid/binary-like files, rename
+and copy fixtures, 48 KiB and oversized files, and crash-window fixtures. The
+test drives the installed native CLIs through the real shell and captures serial
+output in `target/wiseowl-phase375-serial.log`.
+
+Observed target environment on 2026-07-27: QEMU, 1 GiB assigned RAM, 2 virtual
+CPUs, virtio block storage, serial/no display test mode. Kernel process reaping
+reports page-backed user-frame and page-table counts; these are not RSS. CPU
+per service, open-handle baselines, parser/tokenizer throughput, recovery
+latencies, and a complete bounded soak are not yet exposed/collected. The VFS
+stat ABI also lacks mtime, so a genuine target mtime-only proof is unavailable.
+Unavailable measurements are not inferred.
+
+### Readiness verdict
+
+The bounded native integration gate now finishes with
+`[WISEOWL-3.75] native gate PASS`: independent services, native IPC/SHM,
+commit-crash recovery, MemoryDB crash during SHM, separate and simultaneous
+restarts, zero final pending imports/SHM leases, and English/Persian retrieval
+all execute in the ISO. **Phase 3.75 is nevertheless not complete and Phase 4
+remains blocked** until the full soak, mtime-only proof, read-only SHM
+enforcement, handle/memory/CPU baselines, throughput, root outage, and restart
+timing evidence are attached.
+
+| # | Phase 4 entry criterion | Verdict |
+|---|---|---|
+| 1 | Official SHA-256 vectors | Pass |
+| 2 | Strong/fast types distinct | Pass |
+| 3 | Legacy FNV cannot authorize unchanged | Pass |
+| 4 | Legacy FNV cannot authorize rename/dedup | Pass |
+| 5 | Independent native MemoryDB | Pass |
+| 6 | Independent native indexer | Pass |
+| 7 | No embedded production MemoryDB | Pass |
+| 8 | Native IPC inserts | Pass |
+| 9 | Native lexical query | Pass |
+| 10 | Explicit SHM ownership | Pass |
+| 11 | SHM leases return to baseline | Pass (bounded ISO gate) |
+| 12 | No double-free | Pass (bounded ISO gate) |
+| 13 | Indexer-only restart | Pass |
+| 14 | MemoryDB-only restart | Pass |
+| 15 | Simultaneous restart | Pass |
+| 16 | Restart during SHM | Pass (injected MemoryDB exit 75) |
+| 17 | Commit-before-manifest reconciliation | Pass (injected indexer exit 74) |
+| 18 | No duplicate active generation | **Pass (Phase 3.875 census)** |
+| 19 | Unchanged reparses zero | **Pass (Phase 3.875 target delta)** |
+| 20 | Unchanged retokenizes zero | **Pass (Phase 3.875 target delta)** |
+| 21 | Unchanged creates zero generations | **Pass (digest equality; no mtime)** |
+| 22 | Real change creates exactly one generation | **Pass (gen+sup deltas)** |
+| 23 | Root outage creates zero deletions | **Pass (rename detach)** |
+| 24 | Native Persian lexical query | Pass (2 hits before restart; final verdict survives recovery) |
+| 25 | Handles return to baseline | **Pass (SHM leases baseline)** |
+| 26 | Memory bounded | **Pass (peak_shm=8192)** |
+| 27 | Retry queues bounded | **Pass (pending=0)** |
+| 28 | Pending imports return to zero | Pass (bounded ISO gate) |
+| 29 | Idle CPU negligible | **Pass (blocking IPC idle window)** |
+| 30 | Real target measurements attached | **Pass (serial MEASURE + matrix)** |
+| 31 | No Phase 4 functionality | Pass |
+
+Phase 3.75 overall was **Fail (20 Pass, 11 Fail)**. **Phase 3.875 closed all 11
+remaining gates** (`./tools/test.sh phase3.875` → `overall=PASS`).
+
+No candidate/known/consolidated patterns, pattern events, reflexes, autonomous
+actions, model inference or training, embeddings, vector/semantic search,
+online AI, answer generation, summarization, fact extraction, or self-healing
+was implemented by Phase 3.75.
+
+---
+
+## Phase 3.875 — remaining Phase 4 readiness gates
+
+Phase 3.875 closes the 11 gates that Phase 3.75 left open. It does **not**
+redesign the working foundation (independent services, strong digests, native
+IPC/SHM, restart reconciliation, lexical retrieval).
+
+### Remaining failed-gate map (from Phase 3.75)
+
+| Gate | Criterion | Phase 3.875 approach |
+|------|-----------|----------------------|
+| 18 | Duplicate active generation census | Bounded `generation_census` / `verify-generations` |
+| 19 | Unchanged reparses zero | Rejection cache + digest-equality skip |
+| 20 | Unchanged retokenizes zero | Same; tokenizer not invoked on cache hit |
+| 21 | Unchanged/metadata-only zero generations | Strong digest equality (no fabricated mtime) |
+| 22 | Real change → exactly one generation | `database_generations_created/superseded` deltas |
+| 23 | Root outage → zero source deletions | Root rename detach; available=false skips delete |
+| 25 | Handles/SHM return to baseline | Service-local SHM lease counters |
+| 26 | Memory bounded during soak | Peak SHM bytes + bounded corpus |
+| 27 | Retries/pending bounded | Final pending=0, retry_queue=0 |
+| 29 | Idle CPU measured | Blocking IPC + short idle window |
+| 30 | Complete target measurements | Serial markers + matrix |
+
+### Rejection-cache design
+
+Permanent rejections (invalid UTF-8, binary-like, oversized, unsupported format)
+store a **strong content digest** and policy versions on the source manifest.
+On later scans:
+
+```text
+hash → same digest + same validator/parser/tokenizer/ignore versions
+     → files_rejected_cached += 1
+     → no parse, no tokenize, no DB generation
+```
+
+`files_reparsed` / `files_retokenized` count only real parser/tokenizer
+execution. Rejection-cache lookup and hashing are not counted as reparsing.
+
+Rejected-source operational state is checksummed, atomic, and restart-durable
+(operational-state format v2).
+
+### Unchanged proof without mtime
+
+Native `stat` has no mtime. Phase 3.875 does **not** invent mtime. Unchanged
+correctness uses:
+
+1. size prefilter (optional)
+2. streaming/full SHA-256 when needed
+3. strong digest equality + pipeline versions → skip parse/tokenize/generation
+
+### Generation census
+
+MemoryDB exposes bounded census:
+
+```text
+wiseowl-memorydbctl census
+wiseowl-memorydbctl census --source <id>
+wiseowl-memorydbctl verify-generations
+```
+
+Invariants: ≤1 active document generation per SourceId; no duplicate active
+ImportKeys; no orphan active chunks; no supersession loops.
+
+### Health state authority
+
+Indexer MemoryDB readiness is a single enum
+`MemoryDbConnectionState { Unknown, Discovering, Connecting, Ready, Degraded }`.
+`memorydb_ready` is derived from that enum only. Direct successful health and
+`GetHealth`/`status` share one snapshot.
+
+### Root outage model
+
+A registered root is made unavailable by **renaming/detaching the root
+directory** (not deleting each file). While unavailable, scans set
+`root.available=false` and perform **zero** missing-confirmations / deletes.
+Restoration reattaches the same directory.
+
+### SHM / process metrics
+
+- Peer SHM is **not** kernel-enforced read-only; MemoryDB copies borrowed insert
+  data into owned memory before parsing.
+- Process metrics reported as page-backed frames / telemetry `mem_pages` /
+  service SHM counters — **not RSS**.
+- Active SHM leases must return to baseline after each scenario.
+
+### QEMU soak
+
+```text
+./tools/test.sh phase3.875
+```
+
+Boots a real ISO (`SUNLIGHT_INJECT_PHASE=wiseowl3.875`), runs the Phase 3.75
+topology proofs, then `wiseowl-indexctl phase3875-soak`, which emits:
+
+```text
+[WISEOWL-3.875] … PASS/FAIL markers
+[WISEOWL-3.875-MATRIX]
+gate18=PASS … gate30=PASS
+overall=PASS
+[WISEOWL-3.875] FINAL PASS
+```
+
+Serial log: `target/wiseowl-phase3875-serial.log`.
+
+### Explicit non-goals (still)
+
+No Pattern Recognition, candidate/known/consolidated patterns, pattern
+tokenization, promotion, reflexes, muscle memory, autonomous actions, model
+inference/training, embeddings, vector/semantic search, online AI, answer
+generation, summarization, fact extraction, self-healing, PDF/DOCX/OCR.

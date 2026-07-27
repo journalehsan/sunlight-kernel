@@ -19,6 +19,7 @@ use wiseowl_memorydb::record::LongTermMemoryRecord;
 
 use crate::error::IndexError;
 use crate::import_key::{ImportKey, ImportReconcileResult, ImportState};
+use crate::source::SourceManifest;
 
 /// Lightweight health view from MemoryDB.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +31,16 @@ pub struct MemoryDbHealth {
 
 /// Backend interface used by scan / ingest / reconciliation.
 pub trait IndexMemoryDb {
+    /// Native operational-state barrier. Implementations must durably persist
+    /// this prepared manifest before the first mutating transaction request.
+    fn persist_prepared_import(&mut self, _manifest: &SourceManifest) -> Result<(), IndexError> {
+        Ok(())
+    }
+
+    fn clear_prepared_import(&mut self, _source_id: SourceId) -> Result<(), IndexError> {
+        Ok(())
+    }
+
     fn health(&mut self) -> Result<MemoryDbHealth, IndexError>;
 
     fn begin_transaction(&mut self) -> Result<u64, IndexError>;
@@ -61,6 +72,20 @@ pub trait IndexMemoryDb {
 
     /// Query import status by stable ImportKey (idempotent reconciliation).
     fn reconcile_import(&mut self, key: &ImportKey) -> Result<ImportReconcileResult, IndexError>;
+
+    /// Bounded generation census: (sources, active, superseded, multi_active, dup_keys, orphans).
+    fn generation_census(
+        &mut self,
+        _source_id: Option<SourceId>,
+        _max_sources: u32,
+    ) -> Result<(u64, u64, u64, u64, u64, u64), IndexError> {
+        Err(IndexError::DatabaseUnavailable)
+    }
+
+    /// Verify generation invariants: (ok, multi, dups, orphans, invalid_chains, active).
+    fn verify_generations(&mut self) -> Result<(bool, u64, u64, u64, u64, u64), IndexError> {
+        Err(IndexError::DatabaseUnavailable)
+    }
 }
 
 /// Host / test backend wrapping an in-process `Database<S>`.
@@ -228,6 +253,34 @@ impl<S: DurableStore> IndexMemoryDb for HostMemoryDbBackend<S> {
             document_memory_id: None,
             source_revision: None,
         })
+    }
+
+    fn generation_census(
+        &mut self,
+        source_id: Option<SourceId>,
+        max_sources: u32,
+    ) -> Result<(u64, u64, u64, u64, u64, u64), IndexError> {
+        let (g, _) = self.db.generation_census(source_id, max_sources.max(1));
+        Ok((
+            g.sources as u64,
+            g.active_document_generations,
+            g.superseded_document_generations,
+            g.sources_with_multiple_active_generations as u64,
+            g.duplicate_import_keys as u64,
+            g.orphan_chunks as u64,
+        ))
+    }
+
+    fn verify_generations(&mut self) -> Result<(bool, u64, u64, u64, u64, u64), IndexError> {
+        let v = self.db.verify_generations();
+        Ok((
+            v.ok,
+            v.multi_active_sources as u64,
+            v.duplicate_import_keys as u64,
+            v.orphan_chunks as u64,
+            v.invalid_supersession_chains as u64,
+            v.census.active_document_generations,
+        ))
     }
 }
 

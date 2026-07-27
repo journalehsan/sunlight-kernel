@@ -427,7 +427,8 @@ Do not treat unmeasured on-target numbers as complete.
 - Tokenization is caller-supplied only (no built-in tokenizer).
 - OwlQL is intentionally tiny.
 - Relationship index snapshot is best-effort; full rebuild from records is authoritative for primary/token/source.
-- Native segment re-hydration on startup currently focuses on MANIFEST/WAL; full multi-segment FS directory scan is richer on host `FsStore`.
+- Native startup performs a bounded physical segment-directory scan and maps
+  validated segment headers back into the same recovery core as host `FsStore`.
 - Secure multi-pass physical erase is not claimed.
 - On-target resource soak metrics not yet collected in this session.
 
@@ -491,3 +492,85 @@ The following were **not** implemented in Phase 2:
 - general-purpose SQL database  
 - embedding Phase 2 inside `wiseowl-memoryd`  
 - replacing `sunlight-kv`  
+
+---
+
+## Phase 3.75 native boundary addendum
+
+The independent `wiseowl-memorydb` service is the sole production long-term
+store used by `wiseowl-indexd`. Native health, import transaction, reconcile,
+source lookup/deletion, lexical query, and result-lease operations cross native
+IPC; native builds contain no indexer-local MemoryDB or host UDS fallback.
+
+Indexer insert SHM remains owned by the indexer. MemoryDB validates bounds,
+maps and consumes the share before its reply, and relinquishes its mapping;
+only the indexer frees the allocation. Transaction outcome is reconciled by the
+versioned strong-digest `ImportKey` after timeout or endpoint death. Native
+lexical requests use the existing Phase 2 query core with bounded deterministic
+pagination, tokenizer-version isolation, stale-cursor rejection, tombstone and
+supersession filtering, and Any/All/MinimumCount matching.
+
+SHA-256 is authoritative for document/chunk/import identity. FNV values survive
+only as explicitly typed legacy audit/candidate metadata and cannot authorize
+unchanged, rename, deduplication, parsing skips, or tokenization skips.
+
+Target evidence is captured by `./tools/test.sh phase3.75`. The 2026-07-27 QEMU
+environment assigns 1 GiB RAM and 2 virtual CPUs with virtio block storage.
+Kernel user-frame counts are page-backed allocation metrics, not RSS. A complete
+soak and real CPU/handle/throughput/recovery measurements are still outstanding;
+the OS also cannot yet enforce a read-only peer SHM mapping. Therefore the final
+Phase 4 entry verdict remains **Fail / blocked**, regardless of host test or
+build success.
+
+No Pattern Recognition, embeddings, semantic search, model inference/training,
+online AI, natural-language answers, autonomous actions, or self-healing was
+added.
+
+---
+
+## Phase 3.875 — generation census and integrity
+
+Phase 3.875 adds bounded document-generation census on MemoryDB without changing
+the WAL/segment model or introducing Pattern Recognition.
+
+### Census API
+
+```text
+wiseowl-memorydbctl census
+wiseowl-memorydbctl census --source <source-id>
+wiseowl-memorydbctl verify-generations
+```
+
+Native ops: `GenerationCensus (0x4D16)`, `VerifyGenerations (0x4D17)`.
+
+Reports (no payloads):
+
+* active / superseded document generations per SourceId
+* multi-active sources
+* duplicate active ImportKeys
+* orphan active chunk records
+* invalid supersession chains
+
+### Invariants
+
+```text
+active_document_generations <= 1 per SourceId
+duplicate active ImportKey records = 0
+orphan active chunks = 0
+pending imports = 0 after reconciliation
+```
+
+Census is paginated/bounded (`max_sources` default 4096). It does not load an
+unbounded external dump; it walks the in-memory recovered record map.
+
+### SHM borrower model (unchanged, documented)
+
+Peer mappings are not kernel-enforced read-only. MemoryDB copies borrowed insert
+bytes into owned buffers before parse, then unmaps. Result leases are released
+explicitly; death/timeout invalidates endpoints.
+
+### Explicit confirmation
+
+No Pattern Recognition, embeddings, semantic search, model inference/training,
+online AI, natural-language answers, autonomous actions, or self-healing was
+added in Phase 3.875.

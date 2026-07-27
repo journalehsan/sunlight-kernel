@@ -17,6 +17,52 @@ pub const INLINE_PAYLOAD_THRESHOLD: u32 = 3072;
 /// SHM page size.
 pub const SHM_PAGE_SIZE: u32 = 4096;
 
+/// Explicit owner-retained SHM lifecycle used by native Wise Owl requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ShmLeaseState {
+    Allocated = 1,
+    SharedReadOnly = 2,
+    MappedByMemoryDb = 3,
+    Consumed = 4,
+    Unmapped = 5,
+    ReleasedByOwner = 6,
+}
+
+impl ShmLeaseState {
+    pub fn transition(self, next: Self) -> Result<Self, IndexError> {
+        let valid = matches!(
+            (self, next),
+            (Self::Allocated, Self::SharedReadOnly)
+                | (Self::SharedReadOnly, Self::MappedByMemoryDb)
+                | (Self::MappedByMemoryDb, Self::Consumed)
+                | (Self::Consumed, Self::Unmapped)
+                | (Self::Unmapped, Self::ReleasedByOwner)
+        );
+        if valid {
+            Ok(next)
+        } else {
+            Err(IndexError::InvalidRequest("invalid shm lease transition"))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ShmCounters {
+    pub shm_allocations: u64,
+    pub shm_shares: u64,
+    pub shm_maps: u64,
+    pub shm_unmaps: u64,
+    pub shm_owner_frees: u64,
+    pub shm_transfer_failures: u64,
+    pub shm_invalid_handles: u64,
+    pub shm_stale_handles: u64,
+    pub shm_foreign_handles: u64,
+    pub shm_bytes_active: u64,
+    pub shm_bytes_peak: u64,
+    pub active_shm_leases: u64,
+}
+
 /// Fixed header (24 bytes, little-endian).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndexIpcHeader {
@@ -104,6 +150,12 @@ pub enum IndexOp {
     GetPending = 0x4E12,
     Reconcile = 0x4E13,
     GetDigest = 0x4E14,
+    /// Development/test build only: arm deterministic commit crash window.
+    TestArmCommitCrash = 0x4EF0,
+    TestNativeVerdict = 0x4EF1,
+    TestArmShmCrash = 0x4EF2,
+    /// Phase 3.875 soak / remaining Phase 4 readiness gates.
+    TestPhase3875Soak = 0x4EF3,
     Reply = 0x4E80,
     Error = 0x4EFF,
 }
@@ -131,6 +183,10 @@ impl IndexOp {
             0x4E12 => Some(Self::GetPending),
             0x4E13 => Some(Self::Reconcile),
             0x4E14 => Some(Self::GetDigest),
+            0x4EF0 => Some(Self::TestArmCommitCrash),
+            0x4EF1 => Some(Self::TestNativeVerdict),
+            0x4EF2 => Some(Self::TestArmShmCrash),
+            0x4EF3 => Some(Self::TestPhase3875Soak),
             0x4E80 => Some(Self::Reply),
             0x4EFF => Some(Self::Error),
             _ => None,
@@ -211,5 +267,24 @@ mod tests {
         };
         let b = h.encode();
         assert!(IndexIpcHeader::decode(&b).is_err());
+    }
+
+    #[test]
+    fn shm_lifecycle_rejects_invalid_transitions() {
+        let state = ShmLeaseState::Allocated
+            .transition(ShmLeaseState::SharedReadOnly)
+            .unwrap()
+            .transition(ShmLeaseState::MappedByMemoryDb)
+            .unwrap()
+            .transition(ShmLeaseState::Consumed)
+            .unwrap()
+            .transition(ShmLeaseState::Unmapped)
+            .unwrap()
+            .transition(ShmLeaseState::ReleasedByOwner)
+            .unwrap();
+        assert_eq!(state, ShmLeaseState::ReleasedByOwner);
+        assert!(ShmLeaseState::Allocated
+            .transition(ShmLeaseState::ReleasedByOwner)
+            .is_err());
     }
 }

@@ -75,7 +75,7 @@ pub type ContentHash = u64;
 pub type StablePathHash = u64;
 
 /// Fast prefilter fingerprint (FNV). Not final content identity.
-pub type FastFingerprint = u64;
+pub type FastFingerprint = crate::digest::FastFingerprint;
 
 #[cfg(test)]
 mod tests {

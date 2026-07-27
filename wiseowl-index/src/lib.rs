@@ -45,6 +45,7 @@ pub mod import_key;
 pub mod ingest;
 pub mod memorydb_backend;
 pub mod native_ipc;
+pub mod operational_state;
 pub mod parse;
 pub mod path_security;
 pub mod protocol;
@@ -63,9 +64,14 @@ pub mod memorydb_client;
 
 pub use caps::{IndexCapability, IndexCapabilitySet};
 pub use config::{IndexRootConfig, IndexerConfig};
-pub use digest::{ContentDigest, ContentDigestAlgorithm, ContentDigestHasher};
+pub use digest::{
+    ContentDigest, ContentDigestAlgorithm, ContentDigestHasher, FastFingerprint,
+    LegacyFnvContentHash, StrongContentDigest,
+};
 pub use error::IndexError;
-pub use health::{DegradedReason, HealthState, IndexHealth};
+pub use health::{
+    DegradedReason, HealthState, IndexHealth, MemoryDbConnectionState, MemoryDbDegradedReason,
+};
 pub use memorydb_backend::{HostMemoryDbBackend, IndexMemoryDb, MemoryDbHealth};
 pub use protocol::{ENDPOINT_NAME, PROTOCOL_VERSION};
 pub use quotas::IndexQuotaConfig;

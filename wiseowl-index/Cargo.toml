@@ -36,6 +36,9 @@ sunlightos = [
     "wiseowl-memory/sunlightos",
     "wiseowl-memorydb/sunlightos",
 ]
+# Deterministic native Phase 3.75 corpus and fault hooks. Never enabled by
+# production service builds.
+phase375-test = ["wiseowl-memorydb/phase375-test"]
 
 [dependencies]
 wiseowl-memory = { path = "../wiseowl-memory", default-features = false }

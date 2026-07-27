@@ -36,6 +36,7 @@ sunlightos = [
     "dep:heapless",
     "wiseowl-memory/sunlightos",
 ]
+phase375-test = []
 
 [dependencies]
 wiseowl-memory = { path = "../wiseowl-memory", default-features = false }

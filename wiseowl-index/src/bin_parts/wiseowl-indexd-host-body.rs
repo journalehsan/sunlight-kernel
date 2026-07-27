@@ -1,8 +1,8 @@
-//! Host daemon body.
-//!
-//! Host path uses explicit [`HostMemoryDbBackend`] (in-process Database) for
-//! deterministic tests and local development. Native production uses
-//! `NativeMemoryDbClient` only — see wiseowl-indexd-native-body.rs.
+// Host daemon body.
+//
+// Host path uses explicit `HostMemoryDbBackend` (in-process Database) for
+// deterministic tests and local development. Native production uses
+// `NativeMemoryDbClient` only — see wiseowl-indexd-native-body.rs.
 
 use std::io::{self, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -177,7 +177,7 @@ fn dispatch(svc: &mut HostSvc, caller: &IndexCaller, req: IndexRequest) -> Index
             Err(e) => IndexResponse::from_error(e),
         },
         IndexRequest::GetDigest { source_id } => match svc.digest_info(caller, source_id) {
-            Ok((d, rev, mv)) => IndexResponse::Digest {
+            Ok((d, rev, mv, _legacy_present)) => IndexResponse::Digest {
                 algorithm: d.algorithm.as_str().into(),
                 version: d.version,
                 hex_abbrev: d.abbreviated_hex(),

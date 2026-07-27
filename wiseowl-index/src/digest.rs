@@ -62,13 +62,13 @@ pub const CONTENT_DIGEST_FORMAT_VERSION: u16 = 1;
 /// Versioned strong content digest (final content identity).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
-pub struct ContentDigest {
+pub struct StrongContentDigest {
     pub algorithm: ContentDigestAlgorithm,
     pub version: u16,
     pub bytes: [u8; 32],
 }
 
-impl ContentDigest {
+impl StrongContentDigest {
     pub const fn sha256(bytes: [u8; 32]) -> Self {
         Self {
             algorithm: ContentDigestAlgorithm::Sha256,
@@ -87,7 +87,9 @@ impl ContentDigest {
     }
 
     pub fn is_set(&self) -> bool {
-        self.version != 0 && self.bytes != [0u8; 32]
+        self.algorithm == ContentDigestAlgorithm::Sha256
+            && self.version == CONTENT_DIGEST_FORMAT_VERSION
+            && self.bytes != [0u8; 32]
     }
 
     /// Compare including algorithm and version (never bytes alone).
@@ -112,6 +114,9 @@ impl ContentDigest {
         }
         let algorithm = ContentDigestAlgorithm::from_u8(data[0])
             .ok_or(IndexError::InvalidValue("content digest algorithm"))?;
+        if algorithm != ContentDigestAlgorithm::Sha256 {
+            return Err(IndexError::InvalidValue("content digest algorithm unsupported"));
+        }
         let version = u16::from_le_bytes([data[1], data[2]]);
         if version == 0 {
             return Err(IndexError::InvalidValue("content digest version"));
@@ -151,7 +156,7 @@ impl ContentDigest {
     }
 }
 
-impl fmt::Display for ContentDigest {
+impl fmt::Display for StrongContentDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -329,8 +334,8 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
 }
 
 /// Strong content digest of bytes (streaming equivalent of one-shot).
-pub fn digest_bytes(data: &[u8]) -> ContentDigest {
-    ContentDigest::sha256(sha256(data))
+pub fn digest_bytes(data: &[u8]) -> StrongContentDigest {
+    StrongContentDigest::sha256(sha256(data))
 }
 
 /// Streaming digest hasher producing [`ContentDigest`].
@@ -350,8 +355,8 @@ impl ContentDigestHasher {
         self.inner.update(data);
     }
 
-    pub fn finish(self) -> ContentDigest {
-        ContentDigest::sha256(self.inner.finish())
+    pub fn finish(self) -> StrongContentDigest {
+        StrongContentDigest::sha256(self.inner.finish())
     }
 
     pub fn bytes_hashed(&self) -> u64 {
@@ -359,12 +364,46 @@ impl ContentDigestHasher {
     }
 }
 
+/// Backward-compatible name for the strong digest type. This alias never
+/// aliases either weak hash newtype.
+pub type ContentDigest = StrongContentDigest;
+
 /// Optional fast metadata prefilter fingerprint (FNV-1a64). Never final identity.
-pub type FastFingerprint = u64;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
+#[repr(transparent)]
+pub struct FastFingerprint(u64);
+
+impl FastFingerprint {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+/// Historical Phase 3 FNV content metadata. This type is intentionally not
+/// convertible to either [`StrongContentDigest`] or [`FastFingerprint`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
+#[repr(transparent)]
+pub struct LegacyFnvContentHash(u64);
+
+impl LegacyFnvContentHash {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
 
 /// Compute optional fast fingerprint of content (prefilter only).
 pub fn fast_fingerprint(data: &[u8]) -> FastFingerprint {
-    fnv1a64(data)
+    FastFingerprint::new(fnv1a64(data))
 }
 
 #[cfg(test)]
@@ -383,6 +422,60 @@ mod tests {
                 0x78, 0x52, 0xb8, 0x55
             ]
         );
+    }
+
+    #[test]
+    fn abc_sha256_fips_180_4_vector() {
+        assert_eq!(
+            digest_bytes(b"abc").to_hex(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn multi_block_fips_180_4_vector() {
+        let input = b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+        assert_eq!(
+            digest_bytes(input).to_hex(),
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+        );
+    }
+
+    #[test]
+    fn million_a_sha256_standard_vector() {
+        let block = [b'a'; 4096];
+        let mut h = ContentDigestHasher::new();
+        let mut remaining = 1_000_000usize;
+        while remaining != 0 {
+            let n = remaining.min(block.len());
+            h.update(&block[..n]);
+            remaining -= n;
+        }
+        assert_eq!(
+            h.finish().to_hex(),
+            "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"
+        );
+    }
+
+    #[test]
+    fn required_streaming_boundaries_and_empty_final_update() {
+        let mut data = [0u8; 8193];
+        for (i, byte) in data.iter_mut().enumerate() {
+            *byte = (i.wrapping_mul(131) & 0xff) as u8;
+        }
+        let expected = digest_bytes(&data);
+        for size in [1usize, 7, 31, 63, 64, 65, 4096] {
+            let mut h = ContentDigestHasher::new();
+            for chunk in data.chunks(size) {
+                h.update(chunk);
+            }
+            h.update(&[]);
+            assert_eq!(h.finish(), expected, "chunk size {size}");
+        }
+
+        // Deliberately start at an unaligned address.
+        let padded = [&[0x55][..], &data[..], &[0xaa][..]].concat();
+        assert_eq!(digest_bytes(&padded[1..1 + data.len()]), expected);
     }
 
     #[test]
@@ -425,6 +518,22 @@ mod tests {
         let mut e = digest_bytes(b"x").encode();
         e[0] = 99;
         assert!(ContentDigest::decode(&e).is_err());
+    }
+
+    #[test]
+    fn rejects_reserved_but_unsupported_algorithm() {
+        let mut e = digest_bytes(b"x").encode();
+        e[0] = ContentDigestAlgorithm::Blake3_256.as_u8();
+        assert!(ContentDigest::decode(&e).is_err());
+    }
+
+    #[test]
+    fn weak_hashes_are_distinct_nominal_types() {
+        let fast: FastFingerprint = fast_fingerprint(b"x");
+        let legacy = LegacyFnvContentHash::new(fast.get());
+        let strong: StrongContentDigest = digest_bytes(b"x");
+        assert_eq!(fast.get(), legacy.get());
+        assert_ne!(strong.fingerprint64(), 0);
     }
 
     #[test]

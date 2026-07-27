@@ -9,6 +9,7 @@ use sunlight_ipc::{
 };
 use sunlight_libc as libc;
 
+use wiseowl_memorydb::attributes::AttributeValue;
 use wiseowl_memorydb::database::{Database, DbCaller, DurableStore, MemoryStore};
 use wiseowl_memorydb::native_ipc::{
     MemoryDbIpcHeader, MemoryDbOp, INLINE_PAYLOAD_THRESHOLD, MEMORYDB_IPC_HEADER_LEN,
@@ -70,6 +71,47 @@ impl NativeFsStore {
                 let _ = self.mem.write_file_atomic(rel, &data);
             }
         }
+        // Native segment filenames are physical hash-derived names, while the
+        // database recovery core discovers logical `SEGMENTS/data-*` names.
+        // Rehydrate every bounded physical segment under a logical name; the
+        // authoritative segment id is validated from its encoded header.
+        let mut entries = [libc::DirEntry::zeroed(); 64];
+        if let Ok(count) = libc::read_dir(b"/state/wiseowl-memorydb/SEGMENTS", &mut entries) {
+            for (ordinal, entry) in entries.iter().take(count).enumerate() {
+                if entry.file_type != libc::FT_FILE || entry.size > 2 * 1024 * 1024 {
+                    continue;
+                }
+                let Ok(name) = core::str::from_utf8(entry.name_bytes()) else {
+                    continue;
+                };
+                if !name.starts_with('s') || !name.ends_with(".owlseg") {
+                    continue;
+                }
+                let physical = alloc::format!("/state/wiseowl-memorydb/SEGMENTS/{name}");
+                let Ok(fd) = libc::open_with_flags(physical.as_bytes(), libc::O_RDONLY) else {
+                    continue;
+                };
+                let mut data = Vec::new();
+                let mut buf = [0u8; 4096];
+                loop {
+                    match libc::read(fd, &mut buf) {
+                        Ok(0) => break,
+                        Ok(n) if data.len().saturating_add(n) <= 2 * 1024 * 1024 => {
+                            data.extend_from_slice(&buf[..n]);
+                        }
+                        _ => {
+                            data.clear();
+                            break;
+                        }
+                    }
+                }
+                let _ = libc::close(fd);
+                if !data.is_empty() {
+                    let logical = alloc::format!("SEGMENTS/data-{ordinal:06}.owlseg");
+                    let _ = self.mem.write_file_atomic(&logical, &data);
+                }
+            }
+        }
     }
 
     fn persist_rel(&self, rel: &str, data: &[u8]) {
@@ -98,7 +140,10 @@ impl NativeFsStore {
             let hex = b"0123456789abcdef";
             for i in 0..8 {
                 let nibble = ((hash >> (28 - i * 4)) & 0xf) as usize;
-                path[33 + i] = hex[nibble];
+                // Byte 33 is the literal `s`; the eight hex digits begin at
+                // byte 34. Overwriting byte 33 made physical segment names
+                // undiscoverable during native restart recovery.
+                path[34 + i] = hex[nibble];
             }
             let path_bytes = &path[..path.len() - 1];
             if let Ok(fd) = libc::create(path_bytes) {
@@ -178,16 +223,22 @@ pub extern "C" fn _start() -> ! {
         serial_println!("[WISEOWL-DB] registered wiseowl-memorydb");
     }
 
+    // Native indexer authority: no compaction, elevated trust, arbitrary
+    // system-scope insertion, or administrative escape hatch.
     let caller = DbCaller {
-        caps: DbCapabilitySet::admin(),
+        caps: DbCapabilitySet::default_client()
+            .grant(wiseowl_memorydb::DbCapability::ReadPayload)
+            .grant(wiseowl_memorydb::DbCapability::DeleteSource)
+            .grant(wiseowl_memorydb::DbCapability::InspectStats),
         owner: 0,
-        is_system: true,
+        is_system: false,
     };
 
     // Block on ipc_recv / reply-and-wait (no permanent busy poll).
+    let mut crash_during_next_insert = false;
     let mut msg = ipc_recv(ep);
     loop {
-        let reply = handle_msg(&mut db, &caller, &msg);
+        let reply = handle_msg(&mut db, &caller, &msg, &mut crash_during_next_insert);
         msg = ipc_reply_and_wait(ep, reply);
     }
 }
@@ -196,6 +247,7 @@ fn handle_msg(
     db: &mut Database<NativeFsStore>,
     caller: &DbCaller,
     msg: &IpcMsg,
+    crash_during_next_insert: &mut bool,
 ) -> IpcMsg {
     let op = MemoryDbOp::from_u16(msg.label as u16);
     match op {
@@ -204,6 +256,7 @@ fn handle_msg(
             IpcMsg::with_label(MemoryDbOp::Reply as u64)
                 .word(0, if h.ready { 1 } else { 0 })
                 .word(1, h.state as u8 as u64)
+                .word(2, NATIVE_PROTOCOL_VERSION as u64)
         }
         Some(MemoryDbOp::GetStats) => {
             let s = db.stats();
@@ -214,6 +267,32 @@ fn handle_msg(
                 .word(3, s.wal_bytes)
                 .word(4, s.segment_count as u64)
                 .word(5, s.transaction_commits)
+        }
+        Some(MemoryDbOp::GenerationCensus) => {
+            let source_filter = if msg.words[0] == 0 {
+                None
+            } else {
+                wiseowl_memory::SourceId::from_raw(msg.words[0]).ok()
+            };
+            let max = msg.words[1].min(4096).max(1) as u32;
+            let (global, _) = db.generation_census(source_filter, max);
+            IpcMsg::with_label(MemoryDbOp::Reply as u64)
+                .word(0, global.sources as u64)
+                .word(1, global.active_document_generations)
+                .word(2, global.superseded_document_generations)
+                .word(3, global.sources_with_multiple_active_generations as u64)
+                .word(4, global.duplicate_import_keys as u64)
+                .word(5, global.orphan_chunks as u64)
+        }
+        Some(MemoryDbOp::VerifyGenerations) => {
+            let v = db.verify_generations();
+            IpcMsg::with_label(MemoryDbOp::Reply as u64)
+                .word(0, if v.ok { 1 } else { 0 })
+                .word(1, v.multi_active_sources as u64)
+                .word(2, v.duplicate_import_keys as u64)
+                .word(3, v.orphan_chunks as u64)
+                .word(4, v.invalid_supersession_chains as u64)
+                .word(5, v.census.active_document_generations)
         }
         Some(MemoryDbOp::CreateCheckpoint) => match db.create_checkpoint(caller) {
             Ok(()) => IpcMsg::with_label(MemoryDbOp::Reply as u64).word(0, 0),
@@ -271,10 +350,11 @@ fn handle_msg(
             }
         }
         Some(MemoryDbOp::InsertRecord) => {
-            // Phase 3.5: full insert wire via SHM (read-only consume + free lease).
+            // Owner-retained contract: client owns allocation; this service
+            // maps, validates/copies, unmaps, and never frees owner storage.
             let tx = msg.words[0];
             let body_len = msg.words[1] as usize;
-            if body_len > SHM_PAGE || body_len > MAX_BODY {
+            if body_len == 0 || body_len > MAX_BODY {
                 return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 4);
             }
             let token = msg.caps[0];
@@ -284,45 +364,18 @@ fn handle_msg(
             let Ok(ptr) = shm_map(token) else {
                 return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 5);
             };
+            #[cfg(feature = "phase375-test")]
+            if *crash_during_next_insert {
+                sunlight_ipc::ProcessExit::exit(75);
+            }
             let body = unsafe { core::slice::from_raw_parts(ptr, body_len) };
             let quotas = wiseowl_memorydb::DbQuotaConfig::default();
-            let req = match wiseowl_memorydb::insert_wire::decode_insert_request(body, &quotas) {
-                Ok(r) => r,
-                Err(_) => {
-                    // Fallback: raw payload insert (legacy clients).
-                    wiseowl_memorydb::InsertRequest {
-                        kind: wiseowl_memorydb::LongTermMemoryKind::ImportedRecord,
-                        scope: wiseowl_memorydb::MemoryScope::User,
-                        owner: msg.words[2],
-                        payload: body.to_vec(),
-                        provenance: wiseowl_memorydb::provenance::LongTermProvenance {
-                            source_kind: wiseowl_memory::SourceKind::LocalService,
-                            source_id: None,
-                            producer_service: String::from("native"),
-                            original_memory_ids: Vec::new(),
-                            parent_lt_ids: Vec::new(),
-                            insertion_time_ns: 0,
-                            trust: wiseowl_memory::TrustLevel::Untrusted,
-                            source_content_hash: None,
-                            external_ref: None,
-                            derivation: wiseowl_memorydb::provenance::DerivationKind::DirectImport,
-                        },
-                        confidence: 500,
-                        importance: 100,
-                        trust: wiseowl_memory::TrustLevel::Untrusted,
-                        valid_from_ns: None,
-                        valid_until_ns: None,
-                        tokens: None,
-                        attributes: Default::default(),
-                        supersedes: None,
-                        relationships: Vec::new(),
-                        dedup: Default::default(),
-                        id: None,
-                        revision: 1,
-                    }
-                }
+            let decoded = wiseowl_memorydb::insert_wire::decode_insert_request(body, &quotas);
+            let _ = shm_free(token); // unmap server view only
+            let req = match decoded {
+                Ok(req) => req,
+                Err(_) => return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 7),
             };
-            let _ = shm_free(token);
             match db.insert_record(caller, tx, req) {
                 Ok(id) => IpcMsg::with_label(MemoryDbOp::Reply as u64).word(0, id.get()),
                 Err(_) => IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 6),
@@ -334,13 +387,132 @@ fn handle_msg(
             };
             let offset = msg.words[1] as usize;
             let limit = (msg.words[2].min(64)) as usize;
+            let token = msg.caps[0];
+            if token == CapabilityToken::INVALID {
+                return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 5);
+            }
             match db.source_lookup(caller, sid, offset, limit) {
-                Ok((ids, more)) => IpcMsg::with_label(MemoryDbOp::Reply as u64)
-                    .word(0, ids.len() as u64)
-                    .word(1, ids.first().map(|i| i.get()).unwrap_or(0))
-                    .word(2, if more { 1 } else { 0 }),
+                Ok((ids, more)) => {
+                    let Ok(ptr) = shm_map(token) else {
+                        return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 5);
+                    };
+                    for (i, id) in ids.iter().enumerate() {
+                        unsafe {
+                            core::ptr::copy_nonoverlapping(
+                                id.get().to_le_bytes().as_ptr(),
+                                ptr.add(i * 8),
+                                8,
+                            );
+                        }
+                    }
+                    let _ = shm_free(token);
+                    IpcMsg::with_label(MemoryDbOp::Reply as u64)
+                        .word(0, ids.len() as u64)
+                        .word(2, if more { 1 } else { 0 })
+                }
                 Err(_) => IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 3),
             }
+        }
+        Some(MemoryDbOp::Query) => {
+            let request_len = msg.words[0] as usize;
+            let request_token = msg.caps[0];
+            let result_token = msg.caps[1];
+            if request_len == 0
+                || request_len > SHM_PAGE
+                || request_token == CapabilityToken::INVALID
+                || result_token == CapabilityToken::INVALID
+                || request_token == result_token
+            {
+                return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 8);
+            }
+            let Ok(request_ptr) = shm_map(request_token) else {
+                return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 5);
+            };
+            let request = unsafe { core::slice::from_raw_parts(request_ptr, request_len) };
+            let decoded = wiseowl_memorydb::native_ipc::decode_native_query(request);
+            let _ = shm_free(request_token);
+            let query = match decoded {
+                Ok(query) => query,
+                Err(_) => return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 8),
+            };
+            let result = match db.query(caller, query) {
+                Ok(result) => result,
+                Err(wiseowl_memorydb::DbError::StaleCursor) => {
+                    return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 9)
+                }
+                Err(_) => return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 3),
+            };
+            let encoded = match wiseowl_memorydb::native_ipc::encode_native_query_result(&result) {
+                Ok(encoded) if encoded.len() <= SHM_PAGE => encoded,
+                _ => return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 8),
+            };
+            let Ok(result_ptr) = shm_map(result_token) else {
+                return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 5);
+            };
+            unsafe {
+                core::ptr::copy_nonoverlapping(encoded.as_ptr(), result_ptr, encoded.len());
+            }
+            let _ = shm_free(result_token);
+            IpcMsg::with_label(MemoryDbOp::Reply as u64).word(0, encoded.len() as u64)
+        }
+        Some(MemoryDbOp::ReconcileImport) => {
+            let Ok(sid) = wiseowl_memory::SourceId::from_raw(msg.words[0]) else {
+                return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 2);
+            };
+            let revision = msg.words[1] as u32;
+            let len = msg.words[2] as usize;
+            let token = msg.caps[0];
+            if revision == 0 || len != 64 || token == CapabilityToken::INVALID {
+                return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 8);
+            }
+            let Ok(ptr) = shm_map(token) else {
+                return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 5);
+            };
+            let bytes = unsafe { core::slice::from_raw_parts(ptr, len) };
+            let key = core::str::from_utf8(bytes).ok().map(String::from);
+            let _ = shm_free(token);
+            let Some(key) = key else {
+                return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 8);
+            };
+            let (ids, _) = match db.source_lookup(caller, sid, 0, 64) {
+                Ok(page) => page,
+                Err(_) => return IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 3),
+            };
+            let mut found = None;
+            let mut conflict = false;
+            for id in ids {
+                let Ok(rec) = db.get_record(caller, id, false) else { continue };
+                let role = rec.attributes.get("record_role");
+                if role != Some(&AttributeValue::Text(String::from("document"))) {
+                    continue;
+                }
+                let rec_rev = match rec.attributes.get("source_revision") {
+                    Some(AttributeValue::Unsigned(value)) => *value as u32,
+                    _ => rec.revision,
+                };
+                match rec.attributes.get("import_key") {
+                    Some(AttributeValue::Text(value)) if value == &key => found = Some((id.get(), rec_rev)),
+                    Some(AttributeValue::Text(value)) if !value.is_empty() && rec_rev == revision => conflict = true,
+                    _ => {}
+                }
+            }
+            if let Some((id, rev)) = found {
+                IpcMsg::with_label(MemoryDbOp::Reply as u64)
+                    .word(0, 5)
+                    .word(1, id)
+                    .word(2, rev as u64)
+            } else if conflict {
+                IpcMsg::with_label(MemoryDbOp::Reply as u64)
+                    .word(0, 4)
+                    .word(2, revision as u64)
+            } else {
+                IpcMsg::with_label(MemoryDbOp::Reply as u64).word(0, 0)
+            }
+        }
+        #[cfg(feature = "phase375-test")]
+        Some(MemoryDbOp::TestArmShmCrash) => {
+            *crash_during_next_insert = true;
+            IpcMsg::with_label(MemoryDbOp::Reply as u64).word(0, 1)
         }
         Some(MemoryDbOp::DeleteSource) => {
             let Ok(sid) = wiseowl_memory::SourceId::from_raw(msg.words[0]) else {
@@ -386,7 +558,7 @@ fn handle_msg(
     }
 }
 
-const MAX_BODY: usize = 4096;
+const MAX_BODY: usize = 64 * 1024;
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {

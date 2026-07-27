@@ -22,6 +22,7 @@ extern crate alloc;
 
 pub mod attributes;
 pub mod caps;
+pub mod census;
 pub mod codec;
 pub mod database;
 pub mod error;

@@ -48,6 +48,20 @@ case "$PHASE" in
         PASS_LABEL="Phase 3.5"
         NEED_DISK=true
         ;;
+    phase3.75)
+        EXPECTED_FILE="tools/tests/wiseowl_phase3_75.expected"
+        FINAL_MARKER="[WISEOWL-3.75] native gate PASS"
+        PASS_LABEL="Wise Owl Phase 3.75 native"
+        NEED_DISK=true
+        TIMEOUT=90
+        ;;
+    phase3.875)
+        EXPECTED_FILE="tools/tests/wiseowl_phase3_875.expected"
+        FINAL_MARKER="[WISEOWL-3.875] FINAL PASS"
+        PASS_LABEL="Wise Owl Phase 3.875 native"
+        NEED_DISK=true
+        TIMEOUT=180
+        ;;
     phase3.6)
         EXPECTED_FILE="tools/tests/phase3_6.expected"
         FINAL_MARKER="[SunlightOS] Phase 3.6 OK"
@@ -346,8 +360,16 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release >
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
+if [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,phase375-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+else
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
+fi
+if [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos,phase375-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+else
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
+fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release >>"$BUILD_LOG" 2>&1
 # --- Step 1b: Create FAT32 disk image (phase3.5+) ---
 if [[ "$NEED_DISK" == "true" ]]; then
@@ -356,7 +378,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" ]]; then
+if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -374,6 +396,10 @@ if [[ "$PHASE" == "phase2b1" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase2b1)
 elif [[ "$PHASE" == "phase3.9" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
+elif [[ "$PHASE" == "phase3.75" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=wiseowl3.75)
+elif [[ "$PHASE" == "phase3.875" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=wiseowl3.875)
 elif [[ "$PHASE" == "phase6.5.1" ]]; then
     # Reuse the phase3.9 key sequence — it logs in and types sysfetch
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
@@ -473,6 +499,13 @@ fi
 wait $QEMU_PID 2>/dev/null
 QEMU_EXIT=$?
 set -e
+
+if [[ "$PHASE" == "phase3.75" ]]; then
+    cp "$QEMU_OUTPUT" target/wiseowl-phase375-serial.log
+fi
+if [[ "$PHASE" == "phase3.875" ]]; then
+    cp "$QEMU_OUTPUT" target/wiseowl-phase3875-serial.log
+fi
 
 ALL_FOUND=true
 PMM_LINE=$(grep -E '^\[PMM\] [0-9]+/[0-9]+ MiB free$' "$QEMU_OUTPUT" | head -n1 || true)

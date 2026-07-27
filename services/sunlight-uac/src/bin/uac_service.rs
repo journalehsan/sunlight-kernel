@@ -291,6 +291,13 @@ fn handle_auth_password(msg: &IpcMsg, issue_session_grant: bool) -> IpcMsg {
             .ok()
         })
     });
+    serial_println!(
+        "[UAC] password auth session={} user_len={} password_len={} result={}",
+        issue_session_grant,
+        username.len(),
+        password_len,
+        if result.is_some() { "ok" } else { "denied" }
+    );
     password.zeroize();
 
     if let Some(success) = result {

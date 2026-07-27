@@ -3759,8 +3759,10 @@ fn setup_key_injection() {
     // (when no env var is set) is the phase 3.8 sequence used by the boot gate.
     let phase = option_env!("SUNLIGHT_INJECT_PHASE").unwrap_or("phase3.8");
 
-    let sequence: [u8; 4096] = match phase {
+    let sequence: [u8; 12288] = match phase {
         "phase3.9" => build_phase3_9_sequence(),
+        "wiseowl3.75" => build_wiseowl_phase375_sequence(),
+        "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
         "phase2b1" => build_phase2b1_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "phase6.5.utils" => build_phase6_5_utils_sequence(),
@@ -3802,8 +3804,8 @@ fn setup_key_injection() {
 ///   id testuser+Enter
 ///   userdel testuser+Enter
 #[cfg(feature = "key_inject")]
-fn build_phase3_8_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_phase3_8_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let codes: [u8; 66] = [
         0x1C, // select prefilled root user and focus password
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
@@ -3820,10 +3822,123 @@ fn build_phase3_8_sequence() -> [u8; 4096] {
     s
 }
 
+/// Wise Owl Phase 3.75 native integration sequence. Test-only keyboard
+/// injection drives the real shell, CLIs, sunlightd supervisor, IPC and SHM.
+#[cfg(feature = "key_inject")]
+fn build_wiseowl_phase375_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
+    let mut len = 0usize;
+    // Full service stack boot is scheduler-heavier than the basic login gate;
+    // wait until UAC and the login presenter are stably ready before typing.
+    append_injected_delay(&mut s, &mut len, 512);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    // Let the login presenter switch from the preselected user to password
+    // entry before emitting the password; otherwise the larger service set can
+    // leave these keystrokes queued while authentication input is locked.
+    append_injected_delay(&mut s, &mut len, 96);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 256);
+    for command in [
+        b"wiseowl-memoryctl status".as_slice(),
+        b"wiseowl-memorydbctl status".as_slice(),
+        b"wiseowl-indexctl status".as_slice(),
+        b"wiseowl-indexctl transport".as_slice(),
+        b"wiseowl-indexctl memorydb".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"wiseowl-indexctl stats".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"wiseowl-indexctl stats".as_slice(),
+        b"wiseowl-indexctl search wiseowl".as_slice(),
+        b"wiseowl-indexctl search-persian-fixture".as_slice(),
+        b"wiseowl-indexctl inject-uncertain after".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"sunlightctl restart wiseowl-indexd".as_slice(),
+        b"wiseowl-indexctl pending".as_slice(),
+        b"wiseowl-indexctl reconcile".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"wiseowl-indexctl inject-shm-crash".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"sunlightctl restart wiseowl-memorydb".as_slice(),
+        b"wiseowl-indexctl pending".as_slice(),
+        b"wiseowl-indexctl reconcile".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"sunlightctl restart wiseowl-indexd".as_slice(),
+        b"wiseowl-indexctl status".as_slice(),
+        b"sunlightctl restart wiseowl-memorydb".as_slice(),
+        b"wiseowl-indexctl health".as_slice(),
+        b"wiseowl-indexctl memorydb".as_slice(),
+        b"wiseowl-indexctl reconcile".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"sunlightctl restart wiseowl-memorydb".as_slice(),
+        b"sunlightctl restart wiseowl-indexd".as_slice(),
+        b"wiseowl-indexctl status".as_slice(),
+        b"wiseowl-indexctl pending".as_slice(),
+        b"wiseowl-indexctl stats".as_slice(),
+        b"wiseowl-indexctl phase375-verdict".as_slice(),
+    ].into_iter() {
+        append_injected_delay(&mut s, &mut len, 24);
+        append_injected_command(&mut s, &mut len, command);
+        // Let each foreground diagnostic process exit before typing the next
+        // command. This prevents test keystrokes from being consumed by the
+        // prior process while preserving a bounded sequence.
+        append_injected_delay(&mut s, &mut len, 96);
+        if command == b"wiseowl-indexctl scan"
+            || command.starts_with(b"sunlightctl restart wiseowl-")
+        {
+            append_injected_delay(&mut s, &mut len, 160);
+        }
+    }
+    s
+}
+
+/// Phase 3.875: login, bounded recovery sample, then remaining readiness soak.
+#[cfg(feature = "key_inject")]
+fn build_wiseowl_phase3875_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
+    let mut len = 0usize;
+    // Match the proven Phase 3.75 login timing: wait for UAC/login presenter,
+    // select preselected root user, wait for password field, then type root.
+    append_injected_delay(&mut s, &mut len, 512);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    append_injected_delay(&mut s, &mut len, 96);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    // Extra post-login settle so shell owns the keyboard before diagnostics.
+    append_injected_delay(&mut s, &mut len, 384);
+    for command in [
+        b"wiseowl-memoryctl status".as_slice(),
+        b"wiseowl-memorydbctl status".as_slice(),
+        b"wiseowl-indexctl status".as_slice(),
+        b"wiseowl-indexctl memorydb".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"wiseowl-indexctl scan".as_slice(),
+        b"wiseowl-indexctl search wiseowl".as_slice(),
+        b"wiseowl-indexctl search-persian-fixture".as_slice(),
+        b"wiseowl-indexctl phase375-verdict".as_slice(),
+        b"wiseowl-memorydbctl census".as_slice(),
+        b"wiseowl-memorydbctl verify-generations".as_slice(),
+        b"wiseowl-indexctl phase3875-soak".as_slice(),
+    ]
+    .into_iter()
+    {
+        append_injected_delay(&mut s, &mut len, 32);
+        append_injected_command(&mut s, &mut len, command);
+        append_injected_delay(&mut s, &mut len, 128);
+        if command == b"wiseowl-indexctl scan" || command == b"wiseowl-indexctl phase3875-soak" {
+            append_injected_delay(&mut s, &mut len, 224);
+        }
+    }
+    s
+}
+
 /// Phase 3.9 injection: phase 3.8 baseline + sysfetch + hostnamectl.
 #[cfg(feature = "key_inject")]
-fn build_phase3_9_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_phase3_9_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let p38 = build_phase3_8_sequence();
     let p38_len = p38.iter().position(|&b| b == 0).unwrap_or(p38.len());
     s[..p38_len].copy_from_slice(&p38[..p38_len]);
@@ -3843,8 +3958,8 @@ fn build_phase3_9_sequence() -> [u8; 4096] {
 /// password, Tab to the session dropdown, Space to toggle Tty→Desktop, Enter
 /// to log in. Used to verify the login → SESSION_ACTIVATE → desktop handover.
 #[cfg(feature = "key_inject")]
-fn build_desktop_login_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_desktop_login_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let codes: [u8; 8] = [
         0x1C, // Enter -> commit user slot "root", focus password
         0x13, 0x18, 0x18, 0x14, // password: r,o,o,t
@@ -3859,8 +3974,8 @@ fn build_desktop_login_sequence() -> [u8; 4096] {
 /// Phase 2B.1 injection: login, then exercise the four foundational native
 /// process/pathname utilities through the normal shell lookup path.
 #[cfg(feature = "key_inject")]
-fn build_phase2b1_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_phase2b1_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let mut len = 0usize;
 
     append_injected_delay(&mut s, &mut len, 96);
@@ -3889,8 +4004,8 @@ fn build_phase2b1_sequence() -> [u8; 4096] {
 ///   mkdir /tmp/x    (spawns /sunlight-utils/mkdir)
 ///   ls /tmp         (shows the new directory)
 #[cfg(feature = "key_inject")]
-fn build_phase6_5_3_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_phase6_5_3_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let codes: [u8; 31] = [
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
         0x26, 0x1F, 0x39, 0x35, 0x1C, // ls /
@@ -3906,8 +4021,8 @@ fn build_phase6_5_3_sequence() -> [u8; 4096] {
 /// complete newly-created-directory lifecycle through the real shell and TTY.
 /// Phase 2B.2: adds head, cmp, cksum acceptance through the same harness.
 #[cfg(feature = "key_inject")]
-fn build_phase6_5_utils_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_phase6_5_utils_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let mut len = 0usize;
 
     append_injected_delay(&mut s, &mut len, 96);
@@ -3960,8 +4075,8 @@ fn build_phase6_5_utils_sequence() -> [u8; 4096] {
 }
 
 #[cfg(feature = "key_inject")]
-fn build_phase2b4_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_phase2b4_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let mut len = 0usize;
 
     append_injected_delay(&mut s, &mut len, 96);
@@ -3993,8 +4108,8 @@ fn build_phase2b4_sequence() -> [u8; 4096] {
 /// Phase 2B.5: exercise the maintained character, line-composition, join,
 /// and formatted-output utilities through the ordinary shell lookup path.
 #[cfg(feature = "key_inject")]
-fn build_phase2b5_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_phase2b5_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let mut len = 0usize;
 
     append_injected_delay(&mut s, &mut len, 96);
@@ -4126,8 +4241,8 @@ fn injected_scancode(byte: u8) -> (u8, bool) {
 
 /// top gate injection: login, run `top`, then send `q` to exit.
 #[cfg(feature = "key_inject")]
-fn build_top_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_top_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let codes: [u8; 10] = [
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
         0x14, 0x18, 0x19, 0x1C, // top + Enter
@@ -4139,8 +4254,8 @@ fn build_top_sequence() -> [u8; 4096] {
 
 /// Timezone regression gate: login, change the zone, then query it.
 #[cfg(feature = "key_inject")]
-fn build_tzctl_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_tzctl_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     const START: usize = 160;
     s[..START].fill(0x9E); // ignored key-release events; wait ~1.6s for UAC
     let codes: [u8; 42] = [
@@ -4160,8 +4275,8 @@ fn build_tzctl_sequence() -> [u8; 4096] {
 /// DNS resolver debug injection: login, then `ping google.com` twice (second
 /// run should be served from the resolver's TTL cache).
 #[cfg(feature = "key_inject")]
-fn build_dns_test_sequence() -> [u8; 4096] {
-    let mut s = [0u8; 4096];
+fn build_dns_test_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
     let codes: [u8; 37] = [
         0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
         // ping google.com + Enter

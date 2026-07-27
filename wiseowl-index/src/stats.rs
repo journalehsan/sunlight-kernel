@@ -25,9 +25,25 @@ pub struct IndexStats {
     pub files_excluded: u64,
     pub files_indexed: u64,
     pub files_deleted: u64,
+    /// Sources that completed UTF-8/binary validation (accepted or newly rejected).
+    pub files_validated: u64,
+    /// Newly classified permanent rejections (first time or after digest/policy change).
+    pub files_rejected_new: u64,
+    /// Unchanged rejected sources reusing durable rejection identity (no parse/tokenize).
+    pub files_rejected_cached: u64,
+    /// Actual parser execution only (not hash / rejection-cache lookup).
     pub files_reparsed: u64,
+    /// Actual tokenizer execution only.
     pub files_retokenized: u64,
     pub database_generations_created: u64,
+    /// Previous active document generations superseded by a newer import.
+    pub database_generations_superseded: u64,
+    /// Source delete requests issued (not merely missing confirmation).
+    pub source_delete_requests: u64,
+    /// Source delete commits completed.
+    pub source_delete_commits: u64,
+    /// Sources that reached the missing-confirmation threshold (root available path).
+    pub files_missing_confirmed: u64,
     pub bytes_read: u64,
     pub bytes_parsed: u64,
     pub blocks_parsed: u64,
@@ -71,6 +87,8 @@ pub struct IndexStats {
     pub manifest_migrations_started: u64,
     pub manifest_migrations_completed: u64,
     pub manifest_migrations_failed: u64,
+    pub native_lexical_queries: u64,
+    pub native_lexical_hits: u64,
 }
 
 impl IndexStats {

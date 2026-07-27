@@ -84,20 +84,15 @@ fn looks_binary(data: &[u8]) -> bool {
 /// Normalize newlines for parser convenience: CRLF → LF. Does not affect stored payload.
 pub fn normalize_newlines_owned(text: &str) -> alloc::string::String {
     let mut out = alloc::string::String::with_capacity(text.len());
-    let bytes = text.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'\r' {
-            if i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
-                out.push('\n');
-                i += 2;
-                continue;
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\r' {
+            if chars.peek() == Some(&'\n') {
+                let _ = chars.next();
             }
             out.push('\n');
-            i += 1;
         } else {
-            out.push(bytes[i] as char);
-            i += 1;
+            out.push(ch);
         }
     }
     out
@@ -111,6 +106,14 @@ mod tests {
     fn empty_ok() {
         let q = IndexQuotaConfig::default();
         assert_eq!(validate_utf8_text(b"", &q).unwrap(), "");
+    }
+
+    #[test]
+    fn newline_normalization_preserves_unicode() {
+        assert_eq!(
+            normalize_newlines_owned("حافظه\r\nمی\u{200c}روم\rپایان"),
+            "حافظه\nمی\u{200c}روم\nپایان"
+        );
     }
 
     #[test]

@@ -626,7 +626,7 @@ After=vfs_server.service
 Type=simple
 ExecStart=/sbin/wiseowl-memorydb
 Restart=on-failure
-RestartSec=5
+RestartSec=1
 StartLimitBurst=5
 StartLimitIntervalSec=60
 User=root
@@ -646,18 +646,19 @@ WantedBy=sunlight.target
     // restart avoids restart storms on database outage.
     let wiseowl_index_service = r#"[Unit]
 Description=Wise Owl Document Indexer
-After=wiseowl-memorydb.service vfs_server.service
-Wants=wiseowl-memorydb.service
+After=vfs_server.service
 
 [Service]
 Type=simple
 ExecStart=/sbin/wiseowl-indexd
 Restart=on-failure
-RestartSec=5
+RestartSec=1
 StartLimitBurst=5
 StartLimitIntervalSec=60
 User=root
 Capability=logging
+Capability=vfs
+Capability=wiseowl-memorydb
 StandardOutput=journal
 StandardError=journal
 
@@ -1277,6 +1278,7 @@ fn dep_unit_to_ready_name(dep: &str) -> &str {
         "sunlight-sm" => "sm",
         "rand_service" => "rand",
         "net_server" => "net",
+        "vfs_server" => "vfs",
         "sunlight-thumbd" => "thumbd",
         other => other,
     }

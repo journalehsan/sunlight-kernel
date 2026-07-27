@@ -340,6 +340,8 @@ pub enum ServiceCapability {
     /// Administrative access to the thermal policy service (thermald).
     ThermalControl = 22,
     SessionLock = 23,
+    /// Narrow service-to-service access from wiseowl-indexd to MemoryDB.
+    WiseOwlMemoryDb = 24,
 }
 
 impl ServiceCapability {
@@ -373,6 +375,7 @@ impl ServiceCapability {
             "power-control" => Some(Self::PowerControl),
             "thermal-control" => Some(Self::ThermalControl),
             "session-lock" => Some(Self::SessionLock),
+            "wiseowl-memorydb" => Some(Self::WiseOwlMemoryDb),
             _ => None,
         }
     }
@@ -403,11 +406,12 @@ impl ServiceCapability {
             Self::PowerControl => "power-control",
             Self::ThermalControl => "thermal-control",
             Self::SessionLock => "session-lock",
+            Self::WiseOwlMemoryDb => "wiseowl-memorydb",
         }
     }
 }
 
-pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 24] = [
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 25] = [
     ServiceCapability::Network,
     ServiceCapability::Authentication,
     ServiceCapability::Pty,
@@ -432,6 +436,7 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 24] = [
     ServiceCapability::PowerControl,
     ServiceCapability::ThermalControl,
     ServiceCapability::SessionLock,
+    ServiceCapability::WiseOwlMemoryDb,
 ];
 
 pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'static str> + Clone {
@@ -513,6 +518,12 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::SessionLock.bit() != 0 && name_key == name_to_u64("mezzo") {
         return true;
     }
+    if mask & ServiceCapability::WiseOwlMemoryDb.bit() != 0
+        && (name_key == name_to_u64("wiseowl-memorydb")
+            || name_key == name_to_u64("wiseowl.memorydb.v1"))
+    {
+        return true;
+    }
     false
 }
 
@@ -538,6 +549,11 @@ fn matches_user_session_service(name_key: u64) -> bool {
         || name_key == name_to_u64("sunlight-kv")
         || name_key == name_to_u64("sunlight-tls")
         || name_key == name_to_u64("mezzo")
+        || name_key == name_to_u64("wiseowl-memoryd")
+        || name_key == name_to_u64("wiseowl-memorydb")
+        || name_key == name_to_u64("wiseowl.memorydb.v1")
+        || name_key == name_to_u64("wiseowl-indexd")
+        || name_key == name_to_u64("wiseowl.index.v1")
 }
 
 #[cfg(test)]
