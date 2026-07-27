@@ -326,7 +326,9 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-uac --release
     # Desktop session manager + CLI (login handoff after UAC). Must use SERVICE_RUSTFLAGS.
     # Missing from this list → stale/missing include_bytes! ELFs; login auth succeeds but
-    # create_desktop_session fails ("Session policy unavailable").
+    # create_desktop_session fails (session manager unavailable / policy errors).
+    # Note: SESSION_CREATE also needs a multi-second timeout — sessiond spawns Vortex
+    # synchronously; a 100 ms deadline fails on VMware even when binaries are present.
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessionctl --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sm --release

@@ -78,6 +78,10 @@ const DISPLAY_IPC_TIMEOUT_MS: u64 = 100;
 const DISPLAY_ACTIVATION_TIMEOUT_MS: u64 = 2_000;
 const SHELL_IPC_TIMEOUT_MS: u64 = 1_000;
 const SHELL_SLOW_PATH_TIMEOUT_MS: u64 = 5_000;
+/// SESSION_CREATE is synchronous on sessiond: mezzo establish + spawn of the
+/// desktop shell (currently ~17 MiB Vortex). 100 ms is enough on fast QEMU/KVM
+/// but fails under VMware and other slower guests; give the handoff real room.
+const SESSION_CREATE_TIMEOUT_MS: u64 = 15_000;
 const TZ_IPC_TIMEOUT_MS: u64 = 100;
 const DISPLAY_TIMEOUT_LOG_INTERVAL: u64 = 32;
 const SESSION_FOUNDATION_IDLE_WINDOW_MS: u64 = 1_500;
@@ -307,13 +311,47 @@ fn session_foundation_log(marker: &str) {
     debug_log("\n");
 }
 
+/// Why desktop session create failed (login stays on the secure form).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CreateDesktopError {
+    ManagerUnavailable,
+    TimedOut,
+    Policy(u64),
+    Transport,
+}
+
+impl CreateDesktopError {
+    fn message(self) -> &'static str {
+        match self {
+            Self::ManagerUnavailable => "Session manager unavailable; login stayed secure.",
+            Self::TimedOut => "Session start timed out; login stayed secure.",
+            Self::Policy(SessionMsg::ERR_MANIFEST) => {
+                "Session policy unavailable; login stayed secure."
+            }
+            Self::Policy(SessionMsg::ERR_BUSY) => {
+                "Desktop session already active; try again."
+            }
+            Self::Policy(SessionMsg::ERR_UNAUTHORIZED)
+            | Self::Policy(SessionMsg::ERR_INVALID_STATE) => {
+                "Session handoff rejected; login stayed secure."
+            }
+            Self::Policy(_) | Self::Transport => {
+                "Session start failed; login stayed secure."
+            }
+        }
+    }
+}
+
 fn create_desktop_session(
     username: &[u8],
     uid: u32,
     gid: u32,
     session_grant: CapabilityToken,
-) -> Option<DesktopSessionHandle> {
-    let sessiond = nameserver_lookup(SESSION_ENDPOINT)?;
+) -> Result<DesktopSessionHandle, CreateDesktopError> {
+    let Some(sessiond) = nameserver_lookup(SESSION_ENDPOINT) else {
+        debug_log("[SESSION] CREATE fail: sessiond not registered\n");
+        return Err(CreateDesktopError::ManagerUnavailable);
+    };
     let request_id = monotonic_millis();
     let mut msg = IpcMsg::with_label(SessionMsg::SESSION_CREATE)
         .with_cap(0, session_grant)
@@ -329,8 +367,24 @@ fn create_desktop_session(
     msg.words[3] |= (SESSION_PROTOCOL_VERSION as u64)
         | ((SessionKind::Desktop as u64) << 16)
         | ((username.len().min(12) as u64) << 24);
-    let reply = ipc_call_timeout(sessiond, msg, DISPLAY_IPC_TIMEOUT_MS).ok()?;
-    (reply.label == SessionMsg::REPLY).then_some(DesktopSessionHandle {
+    // sessiond holds this call until mezzo establish + shell spawn complete.
+    let reply = match ipc_call_timeout(sessiond, msg, SESSION_CREATE_TIMEOUT_MS) {
+        Ok(reply) => reply,
+        Err(sunlight_ipc::IpcCallError::Timeout) => {
+            debug_log("[SESSION] CREATE fail: timeout waiting for sessiond\n");
+            return Err(CreateDesktopError::TimedOut);
+        }
+        Err(_) => {
+            debug_log("[SESSION] CREATE fail: IPC transport error\n");
+            return Err(CreateDesktopError::Transport);
+        }
+    };
+    if reply.label != SessionMsg::REPLY {
+        let code = reply.words[0];
+        debug_log("[SESSION] CREATE fail: sessiond error\n");
+        return Err(CreateDesktopError::Policy(code));
+    }
+    Ok(DesktopSessionHandle {
         session_id: reply.words[0],
         generation: reply.words[1],
     })
@@ -401,8 +455,8 @@ fn wait_for_desktop_session_running(handle: DesktopSessionHandle, timeout_ms: u6
         match query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) {
             Some(SessionState::Running) => return true,
             Some(SessionState::Failed) | Some(SessionState::Stopped) => return false,
-            Some(_) => {}
-            None => return false,
+            // Transient lookup/IPC miss (slow guest): keep polling until deadline.
+            Some(_) | None => {}
         }
         process_yield();
     }
@@ -1052,21 +1106,23 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 session_foundation_baseline =
                                                     telemetry_baseline(&mut session_telemetry);
                                             }
-                                            let Some(handle) = create_desktop_session(
+                                            let handle = match create_desktop_session(
                                                 &username[..username_len],
                                                 uid,
                                                 gid,
                                                 session_grant,
-                                            ) else {
-                                                login.message =
-                                                    "Session policy unavailable; login stayed secure.";
-                                                if has_fb {
-                                                    render_login_fb(
-                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
-                                                        &mut mouse,
-                                                    );
+                                            ) {
+                                                Ok(handle) => handle,
+                                                Err(err) => {
+                                                    login.message = err.message();
+                                                    if has_fb {
+                                                        render_login_fb(
+                                                            &login, fb_addr, fb32_w, fb32_h,
+                                                            fb32_p, &mut mouse,
+                                                        );
+                                                    }
+                                                    break 'kbd;
                                                 }
-                                                break 'kbd;
                                             };
                                             if !wait_for_desktop_session_running(handle, 10_000) {
                                                 login.message =

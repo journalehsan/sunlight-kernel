@@ -2,7 +2,7 @@
 #![cfg_attr(not(test), no_main)]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, kill,
+    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_reply_and_try_recv, kill,
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
     session_consume_auth_grant, session_query_process, validate_session_caller, IpcMsg, MezzoMsg,
     ServiceCapability, SessionAction, SessionComponentRole, SessionComponentState, SessionGeneration,
@@ -164,8 +164,12 @@ fn create_reply(record: &SessionRecord) -> IpcMsg {
         )
 }
 
+const MEZZO_ESTABLISH_TIMEOUT_MS: u64 = 2_000;
+const SPAWN_SHELL_TIMEOUT_MS: u64 = 12_000;
+
 fn establish_lock_session(username: &[u8], uid: u32, gid: u32) -> bool {
     let Some(mezzo) = nameserver_lookup("mezzo") else {
+        write_log("[SESSION-FOUNDATION] mezzo not registered\n");
         return false;
     };
     let mut message = IpcMsg::with_label(MezzoMsg::SESSION_ESTABLISH_TRUSTED)
@@ -175,7 +179,19 @@ fn establish_lock_session(username: &[u8], uid: u32, gid: u32) -> bool {
         message.words[word_index] |= (byte as u64) << ((index % 8) * 8);
     }
     message.word_count = 4;
-    ipc_call(mezzo, message).label == MezzoMsg::REPLY
+    // Bounded call so a stuck mezzo cannot freeze SESSION_CREATE forever
+    // (login client has its own outer timeout, but sessiond must stay responsive).
+    match ipc_call_timeout(mezzo, message, MEZZO_ESTABLISH_TIMEOUT_MS) {
+        Ok(reply) if reply.label == MezzoMsg::REPLY => true,
+        Ok(_) => {
+            write_log("[SESSION-FOUNDATION] mezzo establish rejected\n");
+            false
+        }
+        Err(_) => {
+            write_log("[SESSION-FOUNDATION] mezzo establish timeout/transport\n");
+            false
+        }
+    }
 }
 
 fn session_summary_reply(record: &SessionRecord) -> IpcMsg {
@@ -286,6 +302,7 @@ fn spawn_shell(
     now: u64,
 ) -> Result<(), u64> {
     let Some(spawn_cap) = nameserver_lookup("spawn") else {
+        write_log("[SESSION-FOUNDATION] spawn not registered\n");
         return Err(SessionMsg::ERR_INVALID_STATE);
     };
     let req = SpawnRequest::new("/bin/sunlight-vortex-shell", "sunlight-vortex-shell")
@@ -293,8 +310,17 @@ fn spawn_shell(
         .with_service_caps(ServiceCapability::UserSession.bit());
     let mut msg = IpcMsg::empty();
     req.pack_into(&mut msg);
-    let reply = ipc_call(spawn_cap, msg);
+    // Vortex shell is a multi-MiB ELF; on slower hypervisors (VMware) load can
+    // take well over 100 ms. Keep this bounded but generous.
+    let reply = match ipc_call_timeout(spawn_cap, msg, SPAWN_SHELL_TIMEOUT_MS) {
+        Ok(reply) => reply,
+        Err(_) => {
+            write_log("[SESSION-FOUNDATION] spawn shell timeout/transport\n");
+            return Err(SessionMsg::ERR_INVALID_STATE);
+        }
+    };
     if reply.label != SpawnMsg::REPLY {
+        write_log("[SESSION-FOUNDATION] spawn shell rejected\n");
         return Err(SessionMsg::ERR_INVALID_STATE);
     }
     let pid = reply.words[0];
@@ -458,6 +484,13 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         state.stats.unauthorized_session_requests =
             state.stats.unauthorized_session_requests.saturating_add(1);
         return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    if state.manifest.is_err() {
+        // Boot race: sessiond may start before VFS can serve the system
+        // manifest. Retry once per CREATE so a transient open failure is not
+        // sticky for the life of the process.
+        write_log("[SESSION-FOUNDATION] CREATE: reloading session manifest\n");
+        state.manifest = load_manifest();
     }
     if state.manifest.is_err() {
         write_log("[SESSION-FOUNDATION] CREATE fail: manifest\n");
