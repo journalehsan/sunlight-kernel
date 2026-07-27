@@ -4,6 +4,7 @@ use crate::error::BrainResult;
 use crate::grounded::{
     AuthIdentity, BrainContextSource, ContextSourceMask, GroundedFact,
 };
+use crate::mtm::{format_memory_mib, BrainPreferences, GreetingStyle, WelcomeMemoryState};
 use crate::protocol::{
     MAX_DEVICE_CLASS_LEN, MAX_GREETING_LEN, MAX_LOCALE_LEN,
     MAX_MODEL_LEN, MAX_NAME_LEN, MAX_VERSION_LEN,
@@ -26,6 +27,14 @@ pub struct BrainContext {
     pub screen_h: Option<u32>,
     pub network_online: Option<bool>,
     pub docs_indexed: Option<bool>,
+    /// MTM: completed Welcome visits for this user.
+    pub visit_count: u32,
+    pub preferences: BrainPreferences,
+    pub index_ready: bool,
+    pub indexed_source_count: Option<u64>,
+    pub memorydb_healthy: bool,
+    pub system_generation: Option<u64>,
+    pub welcome_memory: WelcomeMemoryState,
 }
 
 impl Default for BrainContext {
@@ -48,28 +57,46 @@ impl Default for BrainContext {
             screen_h: None,
             network_online: None,
             docs_indexed: None,
+            visit_count: 0,
+            preferences: BrainPreferences::default(),
+            index_ready: false,
+            indexed_source_count: None,
+            memorydb_healthy: false,
+            system_generation: None,
+            welcome_memory: WelcomeMemoryState::default(),
         }
     }
 }
 
 impl BrainContext {
+    pub fn is_returning_visit(&self) -> bool {
+        self.visit_count > 0 || self.welcome_memory.is_returning_visit()
+    }
+
+    pub fn greeting_style(&self) -> GreetingStyle {
+        self.preferences.greeting_style
+    }
+
     pub fn machine_summary_line(&self, buf: &mut heapless::String<MAX_GREETING_LEN>) {
-        let mut parts: heapless::Vec<&str, 4> = heapless::Vec::new();
-        if let Some(cores) = self.cpu_cores {
-            let mut s: heapless::String<16> = heapless::String::new();
-            let _ = core::fmt::write(&mut s, format_args!("{} CPU cores", cores));
-            let _ = parts.push("cpu");
-        }
-        if let Some(ram) = self.ram_mib {
-            if ram >= 1024 {
-                let _ = write!(buf, "{} GiB RAM", ram / 1024);
-            } else {
-                let _ = write!(buf, "{} MiB RAM", ram);
-            }
+        buf.clear();
+        if let (Some(cores), Some(ram)) = (self.cpu_cores, self.ram_mib) {
+            let mut mem = heapless::String::<32>::new();
+            format_memory_mib(ram, &mut mem);
+            let _ = write!(
+                buf,
+                "This system has {} CPU cores and {} of usable memory.",
+                cores, mem
+            );
+        } else if let Some(cores) = self.cpu_cores {
+            let _ = write!(buf, "This system has {} CPU cores.", cores);
+        } else if let Some(ram) = self.ram_mib {
+            let mut mem = heapless::String::<32>::new();
+            format_memory_mib(ram, &mut mem);
+            let _ = write!(buf, "This system has {} of usable memory.", mem);
         }
         if !self.model_name.is_empty() {
             if !buf.is_empty() {
-                let _ = buf.push_str(", ");
+                let _ = buf.push_str(" ");
             }
             let _ = buf.push_str(&self.model_name);
         }
@@ -212,6 +239,9 @@ pub struct BrainBudget {
     pub max_facts: u8,
     pub max_total_bytes: u16,
     pub max_source_latency_ms: u16,
+    pub max_total_latency_ms: u16,
+    /// Remaining fact slots after prior sources.
+    pub facts_remaining: u8,
 }
 
 impl Default for BrainBudget {
@@ -220,6 +250,8 @@ impl Default for BrainBudget {
             max_facts: 16,
             max_total_bytes: 2048,
             max_source_latency_ms: 50,
+            max_total_latency_ms: 200,
+            facts_remaining: 16,
         }
     }
 }
@@ -228,7 +260,9 @@ pub struct GroundedContextBuilder {
     budget: BrainBudget,
     identity: AuthIdentity,
     sources_consulted: ContextSourceMask,
+    sources_succeeded: ContextSourceMask,
     sources_degraded: ContextSourceMask,
+    fact_bytes: u16,
 }
 
 impl GroundedContextBuilder {
@@ -237,7 +271,9 @@ impl GroundedContextBuilder {
             budget: BrainBudget::default(),
             identity,
             sources_consulted: ContextSourceMask::empty(),
+            sources_succeeded: ContextSourceMask::empty(),
             sources_degraded: ContextSourceMask::empty(),
+            fact_bytes: 0,
         }
     }
 
@@ -246,15 +282,36 @@ impl GroundedContextBuilder {
         source: &dyn BrainContextSource,
     ) -> heapless::Vec<GroundedFact, 16> {
         self.sources_consulted.add(source.source_kind());
-        let facts = source.collect(&self.budget, &self.identity);
-        if !source.is_available() {
+        if self.budget.facts_remaining == 0 || self.fact_bytes >= self.budget.max_total_bytes {
             self.sources_degraded.add(source.source_kind());
+            return heapless::Vec::new();
+        }
+        // Cap per-source collect by remaining budget.
+        let mut limited = self.budget;
+        limited.max_facts = self.budget.facts_remaining;
+        let facts = source.collect(&limited, &self.identity);
+        if source.is_available() && !facts.is_empty() {
+            self.sources_succeeded.add(source.source_kind());
+        } else if !source.is_available() {
+            self.sources_degraded.add(source.source_kind());
+        }
+        for f in facts.iter() {
+            let used = f.value.len() as u16;
+            self.fact_bytes = self.fact_bytes.saturating_add(used.saturating_add(8));
+            self.budget.facts_remaining = self.budget.facts_remaining.saturating_sub(1);
+            if self.fact_bytes >= self.budget.max_total_bytes {
+                break;
+            }
         }
         facts
     }
 
     pub fn sources_consulted(&self) -> ContextSourceMask {
         self.sources_consulted
+    }
+
+    pub fn sources_succeeded(&self) -> ContextSourceMask {
+        self.sources_succeeded
     }
 
     pub fn sources_degraded(&self) -> ContextSourceMask {

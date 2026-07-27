@@ -2,9 +2,10 @@ use crate::context::{BrainContext, ContextBuilder, GroundedContextBuilder};
 use crate::diagnostics::BrainDiagnostics;
 use crate::error::{BrainError, BrainResult};
 use crate::greeting;
-use crate::grounded::{AuthIdentity, BrainContextSource, GroundedFact};
+use crate::grounded::{AuthIdentity, BrainContextSource, FactKind, GroundedFact};
+use crate::mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
 use crate::protocol::{BrainRequestWire, BrainResponseWire};
-use crate::provenance::{BrainProviderKind, BrainResponseMeta};
+use crate::provenance::{BrainProviderKind, BrainResponseFlags, BrainResponseMeta};
 
 pub struct CognitivePipeline {
     pub diagnostics: BrainDiagnostics,
@@ -155,7 +156,7 @@ impl CognitivePipeline {
             }
         }
 
-        let ctx = match self.build_context_from_facts(request, &all_facts) {
+        let mut ctx = match self.build_context_from_facts(request, &all_facts) {
             Ok(c) => c,
             Err(_) => {
                 self.diagnostics.inc_context_fail();
@@ -167,7 +168,21 @@ impl CognitivePipeline {
             }
         };
 
-        let greeting_resp = match greeting::plan_greeting_response(&ctx) {
+        // Apply MTM facts from the fact set into context preferences/state.
+        self.apply_mtm_facts(&mut ctx, &all_facts);
+
+        let (greeting_resp, plan_flags) = match greeting::plan_greeting_with_flags(&ctx) {
+            Ok(r) => r,
+            Err(_) => {
+                self.diagnostics.inc_alignment_fail();
+                self.diagnostics.set_error(11);
+                return (
+                    BrainResponseWire::error(11, request.request_id),
+                    BrainResponseMeta::empty(),
+                );
+            }
+        };
+        let greeting_resp = match greeting::align_and_shape(greeting_resp) {
             Ok(r) => r,
             Err(_) => {
                 self.diagnostics.inc_alignment_fail();
@@ -181,19 +196,117 @@ impl CognitivePipeline {
 
         self.diagnostics.inc_local();
         self.diagnostics.inc_success();
+        if plan_flags
+            .response_flags
+            .has(BrainResponseFlags::FIRST_VISIT_GREETING)
+        {
+            self.diagnostics.inc_first_visit();
+        }
+        if plan_flags
+            .response_flags
+            .has(BrainResponseFlags::RETURNING_USER_GREETING)
+        {
+            self.diagnostics.inc_returning_visit();
+        }
+        if plan_flags
+            .response_flags
+            .has(BrainResponseFlags::AFTER_UPGRADE_GREETING)
+        {
+            self.diagnostics.inc_after_upgrade();
+        }
+        if plan_flags.machine_summary_included {
+            self.diagnostics.inc_machine_summary();
+        }
+        if plan_flags.index_status_included {
+            self.diagnostics.inc_index_status();
+        }
+
+        let used_persisted = all_facts.iter().any(|f| {
+            matches!(
+                f.kind,
+                FactKind::VisitCount
+                    | FactKind::GreetingStyle
+                    | FactKind::ShowMachineSummary
+                    | FactKind::ShowIndexStatus
+                    | FactKind::LastCompletedGeneration
+            )
+        });
+
+        let mut response_flags = plan_flags.response_flags;
+        if builder.sources_degraded().0 != 0 {
+            response_flags.set(BrainResponseFlags::DEGRADED_CONTEXT);
+        }
+        if used_persisted {
+            response_flags.set(BrainResponseFlags::USED_PERSISTED_MEMORY);
+        }
 
         let meta = BrainResponseMeta {
             provider: BrainProviderKind::LocalBounded,
             sources_consulted: builder.sources_consulted(),
+            sources_succeeded: builder.sources_succeeded(),
             sources_degraded: builder.sources_degraded(),
             fact_count: all_facts.len() as u8,
             generation_time_us: 0,
+            used_persisted_context: used_persisted,
+            response_flags,
         };
 
         (
             BrainResponseWire::greeting(greeting_resp, request.request_id),
             meta,
         )
+    }
+
+    fn apply_mtm_facts(&self, ctx: &mut BrainContext, facts: &[GroundedFact]) {
+        let mut welcome = WelcomeMemoryState::default();
+        let mut prefs = BrainPreferences::default();
+        for fact in facts {
+            match fact.kind {
+                FactKind::VisitCount => {
+                    if let Ok(v) = fact.value.parse::<u32>() {
+                        welcome.visit_count = v;
+                        ctx.visit_count = v;
+                    }
+                }
+                FactKind::LastCompletedGeneration => {
+                    if let Ok(v) = fact.value.parse::<u64>() {
+                        welcome.last_completed_generation = Some(v);
+                    }
+                }
+                FactKind::GreetingStyle => {
+                    if let Some(s) = GreetingStyle::from_str(fact.value.as_str()) {
+                        prefs.greeting_style = s;
+                    }
+                }
+                FactKind::ShowMachineSummary => {
+                    prefs.show_machine_summary = fact.value.as_str() != "0";
+                }
+                FactKind::ShowIndexStatus => {
+                    prefs.show_index_status = fact.value.as_str() == "1";
+                }
+                FactKind::IndexReady => {
+                    ctx.index_ready = fact.value.as_str() == "1";
+                }
+                FactKind::IndexedSourceCount => {
+                    if let Ok(v) = fact.value.parse::<u64>() {
+                        ctx.indexed_source_count = Some(v);
+                    }
+                }
+                FactKind::MemoryDbHealthy => {
+                    ctx.memorydb_healthy = fact.value.as_str() == "1";
+                }
+                FactKind::SystemGeneration | FactKind::MemoryDbGeneration => {
+                    if let Ok(v) = fact.value.parse::<u64>() {
+                        if ctx.system_generation.is_none() {
+                            ctx.system_generation = Some(v);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        ctx.welcome_memory = welcome;
+        ctx.preferences = prefs;
     }
 
     fn build_context_from_facts(
@@ -209,22 +322,25 @@ impl CognitivePipeline {
 
         for fact in facts {
             match fact.kind {
-                crate::grounded::FactKind::FirstLogin => {
-                    builder = builder.first_login(!fact.value.is_empty());
+                FactKind::FirstLogin => {
+                    builder = builder.first_login(fact.value.as_str() == "1" || !fact.value.is_empty());
                 }
-                crate::grounded::FactKind::FirstAfterUpgrade => {
-                    builder = builder.first_after_upgrade(!fact.value.is_empty());
+                FactKind::FirstAfterUpgrade => {
+                    builder =
+                        builder.first_after_upgrade(fact.value.as_str() == "1" || !fact.value.is_empty());
                 }
-                crate::grounded::FactKind::RamMib => {
+                FactKind::RamMib => {
                     if let Ok(v) = fact.value.parse::<u32>() {
                         builder = builder.ram_mib(Some(v));
-                    } else if fact.value.contains("GiB") {
-                        if let Some(gib_str) = fact.value.split(' ').next() {
-                            if let Ok(gib) = gib_str.parse::<u32>() {
-                                builder = builder.ram_mib(Some(gib * 1024));
-                            }
-                        }
                     }
+                }
+                FactKind::CpuCores => {
+                    if let Ok(v) = fact.value.parse::<u32>() {
+                        builder = builder.cpu_cores(Some(v));
+                    }
+                }
+                FactKind::OsVersion => {
+                    builder = builder.sunlight_version(fact.value.as_str());
                 }
                 _ => {}
             }

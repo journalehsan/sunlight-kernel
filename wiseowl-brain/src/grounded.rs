@@ -33,9 +33,15 @@ impl ContextSourceKind {
 pub struct ContextSourceMask(pub u8);
 
 impl ContextSourceMask {
-    pub const fn empty() -> Self { Self(0) }
-    pub fn add(&mut self, kind: ContextSourceKind) { self.0 |= kind.bit(); }
-    pub fn has(self, kind: ContextSourceKind) -> bool { self.0 & kind.bit() != 0 }
+    pub const fn empty() -> Self {
+        Self(0)
+    }
+    pub fn add(&mut self, kind: ContextSourceKind) {
+        self.0 |= kind.bit();
+    }
+    pub fn has(self, kind: ContextSourceKind) -> bool {
+        self.0 & kind.bit() != 0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,16 +66,29 @@ pub enum FactKind {
     VisitCount = 17,
     GreetingStyle = 18,
     ShowMachineSummary = 19,
+    ShowIndexStatus = 20,
+    MemoryDbAvailable = 21,
+    MemoryDbHealthy = 22,
+    MemoryDbGeneration = 23,
+    MemoryDbRecordCount = 24,
+    IndexAvailable = 25,
+    IndexedSourceCount = 26,
+    LastCompletedGeneration = 27,
+    SystemGeneration = 28,
 }
 
+/// Freshness categories (lower ordinal wins on conflict).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum FactFreshness {
-    Current = 0,
-    Recent = 1,
-    Stale = 2,
-    Unknown = 3,
+    RequestLocal = 0,
+    CurrentSession = 1,
+    CurrentBoot = 2,
+    Persisted = 3,
+    ServiceSnapshot = 4,
 }
+
+
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroundedFact {
@@ -89,11 +108,16 @@ pub struct AuthIdentity {
 
 impl AuthIdentity {
     pub const fn empty() -> Self {
-        Self { caller_pid: 0, caller_uid: 0, session_id: 0 }
+        Self {
+            caller_pid: 0,
+            caller_uid: 0,
+            session_id: 0,
+        }
     }
 
+    /// Kernel badge stamps a real PID; root uid 0 is a valid subject.
     pub fn is_authenticated(&self) -> bool {
-        self.caller_uid != 0
+        self.caller_pid != 0
     }
 }
 
@@ -111,4 +135,21 @@ pub struct ContextSourceResult {
     pub facts: heapless::Vec<GroundedFact, 16>,
     pub source: ContextSourceKind,
     pub degraded: bool,
+}
+
+/// Prefer current (lower ordinal) freshness, then higher confidence.
+pub fn prefer_fact<'a>(a: &'a GroundedFact, b: &'a GroundedFact) -> &'a GroundedFact {
+    let fa = a.freshness as u8;
+    let fb = b.freshness as u8;
+    if fa != fb {
+        if fa < fb {
+            a
+        } else {
+            b
+        }
+    } else if a.confidence >= b.confidence {
+        a
+    } else {
+        b
+    }
 }

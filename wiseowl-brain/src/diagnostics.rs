@@ -15,6 +15,22 @@ pub struct BrainDiagnostics {
     pub response_alignment_failures: AtomicU64,
     pub welcome_client_requests: AtomicU64,
     pub welcome_client_fallbacks: AtomicU64,
+    pub context_kv_success: AtomicU64,
+    pub context_kv_degraded: AtomicU64,
+    pub context_memorydb_success: AtomicU64,
+    pub context_memorydb_degraded: AtomicU64,
+    pub context_index_success: AtomicU64,
+    pub context_index_degraded: AtomicU64,
+    pub kv_reads: AtomicU64,
+    pub kv_read_failures: AtomicU64,
+    pub kv_writes: AtomicU64,
+    pub kv_write_failures: AtomicU64,
+    pub responses_first_visit: AtomicU64,
+    pub responses_returning_visit: AtomicU64,
+    pub responses_after_upgrade: AtomicU64,
+    pub responses_with_machine_summary: AtomicU64,
+    pub responses_with_index_status: AtomicU64,
+    pub unauthorized_requests: AtomicU64,
     pub last_error_code: AtomicU32,
 }
 
@@ -34,6 +50,22 @@ impl BrainDiagnostics {
             response_alignment_failures: AtomicU64::new(0),
             welcome_client_requests: AtomicU64::new(0),
             welcome_client_fallbacks: AtomicU64::new(0),
+            context_kv_success: AtomicU64::new(0),
+            context_kv_degraded: AtomicU64::new(0),
+            context_memorydb_success: AtomicU64::new(0),
+            context_memorydb_degraded: AtomicU64::new(0),
+            context_index_success: AtomicU64::new(0),
+            context_index_degraded: AtomicU64::new(0),
+            kv_reads: AtomicU64::new(0),
+            kv_read_failures: AtomicU64::new(0),
+            kv_writes: AtomicU64::new(0),
+            kv_write_failures: AtomicU64::new(0),
+            responses_first_visit: AtomicU64::new(0),
+            responses_returning_visit: AtomicU64::new(0),
+            responses_after_upgrade: AtomicU64::new(0),
+            responses_with_machine_summary: AtomicU64::new(0),
+            responses_with_index_status: AtomicU64::new(0),
+            unauthorized_requests: AtomicU64::new(0),
             last_error_code: AtomicU32::new(0),
         }
     }
@@ -51,6 +83,22 @@ impl BrainDiagnostics {
     pub fn inc_alignment_fail(&self) { self.response_alignment_failures.fetch_add(1, Ordering::Relaxed); }
     pub fn inc_welcome(&self) { self.welcome_client_requests.fetch_add(1, Ordering::Relaxed); }
     pub fn inc_welcome_fallback(&self) { self.welcome_client_fallbacks.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_first_visit(&self) { self.responses_first_visit.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_returning_visit(&self) { self.responses_returning_visit.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_after_upgrade(&self) { self.responses_after_upgrade.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_machine_summary(&self) { self.responses_with_machine_summary.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_index_status(&self) { self.responses_with_index_status.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_kv_success(&self) { self.context_kv_success.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_kv_degraded(&self) { self.context_kv_degraded.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_memorydb_success(&self) { self.context_memorydb_success.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_memorydb_degraded(&self) { self.context_memorydb_degraded.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_index_success(&self) { self.context_index_success.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_index_degraded(&self) { self.context_index_degraded.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_kv_read(&self) { self.kv_reads.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_kv_read_fail(&self) { self.kv_read_failures.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_kv_write(&self) { self.kv_writes.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_kv_write_fail(&self) { self.kv_write_failures.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_unauthorized(&self) { self.unauthorized_requests.fetch_add(1, Ordering::Relaxed); }
     pub fn set_error(&self, code: u16) { self.last_error_code.store(code as u32, Ordering::Relaxed); }
 
     pub fn provider_local_available(&self) -> bool {

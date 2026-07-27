@@ -368,3 +368,30 @@ Expected markers:
 | 20 | Host tests pass (52/52) | PASS |
 | 21 | ISO test gate configured | PASS |
 | 22 | Documentation complete | PASS |
+
+---
+
+## Phase 4C / Foundation v1 (additive)
+
+See also:
+
+- `docs/WISE_OWL_BRAIN_PHASE4C_MTM.md` — MTM, status adapters, budgets
+- `docs/WISE_OWL_BRAIN_V1_CONTRACT.md` — frozen `wiseowl.brain.v1` contract
+
+### Layer matrix
+
+| Layer | Backend | Persisted | Used by Greeting | Failure Behavior |
+|-------|---------|-----------|------------------|------------------|
+| STM | request + session | no | yes | always available |
+| MTM | sunlight-kv (`wb1:…`) | yes | preferences, visit class | degrade to defaults |
+| LTM status | MemoryDB + Index health/stats | service state | index-ready sentence only if grounded | omit claim |
+| System | sysinfo / request payload | no | machine summary | omit fields |
+| Session | IPC badge PID + body uid | no | subject identity | reject pid=0 |
+
+### Foundation v1 freeze
+
+Endpoint `wiseowl.brain.v1`, protocol version 1. Incompatible changes require v2.
+
+### Explicit non-goals (still)
+
+General chat, conversation history, document retrieval, embeddings, Pattern Recognition, online AI, command execution, autonomous actions, self-healing.

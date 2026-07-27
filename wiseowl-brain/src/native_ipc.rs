@@ -92,6 +92,12 @@ pub enum BrainOp {
     Summary = 0xB002,
     Suggestion = 0xB003,
     Context = 0xB004,
+    /// Get own preferences (body: none; subject from request uid).
+    PreferencesGet = 0xB010,
+    /// Set one preference field (inline words: field code + value).
+    PreferencesSet = 0xB011,
+    /// Explicit Welcome completion notification (not inferred from greeting).
+    WelcomeCompleted = 0xB012,
     Health = 0xB00E,
     Stats = 0xB00F,
     Reply = 0xBF80,
@@ -105,6 +111,9 @@ impl BrainOp {
             0xB002 => Some(Self::Summary),
             0xB003 => Some(Self::Suggestion),
             0xB004 => Some(Self::Context),
+            0xB010 => Some(Self::PreferencesGet),
+            0xB011 => Some(Self::PreferencesSet),
+            0xB012 => Some(Self::WelcomeCompleted),
             0xB00E => Some(Self::Health),
             0xB00F => Some(Self::Stats),
             0xBF80 => Some(Self::Reply),

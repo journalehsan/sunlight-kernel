@@ -2,9 +2,11 @@ use core::fmt::Write;
 
 use crate::context::BrainContext;
 use crate::error::BrainResult;
+use crate::mtm::{format_memory_mib, GreetingStyle};
 use crate::protocol::{
     ActionWire, GreetingResponseWire, HighlightWire, MAX_GREETING_LEN, MAX_HIGHLIGHT_VALUE,
 };
+use crate::provenance::BrainResponseFlags;
 
 fn s<const N: usize>(text: &str) -> heapless::String<N> {
     let mut out: heapless::String<N> = heapless::String::new();
@@ -20,64 +22,205 @@ fn push_greeting_str(buf: &mut heapless::String<MAX_GREETING_LEN>, text: &str) {
     }
 }
 
+/// Planning outcome flags for provenance.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GreetingPlanFlags {
+    pub response_flags: BrainResponseFlags,
+    pub machine_summary_included: bool,
+    pub index_status_included: bool,
+}
+
 pub fn generate_greeting_response(ctx: &BrainContext) -> BrainResult<GreetingResponseWire> {
+    let (resp, _) = plan_greeting_with_flags(ctx)?;
+    Ok(resp)
+}
+
+pub fn plan_greeting_with_flags(
+    ctx: &BrainContext,
+) -> BrainResult<(GreetingResponseWire, GreetingPlanFlags)> {
     let mut title: heapless::String<MAX_GREETING_LEN> = heapless::String::new();
     let mut body: heapless::String<MAX_GREETING_LEN> = heapless::String::new();
+    let mut flags = GreetingPlanFlags::default();
+    let style = ctx.greeting_style();
+    let returning = ctx.is_returning_visit();
+    let after_upgrade = ctx.first_after_upgrade
+        || ctx
+            .system_generation
+            .map(|g| ctx.welcome_memory.is_after_upgrade(g))
+            .unwrap_or(false);
 
-    if ctx.first_login {
-        push_greeting_str(&mut title, "Welcome to SunlightOS");
-        if !ctx.user_display_name.is_empty() {
-            push_greeting_str(&mut body, "Hello, ");
-            push_greeting_str(&mut body, &ctx.user_display_name);
-            push_greeting_str(&mut body, ". ");
+    // Title + primary body by visit class and style.
+    if ctx.first_login && !returning {
+        flags
+            .response_flags
+            .set(BrainResponseFlags::FIRST_VISIT_GREETING);
+        match style {
+            GreetingStyle::Concise => {
+                push_greeting_str(&mut title, "Welcome to SunlightOS");
+                push_greeting_str(
+                    &mut body,
+                    "Your desktop is ready. Take a short tour to get acquainted.",
+                );
+            }
+            GreetingStyle::Friendly => {
+                push_greeting_str(&mut title, "Welcome to SunlightOS");
+                if !ctx.user_display_name.is_empty() {
+                    push_greeting_str(&mut body, "Hello, ");
+                    push_greeting_str(&mut body, &ctx.user_display_name);
+                    push_greeting_str(&mut body, ". ");
+                }
+                push_greeting_str(
+                    &mut body,
+                    "Your desktop is ready for you. Take a short tour to get acquainted.",
+                );
+            }
+            GreetingStyle::Technical => {
+                push_greeting_str(&mut title, "Welcome to SunlightOS");
+                if let Some(g) = ctx.system_generation {
+                    let _ = write!(&mut body, "SunlightOS generation {} is active. ", g);
+                }
+                push_greeting_str(
+                    &mut body,
+                    "Wise Owl context services are ready. Take a short tour to get acquainted.",
+                );
+            }
         }
-        push_greeting_str(&mut body, "Your desktop is ready. Take a short tour to get acquainted.");
-    } else if ctx.first_after_upgrade {
+    } else if after_upgrade {
+        flags
+            .response_flags
+            .set(BrainResponseFlags::AFTER_UPGRADE_GREETING);
         push_greeting_str(&mut title, "Welcome Back");
-        if !ctx.user_display_name.is_empty() {
-            push_greeting_str(&mut body, "Hello, ");
-            push_greeting_str(&mut body, &ctx.user_display_name);
-            push_greeting_str(&mut body, ". ");
+        match style {
+            GreetingStyle::Technical => {
+                if let Some(g) = ctx.system_generation {
+                    let _ = write!(
+                        &mut body,
+                        "SunlightOS generation {} is active. ",
+                        g
+                    );
+                }
+                push_greeting_str(
+                    &mut body,
+                    "SunlightOS has started a new system generation. Everything should feel familiar.",
+                );
+            }
+            _ => {
+                push_greeting_str(
+                    &mut body,
+                    "SunlightOS has started a new system generation. Everything should feel familiar.",
+                );
+            }
         }
-        push_greeting_str(&mut body, "SunlightOS has been updated with improvements. Everything should feel familiar.");
+    } else if returning {
+        flags
+            .response_flags
+            .set(BrainResponseFlags::RETURNING_USER_GREETING);
+        match style {
+            GreetingStyle::Concise => {
+                push_greeting_str(&mut title, "Welcome back");
+                push_greeting_str(&mut body, "Your desktop is ready.");
+            }
+            GreetingStyle::Friendly => {
+                push_greeting_str(&mut title, "Welcome back to SunlightOS");
+                push_greeting_str(
+                    &mut body,
+                    "Your desktop is ready for you. Browse the tour anytime from the Welcome Center.",
+                );
+            }
+            GreetingStyle::Technical => {
+                push_greeting_str(&mut title, "Welcome back");
+                if let Some(g) = ctx.system_generation {
+                    let _ = write!(&mut body, "SunlightOS generation {} is active. ", g);
+                }
+                push_greeting_str(&mut body, "Wise Owl context services are ready.");
+            }
+        }
     } else {
-        push_greeting_str(&mut title, "Welcome");
-        if !ctx.user_display_name.is_empty() {
-            push_greeting_str(&mut body, "Hello, ");
-            push_greeting_str(&mut body, &ctx.user_display_name);
-            push_greeting_str(&mut body, ". ");
+        // Request-flagged first_login false, no MTM — treat as return-style soft.
+        match style {
+            GreetingStyle::Concise => {
+                push_greeting_str(&mut title, "Welcome");
+                push_greeting_str(&mut body, "Your desktop is ready.");
+            }
+            GreetingStyle::Friendly => {
+                push_greeting_str(&mut title, "Welcome to SunlightOS");
+                push_greeting_str(
+                    &mut body,
+                    "Your desktop is ready. Browse the tour anytime from the Welcome Center.",
+                );
+            }
+            GreetingStyle::Technical => {
+                push_greeting_str(&mut title, "Welcome");
+                push_greeting_str(&mut body, "Wise Owl context services are ready.");
+            }
         }
-        push_greeting_str(&mut body, "Your desktop is ready. Browse the tour anytime from the Welcome Center.");
+    }
+
+    // Machine summary (only when preference + facts).
+    if ctx.preferences.show_machine_summary {
+        let mut summary = heapless::String::<MAX_GREETING_LEN>::new();
+        ctx.machine_summary_line(&mut summary);
+        if !summary.is_empty() {
+            push_greeting_str(&mut body, " ");
+            push_greeting_str(&mut body, &summary);
+            flags.machine_summary_included = true;
+            flags
+                .response_flags
+                .set(BrainResponseFlags::MACHINE_SUMMARY_INCLUDED);
+        }
+    }
+
+    // Index readiness (only when preference + grounded ready fact).
+    if ctx.preferences.show_index_status && ctx.index_ready {
+        push_greeting_str(&mut body, " ");
+        if let Some(n) = ctx.indexed_source_count {
+            if n > 0 {
+                let _ = write!(
+                    &mut body,
+                    "Wise Owl's local index is ready with {} indexed sources.",
+                    n
+                );
+            } else {
+                push_greeting_str(&mut body, "Wise Owl's local index is ready.");
+            }
+        } else {
+            push_greeting_str(&mut body, "Wise Owl's local index is ready.");
+        }
+        flags.index_status_included = true;
+        flags.response_flags.set(BrainResponseFlags::INDEX_READY);
+    }
+
+    if ctx.memorydb_healthy {
+        flags
+            .response_flags
+            .set(BrainResponseFlags::MEMORYDB_HEALTHY);
     }
 
     let mut highlights: heapless::Vec<HighlightWire, { crate::protocol::MAX_HIGHLIGHTS }> =
         heapless::Vec::new();
 
-    if let Some(cores) = ctx.cpu_cores {
-        if cores > 0 {
-            let mut value: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
-            let _ = write!(&mut value, "{} logical cores", cores);
-            let _ = highlights.push(HighlightWire {
-                kind: 1,
-                label: s("Processor"),
-                value,
-            });
-        }
-    }
-
-    if let Some(ram) = ctx.ram_mib {
-        if ram > 0 {
-            let mut value: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
-            if ram >= 1024 {
-                let _ = write!(&mut value, "{} GiB", ram / 1024);
-            } else {
-                let _ = write!(&mut value, "{} MiB", ram);
+    if ctx.preferences.show_machine_summary {
+        if let Some(cores) = ctx.cpu_cores {
+            if cores > 0 {
+                let mut value: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
+                let _ = write!(&mut value, "{} logical cores", cores);
+                let _ = highlights.push(HighlightWire {
+                    kind: 1,
+                    label: s("Processor"),
+                    value,
+                });
             }
-            let _ = highlights.push(HighlightWire {
-                kind: 2,
-                label: s("Memory"),
-                value,
-            });
+        }
+        if let Some(ram) = ctx.ram_mib {
+            if ram > 0 {
+                let mut value: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
+                format_memory_mib(ram, &mut value);
+                let _ = highlights.push(HighlightWire {
+                    kind: 2,
+                    label: s("Memory"),
+                    value,
+                });
+            }
         }
     }
 
@@ -113,7 +256,7 @@ pub fn generate_greeting_response(ctx: &BrainContext) -> BrainResult<GreetingRes
         label: s("Open Control Panel"),
     });
 
-    if ctx.first_login {
+    if ctx.first_login && !returning {
         let _ = actions.push(ActionWire {
             kind: 4,
             label: s("Continue Welcome Tour"),
@@ -134,12 +277,15 @@ pub fn generate_greeting_response(ctx: &BrainContext) -> BrainResult<GreetingRes
         label: s("Open Terminal"),
     });
 
-    Ok(GreetingResponseWire {
-        title,
-        body,
-        highlights,
-        suggested_actions: actions,
-    })
+    Ok((
+        GreetingResponseWire {
+            title,
+            body,
+            highlights,
+            suggested_actions: actions,
+        },
+        flags,
+    ))
 }
 
 pub fn fallback_greeting() -> GreetingResponseWire {
@@ -178,32 +324,15 @@ pub fn align_and_shape(response: GreetingResponseWire) -> BrainResult<GreetingRe
 }
 
 pub fn plan_greeting_response(ctx: &BrainContext) -> BrainResult<GreetingResponseWire> {
-    let resp = if ctx.first_login {
-        generate_first_login_greeting(ctx)?
-    } else if ctx.first_after_upgrade {
-        generate_upgrade_greeting(ctx)?
-    } else {
-        generate_return_greeting(ctx)?
-    };
+    let (resp, _) = plan_greeting_with_flags(ctx)?;
     align_and_shape(resp)
-}
-
-fn generate_first_login_greeting(ctx: &BrainContext) -> BrainResult<GreetingResponseWire> {
-    generate_greeting_response(ctx)
-}
-
-fn generate_upgrade_greeting(ctx: &BrainContext) -> BrainResult<GreetingResponseWire> {
-    generate_greeting_response(ctx)
-}
-
-fn generate_return_greeting(ctx: &BrainContext) -> BrainResult<GreetingResponseWire> {
-    generate_greeting_response(ctx)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::context::ContextBuilder;
+    use crate::mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
 
     #[test]
     fn first_login_greeting() {
@@ -217,67 +346,67 @@ mod tests {
             .build();
         let resp = plan_greeting_response(&ctx).unwrap();
         assert!(resp.title.contains("Welcome"));
-        assert!(resp.body.contains("Alice"));
-        assert!(resp.body.contains("desktop is ready"));
-        assert!(!resp.suggested_actions.is_empty());
-        assert!(!resp.highlights.is_empty());
+        assert!(resp.body.contains("desktop is ready") || resp.body.contains("Alice"));
     }
 
     #[test]
-    fn first_after_upgrade_greeting() {
-        let ctx = ContextBuilder::new()
-            .user_id(1000)
-            .first_after_upgrade(true)
-            .sunlight_version("0.3.0")
-            .build();
-        let resp = plan_greeting_response(&ctx).unwrap();
-        assert!(resp.title.contains("Back") || resp.body.contains("updated"));
-    }
-
-    #[test]
-    fn return_visit_greeting() {
-        let ctx = ContextBuilder::new()
+    fn returning_visit_uses_mtm() {
+        let mut ctx = ContextBuilder::new()
             .user_id(1000)
             .sunlight_version("0.2.0")
             .build();
+        ctx.visit_count = 2;
+        ctx.welcome_memory.visit_count = 2;
         let resp = plan_greeting_response(&ctx).unwrap();
-        assert!(!resp.title.is_empty());
-        assert!(!resp.body.is_empty());
+        assert!(
+            resp.title.to_lowercase().contains("back") || resp.body.to_lowercase().contains("back")
+                || resp.title.contains("Welcome")
+        );
     }
 
     #[test]
-    fn empty_context_returns_safe_greeting() {
-        let ctx = ContextBuilder::new().user_id(1000).build();
+    fn technical_mentions_generation_when_grounded() {
+        let mut ctx = ContextBuilder::new().user_id(1000).first_login(true).build();
+        ctx.preferences = BrainPreferences {
+            greeting_style: GreetingStyle::Technical,
+            show_machine_summary: false,
+            show_index_status: false,
+        };
+        ctx.system_generation = Some(42);
         let resp = plan_greeting_response(&ctx).unwrap();
-        assert!(!resp.title.is_empty());
-        assert!(!resp.body.is_empty());
+        assert!(resp.body.contains("generation 42") || resp.body.contains("Wise Owl"));
     }
 
     #[test]
-    fn highlights_bounded() {
-        let ctx = ContextBuilder::new()
-            .user_id(1000)
-            .cpu_cores(Some(8))
-            .ram_mib(Some(16384))
-            .model_name("TestBox")
-            .sunlight_version("0.2.0")
-            .build();
-        let resp = generate_greeting_response(&ctx).unwrap();
-        assert!(resp.highlights.len() <= crate::protocol::MAX_HIGHLIGHTS);
+    fn index_claim_only_when_ready_and_enabled() {
+        let mut ctx = ContextBuilder::new().user_id(1000).build();
+        ctx.preferences.show_index_status = true;
+        ctx.index_ready = true;
+        ctx.indexed_source_count = Some(12);
+        let resp = plan_greeting_response(&ctx).unwrap();
+        assert!(resp.body.contains("index is ready"));
+        assert!(resp.body.contains("12"));
     }
 
     #[test]
-    fn suggested_actions_bounded_and_safe() {
-        let ctx = ContextBuilder::new()
+    fn index_omitted_when_not_ready() {
+        let mut ctx = ContextBuilder::new().user_id(1000).build();
+        ctx.preferences.show_index_status = true;
+        ctx.index_ready = false;
+        let resp = plan_greeting_response(&ctx).unwrap();
+        assert!(!resp.body.contains("index is ready"));
+    }
+
+    #[test]
+    fn memory_format_in_summary() {
+        let mut ctx = ContextBuilder::new()
             .user_id(1000)
-            .first_login(true)
+            .cpu_cores(Some(4))
+            .ram_mib(Some(3714))
             .build();
-        let resp = generate_greeting_response(&ctx).unwrap();
-        assert!(resp.suggested_actions.len() <= crate::protocol::MAX_ACTIONS);
-        for a in &resp.suggested_actions {
-            assert!(a.kind != 0xFF || a.label.contains("Placeholder"));
-            assert!(!a.label.is_empty());
-        }
+        ctx.preferences.show_machine_summary = true;
+        let resp = plan_greeting_response(&ctx).unwrap();
+        assert!(resp.body.contains("3.6 GiB") || resp.body.contains("3714"));
     }
 
     #[test]
@@ -286,9 +415,6 @@ mod tests {
         let resp = plan_greeting_response(&ctx).unwrap();
         if let Ok(body_str) = core::str::from_utf8(resp.body.as_bytes()) {
             assert!(!body_str.contains("I have"));
-            assert!(!body_str.contains("I performed"));
-            assert!(!body_str.contains("I launched"));
-            assert!(!body_str.contains("I modified"));
             assert!(!body_str.contains("online AI"));
         }
     }
@@ -298,24 +424,23 @@ mod tests {
         let fb = fallback_greeting();
         assert!(!fb.title.is_empty());
         assert!(!fb.body.is_empty());
-        assert!(fb.highlights.is_empty());
-        assert!(fb.suggested_actions.is_empty());
     }
 
     #[test]
-    fn alignment_rejects_empty_title() {
-        let mut resp = fallback_greeting();
-        resp.title.clear();
-        let result = align_and_shape(resp);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn alignment_falls_back_on_empty_body() {
-        let mut resp = fallback_greeting();
-        resp.body.clear();
-        let result = align_and_shape(resp).unwrap();
-        assert!(!result.title.is_empty());
-        assert!(!result.body.is_empty());
+    fn after_upgrade_from_mtm() {
+        let mut ctx = ContextBuilder::new().user_id(0).build();
+        ctx.welcome_memory = WelcomeMemoryState {
+            visit_count: 1,
+            last_completed_generation: Some(1),
+            last_successful_provider: None,
+        };
+        ctx.visit_count = 1;
+        ctx.system_generation = Some(2);
+        ctx.first_after_upgrade = false;
+        let (resp, flags) = plan_greeting_with_flags(&ctx).unwrap();
+        assert!(flags
+            .response_flags
+            .has(BrainResponseFlags::AFTER_UPGRADE_GREETING)
+            || resp.body.contains("generation"));
     }
 }

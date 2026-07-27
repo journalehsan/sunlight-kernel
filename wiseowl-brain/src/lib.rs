@@ -17,7 +17,10 @@ pub mod provider;
 pub mod grounded;
 pub mod provenance;
 pub mod adapters;
+pub mod mtm;
+pub mod kv_client;
 
 pub use pipeline::CognitivePipeline;
 pub use provider::{BrainProvider, LocalBoundedProvider, FutureOnlineProvider, ProviderRegistry};
 pub use diagnostics::BrainDiagnostics;
+pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};

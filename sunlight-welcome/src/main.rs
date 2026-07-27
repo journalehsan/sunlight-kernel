@@ -121,6 +121,20 @@ fn collect_machine_summary(display_ep: Option<CapabilityToken>) -> sunlight_welc
     m
 }
 
+/// Notify wiseowl-braind that Welcome completed (explicit event; not inferred).
+fn notify_brain_welcome_completed() {
+    let Some(ep) = nameserver_lookup(BRAIN_ENDPOINT) else {
+        return;
+    };
+    let uid = libc::getuid() as u64;
+    // system generation: use 1 when unavailable (bounded; no overclaim)
+    let gen = 1u64;
+    let msg = IpcMsg::with_label(BrainOp::WelcomeCompleted.label())
+        .word(0, uid)
+        .word(1, gen);
+    let _ = ipc_call_timeout(ep, msg, 200);
+}
+
 fn report_session_completion() -> bool {
     let Some(ep) = nameserver_lookup(SESSION_ENDPOINT) else {
         debug_log("[WELCOME-WIZARD] session endpoint missing\n");
@@ -503,6 +517,8 @@ impl WelcomeApp {
             if report_session_completion() {
                 log_pass("COMPLETION_RECORDED");
                 self.completion_sent = true;
+                // Explicit MTM completion event (Welcome owns completion).
+                notify_brain_welcome_completed();
             } else {
                 debug_log("[WELCOME-WIZARD] completion report failed (will remain eligible)\n");
             }

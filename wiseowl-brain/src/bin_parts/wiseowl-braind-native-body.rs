@@ -6,14 +6,20 @@ use sunlight_ipc::{
 };
 use sunlight_libc as libc;
 
-use wiseowl_brain::adapters::{SessionContextSource, SystemContextSource};
+use wiseowl_brain::adapters::{
+    IndexContextSource, KvContextSource, SessionContextSource, SystemContextSource,
+    WiseOwlStatusContextSource,
+};
 use wiseowl_brain::grounded::AuthIdentity;
+use wiseowl_brain::kv_client::{load_mtm, save_preferences, save_welcome_state};
+use wiseowl_brain::mtm::GreetingStyle;
 use wiseowl_brain::native_ipc::{
     BrainIpcHeader, BrainOp, NATIVE_PROTOCOL_VERSION, BRAIN_ENDPOINT,
     BRAIN_IPC_HEADER_LEN, IPC_REG_WORDS, REG_INLINE_BODY_MAX, SHM_PAGE_SIZE,
 };
 use wiseowl_brain::pipeline::CognitivePipeline;
 use wiseowl_brain::protocol::BrainRequestWire;
+use wiseowl_brain::provenance::BrainProviderKind;
 
 macro_rules! serial_println {
     ($($arg:tt)*) => {{
@@ -79,11 +85,51 @@ pub extern "C" fn _start() -> ! {
                 let response = handle_native_context(msg, caller_uid, caller_pid);
                 let _ = ipc_reply_and_wait(ep, response);
             }
+            BrainOp::PreferencesGet => {
+                let response = handle_preferences_get(msg, caller_pid);
+                let _ = ipc_reply_and_wait(ep, response);
+            }
+            BrainOp::PreferencesSet => {
+                let response = handle_preferences_set(msg, caller_pid);
+                let _ = ipc_reply_and_wait(ep, response);
+            }
+            BrainOp::WelcomeCompleted => {
+                let response = handle_welcome_completed(msg, caller_pid);
+                let _ = ipc_reply_and_wait(ep, response);
+            }
             _ => {
                 let reply = make_error_reply(msg, 3);
                 let _ = ipc_reply_and_wait(ep, reply);
             }
         }
+    }
+}
+
+fn subject_uid_from_request(request: &BrainRequestWire) -> u64 {
+    if request.user_id != 0 {
+        request.user_id
+    } else {
+        request.caller_uid
+    }
+}
+
+fn load_kv_source(pipeline: &CognitivePipeline, uid: u64) -> KvContextSource {
+    use wiseowl_brain::kv_client::native::NativeKvStore;
+    let store = NativeKvStore;
+    pipeline.diagnostics.inc_kv_read();
+    let loaded = load_mtm(&store, uid);
+    if loaded.degraded {
+        pipeline.diagnostics.inc_kv_degraded();
+        pipeline.diagnostics.inc_kv_read_fail();
+    } else {
+        pipeline.diagnostics.inc_kv_success();
+    }
+    KvContextSource {
+        loaded: true,
+        degraded: loaded.degraded && !loaded.kv_reachable,
+        welcome: loaded.welcome,
+        preferences: loaded.preferences,
+        used_defaults: loaded.used_defaults,
     }
 }
 
@@ -99,26 +145,28 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
         }
     };
 
-    // Kernel badge is caller PID only (not UID). Root (uid=0) is a valid local
-    // user on SunlightOS, so do not reject on zero uid. Require a real PID stamp.
     if caller_pid == 0 {
         serial_println!("[WISEOWL-BRAIN] AUTHZ_REJECT PASS");
+        let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+        pipeline.diagnostics.inc_unauthorized();
         return make_error_reply(msg, 403);
     }
-    // Soft consistency: if both identity fields are set and disagree, reject.
     if request.user_id != 0
         && request.caller_uid != 0
         && request.user_id != request.caller_uid
     {
         serial_println!("[WISEOWL-BRAIN] AUTHZ_REJECT PASS");
+        let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+        pipeline.diagnostics.inc_unauthorized();
         return make_error_reply(msg, 403);
     }
 
-    let subject_uid = if request.user_id != 0 {
-        request.user_id
-    } else {
-        request.caller_uid
-    };
+    let subject_uid = subject_uid_from_request(&request);
+    serial_println!(
+        "[WISEOWL-BRAIN] request id={} caller_uid={} kind=greeting",
+        request.request_id,
+        subject_uid
+    );
 
     let identity = AuthIdentity {
         caller_uid: subject_uid,
@@ -126,19 +174,81 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
         session_id: request.session_id,
     };
 
+    let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+
+    // Priority: session → system → kv → memorydb → index
     let session_source = SessionContextSource;
     let system_source = SystemContextSource;
-    let sources: [&dyn wiseowl_brain::grounded::BrainContextSource; 2] =
-        [&session_source, &system_source];
+    let kv_source = load_kv_source(pipeline, subject_uid);
+    let mut memdb_source = WiseOwlStatusContextSource::query_native();
+    if memdb_source.available && !memdb_source.degraded {
+        pipeline.diagnostics.inc_memorydb_success();
+    } else {
+        pipeline.diagnostics.inc_memorydb_degraded();
+        memdb_source.degraded = true;
+    }
+    let mut index_source = IndexContextSource::query_native();
+    if index_source.available {
+        pipeline.diagnostics.inc_index_success();
+    } else {
+        pipeline.diagnostics.inc_index_degraded();
+        index_source.degraded = true;
+    }
 
-    let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+    let sources: [&dyn wiseowl_brain::grounded::BrainContextSource; 5] = [
+        &session_source,
+        &system_source,
+        &kv_source,
+        &memdb_source,
+        &index_source,
+    ];
+
     let (response, meta) = pipeline.handle_request_grounded(&request, &identity, &sources);
+
+    serial_println!(
+        "[WISEOWL-BRAIN] context sources=session,system,kv,index facts={} flags={:#x}",
+        meta.fact_count,
+        meta.response_flags.0
+    );
+
+    // Best-effort: record last successful provider (not visit_count — that is completion-owned).
+    if meta.is_real_brain_response() {
+        use wiseowl_brain::kv_client::native::NativeKvStore;
+        let store = NativeKvStore;
+        let mut state = kv_source.welcome;
+        state.record_successful_provider(BrainProviderKind::LocalBounded);
+        if save_welcome_state(&store, subject_uid, &state).is_ok() {
+            pipeline.diagnostics.inc_kv_write();
+        } else {
+            pipeline.diagnostics.inc_kv_write_fail();
+        }
+    }
 
     serial_println!("[WISEOWL-BRAIN] NATIVE_REQUEST PASS");
     if meta.is_real_brain_response() {
         serial_println!("[WISEOWL-BRAIN] LOCAL_PROVIDER PASS");
         serial_println!("[WISEOWL-BRAIN] STRUCTURED_RESPONSE PASS");
         serial_println!("[WISEOWL-BRAIN] PROVENANCE PASS");
+        if meta.used_persisted_context {
+            serial_println!("[WISEOWL-BRAIN] MTM_READ PASS");
+        }
+        if meta.response_flags.has(wiseowl_brain::provenance::BrainResponseFlags::FIRST_VISIT_GREETING) {
+            serial_println!("[WISEOWL-BRAIN] FIRST_VISIT PASS");
+        }
+        if meta.response_flags.has(wiseowl_brain::provenance::BrainResponseFlags::RETURNING_USER_GREETING) {
+            serial_println!("[WISEOWL-BRAIN] RETURNING_VISIT PASS");
+        }
+        if index_source.available {
+            serial_println!("[WISEOWL-BRAIN] INDEX_STATUS PASS");
+        }
+        if memdb_source.available {
+            serial_println!("[WISEOWL-BRAIN] MEMORYDB_STATUS PASS");
+        }
+        if meta.sources_degraded.0 != 0 {
+            serial_println!("[WISEOWL-BRAIN] OPTIONAL_SOURCE_DEGRADE PASS");
+        }
+        serial_println!("[WISEOWL-BRAIN] STATUS_PROVENANCE PASS");
+        serial_println!("[WISEOWL-BRAIN] SYSTEM_CONTEXT PASS");
     } else {
         serial_println!(
             "[WISEOWL-BRAIN] RESPONSE kind={} err={} provider={}",
@@ -153,19 +263,138 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
 
 fn handle_native_health(_msg: IpcMsg) -> IpcMsg {
     let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
-    let _snap = pipeline.diagnostics.snapshot();
+    let snap = pipeline.diagnostics.snapshot();
     serial_println!("[WISEOWL-BRAIN] NATIVE_HEALTH PASS");
+    serial_println!("[WISEOWL-BRAIN] HEALTH PASS");
+    serial_println!("[WISEOWL-BRAIN] NATIVE_SERVICE PASS");
 
-    let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Health", "OK");
+    let mut body = heapless::String::<128>::new();
+    let _ = core::fmt::Write::write_fmt(
+        &mut body,
+        format_args!(
+            "ok total={} failed={} local={}",
+            snap.requests_total, snap.requests_failed, snap.provider_local_available as u8
+        ),
+    );
+    let greeting =
+        wiseowl_brain::protocol::GreetingResponseWire::simple("Health", body.as_str());
     let resp = wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0);
     make_reply(_msg, &resp)
 }
 
 fn handle_native_stats(_msg: IpcMsg) -> IpcMsg {
-    let _pipeline = unsafe { PIPELINE.as_mut().unwrap() };
-    let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Stats", "OK");
+    let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+    let d = &pipeline.diagnostics;
+    let mut body = heapless::String::<200>::new();
+    let _ = core::fmt::Write::write_fmt(
+        &mut body,
+        format_args!(
+            "req={} greet={} ok={} rej={} kv_r={} kv_w={} first={} ret={}",
+            d.requests_total.load(core::sync::atomic::Ordering::Relaxed),
+            d.requests_greeting.load(core::sync::atomic::Ordering::Relaxed),
+            d.responses_successful.load(core::sync::atomic::Ordering::Relaxed),
+            d.requests_rejected.load(core::sync::atomic::Ordering::Relaxed),
+            d.kv_reads.load(core::sync::atomic::Ordering::Relaxed),
+            d.kv_writes.load(core::sync::atomic::Ordering::Relaxed),
+            d.responses_first_visit.load(core::sync::atomic::Ordering::Relaxed),
+            d.responses_returning_visit.load(core::sync::atomic::Ordering::Relaxed),
+        ),
+    );
+    let greeting =
+        wiseowl_brain::protocol::GreetingResponseWire::simple("Stats", body.as_str());
     let resp = wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0);
     make_reply(_msg, &resp)
+}
+
+fn handle_preferences_get(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
+    if caller_pid == 0 {
+        return make_error_reply(msg, 403);
+    }
+    let body = read_native_body(msg);
+    let uid = if body.len() >= 8 {
+        u64::from_le_bytes(body[0..8].try_into().unwrap_or([0; 8]))
+    } else {
+        0
+    };
+    use wiseowl_brain::kv_client::native::NativeKvStore;
+    let store = NativeKvStore;
+    let loaded = load_mtm(&store, uid);
+    let mut summary = heapless::String::<160>::new();
+    let _ = core::fmt::Write::write_fmt(
+        &mut summary,
+        format_args!(
+            "style={} machine={} index={} visits={}",
+            loaded.preferences.greeting_style.as_str(),
+            loaded.preferences.show_machine_summary as u8,
+            loaded.preferences.show_index_status as u8,
+            loaded.welcome.visit_count
+        ),
+    );
+    serial_println!("[WISEOWL-BRAIN] PREFERENCES_READ PASS");
+    let greeting =
+        wiseowl_brain::protocol::GreetingResponseWire::simple("Preferences", summary.as_str());
+    make_reply(msg, &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0))
+}
+
+fn handle_preferences_set(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
+    if caller_pid == 0 {
+        return make_error_reply(msg, 403);
+    }
+    // words[0]=uid, words[1]=field tag, words[2]=value tag (small enums)
+    // field: 1=style 2=machine 3=index
+    // style value: 0=concise 1=friendly 2=technical
+    // bool value: 0/1
+    let uid = msg.words[0];
+    let field = msg.words[1] as u8;
+    let value = msg.words[2] as u8;
+    use wiseowl_brain::kv_client::native::NativeKvStore;
+    let store = NativeKvStore;
+    let mut loaded = load_mtm(&store, uid);
+    match field {
+        1 => {
+            loaded.preferences.greeting_style =
+                GreetingStyle::from_u8(value).unwrap_or(GreetingStyle::Concise);
+        }
+        2 => loaded.preferences.show_machine_summary = value != 0,
+        3 => loaded.preferences.show_index_status = value != 0,
+        _ => return make_error_reply(msg, 1),
+    }
+    let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+    if save_preferences(&store, uid, &loaded.preferences).is_ok() {
+        pipeline.diagnostics.inc_kv_write();
+        serial_println!("[WISEOWL-BRAIN] PREFERENCES_WRITE PASS");
+        serial_println!("[WISEOWL-BRAIN] PREFERENCES_APPLIED PASS");
+        let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Preferences", "ok");
+        make_reply(msg, &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0))
+    } else {
+        pipeline.diagnostics.inc_kv_write_fail();
+        make_error_reply(msg, 10)
+    }
+}
+
+fn handle_welcome_completed(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
+    if caller_pid == 0 {
+        return make_error_reply(msg, 403);
+    }
+    // words[0]=uid, words[1]=system_generation
+    let uid = msg.words[0];
+    let gen = msg.words[1];
+    use wiseowl_brain::kv_client::native::NativeKvStore;
+    let store = NativeKvStore;
+    let mut loaded = load_mtm(&store, uid);
+    loaded.welcome.record_completion(gen);
+    let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+    if save_welcome_state(&store, uid, &loaded.welcome).is_ok() {
+        pipeline.diagnostics.inc_kv_write();
+        serial_println!("[WISEOWL-BRAIN] MTM_WRITE PASS");
+        let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Complete", "ok");
+        make_reply(msg, &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0))
+    } else {
+        pipeline.diagnostics.inc_kv_write_fail();
+        // Completion write failure must not break Welcome.
+        let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Complete", "degraded");
+        make_reply(msg, &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0))
+    }
 }
 
 fn handle_native_context(msg: IpcMsg, caller_uid: u64, caller_pid: u64) -> IpcMsg {

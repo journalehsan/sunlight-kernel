@@ -40,8 +40,9 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         "stats" => cmd_stats(),
         "greet" => cmd_greet(&arg_storage[..argc]),
         "context" => cmd_context(&arg_storage[..argc]),
+        "preferences" => cmd_preferences(&arg_storage[..argc]),
         _ => {
-            serial_println!("[WISEOWL-BRAIN] unknown command: {}", arg_storage[1]);
+            serial_println!("[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context|preferences> ...");
         }
     }
 
@@ -265,6 +266,9 @@ fn cmd_context(args: &[&str]) {
                 }
                 i += 2;
             }
+            "--welcome" => {
+                i += 1;
+            }
             _ => {
                 i += 1;
             }
@@ -289,7 +293,83 @@ fn cmd_context(args: &[&str]) {
             serial_println!("[WISEOWL-BRAIN] CONTEXT title={}", g.title);
             serial_println!("[WISEOWL-BRAIN] CONTEXT body={}", g.body);
         }
-        serial_println!("[WISEOWL-BRAIN] CONTEXT provider={} confidence={}", r.provider, r.confidence);
+        serial_println!(
+            "[WISEOWL-BRAIN] CONTEXT provider={} confidence={}",
+            r.provider,
+            r.confidence
+        );
+    }
+}
+
+fn cmd_preferences(args: &[&str]) {
+    let Some(cap) = connect() else {
+        serial_println!("[WISEOWL-BRAIN] cannot connect for preferences");
+        return;
+    };
+    let mut user_id: u64 = 0;
+    let sub = args.get(2).copied().unwrap_or("show");
+    let mut i = 3;
+    while i < args.len() {
+        match args[i] {
+            "--user" if i + 1 < args.len() => {
+                if let Ok(uid) = args[i + 1].parse() {
+                    user_id = uid;
+                }
+                i += 2;
+            }
+            _ => i += 1,
+        }
+    }
+
+    match sub {
+        "show" => {
+            let mut body = heapless::Vec::<u8, 16>::new();
+            for b in user_id.to_le_bytes() {
+                let _ = body.push(b);
+            }
+            if let Some(r) = send_request(cap, BrainOp::PreferencesGet, &body) {
+                if let Some(g) = &r.greeting {
+                    serial_println!("[WISEOWL-BRAIN] preferences: {}", g.body);
+                }
+                serial_println!("[WISEOWL-BRAIN] PREFERENCES_READ PASS");
+                serial_println!("[WISEOWL-BRAIN] NATIVE_CLI PASS");
+            }
+        }
+        "set" => {
+            // wiseowl-brainctl preferences set greeting-style concise
+            // or set show-machine-summary true
+            let field = args.get(3).copied().unwrap_or("");
+            let value = args.get(4).copied().unwrap_or("");
+            let (field_code, value_code) = match (field, value) {
+                ("greeting-style", "concise") => (1u64, 0u64),
+                ("greeting-style", "friendly") => (1, 1),
+                ("greeting-style", "technical") => (1, 2),
+                ("show-machine-summary", "true") | ("show-machine-summary", "1") => (2, 1),
+                ("show-machine-summary", "false") | ("show-machine-summary", "0") => (2, 0),
+                ("show-index-status", "true") | ("show-index-status", "1") => (3, 1),
+                ("show-index-status", "false") | ("show-index-status", "0") => (3, 0),
+                _ => {
+                    serial_println!("[WISEOWL-BRAIN] invalid preference field/value");
+                    return;
+                }
+            };
+            let mut msg = IpcMsg::with_label(BrainOp::PreferencesSet.label())
+                .word(0, user_id)
+                .word(1, field_code)
+                .word(2, value_code);
+            msg.word_count = 3;
+            let reply = ipc_call(cap, msg);
+            let resp_body = read_reply_body(reply);
+            if BrainResponseWire::decode(&resp_body).is_ok() {
+                serial_println!("[WISEOWL-BRAIN] PREFERENCES_WRITE PASS");
+                serial_println!("[WISEOWL-BRAIN] PREFERENCES_APPLIED PASS");
+            } else {
+                serial_println!("[WISEOWL-BRAIN] preferences set failed");
+            }
+        }
+        _ => {
+            serial_println!("[WISEOWL-BRAIN] preferences usage: show | set <field> <value>");
+        }
     }
 }
 
