@@ -1,0 +1,25 @@
+[package]
+name = "sunlight-welcome"
+version = "0.2.3429-alpha.1"
+
+
+
+
+edition = "2021"
+publish = false
+description = "SunlightOS Welcome Wizard (org.sunlight.wiseowl-welcome)"
+
+[lib]
+name = "sunlight_welcome"
+path = "src/lib.rs"
+
+[[bin]]
+name = "welcome"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc"] }
+sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
+sun-font = { path = "../sun-font" }
+heapless = "0.8"

@@ -1,0 +1,24 @@
+[bundle]
+format = 1
+
+[application]
+# Keep ≤24 chars so it cannot hit accidental short String capacities.
+id = "org.sunlight.welcome"
+name = "Welcome to SunlightOS"
+version = "0.1.0"
+kind = "windowed"
+icon = "Resources/icon.tga"
+
+[runtime]
+type = "native"
+
+[entry]
+executable = "/bin/welcome"
+
+[session]
+startup_eligible = true
+default_enabled = true
+default_policy = "first-login-after-system-upgrade"
+single_instance = true
+completion_mode = "wizard-finished"
+launch_path = "/bin/welcome"

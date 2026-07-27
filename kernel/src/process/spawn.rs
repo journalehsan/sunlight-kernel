@@ -848,6 +848,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunbench" | "/usr/bin/sunbench" => Ok(crate::SUNLIGHT_BENCH_ELF_BYTES),
         // calculator: lightweight graphical calculator.
         "/bin/calculator" | "/usr/bin/calculator" => Ok(crate::SUNLIGHT_CALCULATOR_ELF_BYTES),
+        // welcome: SunlightOS Welcome Wizard (startup-eligible .sunapp helper).
+        "/bin/welcome" | "/usr/bin/welcome" => Ok(crate::SUNLIGHT_WELCOME_ELF_BYTES),
         // widget-gallery: developer-only reusable widget preview.
         "/bin/widget-gallery" | "/usr/bin/widget-gallery" => {
             Ok(crate::SUNLIGHT_WIDGET_GALLERY_ELF_BYTES)

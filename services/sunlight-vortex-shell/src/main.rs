@@ -450,7 +450,8 @@ impl DockTheme {
             | AppId::Devices
             | AppId::ApiLab
             | AppId::Mines
-            | AppId::SiliconEchoes => None,
+            | AppId::SiliconEchoes
+            | AppId::Welcome => None,
         }
     }
 }
@@ -557,6 +558,7 @@ pub(crate) enum AppId {
     ApiLab,
     Mines,
     SiliconEchoes,
+    Welcome,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -909,7 +911,8 @@ const MAX_RUNNING_TRACKED: usize = 32;
 const MAX_WINDOW_SNAPSHOTS: usize = 256;
 /// Number of apps tracked in `apps[]` / `RunningAppRegistry::apps[]`. Mirrors
 /// `sunlight_shell_appstate::APP_COUNT`. Kept here as a tuple-array width.
-const APP_REGISTRY_LEN: usize = 15;
+/// Must stay equal to `apps: [DockAppState; N]` and `AppId` variant count.
+const APP_REGISTRY_LEN: usize = 16;
 const ENABLE_RUNNING_TASKBAR: bool = true;
 
 /// Search is an icon button that opens the centered palette; typing belongs
@@ -1507,7 +1510,7 @@ struct VortexShell {
     /// App registry used for launch/focus/restore behavior. Pinned dock apps
     /// are those in [`DOCK_PINNED`]; remaining entries are Start-Menu /
     /// running-strip only but share the same launch/state-sync machinery.
-    apps: [DockAppState; 15],
+    apps: [DockAppState; 16],
     /// Single source of truth for running-application *indicators* (dock
     /// underline, Start Menu tile underline, All Apps underline, future search).
     /// [`Self::sync_app_registry`] updates the registry on each poll, then
@@ -1764,6 +1767,11 @@ impl VortexShell {
                     "Silicon Echoes: 1993",
                     AppId::SiliconEchoes,
                 ),
+                DockAppState::new(
+                    AppId::Welcome,
+                    "Welcome to SunlightOS",
+                    AppId::Welcome,
+                ),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
@@ -2015,6 +2023,7 @@ impl VortexShell {
             AppId::ApiLab => AppStateAppId::ApiLab,
             AppId::Mines => AppStateAppId::Mines,
             AppId::SiliconEchoes => AppStateAppId::SiliconEchoes,
+            AppId::Welcome => AppStateAppId::Welcome,
         }
     }
 
@@ -2050,6 +2059,7 @@ impl VortexShell {
             AppId::ApiLab => "/bin/sunlight-api-lab",
             AppId::Mines => "/Applications/SunlightMines.sunapp",
             AppId::SiliconEchoes => "/bin/silicon-echoes",
+            AppId::Welcome => "/bin/welcome",
         }
     }
 
@@ -2070,6 +2080,7 @@ impl VortexShell {
             AppId::ApiLab => b"sunlight-api-lab",
             AppId::Mines => b"sunlight-mines",
             AppId::SiliconEchoes => b"silicon-echoes",
+            AppId::Welcome => b"welcome",
         }
     }
 
@@ -2090,6 +2101,7 @@ impl VortexShell {
             AppId::ApiLab => "app=sunlight-api-lab",
             AppId::Mines => "app=sunlight-mines",
             AppId::SiliconEchoes => "app=silicon-echoes",
+            AppId::Welcome => "app=welcome",
         }
     }
 
@@ -3176,11 +3188,19 @@ impl VortexShell {
         let _ = reg_launch_id;
 
         Self::log_launch_trace(trace, app_id, "spawn_start", None, now);
+        // Manual Welcome Center launches pass --manual so auto onboarding
+        // completion policy is not confused with launcher relaunch.
+        let welcome_manual: &[&[u8]] = &[b"--manual"];
+        let effective_args: &[&[u8]] = if app_id == AppId::Welcome && args.is_empty() {
+            welcome_manual
+        } else {
+            args
+        };
         match sun_exec::launch(sun_exec::LaunchRequest {
             trace,
             source,
             command: Self::app_launch_command(app_id),
-            args,
+            args: effective_args,
             require_display: true,
         }) {
             Ok(result) => {
@@ -3501,6 +3521,7 @@ impl VortexShell {
             AppId::ApiLab => Some(ICON_API_LAB_TGA),
             AppId::Mines => Some(ICON_GENERIC_APP_TGA),
             AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_TGA),
+            AppId::Welcome => Some(ICON_GENERIC_APP_TGA),
         };
         bytes.and_then(|b| TgaImage::parse(b).ok())
     }

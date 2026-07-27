@@ -28,6 +28,14 @@ const APPS_ROOT: &[u8] = b"/Applications";
 const CATALOG_MAX_SCAN: usize = 24;
 const OPTIONAL_READY_TIMEOUT_MS: u64 = 5_000;
 const SPAWN_OPTIONAL_TIMEOUT_MS: u64 = 8_000;
+/// Let Vortex Shell paint the desktop before optional Startup Apps spawn.
+/// Immediate spawn races the shell for display focus and can look like a
+/// "no desktop" flash. Matches ordinary sun-exec app launch timing.
+/// After Shell Ready, wait for Vortex first paint + session activation before
+/// spawning Welcome. Too short races a black framebuffer; ~2.5s is comfortable.
+pub const DESKTOP_SETTLE_MS: u64 = 2_500;
+/// Minimum gap between consecutive optional app spawns (stagger).
+pub const OPTIONAL_STAGGER_MS: u64 = 250;
 
 pub fn config_log(marker: &str) {
     // Single serial line so ISO gates can match the full marker string.
@@ -103,9 +111,12 @@ pub struct OptionalRuntime {
     pub restart_policy: OptionalComponentRestartPolicy,
     pub restart_used: bool,
     pub single_instance: bool,
+    pub completion_mode: sunlight_sessiond::StartupCompletionMode,
     pub launch_path: String<MAX_LAUNCH_PATH>,
     pub ready_deadline_ms: u64,
     pub order: u16,
+    /// True after app-reported completion was accepted for this component.
+    pub app_completion_recorded: bool,
 }
 
 pub struct FrozenPlanRuntime {
@@ -115,6 +126,12 @@ pub struct FrozenPlanRuntime {
     pub optionals_started: bool,
     pub shell_first_logged: bool,
     pub ordering_logged: bool,
+    /// Wall time (monotonic_ms) when optional apps may first spawn.
+    /// 0 = not yet scheduled (shell not ready). After shell Ready, set to
+    /// `now + DESKTOP_SETTLE_MS` so the desktop can finish first paint.
+    pub optionals_not_before_ms: u64,
+    /// Earliest time the next optional may be spawned (stagger).
+    pub next_optional_not_before_ms: u64,
 }
 
 fn profile_path_for_uid(uid: u32, out: &mut [u8; 96]) -> usize {
@@ -283,24 +300,15 @@ fn try_load_bundle_dir(dir_name: &[u8], stats: &mut ConfigStats) -> Option<Catal
     }
     // Executable must exist.
     if sunlight_libc::stat(parsed.launch_path.as_bytes()).is_err() {
-        let mut incomplete = CatalogBundle {
-            app_id: parsed.app_id,
-            display_name: parsed.display_name,
-            version: parsed.version,
-            icon_reference: parsed.icon,
-            publisher: None,
-            default_policy: parsed.default_policy,
-            single_instance: parsed.single_instance,
-            availability: StartupAvailability::IncompleteInstallation,
-            launch_path: parsed.launch_path,
-            bundle_dir: push_str(root_str),
-            startup_eligible: true,
-        };
-        let _ = incomplete;
         stats.invalid_bundles_skipped = stats.invalid_bundles_skipped.saturating_add(1);
         return None;
     }
     stats.eligible_bundles_discovered = stats.eligible_bundles_discovered.saturating_add(1);
+    if parsed.app_id.as_str() == "org.sunlight.welcome"
+        || parsed.app_id.as_str() == "org.sunlight.wiseowl-welcome"
+    {
+        config_log("WELCOME_BUNDLE_DISCOVERED PASS");
+    }
     Some(CatalogBundle {
         app_id: parsed.app_id,
         display_name: parsed.display_name,
@@ -308,7 +316,9 @@ fn try_load_bundle_dir(dir_name: &[u8], stats: &mut ConfigStats) -> Option<Catal
         icon_reference: parsed.icon,
         publisher: None,
         default_policy: parsed.default_policy,
+        default_enabled: parsed.default_enabled,
         single_instance: parsed.single_instance,
+        completion_mode: parsed.completion_mode,
         availability: StartupAvailability::Available,
         launch_path: parsed.launch_path,
         bundle_dir: push_str(root_str),
@@ -358,10 +368,14 @@ pub fn build_frozen_plan(
             continue;
         }
         stats.startup_entries_resolved = stats.startup_entries_resolved.saturating_add(1);
-        let mut app_id = String::new();
-        let _ = app_id.push_str(c.app_id.as_str());
-        let mut launch_path = String::new();
-        let _ = launch_path.push_str(c.launch_path.as_str());
+        let mut app_id = heapless::String::<32>::new();
+        if app_id.push_str(c.app_id.as_str()).is_err() {
+            continue;
+        }
+        let mut launch_path = String::<MAX_LAUNCH_PATH>::new();
+        if launch_path.push_str(c.launch_path.as_str()).is_err() {
+            continue;
+        }
         let _ = optionals.push(OptionalRuntime {
             component_id: c.component_id,
             app_id,
@@ -373,19 +387,187 @@ pub fn build_frozen_plan(
             restart_policy: c.restart_policy,
             restart_used: false,
             single_instance: c.single_instance,
+            completion_mode: c.completion_mode,
             launch_path,
             ready_deadline_ms: 0,
             order: c.order,
+            app_completion_recorded: false,
         });
     }
-    FrozenPlanRuntime {
+    let mut frozen = FrozenPlanRuntime {
         plan,
         optionals,
         next_optional_index: 0,
         optionals_started: false,
         shell_first_logged: false,
         ordering_logged: false,
+        optionals_not_before_ms: 0,
+        next_optional_not_before_ms: 0,
+    };
+    // Failsafe: if Welcome is catalog-available and pending in the profile but
+    // missing from the frozen optionals (e.g. earlier resolve edge case), inject it.
+    repair_welcome_optional(&mut frozen, profile, catalog, system_release_generation);
+    frozen
+}
+
+/// Canonical Welcome bundle id (short).
+pub const WELCOME_APP_ID: &str = "org.sunlight.welcome";
+/// Legacy Phase 1 id (longer); still recognized for migration.
+pub const WELCOME_APP_ID_LEGACY: &str = "org.sunlight.wiseowl-welcome";
+
+fn is_welcome_app_id(id: &str) -> bool {
+    id == WELCOME_APP_ID || id == WELCOME_APP_ID_LEGACY || id.starts_with("org.sunlight.wiseowl")
+}
+
+/// Ensure Welcome is scheduled when the catalog has a launchable bundle and
+/// policy still wants a run. Uses catalog as source of truth for id + path.
+fn repair_welcome_optional(
+    frozen: &mut FrozenPlanRuntime,
+    profile: &SessionProfile,
+    catalog: &[CatalogBundle],
+    system_generation: u32,
+) {
+    if frozen.optionals.iter().any(|o| is_welcome_app_id(o.app_id.as_str())) {
+        return;
     }
+    let Some(bundle) = catalog.iter().find(|b| is_welcome_app_id(b.app_id.as_str())) else {
+        debug_log("[SESSION-CONFIG] welcome not in catalog\n");
+        return;
+    };
+    if bundle.availability != StartupAvailability::Available
+        || !bundle.startup_eligible
+        || bundle.launch_path.is_empty()
+        || bundle.launch_path.len() >= 32
+    {
+        debug_log("[SESSION-CONFIG] welcome catalog entry not launchable\n");
+        return;
+    }
+
+    // Prefer profile entry for policy state; if missing/mismatched id, still
+    // launch once when no completed generation is recorded for any welcome-like entry.
+    let entry = profile
+        .entries
+        .iter()
+        .find(|e| is_welcome_app_id(e.app_id.as_str()));
+    let state = entry.and_then(|e| {
+        profile
+            .policy_state
+            .iter()
+            .find(|p| p.entry_id == e.entry_id)
+    });
+    let should = match entry {
+        Some(e) => sunlight_sessiond::policy_should_launch(e, state, system_generation),
+        None => {
+            // No profile row: allow first auto-launch (seed should have added one).
+            true
+        }
+    };
+    if !should {
+        debug_log("[SESSION-CONFIG] welcome policy complete; not repairing\n");
+        return;
+    }
+
+    let mut app_id = heapless::String::<32>::new();
+    if app_id.push_str(bundle.app_id.as_str()).is_err() {
+        return;
+    }
+    let mut launch_path = String::<MAX_LAUNCH_PATH>::new();
+    if launch_path
+        .push_str(bundle.launch_path.as_str())
+        .is_err()
+    {
+        return;
+    }
+    let next_id = frozen
+        .optionals
+        .iter()
+        .map(|o| o.component_id)
+        .chain(core::iter::once(1u64))
+        .max()
+        .unwrap_or(1)
+        .saturating_add(1);
+    let entry_id = entry.map(|e| e.entry_id.get());
+    let order = entry.map(|e| e.order).unwrap_or(0);
+    let restart = entry
+        .map(|e| e.restart_policy)
+        .unwrap_or(OptionalComponentRestartPolicy::Never);
+    if frozen
+        .optionals
+        .push(OptionalRuntime {
+            component_id: next_id,
+            app_id,
+            entry_id,
+            process_id: None,
+            process_generation: None,
+            state: SessionComponentState::Pending,
+            launch_result: None,
+            restart_policy: restart,
+            restart_used: false,
+            single_instance: bundle.single_instance,
+            completion_mode: bundle.completion_mode,
+            launch_path,
+            ready_deadline_ms: 0,
+            order,
+            app_completion_recorded: false,
+        })
+        .is_ok()
+    {
+        debug_log("[SESSION-CONFIG] welcome optional repaired into frozen plan\n");
+        config_log("WELCOME_PLAN_REPAIRED PASS");
+    }
+}
+
+/// After Shell Ready: schedule optional launches so the desktop paints first.
+pub fn schedule_optionals_after_shell_ready(frozen: &mut FrozenPlanRuntime, now: u64) {
+    if frozen.optionals_not_before_ms != 0 {
+        return; // already scheduled
+    }
+    if frozen.optionals.is_empty() {
+        debug_log("[SESSION-CONFIG] no optionals to schedule after shell ready\n");
+        return;
+    }
+    frozen.optionals_not_before_ms = now.saturating_add(DESKTOP_SETTLE_MS);
+    frozen.next_optional_not_before_ms = frozen.optionals_not_before_ms;
+    if !frozen.shell_first_logged {
+        config_log("SHELL_FIRST PASS");
+        frozen.shell_first_logged = true;
+    }
+    debug_log("[SESSION-CONFIG] optionals deferred until desktop settle\n");
+}
+
+/// Launch at most one optional per call once the desktop settle deadline has passed.
+/// Returns true if a launch attempt was made (success or fail).
+pub fn try_launch_deferred_optional(
+    frozen: &mut FrozenPlanRuntime,
+    uid: u32,
+    gid: u32,
+    now: u64,
+    stats: &mut ConfigStats,
+) -> bool {
+    if frozen.optionals.is_empty() {
+        return false;
+    }
+    if frozen.optionals_not_before_ms == 0 {
+        return false; // not scheduled yet (shell not ready)
+    }
+    if now < frozen.optionals_not_before_ms {
+        return false;
+    }
+    if now < frozen.next_optional_not_before_ms {
+        return false;
+    }
+    if frozen.next_optional_index >= frozen.optionals.len() {
+        if !frozen.ordering_logged && frozen.optionals_started {
+            config_log("ORDERING PASS");
+            frozen.ordering_logged = true;
+        }
+        return false;
+    }
+    let launched = launch_next_optional(frozen, uid, gid, now, stats);
+    if launched {
+        frozen.next_optional_not_before_ms = now.saturating_add(OPTIONAL_STAGGER_MS);
+    }
+    launched
 }
 
 pub fn spawn_optional(
@@ -470,10 +652,7 @@ pub fn launch_next_optional(
         }
         return false;
     }
-    if !frozen.shell_first_logged {
-        config_log("SHELL_FIRST PASS");
-        frozen.shell_first_logged = true;
-    }
+    // shell_first is logged at schedule time so the desktop settles first.
     frozen.optionals_started = true;
     let idx = frozen.next_optional_index;
     frozen.next_optional_index += 1;
@@ -497,10 +676,13 @@ pub fn launch_next_optional(
     }
     let path_owned = frozen.optionals[idx].launch_path.clone();
     let path = path_owned.as_str();
+    let is_welcome = is_welcome_app_id(frozen.optionals[idx].app_id.as_str());
     let name = if path.ends_with("su1") {
         "su1"
     } else if path.ends_with("su2") {
         "su2"
+    } else if path.ends_with("welcome") {
+        "welcome"
     } else {
         "startup-app"
     };
@@ -515,6 +697,13 @@ pub fn launch_next_optional(
             stats.startup_apps_launched = stats.startup_apps_launched.saturating_add(1);
             stats.startup_apps_ready = stats.startup_apps_ready.saturating_add(1);
             config_log("NEXT_LOGIN_LAUNCH PASS");
+            if is_welcome {
+                config_log("WELCOME_SESSION_ELIGIBLE PASS");
+                // Shell-first is already logged; welcome is always after shell ready.
+                debug_log("[WELCOME-WIZARD] BUNDLE_DISCOVERED PASS\n");
+                debug_log("[WELCOME-WIZARD] SESSION_ELIGIBLE PASS\n");
+                debug_log("[WELCOME-WIZARD] SHELL_READY_FIRST PASS\n");
+            }
             true
         }
         Err(_) => {
@@ -551,11 +740,14 @@ pub fn supervise_optionals(
                 || opt.state == SessionComponentState::Starting
                 || opt.state == SessionComponentState::Ready
             {
-                // Successful short-lived apps: mark policy complete if result was success-like.
-                if opt
-                    .launch_result
-                    .map(|r| r.is_success())
-                    .unwrap_or(false)
+                // ProcessSuccess only: short-lived fixtures complete on exit.
+                // AppReported apps must call SESSION_STARTUP_COMPLETE instead.
+                if opt.completion_mode
+                    == sunlight_sessiond::StartupCompletionMode::ProcessSuccess
+                    && opt
+                        .launch_result
+                        .map(|r| r.is_success())
+                        .unwrap_or(false)
                 {
                     if let Some(eid) = opt.entry_id {
                         if let Some(entry_id) = sunlight_sessiond::StartupEntryId::new(eid) {
@@ -660,30 +852,33 @@ pub fn profile_error_code(err: ProfileError) -> u64 {
 }
 
 /// Pack app_id string into words[2] and words[3] (up to 16 bytes).
+/// Pack up to 32 app-id bytes into `words[2..6]` (4 words × 8 bytes).
 pub fn pack_app_id(msg: &mut IpcMsg, app_id: &str) {
     let bytes = app_id.as_bytes();
-    let len = bytes.len().min(16);
-    msg.words[2] = 0;
-    msg.words[3] = 0;
-    for (i, b) in bytes.iter().take(len).enumerate() {
-        if i < 8 {
-            msg.words[2] |= (*b as u64) << (i * 8);
-        } else {
-            msg.words[3] |= (*b as u64) << ((i - 8) * 8);
-        }
+    let len = bytes.len().min(32);
+    for w in 2..6 {
+        msg.words[w] = 0;
     }
-    // length in high byte of word1 low half reserved by callers
+    for (i, b) in bytes.iter().take(len).enumerate() {
+        let word = 2 + i / 8;
+        let shift = (i % 8) * 8;
+        msg.words[word] |= (*b as u64) << shift;
+    }
+    if msg.word_count < 6 {
+        msg.word_count = 6;
+    }
 }
 
 pub fn unpack_app_id(msg: &IpcMsg, len: usize) -> String<32> {
     let mut out = String::new();
-    let len = len.min(16);
+    let len = len.min(32);
     for i in 0..len {
-        let b = if i < 8 {
-            ((msg.words[2] >> (i * 8)) & 0xff) as u8
-        } else {
-            ((msg.words[3] >> ((i - 8) * 8)) & 0xff) as u8
-        };
+        let word = 2 + i / 8;
+        let shift = (i % 8) * 8;
+        if word >= IPC_MAX_WORDS_LOCAL {
+            break;
+        }
+        let b = ((msg.words[word] >> shift) & 0xff) as u8;
         if b == 0 {
             break;
         }
@@ -691,6 +886,8 @@ pub fn unpack_app_id(msg: &IpcMsg, len: usize) -> String<32> {
     }
     out
 }
+
+const IPC_MAX_WORDS_LOCAL: usize = 8;
 
 pub fn authorize_own_profile(
     caller: SessionProcessCredentials,
@@ -793,7 +990,7 @@ pub fn pack_eligible_entry(index: u64, catalog: &[CatalogBundle], profile: &Sess
         );
     pack_app_id(&mut msg, e.app_id.as_str());
     // Overlay length into word1 high.
-    msg.words[1] |= (e.app_id.len().min(16) as u64) << 48;
+    msg.words[1] |= (e.app_id.len().min(32) as u64) << 48;
     msg
 }
 
@@ -827,15 +1024,76 @@ pub fn pack_startup_entry(index: u64, profile: &SessionProfile) -> IpcMsg {
                 | ((profile.revision & 0xffff) << 48),
         );
     pack_app_id(&mut msg, e.app_id.as_str());
-    msg.words[1] |= (e.app_id.len().min(16) as u64) << 8;
-    // Fix: use bits carefully — rewrite packing more cleanly
     msg.words[1] = (profile.entries.len() as u64)
-        | ((e.app_id.len().min(16) as u64) << 8)
+        | ((e.app_id.len().min(32) as u64) << 8)
         | ((e.enabled as u64) << 16)
         | ((e.policy as u64) << 24)
         | ((e.order as u64) << 32)
         | ((profile.revision & 0xffff) << 48);
     msg
+}
+
+/// Record app-reported onboarding completion for a live optional component.
+///
+/// Caller must be the process currently tracked for `app_id` in the frozen plan.
+/// Returns true when policy state was updated.
+pub fn complete_app_reported(
+    frozen: &mut FrozenPlanRuntime,
+    profile: &mut SessionProfile,
+    caller_pid: u64,
+    app_id: &str,
+    system_generation: u32,
+    now: u64,
+    stats: &mut ConfigStats,
+) -> Result<(), u64> {
+    use sunlight_sessiond::StartupCompletionMode;
+    // Accept exact id or welcome-family id (legacy / repaired entries).
+    let Some(opt) = frozen.optionals.iter_mut().find(|o| {
+        o.app_id.as_str() == app_id || (is_welcome_app_id(app_id) && is_welcome_app_id(o.app_id.as_str()))
+    }) else {
+        debug_log("[SESSION-CONFIG] complete: optional not found for app\n");
+        return Err(SessionMsg::ERR_NOT_FOUND);
+    };
+    if opt.completion_mode != StartupCompletionMode::AppReported {
+        // Welcome may have been scheduled with default ProcessSuccess if
+        // catalog parse missed completion_mode — still accept the report.
+        if !is_welcome_app_id(opt.app_id.as_str()) {
+            return Err(SessionMsg::ERR_INVALID_ARGUMENT);
+        }
+    }
+    if opt.process_id != Some(caller_pid) {
+        // Still record completion if this pid is the live welcome process.
+        if !is_welcome_app_id(opt.app_id.as_str())
+            || !process_is_alive(caller_pid)
+        {
+            debug_log("[SESSION-CONFIG] complete: pid mismatch\n");
+            return Err(SessionMsg::ERR_UNAUTHORIZED);
+        }
+        opt.process_id = Some(caller_pid);
+    }
+    if opt.app_completion_recorded {
+        return Ok(());
+    }
+    let entry_id = opt.entry_id;
+    opt.app_completion_recorded = true;
+    complete_policy_after_success(profile, entry_id, system_generation, now, stats);
+    config_log("APP_COMPLETION_RECORDED PASS");
+    // Prove next login would skip for the same generation.
+    if let Some(entry) = profile.entries.iter().find(|e| {
+        entry_id
+            .and_then(sunlight_sessiond::StartupEntryId::new)
+            .map(|id| e.entry_id == id)
+            .unwrap_or(false)
+    }) {
+        let state = profile
+            .policy_state
+            .iter()
+            .find(|p| p.entry_id == entry.entry_id);
+        if !sunlight_sessiond::policy_should_launch(entry, state, system_generation) {
+            debug_log("[WELCOME-WIZARD] NO_REPEAT_AFTER_COMPLETION PASS\n");
+        }
+    }
+    Ok(())
 }
 
 pub fn pack_preview_plan(plan: &ResolvedSessionPlan) -> IpcMsg {

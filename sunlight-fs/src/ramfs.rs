@@ -1043,6 +1043,36 @@ order = 0
     ),
     RamEntry::file("/bin/su1", 0, 0, mode::FILE_755, b"#!/sunlight/su1\n"),
     RamEntry::file("/bin/su2", 0, 0, mode::FILE_755, b"#!/sunlight/su2\n"),
+    // Welcome Wizard (org.sunlight.wiseowl-welcome) — ordinary startup-eligible .sunapp.
+    RamEntry::dir("/Applications/WiseOwlWelcome.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir(
+        "/Applications/WiseOwlWelcome.sunapp/Resources",
+        0,
+        0,
+        mode::DIR_755,
+    ),
+    RamEntry::file(
+        "/Applications/WiseOwlWelcome.sunapp/Manifest.toml",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../WiseOwlWelcome.sunapp/Manifest.toml"),
+    ),
+    RamEntry::file(
+        "/Applications/WiseOwlWelcome.sunapp/Resources/icon.tga",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../WiseOwlWelcome.sunapp/Resources/icon.tga"),
+    ),
+    RamEntry::file("/bin/welcome", 0, 0, mode::FILE_755, b"#!/sunlight/welcome\n"),
+    RamEntry::file(
+        "/usr/bin/welcome",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/welcome\n",
+    ),
     RamEntry::file(
         "/etc/sunlight/ssh.toml",
         0,

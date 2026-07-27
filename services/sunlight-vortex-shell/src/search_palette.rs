@@ -189,6 +189,14 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
         action: SearchAction::LaunchApp(AppId::SiliconEchoes),
         category: "Games",
     },
+    SearchEntry {
+        app_id: AppId::Welcome,
+        title: "Welcome to SunlightOS",
+        aliases: &["welcome", "onboarding", "tour", "wiseowl"],
+        keywords: &["help", "wizard", "start"],
+        action: SearchAction::LaunchApp(AppId::Welcome),
+        category: "System",
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -334,6 +342,7 @@ fn app_id_token(id: AppId) -> &'static str {
         AppId::ApiLab => "apilab",
         AppId::Mines => "mines",
         AppId::SiliconEchoes => "siliconechoes",
+        AppId::Welcome => "welcome",
     }
 }
 
@@ -376,7 +385,7 @@ pub(crate) fn rank_applications(query: &str, out: &mut [RankedHit]) -> usize {
 
     // Deduplicate by app_id (keep best rank already first).
     let mut written = 0usize;
-    let mut seen = [false; 16]; // APP_COUNT is 15
+    let mut seen = [false; 16]; // APP_COUNT / AppId variant count
     for i in 0..n {
         let hit = hits[i].unwrap();
         let app_id = SEARCH_REGISTRY[hit.entry_index].app_id as usize;

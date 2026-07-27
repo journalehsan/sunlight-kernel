@@ -268,6 +268,9 @@ static SUNLIGHT_BENCH_ELF_BYTES: &[u8] =
 // Sunlight Calculator: lightweight graphical calculator.
 static SUNLIGHT_CALCULATOR_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/calculator");
+// Welcome Wizard (org.sunlight.wiseowl-welcome).
+static SUNLIGHT_WELCOME_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/welcome");
 // Developer widget gallery (DigitalNumber / SolarClock / WorldMap preview).
 static SUNLIGHT_WIDGET_GALLERY_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/widget-gallery");
@@ -3794,6 +3797,7 @@ fn setup_key_injection() {
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
         "session_foundation" => build_session_foundation_sequence(),
         "session_configuration" => build_session_configuration_sequence(),
+        "welcome_wizard" => build_session_configuration_sequence(),
         "phase2b1" => build_phase2b1_sequence(),
         "phase6.5.3" => build_phase6_5_3_sequence(),
         "phase6.5.utils" => build_phase6_5_utils_sequence(),

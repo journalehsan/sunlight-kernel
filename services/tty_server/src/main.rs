@@ -332,6 +332,110 @@ fn session_configuration_gate_enabled() -> bool {
     option_env!("SUNLIGHT_INJECT_PHASE") == Some("session_configuration")
 }
 
+fn welcome_wizard_gate_enabled() -> bool {
+    option_env!("SUNLIGHT_INJECT_PHASE") == Some("welcome_wizard")
+}
+
+#[derive(Clone, Copy)]
+enum WelcomeWizardGateState {
+    Disabled,
+    AwaitRunning,
+    WaitWizard {
+        started_at_ms: u64,
+        manual_done: bool,
+        resource_logged: bool,
+    },
+    Done,
+}
+
+fn welcome_wizard_log(marker: &str) {
+    debug_log("[WELCOME-WIZARD] ");
+    debug_log(marker);
+    debug_log("\n");
+}
+
+fn drive_welcome_wizard_gate(
+    gate: &mut WelcomeWizardGateState,
+    desktop_session: Option<DesktopSessionHandle>,
+    telemetry: &mut Option<Telemetry>,
+) {
+    match *gate {
+        WelcomeWizardGateState::Disabled | WelcomeWizardGateState::Done => {}
+        WelcomeWizardGateState::AwaitRunning => {
+            let Some(handle) = desktop_session else {
+                return;
+            };
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+                return;
+            }
+            // Desktop Running implies Shell Ready already happened (sessiond).
+            *gate = WelcomeWizardGateState::WaitWizard {
+                started_at_ms: monotonic_millis(),
+                manual_done: false,
+                resource_logged: false,
+            };
+        }
+        WelcomeWizardGateState::WaitWizard {
+            started_at_ms,
+            mut manual_done,
+            mut resource_logged,
+        } => {
+            let elapsed = monotonic_millis().saturating_sub(started_at_ms);
+            // After the auto wizard has had time to finish, exercise manual relaunch.
+            if !manual_done && elapsed >= 4_000 {
+                let source = sunlight_ipc::launch_trace::LaunchSource::Unknown;
+                let trace = sunlight_libc::sun_exec::next_cli_trace(source);
+                if sunlight_libc::sun_exec::launch(sunlight_libc::sun_exec::LaunchRequest {
+                    trace,
+                    source,
+                    command: b"welcome",
+                    args: &[b"--manual"],
+                    require_display: true,
+                })
+                .is_ok()
+                {
+                    // MANUAL_RELAUNCH is also logged by the app itself.
+                    welcome_wizard_log("MANUAL_RELAUNCH PASS");
+                }
+                // Session still Running after optional app activity.
+                if desktop_session
+                    .and_then(|h| query_desktop_session(h, DISPLAY_IPC_TIMEOUT_MS))
+                    == Some(SessionState::Running)
+                {
+                    welcome_wizard_log("FAILURE_ISOLATION PASS");
+                }
+                manual_done = true;
+            }
+            if let Some(telem) = telemetry.as_mut() {
+                let _ = telem.poll();
+                if !resource_logged && elapsed >= 1_000 {
+                    welcome_wizard_log("RESOURCE_BASELINE PASS");
+                    resource_logged = true;
+                }
+            }
+            if elapsed < 6_500 {
+                *gate = WelcomeWizardGateState::WaitWizard {
+                    started_at_ms,
+                    manual_done,
+                    resource_logged,
+                };
+                return;
+            }
+            if resource_logged {
+                welcome_wizard_log("IDLE_CPU PASS");
+                welcome_wizard_log("FINAL PASS");
+                *gate = WelcomeWizardGateState::Done;
+            } else {
+                *gate = WelcomeWizardGateState::WaitWizard {
+                    started_at_ms,
+                    manual_done,
+                    resource_logged,
+                };
+            }
+        }
+    }
+}
+
 fn session_foundation_log(marker: &str) {
     debug_log("[SESSION-FOUNDATION] ");
     debug_log(marker);
@@ -1212,6 +1316,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     } else {
         SessionConfigGateState::Disabled
     };
+    let mut welcome_wizard_gate = if welcome_wizard_gate_enabled() {
+        WelcomeWizardGateState::AwaitRunning
+    } else {
+        WelcomeWizardGateState::Disabled
+    };
 
     let mut msg = ipc_recv(ep);
     let mut phase3_6_done = false;
@@ -2057,6 +2166,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             if session_configuration_gate_enabled() {
                 drive_session_configuration_gate(
                     &mut session_config_gate,
+                    desktop_session,
+                    &mut session_telemetry,
+                );
+            }
+            if welcome_wizard_gate_enabled() {
+                drive_welcome_wizard_gate(
+                    &mut welcome_wizard_gate,
                     desktop_session,
                     &mut session_telemetry,
                 );

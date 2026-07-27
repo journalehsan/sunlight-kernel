@@ -128,6 +128,47 @@ pub enum StartupLaunchPhase {
     AfterShellReady = 1,
 }
 
+/// How one-time startup policies complete for an optional app.
+///
+/// `ProcessSuccess` (default): successful spawn/short-lived exit completes
+/// FirstLogin* policies (Session Configuration Phase 1 fixtures).
+///
+/// `AppReported`: launch alone never completes the policy; the app must send
+/// `SESSION_STARTUP_COMPLETE` after the user finishes onboarding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum StartupCompletionMode {
+    ProcessSuccess = 1,
+    AppReported = 2,
+}
+
+impl StartupCompletionMode {
+    pub const fn from_u8(raw: u8) -> Option<Self> {
+        match raw {
+            1 => Some(Self::ProcessSuccess),
+            2 => Some(Self::AppReported),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ProcessSuccess => "process-success",
+            Self::AppReported => "app-reported",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "process-success" | "ProcessSuccess" => Some(Self::ProcessSuccess),
+            "app-reported" | "AppReported" | "wizard-finished" | "WizardFinished" => {
+                Some(Self::AppReported)
+            }
+            _ => None,
+        }
+    }
+}
+
 impl StartupLaunchPhase {
     pub const fn from_u8(raw: u8) -> Option<Self> {
         match raw {
@@ -312,6 +353,7 @@ pub struct ResolvedSessionComponent {
     pub restart_policy: OptionalComponentRestartPolicy,
     pub launch_path: String<MAX_LAUNCH_PATH>,
     pub single_instance: bool,
+    pub completion_mode: StartupCompletionMode,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -581,7 +623,7 @@ pub fn profile_add_app(
     }
     let entry_id = next_entry_id(profile);
     let order = profile.entries.len() as u16;
-    let mut id = String::new();
+    let mut id = String::<MAX_APP_ID>::new();
     id.push_str(app_id)
         .map_err(|_| ProfileError::InvalidString)?;
     let entry = StartupEntry {
@@ -769,7 +811,7 @@ pub fn mark_policy_success(
     profile.checksum = profile_checksum(profile);
 }
 
-fn policy_should_launch(
+pub fn policy_should_launch(
     entry: &StartupEntry,
     state: Option<&StartupPolicyState>,
     system_generation: u32,
@@ -798,7 +840,9 @@ pub struct CatalogBundle {
     pub icon_reference: Option<String<MAX_ICON_REF>>,
     pub publisher: Option<String<MAX_PUBLISHER>>,
     pub default_policy: StartupPolicy,
+    pub default_enabled: bool,
     pub single_instance: bool,
+    pub completion_mode: StartupCompletionMode,
     pub availability: StartupAvailability,
     pub launch_path: String<MAX_LAUNCH_PATH>,
     pub bundle_dir: String<MAX_BUNDLE_DIR>,
@@ -902,6 +946,7 @@ pub fn resolve_session_plan(
             restart_policy: OptionalComponentRestartPolicy::Never,
             launch_path,
             single_instance: true,
+            completion_mode: StartupCompletionMode::ProcessSuccess,
         });
         next_id = next_id.saturating_add(1);
     }
@@ -950,10 +995,14 @@ pub fn resolve_session_plan(
             if bundle.launch_path.is_empty() {
                 continue;
             }
-            let mut app_id = String::new();
-            let _ = app_id.push_str(e.app_id.as_str());
-            let mut launch_path = String::new();
-            let _ = launch_path.push_str(bundle.launch_path.as_str());
+            let mut app_id = String::<MAX_APP_ID>::new();
+            if app_id.push_str(e.app_id.as_str()).is_err() {
+                continue;
+            }
+            let mut launch_path = String::<MAX_LAUNCH_PATH>::new();
+            if launch_path.push_str(bundle.launch_path.as_str()).is_err() {
+                continue;
+            }
             let _ = components.push(ResolvedSessionComponent {
                 component_id: next_id,
                 app_id,
@@ -965,6 +1014,7 @@ pub fn resolve_session_plan(
                 restart_policy: e.restart_policy,
                 launch_path,
                 single_instance: bundle.single_instance,
+                completion_mode: bundle.completion_mode,
             });
             next_id = next_id.saturating_add(1);
         }
@@ -1009,6 +1059,7 @@ pub struct ParsedBundleSession {
     pub default_enabled: bool,
     pub default_policy: StartupPolicy,
     pub single_instance: bool,
+    pub completion_mode: StartupCompletionMode,
     pub runtime_native: bool,
     pub launch_path: String<MAX_LAUNCH_PATH>,
 }
@@ -1044,6 +1095,7 @@ pub fn parse_bundle_session_manifest(
     let mut default_enabled = false;
     let mut default_policy = StartupPolicy::EveryLogin;
     let mut single_instance = true;
+    let mut completion_mode = StartupCompletionMode::ProcessSuccess;
     let mut runtime = String::<16>::new();
     let mut entry_exec = String::<MAX_LAUNCH_PATH>::new();
 
@@ -1115,6 +1167,12 @@ pub fn parse_bundle_session_manifest(
             ("session", "single_instance") => {
                 single_instance = toml_bool(value).unwrap_or(true);
             }
+            ("session", "completion_mode") => {
+                if let Some(s) = toml_string_value(value) {
+                    completion_mode =
+                        StartupCompletionMode::parse(s).unwrap_or(StartupCompletionMode::ProcessSuccess);
+                }
+            }
             ("session", "launch_path") => {
                 // System-only short spawn path for native session utilities.
                 if let Some(s) = toml_string_value(value) {
@@ -1152,8 +1210,6 @@ pub fn parse_bundle_session_manifest(
         // launch_path from session.launch_path already handled into entry_exec when absolute.
     }
 
-    let _ = default_enabled; // reserved for future default profile seeding
-
     Ok(ParsedBundleSession {
         app_id,
         display_name,
@@ -1163,9 +1219,51 @@ pub fn parse_bundle_session_manifest(
         default_enabled,
         default_policy,
         single_instance,
+        completion_mode,
         runtime_native,
         launch_path,
     })
+}
+
+/// Seed catalog apps marked `default_enabled` into a fresh user profile.
+///
+/// Only adds entries that are not already configured. Used when a profile is
+/// first created (Missing) so first-login onboarding can auto-launch without
+/// Control Panel configuration.
+pub fn seed_default_enabled_apps(
+    profile: &mut SessionProfile,
+    catalog: &[CatalogBundle],
+    now: u64,
+) -> u32 {
+    let mut added = 0u32;
+    for bundle in catalog.iter() {
+        if !bundle.default_enabled || !bundle.startup_eligible {
+            continue;
+        }
+        if bundle.availability != StartupAvailability::Available {
+            continue;
+        }
+        if profile
+            .entries
+            .iter()
+            .any(|e| e.app_id.as_str() == bundle.app_id.as_str())
+        {
+            continue;
+        }
+        let rev = profile.revision;
+        if profile_add_app(
+            profile,
+            bundle.app_id.as_str(),
+            bundle.default_policy,
+            rev,
+            now,
+        )
+        .is_ok()
+        {
+            added = added.saturating_add(1);
+        }
+    }
+    added
 }
 
 /// Serialize profile to a compact binary blob for atomic persistence.
@@ -1428,7 +1526,9 @@ order = 0
             icon_reference: None,
             publisher: None,
             default_policy: StartupPolicy::EveryLogin,
+            default_enabled: false,
             single_instance: true,
+            completion_mode: StartupCompletionMode::ProcessSuccess,
             availability: StartupAvailability::Available,
             launch_path: String::new(),
             bundle_dir: String::new(),
@@ -1722,6 +1822,179 @@ launch_path = "/bin/su1"
         assert!(parsed.startup_eligible);
         assert_eq!(parsed.launch_path.as_str(), "/bin/su1");
         assert_eq!(parsed.default_policy, StartupPolicy::EveryLogin);
+        assert_eq!(parsed.completion_mode, StartupCompletionMode::ProcessSuccess);
+    }
+
+    #[test]
+    fn parse_app_reported_completion_mode() {
+        let text = r#"
+[application]
+id = "org.sunlight.welcome"
+name = "Welcome to SunlightOS"
+version = "0.1.0"
+
+[session]
+startup_eligible = true
+default_enabled = true
+default_policy = "first-login-after-system-upgrade"
+single_instance = true
+completion_mode = "wizard-finished"
+launch_path = "/bin/welcome"
+"#;
+        let parsed =
+            parse_bundle_session_manifest(text, "/Applications/WiseOwlWelcome.sunapp").unwrap();
+        assert!(parsed.default_enabled);
+        assert_eq!(
+            parsed.default_policy,
+            StartupPolicy::FirstLoginAfterSystemUpgrade
+        );
+        assert_eq!(parsed.completion_mode, StartupCompletionMode::AppReported);
+        assert_eq!(parsed.launch_path.as_str(), "/bin/welcome");
+        assert_eq!(parsed.app_id.as_str(), "org.sunlight.welcome");
+    }
+
+    #[test]
+    fn seed_default_enabled_adds_once() {
+        let mut cat = catalog_two();
+        cat[0].default_enabled = true;
+        cat[0].default_policy = StartupPolicy::FirstLoginAfterSystemUpgrade;
+        cat[0].completion_mode = StartupCompletionMode::AppReported;
+        let mut p = default_profile(1000, "org.sunlight.session.desktop", 1).unwrap();
+        let n = seed_default_enabled_apps(&mut p, &cat, 10);
+        assert_eq!(n, 1);
+        assert_eq!(p.entries.len(), 1);
+        assert_eq!(p.entries[0].app_id.as_str(), "org.sun.test.su1");
+        assert_eq!(
+            p.entries[0].policy,
+            StartupPolicy::FirstLoginAfterSystemUpgrade
+        );
+        // Second seed is a no-op.
+        assert_eq!(seed_default_enabled_apps(&mut p, &cat, 11), 0);
+        assert_eq!(p.entries.len(), 1);
+    }
+
+    #[test]
+    fn welcome_manifest_seeds_and_resolves_optional() {
+        let text = r#"
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.welcome"
+name = "Welcome to SunlightOS"
+version = "0.1.0"
+icon = "Resources/icon.tga"
+
+[runtime]
+type = "native"
+
+[entry]
+executable = "/bin/welcome"
+
+[session]
+startup_eligible = true
+default_enabled = true
+default_policy = "first-login-after-system-upgrade"
+single_instance = true
+completion_mode = "wizard-finished"
+launch_path = "/bin/welcome"
+"#;
+        let parsed =
+            parse_bundle_session_manifest(text, "/Applications/WiseOwlWelcome.sunapp").unwrap();
+        assert!(parsed.default_enabled);
+        assert_eq!(parsed.app_id.as_str(), "org.sunlight.welcome");
+        assert_eq!(parsed.launch_path.as_str(), "/bin/welcome");
+        assert_eq!(
+            parsed.completion_mode,
+            StartupCompletionMode::AppReported
+        );
+        assert_eq!(
+            parsed.default_policy,
+            StartupPolicy::FirstLoginAfterSystemUpgrade
+        );
+
+        let cat = CatalogBundle {
+            app_id: parsed.app_id.clone(),
+            display_name: parsed.display_name.clone(),
+            version: parsed.version.clone(),
+            icon_reference: parsed.icon.clone(),
+            publisher: None,
+            default_policy: parsed.default_policy,
+            default_enabled: parsed.default_enabled,
+            single_instance: parsed.single_instance,
+            completion_mode: parsed.completion_mode,
+            availability: StartupAvailability::Available,
+            launch_path: parsed.launch_path.clone(),
+            bundle_dir: {
+                let mut s = String::new();
+                let _ = s.push_str("/Applications/WiseOwlWelcome.sunapp");
+                s
+            },
+            startup_eligible: true,
+        };
+        let catalog = [cat];
+        let mut p = default_profile(0, "org.sunlight.session.desktop", 1).unwrap();
+        let n = seed_default_enabled_apps(&mut p, &catalog, 10);
+        assert_eq!(n, 1, "welcome must seed into empty profile");
+        assert_eq!(p.entries.len(), 1);
+        assert_eq!(p.entries[0].app_id.as_str(), "org.sunlight.welcome");
+        assert!(p.entries[0].enabled);
+        assert_eq!(
+            p.entries[0].policy,
+            StartupPolicy::FirstLoginAfterSystemUpgrade
+        );
+
+        let manifest = base_manifest();
+        let plan = resolve_session_plan(&manifest, &p, &catalog, 1, 1, 1, 1, false);
+        let optional = plan
+            .components
+            .iter()
+            .filter(|c| c.kind == ResolvedComponentKind::OptionalStartup)
+            .count();
+        assert_eq!(
+            optional, 1,
+            "seeded welcome must appear as optional in plan, got components={:?}",
+            plan.components
+                .iter()
+                .map(|c| c.app_id.as_str())
+                .collect::<std::vec::Vec<_>>()
+        );
+        assert_eq!(
+            plan.components[1].completion_mode,
+            StartupCompletionMode::AppReported
+        );
+    }
+
+    #[test]
+    fn app_reported_policy_not_complete_until_mark() {
+        let mut p = default_profile(1000, "org.sunlight.session.desktop", 1).unwrap();
+        profile_add_app(
+            &mut p,
+            "org.sunlight.welcome",
+            StartupPolicy::FirstLoginAfterSystemUpgrade,
+            1,
+            2,
+        )
+        .unwrap();
+        let eid = p.entries[0].entry_id;
+        // Launch eligibility remains until explicit mark.
+        assert!(policy_should_launch(
+            &p.entries[0],
+            p.policy_state.iter().find(|s| s.entry_id == eid),
+            1
+        ));
+        mark_policy_success(&mut p, eid, 1, 3);
+        assert!(!policy_should_launch(
+            &p.entries[0],
+            p.policy_state.iter().find(|s| s.entry_id == eid),
+            1
+        ));
+        // New system generation re-arms.
+        assert!(policy_should_launch(
+            &p.entries[0],
+            p.policy_state.iter().find(|s| s.entry_id == eid),
+            2
+        ));
     }
 
     #[test]

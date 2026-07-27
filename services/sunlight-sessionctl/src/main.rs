@@ -41,27 +41,27 @@ fn session_ep() -> Option<sunlight_ipc::CapabilityToken> {
 
 fn pack_app_id(msg: &mut IpcMsg, app_id: &str) {
     let bytes = app_id.as_bytes();
-    let len = bytes.len().min(16);
-    msg.words[2] = 0;
-    msg.words[3] = 0;
+    let len = bytes.len().min(32);
+    for w in 2..6 {
+        msg.words[w] = 0;
+    }
     for (i, b) in bytes.iter().take(len).enumerate() {
-        if i < 8 {
-            msg.words[2] |= (*b as u64) << (i * 8);
-        } else {
-            msg.words[3] |= (*b as u64) << ((i - 8) * 8);
-        }
+        let word = 2 + i / 8;
+        let shift = (i % 8) * 8;
+        msg.words[word] |= (*b as u64) << shift;
+    }
+    if msg.word_count < 6 {
+        msg.word_count = 6;
     }
 }
 
 fn unpack_app_id(msg: &IpcMsg, len: usize) -> heapless::String<32> {
     let mut out = heapless::String::new();
-    let len = len.min(16);
+    let len = len.min(32);
     for i in 0..len {
-        let b = if i < 8 {
-            ((msg.words[2] >> (i * 8)) & 0xff) as u8
-        } else {
-            ((msg.words[3] >> ((i - 8) * 8)) & 0xff) as u8
-        };
+        let word = 2 + i / 8;
+        let shift = (i % 8) * 8;
+        let b = ((msg.words[word] >> shift) & 0xff) as u8;
         if b == 0 {
             break;
         }

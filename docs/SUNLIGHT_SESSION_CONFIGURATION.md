@@ -281,9 +281,14 @@ RESOURCE_BASELINE / IDLE_CPU markers on a real boot.
 - No Start Now / Stop Now runtime controls
 - Chronos-only long `.sunapp` paths not yet launchable as startup apps
 
-## Wise Owl Welcome entry criteria
+## Welcome Wizard (implemented)
 
-A future Welcome app is an ordinary optional component:
+Welcome is now an ordinary optional startup component. Design and permanent
+fix notes live under **session manager** docs:
+
+- [`session-manager/README.md`](./session-manager/README.md)
+- [`session-manager/WELCOME_WIZARD_PHASE1.md`](./session-manager/WELCOME_WIZARD_PHASE1.md)
+- [`session-manager/WELCOME_WIZARD_IMPLEMENTATION_FIXES.md`](./session-manager/WELCOME_WIZARD_IMPLEMENTATION_FIXES.md)
 
 ```toml
 [session]
@@ -291,9 +296,13 @@ startup_eligible = true
 default_enabled = true
 default_policy = "first-login-after-system-upgrade"
 single_instance = true
+completion_mode = "wizard-finished"
+launch_path = "/bin/welcome"
 ```
 
-No Wise Owl special-cases exist in sessiond.
+Bundle id: `org.sunlight.welcome`. No Welcome special-case inside Login or
+Vortex lifecycle; sessiond uses the generic optional path plus a short desktop
+settle delay before spawn.
 
 ## Session Restore boundary
 
@@ -303,5 +312,5 @@ This phase implements only the Startup Profile side.
 
 ## Explicit non-implementation confirmation
 
-Wise Owl Welcome, Session Restore, Pattern Recognition, and self-healing were
-**not** implemented in this phase.
+Full Wise Owl inference, Session Restore, Pattern Recognition, and self-healing
+were **not** implemented in Session Configuration Phase 1 (or Welcome Phase 1).

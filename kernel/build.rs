@@ -595,6 +595,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "sunlight-welcome",
+            output: "welcome",
+            rustflags: service_rustflags,
+            args: &["--bin", "welcome", "--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-widget-gallery",
             output: "widget-gallery",
             rustflags: service_rustflags,

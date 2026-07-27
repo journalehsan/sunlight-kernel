@@ -601,6 +601,7 @@ fn resolve(command: &[u8]) -> Option<ResolvedApp> {
 fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
     match command {
         b"calculator" | b"calc" => Some(b"/bin/calculator"),
+        b"welcome" | b"wiseowl-welcome" | b"sunlight-welcome" => Some(b"/bin/welcome"),
         b"terminal" | b"term" | b"sunlight-terminal" => Some(b"/bin/sunlight-terminal"),
         b"chronos" | b"sunlight-chronos" | b"sunlight-dos-terminal" => {
             Some(b"/Applications/ChronosDosShell.sunapp")

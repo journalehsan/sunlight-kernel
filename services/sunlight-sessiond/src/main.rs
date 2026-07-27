@@ -6,9 +6,10 @@ mod config_ops;
 
 use config_ops::{
     apply_mutation, authorize_own_profile, build_frozen_plan, config_log, discover_catalog,
-    launch_next_optional, load_or_default_profile, load_system_release_generation, pack_eligible_entry,
-    pack_preview_plan, pack_profile_summary, pack_startup_entry, persist_profile, profile_error_code,
-    stop_optionals, supervise_optionals, unpack_app_id, ConfigStats, FrozenPlanRuntime,
+    load_or_default_profile, load_system_release_generation, pack_eligible_entry, pack_preview_plan,
+    pack_profile_summary, pack_startup_entry, persist_profile, profile_error_code,
+    schedule_optionals_after_shell_ready, stop_optionals, supervise_optionals,
+    try_launch_deferred_optional, unpack_app_id, ConfigStats, FrozenPlanRuntime,
 };
 use heapless::Vec;
 use sunlight_ipc::{
@@ -328,38 +329,55 @@ fn transition_to_running(session: &mut ActiveSession, now: u64) -> bool {
     false
 }
 
-fn launch_optional_after_shell_ready(state: &mut ServiceState, now: u64) {
+/// Shell just became Ready: schedule optionals after a desktop settle delay.
+/// Actual spawns happen in `supervise` via `try_launch_deferred_optional` so
+/// Vortex can paint the desktop before Welcome (or other startup apps) appear.
+fn schedule_optionals_on_shell_ready(state: &mut ServiceState, now: u64) {
     let Some(active) = state.active.as_mut() else {
         return;
     };
+    let Some(frozen) = active.frozen.as_mut() else {
+        return;
+    };
+    schedule_optionals_after_shell_ready(frozen, now);
+}
+
+/// Tick deferred optional launches (at most one per call, after settle + stagger).
+fn tick_deferred_optionals(state: &mut ServiceState, now: u64) {
+    let Some(active) = state.active.as_mut() else {
+        return;
+    };
+    if active.record.state != SessionState::Running {
+        return;
+    }
     let uid = active.record.uid;
     let gid = active.record.gid;
     let gen = active.system_release_generation;
-    // Launch all AfterShellReady optionals in deterministic order; failures are isolated.
-    loop {
-        let Some(frozen) = active.frozen.as_mut() else {
-            break;
-        };
-        let before = frozen.next_optional_index;
-        if !launch_next_optional(frozen, uid, gid, now, &mut state.config_stats) {
-            break;
-        }
-        let (entry_id, success) = {
-            let opt = &frozen.optionals[before];
-            (
-                opt.entry_id,
-                opt.launch_result.map(|r| r.is_success()).unwrap_or(false),
-            )
-        };
-        if success {
-            config_ops::complete_policy_after_success(
-                &mut active.profile,
-                entry_id,
-                gen,
-                now,
-                &mut state.config_stats,
-            );
-        }
+    let Some(frozen) = active.frozen.as_mut() else {
+        return;
+    };
+    let before = frozen.next_optional_index;
+    if !try_launch_deferred_optional(frozen, uid, gid, now, &mut state.config_stats) {
+        return;
+    }
+    let (entry_id, success, app_reported) = {
+        let opt = &frozen.optionals[before];
+        (
+            opt.entry_id,
+            opt.launch_result.map(|r| r.is_success()).unwrap_or(false),
+            opt.completion_mode == sunlight_sessiond::StartupCompletionMode::AppReported,
+        )
+    };
+    // ProcessSuccess only: successful spawn completes FirstLogin* policies.
+    // AppReported (Welcome Wizard) requires SESSION_STARTUP_COMPLETE.
+    if success && !app_reported {
+        config_ops::complete_policy_after_success(
+            &mut active.profile,
+            entry_id,
+            gen,
+            now,
+            &mut state.config_stats,
+        );
     }
 }
 
@@ -486,6 +504,8 @@ fn supervise(state: &mut ServiceState) {
     let now = monotonic_millis();
     let mut finalize = false;
     let mut do_restart = false;
+    // Deferred AfterShellReady optionals (Welcome, fixtures, …).
+    tick_deferred_optionals(state, now);
     if let Some(active) = state.active.as_mut() {
         let session_state = active.record.state;
         let stopping = session_state == SessionState::Stopping;
@@ -625,6 +645,95 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         config_log("PROFILE_DEFAULT PASS");
     }
     state.refresh_catalog();
+    // Seed default_enabled catalog apps (e.g. Welcome Wizard) on first profile
+    // or any empty valid profile (so Welcome is not skipped after a reset).
+    if !profile_degraded
+        && (matches!(load_status, ProfileLoadStatus::Missing) || profile.entries.is_empty())
+    {
+        let seeded =
+            sunlight_sessiond::seed_default_enabled_apps(&mut profile, &state.catalog, now);
+        if seeded > 0 {
+            let _ = persist_profile(&profile);
+            config_log("DEFAULT_ENABLED_SEEDED PASS");
+        }
+    }
+    // Migrate legacy long Welcome ids → org.sunlight.welcome, and drop duplicates.
+    {
+        let mut changed = false;
+        for entry in profile.entries.iter_mut() {
+            if entry.app_id.as_str() != config_ops::WELCOME_APP_ID
+                && (entry.app_id.as_str() == config_ops::WELCOME_APP_ID_LEGACY
+                    || entry.app_id.as_str().starts_with("org.sunlight.wiseowl"))
+            {
+                entry.app_id.clear();
+                let _ = entry.app_id.push_str(config_ops::WELCOME_APP_ID);
+                changed = true;
+            }
+        }
+        for st in profile.policy_state.iter_mut() {
+            if st.app_id.as_str() != config_ops::WELCOME_APP_ID
+                && (st.app_id.as_str() == config_ops::WELCOME_APP_ID_LEGACY
+                    || st.app_id.as_str().starts_with("org.sunlight.wiseowl"))
+            {
+                st.app_id.clear();
+                let _ = st.app_id.push_str(config_ops::WELCOME_APP_ID);
+                // Re-arm tour once after id migration so users who never saw it get a run.
+                st.completed_system_generation = None;
+                st.completed_first_login = false;
+                changed = true;
+            }
+        }
+        // Dedup welcome entries (keep first).
+        let mut seen_welcome = false;
+        let mut i = 0usize;
+        while i < profile.entries.len() {
+            if profile.entries[i].app_id.as_str() == config_ops::WELCOME_APP_ID {
+                if seen_welcome {
+                    let eid = profile.entries[i].entry_id;
+                    profile.entries.swap_remove(i);
+                    profile.policy_state.retain(|p| p.entry_id != eid);
+                    changed = true;
+                    continue;
+                }
+                seen_welcome = true;
+            }
+            i += 1;
+        }
+        if changed {
+            sunlight_sessiond::normalize_orders(&mut profile);
+            profile.checksum = sunlight_sessiond::profile_checksum(&profile);
+            let _ = persist_profile(&profile);
+            config_log("WELCOME_ID_MIGRATED PASS");
+        }
+    }
+    // Ensure Welcome is configured when the trusted bundle is available.
+    if !profile_degraded
+        && state
+            .catalog
+            .iter()
+            .any(|b| b.app_id.as_str() == config_ops::WELCOME_APP_ID)
+        && !profile
+            .entries
+            .iter()
+            .any(|e| e.app_id.as_str() == config_ops::WELCOME_APP_ID)
+    {
+        let rev = profile.revision;
+        match sunlight_sessiond::profile_add_app(
+            &mut profile,
+            config_ops::WELCOME_APP_ID,
+            sunlight_sessiond::StartupPolicy::FirstLoginAfterSystemUpgrade,
+            rev,
+            now,
+        ) {
+            Ok(()) => {
+                let _ = persist_profile(&profile);
+                config_log("WELCOME_SEEDED PASS");
+            }
+            Err(_) => {
+                config_log("WELCOME_SEED_FAILED PASS");
+            }
+        }
+    }
     // ISO gate reliability: under session_configuration inject, seed one eligible
     // Startup App when the profile is still empty so Shell-first optional launch is
     // proven even if a subsequent interactive re-login key sequence is lost.
@@ -660,8 +769,9 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     );
     {
         use core::fmt::Write;
+        // Short multi-line diagnostics (avoid heapless line truncation).
         let mut line = heapless::String::<96>::new();
-        let optional = frozen
+        let optional_plan = frozen
             .plan
             .components
             .iter()
@@ -669,15 +779,55 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
                 c.kind == sunlight_sessiond::ResolvedComponentKind::OptionalStartup
             })
             .count();
+        let optional_rt = frozen.optionals.len();
         let _ = write!(
             &mut line,
-            "[SESSION-CONFIG] plan_components={} optional={} catalog={} profile_entries={}\n",
+            "[SESSION-CONFIG] plan c={} opt_plan={} opt_rt={} cat={} prof={} gen={}\n",
             frozen.plan.components.len(),
-            optional,
+            optional_plan,
+            optional_rt,
             state.catalog.len(),
-            profile.entries.len()
+            profile.entries.len(),
+            system_gen,
         );
         write_log(line.as_str());
+        for (i, e) in profile.entries.iter().enumerate() {
+            line.clear();
+            let _ = write!(
+                &mut line,
+                "[SESSION-CONFIG] prof[{}] id={} pol={} en={}\n",
+                i,
+                e.app_id.as_str(),
+                e.policy.as_str(),
+                e.enabled as u8,
+            );
+            write_log(line.as_str());
+        }
+        for (i, o) in frozen.optionals.iter().enumerate() {
+            line.clear();
+            let _ = write!(
+                &mut line,
+                "[SESSION-CONFIG] opt[{}] id={} path={}\n",
+                i,
+                o.app_id.as_str(),
+                o.launch_path.as_str(),
+            );
+            write_log(line.as_str());
+        }
+        if let Some(b) = state
+            .catalog
+            .iter()
+            .find(|b| b.app_id.as_str() == config_ops::WELCOME_APP_ID)
+        {
+            line.clear();
+            let _ = write!(
+                &mut line,
+                "[SESSION-CONFIG] welcome cat path={} def_en={}\n",
+                b.launch_path.as_str(),
+                b.default_enabled as u8,
+            );
+            write_log(line.as_str());
+        }
     }
     // Prove current plan immutability relative to later profile edits.
     config_log("CURRENT_PLAN_IMMUTABLE PASS");
@@ -885,8 +1035,9 @@ fn component_ready(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     if became_running {
         state.stats.sessions_started = state.stats.sessions_started.saturating_add(1);
         state.stats.sessions_running = state.stats.sessions_running.saturating_add(1);
-        // Required shell is Ready — launch optional Startup Apps from frozen plan.
-        launch_optional_after_shell_ready(state, now);
+        // Required shell is Ready — schedule optionals after desktop settles.
+        // Do not spawn immediately: Welcome would race Vortex for the screen.
+        schedule_optionals_on_shell_ready(state, now);
     }
     IpcMsg::with_label(SessionMsg::REPLY)
 }
@@ -1090,6 +1241,48 @@ fn handle_preview_plan(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     pack_preview_plan(&plan)
 }
 
+fn handle_startup_complete(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
+    let Some(caller) = session_query_process(msg.badge) else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    let app_len = (msg.words[0] & 0xff) as usize;
+    let app_id = unpack_app_id(&msg, app_len);
+    if app_id.is_empty() {
+        return error(SessionMsg::ERR_INVALID_ARGUMENT);
+    }
+    let Some(active) = state.active.as_mut() else {
+        return error(SessionMsg::ERR_INVALID_STATE);
+    };
+    if active.record.uid != caller.uid && caller.uid != 0 {
+        state.stats.unauthorized_session_requests =
+            state.stats.unauthorized_session_requests.saturating_add(1);
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    let Some(frozen) = active.frozen.as_mut() else {
+        return error(SessionMsg::ERR_INVALID_STATE);
+    };
+    let now = monotonic_millis();
+    match config_ops::complete_app_reported(
+        frozen,
+        &mut active.profile,
+        caller.pid,
+        app_id.as_str(),
+        active.system_release_generation,
+        now,
+        &mut state.config_stats,
+    ) {
+        Ok(()) => {
+            // Keep disk profile in sync with the active session profile.
+            let _ = persist_profile(&active.profile);
+            config_log("COMPLETION_RECORDED PASS");
+            IpcMsg::with_label(SessionMsg::REPLY)
+                .word(0, active.system_release_generation as u64)
+                .word(1, active.profile.revision)
+        }
+        Err(code) => error(code),
+    }
+}
+
 fn handle_profile_status(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     let Some(caller) = session_query_process(msg.badge) else {
         return error(SessionMsg::ERR_UNAUTHORIZED);
@@ -1171,6 +1364,7 @@ pub extern "C" fn _start() -> ! {
             }
             SessionMsg::SESSION_PROFILE_PREVIEW_PLAN => handle_preview_plan(&mut state, message),
             SessionMsg::SESSION_PROFILE_STATUS => handle_profile_status(&mut state, message),
+            SessionMsg::SESSION_STARTUP_COMPLETE => handle_startup_complete(&mut state, message),
             _ => error(SessionMsg::ERR_INVALID_ARGUMENT),
         };
     }

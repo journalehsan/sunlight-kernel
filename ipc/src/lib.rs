@@ -1804,6 +1804,10 @@ pub mod SessionMsg {
     pub const SESSION_PROFILE_LIST_ELIGIBLE_APPS: u64 = 0xC119;
     pub const SESSION_PROFILE_PREVIEW_PLAN: u64 = 0xC11A;
     pub const SESSION_PROFILE_STATUS: u64 = 0xC11B;
+    /// Optional startup app reports one-time policy completion (wizard finished).
+    /// words[0] = app_id length; words[2..] packed app_id bytes (up to 32).
+    /// Caller must be the live optional process for that app in the active plan.
+    pub const SESSION_STARTUP_COMPLETE: u64 = 0xC11C;
     pub const REPLY: u64 = 0xC1FF;
     pub const ERROR: u64 = 0xC1FE;
 
