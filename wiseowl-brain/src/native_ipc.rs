@@ -5,7 +5,14 @@ use crate::error::BrainError;
 pub const NATIVE_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_REQUEST_BODY: u32 = 64 * 1024;
 pub const MAX_REPLY_BODY: u32 = 64 * 1024;
+/// Max payload that may be packed into a single SHM page after the BrainIpcHeader.
 pub const INLINE_PAYLOAD_THRESHOLD: u32 = 3072;
+/// Register IPC ABI only carries `words[0..4]` (see sunlight_ipc). With
+/// `words[0] = body_len`, at most 3×8 = 24 bytes of body can travel inline.
+/// Anything larger **must** use SHM (cap0 + BrainIpcHeader).
+pub const REG_INLINE_BODY_MAX: usize = 24;
+/// Max `word_count` accepted by the kernel register transport.
+pub const IPC_REG_WORDS: u32 = 4;
 pub const SHM_PAGE_SIZE: u32 = 4096;
 pub const BRAIN_IPC_HEADER_LEN: usize = 24;
 pub const REQUIRED_FLAGS_MASK: u32 = 0xFFFF_0000;
@@ -84,6 +91,7 @@ pub enum BrainOp {
     Greeting = 0xB001,
     Summary = 0xB002,
     Suggestion = 0xB003,
+    Context = 0xB004,
     Health = 0xB00E,
     Stats = 0xB00F,
     Reply = 0xBF80,
@@ -96,6 +104,7 @@ impl BrainOp {
             0xB001 => Some(Self::Greeting),
             0xB002 => Some(Self::Summary),
             0xB003 => Some(Self::Suggestion),
+            0xB004 => Some(Self::Context),
             0xB00E => Some(Self::Health),
             0xB00F => Some(Self::Stats),
             0xBF80 => Some(Self::Reply),
@@ -170,6 +179,13 @@ mod tests {
         assert!(
             (BRAIN_IPC_HEADER_LEN as u32 + INLINE_PAYLOAD_THRESHOLD) <= SHM_PAGE_SIZE
         );
+    }
+
+    #[test]
+    fn reg_inline_body_fits_register_words() {
+        // words[0]=len + words[1..3]=body bytes; max 3 words of body.
+        assert_eq!(REG_INLINE_BODY_MAX, 24);
+        assert!(REG_INLINE_BODY_MAX <= (IPC_REG_WORDS as usize - 1) * 8);
     }
 
     #[test]

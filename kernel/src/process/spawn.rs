@@ -922,6 +922,12 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/wiseowl-indexctl" | "/usr/bin/wiseowl-indexctl" => {
             Ok(crate::WISEOWL_INDEXCTL_ELF_BYTES)
         }
+        "/sbin/wiseowl-braind" | "/usr/sbin/wiseowl-braind" => {
+            Ok(crate::WISEOWL_BRAIND_ELF_BYTES)
+        }
+        "/bin/wiseowl-brainctl" | "/usr/bin/wiseowl-brainctl" => {
+            Ok(crate::WISEOWL_BRAINCTL_ELF_BYTES)
+        }
         "/bin/sunlight-clipman" | "/usr/bin/sunlight-clipman" => {
             Ok(crate::SUNLIGHT_CLIPMAN_ELF_BYTES)
         }

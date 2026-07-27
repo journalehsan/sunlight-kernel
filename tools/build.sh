@@ -130,7 +130,9 @@ echo "[build] Building kernel..."
 # The kernel embeds userspace ELF blobs via include_bytes!, but Cargo does not
 # track those release artifacts as kernel inputs. Force a fresh kernel compile
 # so changed services are actually baked into the ISO.
+# Also force sunlightd rebuild so new service units are included.
 touch "$PROJECT_ROOT/kernel/src/main.rs"
+touch "$PROJECT_ROOT/services/sunlightd/src/main.rs"
 cargo build --package sunlight-kernel
 
 # --- Step 3–6: Limine hybrid ISO (legacy BIOS + x86_64 UEFI) ---

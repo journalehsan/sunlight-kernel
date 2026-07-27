@@ -3,8 +3,7 @@ use core::fmt::Write;
 use crate::context::BrainContext;
 use crate::error::BrainResult;
 use crate::protocol::{
-    ActionWire, GreetingResponseWire, HighlightWire, MAX_ACTION_LABEL, MAX_GREETING_LEN,
-    MAX_HIGHLIGHT_LABEL, MAX_HIGHLIGHT_VALUE,
+    ActionWire, GreetingResponseWire, HighlightWire, MAX_GREETING_LEN, MAX_HIGHLIGHT_VALUE,
 };
 
 fn s<const N: usize>(text: &str) -> heapless::String<N> {

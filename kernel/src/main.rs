@@ -335,6 +335,11 @@ static WISEOWL_INDEXD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexd");
 static WISEOWL_INDEXCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexctl");
+// Wise Owl Phase 4A: bounded cognitive brain service + diagnostic CLI.
+static WISEOWL_BRAIND_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-braind");
+static WISEOWL_BRAINCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-brainctl");
 static SUNLIGHT_CLIPMAN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
 static EMOJI_PICKER_ELF_BYTES: &[u8] =

@@ -2,8 +2,7 @@ use core::fmt::Write;
 
 use crate::context::BrainContext;
 use crate::protocol::{
-    MAX_ACTION_LABEL, MAX_DEVICE_CLASS_LEN, MAX_HIGHLIGHT_LABEL, MAX_HIGHLIGHT_VALUE,
-    MAX_MODEL_LEN, MAX_NAME_LEN, MAX_VERSION_LEN,
+    MAX_HIGHLIGHT_LABEL, MAX_HIGHLIGHT_VALUE, MAX_NAME_LEN,
 };
 
 /// Short-term memory: current request-local working context, fast and bounded.

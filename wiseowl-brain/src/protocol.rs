@@ -112,7 +112,7 @@ pub const MAX_ACTION_LABEL: usize = 64;
 
 #[cfg(feature = "host")]
 pub mod host_types {
-    use super::*;
+    
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]

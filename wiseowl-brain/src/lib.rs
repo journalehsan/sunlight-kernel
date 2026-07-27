@@ -14,6 +14,9 @@ pub mod diagnostics;
 pub mod greeting;
 pub mod pipeline;
 pub mod provider;
+pub mod grounded;
+pub mod provenance;
+pub mod adapters;
 
 pub use pipeline::CognitivePipeline;
 pub use provider::{BrainProvider, LocalBoundedProvider, FutureOnlineProvider, ProviderRegistry};

@@ -1,9 +1,10 @@
-use crate::context::{BrainContext, ContextBuilder};
+use crate::context::{BrainContext, ContextBuilder, GroundedContextBuilder};
 use crate::diagnostics::BrainDiagnostics;
 use crate::error::{BrainError, BrainResult};
 use crate::greeting;
-use crate::memory_layers::BoundedContextSet;
-use crate::protocol::{BrainRequestWire, BrainResponseWire, GreetingRequestWire};
+use crate::grounded::{AuthIdentity, BrainContextSource, GroundedFact};
+use crate::protocol::{BrainRequestWire, BrainResponseWire};
+use crate::provenance::{BrainProviderKind, BrainResponseMeta};
 
 pub struct CognitivePipeline {
     pub diagnostics: BrainDiagnostics,
@@ -19,7 +20,7 @@ impl CognitivePipeline {
     pub fn handle_request(&mut self, request: &BrainRequestWire) -> BrainResponseWire {
         self.diagnostics.inc_requests();
 
-        if let Err(e) = self.validate_request(request) {
+        if let Err(_e) = self.validate_request(request) {
             self.diagnostics.inc_rejected();
             self.diagnostics.set_error(1);
             return BrainResponseWire::error(1, request.request_id);
@@ -50,13 +51,64 @@ impl CognitivePipeline {
         }
     }
 
-    fn validate_request(&self, request: &BrainRequestWire) -> BrainResult<()> {
-        if request.user_id == 0 && request.caller_uid == 0 {
-            return Err(BrainError::Unauthorized);
+    pub fn handle_request_grounded(
+        &mut self,
+        request: &BrainRequestWire,
+        identity: &AuthIdentity,
+        sources: &[&dyn BrainContextSource],
+    ) -> (BrainResponseWire, BrainResponseMeta) {
+        self.diagnostics.inc_requests();
+
+        if let Err(_e) = self.validate_request(request) {
+            self.diagnostics.inc_rejected();
+            self.diagnostics.set_error(1);
+            return (
+                BrainResponseWire::error(1, request.request_id),
+                BrainResponseMeta::empty(),
+            );
         }
+
+        let request_kind = match BrainRequestKindWire::from_u16(request.request_kind) {
+            Some(k) => k,
+            None => {
+                self.diagnostics.inc_rejected();
+                self.diagnostics.set_error(2);
+                return (
+                    BrainResponseWire::error(2, request.request_id),
+                    BrainResponseMeta::empty(),
+                );
+            }
+        };
+
+        match request_kind {
+            BrainRequestKindWire::Greeting => {
+                self.diagnostics.inc_greeting();
+                self.handle_greeting_grounded(request, identity, sources)
+            }
+            _ => {
+                self.diagnostics.inc_rejected();
+                (
+                    BrainResponseWire::error(3, request.request_id),
+                    BrainResponseMeta::empty(),
+                )
+            }
+        }
+    }
+
+    fn validate_request(&self, request: &BrainRequestWire) -> BrainResult<()> {
+        // Root (uid=0) is a valid local user on SunlightOS (welcome and many
+        // services run as uid=0). Do not treat zero ids as unauthorized.
+        // Identity is still constrained by the native daemon's PID badge check.
 
         if request.request_kind == 1 && request.greeting.is_none() {
             return Err(BrainError::InvalidRequest("greeting request missing payload"));
+        }
+
+        if request.user_id != 0
+            && request.caller_uid != 0
+            && request.user_id != request.caller_uid
+        {
+            return Err(BrainError::Unauthorized);
         }
 
         Ok(())
@@ -65,7 +117,7 @@ impl CognitivePipeline {
     fn handle_greeting(&mut self, request: &BrainRequestWire) -> BrainResponseWire {
         let ctx = match self.build_context(request) {
             Ok(c) => c,
-            Err(e) => {
+            Err(_e) => {
                 self.diagnostics.inc_context_fail();
                 self.diagnostics.set_error(10);
                 return BrainResponseWire::error(10, request.request_id);
@@ -74,7 +126,7 @@ impl CognitivePipeline {
 
         let greeting_resp = match greeting::plan_greeting_response(&ctx) {
             Ok(r) => r,
-            Err(e) => {
+            Err(_e) => {
                 self.diagnostics.inc_alignment_fail();
                 self.diagnostics.set_error(11);
                 return BrainResponseWire::error(11, request.request_id);
@@ -85,6 +137,132 @@ impl CognitivePipeline {
         self.diagnostics.inc_success();
 
         BrainResponseWire::greeting(greeting_resp, request.request_id)
+    }
+
+    fn handle_greeting_grounded(
+        &mut self,
+        request: &BrainRequestWire,
+        identity: &AuthIdentity,
+        sources: &[&dyn BrainContextSource],
+    ) -> (BrainResponseWire, BrainResponseMeta) {
+        let mut builder = GroundedContextBuilder::new(*identity);
+        let mut all_facts: heapless::Vec<GroundedFact, 48> = heapless::Vec::new();
+
+        for source in sources {
+            let facts = builder.gather_from(*source);
+            for f in facts.iter() {
+                let _ = all_facts.push(f.clone());
+            }
+        }
+
+        let ctx = match self.build_context_from_facts(request, &all_facts) {
+            Ok(c) => c,
+            Err(_) => {
+                self.diagnostics.inc_context_fail();
+                self.diagnostics.set_error(10);
+                return (
+                    BrainResponseWire::error(10, request.request_id),
+                    BrainResponseMeta::empty(),
+                );
+            }
+        };
+
+        let greeting_resp = match greeting::plan_greeting_response(&ctx) {
+            Ok(r) => r,
+            Err(_) => {
+                self.diagnostics.inc_alignment_fail();
+                self.diagnostics.set_error(11);
+                return (
+                    BrainResponseWire::error(11, request.request_id),
+                    BrainResponseMeta::empty(),
+                );
+            }
+        };
+
+        self.diagnostics.inc_local();
+        self.diagnostics.inc_success();
+
+        let meta = BrainResponseMeta {
+            provider: BrainProviderKind::LocalBounded,
+            sources_consulted: builder.sources_consulted(),
+            sources_degraded: builder.sources_degraded(),
+            fact_count: all_facts.len() as u8,
+            generation_time_us: 0,
+        };
+
+        (
+            BrainResponseWire::greeting(greeting_resp, request.request_id),
+            meta,
+        )
+    }
+
+    fn build_context_from_facts(
+        &self,
+        request: &BrainRequestWire,
+        facts: &[GroundedFact],
+    ) -> BrainResult<BrainContext> {
+        let mut builder = ContextBuilder::new().user_id(request.user_id);
+
+        if request.session_id != 0 {
+            builder = builder.session_id(Some(request.session_id));
+        }
+
+        for fact in facts {
+            match fact.kind {
+                crate::grounded::FactKind::FirstLogin => {
+                    builder = builder.first_login(!fact.value.is_empty());
+                }
+                crate::grounded::FactKind::FirstAfterUpgrade => {
+                    builder = builder.first_after_upgrade(!fact.value.is_empty());
+                }
+                crate::grounded::FactKind::RamMib => {
+                    if let Ok(v) = fact.value.parse::<u32>() {
+                        builder = builder.ram_mib(Some(v));
+                    } else if fact.value.contains("GiB") {
+                        if let Some(gib_str) = fact.value.split(' ').next() {
+                            if let Ok(gib) = gib_str.parse::<u32>() {
+                                builder = builder.ram_mib(Some(gib * 1024));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(ref g) = request.greeting {
+            if !g.display_name.is_empty() {
+                builder = builder.user_display_name(&g.display_name);
+            }
+            if !g.sunlight_version.is_empty() {
+                builder = builder.sunlight_version(&g.sunlight_version);
+            }
+            if g.cpu_cores > 0 {
+                builder = builder.cpu_cores(Some(g.cpu_cores));
+            }
+            if g.ram_mib > 0 {
+                builder = builder.ram_mib(Some(g.ram_mib));
+            }
+            if !g.device_class.is_empty() {
+                builder = builder.device_class(&g.device_class);
+            }
+            if !g.model_name.is_empty() {
+                builder = builder.model_name(&g.model_name);
+            }
+            if g.screen_w > 0 {
+                builder = builder.screen_dims(Some(g.screen_w), Some(g.screen_h));
+            }
+            builder = builder.first_login(g.first_login != 0);
+            builder = builder.first_after_upgrade(g.first_after_upgrade != 0);
+        }
+
+        if !request.locale.is_empty() {
+            builder = builder.locale(&request.locale);
+        }
+
+        let ctx = builder.build();
+        ctx.validate()?;
+        Ok(ctx)
     }
 
     fn build_context(&self, request: &BrainRequestWire) -> BrainResult<BrainContext> {
@@ -221,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn pipeline_rejects_unauthorized() {
+    fn pipeline_rejects_missing_greeting_payload() {
         let mut pipeline = CognitivePipeline::new();
         let req = BrainRequestWire {
             request_id: 1,
@@ -237,6 +415,28 @@ mod tests {
         assert_eq!(resp.response_kind, 0xFFFE);
         assert_eq!(resp.error_code, 1);
         assert!(resp.greeting.is_none());
+    }
+
+    #[test]
+    fn pipeline_accepts_root_uid_zero() {
+        let mut pipeline = CognitivePipeline::new();
+        let mut req = make_greeting_request(true, "Root");
+        req.caller_uid = 0;
+        req.user_id = 0;
+        let resp = pipeline.handle_request(&req);
+        assert_eq!(resp.response_kind, 1);
+        assert!(resp.greeting.is_some());
+    }
+
+    #[test]
+    fn pipeline_rejects_mismatched_identity() {
+        let mut pipeline = CognitivePipeline::new();
+        let mut req = make_greeting_request(true, "Alice");
+        req.caller_uid = 1000;
+        req.user_id = 2000;
+        let resp = pipeline.handle_request(&req);
+        assert_eq!(resp.response_kind, 0xFFFE);
+        assert_eq!(resp.error_code, 1);
     }
 
     #[test]
@@ -319,5 +519,20 @@ mod tests {
         }
         assert_eq!(pipeline.diagnostics.requests_total.load(core::sync::atomic::Ordering::Relaxed), 5);
         assert_eq!(pipeline.diagnostics.requests_greeting.load(core::sync::atomic::Ordering::Relaxed), 5);
+    }
+
+    #[test]
+    fn grounded_pipeline_returns_meta() {
+        use crate::adapters::SessionContextSource;
+        let mut pipeline = CognitivePipeline::new();
+        let req = make_greeting_request(true, "Alice");
+        let identity = AuthIdentity { caller_uid: 1000, caller_pid: 1, session_id: 42 };
+        let session_source = SessionContextSource;
+        let sources: [&dyn BrainContextSource; 1] = [&session_source];
+        let (resp, meta) = pipeline.handle_request_grounded(&req, &identity, &sources);
+
+        assert_eq!(resp.response_kind, 1);
+        assert_eq!(meta.provider, BrainProviderKind::LocalBounded);
+        assert!(meta.fact_count > 0);
     }
 }

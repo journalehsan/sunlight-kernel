@@ -13,7 +13,7 @@ use sun_font::{draw_text, FontRole, TextStyle, Typography, VecFont};
 use sunlight_ipc::{
     debug_log, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_yield,
     query_display_metrics, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit,
-    SessionMsg, SESSION_ENDPOINT, SHM_PAGE,
+    SessionMsg, SESSION_ENDPOINT,
 };
 use sunlight_libc::{self as libc, crt0, sun_exec};
 use sunlight_ui::{
@@ -28,7 +28,7 @@ use sunlight_welcome::{
 };
 use wiseowl_brain::native_ipc::{
     BrainIpcHeader, BrainOp, NATIVE_PROTOCOL_VERSION, BRAIN_ENDPOINT,
-    BRAIN_IPC_HEADER_LEN, INLINE_PAYLOAD_THRESHOLD, SHM_PAGE_SIZE,
+    BRAIN_IPC_HEADER_LEN, SHM_PAGE_SIZE,
 };
 use wiseowl_brain::protocol::{
     BrainRequestWire, BrainResponseWire, GreetingRequestWire,
@@ -181,12 +181,19 @@ fn open_action(card: &ActionCard) -> Result<(), &'static str> {
 
 /// Try requesting a greeting from wiseowl-braind via native IPC.
 /// Returns Some(greeting_text) on success, None on any failure.
+///
+/// Register IPC only carries 4 words (~24 body bytes after length). Greeting
+/// requests are ~70+ bytes, so the body always travels in SHM with a
+/// BrainIpcHeader (same layout braind uses for replies).
 fn try_brain_greeting(state: &WizardState) -> Option<heapless::String<MAX_GREETING>> {
     use heapless::String as HString;
 
-    let ep = nameserver_lookup(BRAIN_ENDPOINT)?;
+    let Some(ep) = nameserver_lookup(BRAIN_ENDPOINT) else {
+        debug_log("[WELCOME-WIZARD] brain endpoint missing\n");
+        return None;
+    };
 
-    let mut display_name: HString<MAX_NAME> = HString::new();
+    let display_name: HString<MAX_NAME> = HString::new();
     let mut version: HString<MAX_VERSION_LEN> = HString::new();
     let _ = version.push_str(state.sunlight_version.as_str());
     let mut dc: HString<MAX_DEVICE_CLASS_LEN> = HString::new();
@@ -204,10 +211,11 @@ fn try_brain_greeting(state: &WizardState) -> Option<heapless::String<MAX_GREETI
         }
     }
 
+    let uid = libc::getuid() as u64;
     let req = BrainRequestWire {
         request_id: 1,
-        caller_uid: unsafe { libc::getuid() } as u64,
-        user_id: unsafe { libc::getuid() } as u64,
+        caller_uid: uid,
+        user_id: uid,
         session_id: 0,
         locale_len: 0,
         locale: HString::new(),
@@ -229,49 +237,91 @@ fn try_brain_greeting(state: &WizardState) -> Option<heapless::String<MAX_GREETI
     };
 
     let body = req.encode();
+    if body.len() + BRAIN_IPC_HEADER_LEN > SHM_PAGE_SIZE as usize {
+        debug_log("[WELCOME-WIZARD] brain request too large for SHM page\n");
+        return None;
+    }
 
-    let mut msg = IpcMsg::with_label(BrainOp::Greeting.label());
-    msg.words[0] = body.len() as u64;
-    for (i, chunk) in body.chunks(8).enumerate().take(7) {
-        let mut word: u64 = 0;
-        for (j, &b) in chunk.iter().enumerate() {
-            word |= (b as u64) << (j * 8);
+    let (ptr, req_cap) = match shm_alloc() {
+        Ok(v) => v,
+        Err(_) => {
+            debug_log("[WELCOME-WIZARD] brain request shm_alloc failed\n");
+            return None;
         }
-        msg.words[1 + i] = word;
-    }
-    msg.word_count = 1 + (body.len().div_ceil(8)) as u32;
-    if msg.word_count > 8 {
-        msg.word_count = 8;
+    };
+    let header = BrainIpcHeader {
+        protocol_version: NATIVE_PROTOCOL_VERSION,
+        operation: BrainOp::Greeting.as_u16(),
+        flags: 0,
+        request_id: 1,
+        body_len: body.len() as u32,
+        reserved: 0,
+    };
+    let header_enc = header.encode();
+    unsafe {
+        core::ptr::copy_nonoverlapping(header_enc.as_ptr(), ptr, BRAIN_IPC_HEADER_LEN);
+        core::ptr::copy_nonoverlapping(
+            body.as_ptr(),
+            ptr.add(BRAIN_IPC_HEADER_LEN),
+            body.len(),
+        );
     }
 
-    let reply = ipc_call_timeout(ep, msg, 100).ok()?;
+    let msg = IpcMsg::with_label(BrainOp::Greeting.label())
+        .word(0, body.len() as u64)
+        .with_cap(0, req_cap);
 
-    let resp_body_len = if reply.word_count >= 1 { reply.words[0] as usize } else { 0 };
+    // 500ms: local provider is fast, but first contact can contend with boot load.
+    let reply = match ipc_call_timeout(ep, msg, 500) {
+        Ok(r) => r,
+        Err(_) => {
+            let _ = shm_free(req_cap);
+            debug_log("[WELCOME-WIZARD] brain ipc_call failed/timeout\n");
+            return None;
+        }
+    };
+    let _ = shm_free(req_cap);
+
     let mut resp_bytes: heapless::Vec<u8, 1024> = heapless::Vec::new();
-    if resp_body_len > 0 {
-        for i in 0..resp_body_len.min(56) {
+    // Prefer SHM reply (greeting responses always use SHM from braind).
+    if reply.cap_count > 0 {
+        if let Ok(rptr) = shm_map(reply.caps[0]) {
+            let slice =
+                unsafe { core::slice::from_raw_parts(rptr as *const u8, SHM_PAGE_SIZE as usize) };
+            let body_len = if slice.len() >= 20 {
+                u32::from_le_bytes([slice[16], slice[17], slice[18], slice[19]]) as usize
+            } else {
+                0
+            };
+            let start = BRAIN_IPC_HEADER_LEN;
+            let end = (start + body_len).min(SHM_PAGE_SIZE as usize);
+            for &b in &slice[start..end] {
+                if resp_bytes.push(b).is_err() {
+                    break;
+                }
+            }
+            let _ = shm_free(reply.caps[0]);
+        }
+    } else if reply.word_count >= 1 {
+        let resp_body_len = (reply.words[0] as usize).min(24);
+        for i in 0..resp_body_len {
             let word_idx = 1 + i / 8;
+            if word_idx >= 4 {
+                break;
+            }
             let byte_idx = i % 8;
             let byte = (reply.words[word_idx] >> (byte_idx * 8)) as u8;
             let _ = resp_bytes.push(byte);
         }
-    } else if reply.cap_count > 0 {
-        if let Ok(ptr) = shm_map(reply.caps[0]) {
-            let slice = unsafe { core::slice::from_raw_parts(ptr as *const u8, SHM_PAGE_SIZE as usize) };
-            let hdr_end = BRAIN_IPC_HEADER_LEN;
-            let body_len = if slice.len() >= 20 {
-                let mut bl = [0u8; 4];
-                bl.copy_from_slice(&slice[16..20]);
-                u32::from_le_bytes(bl) as usize
-            } else { 0 };
-            let copy_len = (hdr_end + body_len).min(SHM_PAGE_SIZE as usize).min(1024);
-            for &b in &slice[hdr_end..copy_len] {
-                let _ = resp_bytes.push(b);
-            }
-        }
     }
 
-    let (resp, _) = BrainResponseWire::decode(&resp_bytes).ok()?;
+    let (resp, _) = match BrainResponseWire::decode(&resp_bytes) {
+        Ok(r) => r,
+        Err(_) => {
+            debug_log("[WELCOME-WIZARD] brain response decode failed\n");
+            return None;
+        }
+    };
 
     if resp.response_kind == 1 {
         if let Some(g) = resp.greeting {
@@ -293,7 +343,18 @@ fn try_brain_greeting(state: &WizardState) -> Option<heapless::String<MAX_GREETI
                 debug_log("[WISEOWL-BRAIN] WELCOME_INTEGRATION PASS\n");
                 return Some(text);
             }
+            debug_log("[WELCOME-WIZARD] brain greeting empty title/body\n");
+        } else {
+            debug_log("[WELCOME-WIZARD] brain greeting payload missing\n");
         }
+    } else {
+        let mut line: heapless::String<96> = heapless::String::new();
+        let _ = write!(
+            &mut line,
+            "[WELCOME-WIZARD] brain non-greeting kind={} err={}\n",
+            resp.response_kind, resp.error_code
+        );
+        debug_log(&line);
     }
 
     debug_log("[WISEOWL-BRAIN] FALLBACK PASS\n");

@@ -313,8 +313,15 @@ case "$PHASE" in
         NEED_DISK=true
         TIMEOUT=360
         ;;
+    wiseowl-phase4b)
+        EXPECTED_FILE="tools/tests/wiseowl_phase4b.expected"
+        FINAL_MARKER="[WISEOWL-BRAIN] FINAL PASS"
+        PASS_LABEL="Wise Owl Phase 4B Brain Foundation"
+        NEED_DISK=true
+        TIMEOUT=360
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration welcome-wizard wiseowl-phase4a sunlightd top tzctl memory-accounting"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration welcome-wizard wiseowl-phase4a wiseowl-phase4b sunlightd top tzctl memory-accounting"
         exit 2
         ;;
 esac
@@ -340,7 +347,7 @@ elif [[ "$PHASE" == "session-configuration" ]]; then
     SUNLIGHT_INJECT_PHASE=session_configuration RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "welcome-wizard" ]]; then
     SUNLIGHT_INJECT_PHASE=welcome_wizard RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
-elif [[ "$PHASE" == "wiseowl-phase4a" ]]; then
+elif [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" ]]; then
     SUNLIGHT_INJECT_PHASE=welcome_wizard RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
@@ -355,7 +362,7 @@ if [[ "$PHASE" == "session-configuration" ]]; then
     SUNLIGHT_INJECT_PHASE=session_configuration RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "welcome-wizard" ]]; then
     SUNLIGHT_INJECT_PHASE=welcome_wizard RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release >>"$BUILD_LOG" 2>&1
-elif [[ "$PHASE" == "wiseowl-phase4a" ]]; then
+elif [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" ]]; then
     SUNLIGHT_INJECT_PHASE=welcome_wizard RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release >>"$BUILD_LOG" 2>&1
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release >>"$BUILD_LOG" 2>&1
@@ -432,7 +439,7 @@ if [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 fi
-if [[ "$PHASE" == "wiseowl-phase4a" ]]; then
+if [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,phase4a-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
@@ -445,7 +452,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" ]]; then
+if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -490,7 +497,7 @@ elif [[ "$PHASE" == "session-configuration" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=session_configuration)
 elif [[ "$PHASE" == "welcome-wizard" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=welcome_wizard)
-elif [[ "$PHASE" == "wiseowl-phase4a" ]]; then
+elif [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=welcome_wizard)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
@@ -498,6 +505,7 @@ elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* || "$PHASE" == "dns_hosts" ]
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE="$PHASE")
 fi
 touch kernel/src/main.rs
+touch "$PROJECT_ROOT/services/sunlightd/src/main.rs"
 env "${EXTRA_ENV[@]}" cargo build --package sunlight-kernel $KERNEL_FEATURES >>"$BUILD_LOG" 2>&1
 
 # --- Step 3–5: Hybrid ISO (BIOS + UEFI) via shared helper ---

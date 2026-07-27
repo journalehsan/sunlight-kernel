@@ -567,6 +567,9 @@ fn matches_user_session_service(name_key: u64) -> bool {
         || name_key == name_to_u64("wiseowl.memorydb.v1")
         || name_key == name_to_u64("wiseowl-indexd")
         || name_key == name_to_u64("wiseowl.index.v1")
+        // Bounded cognitive greetings for Welcome Wizard and desktop clients.
+        || name_key == name_to_u64("wiseowl-braind")
+        || name_key == name_to_u64("wiseowl.brain.v1")
 }
 
 #[cfg(test)]
@@ -623,6 +626,15 @@ mod service_capability_tests {
         assert!(service_capability_allows_hashed_name(
             session,
             name_to_u64("net")
+        ));
+        // Welcome Wizard greets via wiseowl-braind (registered as wiseowl.brain.v1).
+        assert!(service_capability_allows_hashed_name(
+            session,
+            name_to_u64("wiseowl.brain.v1")
+        ));
+        assert!(service_capability_allows_hashed_name(
+            session,
+            name_to_u64("wiseowl-braind")
         ));
     }
 

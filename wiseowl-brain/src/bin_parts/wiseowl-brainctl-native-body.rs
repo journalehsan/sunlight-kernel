@@ -1,17 +1,15 @@
-use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::Write;
 
 use sunlight_ipc::{
-    debug_log, ipc_call_timeout, nameserver_lookup, process_yield,
-    shm_alloc, shm_free, shm_map, IpcMsg, SHM_PAGE,
+    debug_log, ipc_call, nameserver_lookup, process_yield, shm_alloc, shm_free, shm_map,
+    CapabilityToken, IpcMsg,
 };
 use sunlight_libc as libc;
-use sunlight_libc::crt0;
 
 use wiseowl_brain::native_ipc::{
-    BrainIpcHeader, BrainOp, NATIVE_PROTOCOL_VERSION, BRAIN_ENDPOINT,
-    BRAIN_IPC_HEADER_LEN, INLINE_PAYLOAD_THRESHOLD, SHM_PAGE_SIZE,
+    BrainIpcHeader, BrainOp, BRAIN_ENDPOINT, BRAIN_IPC_HEADER_LEN, NATIVE_PROTOCOL_VERSION,
+    REG_INLINE_BODY_MAX, SHM_PAGE_SIZE,
 };
 use wiseowl_brain::protocol::{BrainRequestWire, BrainResponseWire, MAX_NAME_LEN, MAX_VERSION_LEN,
     MAX_DEVICE_CLASS_LEN, MAX_MODEL_LEN, GreetingRequestWire};
@@ -25,32 +23,25 @@ macro_rules! serial_println {
 }
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
-    let _ = crt0::init();
-
-    let args: Vec<String> = match crt0::get_args() {
-        Some(a) => a.iter().filter_map(|s| {
-            let mut string = String::new();
-            for &b in s {
-                string.push(b as char);
-            }
-            Some(string)
-        }).collect(),
-        None => Vec::new(),
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    let mut arg_storage: [&str; 8] = [""; 8];
+    let argc = unsafe {
+        libc::crt0::collect_utf8_args(argc, argv, &mut arg_storage, 512)
     };
 
-    if args.len() < 2 {
-        serial_println!("[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet> [--user id] [--welcome]");
+    if argc < 2 {
+        serial_println!("[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context> [options]");
         process_yield();
         libc::exit(0);
     }
 
-    match args[1].as_str() {
+    match arg_storage[1] {
         "health" => cmd_health(),
         "stats" => cmd_stats(),
-        "greet" => cmd_greet(&args),
+        "greet" => cmd_greet(&arg_storage[..argc]),
+        "context" => cmd_context(&arg_storage[..argc]),
         _ => {
-            serial_println!("[WISEOWL-BRAIN] unknown command: {}", args[1]);
+            serial_println!("[WISEOWL-BRAIN] unknown command: {}", arg_storage[1]);
         }
     }
 
@@ -58,9 +49,9 @@ pub extern "C" fn _start() -> ! {
     libc::exit(0);
 }
 
-fn connect() -> Option<IpcMsg> {
+fn connect() -> Option<CapabilityToken> {
     match nameserver_lookup(BRAIN_ENDPOINT) {
-        Some(ep) => Some(ep),
+        Some(cap) => Some(cap),
         None => {
             serial_println!("[WISEOWL-BRAIN] cannot find {}", BRAIN_ENDPOINT);
             None
@@ -68,76 +59,92 @@ fn connect() -> Option<IpcMsg> {
     }
 }
 
-fn send_request(ep: IpcMsg, op: BrainOp, body: &[u8]) -> Option<BrainResponseWire> {
-    let shm = if body.len() > INLINE_PAYLOAD_THRESHOLD as usize {
-        let page = shm_alloc(SHM_PAGE_SIZE).expect("shm_alloc");
-        if let Ok(base) = shm_map(page) {
-            let slice = unsafe { core::slice::from_raw_parts_mut(base as *mut u8, SHM_PAGE_SIZE as usize) };
-            let header = BrainIpcHeader {
-                protocol_version: NATIVE_PROTOCOL_VERSION,
-                operation: op.as_u16(),
-                flags: 0,
-                request_id: 1,
-                body_len: body.len() as u32,
-                reserved: 0,
-            };
-            let hdr_enc = header.encode();
-            slice[..BRAIN_IPC_HEADER_LEN].copy_from_slice(&hdr_enc);
-            let copy_len = body.len().min(SHM_PAGE_SIZE as usize - BRAIN_IPC_HEADER_LEN);
-            slice[BRAIN_IPC_HEADER_LEN..BRAIN_IPC_HEADER_LEN + copy_len].copy_from_slice(&body[..copy_len]);
-        }
-        Some(page)
-    } else {
-        None
-    };
-
-    let mut msg = IpcMsg::with_label(op.label());
-    if let Some(shm_cap) = shm {
+fn send_request(cap: CapabilityToken, op: BrainOp, body: &[u8]) -> Option<BrainResponseWire> {
+    // Register ABI only carries 24 body bytes; use SHM for larger payloads.
+    let (msg, req_cap) = if body.is_empty() {
+        (IpcMsg::with_label(op.label()).word(0, 0), None)
+    } else if body.len() <= REG_INLINE_BODY_MAX {
+        let mut msg = IpcMsg::with_label(op.label());
         msg.words[0] = body.len() as u64;
-        msg = msg.with_cap(0, shm_cap);
-    } else {
-        msg.words[0] = body.len() as u64;
-        for (i, chunk) in body.chunks(8).enumerate().take(7) {
+        for i in 0..3 {
             let mut word: u64 = 0;
-            for (j, &b) in chunk.iter().enumerate() {
-                word |= (b as u64) << (j * 8);
+            for j in 0..8 {
+                if i * 8 + j < body.len() {
+                    word |= (body[i * 8 + j] as u64) << (j * 8);
+                }
             }
             msg.words[1 + i] = word;
         }
-    }
-
-    let reply = match ipc_call_timeout(ep, msg, 200) {
-        Ok(r) => r,
-        Err(_) => {
-            if let Some(cap) = shm {
-                let _ = shm_free(cap);
-            }
+        msg.word_count = (1 + body.len().div_ceil(8) as u32).min(4);
+        (msg, None)
+    } else {
+        if body.len() + BRAIN_IPC_HEADER_LEN > SHM_PAGE_SIZE as usize {
+            serial_println!("[WISEOWL-BRAIN] request too large for SHM");
             return None;
         }
+        let (ptr, token) = match shm_alloc() {
+            Ok(v) => v,
+            Err(_) => {
+                serial_println!("[WISEOWL-BRAIN] shm_alloc failed");
+                return None;
+            }
+        };
+        let header = BrainIpcHeader {
+            protocol_version: NATIVE_PROTOCOL_VERSION,
+            operation: op.as_u16(),
+            flags: 0,
+            request_id: 1,
+            body_len: body.len() as u32,
+            reserved: 0,
+        };
+        let header_enc = header.encode();
+        unsafe {
+            core::ptr::copy_nonoverlapping(header_enc.as_ptr(), ptr, BRAIN_IPC_HEADER_LEN);
+            core::ptr::copy_nonoverlapping(body.as_ptr(), ptr.add(BRAIN_IPC_HEADER_LEN), body.len());
+        }
+        let msg = IpcMsg::with_label(op.label())
+            .word(0, body.len() as u64)
+            .with_cap(0, token);
+        (msg, Some(token))
     };
 
-    if let Some(cap) = shm {
-        let _ = shm_free(cap);
+    let reply = ipc_call(cap, msg);
+    if let Some(tok) = req_cap {
+        let _ = shm_free(tok);
     }
-
-    let resp_body = if reply.cap_count > 0 {
-        read_shm_body(reply)
-    } else {
-        read_inline_body(reply)
-    };
-
+    let resp_body = read_reply_body(reply);
     BrainResponseWire::decode(&resp_body).ok().map(|(r, _)| r)
 }
 
-fn read_inline_body(msg: IpcMsg) -> Vec<u8> {
+fn read_reply_body(msg: IpcMsg) -> Vec<u8> {
+    if msg.cap_count > 0 {
+        if let Ok(ptr) = shm_map(msg.caps[0]) {
+            let slice =
+                unsafe { core::slice::from_raw_parts(ptr as *const u8, SHM_PAGE_SIZE as usize) };
+            let body_len = if slice.len() >= 20 {
+                u32::from_le_bytes([slice[16], slice[17], slice[18], slice[19]]) as usize
+            } else {
+                0
+            };
+            let start = BRAIN_IPC_HEADER_LEN;
+            let end = (start + body_len).min(SHM_PAGE_SIZE as usize);
+            let mut body = Vec::with_capacity(end.saturating_sub(start));
+            body.extend_from_slice(&slice[start..end]);
+            let _ = shm_free(msg.caps[0]);
+            return body;
+        }
+    }
     let body_len = if msg.word_count >= 1 {
-        msg.words[0] as usize
+        (msg.words[0] as usize).min(REG_INLINE_BODY_MAX)
     } else {
         0
     };
     let mut body = Vec::with_capacity(body_len);
-    for i in 0..body_len.min(56) {
+    for i in 0..body_len {
         let word_idx = 1 + i / 8;
+        if word_idx >= 4 {
+            break;
+        }
         let byte_idx = i % 8;
         let byte = (msg.words[word_idx] >> (byte_idx * 8)) as u8;
         body.push(byte);
@@ -145,36 +152,22 @@ fn read_inline_body(msg: IpcMsg) -> Vec<u8> {
     body
 }
 
-fn read_shm_body(msg: IpcMsg) -> Vec<u8> {
-    let body_len = msg.words[0] as usize;
-    let mut body = Vec::with_capacity(body_len);
-    if msg.cap_count > 0 {
-        if let Ok(ptr) = shm_map(msg.caps[0]) {
-            let slice = unsafe { core::slice::from_raw_parts(ptr as *const u8, SHM_PAGE_SIZE as usize) };
-            let body_end = (BRAIN_IPC_HEADER_LEN + body_len).min(SHM_PAGE_SIZE as usize);
-            body.extend_from_slice(&slice[BRAIN_IPC_HEADER_LEN..body_end]);
-        }
-    }
-    body
-}
-
 fn cmd_health() {
-    let Some(ep) = connect() else { return };
-    let resp = send_request(ep, BrainOp::Health, &[]);
-    if let Some(r) = resp {
-        serial_println!("[WISEOWL-BRAIN] HEALTH PASS");
-        serial_println!("[WISEOWL-BRAIN] provider_local={}", r.provider == 1);
+    let Some(cap) = connect() else { return };
+    let resp = send_request(cap, BrainOp::Health, &[]);
+    if let Some(_r) = resp {
+        serial_println!("[WISEOWL-BRAIN] NATIVE_HEALTH PASS");
     }
 }
 
 fn cmd_stats() {
-    let Some(ep) = connect() else { return };
-    let _resp = send_request(ep, BrainOp::Stats, &[]);
+    let Some(cap) = connect() else { return };
+    let _resp = send_request(cap, BrainOp::Stats, &[]);
     serial_println!("[WISEOWL-BRAIN] STATS");
 }
 
-fn cmd_greet(args: &[String]) {
-    let Some(ep) = connect() else {
+fn cmd_greet(args: &[&str]) {
+    let Some(cap) = connect() else {
         serial_println!("[WISEOWL-BRAIN] cannot connect");
         return;
     };
@@ -185,7 +178,7 @@ fn cmd_greet(args: &[String]) {
 
     let mut i = 2;
     while i < args.len() {
-        match args[i].as_str() {
+        match args[i] {
             "--user" if i + 1 < args.len() => {
                 if let Ok(uid) = args[i + 1].parse() {
                     user_id = uid;
@@ -193,7 +186,7 @@ fn cmd_greet(args: &[String]) {
                 i += 2;
             }
             "--name" if i + 1 < args.len() => {
-                name = &args[i + 1];
+                name = args[i + 1];
                 i += 2;
             }
             "--welcome" => {
@@ -214,7 +207,7 @@ fn cmd_greet(args: &[String]) {
     let _ = ver.push_str("0.2.0");
     let mut dc: heapless::String<MAX_DEVICE_CLASS_LEN> = heapless::String::new();
     let _ = dc.push_str("desktop");
-    let mut mn: heapless::String<MAX_MODEL_LEN> = heapless::String::new();
+    let mn: heapless::String<MAX_MODEL_LEN> = heapless::String::new();
 
     let req = BrainRequestWire {
         request_id: 1,
@@ -241,13 +234,69 @@ fn cmd_greet(args: &[String]) {
     };
 
     let body = req.encode();
-    if let Some(resp) = send_request(ep, BrainOp::Greeting, &body) {
-        serial_println!("[WISEOWL-BRAIN] GREETING_RESPONSE PASS");
+    if let Some(resp) = send_request(cap, BrainOp::Greeting, &body) {
+        serial_println!("[WISEOWL-BRAIN] NATIVE_REQUEST PASS");
+        if resp.provider == 1 {
+            serial_println!("[WISEOWL-BRAIN] LOCAL_PROVIDER PASS");
+        }
         if let Some(g) = &resp.greeting {
+            serial_println!("[WISEOWL-BRAIN] STRUCTURED_RESPONSE PASS");
             serial_println!("[WISEOWL-BRAIN] title={}", g.title);
             serial_println!("[WISEOWL-BRAIN] body={}", g.body);
         }
     } else {
         serial_println!("[WISEOWL-BRAIN] GREETING_FAILED");
+    }
+}
+
+fn cmd_context(args: &[&str]) {
+    let Some(cap) = connect() else {
+        serial_println!("[WISEOWL-BRAIN] cannot connect for context");
+        return;
+    };
+
+    let mut user_id: u64 = 1000;
+    let mut i = 2;
+    while i < args.len() {
+        match args[i] {
+            "--user" if i + 1 < args.len() => {
+                if let Ok(uid) = args[i + 1].parse() {
+                    user_id = uid;
+                }
+                i += 2;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+
+    let req = BrainRequestWire {
+        request_id: 2,
+        caller_uid: user_id,
+        user_id,
+        session_id: 0,
+        locale_len: 0,
+        locale: heapless::String::new(),
+        request_kind: 1,
+        greeting: None,
+    };
+
+    let body = req.encode();
+    let resp = send_request(cap, BrainOp::Context, &body);
+    if let Some(r) = resp {
+        if let Some(g) = &r.greeting {
+            serial_println!("[WISEOWL-BRAIN] CONTEXT title={}", g.title);
+            serial_println!("[WISEOWL-BRAIN] CONTEXT body={}", g.body);
+        }
+        serial_println!("[WISEOWL-BRAIN] CONTEXT provider={} confidence={}", r.provider, r.confidence);
+    }
+}
+
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    serial_println!("[WISEOWL-BRAIN] PANIC brainctl");
+    loop {
+        process_yield();
     }
 }

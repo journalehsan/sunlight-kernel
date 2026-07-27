@@ -693,6 +693,37 @@ WantedBy=sunlight.target
         let _ = services.add(unit);
     }
 
+    // wiseowl-braind.service — Wise Owl Phase 4B bounded cognitive brain.
+    // Serves greeting and context requests for Welcome Wizard and CLI.
+    // Independent of other Wise Owl services; degrades gracefully when
+    // optional context sources (KV, MemoryDB, Index) are unavailable.
+    let wiseowl_brain_service = r#"[Unit]
+Description=Wise Owl Cognitive Brain Service
+After=vfs_server.service
+Wants=sunlight-kv.service
+Wants=wiseowl-memorydb.service
+Wants=wiseowl-indexd.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/wiseowl-braind
+Restart=on-failure
+RestartSec=2
+StartLimitBurst=5
+StartLimitIntervalSec=60
+User=root
+Capability=logging
+Capability=kv-store
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(wiseowl_brain_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
     let dialogd_service = r#"[Unit]
 Description=SunlightOS Dialog Host
 After=sunlight-display.service

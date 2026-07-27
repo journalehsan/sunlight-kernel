@@ -96,7 +96,7 @@ fn handle_client(mut stream: UnixStream, pipeline: &Mutex<CognitivePipeline>) ->
                     snap.requests_failed,
                     snap.provider_local_available as u8,
                 );
-                let mut greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Stats", &body_str);
+                let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Stats", &body_str);
                 wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, header.request_id)
             }
             _ => {

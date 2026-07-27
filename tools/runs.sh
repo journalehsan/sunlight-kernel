@@ -375,6 +375,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos --no-default-features --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release
     # sunshell (includes localectl builtin + pulls in support libs e.g. sunlight-locale, sunlight-tz)
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --release --features sunlight --no-default-features --target x86_64-unknown-none
@@ -383,7 +384,9 @@ if [ "$BUILD_FIRST" = true ]; then
         bs=1 seek=7 conv=notrunc 2>/dev/null
     # The kernel embeds the freshly built service ELFs with include_bytes!.
     # Force rustc to refresh those bytes even when Cargo misses artifact mtimes.
+    # Also force sunlightd rebuild so new service units are baked in.
     touch "$PROJECT_ROOT/kernel/src/main.rs"
+    touch "$PROJECT_ROOT/services/sunlightd/src/main.rs"
     cargo build --package sunlight-kernel
 
     KERNEL_ELF="$PROJECT_ROOT/target/x86_64-unknown-none/debug/sunlight-kernel"

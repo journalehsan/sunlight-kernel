@@ -1,9 +1,12 @@
 use core::fmt::Write;
 
 use crate::error::BrainResult;
+use crate::grounded::{
+    AuthIdentity, BrainContextSource, ContextSourceMask, GroundedFact,
+};
 use crate::protocol::{
-    MAX_DEVICE_CLASS_LEN, MAX_GREETING_LEN, MAX_LOCALE_LEN, MAX_MODEL_LEN,
-    MAX_NAME_LEN, MAX_VERSION_LEN,
+    MAX_DEVICE_CLASS_LEN, MAX_GREETING_LEN, MAX_LOCALE_LEN,
+    MAX_MODEL_LEN, MAX_NAME_LEN, MAX_VERSION_LEN,
 };
 
 #[derive(Debug, Clone)]
@@ -80,9 +83,8 @@ impl BrainContext {
     }
 
     pub fn validate(&self) -> BrainResult<()> {
-        if self.user_id == 0 {
-            return Err(crate::error::BrainError::InvalidRequest("missing user_id"));
-        }
+        // Root (uid=0) is a real local account on SunlightOS. Welcome Wizard and
+        // many early-boot apps run as root; treat 0 as a valid subject id.
         Ok(())
     }
 }
@@ -202,6 +204,65 @@ impl ContextBuilder {
 impl Default for ContextBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BrainBudget {
+    pub max_facts: u8,
+    pub max_total_bytes: u16,
+    pub max_source_latency_ms: u16,
+}
+
+impl Default for BrainBudget {
+    fn default() -> Self {
+        Self {
+            max_facts: 16,
+            max_total_bytes: 2048,
+            max_source_latency_ms: 50,
+        }
+    }
+}
+
+pub struct GroundedContextBuilder {
+    budget: BrainBudget,
+    identity: AuthIdentity,
+    sources_consulted: ContextSourceMask,
+    sources_degraded: ContextSourceMask,
+}
+
+impl GroundedContextBuilder {
+    pub fn new(identity: AuthIdentity) -> Self {
+        Self {
+            budget: BrainBudget::default(),
+            identity,
+            sources_consulted: ContextSourceMask::empty(),
+            sources_degraded: ContextSourceMask::empty(),
+        }
+    }
+
+    pub fn gather_from(
+        &mut self,
+        source: &dyn BrainContextSource,
+    ) -> heapless::Vec<GroundedFact, 16> {
+        self.sources_consulted.add(source.source_kind());
+        let facts = source.collect(&self.budget, &self.identity);
+        if !source.is_available() {
+            self.sources_degraded.add(source.source_kind());
+        }
+        facts
+    }
+
+    pub fn sources_consulted(&self) -> ContextSourceMask {
+        self.sources_consulted
+    }
+
+    pub fn sources_degraded(&self) -> ContextSourceMask {
+        self.sources_degraded
+    }
+
+    pub fn identity(&self) -> &AuthIdentity {
+        &self.identity
     }
 }
 

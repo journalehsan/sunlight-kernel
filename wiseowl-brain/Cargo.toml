@@ -1,6 +1,9 @@
 [package]
 name = "wiseowl-brain"
-version = "0.2.3475-alpha.1"
+version = "0.2.3485-alpha.1"
+
+
+
 
 edition = "2021"
 description = "Wise Owl Phase 4A: native bounded cognitive service"
