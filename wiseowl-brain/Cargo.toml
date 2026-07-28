@@ -1,6 +1,7 @@
 [package]
 name = "wiseowl-brain"
-version = "0.2.3592-alpha.1"
+version = "0.2.3612-alpha.1"
+
 
 
 
@@ -46,6 +47,7 @@ phase4a-test = []
 
 [dependencies]
 heapless = "0.8"
+sha2 = { version = "0.10", default-features = false }
 serde = { version = "1", features = ["derive"], optional = true }
 bincode = { version = "1.3", optional = true }
 thiserror = { version = "1", optional = true }

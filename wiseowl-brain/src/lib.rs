@@ -6,6 +6,7 @@ extern crate alloc;
 pub mod action_intent;
 pub mod adapters;
 pub mod caps;
+pub mod confirmation;
 pub mod context;
 pub mod diagnostics;
 pub mod error;
@@ -28,6 +29,14 @@ pub use action_intent::{
     ActionParameters, ActionTarget, AuditEntry, AuditId, AuditLog, BoundedFilePath,
     ConfirmationBinding, CreationTime, IdentifierError, IntentId, IntentValidation, ParameterValue,
     Provenance, RequestedBy, RiskHint, SessionId, TargetKind, TypedIdentifier, ValidationReason,
+};
+pub use confirmation::{
+    ApprovalProof, AuthorityError, AuthorityTime, BindingDigest, ChallengeId,
+    ConfirmationAuditEvent, ConfirmationAuditLog, ConfirmationAuthority, ConfirmationChallenge,
+    ConfirmationChoice, ConfirmationGrant, ConfirmationNonce, ConfirmationResponse,
+    ConfirmationResponseType, ConfirmationState, ConfirmationView, ConsequenceAcknowledgement,
+    FinalValidationResult, GrantId, ReadinessDenialReason, ReadyForExecution, ResponderIdentity,
+    ResponseValidationContext, SessionAuthorization, SessionStatus,
 };
 pub use diagnostics::BrainDiagnostics;
 pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};

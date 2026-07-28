@@ -26,7 +26,9 @@ Policy evaluation
         |
 Action Decision
         |
-Future confirmation and executor (not implemented)
+Confirmation Authority v1
+        |
+ReadyForExecution (non-executing data only)
 ```
 
 The terms are deliberately distinct:
@@ -45,11 +47,11 @@ The terms are deliberately distinct:
   proposal. Its public `ActionDecision` envelope contains the intent ID, policy
   version, result, confirmation level, public reason code, Runtime Snapshot
   generation, and audit ID. `Unknown` remains fail-closed.
-- **Confirmation** is future user authorization for one exact intent, target,
-  parameter set, policy version, and Runtime Snapshot generation. The v1
-  `ConfirmationBinding` prepares that identity check only; it has no UI and
-  does not turn a decision into execution. Any changed field or stale
-  generation invalidates the binding.
+- **Confirmation** is user authorization for one exact intent, target,
+  parameter set, policy version, Runtime Snapshot generation, session, and
+  responder. Confirmation Authority v1 supersedes the preparatory
+  `ConfirmationBinding` with expiring typed challenges, responses, single-use
+  grants, final revalidation, and a non-executing readiness envelope.
 - **Execution** is a future component that may consume an eligible decision and
   any required confirmation. No executor type, command representation, OS
   service adapter, syscall, or execution result exists in Action Intent v1.

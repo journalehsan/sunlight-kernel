@@ -40,6 +40,10 @@ Action Intent validation
 Policy Engine
         |
 Action Decision
+        |
+Confirmation Authority v1 (when required)
+        |
+ReadyForExecution (non-executing data only)
 ```
 
 Foundation remains unchanged; Runtime Snapshot adds only a publication
@@ -97,7 +101,8 @@ failures, or other internal implementation details to users.
 
 ## Non-Goals
 
-Policy v1 does not execute actions, prompt for confirmation, infer installer
+Policy v1 does not execute actions, render confirmation UI, infer installer
 intent, learn rules, update Foundation Memory, mutate Runtime Snapshot, start
-background work, or add a transport. Those responsibilities stay outside this
-pure decision layer.
+background work, or add a transport. Confirmation Authority v1 consumes the
+public action decision and re-evaluates this same immutable policy before it can
+produce a capability-neutral readiness envelope. It still does not execute.

@@ -285,7 +285,7 @@ pub enum ValidationReason {
 #[derive(Debug, Clone, Copy)]
 pub struct ValidatedActionIntent<'a> {
     intent: &'a ActionIntent,
-    policy_operation: PolicyOperation,
+    pub(crate) policy_operation: PolicyOperation,
 }
 
 impl<'a> ValidatedActionIntent<'a> {
@@ -295,13 +295,13 @@ impl<'a> ValidatedActionIntent<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Validation<'a> {
-    status: IntentValidation,
-    reason: ValidationReason,
-    valid: Option<ValidatedActionIntent<'a>>,
+pub(crate) struct Validation<'a> {
+    pub(crate) status: IntentValidation,
+    pub(crate) reason: ValidationReason,
+    pub(crate) valid: Option<ValidatedActionIntent<'a>>,
 }
 
-fn validate<'a>(intent: &'a ActionIntent, runtime_generation: u64) -> Validation<'a> {
+pub(crate) fn validate<'a>(intent: &'a ActionIntent, runtime_generation: u64) -> Validation<'a> {
     if matches!(intent.operation, ActionOperation::UnknownOperation(_)) {
         return invalid(
             IntentValidation::Unknown,
@@ -552,6 +552,11 @@ pub struct ActionDecision {
     bound_operation: ActionOperation,
     bound_target: ActionTarget,
     bound_parameters: ActionParameters,
+    bound_requested_by: RequestedBy,
+    bound_session_id: SessionId,
+    bound_creation_time: CreationTime,
+    bound_risk_hint: RiskHint,
+    bound_provenance: Provenance,
 }
 
 impl fmt::Debug for ActionDecision {
@@ -593,6 +598,38 @@ impl ActionDecision {
     }
     pub const fn audit_id(&self) -> AuditId {
         self.audit_id
+    }
+
+    pub(crate) const fn bound_operation(&self) -> ActionOperation {
+        self.bound_operation
+    }
+
+    pub(crate) fn bound_target(&self) -> &ActionTarget {
+        &self.bound_target
+    }
+
+    pub(crate) fn bound_parameters(&self) -> &ActionParameters {
+        &self.bound_parameters
+    }
+
+    pub(crate) const fn bound_requested_by(&self) -> RequestedBy {
+        self.bound_requested_by
+    }
+
+    pub(crate) const fn bound_session_id(&self) -> SessionId {
+        self.bound_session_id
+    }
+
+    pub(crate) const fn bound_creation_time(&self) -> CreationTime {
+        self.bound_creation_time
+    }
+
+    pub(crate) const fn bound_risk_hint(&self) -> RiskHint {
+        self.bound_risk_hint
+    }
+
+    pub(crate) const fn bound_provenance(&self) -> Provenance {
+        self.bound_provenance
     }
 }
 
@@ -727,6 +764,11 @@ fn decision_envelope(
         bound_operation: valid.intent.operation,
         bound_target: valid.intent.target.clone(),
         bound_parameters: valid.intent.parameters.clone(),
+        bound_requested_by: valid.intent.requested_by,
+        bound_session_id: valid.intent.session_id,
+        bound_creation_time: valid.intent.creation_time,
+        bound_risk_hint: valid.intent.risk_hint,
+        bound_provenance: valid.intent.provenance,
     }
 }
 
