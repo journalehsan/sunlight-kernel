@@ -336,6 +336,9 @@ static WISEOWL_BRAIND_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-braind");
 static WISEOWL_BRAINCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-brainctl");
+// Wise Owl native graphical console.
+static WISEOWL_CONSOLE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl");
 static SUNLIGHT_CLIPMAN_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
 static EMOJI_PICKER_ELF_BYTES: &[u8] =
@@ -3793,6 +3796,7 @@ fn setup_key_injection() {
         "phase3.9" => build_phase3_9_sequence(),
         "wiseowl3.75" => build_wiseowl_phase375_sequence(),
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
+        "wiseowl_graphical_console_v1" => build_wiseowl_graphical_console_v1_sequence(),
         "session_foundation" => build_session_foundation_sequence(),
         "session_configuration" => build_session_configuration_sequence(),
         "welcome_wizard" => build_session_configuration_sequence(),
@@ -3936,7 +3940,7 @@ fn build_wiseowl_phase3875_sequence() -> [u8; 12288] {
     let mut len = 0usize;
     // Match the proven Phase 3.75 login timing: wait for UAC/login presenter,
     // select preselected root user, wait for password field, then type root.
-    append_injected_delay(&mut s, &mut len, 512);
+    append_injected_delay(&mut s, &mut len, 1536);
     append_injected_scancode(&mut s, &mut len, 0x1c);
     append_injected_delay(&mut s, &mut len, 96);
     for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
@@ -3967,6 +3971,21 @@ fn build_wiseowl_phase3875_sequence() -> [u8; 12288] {
             append_injected_delay(&mut s, &mut len, 224);
         }
     }
+    s
+}
+
+#[cfg(feature = "key_inject")]
+fn build_wiseowl_graphical_console_v1_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
+    let mut len = 0usize;
+    append_injected_delay(&mut s, &mut len, 768);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    append_injected_delay(&mut s, &mut len, 96);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 1536);
+    append_injected_command(&mut s, &mut len, b"wiseowl");
     s
 }
 

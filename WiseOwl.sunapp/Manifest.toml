@@ -1,0 +1,21 @@
+[bundle]
+format = 1
+
+[application]
+id = "org.sunlight.wiseowl"
+name = "Wise Owl"
+version = "0.1.0"
+kind = "windowed"
+icon = "Resources/icon.tga"
+
+[runtime]
+type = "native"
+
+[entry]
+executable = "/bin/wiseowl"
+
+[session]
+startup_eligible = false
+default_enabled = true
+single_instance = true
+launch_path = "/bin/wiseowl"

@@ -924,3 +924,173 @@ mod tests {
         assert_eq!(actions.len(), MAX_ACTIONS);
     }
 }
+
+// ── UI to Brain boundary ──
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WiseOwlUiRequestWire {
+    SubmitConversationTurn {
+        text: heapless::String<256>,
+    },
+    SubmitClarificationSelection {
+        candidate_id: u64,
+    },
+    SubmitConfirmationResponse {
+        level: u8,
+        approved: bool,
+    },
+    CancelPendingAction,
+    QueryCurrentConversation,
+    QueryRecentReceipts,
+    QueryComponentHealth,
+    QueryPrivacyStatus,
+}
+
+impl WiseOwlUiRequestWire {
+    pub fn encode(&self) -> heapless::Vec<u8, 512> {
+        let mut out = heapless::Vec::new();
+        match self {
+            Self::SubmitConversationTurn { text } => {
+                let _ = out.push(1);
+                let _ = out.push(text.len() as u8);
+                out.extend_from_slice(text.as_bytes()).ok();
+            }
+            Self::SubmitClarificationSelection { candidate_id } => {
+                let _ = out.push(2);
+                out.extend_from_slice(&candidate_id.to_le_bytes()).ok();
+            }
+            Self::SubmitConfirmationResponse { level, approved } => {
+                let _ = out.push(3);
+                let _ = out.push(*level);
+                let _ = out.push(if *approved { 1 } else { 0 });
+            }
+            Self::CancelPendingAction => {
+                let _ = out.push(4);
+            }
+            Self::QueryCurrentConversation => {
+                let _ = out.push(5);
+            }
+            Self::QueryRecentReceipts => {
+                let _ = out.push(6);
+            }
+            Self::QueryComponentHealth => {
+                let _ = out.push(7);
+            }
+            Self::QueryPrivacyStatus => {
+                let _ = out.push(8);
+            }
+        }
+        out
+    }
+
+    pub fn decode(data: &[u8]) -> BrainResult<(Self, usize)> {
+        if data.is_empty() {
+            return Err(BrainError::TruncatedBody);
+        }
+        let tag = data[0];
+        let mut pos = 1;
+        match tag {
+            1 => {
+                if pos >= data.len() {
+                    return Err(BrainError::TruncatedBody);
+                }
+                let len = data[pos] as usize;
+                pos += 1;
+                if pos + len > data.len() {
+                    return Err(BrainError::TruncatedBody);
+                }
+                let mut text: heapless::String<256> = heapless::String::new();
+                for &b in &data[pos..pos + len] {
+                    let _ = text.push(b as char);
+                }
+                pos += len;
+                Ok((Self::SubmitConversationTurn { text }, pos))
+            }
+            2 => {
+                if pos + 8 > data.len() {
+                    return Err(BrainError::TruncatedBody);
+                }
+                let candidate_id = u64::from_le_bytes(data[pos..pos + 8].try_into().unwrap());
+                pos += 8;
+                Ok((Self::SubmitClarificationSelection { candidate_id }, pos))
+            }
+            3 => {
+                if pos + 2 > data.len() {
+                    return Err(BrainError::TruncatedBody);
+                }
+                let level = data[pos];
+                let approved = data[pos + 1] != 0;
+                pos += 2;
+                Ok((Self::SubmitConfirmationResponse { level, approved }, pos))
+            }
+            4 => Ok((Self::CancelPendingAction, pos)),
+            5 => Ok((Self::QueryCurrentConversation, pos)),
+            6 => Ok((Self::QueryRecentReceipts, pos)),
+            7 => Ok((Self::QueryComponentHealth, pos)),
+            8 => Ok((Self::QueryPrivacyStatus, pos)),
+            _ => Err(BrainError::BadEncoding),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WiseOwlUiResponseWire {
+    ConversationUpdated,
+    ClarificationRequired,
+    ConfirmationRequired,
+    ActionProgressUpdated,
+    ActionCompleted,
+    ActionFailed,
+    ReceiptsReturned,
+    HealthReturned,
+    PrivacyStatusReturned,
+    NoChange,
+    Rejected,
+    Unavailable,
+}
+
+impl WiseOwlUiResponseWire {
+    pub fn encode(&self) -> heapless::Vec<u8, 64> {
+        let mut out = heapless::Vec::new();
+        let tag: u8 = match self {
+            Self::ConversationUpdated => 1,
+            Self::ClarificationRequired => 2,
+            Self::ConfirmationRequired => 3,
+            Self::ActionProgressUpdated => 4,
+            Self::ActionCompleted => 5,
+            Self::ActionFailed => 6,
+            Self::ReceiptsReturned => 7,
+            Self::HealthReturned => 8,
+            Self::PrivacyStatusReturned => 9,
+            Self::NoChange => 10,
+            Self::Rejected => 11,
+            Self::Unavailable => 12,
+        };
+        let _ = out.push(tag);
+        out
+    }
+
+    pub fn decode(data: &[u8]) -> BrainResult<(Self, usize)> {
+        if data.is_empty() {
+            return Err(BrainError::TruncatedBody);
+        }
+        let tag = data[0];
+        let pos = 1;
+        let res = match tag {
+            1 => Self::ConversationUpdated,
+            2 => Self::ClarificationRequired,
+            3 => Self::ConfirmationRequired,
+            4 => Self::ActionProgressUpdated,
+            5 => Self::ActionCompleted,
+            6 => Self::ActionFailed,
+            7 => Self::ReceiptsReturned,
+            8 => Self::HealthReturned,
+            9 => Self::PrivacyStatusReturned,
+            10 => Self::NoChange,
+            11 => Self::Rejected,
+            12 => Self::Unavailable,
+            _ => return Err(BrainError::BadEncoding),
+        };
+        Ok((res, pos))
+    }
+}

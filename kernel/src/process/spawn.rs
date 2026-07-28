@@ -905,6 +905,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/wiseowl-brainctl" | "/usr/bin/wiseowl-brainctl" => {
             Ok(crate::WISEOWL_BRAINCTL_ELF_BYTES)
         }
+        "/bin/wiseowl" | "/usr/bin/wiseowl" => Ok(crate::WISEOWL_CONSOLE_ELF_BYTES),
         "/bin/sunlight-clipman" | "/usr/bin/sunlight-clipman" => {
             Ok(crate::SUNLIGHT_CLIPMAN_ELF_BYTES)
         }

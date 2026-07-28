@@ -466,7 +466,8 @@ impl DockTheme {
             | AppId::ApiLab
             | AppId::Mines
             | AppId::SiliconEchoes
-            | AppId::Welcome => None,
+            | AppId::Welcome
+            | AppId::WiseOwl => None,
         }
     }
 }
@@ -574,6 +575,7 @@ pub(crate) enum AppId {
     Mines,
     SiliconEchoes,
     Welcome,
+    WiseOwl,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -927,7 +929,7 @@ const MAX_WINDOW_SNAPSHOTS: usize = 256;
 /// Number of apps tracked in `apps[]` / `RunningAppRegistry::apps[]`. Mirrors
 /// `sunlight_shell_appstate::APP_COUNT`. Kept here as a tuple-array width.
 /// Must stay equal to `apps: [DockAppState; N]` and `AppId` variant count.
-const APP_REGISTRY_LEN: usize = 16;
+const APP_REGISTRY_LEN: usize = 17;
 const ENABLE_RUNNING_TASKBAR: bool = true;
 
 /// Search is an icon button that opens the centered palette; typing belongs
@@ -1530,7 +1532,7 @@ struct VortexShell {
     /// App registry used for launch/focus/restore behavior. Pinned dock apps
     /// are those in [`DOCK_PINNED`]; remaining entries are Start-Menu /
     /// running-strip only but share the same launch/state-sync machinery.
-    apps: [DockAppState; 16],
+    apps: [DockAppState; APP_REGISTRY_LEN],
     /// Single source of truth for running-application *indicators* (dock
     /// underline, Start Menu tile underline, All Apps underline, future search).
     /// [`Self::sync_app_registry`] updates the registry on each poll, then
@@ -1791,6 +1793,7 @@ impl VortexShell {
                     AppId::SiliconEchoes,
                 ),
                 DockAppState::new(AppId::Welcome, "Welcome to SunlightOS", AppId::Welcome),
+                DockAppState::new(AppId::WiseOwl, "Wise Owl", AppId::WiseOwl),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
@@ -2044,6 +2047,7 @@ impl VortexShell {
             AppId::Mines => AppStateAppId::Mines,
             AppId::SiliconEchoes => AppStateAppId::SiliconEchoes,
             AppId::Welcome => AppStateAppId::Welcome,
+            AppId::WiseOwl => AppStateAppId::WiseOwl,
         }
     }
 
@@ -2080,6 +2084,7 @@ impl VortexShell {
             AppId::Mines => "/Applications/SunlightMines.sunapp",
             AppId::SiliconEchoes => "/bin/silicon-echoes",
             AppId::Welcome => "/bin/welcome",
+            AppId::WiseOwl => "/bin/wiseowl",
         }
     }
 
@@ -2101,6 +2106,7 @@ impl VortexShell {
             AppId::Mines => b"sunlight-mines",
             AppId::SiliconEchoes => b"silicon-echoes",
             AppId::Welcome => b"welcome",
+            AppId::WiseOwl => b"wiseowl",
         }
     }
 
@@ -2122,6 +2128,7 @@ impl VortexShell {
             AppId::Mines => "app=sunlight-mines",
             AppId::SiliconEchoes => "app=silicon-echoes",
             AppId::Welcome => "app=welcome",
+            AppId::WiseOwl => "app=wiseowl",
         }
     }
 
@@ -3541,6 +3548,7 @@ impl VortexShell {
             AppId::Mines => Some(ICON_GENERIC_APP_TGA),
             AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_TGA),
             AppId::Welcome => Some(ICON_GENERIC_APP_TGA),
+            AppId::WiseOwl => Some(ICON_GENERIC_APP_TGA),
         };
         bytes.and_then(|b| TgaImage::parse(b).ok())
     }

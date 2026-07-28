@@ -100,6 +100,7 @@ pub enum BrainOp {
     WelcomeCompleted = 0xB012,
     Health = 0xB00E,
     Stats = 0xB00F,
+    ConsoleUi = 0xB020,
     Reply = 0xBF80,
     Error = 0xBFFF,
 }
@@ -116,6 +117,7 @@ impl BrainOp {
             0xB012 => Some(Self::WelcomeCompleted),
             0xB00E => Some(Self::Health),
             0xB00F => Some(Self::Stats),
+            0xB020 => Some(Self::ConsoleUi),
             0xBF80 => Some(Self::Reply),
             0xBFFF => Some(Self::Error),
             _ => None,

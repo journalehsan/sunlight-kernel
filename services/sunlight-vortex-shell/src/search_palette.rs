@@ -343,6 +343,7 @@ fn app_id_token(id: AppId) -> &'static str {
         AppId::Mines => "mines",
         AppId::SiliconEchoes => "siliconechoes",
         AppId::Welcome => "welcome",
+        AppId::WiseOwl => "wiseowl",
     }
 }
 
