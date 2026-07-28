@@ -19,6 +19,7 @@ pub mod adapters;
 pub mod mtm;
 pub mod kv_client;
 pub mod foundation;
+pub mod runtime_context;
 
 pub use pipeline::CognitivePipeline;
 pub use provider::{BrainProvider, LocalBoundedProvider, FutureOnlineProvider, ProviderRegistry};

@@ -247,11 +247,11 @@ pub struct BrainBudget {
 impl Default for BrainBudget {
     fn default() -> Self {
         Self {
-            max_facts: 16,
-            max_total_bytes: 2048,
+            max_facts: 56,
+            max_total_bytes: 3072,
             max_source_latency_ms: 50,
             max_total_latency_ms: 200,
-            facts_remaining: 16,
+            facts_remaining: 56,
         }
     }
 }
@@ -280,7 +280,7 @@ impl GroundedContextBuilder {
     pub fn gather_from(
         &mut self,
         source: &dyn BrainContextSource,
-    ) -> heapless::Vec<GroundedFact, 16> {
+    ) -> heapless::Vec<GroundedFact, 32> {
         self.sources_consulted.add(source.source_kind());
         if self.budget.facts_remaining == 0 || self.fact_bytes >= self.budget.max_total_bytes {
             self.sources_degraded.add(source.source_kind());

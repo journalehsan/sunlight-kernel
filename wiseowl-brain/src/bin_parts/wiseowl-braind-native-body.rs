@@ -7,8 +7,8 @@ use sunlight_ipc::{
 use sunlight_libc as libc;
 
 use wiseowl_brain::adapters::{
-    FoundationContextSource, IndexContextSource, KvContextSource, SessionContextSource,
-    SystemContextSource, WiseOwlStatusContextSource,
+    FoundationContextSource, IndexContextSource, KvContextSource, RuntimeContextSource,
+    SessionContextSource, SystemContextSource, WiseOwlStatusContextSource,
 };
 use wiseowl_brain::grounded::AuthIdentity;
 use wiseowl_brain::kv_client::{load_mtm, save_preferences, save_welcome_state};
@@ -188,13 +188,18 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
     };
 
     let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+    pipeline.refresh_runtime_context_if_due();
 
-    // Priority: session → system → kv → memorydb → index
+    // Priority: foundation → runtime → session/system → user MTM → health/index.
     let session_source = SessionContextSource;
     let system_source = SystemContextSource;
     let foundation_snapshot = pipeline.foundation().cloned();
     let foundation_source = FoundationContextSource {
         foundation: foundation_snapshot.as_ref(),
+    };
+    let runtime_snapshot = pipeline.runtime_context().clone();
+    let runtime_source = RuntimeContextSource {
+        snapshot: &runtime_snapshot,
     };
     let kv_source = load_kv_source(pipeline, subject_uid);
     let mut memdb_source = WiseOwlStatusContextSource::query_native();
@@ -212,10 +217,11 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
         index_source.degraded = true;
     }
 
-    let sources: [&dyn wiseowl_brain::grounded::BrainContextSource; 6] = [
+    let sources: [&dyn wiseowl_brain::grounded::BrainContextSource; 7] = [
+        &foundation_source,
+        &runtime_source,
         &session_source,
         &system_source,
-        &foundation_source,
         &kv_source,
         &memdb_source,
         &index_source,
@@ -224,7 +230,7 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
     let (response, meta) = pipeline.handle_request_grounded(&request, &identity, &sources);
 
     serial_println!(
-        "[WISEOWL-BRAIN] context sources=session,system,kv,index facts={} flags={:#x}",
+        "[WISEOWL-BRAIN] context sources=foundation,runtime,session,system,kv,index facts={} flags={:#x}",
         meta.fact_count,
         meta.response_flags.0
     );
@@ -432,13 +438,34 @@ fn handle_native_context(msg: IpcMsg, caller_uid: u64, caller_pid: u64) -> IpcMs
 
     let session_source = SessionContextSource;
     let system_source = SystemContextSource;
-    let pipeline = unsafe { PIPELINE.as_ref().unwrap() };
+    let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+    pipeline.refresh_runtime_context_if_due();
     let foundation_source = FoundationContextSource {
         foundation: pipeline.foundation(),
+    };
+    let runtime_snapshot = pipeline.runtime_context().clone();
+    let runtime_source = RuntimeContextSource {
+        snapshot: &runtime_snapshot,
     };
 
     use wiseowl_brain::grounded::BrainContextSource;
     let mut all_facts: Vec<wiseowl_brain::grounded::GroundedFact> = Vec::new();
+    let foundation_facts = BrainContextSource::collect(
+        &foundation_source,
+        &wiseowl_brain::context::BrainBudget::default(),
+        &identity,
+    );
+    for fact in foundation_facts {
+        all_facts.push(fact);
+    }
+    let runtime_facts = BrainContextSource::collect(
+        &runtime_source,
+        &wiseowl_brain::context::BrainBudget::default(),
+        &identity,
+    );
+    for fact in runtime_facts {
+        all_facts.push(fact);
+    }
     let session_facts = BrainContextSource::collect(
         &session_source,
         &wiseowl_brain::context::BrainBudget::default(),
@@ -455,23 +482,16 @@ fn handle_native_context(msg: IpcMsg, caller_uid: u64, caller_pid: u64) -> IpcMs
     for fact in system_facts {
         all_facts.push(fact);
     }
-    let foundation_facts = BrainContextSource::collect(
-        &foundation_source,
-        &wiseowl_brain::context::BrainBudget::default(),
-        &identity,
-    );
-    for fact in foundation_facts {
-        all_facts.push(fact);
-    }
 
     use core::fmt::Write;
     let mut summary = heapless::String::<256>::new();
     let _ = write!(&mut summary,
-        "facts={} uid={} pid={} foundation={} fr={} ft={}",
+        "facts={} uid={} pid={} foundation={} runtime={} fr={} ft={}",
         all_facts.len(),
         caller_uid,
         caller_pid,
         pipeline.foundation_state().status_label(),
+        runtime_snapshot.availability_summary().as_str(),
         pipeline.foundation_state().record_count(),
         pipeline.foundation_state().token_count(),
     );

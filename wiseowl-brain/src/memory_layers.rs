@@ -5,6 +5,7 @@ use crate::foundation::FoundationMemory;
 use crate::protocol::{
     MAX_HIGHLIGHT_LABEL, MAX_HIGHLIGHT_VALUE, MAX_NAME_LEN,
 };
+use crate::runtime_context::RuntimeContextSnapshot;
 
 /// Short-term memory: current request-local working context, fast and bounded.
 #[derive(Debug, Clone)]
@@ -96,12 +97,33 @@ impl FoundationMemoryLayer {
 }
 
 /// Runtime context: live per-boot and per-session facts.
-///
-/// This is intentionally a placeholder in Foundation Memory v1. The shape exists
-/// so later milestones can add runtime facts without changing layer boundaries.
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeContextLayer {
     pub available: bool,
+    pub hostname: heapless::String<64>,
+    pub timezone: heapless::String<64>,
+    pub current_user: heapless::String<MAX_NAME_LEN>,
+    pub network_connected: Option<bool>,
+}
+
+impl RuntimeContextLayer {
+    pub fn from_snapshot(snapshot: &RuntimeContextSnapshot) -> Self {
+        let mut layer = Self {
+            available: snapshot.available,
+            ..Self::default()
+        };
+        if let Some(hostname) = snapshot.system.hostname.as_ref() {
+            let _ = layer.hostname.push_str(hostname.as_str());
+        }
+        if let Some(timezone) = snapshot.system.timezone.as_ref() {
+            let _ = layer.timezone.push_str(timezone.as_str());
+        }
+        if let Some(current_user) = snapshot.system.current_user.as_ref() {
+            let _ = layer.current_user.push_str(current_user.as_str());
+        }
+        layer.network_connected = snapshot.network.connected;
+        layer
+    }
 }
 
 /// Bounded context set assembled from all three memory layers.

@@ -7,16 +7,19 @@ use crate::grounded::{AuthIdentity, BrainContextSource, FactKind, GroundedFact};
 use crate::mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
 use crate::protocol::{BrainRequestWire, BrainResponseWire};
 use crate::provenance::{BrainProviderKind, BrainResponseFlags, BrainResponseMeta};
+use crate::runtime_context::{RuntimeContextCache, RuntimeContextSnapshot};
 
 pub struct CognitivePipeline {
     pub diagnostics: BrainDiagnostics,
     foundation: FoundationLoadState,
+    runtime_context: RuntimeContextCache,
 }
 
 impl CognitivePipeline {
     pub fn new() -> Self {
         let diagnostics = BrainDiagnostics::new();
         let foundation = FoundationLoadState::load_embedded();
+        let runtime_context = RuntimeContextCache::new();
         if foundation.is_ready() {
             diagnostics.note_foundation_loaded(
                 foundation.record_count() as u64,
@@ -28,6 +31,7 @@ impl CognitivePipeline {
         Self {
             diagnostics,
             foundation,
+            runtime_context,
         }
     }
 
@@ -37,6 +41,14 @@ impl CognitivePipeline {
 
     pub fn foundation_state(&self) -> &FoundationLoadState {
         &self.foundation
+    }
+
+    pub fn runtime_context(&self) -> &RuntimeContextSnapshot {
+        self.runtime_context.snapshot()
+    }
+
+    pub fn refresh_runtime_context_if_due(&mut self) {
+        self.runtime_context.refresh_if_due();
     }
 
     pub fn handle_request(&mut self, request: &BrainRequestWire) -> BrainResponseWire {
@@ -168,7 +180,7 @@ impl CognitivePipeline {
         sources: &[&dyn BrainContextSource],
     ) -> (BrainResponseWire, BrainResponseMeta) {
         let mut builder = GroundedContextBuilder::new(*identity);
-        let mut all_facts: heapless::Vec<GroundedFact, 48> = heapless::Vec::new();
+        let mut all_facts: heapless::Vec<GroundedFact, 64> = heapless::Vec::new();
 
         for source in sources {
             let facts = builder.gather_from(*source);
@@ -355,13 +367,27 @@ impl CognitivePipeline {
                         builder = builder.ram_mib(Some(v));
                     }
                 }
+                FactKind::UserName => {
+                    builder = builder.user_display_name(fact.value.as_str());
+                }
                 FactKind::CpuCores => {
                     if let Ok(v) = fact.value.parse::<u32>() {
                         builder = builder.cpu_cores(Some(v));
                     }
                 }
+                FactKind::Locale => {
+                    builder = builder.locale(fact.value.as_str());
+                }
                 FactKind::OsVersion => {
                     builder = builder.sunlight_version(fact.value.as_str());
+                }
+                FactKind::ScreenDims => {
+                    if let Some((w, h)) = parse_screen_dims(fact.value.as_str()) {
+                        builder = builder.screen_dims(Some(w), Some(h));
+                    }
+                }
+                FactKind::NetworkOnline => {
+                    builder = builder.network_online(Some(fact.value.as_str() == "1"));
                 }
                 _ => {}
             }
@@ -444,6 +470,11 @@ impl CognitivePipeline {
         ctx.validate()?;
         Ok(ctx)
     }
+}
+
+fn parse_screen_dims(value: &str) -> Option<(u32, u32)> {
+    let (w, h) = value.split_once('x')?;
+    Some((w.parse().ok()?, h.parse().ok()?))
 }
 
 impl Default for CognitivePipeline {

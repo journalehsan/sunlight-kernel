@@ -8,6 +8,7 @@ use super::grounded::{
 };
 use super::mtm::{self, BrainPreferences, WelcomeMemoryState};
 use super::protocol::MAX_HIGHLIGHT_VALUE;
+use super::runtime_context::RuntimeContextSnapshot;
 use core::fmt::Write;
 
 fn fact_str<const N: usize>(text: &str) -> heapless::String<N> {
@@ -38,8 +39,9 @@ impl BrainContextSource for SessionContextSource {
         &self,
         _budget: &BrainBudget,
         identity: &AuthIdentity,
-    ) -> heapless::Vec<GroundedFact, 16> {
-        let mut facts: heapless::Vec<GroundedFact, 16> = heapless::Vec::new();
+    ) -> heapless::Vec<GroundedFact, 32> {
+        #[allow(unused_mut)]
+        let mut facts: heapless::Vec<GroundedFact, 32> = heapless::Vec::new();
 
         let _ = facts.push(GroundedFact {
             kind: FactKind::UserId,
@@ -77,8 +79,9 @@ impl BrainContextSource for SystemContextSource {
         &self,
         _budget: &BrainBudget,
         _identity: &AuthIdentity,
-    ) -> heapless::Vec<GroundedFact, 16> {
-        let mut facts: heapless::Vec<GroundedFact, 16> = heapless::Vec::new();
+    ) -> heapless::Vec<GroundedFact, 32> {
+        #[allow(unused_mut)]
+        let mut facts: heapless::Vec<GroundedFact, 32> = heapless::Vec::new();
 
         #[cfg(feature = "sunlightos")]
         {
@@ -118,11 +121,11 @@ impl<'a> BrainContextSource for FoundationContextSource<'a> {
         &self,
         budget: &BrainBudget,
         _identity: &AuthIdentity,
-    ) -> heapless::Vec<GroundedFact, 16> {
+    ) -> heapless::Vec<GroundedFact, 32> {
         let Some(foundation) = self.foundation else {
             return heapless::Vec::new();
         };
-        let mut facts: heapless::Vec<GroundedFact, 16> = heapless::Vec::new();
+        let mut facts: heapless::Vec<GroundedFact, 32> = heapless::Vec::new();
         let max = budget.max_facts as usize;
         for record in foundation.records.iter() {
             if facts.len() >= max {
@@ -137,6 +140,193 @@ impl<'a> BrainContextSource for FoundationContextSource<'a> {
             });
         }
         facts
+    }
+}
+
+pub struct RuntimeContextSource<'a> {
+    pub snapshot: &'a RuntimeContextSnapshot,
+}
+
+impl<'a> BrainContextSource for RuntimeContextSource<'a> {
+    fn source_kind(&self) -> ContextSourceKind {
+        ContextSourceKind::Runtime
+    }
+
+    fn is_available(&self) -> bool {
+        self.snapshot.available
+    }
+
+    fn collect(
+        &self,
+        budget: &BrainBudget,
+        _identity: &AuthIdentity,
+    ) -> heapless::Vec<GroundedFact, 32> {
+        let mut facts: heapless::Vec<GroundedFact, 32> = heapless::Vec::new();
+        let max = budget.max_facts as usize;
+
+        let mut push = |kind, freshness, value: &str| {
+            if !value.is_empty() && facts.len() < max {
+                let _ = facts.push(GroundedFact {
+                    kind,
+                    source: ContextSourceKind::Runtime,
+                    freshness,
+                    confidence: 100,
+                    value: fact_str(value),
+                });
+            }
+        };
+
+        if let Some(version) = self.snapshot.system.os_version.as_ref() {
+            push(FactKind::OsVersion, FactFreshness::CurrentBoot, version.as_str());
+        }
+        if let Some(build) = self.snapshot.system.build.as_ref() {
+            push(FactKind::RuntimeBuild, FactFreshness::CurrentBoot, build.as_str());
+        }
+        if let Some(arch) = self.snapshot.system.architecture.as_ref() {
+            push(
+                FactKind::RuntimeArchitecture,
+                FactFreshness::CurrentBoot,
+                arch.as_str(),
+            );
+        }
+        if let Some(locale) = self.snapshot.system.locale.as_ref() {
+            push(FactKind::Locale, FactFreshness::CurrentBoot, locale.as_str());
+        }
+        if let Some(timezone) = self.snapshot.system.timezone.as_ref() {
+            push(
+                FactKind::RuntimeTimezone,
+                FactFreshness::ServiceSnapshot,
+                timezone.as_str(),
+            );
+        }
+        if let Some(uptime) = self.snapshot.system.uptime_secs {
+            let value = fact_u64(uptime);
+            push(
+                FactKind::RuntimeUptimeSecs,
+                FactFreshness::ServiceSnapshot,
+                value.as_str(),
+            );
+        }
+        if let Some(hostname) = self.snapshot.system.hostname.as_ref() {
+            push(
+                FactKind::RuntimeHostname,
+                FactFreshness::CurrentBoot,
+                hostname.as_str(),
+            );
+        }
+        if let Some(user) = self.snapshot.system.current_user.as_ref() {
+            push(FactKind::UserName, FactFreshness::CurrentSession, user.as_str());
+        }
+        if let Some(boot_mode) = self.snapshot.system.boot_mode.as_ref() {
+            push(
+                FactKind::RuntimeBootMode,
+                FactFreshness::CurrentSession,
+                boot_mode.as_str(),
+            );
+        }
+        if let Some(desktop_mode) = self.snapshot.system.desktop_mode {
+            push(
+                FactKind::RuntimeDesktopMode,
+                FactFreshness::CurrentSession,
+                if desktop_mode { "1" } else { "0" },
+            );
+        }
+        if let Some(installer_mode) = self.snapshot.system.installer_mode {
+            push(
+                FactKind::RuntimeInstallerMode,
+                FactFreshness::CurrentSession,
+                if installer_mode { "1" } else { "0" },
+            );
+        }
+        if let Some(recovery_mode) = self.snapshot.system.recovery_mode {
+            push(
+                FactKind::RuntimeRecoveryMode,
+                FactFreshness::CurrentSession,
+                if recovery_mode { "1" } else { "0" },
+            );
+        }
+        if let Some(session_state) = self.snapshot.system.session_state.as_ref() {
+            push(
+                FactKind::RuntimeSessionState,
+                FactFreshness::CurrentSession,
+                session_state.as_str(),
+            );
+        }
+        if let Some(available) = self.snapshot.network.available {
+            push(
+                FactKind::RuntimeNetworkAvailable,
+                FactFreshness::ServiceSnapshot,
+                if available { "1" } else { "0" },
+            );
+        }
+        if let Some(connected) = self.snapshot.network.connected {
+            push(
+                FactKind::NetworkOnline,
+                FactFreshness::ServiceSnapshot,
+                if connected { "1" } else { "0" },
+            );
+        }
+        if let Some(interface_count) = self.snapshot.network.interface_count {
+            let value = fact_u64(interface_count as u64);
+            push(
+                FactKind::RuntimeInterfaceCount,
+                FactFreshness::ServiceSnapshot,
+                value.as_str(),
+            );
+        }
+        if let (Some(width), Some(height)) = (self.snapshot.display.width_px, self.snapshot.display.height_px) {
+            let mut dims: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
+            let _ = write!(&mut dims, "{}x{}", width, height);
+            push(
+                FactKind::ScreenDims,
+                FactFreshness::ServiceSnapshot,
+                dims.as_str(),
+            );
+        }
+        if let Some(scale) = self.snapshot.display.scale_percent {
+            let value = fact_u64(scale as u64);
+            push(
+                FactKind::RuntimeDisplayScale,
+                FactFreshness::ServiceSnapshot,
+                value.as_str(),
+            );
+        }
+
+        push_service(&mut facts, max, FactKind::ServiceSunlightd, self.snapshot.services.sunlightd);
+        push_service(&mut facts, max, FactKind::ServiceSessiond, self.snapshot.services.sessiond);
+        push_service(&mut facts, max, FactKind::ServiceNetworkd, self.snapshot.services.networkd);
+        push_service(&mut facts, max, FactKind::ServiceResolved, self.snapshot.services.resolved);
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServiceTimezone,
+            self.snapshot.services.timezone_service,
+        );
+        push_service(&mut facts, max, FactKind::ServiceTimed, self.snapshot.services.timed);
+        push_service(&mut facts, max, FactKind::ServicePowerd, self.snapshot.services.powerd);
+        push_service(&mut facts, max, FactKind::ServiceThermald, self.snapshot.services.thermald);
+        push_service(&mut facts, max, FactKind::ServiceDisplay, self.snapshot.services.display);
+
+        facts
+    }
+}
+
+fn push_service(
+    facts: &mut heapless::Vec<GroundedFact, 32>,
+    max: usize,
+    kind: FactKind,
+    status: Option<super::runtime_context::RuntimeServiceStatus>,
+) {
+    if let Some(status) = status {
+        if facts.len() < max {
+            let _ = facts.push(GroundedFact {
+                kind,
+                source: ContextSourceKind::Runtime,
+                freshness: FactFreshness::ServiceSnapshot,
+                confidence: 100,
+                value: fact_str(status.as_str()),
+            });
+        }
     }
 }
 
@@ -173,8 +363,8 @@ impl BrainContextSource for KvContextSource {
         &self,
         budget: &BrainBudget,
         _identity: &AuthIdentity,
-    ) -> heapless::Vec<GroundedFact, 16> {
-        let mut facts: heapless::Vec<GroundedFact, 16> = heapless::Vec::new();
+    ) -> heapless::Vec<GroundedFact, 32> {
+        let mut facts: heapless::Vec<GroundedFact, 32> = heapless::Vec::new();
         if !self.loaded {
             return facts;
         }
@@ -319,8 +509,8 @@ impl BrainContextSource for WiseOwlStatusContextSource {
         &self,
         budget: &BrainBudget,
         _identity: &AuthIdentity,
-    ) -> heapless::Vec<GroundedFact, 16> {
-        let mut facts: heapless::Vec<GroundedFact, 16> = heapless::Vec::new();
+    ) -> heapless::Vec<GroundedFact, 32> {
+        let mut facts: heapless::Vec<GroundedFact, 32> = heapless::Vec::new();
         if !self.queried {
             return facts;
         }
@@ -453,8 +643,8 @@ impl BrainContextSource for IndexContextSource {
         &self,
         budget: &BrainBudget,
         _identity: &AuthIdentity,
-    ) -> heapless::Vec<GroundedFact, 16> {
-        let mut facts: heapless::Vec<GroundedFact, 16> = heapless::Vec::new();
+    ) -> heapless::Vec<GroundedFact, 32> {
+        let mut facts: heapless::Vec<GroundedFact, 32> = heapless::Vec::new();
         if !self.queried {
             return facts;
         }

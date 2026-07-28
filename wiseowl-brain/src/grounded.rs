@@ -10,7 +10,8 @@ pub enum ContextSourceKind {
     WiseOwlStatus = 4,
     Index = 5,
     Foundation = 6,
-    Request = 7,
+    Runtime = 7,
+    Request = 8,
 }
 
 impl ContextSourceKind {
@@ -22,12 +23,13 @@ impl ContextSourceKind {
             Self::WiseOwlStatus => "wiseowl-status",
             Self::Index => "index",
             Self::Foundation => "foundation",
+            Self::Runtime => "runtime",
             Self::Request => "request",
         }
     }
 
     pub const fn bit(self) -> u8 {
-        1u8 << (self as u8)
+        1u8 << ((self as u8) - 1)
     }
 }
 
@@ -86,6 +88,28 @@ pub enum FactKind {
     FoundationSecurityModel = 35,
     FoundationRuntimeInfo = 36,
     FoundationMemoryModel = 37,
+    RuntimeBootMode = 38,
+    RuntimeDesktopMode = 39,
+    RuntimeInstallerMode = 40,
+    RuntimeRecoveryMode = 41,
+    RuntimeBuild = 42,
+    RuntimeArchitecture = 43,
+    RuntimeTimezone = 44,
+    RuntimeUptimeSecs = 45,
+    RuntimeHostname = 46,
+    RuntimeSessionState = 47,
+    RuntimeNetworkAvailable = 48,
+    RuntimeInterfaceCount = 49,
+    RuntimeDisplayScale = 50,
+    ServiceSunlightd = 51,
+    ServiceSessiond = 52,
+    ServiceNetworkd = 53,
+    ServiceResolved = 54,
+    ServiceTimezone = 55,
+    ServiceTimed = 56,
+    ServicePowerd = 57,
+    ServiceThermald = 58,
+    ServiceDisplay = 59,
 }
 
 /// Freshness categories (lower ordinal wins on conflict).
@@ -139,7 +163,7 @@ pub trait BrainContextSource {
         &self,
         budget: &BrainBudget,
         identity: &AuthIdentity,
-    ) -> heapless::Vec<GroundedFact, 16>;
+    ) -> heapless::Vec<GroundedFact, 32>;
 }
 
 pub struct ContextSourceResult {
