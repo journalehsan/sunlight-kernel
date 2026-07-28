@@ -1997,6 +1997,7 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
             let next = unsafe { core::slice::from_raw_parts(raw[i + 1], next_len) };
             match ControlPanelPage::from_cli_id(next) {
                 Some(ControlPanelPage::Wallpaper) => return Page::Wallpaper,
+                Some(ControlPanelPage::Display) => return Page::Monitor,
                 Some(ControlPanelPage::AboutComputer) => return Page::AboutComputer,
                 Some(ControlPanelPage::AboutOs) => return Page::AboutOs,
                 Some(ControlPanelPage::Network) => return Page::Network,

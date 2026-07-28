@@ -1,5 +1,9 @@
 # SunlightOS Documentation
 
+- `WISEOWL_BOUNDED_ACTION_PLANNER_V1.md` — proposal-only English/Persian
+  conversation-to-intent planning, registry aliases, clarification, and the
+  Trusted Action Flow boundary.
+
 This directory contains project documentation beyond the root quick-start guide.
 
 - `README_TUI.md` — Graphical boot TUI usage and troubleshooting.

@@ -19,6 +19,7 @@ const MAX_MANIFEST_BYTES: usize = 8192;
 const MAX_BUNDLE_PATH: usize = MAX_PATH - 14;
 const CHRONOS_RUNTIME_PATH: &[u8] = b"/bin/sunlight-chronos";
 const CHRONOS_BUNDLE_ARG_COUNT: usize = 8;
+pub const ACTION_ALIAS_MODEL_VERSION: u16 = 1;
 
 /// Runtime selected by a validated external application bundle.  Native
 /// applications keep using the established executable resolver.
@@ -47,6 +48,7 @@ pub struct ApplicationLaunchRequest<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ControlPanelPage {
     Wallpaper,
+    Display,
     AboutComputer,
     AboutOs,
     Network,
@@ -55,10 +57,273 @@ pub enum ControlPanelPage {
     LoginSession,
 }
 
+/// Public, path-free metadata from the canonical launcher registry.
+///
+/// The executable mapping remains private to `sun_exec`. Consumers such as
+/// Wise Owl may inspect only canonical IDs, display names, and explicit
+/// locale-bound aliases.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RegisteredAlias {
+    locale: &'static str,
+    value: &'static str,
+}
+
+impl RegisteredAlias {
+    pub const fn locale(self) -> &'static str {
+        self.locale
+    }
+
+    pub const fn value(self) -> &'static str {
+        self.value
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ApplicationRegistryEntry {
+    canonical_id: &'static str,
+    display_name: &'static str,
+    aliases: &'static [RegisteredAlias],
+    executable: &'static [u8],
+}
+
+impl ApplicationRegistryEntry {
+    pub const fn canonical_id(self) -> &'static str {
+        self.canonical_id
+    }
+
+    pub const fn display_name(self) -> &'static str {
+        self.display_name
+    }
+
+    pub const fn aliases(self) -> &'static [RegisteredAlias] {
+        self.aliases
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SettingsPageRegistryEntry {
+    page: ControlPanelPage,
+    display_name: &'static str,
+    aliases: &'static [RegisteredAlias],
+}
+
+impl SettingsPageRegistryEntry {
+    pub const fn canonical_id(self) -> &'static str {
+        // Canonical IDs are ASCII by construction.
+        match core::str::from_utf8(self.page.id()) {
+            Ok(id) => id,
+            Err(_) => "",
+        }
+    }
+
+    pub const fn page(self) -> ControlPanelPage {
+        self.page
+    }
+
+    pub const fn display_name(self) -> &'static str {
+        self.display_name
+    }
+
+    pub const fn aliases(self) -> &'static [RegisteredAlias] {
+        self.aliases
+    }
+}
+
+macro_rules! aliases {
+    ($(($locale:literal, $value:literal)),* $(,)?) => {
+        &[$(RegisteredAlias { locale: $locale, value: $value }),*]
+    };
+}
+
+static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
+    ApplicationRegistryEntry {
+        canonical_id: "calculator",
+        display_name: "Calculator",
+        aliases: aliases![("en", "calc"), ("fa", "ماشین حساب")],
+        executable: b"/bin/calculator",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "welcome",
+        display_name: "Welcome",
+        aliases: aliases![("en", "wiseowl-welcome"), ("en", "sunlight-welcome")],
+        executable: b"/bin/welcome",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "terminal",
+        display_name: "Terminal",
+        aliases: aliases![("en", "term"), ("en", "sunlight-terminal")],
+        executable: b"/bin/sunlight-terminal",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "chronos",
+        display_name: "Chronos",
+        aliases: aliases![("en", "sunlight-chronos"), ("en", "sunlight-dos-terminal")],
+        executable: b"/Applications/ChronosDosShell.sunapp",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "settings",
+        display_name: "Settings",
+        aliases: aliases![("en", "control-panel"), ("en", "preferences")],
+        executable: b"/bin/control-panel",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "files",
+        display_name: "Files",
+        aliases: aliases![
+            ("en", "file-manager"),
+            ("en", "sunlight-files"),
+            ("fa", "پرونده‌ها")
+        ],
+        executable: b"/bin/sunlight-files",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "tasks",
+        display_name: "Tasks",
+        aliases: aliases![("en", "task-manager"), ("en", "sunlight-tasks")],
+        executable: b"/bin/sunlight-tasks",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "eyes",
+        display_name: "Eyes",
+        aliases: aliases![],
+        executable: b"/bin/eyes",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "bench",
+        display_name: "SunBench",
+        aliases: aliases![("en", "sunbench"), ("en", "sunlight-bench")],
+        executable: b"/bin/sunbench",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "sunlight-edit",
+        display_name: "Text Editor",
+        aliases: aliases![
+            ("en", "sunlight-text"),
+            ("en", "edit"),
+            ("en", "text-editor")
+        ],
+        executable: b"/bin/sunlight-edit",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "light-lens",
+        display_name: "Light Lens",
+        aliases: aliases![("en", "photos"), ("en", "photo-viewer")],
+        executable: b"/bin/light-lens",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "calendar",
+        display_name: "Calendar",
+        aliases: aliases![("en", "sunlight-calendar")],
+        executable: b"/bin/sunlight-calendar",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "rappid-rabbit",
+        display_name: "Rappid Rabbit",
+        aliases: aliases![("en", "rabbit")],
+        executable: b"/bin/rappid-rabbit",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "sunlight-api-lab",
+        display_name: "API Lab",
+        aliases: aliases![("en", "api-lab")],
+        executable: b"/bin/sunlight-api-lab",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "silicon-echoes",
+        display_name: "Silicon Echoes",
+        aliases: aliases![("en", "silicon")],
+        executable: b"/bin/silicon-echoes",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "emoji-picker",
+        display_name: "Emoji Picker",
+        aliases: aliases![("en", "emoji"), ("en", "picker")],
+        executable: b"/bin/emoji-picker",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "sun-open",
+        display_name: "Sun Open",
+        aliases: aliases![],
+        executable: b"/bin/sun-open",
+    },
+    ApplicationRegistryEntry {
+        canonical_id: "mines",
+        display_name: "Sunlight Mines",
+        aliases: aliases![("en", "sunlight-mines")],
+        executable: b"/Applications/SunlightMines.sunapp",
+    },
+];
+
+static SETTINGS_PAGE_REGISTRY: &[SettingsPageRegistryEntry] = &[
+    SettingsPageRegistryEntry {
+        page: ControlPanelPage::Wallpaper,
+        display_name: "Wallpaper",
+        aliases: aliases![("fa", "پس‌زمینه")],
+    },
+    SettingsPageRegistryEntry {
+        page: ControlPanelPage::Display,
+        display_name: "Display",
+        aliases: aliases![("en", "monitor"), ("fa", "نمایشگر")],
+    },
+    SettingsPageRegistryEntry {
+        page: ControlPanelPage::AboutComputer,
+        display_name: "About Computer",
+        aliases: aliases![("en", "computer"), ("fa", "درباره رایانه")],
+    },
+    SettingsPageRegistryEntry {
+        page: ControlPanelPage::AboutOs,
+        display_name: "About SunlightOS",
+        aliases: aliases![
+            ("en", "about"),
+            ("en", "about-sunlightos"),
+            ("fa", "درباره سیستم")
+        ],
+    },
+    SettingsPageRegistryEntry {
+        page: ControlPanelPage::Network,
+        display_name: "Network",
+        aliases: aliases![("fa", "شبکه")],
+    },
+    SettingsPageRegistryEntry {
+        page: ControlPanelPage::PowerThermal,
+        display_name: "Power and Thermal",
+        aliases: aliases![("en", "power"), ("en", "thermal"), ("fa", "توان")],
+    },
+    SettingsPageRegistryEntry {
+        page: ControlPanelPage::DateTime,
+        display_name: "Date and Time",
+        aliases: aliases![
+            ("en", "datetime"),
+            ("en", "time"),
+            ("en", "timezone"),
+            ("fa", "تاریخ و زمان")
+        ],
+    },
+    SettingsPageRegistryEntry {
+        page: ControlPanelPage::LoginSession,
+        display_name: "Login and Session",
+        aliases: aliases![
+            ("en", "session"),
+            ("en", "startup"),
+            ("en", "startup-apps"),
+            ("fa", "ورود و نشست")
+        ],
+    },
+];
+
+pub const fn application_registry() -> &'static [ApplicationRegistryEntry] {
+    APPLICATION_REGISTRY
+}
+
+pub const fn settings_page_registry() -> &'static [SettingsPageRegistryEntry] {
+    SETTINGS_PAGE_REGISTRY
+}
+
 impl ControlPanelPage {
     pub const fn from_id(id: &[u8]) -> Option<Self> {
         match id {
             b"wallpaper" => Some(Self::Wallpaper),
+            b"display" => Some(Self::Display),
             b"about-computer" => Some(Self::AboutComputer),
             b"about-os" => Some(Self::AboutOs),
             b"network" => Some(Self::Network),
@@ -72,6 +337,7 @@ impl ControlPanelPage {
     pub const fn id(self) -> &'static [u8] {
         match self {
             Self::Wallpaper => b"wallpaper",
+            Self::Display => b"display",
             Self::AboutComputer => b"about-computer",
             Self::AboutOs => b"about-os",
             Self::Network => b"network",
@@ -84,15 +350,20 @@ impl ControlPanelPage {
     /// Compatibility parser for direct Control Panel CLI use. Typed executor
     /// dispatch deliberately uses `from_id` and therefore accepts canonical
     /// registry IDs only.
-    pub const fn from_cli_id(id: &[u8]) -> Option<Self> {
-        match id {
-            b"computer" => Some(Self::AboutComputer),
-            b"about-sunlightos" | b"about" => Some(Self::AboutOs),
-            b"power" | b"thermal" => Some(Self::PowerThermal),
-            b"datetime" | b"time" | b"timezone" => Some(Self::DateTime),
-            b"session" | b"startup" | b"startup-apps" => Some(Self::LoginSession),
-            _ => Self::from_id(id),
+    pub fn from_cli_id(id: &[u8]) -> Option<Self> {
+        if let Some(page) = Self::from_id(id) {
+            return Some(page);
         }
+        for entry in SETTINGS_PAGE_REGISTRY {
+            if entry
+                .aliases
+                .iter()
+                .any(|alias| alias.value.as_bytes() == id)
+            {
+                return Some(entry.page);
+            }
+        }
+        None
     }
 }
 
@@ -714,31 +985,17 @@ fn resolve(command: &[u8]) -> Option<ResolvedApp> {
 }
 
 fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
-    match command {
-        b"calculator" | b"calc" => Some(b"/bin/calculator"),
-        b"welcome" | b"wiseowl-welcome" | b"sunlight-welcome" => Some(b"/bin/welcome"),
-        b"terminal" | b"term" | b"sunlight-terminal" => Some(b"/bin/sunlight-terminal"),
-        b"chronos" | b"sunlight-chronos" | b"sunlight-dos-terminal" => {
-            Some(b"/Applications/ChronosDosShell.sunapp")
+    for entry in APPLICATION_REGISTRY {
+        if command == entry.canonical_id.as_bytes()
+            || entry
+                .aliases
+                .iter()
+                .any(|alias| command == alias.value.as_bytes())
+        {
+            return Some(entry.executable);
         }
-        b"settings" | b"control-panel" | b"preferences" => Some(b"/bin/control-panel"),
-        b"files" | b"file-manager" | b"sunlight-files" => Some(b"/bin/sunlight-files"),
-        b"tasks" | b"task-manager" | b"sunlight-tasks" => Some(b"/bin/sunlight-tasks"),
-        b"eyes" => Some(b"/bin/eyes"),
-        b"bench" | b"sunbench" | b"sunlight-bench" => Some(b"/bin/sunbench"),
-        b"sunlight-edit" | b"sunlight-text" | b"edit" | b"text-editor" => {
-            Some(b"/bin/sunlight-edit")
-        }
-        b"light-lens" | b"photos" | b"photo-viewer" => Some(b"/bin/light-lens"),
-        b"calendar" | b"sunlight-calendar" => Some(b"/bin/sunlight-calendar"),
-        b"rappid-rabbit" | b"rabbit" => Some(b"/bin/rappid-rabbit"),
-        b"sunlight-api-lab" | b"api-lab" => Some(b"/bin/sunlight-api-lab"),
-        b"silicon-echoes" | b"silicon" => Some(b"/bin/silicon-echoes"),
-        b"emoji-picker" | b"emoji" | b"picker" => Some(b"/bin/emoji-picker"),
-        b"sun-open" => Some(b"/bin/sun-open"),
-        b"mines" | b"sunlight-mines" => Some(b"/Applications/SunlightMines.sunapp"),
-        _ => None,
     }
+    None
 }
 
 fn is_strict_identifier(value: &[u8]) -> bool {
@@ -840,7 +1097,7 @@ pub fn next_cli_trace(source: LaunchSource) -> LaunchTrace {
 mod tests {
     use super::{
         is_bundle_path, is_strict_identifier, join_bundle_program, map_app_id, ControlPanelPage,
-        CHRONOS_BUNDLE_ARG_COUNT, MAX_ARGS, MAX_PATH,
+        APPLICATION_REGISTRY, CHRONOS_BUNDLE_ARG_COUNT, MAX_ARGS, MAX_PATH, SETTINGS_PAGE_REGISTRY,
     };
 
     #[test]
@@ -866,6 +1123,7 @@ mod tests {
     fn every_typed_settings_page_has_a_canonical_round_trip() {
         for page in [
             ControlPanelPage::Wallpaper,
+            ControlPanelPage::Display,
             ControlPanelPage::AboutComputer,
             ControlPanelPage::AboutOs,
             ControlPanelPage::Network,
@@ -874,6 +1132,40 @@ mod tests {
             ControlPanelPage::LoginSession,
         ] {
             assert_eq!(ControlPanelPage::from_id(page.id()), Some(page));
+        }
+    }
+
+    #[test]
+    fn public_registry_ids_and_locale_aliases_are_collision_free() {
+        for (index, left) in APPLICATION_REGISTRY.iter().enumerate() {
+            assert!(is_strict_identifier(left.canonical_id.as_bytes()));
+            for right in APPLICATION_REGISTRY.iter().skip(index + 1) {
+                assert_ne!(left.canonical_id, right.canonical_id);
+                for left_alias in left.aliases {
+                    for right_alias in right.aliases {
+                        assert!(
+                            left_alias.locale != right_alias.locale
+                                || left_alias.value != right_alias.value,
+                            "application alias collision"
+                        );
+                    }
+                }
+            }
+        }
+        for (index, left) in SETTINGS_PAGE_REGISTRY.iter().enumerate() {
+            assert!(is_strict_identifier(left.canonical_id().as_bytes()));
+            for right in SETTINGS_PAGE_REGISTRY.iter().skip(index + 1) {
+                assert_ne!(left.canonical_id(), right.canonical_id());
+                for left_alias in left.aliases {
+                    for right_alias in right.aliases {
+                        assert!(
+                            left_alias.locale != right_alias.locale
+                                || left_alias.value != right_alias.value,
+                            "settings alias collision"
+                        );
+                    }
+                }
+            }
         }
     }
 

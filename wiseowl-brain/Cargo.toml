@@ -1,6 +1,7 @@
 [package]
 name = "wiseowl-brain"
-version = "0.2.3612-alpha.1"
+version = "0.2.3652-alpha.1"
+
 
 
 
@@ -45,6 +46,7 @@ sunlightos = [
 ]
 phase4a-test = []
 executor-v1-test = []
+planner-v1-test = []
 
 [dependencies]
 heapless = "0.8"

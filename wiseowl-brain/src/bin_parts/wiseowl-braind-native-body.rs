@@ -62,6 +62,8 @@ pub extern "C" fn _start() -> ! {
         serial_println!("[WISEOWL-BRAIN] registered {}", BRAIN_ENDPOINT);
         #[cfg(feature = "executor-v1-test")]
         run_executor_v1_gate();
+        #[cfg(feature = "planner-v1-test")]
+        run_planner_v1_gate();
     } else {
         serial_println!("[WISEOWL-BRAIN] failed to register {}", BRAIN_ENDPOINT);
         process_yield();
@@ -117,6 +119,176 @@ pub extern "C" fn _start() -> ! {
                 let _ = ipc_reply_and_wait(ep, reply);
             }
         }
+    }
+}
+
+#[cfg(feature = "planner-v1-test")]
+fn run_planner_v1_gate() {
+    use wiseowl_brain::{
+        ActionEvaluation, ActionOperation, AuthorityTime, BoundedActionPlanner, DispatchStatus,
+        ExecutionContext, ExecutionResultCode, IntentId, LaunchApplicationRequest,
+        OpenSettingsPageRequest, PlannerContext, PlannerInput, PlannerResult, PolicyEngine,
+        ProposedTarget, RegistryStatus, RequestedBy, ResponderIdentity, RuntimeContextSnapshot,
+        SessionAuthorization, SessionId, SessionStatus, SunlightPlannerRegistry, TrustedActionFlow,
+        TrustedLaunchAdapter, TypedIdentifier, UnsupportedReason,
+    };
+
+    struct FakeTypedLaunchAdapter;
+    impl TrustedLaunchAdapter for FakeTypedLaunchAdapter {
+        fn application_status(&self, bundle_id: &TypedIdentifier) -> RegistryStatus {
+            if bundle_id.as_str() == "calculator" {
+                RegistryStatus::Registered
+            } else {
+                RegistryStatus::NotFound
+            }
+        }
+
+        fn settings_page_status(&self, page_id: &TypedIdentifier) -> RegistryStatus {
+            if page_id.as_str() == "network" {
+                RegistryStatus::Registered
+            } else {
+                RegistryStatus::NotFound
+            }
+        }
+
+        fn launch_application(&mut self, request: LaunchApplicationRequest) -> DispatchStatus {
+            if request.bundle_id().as_str() == "calculator" {
+                DispatchStatus::Accepted
+            } else {
+                DispatchStatus::Failed
+            }
+        }
+
+        fn open_settings_page(&mut self, _: OpenSettingsPageRequest) -> DispatchStatus {
+            DispatchStatus::Failed
+        }
+    }
+
+    let planner_context = PlannerContext {
+        runtime_snapshot_generation: 1,
+        active_session_id: SessionId(1),
+        now: 100,
+    };
+    let request = |id, locale, text| {
+        PlannerInput::direct(
+            id,
+            1,
+            SessionId(1),
+            RequestedBy::User(0),
+            locale,
+            text,
+            1,
+            100,
+        )
+    };
+    let mut planner = BoundedActionPlanner::<SunlightPlannerRegistry>::new(SunlightPlannerRegistry);
+
+    serial_println!("[WISEOWL-PLANNER] READY PASS");
+    let exact = match planner.plan(&request(1, "en", "Open Calculator"), planner_context) {
+        PlannerResult::Proposed(draft)
+            if draft.operation() == ActionOperation::OpenApplication
+                && matches!(
+                    draft.target(),
+                    ProposedTarget::Application(id) if id.as_str() == "calculator"
+                ) =>
+        {
+            serial_println!("[WISEOWL-PLANNER] EXACT_APPLICATION PASS");
+            draft
+        }
+        _ => {
+            serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT FAIL");
+            return;
+        }
+    };
+    if matches!(
+        planner.plan(
+            &request(2, "fa", "تنظیمات شبکه را باز کن"),
+            planner_context
+        ),
+        PlannerResult::Proposed(draft)
+            if matches!(
+                draft.target(),
+                ProposedTarget::SettingsPage(id) if id.as_str() == "network"
+            )
+    ) {
+        serial_println!("[WISEOWL-PLANNER] SETTINGS_PAGE PASS");
+    } else {
+        serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT FAIL");
+        return;
+    }
+    if matches!(
+        planner.plan(&request(3, "fa", "ماشین حساب را باز نکن"), planner_context),
+        PlannerResult::NoAction
+    ) {
+        serial_println!("[WISEOWL-PLANNER] NEGATION PASS");
+    } else {
+        serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT FAIL");
+        return;
+    }
+    if matches!(
+        planner.plan(&request(4, "en", "Open settings"), planner_context),
+        PlannerResult::NeedsClarification(_)
+    ) {
+        serial_println!("[WISEOWL-PLANNER] AMBIGUITY PASS");
+    } else {
+        serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT FAIL");
+        return;
+    }
+    if matches!(
+        planner.plan(&request(5, "en", "Restart networkd"), planner_context),
+        PlannerResult::Unsupported(UnsupportedReason::UnsupportedOperation)
+    ) {
+        serial_println!("[WISEOWL-PLANNER] UNSUPPORTED PASS");
+    } else {
+        serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT FAIL");
+        return;
+    }
+
+    let intent = exact.build_action_intent(IntentId::new([0x71; 16]));
+    let mut runtime = RuntimeContextSnapshot {
+        available: true,
+        generation: 1,
+        captured_mono_ms: 100,
+        ..RuntimeContextSnapshot::default()
+    };
+    runtime.session.desktop_mode = Some(true);
+    runtime.session.installer_mode = Some(false);
+    runtime.session.recovery_mode = Some(false);
+    let mut flow = TrustedActionFlow::new(FakeTypedLaunchAdapter, 1_000);
+    let ActionEvaluation::Decided(decision) = flow.evaluate_action(&intent, &runtime) else {
+        serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT FAIL");
+        return;
+    };
+    let session = SessionAuthorization::new(
+        SessionId(1),
+        ResponderIdentity::User(0),
+        SessionStatus::Active,
+    );
+    let Ok(ready) = flow.prepare_for_execution(
+        &intent,
+        &decision,
+        None,
+        &runtime,
+        session,
+        AuthorityTime(110),
+    ) else {
+        serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT FAIL");
+        return;
+    };
+    serial_println!("[WISEOWL-PLANNER] TRUSTED_FLOW PASS");
+    let policy = PolicyEngine::v1();
+    let execution_context = ExecutionContext::new(
+        &runtime,
+        &policy,
+        session,
+        RequestedBy::User(0),
+        AuthorityTime(111),
+    );
+    if flow.execute_ready_action(ready, &execution_context).code() == ExecutionResultCode::Succeeded
+    {
+        serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT PASS");
+    } else {
+        serial_println!("[WISEOWL-PLANNER] EXECUTION_RESULT FAIL");
     }
 }
 

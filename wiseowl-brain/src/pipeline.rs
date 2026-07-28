@@ -9,6 +9,10 @@ use crate::foundation::{FoundationLoadState, FoundationMemory};
 use crate::greeting;
 use crate::grounded::{AuthIdentity, BrainContextSource, FactKind, GroundedFact};
 use crate::mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
+#[cfg(feature = "sunlightos")]
+use crate::planner::{
+    BoundedActionPlanner, PlannerContext, PlannerInput, PlannerResult, SunlightPlannerRegistry,
+};
 use crate::policy::PolicyEngine;
 use crate::protocol::{BrainRequestWire, BrainResponseWire};
 use crate::provenance::{BrainProviderKind, BrainResponseFlags, BrainResponseMeta};
@@ -19,6 +23,8 @@ pub struct CognitivePipeline {
     foundation: FoundationLoadState,
     runtime_context: RuntimeContextCache,
     action_intents: ActionIntentEvaluator<DEFAULT_AUDIT_CAPACITY>,
+    #[cfg(feature = "sunlightos")]
+    action_planner: BoundedActionPlanner<SunlightPlannerRegistry>,
 }
 
 impl CognitivePipeline {
@@ -40,6 +46,8 @@ impl CognitivePipeline {
             foundation,
             runtime_context,
             action_intents,
+            #[cfg(feature = "sunlightos")]
+            action_planner: BoundedActionPlanner::new(SunlightPlannerRegistry),
         }
     }
 
@@ -69,6 +77,34 @@ impl CognitivePipeline {
         self.refresh_runtime_context_if_due();
         self.action_intents
             .evaluate(intent, self.runtime_context.snapshot())
+    }
+
+    /// Converts a bounded conversation request into an untrusted proposal.
+    /// The result cannot execute and must be built into an ActionIntent before
+    /// entering `evaluate_action` and the rest of TrustedActionFlow.
+    #[cfg(feature = "sunlightos")]
+    pub fn plan_action(
+        &mut self,
+        input: &PlannerInput,
+        active_session_id: crate::SessionId,
+        now: u64,
+    ) -> PlannerResult {
+        self.refresh_runtime_context_if_due();
+        self.action_planner.plan(
+            input,
+            PlannerContext {
+                runtime_snapshot_generation: self.runtime_context.snapshot().generation,
+                active_session_id,
+                now,
+            },
+        )
+    }
+
+    #[cfg(feature = "sunlightos")]
+    pub fn planner_audit(
+        &self,
+    ) -> &crate::planner::PlannerAuditLog<{ crate::planner::DEFAULT_PLANNER_AUDIT_CAPACITY }> {
+        self.action_planner.audit()
     }
 
     pub fn refresh_runtime_context_if_due(&mut self) {

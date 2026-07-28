@@ -19,6 +19,7 @@ pub mod memory_layers;
 pub mod mtm;
 pub mod native_ipc;
 pub mod pipeline;
+pub mod planner;
 pub mod policy;
 pub mod protocol;
 pub mod provenance;
@@ -50,6 +51,17 @@ pub use executor::{
 };
 pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
 pub use pipeline::CognitivePipeline;
+#[cfg(feature = "sunlightos")]
+pub use planner::SunlightPlannerRegistry;
+pub use planner::{
+    ActionIntentDraft, BoundedActionPlanner, ClarificationCandidate, ClarificationId,
+    ClarificationRequest, ConfidenceClass, ConversationId, DraftProvenance, EvidenceSpan,
+    InvalidInputReason, NormalizedParameters, PlannerAuditEntry, PlannerAuditLog,
+    PlannerAuditResult, PlannerContext, PlannerInput, PlannerInputError, PlannerInputProvenance,
+    PlannerRegistry, PlannerRequestId, PlannerResult, PlannerTargetKind, PlannerVersion,
+    ProposedTarget, RegistryAliasRef, RegistryTargetRef, UnsupportedReason, ALIAS_MODEL_V1,
+    PLANNER_V1,
+};
 pub use policy::{
     ConfirmationLevel, PolicyCategory, PolicyEngine, PolicyOperation, PolicyReason, PolicyResult,
     PolicyRule, PolicyVersion,
