@@ -42,6 +42,77 @@ pub struct ApplicationLaunchRequest<'a> {
     pub documents_read_write: bool,
 }
 
+/// The authoritative bounded Control Panel page registry. These are the only
+/// page identifiers accepted by typed settings dispatch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ControlPanelPage {
+    Wallpaper,
+    AboutComputer,
+    AboutOs,
+    Network,
+    PowerThermal,
+    DateTime,
+    LoginSession,
+}
+
+impl ControlPanelPage {
+    pub const fn from_id(id: &[u8]) -> Option<Self> {
+        match id {
+            b"wallpaper" => Some(Self::Wallpaper),
+            b"about-computer" => Some(Self::AboutComputer),
+            b"about-os" => Some(Self::AboutOs),
+            b"network" => Some(Self::Network),
+            b"power-thermal" => Some(Self::PowerThermal),
+            b"date-time" => Some(Self::DateTime),
+            b"login-session" => Some(Self::LoginSession),
+            _ => None,
+        }
+    }
+
+    pub const fn id(self) -> &'static [u8] {
+        match self {
+            Self::Wallpaper => b"wallpaper",
+            Self::AboutComputer => b"about-computer",
+            Self::AboutOs => b"about-os",
+            Self::Network => b"network",
+            Self::PowerThermal => b"power-thermal",
+            Self::DateTime => b"date-time",
+            Self::LoginSession => b"login-session",
+        }
+    }
+
+    /// Compatibility parser for direct Control Panel CLI use. Typed executor
+    /// dispatch deliberately uses `from_id` and therefore accepts canonical
+    /// registry IDs only.
+    pub const fn from_cli_id(id: &[u8]) -> Option<Self> {
+        match id {
+            b"computer" => Some(Self::AboutComputer),
+            b"about-sunlightos" | b"about" => Some(Self::AboutOs),
+            b"power" | b"thermal" => Some(Self::PowerThermal),
+            b"datetime" | b"time" | b"timezone" => Some(Self::DateTime),
+            b"session" | b"startup" | b"startup-apps" => Some(Self::LoginSession),
+            _ => Self::from_id(id),
+        }
+    }
+}
+
+/// Typed request for a registered app ID. It contains no executable path,
+/// arguments, environment, or command string.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RegisteredApplicationRequest<'a> {
+    pub trace: LaunchTrace,
+    pub source: LaunchSource,
+    pub app_id: &'a [u8],
+}
+
+/// Typed request for an allowlisted Control Panel page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RegisteredSettingsPageRequest {
+    pub trace: LaunchTrace,
+    pub source: LaunchSource,
+    pub page: ControlPanelPage,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LaunchError {
     AppNotFound,
@@ -179,6 +250,50 @@ pub fn launch(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
             Err(LaunchError::SpawnFailed(err))
         }
     }
+}
+
+pub fn registered_application_available(app_id: &[u8]) -> bool {
+    is_strict_identifier(app_id)
+        && map_app_id(app_id)
+            .and_then(ResolvedApp::from_path)
+            .is_some()
+}
+
+pub fn launch_registered_application(
+    request: RegisteredApplicationRequest<'_>,
+) -> Result<LaunchResult, LaunchError> {
+    if !registered_application_available(request.app_id) {
+        return Err(LaunchError::AppNotFound);
+    }
+    launch(LaunchRequest {
+        trace: request.trace,
+        source: request.source,
+        command: request.app_id,
+        args: &[],
+        require_display: true,
+    })
+}
+
+pub fn settings_page_available(page_id: &[u8]) -> bool {
+    ControlPanelPage::from_id(page_id).is_some()
+        && map_app_id(b"settings")
+            .and_then(ResolvedApp::from_path)
+            .is_some()
+}
+
+pub fn open_registered_settings_page(
+    request: RegisteredSettingsPageRequest,
+) -> Result<LaunchResult, LaunchError> {
+    if !settings_page_available(request.page.id()) {
+        return Err(LaunchError::AppNotFound);
+    }
+    launch(LaunchRequest {
+        trace: request.trace,
+        source: request.source,
+        command: b"settings",
+        args: &[b"--page", request.page.id()],
+        require_display: true,
+    })
 }
 
 fn launch_chronos_bundle(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
@@ -626,6 +741,14 @@ fn map_app_id(command: &[u8]) -> Option<&'static [u8]> {
     }
 }
 
+fn is_strict_identifier(value: &[u8]) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
 fn validate_command(command: &[u8]) -> Result<(), LaunchError> {
     if command.is_empty() || command.len() >= MAX_PATH || command.contains(&0) {
         return Err(LaunchError::InvalidCommand);
@@ -716,9 +839,43 @@ pub fn next_cli_trace(source: LaunchSource) -> LaunchTrace {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_bundle_path, join_bundle_program, map_app_id, CHRONOS_BUNDLE_ARG_COUNT, MAX_ARGS,
-        MAX_PATH,
+        is_bundle_path, is_strict_identifier, join_bundle_program, map_app_id, ControlPanelPage,
+        CHRONOS_BUNDLE_ARG_COUNT, MAX_ARGS, MAX_PATH,
     };
+
+    #[test]
+    fn typed_registry_rejects_paths_commands_and_unknown_settings_pages() {
+        assert!(is_strict_identifier(b"calculator"));
+        assert!(!is_strict_identifier(b"/bin/calculator"));
+        assert!(!is_strict_identifier(b"calculator --unsafe"));
+        assert!(!is_strict_identifier(b"calculator;reboot"));
+        assert_eq!(
+            ControlPanelPage::from_id(b"network"),
+            Some(ControlPanelPage::Network)
+        );
+        assert_eq!(ControlPanelPage::from_id(b"unknown"), None);
+        assert_eq!(ControlPanelPage::from_id(b"root"), None);
+        assert_eq!(ControlPanelPage::from_id(b"timezone"), None);
+        assert_eq!(
+            ControlPanelPage::from_cli_id(b"timezone"),
+            Some(ControlPanelPage::DateTime)
+        );
+    }
+
+    #[test]
+    fn every_typed_settings_page_has_a_canonical_round_trip() {
+        for page in [
+            ControlPanelPage::Wallpaper,
+            ControlPanelPage::AboutComputer,
+            ControlPanelPage::AboutOs,
+            ControlPanelPage::Network,
+            ControlPanelPage::PowerThermal,
+            ControlPanelPage::DateTime,
+            ControlPanelPage::LoginSession,
+        ] {
+            assert_eq!(ControlPanelPage::from_id(page.id()), Some(page));
+        }
+    }
 
     #[test]
     fn chronos_aliases_resolve_to_the_dos_shell_bundle() {

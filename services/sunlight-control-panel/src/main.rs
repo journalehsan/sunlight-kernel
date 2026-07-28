@@ -42,7 +42,7 @@ use sunlight_ipc::{
     DisplayModeManagement, DisplayModeTransaction, IpcMsg, NotificationKind, ProcessExit,
     ScreenBackend, SgpMsg, DEFAULT_MODE_PREVIEW_TIMEOUT_MS,
 };
-use sunlight_libc::crt0;
+use sunlight_libc::{crt0, sun_exec::ControlPanelPage};
 use sunlight_ui::{
     image::{decode_simg, draw_mono_icon, MonoIcon, RgbaImage, TgaImage},
     request_close,
@@ -1995,17 +1995,15 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
         if bytes == b"--page" && i + 1 < count {
             let next_len = unsafe { crt0::cstr_len(raw[i + 1], 48) };
             let next = unsafe { core::slice::from_raw_parts(raw[i + 1], next_len) };
-            match next {
-                b"wallpaper" => return Page::Wallpaper,
-                b"about-computer" | b"computer" => return Page::AboutComputer,
-                b"about-os" | b"about-sunlightos" | b"about" => return Page::AboutOs,
-                b"network" => return Page::Network,
-                b"power" | b"thermal" | b"power-thermal" => return Page::PowerThermal,
-                b"date-time" | b"datetime" | b"time" | b"timezone" => return Page::DateTime,
-                b"login-session" | b"session" | b"startup" | b"startup-apps" => {
-                    return Page::LoginSession
-                }
-                _ => {}
+            match ControlPanelPage::from_cli_id(next) {
+                Some(ControlPanelPage::Wallpaper) => return Page::Wallpaper,
+                Some(ControlPanelPage::AboutComputer) => return Page::AboutComputer,
+                Some(ControlPanelPage::AboutOs) => return Page::AboutOs,
+                Some(ControlPanelPage::Network) => return Page::Network,
+                Some(ControlPanelPage::PowerThermal) => return Page::PowerThermal,
+                Some(ControlPanelPage::DateTime) => return Page::DateTime,
+                Some(ControlPanelPage::LoginSession) => return Page::LoginSession,
+                None => {}
             }
             i += 2;
             continue;

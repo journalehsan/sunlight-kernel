@@ -14,8 +14,8 @@ use wiseowl_brain::grounded::AuthIdentity;
 use wiseowl_brain::kv_client::{load_mtm, save_preferences, save_welcome_state};
 use wiseowl_brain::mtm::GreetingStyle;
 use wiseowl_brain::native_ipc::{
-    BrainIpcHeader, BrainOp, NATIVE_PROTOCOL_VERSION, BRAIN_ENDPOINT,
-    BRAIN_IPC_HEADER_LEN, IPC_REG_WORDS, REG_INLINE_BODY_MAX, SHM_PAGE_SIZE,
+    BrainIpcHeader, BrainOp, BRAIN_ENDPOINT, BRAIN_IPC_HEADER_LEN, IPC_REG_WORDS,
+    NATIVE_PROTOCOL_VERSION, REG_INLINE_BODY_MAX, SHM_PAGE_SIZE,
 };
 use wiseowl_brain::pipeline::CognitivePipeline;
 use wiseowl_brain::protocol::BrainRequestWire;
@@ -60,6 +60,8 @@ pub extern "C" fn _start() -> ! {
         serial_println!("[WISEOWL-BRAIN] ENDPOINT_REGISTER PASS");
         serial_println!("[WISEOWL-BRAIN] SERVICE_READY PASS");
         serial_println!("[WISEOWL-BRAIN] registered {}", BRAIN_ENDPOINT);
+        #[cfg(feature = "executor-v1-test")]
+        run_executor_v1_gate();
     } else {
         serial_println!("[WISEOWL-BRAIN] failed to register {}", BRAIN_ENDPOINT);
         process_yield();
@@ -118,6 +120,114 @@ pub extern "C" fn _start() -> ! {
     }
 }
 
+#[cfg(feature = "executor-v1-test")]
+fn run_executor_v1_gate() {
+    use wiseowl_brain::{
+        ActionEvaluation, ActionIntent, ActionOperation, ActionParameters, ActionTarget,
+        AuthorityTime, CreationTime, DispatchStatus, ExecutionContext, ExecutionResultCode,
+        IntentId, OpenSettingsPageRequest, PolicyEngine, Provenance, RegistryStatus, RequestedBy,
+        ResponderIdentity, RiskHint, RuntimeContextSnapshot, SessionAuthorization, SessionId,
+        SessionStatus, TrustedActionFlow, TrustedLaunchAdapter, TypedIdentifier,
+    };
+
+    struct GateLaunchAdapter;
+    impl TrustedLaunchAdapter for GateLaunchAdapter {
+        fn application_status(&self, _: &TypedIdentifier) -> RegistryStatus {
+            RegistryStatus::NotFound
+        }
+        fn settings_page_status(&self, page_id: &TypedIdentifier) -> RegistryStatus {
+            if page_id.as_str() == "network" {
+                RegistryStatus::Registered
+            } else {
+                RegistryStatus::NotFound
+            }
+        }
+        fn launch_application(
+            &mut self,
+            _: wiseowl_brain::LaunchApplicationRequest,
+        ) -> DispatchStatus {
+            DispatchStatus::Failed
+        }
+        fn open_settings_page(&mut self, request: OpenSettingsPageRequest) -> DispatchStatus {
+            if request.page_id().as_str() == "network" {
+                DispatchStatus::Accepted
+            } else {
+                DispatchStatus::Failed
+            }
+        }
+    }
+
+    serial_println!("WISEOWL-EXECUTOR READY");
+    let mut runtime = RuntimeContextSnapshot {
+        available: true,
+        generation: 1,
+        captured_mono_ms: 100,
+        ..RuntimeContextSnapshot::default()
+    };
+    runtime.session.desktop_mode = Some(true);
+    runtime.session.installer_mode = Some(false);
+    runtime.session.recovery_mode = Some(false);
+    let intent = ActionIntent::new(
+        IntentId::new([0x51; 16]),
+        ActionOperation::OpenSettingsPage,
+        ActionTarget::SettingsPage(TypedIdentifier::new("network").unwrap()),
+        ActionParameters::Settings { focus: None },
+        RequestedBy::User(0),
+        SessionId(1),
+        1,
+        CreationTime(100),
+        RiskHint::Low,
+        Provenance::ExplicitUserRequest,
+    );
+    let mut flow = TrustedActionFlow::new(GateLaunchAdapter, 1_000);
+    let ActionEvaluation::Decided(decision) = flow.evaluate_action(&intent, &runtime) else {
+        serial_println!("EXECUTION_RESULT FAIL");
+        return;
+    };
+    serial_println!("ACTION_INTENT VALID");
+    if decision.result() != wiseowl_brain::PolicyResult::Allowed {
+        serial_println!("EXECUTION_RESULT FAIL");
+        return;
+    }
+    serial_println!("POLICY ALLOWED");
+    let session = SessionAuthorization::new(
+        SessionId(1),
+        ResponderIdentity::User(0),
+        SessionStatus::Active,
+    );
+    let Ok(ready) = flow.prepare_for_execution(
+        &intent,
+        &decision,
+        None,
+        &runtime,
+        session,
+        AuthorityTime(110),
+    ) else {
+        serial_println!("EXECUTION_RESULT FAIL");
+        return;
+    };
+    serial_println!("READY_FOR_EXECUTION");
+    let policy = PolicyEngine::v1();
+    let context = ExecutionContext::new(
+        &runtime,
+        &policy,
+        session,
+        RequestedBy::User(0),
+        AuthorityTime(111),
+    );
+    let result = flow.execute_ready_action(ready, &context);
+    if result.code() == ExecutionResultCode::Succeeded {
+        serial_println!("EXECUTION_DISPATCH PASS");
+        serial_println!(
+            "[WISEOWL-EXEC] execution_id={} operation=OpenSettingsPage target_kind=SettingsPage result=Succeeded",
+            result.execution_id().0
+        );
+        serial_println!("EXECUTION_RESULT PASS");
+    } else {
+        serial_println!("EXECUTION_RESULT FAIL");
+    }
+}
+
 fn subject_uid_from_request(request: &BrainRequestWire) -> u64 {
     if request.user_id != 0 {
         request.user_id
@@ -164,10 +274,7 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
         pipeline.diagnostics.inc_unauthorized();
         return make_error_reply(msg, 403);
     }
-    if request.user_id != 0
-        && request.caller_uid != 0
-        && request.user_id != request.caller_uid
-    {
+    if request.user_id != 0 && request.caller_uid != 0 && request.user_id != request.caller_uid {
         serial_println!("[WISEOWL-BRAIN] AUTHZ_REJECT PASS");
         let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
         pipeline.diagnostics.inc_unauthorized();
@@ -206,12 +313,8 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
         index_source.degraded = true;
     }
 
-    let sources: [&dyn wiseowl_brain::grounded::BrainContextSource; 4] = [
-        &session_source,
-        &kv_source,
-        &memdb_source,
-        &index_source,
-    ];
+    let sources: [&dyn wiseowl_brain::grounded::BrainContextSource; 4] =
+        [&session_source, &kv_source, &memdb_source, &index_source];
 
     let (response, meta) = pipeline.handle_request_grounded(&request, &identity, &sources);
 
@@ -242,10 +345,16 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
         if meta.used_persisted_context {
             serial_println!("[WISEOWL-BRAIN] MTM_READ PASS");
         }
-        if meta.response_flags.has(wiseowl_brain::provenance::BrainResponseFlags::FIRST_VISIT_GREETING) {
+        if meta
+            .response_flags
+            .has(wiseowl_brain::provenance::BrainResponseFlags::FIRST_VISIT_GREETING)
+        {
             serial_println!("[WISEOWL-BRAIN] FIRST_VISIT PASS");
         }
-        if meta.response_flags.has(wiseowl_brain::provenance::BrainResponseFlags::RETURNING_USER_GREETING) {
+        if meta
+            .response_flags
+            .has(wiseowl_brain::provenance::BrainResponseFlags::RETURNING_USER_GREETING)
+        {
             serial_println!("[WISEOWL-BRAIN] RETURNING_VISIT PASS");
         }
         if index_source.available {
@@ -289,8 +398,7 @@ fn handle_native_health(_msg: IpcMsg) -> IpcMsg {
             pipeline.foundation_state().status_label(),
         ),
     );
-    let greeting =
-        wiseowl_brain::protocol::GreetingResponseWire::simple("Health", body.as_str());
+    let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Health", body.as_str());
     let resp = wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0);
     make_reply(_msg, &resp)
 }
@@ -316,8 +424,7 @@ fn handle_native_stats(_msg: IpcMsg) -> IpcMsg {
             d.foundation_token_count.load(core::sync::atomic::Ordering::Relaxed),
         ),
     );
-    let greeting =
-        wiseowl_brain::protocol::GreetingResponseWire::simple("Stats", body.as_str());
+    let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Stats", body.as_str());
     let resp = wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0);
     make_reply(_msg, &resp)
 }
@@ -349,7 +456,10 @@ fn handle_preferences_get(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
     serial_println!("[WISEOWL-BRAIN] PREFERENCES_READ PASS");
     let greeting =
         wiseowl_brain::protocol::GreetingResponseWire::simple("Preferences", summary.as_str());
-    make_reply(msg, &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0))
+    make_reply(
+        msg,
+        &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0),
+    )
 }
 
 fn handle_preferences_set(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
@@ -381,7 +491,10 @@ fn handle_preferences_set(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
         serial_println!("[WISEOWL-BRAIN] PREFERENCES_WRITE PASS");
         serial_println!("[WISEOWL-BRAIN] PREFERENCES_APPLIED PASS");
         let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Preferences", "ok");
-        make_reply(msg, &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0))
+        make_reply(
+            msg,
+            &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0),
+        )
     } else {
         pipeline.diagnostics.inc_kv_write_fail();
         make_error_reply(msg, 10)
@@ -404,12 +517,19 @@ fn handle_welcome_completed(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
         pipeline.diagnostics.inc_kv_write();
         serial_println!("[WISEOWL-BRAIN] MTM_WRITE PASS");
         let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Complete", "ok");
-        make_reply(msg, &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0))
+        make_reply(
+            msg,
+            &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0),
+        )
     } else {
         pipeline.diagnostics.inc_kv_write_fail();
         // Completion write failure must not break Welcome.
-        let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Complete", "degraded");
-        make_reply(msg, &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0))
+        let greeting =
+            wiseowl_brain::protocol::GreetingResponseWire::simple("Complete", "degraded");
+        make_reply(
+            msg,
+            &wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, 0),
+        )
     }
 }
 
@@ -462,7 +582,8 @@ fn handle_native_context(msg: IpcMsg, caller_uid: u64, caller_pid: u64) -> IpcMs
 
     use core::fmt::Write;
     let mut summary = heapless::String::<256>::new();
-    let _ = write!(&mut summary,
+    let _ = write!(
+        &mut summary,
         "facts={} uid={} pid={} foundation={} runtime={} fr={} ft={}",
         all_facts.len(),
         caller_uid,
@@ -482,7 +603,8 @@ fn read_native_body(msg: IpcMsg) -> Vec<u8> {
     // register inline limit. Cap presence is authoritative.
     if msg.cap_count > 0 {
         if let Ok(ptr) = shm_map(msg.caps[0]) {
-            let slice = unsafe { core::slice::from_raw_parts(ptr as *const u8, SHM_PAGE_SIZE as usize) };
+            let slice =
+                unsafe { core::slice::from_raw_parts(ptr as *const u8, SHM_PAGE_SIZE as usize) };
             let header = match BrainIpcHeader::decode(slice) {
                 Ok(h) => h,
                 Err(_) => {
@@ -563,7 +685,9 @@ fn make_reply(msg: IpcMsg, response: &wiseowl_brain::protocol::BrainResponseWire
         let slice = unsafe { core::slice::from_raw_parts_mut(base, SHM_PAGE_SIZE as usize) };
         let header_enc = header.encode();
         slice[..BRAIN_IPC_HEADER_LEN].copy_from_slice(&header_enc);
-        let copy_len = resp_bytes.len().min(SHM_PAGE_SIZE as usize - BRAIN_IPC_HEADER_LEN);
+        let copy_len = resp_bytes
+            .len()
+            .min(SHM_PAGE_SIZE as usize - BRAIN_IPC_HEADER_LEN);
         slice[BRAIN_IPC_HEADER_LEN..BRAIN_IPC_HEADER_LEN + copy_len]
             .copy_from_slice(&resp_bytes[..copy_len]);
         let mut reply = IpcMsg::with_label(BrainOp::Reply.label());

@@ -10,6 +10,7 @@ pub mod confirmation;
 pub mod context;
 pub mod diagnostics;
 pub mod error;
+pub mod executor;
 pub mod foundation;
 pub mod greeting;
 pub mod grounded;
@@ -39,6 +40,14 @@ pub use confirmation::{
     ResponseValidationContext, SessionAuthorization, SessionStatus,
 };
 pub use diagnostics::BrainDiagnostics;
+#[cfg(feature = "sunlightos")]
+pub use executor::SunlightLaunchAdapter;
+pub use executor::{
+    ActionExecutor, DispatchStatus, ExecutionAuditEntry, ExecutionAuditEvent, ExecutionAuditLog,
+    ExecutionContext, ExecutionId, ExecutionResult, ExecutionResultCode, LaunchApplicationRequest,
+    OpenSettingsPageRequest, RegistryStatus, TrustedActionExecutor, TrustedActionFlow,
+    TrustedLaunchAdapter,
+};
 pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
 pub use pipeline::CognitivePipeline;
 pub use policy::{

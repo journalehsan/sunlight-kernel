@@ -101,6 +101,18 @@ impl SessionAuthorization {
             status,
         }
     }
+
+    pub const fn session_id(self) -> SessionId {
+        self.session_id
+    }
+
+    pub const fn responder(self) -> ResponderIdentity {
+        self.responder
+    }
+
+    pub const fn status(self) -> SessionStatus {
+        self.status
+    }
 }
 
 /// Trusted current inputs checked while accepting an approval response.
@@ -318,6 +330,9 @@ pub enum ConfirmationState {
     Rejected,
     Cancelled,
     Expired,
+    /// The exact grant has been reserved by a readiness envelope. Dispatch is
+    /// still pending; executor replay protection performs final consumption.
+    Ready,
     Consumed,
     Invalidated,
 }
@@ -430,6 +445,37 @@ impl ReadyForExecution {
     pub const fn readiness_timestamp(&self) -> AuthorityTime {
         self.readiness_timestamp
     }
+
+    /// Recomputes all bindings held by this immutable envelope. This is used
+    /// immediately before dispatch; it does not consult mutable runtime state.
+    pub(crate) fn has_valid_integrity(&self) -> bool {
+        if self.final_validation_result != FinalValidationResult::Valid
+            || self.policy_version != self.decision.policy_version()
+            || self.runtime_snapshot_generation != self.decision.runtime_snapshot_generation()
+            || !decision_matches_intent(&self.decision, &self.intent)
+        {
+            return false;
+        }
+
+        match self.decision.result() {
+            PolicyResult::Allowed => self.confirmation_grant.is_none(),
+            PolicyResult::ConfirmationRequired => {
+                let Some(grant) = self.confirmation_grant.as_ref() else {
+                    return false;
+                };
+                grant.intent_id == self.intent.intent_id()
+                    && grant.intent_digest == digest_intent(&self.intent)
+                    && grant.operation == self.intent.operation()
+                    && grant.target == *self.intent.target()
+                    && grant.parameters_digest == digest_parameters(self.intent.parameters())
+                    && grant.provenance == self.intent.provenance()
+                    && grant.policy_version == self.policy_version
+                    && grant.runtime_snapshot_generation == self.runtime_snapshot_generation
+                    && grant.session_id == self.intent.session_id()
+            }
+            PolicyResult::Denied | PolicyResult::Unknown => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -492,7 +538,7 @@ pub enum ConfirmationAuditEvent {
         challenge_id: ChallengeId,
         reason: ReadinessDenialReason,
     },
-    GrantConsumed {
+    GrantReserved {
         challenge_id: ChallengeId,
         grant_id: GrantId,
     },
@@ -891,8 +937,8 @@ impl<const N: usize, const A: usize> ConfirmationAuthority<N, A> {
                 .cloned()
                 .ok_or(AuthorityError::Denied(ReadinessDenialReason::GrantMissing))?;
             let record = self.record_mut(grant.challenge_id)?;
-            record.state = ConfirmationState::Consumed;
-            self.audit.record(ConfirmationAuditEvent::GrantConsumed {
+            record.state = ConfirmationState::Ready;
+            self.audit.record(ConfirmationAuditEvent::GrantReserved {
                 challenge_id: grant.challenge_id,
                 grant_id: grant.grant_id,
             });
@@ -984,7 +1030,10 @@ impl<const N: usize, const A: usize> ConfirmationAuthority<N, A> {
             .iter()
             .find(|record| record.challenge.challenge_id == grant.challenge_id)
             .ok_or(ReadinessDenialReason::GrantChanged)?;
-        if record.state == ConfirmationState::Consumed {
+        if matches!(
+            record.state,
+            ConfirmationState::Ready | ConfirmationState::Consumed
+        ) {
             return Err(ReadinessDenialReason::GrantConsumed);
         }
         if record.state != ConfirmationState::Approved || record.grant.as_ref() != Some(grant) {
@@ -1861,7 +1910,7 @@ mod tests {
         assert_eq!(ready.confirmation_grant(), Some(&grant));
         assert_eq!(
             authority.state(challenge.challenge_id()),
-            Some(ConfirmationState::Consumed)
+            Some(ConfirmationState::Ready)
         );
         // The only output is an immutable data envelope. There is no execute method.
         assert_eq!(ready.intent().intent_id(), intent.intent_id());
