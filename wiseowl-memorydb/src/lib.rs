@@ -20,6 +20,7 @@ extern crate std;
 
 extern crate alloc;
 
+pub mod action_receipts;
 pub mod attributes;
 pub mod caps;
 pub mod census;
@@ -42,6 +43,10 @@ pub mod stats;
 pub mod tokens;
 pub mod wal;
 
+pub use action_receipts::{
+    ActionReceiptBlobStore, ReceiptBlobKey, ACTION_RECEIPT_NAMESPACE,
+    ACTION_RECEIPT_STORAGE_VERSION,
+};
 pub use caps::{DbCapability, DbCapabilitySet};
 pub use database::{Database, DbCaller, DurableStore, InsertRequest, MemoryStore};
 pub use error::DbError;

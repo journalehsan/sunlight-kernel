@@ -68,6 +68,8 @@ pub extern "C" fn _start() -> ! {
         run_coordinator_v1_gate();
         #[cfg(feature = "outcome-observer-v1-test")]
         run_outcome_observer_v1_gate();
+        #[cfg(feature = "action-receipt-v1-test")]
+        run_action_receipt_v1_gate();
     } else {
         serial_println!("[WISEOWL-BRAIN] failed to register {}", BRAIN_ENDPOINT);
         process_yield();
@@ -126,6 +128,230 @@ pub extern "C" fn _start() -> ! {
     }
 }
 
+#[cfg(feature = "action-receipt-v1-test")]
+fn run_action_receipt_v1_gate() {
+    use wiseowl_brain::{
+        ActionOperation, ActionReceiptId, ActionReceiptLedger, ActionReceiptLifecycleEvent,
+        ActionReceiptTerminalStatus, AppendDisposition, AuditId, ConversationId,
+        CoordinatorActionId, ExecutionId, IntentId, ObservationId, PlannerRequestId,
+        PlannerVersion, PolicyVersion, PublicReasonCode, ReceiptError, ReceiptEventSource,
+        ReceiptLifecycleEventType, ReceiptOpen, ReceiptQuery, ReceiptQueryKind, ReceiptQueryResult,
+        ReceiptRelevantIds, ReceiptRetentionPolicy, RequestedBy, SessionId, TargetDisplayKey,
+        TargetKind,
+    };
+
+    type GateLedger = ActionReceiptLedger<wiseowl_brain::VolatileReceiptPersistence, 4, 4, 48>;
+
+    fn open(request_id: u64) -> ReceiptOpen {
+        let action_id = CoordinatorActionId(request_id);
+        let conversation_id = ConversationId(4);
+        let session_id = SessionId(7);
+        let requester = RequestedBy::User(0);
+        let original_request_id = PlannerRequestId(request_id);
+        ReceiptOpen {
+            receipt_id: ActionReceiptId::for_action(
+                action_id,
+                conversation_id,
+                session_id,
+                requester,
+                original_request_id,
+            ),
+            coordinator_action_id: action_id,
+            conversation_id,
+            session_id,
+            requester,
+            original_request_id,
+            intent_id: Some(IntentId::new([request_id as u8; 16])),
+            operation: Some(ActionOperation::OpenApplication),
+            target_kind: Some(TargetKind::Application),
+            target_display_key: Some(TargetDisplayKey::new("calculator").unwrap()),
+            request_timestamp: 100 + request_id,
+            policy_version: PolicyVersion::new(1, 0),
+            planner_version: PlannerVersion::new(1, 0),
+            runtime_snapshot_generation: 1,
+            application_registry_generation: 1,
+            settings_registry_generation: 1,
+            bounded_audit_references: heapless::Vec::new(),
+        }
+    }
+
+    fn event(
+        open: &ReceiptOpen,
+        sequence: u16,
+        event_type: ReceiptLifecycleEventType,
+        source: ReceiptEventSource,
+        reason: PublicReasonCode,
+        terminal_status: Option<ActionReceiptTerminalStatus>,
+    ) -> ActionReceiptLifecycleEvent {
+        ActionReceiptLifecycleEvent::new(
+            open.receipt_id,
+            open.coordinator_action_id,
+            open.session_id,
+            open.requester,
+            sequence,
+            200 + sequence as u64,
+            event_type,
+            reason,
+            ReceiptRelevantIds {
+                intent_id: open.intent_id,
+                execution_id: Some(ExecutionId(31)),
+                observation_id: Some(ObservationId(41)),
+                audit_id: Some(AuditId(sequence as u64)),
+            },
+            source,
+            terminal_status,
+        )
+    }
+
+    serial_println!("[WISEOWL-RECEIPT] READY PASS");
+    let mut ledger = GateLedger::volatile(ReceiptRetentionPolicy {
+        max_sealed_per_domain: 1,
+        max_nonexecuted_per_domain: 1,
+    });
+    let first = open(1);
+    if ledger.open(first.clone()).is_err() {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] OPENED PASS");
+
+    if ledger
+        .append(event(
+            &first,
+            1,
+            ReceiptLifecycleEventType::RequestAccepted,
+            ReceiptEventSource::Planner,
+            PublicReasonCode::None,
+            None,
+        ))
+        .is_err()
+        || ledger
+            .append(event(
+                &first,
+                2,
+                ReceiptLifecycleEventType::PolicyAllowed,
+                ReceiptEventSource::Policy,
+                PublicReasonCode::None,
+                None,
+            ))
+            .is_err()
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] POLICY_EVENT PASS");
+
+    let dispatch = event(
+        &first,
+        3,
+        ReceiptLifecycleEventType::DispatchAccepted,
+        ReceiptEventSource::Executor,
+        PublicReasonCode::DispatchAccepted,
+        None,
+    );
+    if ledger.append(dispatch.clone()).is_err()
+        || ledger.append(dispatch) != Ok(AppendDisposition::DuplicateIgnored)
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] DISPATCH_EVENT PASS");
+
+    if ledger
+        .append(event(
+            &first,
+            4,
+            ReceiptLifecycleEventType::AwaitingOutcome,
+            ReceiptEventSource::Coordinator,
+            PublicReasonCode::DispatchAccepted,
+            None,
+        ))
+        .is_err()
+        || ledger
+            .append(event(
+                &first,
+                5,
+                ReceiptLifecycleEventType::TargetReady,
+                ReceiptEventSource::OutcomeObserver,
+                PublicReasonCode::OutcomeReady,
+                None,
+            ))
+            .is_err()
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] OUTCOME_EVENT PASS");
+
+    let terminal = event(
+        &first,
+        6,
+        ReceiptLifecycleEventType::Completed,
+        ReceiptEventSource::Coordinator,
+        PublicReasonCode::OutcomeReady,
+        Some(ActionReceiptTerminalStatus::CompletedReady),
+    );
+    if ledger.append(terminal.clone()) != Ok(AppendDisposition::Sealed)
+        || ledger.append(terminal) != Err(ReceiptError::DuplicateTerminal)
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] SEALED PASS");
+
+    let query = ReceiptQuery {
+        requester: RequestedBy::User(0),
+        active_session: SessionId(7),
+        maximum_results: 1,
+        kind: ReceiptQueryKind::Latest,
+    };
+    let Ok(ReceiptQueryResult::Sealed(view)) = ledger.query(query, "en") else {
+        return;
+    };
+    if view.len() != 1 || !view[0].readiness_observed {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] QUERY PASS");
+
+    let isolated = ReceiptQuery {
+        requester: RequestedBy::User(0),
+        active_session: SessionId(8),
+        maximum_results: 1,
+        kind: ReceiptQueryKind::Latest,
+    };
+    if ledger.query(isolated, "en") != Ok(ReceiptQueryResult::NotFound) {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] ISOLATION PASS");
+
+    if !ledger
+        .sealed_receipts()
+        .all(|receipt| receipt.verify_integrity())
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] INTEGRITY PASS");
+
+    let active = open(3);
+    if ledger.open(active).is_err() {
+        return;
+    }
+    let second = open(2);
+    if ledger.open(second.clone()).is_err()
+        || ledger
+            .append(event(
+                &second,
+                1,
+                ReceiptLifecycleEventType::Unsupported,
+                ReceiptEventSource::Planner,
+                PublicReasonCode::Unsupported,
+                Some(ActionReceiptTerminalStatus::Unsupported),
+            ))
+            .is_err()
+        || ledger.active_len() != 1
+        || ledger.sealed_len() != 1
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-RECEIPT] RETENTION PASS");
+    serial_println!("[WISEOWL-RECEIPT] COMPLETE PASS");
+}
+
 #[cfg(feature = "outcome-observer-v1-test")]
 fn run_outcome_observer_v1_gate() {
     use wiseowl_brain::{
@@ -155,11 +381,11 @@ fn run_outcome_observer_v1_gate() {
     // request. This feature gate adds deterministic lifecycle evidence through
     // the same library observer; no production lifecycle source is replaced.
     use wiseowl_brain::{
-        ActionIntent, ActionIntentEvaluator, ActionParameters, ActionEvaluation, CreationTime,
-        DispatchStatus, ExecutionContext, IntentId, LaunchApplicationRequest,
-        OpenSettingsPageRequest, PolicyEngine, Provenance, RegistryStatus, RequestedBy, RiskHint,
-        SessionAuthorization, SessionId, SessionStatus, ResponderIdentity, TrustedActionExecutor,
-        TrustedLaunchAdapter, ActionExecutor, ConfirmationAuthority,
+        ActionEvaluation, ActionExecutor, ActionIntent, ActionIntentEvaluator, ActionParameters,
+        ConfirmationAuthority, CreationTime, DispatchStatus, ExecutionContext, IntentId,
+        LaunchApplicationRequest, OpenSettingsPageRequest, PolicyEngine, Provenance,
+        RegistryStatus, RequestedBy, ResponderIdentity, RiskHint, SessionAuthorization, SessionId,
+        SessionStatus, TrustedActionExecutor, TrustedLaunchAdapter,
     };
     struct Launch;
     impl TrustedLaunchAdapter for Launch {
@@ -181,7 +407,9 @@ fn run_outcome_observer_v1_gate() {
         target: ActionTarget,
     ) -> wiseowl_brain::ExecutionResult {
         let parameters = if operation == ActionOperation::OpenApplication {
-            ActionParameters::Application { new_instance: false }
+            ActionParameters::Application {
+                new_instance: false,
+            }
         } else {
             ActionParameters::Settings { focus: None }
         };
@@ -323,9 +551,7 @@ fn run_outcome_observer_v1_gate() {
         settings_request.execution_id(),
         settings_request.correlation_token(),
         settings_request.target().clone(),
-        ObservationEvidenceKind::SettingsPageActivated(
-            TypedIdentifier::new("network").unwrap(),
-        ),
+        ObservationEvidenceKind::SettingsPageActivated(TypedIdentifier::new("network").unwrap()),
     );
     if settings_observer
         .observe(activated, &settings_registry)
@@ -403,9 +629,7 @@ fn run_outcome_observer_v1_gate() {
             public_code: 1,
         },
     );
-    if early.observe(exited, &registry).unwrap().kind()
-        != ObservedActionOutcomeKind::ExitedEarly
-    {
+    if early.observe(exited, &registry).unwrap().kind() != ObservedActionOutcomeKind::ExitedEarly {
         return;
     }
     serial_println!("[WISEOWL-OUTCOME] EARLY_EXIT PASS");
@@ -413,7 +637,12 @@ fn run_outcome_observer_v1_gate() {
     let mut session_observer = ActionOutcomeObserver::<4, 24, 8>::new();
     session_observer.create(request.clone()).unwrap();
     if session_observer
-        .invalidate_session(request.execution_id(), SessionId(99), false, AuthorityTime(129))
+        .invalidate_session(
+            request.execution_id(),
+            SessionId(99),
+            false,
+            AuthorityTime(129),
+        )
         .unwrap()
         .kind()
         != ObservedActionOutcomeKind::SessionInvalidated
@@ -533,17 +762,17 @@ fn run_outcome_observer_v1_gate() {
 
 #[cfg(feature = "coordinator-v1-test")]
 fn run_coordinator_v1_gate() {
+    use wiseowl_brain::policy::PolicyEffect;
     use wiseowl_brain::{
         ActionCoordinator, ApprovalProof, AuthorityTime, BoundConfirmationResponse,
         ClarificationResponse, ConfirmationLevel, ConfirmationResponse, ConfirmationResponseType,
-        CoordinatorConfig, CoordinatorContext, CoordinatorInput, CoordinatorResult,
-        DispatchStatus, LaunchApplicationRequest, OpenSettingsPageRequest, PlannerInput,
-        PolicyCategory, PolicyEngine, PolicyOperation, PolicyRule, PolicyVersion,
-        QueryPendingAction, RegistryStatus, RequestedBy, ResponderIdentity, RuntimeContextSnapshot,
+        CoordinatorConfig, CoordinatorContext, CoordinatorInput, CoordinatorResult, DispatchStatus,
+        LaunchApplicationRequest, OpenSettingsPageRequest, PlannerInput, PolicyCategory,
+        PolicyEngine, PolicyOperation, PolicyRule, PolicyVersion, QueryPendingAction,
+        RegistryStatus, RequestedBy, ResponderIdentity, RuntimeContextSnapshot,
         SessionAuthorization, SessionEndedInput, SessionId, SessionStatus, SunlightPlannerRegistry,
         TrustedLaunchAdapter, TypedIdentifier,
     };
-    use wiseowl_brain::policy::PolicyEffect;
 
     struct FakeTypedLaunchAdapter;
     impl TrustedLaunchAdapter for FakeTypedLaunchAdapter {
@@ -567,8 +796,7 @@ fn run_coordinator_v1_gate() {
             DispatchStatus::Accepted
         }
     }
-    type GateCoordinator =
-        ActionCoordinator<SunlightPlannerRegistry, FakeTypedLaunchAdapter>;
+    type GateCoordinator = ActionCoordinator<SunlightPlannerRegistry, FakeTypedLaunchAdapter>;
 
     static CONFIRM_RULES: &[PolicyRule] = &[
         PolicyRule::new(
@@ -706,8 +934,7 @@ fn run_coordinator_v1_gate() {
     }
     serial_println!("[WISEOWL-COORD] CLARIFICATION PASS");
 
-    let confirm_policy =
-        PolicyEngine::from_static_rules(PolicyVersion::new(8, 1), CONFIRM_RULES);
+    let confirm_policy = PolicyEngine::from_static_rules(PolicyVersion::new(8, 1), CONFIRM_RULES);
     let mut confirmation = GateCoordinator::new(
         SunlightPlannerRegistry,
         FakeTypedLaunchAdapter,

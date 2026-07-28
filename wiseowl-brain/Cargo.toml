@@ -49,6 +49,7 @@ executor-v1-test = []
 planner-v1-test = []
 coordinator-v1-test = []
 outcome-observer-v1-test = []
+action-receipt-v1-test = []
 
 [dependencies]
 heapless = "0.8"
@@ -63,6 +64,7 @@ sunlight-networkd = { path = "../services/sunlight-networkd", optional = true }
 sunlight-tz = { path = "../sunlight-tz", optional = true }
 sunlight-locale = { path = "../sunlight-locale", optional = true }
 wiseowl-index = { path = "../wiseowl-index", default-features = false }
+wiseowl-memorydb = { path = "../wiseowl-memorydb", default-features = false }
 
 [build-dependencies]
 wiseowl-index = { path = "../wiseowl-index", default-features = false }

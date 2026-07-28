@@ -4,6 +4,7 @@
 extern crate alloc;
 
 pub mod action_intent;
+pub mod action_receipt;
 pub mod adapters;
 pub mod caps;
 pub mod confirmation;
@@ -33,6 +34,18 @@ pub use action_intent::{
     ActionParameters, ActionTarget, AuditEntry, AuditId, AuditLog, BoundedFilePath,
     ConfirmationBinding, CreationTime, IdentifierError, IntentId, IntentValidation, ParameterValue,
     Provenance, RequestedBy, RiskHint, SessionId, TargetKind, TypedIdentifier, ValidationReason,
+};
+pub use action_receipt::{
+    ActionReceipt, ActionReceiptId, ActionReceiptLedger, ActionReceiptLifecycleEvent,
+    ActionReceiptTerminalStatus, ActionReceiptView, AppendDisposition, ConfirmationReceiptOutcome,
+    ConfirmationReceiptSummary, DispatchReceiptStatus, DispatchReceiptSummary,
+    ObservedOutcomeReceiptSummary, ObservedReceiptOutcome, PendingActionReceiptView,
+    PendingReceiptState, PolicyReceiptSummary, ReceiptAuditEntry, ReceiptAuditEvent,
+    ReceiptAuditLog, ReceiptConversationAnswer, ReceiptConversationQuestion, ReceiptError,
+    ReceiptEventSource, ReceiptLifecycleEventType, ReceiptOpen, ReceiptPersistence,
+    ReceiptPersistenceError, ReceiptQuery, ReceiptQueryKind, ReceiptQueryResult,
+    ReceiptReadinessAnswer, ReceiptRelevantIds, ReceiptRetentionPolicy, TargetDisplayKey,
+    VolatileReceiptPersistence, ACTION_RECEIPT_DIGEST_DOMAIN, ACTION_RECEIPT_SCHEMA_VERSION,
 };
 pub use confirmation::{
     ApprovalProof, AuthorityError, AuthorityTime, BindingDigest, ChallengeId,
