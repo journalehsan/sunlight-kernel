@@ -25,3 +25,7 @@ pub use pipeline::CognitivePipeline;
 pub use provider::{BrainProvider, LocalBoundedProvider, FutureOnlineProvider, ProviderRegistry};
 pub use diagnostics::BrainDiagnostics;
 pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
+pub use runtime_context::{
+    ContextProvider, ContextProviderError, RefreshClass, RuntimeContextCache,
+    RuntimeContextSnapshot,
+};

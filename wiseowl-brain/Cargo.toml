@@ -38,7 +38,6 @@ sunlightos = [
     "dep:sunlight-networkd",
     "dep:sunlight-tz",
     "dep:sunlight-locale",
-    "dep:sunlightd",
 ]
 phase4a-test = []
 
@@ -53,7 +52,6 @@ sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["globa
 sunlight-networkd = { path = "../services/sunlight-networkd", optional = true }
 sunlight-tz = { path = "../sunlight-tz", optional = true }
 sunlight-locale = { path = "../sunlight-locale", optional = true }
-sunlightd = { path = "../services/sunlightd", optional = true }
 wiseowl-index = { path = "../wiseowl-index", default-features = false }
 
 [build-dependencies]

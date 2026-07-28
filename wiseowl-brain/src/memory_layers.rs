@@ -115,10 +115,10 @@ impl RuntimeContextLayer {
         if let Some(hostname) = snapshot.system.hostname.as_ref() {
             let _ = layer.hostname.push_str(hostname.as_str());
         }
-        if let Some(timezone) = snapshot.system.timezone.as_ref() {
+        if let Some(timezone) = snapshot.timezone.identifier.as_ref() {
             let _ = layer.timezone.push_str(timezone.as_str());
         }
-        if let Some(current_user) = snapshot.system.current_user.as_ref() {
+        if let Some(current_user) = snapshot.session.current_user.as_ref() {
             let _ = layer.current_user.push_str(current_user.as_str());
         }
         layer.network_connected = snapshot.network.connected;

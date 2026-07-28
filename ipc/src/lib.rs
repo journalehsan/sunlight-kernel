@@ -574,7 +574,9 @@ fn matches_user_session_service(name_key: u64) -> bool {
 
 #[cfg(test)]
 mod service_capability_tests {
-    use super::{name_to_u64, service_capability_allows_hashed_name, ServiceCapability};
+    use super::{
+        name_to_u64, service_capability_allows_hashed_name, ServiceCapability, SESSION_ENDPOINT,
+    };
 
     #[test]
     fn control_plane_capabilities_are_service_specific() {
@@ -627,6 +629,19 @@ mod service_capability_tests {
             session,
             name_to_u64("net")
         ));
+        for name in [
+            SESSION_ENDPOINT,
+            "display_server",
+            "networkd",
+            "resolved",
+            "tz",
+            "timed",
+        ] {
+            assert!(
+                service_capability_allows_hashed_name(session, name_to_u64(name)),
+                "user-session must resolve runtime context source {name}"
+            );
+        }
         // Welcome Wizard greets via wiseowl-braind (registered as wiseowl.brain.v1).
         assert!(service_capability_allows_hashed_name(
             session,

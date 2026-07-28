@@ -1,5 +1,5 @@
-//! Context source adapters. Session/System always available; KV/MemoryDB/Index
-//! degrade cleanly when optional services are missing.
+//! Context source adapters. Live operating-system state enters through
+//! `RuntimeContextSource`; optional persisted sources degrade cleanly.
 
 use super::context::BrainBudget;
 use super::foundation::FoundationMemory;
@@ -59,45 +59,6 @@ impl BrainContextSource for SessionContextSource {
                 confidence: 100,
                 value: fact_u64(identity.session_id),
             });
-        }
-
-        facts
-    }
-}
-
-pub struct SystemContextSource;
-
-impl BrainContextSource for SystemContextSource {
-    fn source_kind(&self) -> ContextSourceKind {
-        ContextSourceKind::System
-    }
-    fn is_available(&self) -> bool {
-        true
-    }
-
-    fn collect(
-        &self,
-        _budget: &BrainBudget,
-        _identity: &AuthIdentity,
-    ) -> heapless::Vec<GroundedFact, 32> {
-        #[allow(unused_mut)]
-        let mut facts: heapless::Vec<GroundedFact, 32> = heapless::Vec::new();
-
-        #[cfg(feature = "sunlightos")]
-        {
-            let info = sunlight_ipc::sysinfo();
-            let ram_mib = (info.total_ram_kb / 1024) as u32;
-            if ram_mib > 0 {
-                let mut v: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
-                let _ = write!(&mut v, "{}", ram_mib);
-                let _ = facts.push(GroundedFact {
-                    kind: FactKind::RamMib,
-                    source: ContextSourceKind::System,
-                    freshness: FactFreshness::CurrentBoot,
-                    confidence: 100,
-                    value: v,
-                });
-            }
         }
 
         facts
@@ -192,7 +153,7 @@ impl<'a> BrainContextSource for RuntimeContextSource<'a> {
         if let Some(locale) = self.snapshot.system.locale.as_ref() {
             push(FactKind::Locale, FactFreshness::CurrentBoot, locale.as_str());
         }
-        if let Some(timezone) = self.snapshot.system.timezone.as_ref() {
+        if let Some(timezone) = self.snapshot.timezone.identifier.as_ref() {
             push(
                 FactKind::RuntimeTimezone,
                 FactFreshness::ServiceSnapshot,
@@ -214,38 +175,46 @@ impl<'a> BrainContextSource for RuntimeContextSource<'a> {
                 hostname.as_str(),
             );
         }
-        if let Some(user) = self.snapshot.system.current_user.as_ref() {
+        if let Some(cpu_count) = self.snapshot.system.cpu_count {
+            let value = fact_u64(cpu_count as u64);
+            push(FactKind::CpuCores, FactFreshness::CurrentBoot, value.as_str());
+        }
+        if let Some(ram_mib) = self.snapshot.system.ram_mib {
+            let value = fact_u64(ram_mib as u64);
+            push(FactKind::RamMib, FactFreshness::CurrentBoot, value.as_str());
+        }
+        if let Some(user) = self.snapshot.session.current_user.as_ref() {
             push(FactKind::UserName, FactFreshness::CurrentSession, user.as_str());
         }
-        if let Some(boot_mode) = self.snapshot.system.boot_mode.as_ref() {
+        if let Some(boot_mode) = self.snapshot.session.boot_mode.as_ref() {
             push(
                 FactKind::RuntimeBootMode,
                 FactFreshness::CurrentSession,
                 boot_mode.as_str(),
             );
         }
-        if let Some(desktop_mode) = self.snapshot.system.desktop_mode {
+        if let Some(desktop_mode) = self.snapshot.session.desktop_mode {
             push(
                 FactKind::RuntimeDesktopMode,
                 FactFreshness::CurrentSession,
                 if desktop_mode { "1" } else { "0" },
             );
         }
-        if let Some(installer_mode) = self.snapshot.system.installer_mode {
+        if let Some(installer_mode) = self.snapshot.session.installer_mode {
             push(
                 FactKind::RuntimeInstallerMode,
                 FactFreshness::CurrentSession,
                 if installer_mode { "1" } else { "0" },
             );
         }
-        if let Some(recovery_mode) = self.snapshot.system.recovery_mode {
+        if let Some(recovery_mode) = self.snapshot.session.recovery_mode {
             push(
                 FactKind::RuntimeRecoveryMode,
                 FactFreshness::CurrentSession,
                 if recovery_mode { "1" } else { "0" },
             );
         }
-        if let Some(session_state) = self.snapshot.system.session_state.as_ref() {
+        if let Some(session_state) = self.snapshot.session.state.as_ref() {
             push(
                 FactKind::RuntimeSessionState,
                 FactFreshness::CurrentSession,

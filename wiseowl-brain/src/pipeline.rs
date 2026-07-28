@@ -1,4 +1,5 @@
 use crate::context::{BrainContext, ContextBuilder, GroundedContextBuilder};
+use crate::adapters::{FoundationContextSource, RuntimeContextSource};
 use crate::diagnostics::BrainDiagnostics;
 use crate::error::{BrainError, BrainResult};
 use crate::foundation::{FoundationLoadState, FoundationMemory};
@@ -149,7 +150,27 @@ impl CognitivePipeline {
     }
 
     fn handle_greeting(&mut self, request: &BrainRequestWire) -> BrainResponseWire {
-        let ctx = match self.build_context(request) {
+        self.refresh_runtime_context_if_due();
+        let foundation_snapshot = self.foundation().cloned();
+        let foundation_source = FoundationContextSource {
+            foundation: foundation_snapshot.as_ref(),
+        };
+        let snapshot = self.runtime_context().clone();
+        let source = RuntimeContextSource { snapshot: &snapshot };
+        let identity = AuthIdentity {
+            caller_uid: request.caller_uid,
+            caller_pid: 0,
+            session_id: request.session_id,
+        };
+        let budget = crate::context::BrainBudget::default();
+        let mut facts: heapless::Vec<GroundedFact, 64> = heapless::Vec::new();
+        for fact in foundation_source.collect(&budget, &identity) {
+            let _ = facts.push(fact);
+        }
+        for fact in source.collect(&budget, &identity) {
+            let _ = facts.push(fact);
+        }
+        let ctx = match self.build_context_from_facts(request, &facts) {
             Ok(c) => c,
             Err(_e) => {
                 self.diagnostics.inc_context_fail();
@@ -179,8 +200,26 @@ impl CognitivePipeline {
         identity: &AuthIdentity,
         sources: &[&dyn BrainContextSource],
     ) -> (BrainResponseWire, BrainResponseMeta) {
+        self.refresh_runtime_context_if_due();
+        let foundation_snapshot = self.foundation().cloned();
+        let foundation_source = FoundationContextSource {
+            foundation: foundation_snapshot.as_ref(),
+        };
+        let runtime_snapshot = self.runtime_context().clone();
+        let runtime_source = RuntimeContextSource {
+            snapshot: &runtime_snapshot,
+        };
         let mut builder = GroundedContextBuilder::new(*identity);
         let mut all_facts: heapless::Vec<GroundedFact, 64> = heapless::Vec::new();
+
+        let foundation_facts = builder.gather_from(&foundation_source);
+        for fact in foundation_facts.iter() {
+            let _ = all_facts.push(fact.clone());
+        }
+        let runtime_facts = builder.gather_from(&runtime_source);
+        for fact in runtime_facts.iter() {
+            let _ = all_facts.push(fact.clone());
+        }
 
         for source in sources {
             let facts = builder.gather_from(*source);
@@ -428,48 +467,6 @@ impl CognitivePipeline {
         Ok(ctx)
     }
 
-    fn build_context(&self, request: &BrainRequestWire) -> BrainResult<BrainContext> {
-        let mut builder = ContextBuilder::new()
-            .user_id(request.user_id);
-
-        if request.session_id != 0 {
-            builder = builder.session_id(Some(request.session_id));
-        }
-
-        if let Some(ref g) = request.greeting {
-            if !g.display_name.is_empty() {
-                builder = builder.user_display_name(&g.display_name);
-            }
-            if !g.sunlight_version.is_empty() {
-                builder = builder.sunlight_version(&g.sunlight_version);
-            }
-            if g.cpu_cores > 0 {
-                builder = builder.cpu_cores(Some(g.cpu_cores));
-            }
-            if g.ram_mib > 0 {
-                builder = builder.ram_mib(Some(g.ram_mib));
-            }
-            if !g.device_class.is_empty() {
-                builder = builder.device_class(&g.device_class);
-            }
-            if !g.model_name.is_empty() {
-                builder = builder.model_name(&g.model_name);
-            }
-            if g.screen_w > 0 {
-                builder = builder.screen_dims(Some(g.screen_w), Some(g.screen_h));
-            }
-            builder = builder.first_login(g.first_login != 0);
-            builder = builder.first_after_upgrade(g.first_after_upgrade != 0);
-        }
-
-        if !request.locale.is_empty() {
-            builder = builder.locale(&request.locale);
-        }
-
-        let ctx = builder.build();
-        ctx.validate()?;
-        Ok(ctx)
-    }
 }
 
 fn parse_screen_dims(value: &str) -> Option<(u32, u32)> {

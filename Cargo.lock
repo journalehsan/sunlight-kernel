@@ -3399,7 +3399,6 @@ dependencies = [
  "sunlight-locale",
  "sunlight-networkd",
  "sunlight-tz",
- "sunlightd",
  "thiserror 1.0.69",
  "wiseowl-index",
 ]

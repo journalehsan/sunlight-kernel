@@ -714,6 +714,7 @@ StartLimitIntervalSec=60
 User=root
 Capability=logging
 Capability=kv-store
+Capability=user-session
 StandardOutput=journal
 StandardError=journal
 
