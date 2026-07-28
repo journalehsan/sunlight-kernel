@@ -273,7 +273,13 @@ pub struct TrustedActionFlow<A: TrustedLaunchAdapter> {
 
 impl<A: TrustedLaunchAdapter> TrustedActionFlow<A> {
     pub const fn new(adapter: A, max_runtime_age_ms: u64) -> Self {
-        let policy = PolicyEngine::v1();
+        Self::with_policy(adapter, max_runtime_age_ms, PolicyEngine::v1())
+    }
+
+    /// Constructs the same closed trusted flow with an explicitly selected
+    /// immutable policy set. This is not an execution shortcut: evaluation,
+    /// confirmation, readiness, and final executor validation remain mandatory.
+    pub const fn with_policy(adapter: A, max_runtime_age_ms: u64, policy: PolicyEngine) -> Self {
         Self {
             evaluator: crate::action_intent::ActionIntentEvaluator::new(policy),
             confirmations: ConfirmationAuthority::new(policy, max_runtime_age_ms),

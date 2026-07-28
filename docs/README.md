@@ -3,6 +3,9 @@
 - `WISEOWL_BOUNDED_ACTION_PLANNER_V1.md` — proposal-only English/Persian
   conversation-to-intent planning, registry aliases, clarification, and the
   Trusted Action Flow boundary.
+- `WISEOWL_CONVERSATIONAL_ACTION_COORDINATOR_V1.md` — bounded session-bound
+  multi-turn action lifecycle, cancellation, invalidation, replay protection,
+  localization, and trusted dispatch.
 
 This directory contains project documentation beyond the root quick-start guide.
 

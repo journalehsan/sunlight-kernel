@@ -320,6 +320,26 @@ impl ConfirmationResponse {
             submitted_at,
         }
     }
+
+    pub const fn challenge_id(&self) -> ChallengeId {
+        self.challenge_id
+    }
+
+    pub const fn session_id(&self) -> SessionId {
+        self.session_id
+    }
+
+    pub const fn responder(&self) -> ResponderIdentity {
+        self.responder
+    }
+
+    pub const fn response_type(&self) -> ConfirmationResponseType {
+        self.response_type
+    }
+
+    pub const fn submitted_at(&self) -> AuthorityTime {
+        self.submitted_at
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

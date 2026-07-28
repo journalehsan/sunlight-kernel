@@ -64,6 +64,8 @@ pub extern "C" fn _start() -> ! {
         run_executor_v1_gate();
         #[cfg(feature = "planner-v1-test")]
         run_planner_v1_gate();
+        #[cfg(feature = "coordinator-v1-test")]
+        run_coordinator_v1_gate();
     } else {
         serial_println!("[WISEOWL-BRAIN] failed to register {}", BRAIN_ENDPOINT);
         process_yield();
@@ -120,6 +122,303 @@ pub extern "C" fn _start() -> ! {
             }
         }
     }
+}
+
+#[cfg(feature = "coordinator-v1-test")]
+fn run_coordinator_v1_gate() {
+    use wiseowl_brain::{
+        ActionCoordinator, ApprovalProof, AuthorityTime, BoundConfirmationResponse,
+        ClarificationResponse, ConfirmationLevel, ConfirmationResponse, ConfirmationResponseType,
+        CoordinatorConfig, CoordinatorContext, CoordinatorInput, CoordinatorResult,
+        DispatchStatus, LaunchApplicationRequest, OpenSettingsPageRequest, PlannerInput,
+        PolicyCategory, PolicyEngine, PolicyOperation, PolicyRule, PolicyVersion,
+        QueryPendingAction, RegistryStatus, RequestedBy, ResponderIdentity, RuntimeContextSnapshot,
+        SessionAuthorization, SessionEndedInput, SessionId, SessionStatus, SunlightPlannerRegistry,
+        TrustedLaunchAdapter, TypedIdentifier,
+    };
+    use wiseowl_brain::policy::PolicyEffect;
+
+    struct FakeTypedLaunchAdapter;
+    impl TrustedLaunchAdapter for FakeTypedLaunchAdapter {
+        fn application_status(&self, id: &TypedIdentifier) -> RegistryStatus {
+            if id.as_str() == "calculator" {
+                RegistryStatus::Registered
+            } else {
+                RegistryStatus::NotFound
+            }
+        }
+
+        fn settings_page_status(&self, _: &TypedIdentifier) -> RegistryStatus {
+            RegistryStatus::Registered
+        }
+
+        fn launch_application(&mut self, _: LaunchApplicationRequest) -> DispatchStatus {
+            DispatchStatus::Accepted
+        }
+
+        fn open_settings_page(&mut self, _: OpenSettingsPageRequest) -> DispatchStatus {
+            DispatchStatus::Accepted
+        }
+    }
+    type GateCoordinator =
+        ActionCoordinator<SunlightPlannerRegistry, FakeTypedLaunchAdapter>;
+
+    static CONFIRM_RULES: &[PolicyRule] = &[
+        PolicyRule::new(
+            PolicyOperation::OpenApplication,
+            PolicyCategory::Execute,
+            PolicyEffect::Confirm(ConfirmationLevel::Soft),
+        ),
+        PolicyRule::new(
+            PolicyOperation::OpenSettingsPage,
+            PolicyCategory::Execute,
+            PolicyEffect::Confirm(ConfirmationLevel::Soft),
+        ),
+    ];
+
+    fn runtime() -> RuntimeContextSnapshot {
+        let mut runtime = RuntimeContextSnapshot {
+            available: true,
+            generation: 1,
+            captured_mono_ms: 100,
+            ..RuntimeContextSnapshot::default()
+        };
+        runtime.session.desktop_mode = Some(true);
+        runtime.session.installer_mode = Some(false);
+        runtime.session.recovery_mode = Some(false);
+        runtime
+    }
+
+    fn request(id: u64, locale: &str, text: &str, at: u64) -> PlannerInput {
+        PlannerInput::direct(
+            id,
+            4,
+            SessionId(7),
+            RequestedBy::User(0),
+            locale,
+            text,
+            1,
+            at,
+        )
+    }
+
+    fn context<'a>(
+        runtime: &'a RuntimeContextSnapshot,
+        policy: &'a PolicyEngine,
+        at: u64,
+    ) -> CoordinatorContext<'a> {
+        CoordinatorContext {
+            conversation_id: wiseowl_brain::ConversationId(4),
+            runtime,
+            policy,
+            session: SessionAuthorization::new(
+                SessionId(7),
+                ResponderIdentity::User(0),
+                SessionStatus::Active,
+            ),
+            requester: RequestedBy::User(0),
+            now: AuthorityTime(at),
+            application_registry_generation: 1,
+            settings_registry_generation: 1,
+        }
+    }
+
+    serial_println!("[WISEOWL-COORD] READY PASS");
+    let runtime = runtime();
+    let policy = PolicyEngine::v1();
+    let mut exact = GateCoordinator::new(
+        SunlightPlannerRegistry,
+        FakeTypedLaunchAdapter,
+        policy,
+        CoordinatorConfig::default(),
+        [0x81; 32],
+    );
+    let exact_input = CoordinatorInput::UserRequest(request(1, "en", "Open Calculator", 100));
+    let exact_result = exact.handle(exact_input.clone(), context(&runtime, &policy, 101));
+    if !matches!(exact_result, CoordinatorResult::ActionCompleted(_)) {
+        return;
+    }
+    serial_println!("[WISEOWL-COORD] EXACT_ACTION PASS");
+    serial_println!("[WISEOWL-COORD] TRUSTED_FLOW PASS");
+
+    let mut clarification = GateCoordinator::new(
+        SunlightPlannerRegistry,
+        FakeTypedLaunchAdapter,
+        policy,
+        CoordinatorConfig::default(),
+        [0x82; 32],
+    );
+    if !matches!(
+        clarification.handle(
+            CoordinatorInput::UserRequest(request(2, "en", "Open settings", 100)),
+            context(&runtime, &policy, 100),
+        ),
+        CoordinatorResult::ClarificationRequired(_)
+    ) {
+        return;
+    }
+    let record = clarification.active_record().unwrap().clone();
+    let clarification_id = clarification.active_clarification_id().unwrap();
+    let wrong_session = ClarificationResponse {
+        input_id: 3,
+        action_id: record.coordinator_action_id(),
+        clarification_id,
+        choice_id: 0,
+        conversation_id: wiseowl_brain::ConversationId(4),
+        session_id: SessionId(8),
+        requester: RequestedBy::User(0),
+        submitted_at: 101,
+    };
+    if !matches!(
+        clarification.handle(
+            CoordinatorInput::ClarificationResponse(wrong_session),
+            context(&runtime, &policy, 101),
+        ),
+        CoordinatorResult::InvalidInput(_)
+    ) {
+        return;
+    }
+    let valid = ClarificationResponse {
+        input_id: 4,
+        action_id: record.coordinator_action_id(),
+        clarification_id,
+        choice_id: 0,
+        conversation_id: wiseowl_brain::ConversationId(4),
+        session_id: SessionId(7),
+        requester: RequestedBy::User(0),
+        submitted_at: 102,
+    };
+    if !matches!(
+        clarification.handle(
+            CoordinatorInput::ClarificationResponse(valid),
+            context(&runtime, &policy, 102),
+        ),
+        CoordinatorResult::ActionCompleted(_)
+    ) {
+        return;
+    }
+    serial_println!("[WISEOWL-COORD] CLARIFICATION PASS");
+
+    let confirm_policy =
+        PolicyEngine::from_static_rules(PolicyVersion::new(8, 1), CONFIRM_RULES);
+    let mut confirmation = GateCoordinator::new(
+        SunlightPlannerRegistry,
+        FakeTypedLaunchAdapter,
+        confirm_policy,
+        CoordinatorConfig::default(),
+        [0x83; 32],
+    );
+    if !matches!(
+        confirmation.handle(
+            CoordinatorInput::UserRequest(request(5, "en", "Open Calculator", 100)),
+            context(&runtime, &confirm_policy, 100),
+        ),
+        CoordinatorResult::ConfirmationRequired { .. }
+    ) {
+        return;
+    }
+    let record = confirmation.active_record().unwrap().clone();
+    let approved = BoundConfirmationResponse {
+        input_id: 6,
+        action_id: record.coordinator_action_id(),
+        response: ConfirmationResponse::new(
+            record.challenge_id().unwrap(),
+            SessionId(7),
+            ResponderIdentity::User(0),
+            ConfirmationResponseType::Approved(ApprovalProof::SoftExplicit),
+            AuthorityTime(101),
+        ),
+    };
+    if !matches!(
+        confirmation.handle(
+            CoordinatorInput::ConfirmationResponse(approved),
+            context(&runtime, &confirm_policy, 101),
+        ),
+        CoordinatorResult::ActionCompleted(_)
+    ) {
+        return;
+    }
+    serial_println!("[WISEOWL-COORD] CONFIRMATION PASS");
+
+    let mut cancellation = GateCoordinator::new(
+        SunlightPlannerRegistry,
+        FakeTypedLaunchAdapter,
+        policy,
+        CoordinatorConfig::default(),
+        [0x84; 32],
+    );
+    cancellation.handle(
+        CoordinatorInput::UserRequest(request(7, "fa", "تنظیمات را باز کن", 100)),
+        context(&runtime, &policy, 100),
+    );
+    if !matches!(
+        cancellation.handle(
+            CoordinatorInput::UserRequest(request(8, "fa", "لغو", 101)),
+            context(&runtime, &policy, 101),
+        ),
+        CoordinatorResult::ActionCancelled(_)
+    ) {
+        return;
+    }
+    serial_println!("[WISEOWL-COORD] CANCELLATION PASS");
+
+    let mut expiry = GateCoordinator::new(
+        SunlightPlannerRegistry,
+        FakeTypedLaunchAdapter,
+        policy,
+        CoordinatorConfig::default(),
+        [0x85; 32],
+    );
+    expiry.handle(
+        CoordinatorInput::UserRequest(request(9, "en", "Open settings", 100)),
+        context(&runtime, &policy, 100),
+    );
+    if !matches!(
+        expiry.handle(
+            CoordinatorInput::QueryPendingAction(QueryPendingAction {
+                conversation_id: wiseowl_brain::ConversationId(4),
+                session_id: SessionId(7),
+                requester: RequestedBy::User(0),
+            }),
+            context(&runtime, &policy, 30_101),
+        ),
+        CoordinatorResult::ActionExpired(_)
+    ) {
+        return;
+    }
+    serial_println!("[WISEOWL-COORD] EXPIRY PASS");
+
+    let mut session = GateCoordinator::new(
+        SunlightPlannerRegistry,
+        FakeTypedLaunchAdapter,
+        policy,
+        CoordinatorConfig::default(),
+        [0x86; 32],
+    );
+    session.handle(
+        CoordinatorInput::UserRequest(request(10, "en", "Open settings", 100)),
+        context(&runtime, &policy, 100),
+    );
+    if !matches!(
+        session.handle(
+            CoordinatorInput::SessionEnded(SessionEndedInput {
+                input_id: 11,
+                session_id: SessionId(7),
+                submitted_at: 101,
+            }),
+            context(&runtime, &policy, 101),
+        ),
+        CoordinatorResult::ActionInvalidated(_)
+    ) {
+        return;
+    }
+    serial_println!("[WISEOWL-COORD] SESSION_INVALIDATION PASS");
+
+    if exact.handle(exact_input, context(&runtime, &policy, 102)) != exact_result {
+        return;
+    }
+    serial_println!("[WISEOWL-COORD] REPLAY_PROTECTION PASS");
+    serial_println!("[WISEOWL-COORD] COMPLETE PASS");
 }
 
 #[cfg(feature = "planner-v1-test")]

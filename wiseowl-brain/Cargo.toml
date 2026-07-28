@@ -47,6 +47,7 @@ sunlightos = [
 phase4a-test = []
 executor-v1-test = []
 planner-v1-test = []
+coordinator-v1-test = []
 
 [dependencies]
 heapless = "0.8"

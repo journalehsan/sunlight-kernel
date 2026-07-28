@@ -8,6 +8,7 @@ pub mod adapters;
 pub mod caps;
 pub mod confirmation;
 pub mod context;
+pub mod coordinator;
 pub mod diagnostics;
 pub mod error;
 pub mod executor;
@@ -39,6 +40,13 @@ pub use confirmation::{
     ConfirmationResponseType, ConfirmationState, ConfirmationView, ConsequenceAcknowledgement,
     FinalValidationResult, GrantId, ReadinessDenialReason, ReadyForExecution, ResponderIdentity,
     ResponseValidationContext, SessionAuthorization, SessionStatus,
+};
+pub use coordinator::{
+    ActionChoiceView, ActionConversationRecord, ActionCoordinator, ActionResponseView,
+    BoundConfirmationResponse, CancelPendingAction, ClarificationResponse, CoordinatorActionId,
+    CoordinatorAuditEntry, CoordinatorAuditEvent, CoordinatorAuditLog, CoordinatorConfig,
+    CoordinatorContext, CoordinatorInput, CoordinatorResult, CoordinatorState, PublicActionStatus,
+    PublicReasonCode, QueryPendingAction, RuntimeInvalidation, SessionEndedInput,
 };
 pub use diagnostics::BrainDiagnostics;
 #[cfg(feature = "sunlightos")]
