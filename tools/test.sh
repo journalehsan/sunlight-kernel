@@ -348,8 +348,15 @@ case "$PHASE" in
         NEED_DISK=true
         TIMEOUT=360
         ;;
+    wiseowl-outcome-observer-v1)
+        EXPECTED_FILE="tools/tests/wiseowl_outcome_observer_v1.expected"
+        FINAL_MARKER="[WISEOWL-OUTCOME] COMPLETE PASS"
+        PASS_LABEL="Wise Owl Action Outcome Observer v1"
+        NEED_DISK=true
+        TIMEOUT=360
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration welcome-wizard wiseowl-phase4a wiseowl-phase4b wiseowl-foundation-v1 wiseowl-executor-v1 wiseowl-planner-v1 wiseowl-coordinator-v1 sunlightd top tzctl memory-accounting"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration welcome-wizard wiseowl-phase4a wiseowl-phase4b wiseowl-foundation-v1 wiseowl-executor-v1 wiseowl-planner-v1 wiseowl-coordinator-v1 wiseowl-outcome-observer-v1 sunlightd top tzctl memory-accounting"
         exit 2
         ;;
 esac
@@ -473,6 +480,8 @@ elif [[ "$PHASE" == "wiseowl-planner-v1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,planner-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-coordinator-v1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,coordinator-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "wiseowl-outcome-observer-v1" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,outcome-observer-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,phase4a-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 else

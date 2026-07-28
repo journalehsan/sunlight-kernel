@@ -19,6 +19,7 @@ pub mod kv_client;
 pub mod memory_layers;
 pub mod mtm;
 pub mod native_ipc;
+pub mod outcome;
 pub mod pipeline;
 pub mod planner;
 pub mod policy;
@@ -45,8 +46,9 @@ pub use coordinator::{
     ActionChoiceView, ActionConversationRecord, ActionCoordinator, ActionResponseView,
     BoundConfirmationResponse, CancelPendingAction, ClarificationResponse, CoordinatorActionId,
     CoordinatorAuditEntry, CoordinatorAuditEvent, CoordinatorAuditLog, CoordinatorConfig,
-    CoordinatorContext, CoordinatorInput, CoordinatorResult, CoordinatorState, PublicActionStatus,
-    PublicReasonCode, QueryPendingAction, RuntimeInvalidation, SessionEndedInput,
+    CoordinatorContext, CoordinatorInput, CoordinatorResult, CoordinatorState,
+    ObservedOutcomeInput, PublicActionStatus, PublicReasonCode, QueryPendingAction,
+    RuntimeInvalidation, SessionEndedInput,
 };
 pub use diagnostics::BrainDiagnostics;
 #[cfg(feature = "sunlightos")]
@@ -54,10 +56,17 @@ pub use executor::SunlightLaunchAdapter;
 pub use executor::{
     ActionExecutor, DispatchStatus, ExecutionAuditEntry, ExecutionAuditEvent, ExecutionAuditLog,
     ExecutionContext, ExecutionId, ExecutionResult, ExecutionResultCode, LaunchApplicationRequest,
-    OpenSettingsPageRequest, RegistryStatus, TrustedActionExecutor, TrustedActionFlow,
-    TrustedLaunchAdapter,
+    LaunchCorrelationToken, OpenSettingsPageRequest, RegistryStatus, TrustedActionExecutor,
+    TrustedActionFlow, TrustedLaunchAdapter,
 };
 pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
+pub use outcome::{
+    AchievedReadiness, ActionOutcomeObserver, EvidenceId, EvidenceSummary, ObservationAuditEntry,
+    ObservationAuditEvent, ObservationAuditLog, ObservationCreateError, ObservationDeadlines,
+    ObservationEvidence, ObservationEvidenceKind, ObservationId, ObservationRequest,
+    ObservationState, ObservedActionOutcome, ObservedActionOutcomeKind, OutcomeRegistry,
+    PublicOutcomeCode, ReadinessContract, TrustedSourceKind,
+};
 pub use pipeline::CognitivePipeline;
 #[cfg(feature = "sunlightos")]
 pub use planner::SunlightPlannerRegistry;

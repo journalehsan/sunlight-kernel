@@ -66,6 +66,8 @@ pub extern "C" fn _start() -> ! {
         run_planner_v1_gate();
         #[cfg(feature = "coordinator-v1-test")]
         run_coordinator_v1_gate();
+        #[cfg(feature = "outcome-observer-v1-test")]
+        run_outcome_observer_v1_gate();
     } else {
         serial_println!("[WISEOWL-BRAIN] failed to register {}", BRAIN_ENDPOINT);
         process_yield();
@@ -122,6 +124,411 @@ pub extern "C" fn _start() -> ! {
             }
         }
     }
+}
+
+#[cfg(feature = "outcome-observer-v1-test")]
+fn run_outcome_observer_v1_gate() {
+    use wiseowl_brain::{
+        ActionOperation, ActionOutcomeObserver, ActionTarget, AuthorityTime, EvidenceId,
+        ObservationDeadlines, ObservationEvidence, ObservationEvidenceKind, ObservationId,
+        ObservationRequest, ObservedActionOutcomeKind, OutcomeRegistry, ReadinessContract,
+        TrustedSourceKind, TypedIdentifier,
+    };
+
+    struct Registry {
+        contract: ReadinessContract,
+    }
+    impl OutcomeRegistry for Registry {
+        fn generation(&self, _: ActionOperation) -> u64 {
+            1
+        }
+        fn readiness_contract(
+            &self,
+            _: ActionOperation,
+            _: &ActionTarget,
+        ) -> Option<ReadinessContract> {
+            Some(self.contract)
+        }
+    }
+
+    // The existing typed executor gate proves the accepted envelope and launch
+    // request. This feature gate adds deterministic lifecycle evidence through
+    // the same library observer; no production lifecycle source is replaced.
+    use wiseowl_brain::{
+        ActionIntent, ActionIntentEvaluator, ActionParameters, ActionEvaluation, CreationTime,
+        DispatchStatus, ExecutionContext, IntentId, LaunchApplicationRequest,
+        OpenSettingsPageRequest, PolicyEngine, Provenance, RegistryStatus, RequestedBy, RiskHint,
+        SessionAuthorization, SessionId, SessionStatus, ResponderIdentity, TrustedActionExecutor,
+        TrustedLaunchAdapter, ActionExecutor, ConfirmationAuthority,
+    };
+    struct Launch;
+    impl TrustedLaunchAdapter for Launch {
+        fn application_status(&self, _: &TypedIdentifier) -> RegistryStatus {
+            RegistryStatus::Registered
+        }
+        fn settings_page_status(&self, _: &TypedIdentifier) -> RegistryStatus {
+            RegistryStatus::Registered
+        }
+        fn launch_application(&mut self, _: LaunchApplicationRequest) -> DispatchStatus {
+            DispatchStatus::Accepted
+        }
+        fn open_settings_page(&mut self, _: OpenSettingsPageRequest) -> DispatchStatus {
+            DispatchStatus::Accepted
+        }
+    }
+    fn execution(
+        operation: ActionOperation,
+        target: ActionTarget,
+    ) -> wiseowl_brain::ExecutionResult {
+        let parameters = if operation == ActionOperation::OpenApplication {
+            ActionParameters::Application { new_instance: false }
+        } else {
+            ActionParameters::Settings { focus: None }
+        };
+        let intent = ActionIntent::new(
+            IntentId::new([8; 16]),
+            operation,
+            target,
+            parameters,
+            RequestedBy::User(0),
+            SessionId(7),
+            1,
+            CreationTime(100),
+            RiskHint::Low,
+            Provenance::ExplicitUserRequest,
+        );
+        let mut runtime = wiseowl_brain::RuntimeContextSnapshot {
+            available: true,
+            generation: 1,
+            captured_mono_ms: 100,
+            ..wiseowl_brain::RuntimeContextSnapshot::default()
+        };
+        runtime.session.desktop_mode = Some(true);
+        runtime.session.installer_mode = Some(false);
+        runtime.session.recovery_mode = Some(false);
+        let policy = PolicyEngine::v1();
+        let ActionEvaluation::Decided(decision) =
+            ActionIntentEvaluator::<8>::new(policy).evaluate(&intent, &runtime)
+        else {
+            panic!("outcome gate policy")
+        };
+        let session = SessionAuthorization::new(
+            SessionId(7),
+            ResponderIdentity::User(0),
+            SessionStatus::Active,
+        );
+        let ready = ConfirmationAuthority::<8, 8>::new(policy, 1_000)
+            .produce_ready(
+                &intent,
+                &decision,
+                None,
+                &runtime,
+                session,
+                AuthorityTime(110),
+            )
+            .unwrap();
+        TrustedActionExecutor::<Launch, 16, 8>::new(Launch).execute(
+            ready,
+            &ExecutionContext::new(
+                &runtime,
+                &policy,
+                session,
+                RequestedBy::User(0),
+                AuthorityTime(120),
+            ),
+        )
+    }
+
+    let accepted = execution(
+        ActionOperation::OpenApplication,
+        ActionTarget::Application(TypedIdentifier::new("calculator").unwrap()),
+    );
+    let registry = Registry {
+        contract: ReadinessContract::FirstWindowRegistered,
+    };
+    let request = ObservationRequest::from_execution(
+        ObservationId(1),
+        &accepted,
+        &registry,
+        ObservationDeadlines::uniform(AuthorityTime(150)),
+    )
+    .unwrap();
+    let mut observer = ActionOutcomeObserver::<4, 24, 8>::new();
+    let dispatch = observer.create(request.clone()).unwrap();
+    if dispatch.kind() != ObservedActionOutcomeKind::DispatchOnly {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] DISPATCH_ONLY PASS");
+
+    let wrong = ObservationEvidence::trusted(
+        EvidenceId(1),
+        TrustedSourceKind::DisplayServer,
+        TypedIdentifier::new("display-server").unwrap(),
+        request.session_id(),
+        AuthorityTime(125),
+        1,
+        request.execution_id(),
+        request.correlation_token(),
+        ActionTarget::Application(TypedIdentifier::new("terminal").unwrap()),
+        ObservationEvidenceKind::WindowRegistered,
+    );
+    observer.observe(wrong, &registry);
+    if observer.outcome(request.execution_id()).unwrap().kind()
+        != ObservedActionOutcomeKind::DispatchOnly
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] WRONG_TARGET_REJECTED PASS");
+    let ready = ObservationEvidence::trusted(
+        EvidenceId(2),
+        TrustedSourceKind::DisplayServer,
+        TypedIdentifier::new("display-server").unwrap(),
+        request.session_id(),
+        AuthorityTime(126),
+        1,
+        request.execution_id(),
+        request.correlation_token(),
+        request.target().clone(),
+        ObservationEvidenceKind::WindowRegistered,
+    );
+    if observer.observe(ready, &registry).unwrap().kind() != ObservedActionOutcomeKind::Ready {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] READY PASS");
+    serial_println!("[WISEOWL-OUTCOME] APPLICATION_READY PASS");
+
+    let settings = execution(
+        ActionOperation::OpenSettingsPage,
+        ActionTarget::SettingsPage(TypedIdentifier::new("network").unwrap()),
+    );
+    let settings_registry = Registry {
+        contract: ReadinessContract::RequestedPageActivated,
+    };
+    let settings_request = ObservationRequest::from_execution(
+        ObservationId(2),
+        &settings,
+        &settings_registry,
+        ObservationDeadlines::uniform(AuthorityTime(150)),
+    )
+    .unwrap();
+    let mut settings_observer = ActionOutcomeObserver::<4, 24, 8>::new();
+    settings_observer.create(settings_request.clone()).unwrap();
+    let activated = ObservationEvidence::trusted(
+        EvidenceId(3),
+        TrustedSourceKind::ControlPanel,
+        TypedIdentifier::new("control-panel").unwrap(),
+        settings_request.session_id(),
+        AuthorityTime(127),
+        1,
+        settings_request.execution_id(),
+        settings_request.correlation_token(),
+        settings_request.target().clone(),
+        ObservationEvidenceKind::SettingsPageActivated(
+            TypedIdentifier::new("network").unwrap(),
+        ),
+    );
+    if settings_observer
+        .observe(activated, &settings_registry)
+        .unwrap()
+        .kind()
+        != ObservedActionOutcomeKind::Ready
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] SETTINGS_PAGE_READY PASS");
+
+    let timeout_request = ObservationRequest::from_execution(
+        ObservationId(3),
+        &accepted,
+        &registry,
+        ObservationDeadlines::uniform(AuthorityTime(130)),
+    )
+    .unwrap();
+    let mut timeout = ActionOutcomeObserver::<4, 24, 8>::new();
+    timeout.create(timeout_request.clone()).unwrap();
+    if timeout
+        .tick(timeout_request.execution_id(), AuthorityTime(131))
+        .unwrap()
+        .kind()
+        != ObservedActionOutcomeKind::TimedOut
+    {
+        return;
+    }
+    let late = ObservationEvidence::trusted(
+        EvidenceId(30),
+        TrustedSourceKind::DisplayServer,
+        TypedIdentifier::new("display-server").unwrap(),
+        timeout_request.session_id(),
+        AuthorityTime(132),
+        1,
+        timeout_request.execution_id(),
+        timeout_request.correlation_token(),
+        timeout_request.target().clone(),
+        ObservationEvidenceKind::WindowRegistered,
+    );
+    if timeout.observe(late, &registry).unwrap().kind() != ObservedActionOutcomeKind::TimedOut {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] TIMEOUT PASS");
+
+    let mut early = ActionOutcomeObserver::<4, 24, 8>::new();
+    early.create(request.clone()).unwrap();
+    let created = ObservationEvidence::trusted(
+        EvidenceId(4),
+        TrustedSourceKind::ProcessLifecycle,
+        TypedIdentifier::new("process-lifecycle").unwrap(),
+        request.session_id(),
+        AuthorityTime(128),
+        1,
+        request.execution_id(),
+        request.correlation_token(),
+        request.target().clone(),
+        ObservationEvidenceKind::ProcessCreated {
+            process_instance: 44,
+        },
+    );
+    early.observe(created, &registry);
+    let exited = ObservationEvidence::trusted(
+        EvidenceId(5),
+        TrustedSourceKind::ProcessLifecycle,
+        TypedIdentifier::new("process-lifecycle").unwrap(),
+        request.session_id(),
+        AuthorityTime(129),
+        1,
+        request.execution_id(),
+        request.correlation_token(),
+        request.target().clone(),
+        ObservationEvidenceKind::ProcessExited {
+            process_instance: 44,
+            public_code: 1,
+        },
+    );
+    if early.observe(exited, &registry).unwrap().kind()
+        != ObservedActionOutcomeKind::ExitedEarly
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] EARLY_EXIT PASS");
+
+    let mut session_observer = ActionOutcomeObserver::<4, 24, 8>::new();
+    session_observer.create(request.clone()).unwrap();
+    if session_observer
+        .invalidate_session(request.execution_id(), SessionId(99), false, AuthorityTime(129))
+        .unwrap()
+        .kind()
+        != ObservedActionOutcomeKind::SessionInvalidated
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] SESSION_INVALIDATION PASS");
+
+    if !matches!(
+        session_observer.create(request.clone()),
+        Err(wiseowl_brain::ObservationCreateError::DuplicateExecution)
+    ) {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] REPLAY_PROTECTION PASS");
+
+    use wiseowl_brain::{
+        ActionCoordinator, CoordinatorConfig, CoordinatorContext, CoordinatorInput,
+        CoordinatorResult, ObservedOutcomeInput, PlannerInput, SunlightPlannerRegistry,
+    };
+    let mut coordinator: ActionCoordinator<SunlightPlannerRegistry, Launch> =
+        ActionCoordinator::new(
+            SunlightPlannerRegistry,
+            Launch,
+            PolicyEngine::v1(),
+            CoordinatorConfig::default().with_outcome_observation(),
+            [0xA5; 32],
+        );
+    let input = PlannerInput::direct(
+        90,
+        4,
+        SessionId(7),
+        RequestedBy::User(0),
+        "en",
+        "Open Calculator",
+        1,
+        100,
+    );
+    let policy = PolicyEngine::v1();
+    let mut coordinator_runtime = wiseowl_brain::RuntimeContextSnapshot {
+        available: true,
+        generation: 1,
+        captured_mono_ms: 100,
+        ..wiseowl_brain::RuntimeContextSnapshot::default()
+    };
+    coordinator_runtime.session.desktop_mode = Some(true);
+    coordinator_runtime.session.installer_mode = Some(false);
+    coordinator_runtime.session.recovery_mode = Some(false);
+    let coordinator_context = |now| CoordinatorContext {
+        conversation_id: wiseowl_brain::ConversationId(4),
+        runtime: &coordinator_runtime,
+        policy: &policy,
+        session: SessionAuthorization::new(
+            SessionId(7),
+            ResponderIdentity::User(0),
+            SessionStatus::Active,
+        ),
+        requester: RequestedBy::User(0),
+        now: AuthorityTime(now),
+        application_registry_generation: 1,
+        settings_registry_generation: 1,
+    };
+    let opening = coordinator.handle(
+        CoordinatorInput::UserRequest(input),
+        coordinator_context(101),
+    );
+    if !matches!(opening, CoordinatorResult::ActionDispatched(_))
+        || opening.response().message.as_str() != "Opening Calculator…"
+    {
+        return;
+    }
+    let coordinator_execution = coordinator.accepted_execution().unwrap().clone();
+    let coordinator_request = ObservationRequest::from_execution(
+        ObservationId(4),
+        &coordinator_execution,
+        &registry,
+        ObservationDeadlines::uniform(AuthorityTime(150)),
+    )
+    .unwrap();
+    let mut coordinator_observer = ActionOutcomeObserver::<4, 24, 8>::new();
+    coordinator_observer
+        .create(coordinator_request.clone())
+        .unwrap();
+    let coordinator_ready = coordinator_observer
+        .observe(
+            ObservationEvidence::trusted(
+                EvidenceId(6),
+                TrustedSourceKind::DisplayServer,
+                TypedIdentifier::new("display-server").unwrap(),
+                coordinator_request.session_id(),
+                AuthorityTime(130),
+                1,
+                coordinator_request.execution_id(),
+                coordinator_request.correlation_token(),
+                coordinator_request.target().clone(),
+                ObservationEvidenceKind::WindowRegistered,
+            ),
+            &registry,
+        )
+        .unwrap();
+    let completed = coordinator.handle(
+        CoordinatorInput::ObservedOutcome(ObservedOutcomeInput {
+            input_id: 91,
+            outcome: coordinator_ready,
+            submitted_at: 130,
+        }),
+        coordinator_context(130),
+    );
+    if !matches!(completed, CoordinatorResult::ActionCompleted(_))
+        || completed.response().message.as_str() != "Calculator is ready."
+    {
+        return;
+    }
+    serial_println!("[WISEOWL-OUTCOME] COORDINATOR_INTEGRATION PASS");
+    serial_println!("[WISEOWL-OUTCOME] COMPLETE PASS");
 }
 
 #[cfg(feature = "coordinator-v1-test")]
@@ -230,7 +637,7 @@ fn run_coordinator_v1_gate() {
         SunlightPlannerRegistry,
         FakeTypedLaunchAdapter,
         policy,
-        CoordinatorConfig::default(),
+        CoordinatorConfig::default().without_outcome_observation(),
         [0x81; 32],
     );
     let exact_input = CoordinatorInput::UserRequest(request(1, "en", "Open Calculator", 100));
@@ -245,7 +652,7 @@ fn run_coordinator_v1_gate() {
         SunlightPlannerRegistry,
         FakeTypedLaunchAdapter,
         policy,
-        CoordinatorConfig::default(),
+        CoordinatorConfig::default().without_outcome_observation(),
         [0x82; 32],
     );
     if !matches!(
@@ -305,7 +712,7 @@ fn run_coordinator_v1_gate() {
         SunlightPlannerRegistry,
         FakeTypedLaunchAdapter,
         confirm_policy,
-        CoordinatorConfig::default(),
+        CoordinatorConfig::default().without_outcome_observation(),
         [0x83; 32],
     );
     if !matches!(
@@ -344,7 +751,7 @@ fn run_coordinator_v1_gate() {
         SunlightPlannerRegistry,
         FakeTypedLaunchAdapter,
         policy,
-        CoordinatorConfig::default(),
+        CoordinatorConfig::default().without_outcome_observation(),
         [0x84; 32],
     );
     cancellation.handle(
@@ -366,7 +773,7 @@ fn run_coordinator_v1_gate() {
         SunlightPlannerRegistry,
         FakeTypedLaunchAdapter,
         policy,
-        CoordinatorConfig::default(),
+        CoordinatorConfig::default().without_outcome_observation(),
         [0x85; 32],
     );
     expiry.handle(
@@ -392,7 +799,7 @@ fn run_coordinator_v1_gate() {
         SunlightPlannerRegistry,
         FakeTypedLaunchAdapter,
         policy,
-        CoordinatorConfig::default(),
+        CoordinatorConfig::default().without_outcome_observation(),
         [0x86; 32],
     );
     session.handle(

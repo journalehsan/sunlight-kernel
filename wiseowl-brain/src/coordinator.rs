@@ -19,8 +19,10 @@ use crate::confirmation::{
     ConfirmationView, ResponseValidationContext, SessionAuthorization, SessionStatus,
 };
 use crate::executor::{
-    ExecutionContext, ExecutionId, ExecutionResultCode, TrustedActionFlow, TrustedLaunchAdapter,
+    ExecutionContext, ExecutionId, ExecutionResult, ExecutionResultCode, TrustedActionFlow,
+    TrustedLaunchAdapter,
 };
+use crate::outcome::{ObservedActionOutcome, ObservedActionOutcomeKind};
 use crate::planner::{
     BoundedActionPlanner, ClarificationId, ClarificationRequest, ConversationId, PlannerContext,
     PlannerInput, PlannerRegistry, PlannerRequestId, PlannerResult, PlannerTargetKind,
@@ -47,6 +49,11 @@ pub enum CoordinatorState {
     AwaitingConfirmation,
     PreparingExecution,
     Dispatching,
+    DispatchAccepted,
+    AwaitingOutcome,
+    Ready,
+    OutcomeFailed,
+    OutcomeTimedOut,
     Completed,
     Rejected,
     Cancelled,
@@ -58,14 +65,21 @@ impl CoordinatorState {
     pub const fn is_pending(self) -> bool {
         matches!(
             self,
-            Self::AwaitingClarification | Self::AwaitingConfirmation
+            Self::AwaitingClarification | Self::AwaitingConfirmation | Self::AwaitingOutcome
         )
     }
 
     pub const fn is_terminal(self) -> bool {
         matches!(
             self,
-            Self::Completed | Self::Rejected | Self::Cancelled | Self::Expired | Self::Invalidated
+            Self::Completed
+                | Self::Ready
+                | Self::OutcomeFailed
+                | Self::OutcomeTimedOut
+                | Self::Rejected
+                | Self::Cancelled
+                | Self::Expired
+                | Self::Invalidated
         )
     }
 }
@@ -76,6 +90,10 @@ pub enum PublicActionStatus {
     Proposed,
     ClarificationRequired,
     ConfirmationRequired,
+    Opening,
+    Ready,
+    OutcomeFailed,
+    OutcomeTimedOut,
     Completed,
     Rejected,
     Unsupported,
@@ -93,6 +111,11 @@ pub enum PublicReasonCode {
     ClarificationNeeded,
     ConfirmationNeeded,
     DispatchAccepted,
+    OutcomeReady,
+    OutcomeFailed,
+    OutcomeTimedOut,
+    ExitedBeforeReady,
+    ObservationCancelled,
     DispatchFailed,
     TargetNotFound,
     TargetUnavailable,
@@ -219,6 +242,13 @@ pub struct SessionEndedInput {
     pub submitted_at: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObservedOutcomeInput {
+    pub input_id: u64,
+    pub outcome: ObservedActionOutcome,
+    pub submitted_at: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuntimeInvalidation {
     pub input_id: u64,
@@ -238,6 +268,7 @@ pub enum CoordinatorInput {
     QueryPendingAction(QueryPendingAction),
     SessionEnded(SessionEndedInput),
     RuntimeInvalidated(RuntimeInvalidation),
+    ObservedOutcome(ObservedOutcomeInput),
 }
 
 pub struct CoordinatorContext<'a> {
@@ -257,6 +288,8 @@ pub struct CoordinatorConfig {
     pub confirmation_ttl_ms: u64,
     pub ready_ttl_ms: u64,
     pub record_retention_ms: u64,
+    /// When enabled, dispatch acceptance enters `AwaitingOutcome`.
+    pub observe_outcomes: bool,
 }
 
 impl Default for CoordinatorConfig {
@@ -266,7 +299,22 @@ impl Default for CoordinatorConfig {
             confirmation_ttl_ms: 30_000,
             ready_ttl_ms: 5_000,
             record_retention_ms: 300_000,
+            observe_outcomes: true,
         }
+    }
+}
+
+impl CoordinatorConfig {
+    pub const fn with_outcome_observation(mut self) -> Self {
+        self.observe_outcomes = true;
+        self
+    }
+
+    /// Transitional compatibility for callers that intentionally expose only
+    /// dispatch acceptance. New action surfaces should not use this mode.
+    pub const fn without_outcome_observation(mut self) -> Self {
+        self.observe_outcomes = false;
+        self
     }
 }
 
@@ -444,6 +492,7 @@ struct ActiveFlow {
     decision: Option<ActionDecision>,
     challenge: Option<ConfirmationChallenge>,
     grant: Option<ConfirmationGrant>,
+    execution_result: Option<ExecutionResult>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -454,6 +503,7 @@ enum ReplayKey {
     Cancellation(u64),
     SessionEnd(u64),
     Invalidation(u64),
+    Outcome(u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -513,6 +563,10 @@ impl<
 
     pub fn active_record(&self) -> Option<&ActionConversationRecord> {
         self.active.as_ref().map(|active| &active.record)
+    }
+
+    pub fn accepted_execution(&self) -> Option<&ExecutionResult> {
+        self.active.as_ref()?.execution_result.as_ref()
     }
 
     /// Opaque binding for the presentation controller; candidates remain
@@ -589,6 +643,7 @@ impl<
             CoordinatorInput::RuntimeInvalidated(invalidation) => {
                 self.runtime_invalidated(invalidation, &context)
             }
+            CoordinatorInput::ObservedOutcome(outcome) => self.observed_outcome(outcome),
         };
         self.cache(key, &result);
         result
@@ -1137,6 +1192,10 @@ impl<
                 context.session,
                 context.requester,
                 context.now,
+            )
+            .with_registry_generations(
+                context.application_registry_generation,
+                context.settings_registry_generation,
             ),
         );
         let locale = self.active.as_ref().unwrap().locale.clone();
@@ -1148,19 +1207,36 @@ impl<
             context.now.0,
         );
         if execution.code() == ExecutionResultCode::Succeeded {
-            let result = CoordinatorResult::ActionCompleted(localized_view(
+            if !self.config.observe_outcomes {
+                let result = CoordinatorResult::ActionCompleted(localized_view(
+                    locale.as_str(),
+                    PublicActionStatus::Completed,
+                    PublicReasonCode::DispatchAccepted,
+                    target.as_str(),
+                    None,
+                    false,
+                ));
+                self.finish(
+                    CoordinatorState::Completed,
+                    PublicReasonCode::DispatchAccepted,
+                    context.now.0,
+                );
+                return result;
+            }
+            let result = CoordinatorResult::ActionDispatched(localized_view(
                 locale.as_str(),
-                PublicActionStatus::Completed,
+                PublicActionStatus::Opening,
                 PublicReasonCode::DispatchAccepted,
                 target.as_str(),
                 None,
-                false,
+                true,
             ));
-            self.finish(
-                CoordinatorState::Completed,
-                PublicReasonCode::DispatchAccepted,
-                context.now.0,
-            );
+            let active = self.active.as_mut().unwrap();
+            active.execution_result = Some(execution);
+            active.record.current_state = CoordinatorState::AwaitingOutcome;
+            active.record.public_outcome_code = PublicReasonCode::DispatchAccepted;
+            active.record.update_time = context.now.0;
+            active.record.expiry_time = context.now.0.saturating_add(self.config.ready_ttl_ms);
             result
         } else {
             let reason = execution_reason(execution.code());
@@ -1174,6 +1250,112 @@ impl<
             ));
             self.finish(CoordinatorState::Rejected, reason, context.now.0);
             result
+        }
+    }
+
+    fn observed_outcome(&mut self, input: ObservedOutcomeInput) -> CoordinatorResult {
+        let Some(active) = self.active.as_ref() else {
+            return CoordinatorResult::Unknown(localized_view(
+                "en",
+                PublicActionStatus::Unknown,
+                PublicReasonCode::ReplayRejected,
+                "",
+                None,
+                false,
+            ));
+        };
+        let locale = active.locale.clone();
+        let target = active.target_display_name.clone();
+        if active.record.current_state != CoordinatorState::AwaitingOutcome
+            || active.record.execution_id != Some(input.outcome.execution_id())
+            || active.record.intent_id != Some(input.outcome.intent_id())
+        {
+            return CoordinatorResult::ActionRejected(localized_view(
+                locale.as_str(),
+                PublicActionStatus::Rejected,
+                PublicReasonCode::ReplayRejected,
+                target.as_str(),
+                None,
+                false,
+            ));
+        }
+        match input.outcome.kind() {
+            ObservedActionOutcomeKind::Ready => {
+                let result = CoordinatorResult::ActionCompleted(localized_view(
+                    locale.as_str(),
+                    PublicActionStatus::Ready,
+                    PublicReasonCode::OutcomeReady,
+                    target.as_str(),
+                    None,
+                    false,
+                ));
+                self.finish(
+                    CoordinatorState::Ready,
+                    PublicReasonCode::OutcomeReady,
+                    input.submitted_at,
+                );
+                result
+            }
+            ObservedActionOutcomeKind::TimedOut => {
+                let result = CoordinatorResult::ActionExpired(localized_view(
+                    locale.as_str(),
+                    PublicActionStatus::OutcomeTimedOut,
+                    PublicReasonCode::OutcomeTimedOut,
+                    target.as_str(),
+                    None,
+                    false,
+                ));
+                self.finish(
+                    CoordinatorState::OutcomeTimedOut,
+                    PublicReasonCode::OutcomeTimedOut,
+                    input.submitted_at,
+                );
+                result
+            }
+            ObservedActionOutcomeKind::ExitedEarly
+            | ObservedActionOutcomeKind::Failed
+            | ObservedActionOutcomeKind::SessionInvalidated
+            | ObservedActionOutcomeKind::RegistryInvalidated => {
+                let reason = if input.outcome.kind() == ObservedActionOutcomeKind::ExitedEarly {
+                    PublicReasonCode::ExitedBeforeReady
+                } else {
+                    PublicReasonCode::OutcomeFailed
+                };
+                let result = CoordinatorResult::ActionRejected(localized_view(
+                    locale.as_str(),
+                    PublicActionStatus::OutcomeFailed,
+                    reason,
+                    target.as_str(),
+                    None,
+                    false,
+                ));
+                self.finish(CoordinatorState::OutcomeFailed, reason, input.submitted_at);
+                result
+            }
+            ObservedActionOutcomeKind::Cancelled => {
+                let result = CoordinatorResult::ActionCancelled(localized_view(
+                    locale.as_str(),
+                    PublicActionStatus::Cancelled,
+                    PublicReasonCode::ObservationCancelled,
+                    target.as_str(),
+                    None,
+                    false,
+                ));
+                self.finish(
+                    CoordinatorState::Cancelled,
+                    PublicReasonCode::ObservationCancelled,
+                    input.submitted_at,
+                );
+                result
+            }
+            _ => CoordinatorResult::ActionDispatched(localized_view(
+                locale.as_str(),
+                PublicActionStatus::Opening,
+                PublicReasonCode::DispatchAccepted,
+                target.as_str(),
+                None,
+                true,
+            )),
         }
     }
 
@@ -1400,6 +1582,7 @@ impl<
             decision: None,
             challenge: None,
             grant: None,
+            execution_result: None,
         });
         self.audit_active(
             CoordinatorAuditEvent::FlowCreated,
@@ -1611,6 +1794,7 @@ fn replay_key(input: &CoordinatorInput) -> Option<ReplayKey> {
         CoordinatorInput::RuntimeInvalidated(input) => {
             Some(ReplayKey::Invalidation(input.input_id))
         }
+        CoordinatorInput::ObservedOutcome(input) => Some(ReplayKey::Outcome(input.input_id)),
     }
 }
 
@@ -1735,12 +1919,29 @@ fn localized_view(
 ) -> ActionResponseView {
     let fa = locale.starts_with("fa");
     let (title, base_message) = localized_text(fa, status, reason);
+    let presented_target = if fa && target == "Calculator" {
+        "ماشین حساب"
+    } else {
+        target
+    };
     let mut message = String::new();
     if reason == PublicReasonCode::DispatchAccepted && !target.is_empty() {
         if fa {
-            let _ = write!(&mut message, "{} باز شد.", target);
+            let _ = write!(&mut message, "در حال باز کردن {}…", presented_target);
         } else {
-            let _ = write!(&mut message, "{} was opened.", target);
+            let _ = write!(&mut message, "Opening {}…", target);
+        }
+    } else if reason == PublicReasonCode::OutcomeReady && !target.is_empty() {
+        if fa {
+            let _ = write!(&mut message, "{} آماده است.", presented_target);
+        } else {
+            let _ = write!(&mut message, "{} is ready.", target);
+        }
+    } else if reason == PublicReasonCode::OutcomeTimedOut && !target.is_empty() {
+        if fa {
+            let _ = write!(&mut message, "{} در زمان مقرر آماده نشد.", presented_target);
+        } else {
+            let _ = write!(&mut message, "{} did not become ready in time.", target);
         }
     } else {
         let _ = message.push_str(base_message);
@@ -1785,6 +1986,12 @@ fn localized_text(
             (PublicActionStatus::ConfirmationRequired, _) => {
                 ("تأیید لازم است", "آیا می‌خواهید این کار انجام شود؟")
             }
+            (PublicActionStatus::Opening, _) => ("در حال باز کردن", "درخواست پذیرفته شد."),
+            (PublicActionStatus::Ready, _) => ("آماده", "هدف آماده است."),
+            (PublicActionStatus::OutcomeTimedOut, _) => {
+                ("زمان پایان یافت", "هدف در زمان مقرر آماده نشد.")
+            }
+            (PublicActionStatus::OutcomeFailed, _) => ("ناموفق", "هدف آماده نشد."),
             (PublicActionStatus::Completed, _) => ("انجام شد", "درخواست پذیرفته شد."),
             (PublicActionStatus::Cancelled, _) => ("لغو شد", "درخواست لغو شد."),
             (PublicActionStatus::Expired, _) => {
@@ -1817,6 +2024,13 @@ fn localized_text(
             "Confirmation required",
             "Do you want me to perform this action?",
         ),
+        (PublicActionStatus::Opening, _) => ("Opening", "The dispatch was accepted."),
+        (PublicActionStatus::Ready, _) => ("Ready", "The target is ready."),
+        (PublicActionStatus::OutcomeTimedOut, _) => (
+            "Readiness timed out",
+            "The target did not become ready in time.",
+        ),
+        (PublicActionStatus::OutcomeFailed, _) => ("Not ready", "The target did not become ready."),
         (PublicActionStatus::Completed, _) => ("Completed", "The dispatch was accepted."),
         (PublicActionStatus::Cancelled, _) => ("Cancelled", "The request was cancelled."),
         (PublicActionStatus::Expired, _) => ("Expired", "The request expired."),
@@ -1847,6 +2061,11 @@ mod tests {
     use crate::confirmation::{ApprovalProof, ConfirmationResponseType, ResponderIdentity};
     use crate::executor::{
         DispatchStatus, LaunchApplicationRequest, OpenSettingsPageRequest, RegistryStatus,
+    };
+    use crate::outcome::{
+        ActionOutcomeObserver, EvidenceId, ObservationDeadlines, ObservationEvidence,
+        ObservationEvidenceKind, ObservationId, ObservationRequest, OutcomeRegistry,
+        ReadinessContract, TrustedSourceKind,
     };
     use crate::planner::{RegistryAliasRef, RegistryTargetRef};
     use crate::policy::{
@@ -1896,6 +2115,30 @@ mod tests {
                 display_name: "Display",
                 aliases: DISPLAY_ALIASES,
             });
+        }
+    }
+
+    impl OutcomeRegistry for Registry {
+        fn generation(&self, operation: ActionOperation) -> u64 {
+            match operation {
+                ActionOperation::OpenApplication => 11,
+                ActionOperation::OpenSettingsPage => 13,
+                _ => 0,
+            }
+        }
+
+        fn readiness_contract(
+            &self,
+            operation: ActionOperation,
+            _: &crate::action_intent::ActionTarget,
+        ) -> Option<ReadinessContract> {
+            match operation {
+                ActionOperation::OpenApplication => Some(ReadinessContract::FirstWindowRegistered),
+                ActionOperation::OpenSettingsPage => {
+                    Some(ReadinessContract::RequestedPageActivated)
+                }
+                _ => None,
+            }
         }
     }
 
@@ -2008,7 +2251,7 @@ mod tests {
             Registry,
             Adapter::default(),
             policy,
-            CoordinatorConfig::default(),
+            CoordinatorConfig::default().without_outcome_observation(),
             [0x51; 32],
         )
     }
@@ -2037,6 +2280,115 @@ mod tests {
             context(&runtime, &policy, 103),
         );
         assert!(matches!(result, CoordinatorResult::ActionCompleted(_)));
+    }
+
+    #[test]
+    fn outcome_enabled_coordinator_opens_then_reports_only_observed_readiness() {
+        let runtime = runtime(1, 100);
+        let policy = PolicyEngine::v1();
+        let mut coordinator: ActionCoordinator<Registry, Adapter> = ActionCoordinator::new(
+            Registry,
+            Adapter::default(),
+            policy,
+            CoordinatorConfig::default().with_outcome_observation(),
+            [0x91; 32],
+        );
+        let opening = coordinator.handle(
+            CoordinatorInput::UserRequest(request(41, "en", "Open Calculator", 1, 100)),
+            context(&runtime, &policy, 101),
+        );
+        assert!(matches!(opening, CoordinatorResult::ActionDispatched(_)));
+        assert_eq!(opening.response().message.as_str(), "Opening Calculator…");
+        assert_eq!(
+            coordinator.active_record().unwrap().current_state(),
+            CoordinatorState::AwaitingOutcome
+        );
+
+        let execution = coordinator.accepted_execution().unwrap().clone();
+        let observation_request = ObservationRequest::from_execution(
+            ObservationId(32),
+            &execution,
+            &Registry,
+            ObservationDeadlines::uniform(AuthorityTime(150)),
+        )
+        .unwrap();
+        let mut observer = ActionOutcomeObserver::<4, 16, 8>::new();
+        observer.create(observation_request.clone()).unwrap();
+        let ready = observer
+            .observe(
+                ObservationEvidence::trusted(
+                    EvidenceId(1),
+                    TrustedSourceKind::DisplayServer,
+                    TypedIdentifier::new("display-server").unwrap(),
+                    observation_request.session_id(),
+                    AuthorityTime(120),
+                    11,
+                    observation_request.execution_id(),
+                    observation_request.correlation_token(),
+                    observation_request.target().clone(),
+                    ObservationEvidenceKind::WindowRegistered,
+                ),
+                &Registry,
+            )
+            .unwrap();
+        let completed = coordinator.handle(
+            CoordinatorInput::ObservedOutcome(ObservedOutcomeInput {
+                input_id: 42,
+                outcome: ready,
+                submitted_at: 120,
+            }),
+            context(&runtime, &policy, 120),
+        );
+        assert!(matches!(completed, CoordinatorResult::ActionCompleted(_)));
+        assert_eq!(
+            completed.response().message.as_str(),
+            "Calculator is ready."
+        );
+        assert_eq!(
+            coordinator.records().last().unwrap().current_state(),
+            CoordinatorState::Ready
+        );
+
+        let mut persian: ActionCoordinator<Registry, Adapter> = ActionCoordinator::new(
+            Registry,
+            Adapter::default(),
+            policy,
+            CoordinatorConfig::default().with_outcome_observation(),
+            [0x92; 32],
+        );
+        let opening = persian.handle(
+            CoordinatorInput::UserRequest(request(43, "fa", "ماشین حساب را باز کن", 1, 100)),
+            context(&runtime, &policy, 101),
+        );
+        assert_eq!(
+            opening.response().message.as_str(),
+            "در حال باز کردن ماشین حساب…"
+        );
+        let execution = persian.accepted_execution().unwrap().clone();
+        let observation_request = ObservationRequest::from_execution(
+            ObservationId(33),
+            &execution,
+            &Registry,
+            ObservationDeadlines::uniform(AuthorityTime(110)),
+        )
+        .unwrap();
+        let mut observer = ActionOutcomeObserver::<4, 16, 8>::new();
+        observer.create(observation_request.clone()).unwrap();
+        let timed_out = observer
+            .tick(observation_request.execution_id(), AuthorityTime(111))
+            .unwrap();
+        let result = persian.handle(
+            CoordinatorInput::ObservedOutcome(ObservedOutcomeInput {
+                input_id: 44,
+                outcome: timed_out,
+                submitted_at: 111,
+            }),
+            context(&runtime, &policy, 111),
+        );
+        assert_eq!(
+            result.response().message.as_str(),
+            "ماشین حساب در زمان مقرر آماده نشد."
+        );
     }
 
     #[test]
@@ -2524,6 +2876,7 @@ mod tests {
             policy,
             CoordinatorConfig {
                 record_retention_ms: 10,
+                observe_outcomes: false,
                 ..CoordinatorConfig::default()
             },
             [0x71; 32],

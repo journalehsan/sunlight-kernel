@@ -5,6 +5,7 @@
 //! process-spawn callback, filesystem API, or generic IPC endpoint.
 
 use heapless::{Deque, Vec};
+use sha2::{Digest, Sha256};
 
 use crate::action_intent::{
     validate, ActionOperation, ActionParameters, ActionTarget, AuditId, IntentId, RequestedBy,
@@ -24,6 +25,27 @@ pub const DEFAULT_MAX_RUNTIME_AGE_MS: u64 = 5_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExecutionId(pub u64);
+
+/// Opaque launch-attempt identity minted by the trusted executor.  Lifecycle
+/// producers copy this token; conversation and planner inputs can never supply
+/// one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LaunchCorrelationToken([u8; 32]);
+
+impl LaunchCorrelationToken {
+    pub const fn bytes(self) -> [u8; 32] {
+        self.0
+    }
+
+    /// Bounded tag carried by the existing launch-trace path. Trusted
+    /// lifecycle aggregation resolves it against the pending full token; it is
+    /// never sufficient by itself to complete an observation.
+    pub const fn launch_trace_id(self) -> u64 {
+        u64::from_le_bytes([
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7],
+        ])
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutionResultCode {
@@ -54,6 +76,11 @@ pub struct ExecutionResult {
     dispatch_timestamp: Option<AuthorityTime>,
     completion_timestamp: Option<AuthorityTime>,
     audit_id: AuditId,
+    target: ActionTarget,
+    session_id: SessionId,
+    requester: RequestedBy,
+    registry_generation: u64,
+    correlation_token: Option<LaunchCorrelationToken>,
 }
 
 impl ExecutionResult {
@@ -78,6 +105,21 @@ impl ExecutionResult {
     pub const fn audit_id(&self) -> AuditId {
         self.audit_id
     }
+    pub fn target(&self) -> &ActionTarget {
+        &self.target
+    }
+    pub const fn session_id(&self) -> SessionId {
+        self.session_id
+    }
+    pub const fn requester(&self) -> RequestedBy {
+        self.requester
+    }
+    pub const fn registry_generation(&self) -> u64 {
+        self.registry_generation
+    }
+    pub const fn correlation_token(&self) -> Option<LaunchCorrelationToken> {
+        self.correlation_token
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +129,7 @@ pub struct LaunchApplicationRequest {
     requester: RequestedBy,
     audit_id: AuditId,
     execution_id: ExecutionId,
+    correlation_token: LaunchCorrelationToken,
 }
 
 impl LaunchApplicationRequest {
@@ -105,6 +148,9 @@ impl LaunchApplicationRequest {
     pub const fn execution_id(&self) -> ExecutionId {
         self.execution_id
     }
+    pub const fn correlation_token(&self) -> LaunchCorrelationToken {
+        self.correlation_token
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,6 +160,7 @@ pub struct OpenSettingsPageRequest {
     requester: RequestedBy,
     audit_id: AuditId,
     execution_id: ExecutionId,
+    correlation_token: LaunchCorrelationToken,
 }
 
 impl OpenSettingsPageRequest {
@@ -131,6 +178,9 @@ impl OpenSettingsPageRequest {
     }
     pub const fn execution_id(&self) -> ExecutionId {
         self.execution_id
+    }
+    pub const fn correlation_token(&self) -> LaunchCorrelationToken {
+        self.correlation_token
     }
 }
 
@@ -162,6 +212,8 @@ pub struct ExecutionContext<'a> {
     session: SessionAuthorization,
     requester: RequestedBy,
     now: AuthorityTime,
+    application_registry_generation: u64,
+    settings_registry_generation: u64,
 }
 
 impl<'a> ExecutionContext<'a> {
@@ -178,6 +230,26 @@ impl<'a> ExecutionContext<'a> {
             session,
             requester,
             now,
+            application_registry_generation: runtime.generation,
+            settings_registry_generation: runtime.generation,
+        }
+    }
+
+    pub const fn with_registry_generations(
+        mut self,
+        application_registry_generation: u64,
+        settings_registry_generation: u64,
+    ) -> Self {
+        self.application_registry_generation = application_registry_generation;
+        self.settings_registry_generation = settings_registry_generation;
+        self
+    }
+
+    const fn registry_generation(&self, operation: ActionOperation) -> u64 {
+        match operation {
+            ActionOperation::OpenApplication => self.application_registry_generation,
+            ActionOperation::OpenSettingsPage => self.settings_registry_generation,
+            _ => 0,
         }
     }
 }
@@ -421,6 +493,8 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize>
         now: AuthorityTime,
         dispatch_timestamp: Option<AuthorityTime>,
         code: ExecutionResultCode,
+        correlation_token: Option<LaunchCorrelationToken>,
+        registry_generation: u64,
     ) -> ExecutionResult {
         self.record(
             ready,
@@ -436,6 +510,11 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize>
             dispatch_timestamp,
             completion_timestamp: dispatch_timestamp.map(|_| now),
             audit_id: ready.audit_id(),
+            target: ready.intent().target().clone(),
+            session_id: ready.intent().session_id(),
+            requester: ready.intent().requested_by(),
+            registry_generation,
+            correlation_token,
         }
     }
 
@@ -452,7 +531,7 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize>
             now,
             ExecutionAuditEvent::FinalValidationFailed(code),
         );
-        self.result(ready, execution_id, now, None, code)
+        self.result(ready, execution_id, now, None, code, None, 0)
     }
 
     fn validate_final(
@@ -597,6 +676,8 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize> ActionExe
                 context.now,
                 None,
                 ExecutionResultCode::AlreadyConsumed,
+                None,
+                0,
             );
         }
 
@@ -635,6 +716,8 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize> ActionExe
             ExecutionAuditEvent::DispatchAttempted,
         );
 
+        let registry_generation = context.registry_generation(ready.intent().operation());
+        let correlation_token = launch_correlation_token(&ready, execution_id, registry_generation);
         let request_status = match ready.intent().target() {
             ActionTarget::Application(bundle_id) => {
                 self.adapter.launch_application(LaunchApplicationRequest {
@@ -643,6 +726,7 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize> ActionExe
                     requester: ready.intent().requested_by(),
                     audit_id: ready.audit_id(),
                     execution_id,
+                    correlation_token,
                 })
             }
             ActionTarget::SettingsPage(page_id) => {
@@ -652,6 +736,7 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize> ActionExe
                     requester: ready.intent().requested_by(),
                     audit_id: ready.audit_id(),
                     execution_id,
+                    correlation_token,
                 })
             }
             _ => DispatchStatus::Failed,
@@ -671,6 +756,8 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize> ActionExe
                     context.now,
                     Some(context.now),
                     ExecutionResultCode::Succeeded,
+                    Some(correlation_token),
+                    registry_generation,
                 )
             }
             DispatchStatus::Failed => {
@@ -686,10 +773,49 @@ impl<A: TrustedLaunchAdapter, const AUDIT: usize, const REPLAY: usize> ActionExe
                     context.now,
                     Some(context.now),
                     ExecutionResultCode::DispatchFailed,
+                    None,
+                    registry_generation,
                 )
             }
         }
     }
+}
+
+fn launch_correlation_token(
+    ready: &ReadyForExecution,
+    execution_id: ExecutionId,
+    registry_generation: u64,
+) -> LaunchCorrelationToken {
+    let mut hasher = Sha256::new();
+    hasher.update(b"wiseowl.launch-correlation.v1");
+    hasher.update(execution_id.0.to_le_bytes());
+    hasher.update(execution_id.0.to_le_bytes()); // launch-attempt number in v1
+    hasher.update(ready.intent().intent_id().bytes());
+    hasher.update(ready.intent().session_id().0.to_le_bytes());
+    match ready.intent().requested_by() {
+        RequestedBy::User(id) => {
+            hasher.update([1]);
+            hasher.update(id.to_le_bytes());
+        }
+        RequestedBy::WiseOwlReasoning => hasher.update([2]),
+        RequestedBy::SystemComponent(id) => {
+            hasher.update([3]);
+            hasher.update(id.to_le_bytes());
+        }
+    }
+    match ready.intent().target() {
+        ActionTarget::Application(id) => {
+            hasher.update([1]);
+            hasher.update(id.as_str().as_bytes());
+        }
+        ActionTarget::SettingsPage(id) => {
+            hasher.update([2]);
+            hasher.update(id.as_str().as_bytes());
+        }
+        _ => hasher.update([0]),
+    }
+    hasher.update(registry_generation.to_le_bytes());
+    LaunchCorrelationToken(hasher.finalize().into())
 }
 
 fn responder_matches_requester(responder: ResponderIdentity, requester: RequestedBy) -> bool {
@@ -731,7 +857,7 @@ impl TrustedLaunchAdapter for SunlightLaunchAdapter {
         use sunlight_ipc::launch_trace::{LaunchSource, LaunchTrace};
 
         let trace = LaunchTrace::new(
-            request.execution_id().0,
+            request.correlation_token().launch_trace_id(),
             LaunchSource::Runner,
             sunlight_ipc::monotonic_millis(),
         );
@@ -757,7 +883,7 @@ impl TrustedLaunchAdapter for SunlightLaunchAdapter {
             return DispatchStatus::Failed;
         };
         let trace = LaunchTrace::new(
-            request.execution_id().0,
+            request.correlation_token().launch_trace_id(),
             LaunchSource::Runner,
             sunlight_ipc::monotonic_millis(),
         );
