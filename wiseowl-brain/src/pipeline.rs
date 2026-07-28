@@ -1,6 +1,7 @@
 use crate::context::{BrainContext, ContextBuilder, GroundedContextBuilder};
 use crate::diagnostics::BrainDiagnostics;
 use crate::error::{BrainError, BrainResult};
+use crate::foundation::{FoundationLoadState, FoundationMemory};
 use crate::greeting;
 use crate::grounded::{AuthIdentity, BrainContextSource, FactKind, GroundedFact};
 use crate::mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
@@ -9,13 +10,33 @@ use crate::provenance::{BrainProviderKind, BrainResponseFlags, BrainResponseMeta
 
 pub struct CognitivePipeline {
     pub diagnostics: BrainDiagnostics,
+    foundation: FoundationLoadState,
 }
 
 impl CognitivePipeline {
     pub fn new() -> Self {
-        Self {
-            diagnostics: BrainDiagnostics::new(),
+        let diagnostics = BrainDiagnostics::new();
+        let foundation = FoundationLoadState::load_embedded();
+        if foundation.is_ready() {
+            diagnostics.note_foundation_loaded(
+                foundation.record_count() as u64,
+                foundation.token_count() as u64,
+            );
+        } else {
+            diagnostics.note_foundation_failed();
         }
+        Self {
+            diagnostics,
+            foundation,
+        }
+    }
+
+    pub fn foundation(&self) -> Option<&FoundationMemory> {
+        self.foundation.memory()
+    }
+
+    pub fn foundation_state(&self) -> &FoundationLoadState {
+        &self.foundation
     }
 
     pub fn handle_request(&mut self, request: &BrainRequestWire) -> BrainResponseWire {

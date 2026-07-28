@@ -1,6 +1,7 @@
 [package]
 name = "wiseowl-brain"
-version = "0.2.3504-alpha.1"
+version = "0.2.3512-alpha.1"
+
 
 
 
@@ -44,5 +45,9 @@ thiserror = { version = "1", optional = true }
 log = { version = "0.4", optional = true }
 sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["global-alloc", "dynamic-heap"] }
+wiseowl-index = { path = "../wiseowl-index", default-features = false }
+
+[build-dependencies]
+wiseowl-index = { path = "../wiseowl-index", default-features = false }
 
 [dev-dependencies]

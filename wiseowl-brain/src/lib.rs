@@ -1,7 +1,6 @@
 #![cfg_attr(feature = "sunlightos", no_std)]
 #![cfg_attr(feature = "sunlightos", allow(static_mut_refs))]
 
-#[cfg(feature = "sunlightos")]
 extern crate alloc;
 
 pub mod error;
@@ -19,6 +18,7 @@ pub mod provenance;
 pub mod adapters;
 pub mod mtm;
 pub mod kv_client;
+pub mod foundation;
 
 pub use pipeline::CognitivePipeline;
 pub use provider::{BrainProvider, LocalBoundedProvider, FutureOnlineProvider, ProviderRegistry};

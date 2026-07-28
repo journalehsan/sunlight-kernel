@@ -9,7 +9,8 @@ pub enum ContextSourceKind {
     Kv = 3,
     WiseOwlStatus = 4,
     Index = 5,
-    Request = 6,
+    Foundation = 6,
+    Request = 7,
 }
 
 impl ContextSourceKind {
@@ -20,6 +21,7 @@ impl ContextSourceKind {
             Self::Kv => "kv",
             Self::WiseOwlStatus => "wiseowl-status",
             Self::Index => "index",
+            Self::Foundation => "foundation",
             Self::Request => "request",
         }
     }
@@ -75,6 +77,15 @@ pub enum FactKind {
     IndexedSourceCount = 26,
     LastCompletedGeneration = 27,
     SystemGeneration = 28,
+    AssistantName = 29,
+    AssistantCodename = 30,
+    SunlightIdentity = 31,
+    FoundationRole = 32,
+    FoundationCapabilities = 33,
+    FoundationSafety = 34,
+    FoundationSecurityModel = 35,
+    FoundationRuntimeInfo = 36,
+    FoundationMemoryModel = 37,
 }
 
 /// Freshness categories (lower ordinal wins on conflict).

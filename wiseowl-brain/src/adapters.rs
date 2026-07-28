@@ -2,6 +2,7 @@
 //! degrade cleanly when optional services are missing.
 
 use super::context::BrainBudget;
+use super::foundation::FoundationMemory;
 use super::grounded::{
     AuthIdentity, BrainContextSource, ContextSourceKind, FactFreshness, FactKind, GroundedFact,
 };
@@ -96,6 +97,45 @@ impl BrainContextSource for SystemContextSource {
             }
         }
 
+        facts
+    }
+}
+
+pub struct FoundationContextSource<'a> {
+    pub foundation: Option<&'a FoundationMemory>,
+}
+
+impl<'a> BrainContextSource for FoundationContextSource<'a> {
+    fn source_kind(&self) -> ContextSourceKind {
+        ContextSourceKind::Foundation
+    }
+
+    fn is_available(&self) -> bool {
+        self.foundation.is_some()
+    }
+
+    fn collect(
+        &self,
+        budget: &BrainBudget,
+        _identity: &AuthIdentity,
+    ) -> heapless::Vec<GroundedFact, 16> {
+        let Some(foundation) = self.foundation else {
+            return heapless::Vec::new();
+        };
+        let mut facts: heapless::Vec<GroundedFact, 16> = heapless::Vec::new();
+        let max = budget.max_facts as usize;
+        for record in foundation.records.iter() {
+            if facts.len() >= max {
+                break;
+            }
+            let _ = facts.push(GroundedFact {
+                kind: record.key.fact_kind(),
+                source: ContextSourceKind::Foundation,
+                freshness: FactFreshness::Persisted,
+                confidence: 100,
+                value: fact_str(record.value.as_str()),
+            });
+        }
         facts
     }
 }

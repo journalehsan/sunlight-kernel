@@ -7,8 +7,8 @@ use sunlight_ipc::{
 use sunlight_libc as libc;
 
 use wiseowl_brain::adapters::{
-    IndexContextSource, KvContextSource, SessionContextSource, SystemContextSource,
-    WiseOwlStatusContextSource,
+    FoundationContextSource, IndexContextSource, KvContextSource, SessionContextSource,
+    SystemContextSource, WiseOwlStatusContextSource,
 };
 use wiseowl_brain::grounded::AuthIdentity;
 use wiseowl_brain::kv_client::{load_mtm, save_preferences, save_welcome_state};
@@ -38,6 +38,19 @@ pub extern "C" fn _start() -> ! {
 
     unsafe {
         PIPELINE = Some(CognitivePipeline::new());
+    }
+    let pipeline = unsafe { PIPELINE.as_ref().unwrap() };
+    if pipeline.foundation_state().is_ready() {
+        serial_println!(
+            "[WISEOWL-BRAIN] FOUNDATION_READY records={} tokens={}",
+            pipeline.foundation_state().record_count(),
+            pipeline.foundation_state().token_count()
+        );
+    } else {
+        serial_println!(
+            "[WISEOWL-BRAIN] FOUNDATION_DEGRADED reason={}",
+            pipeline.foundation_state().status_label()
+        );
     }
 
     let ep = endpoint_create();
@@ -179,6 +192,10 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
     // Priority: session → system → kv → memorydb → index
     let session_source = SessionContextSource;
     let system_source = SystemContextSource;
+    let foundation_snapshot = pipeline.foundation().cloned();
+    let foundation_source = FoundationContextSource {
+        foundation: foundation_snapshot.as_ref(),
+    };
     let kv_source = load_kv_source(pipeline, subject_uid);
     let mut memdb_source = WiseOwlStatusContextSource::query_native();
     if memdb_source.available && !memdb_source.degraded {
@@ -195,9 +212,10 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
         index_source.degraded = true;
     }
 
-    let sources: [&dyn wiseowl_brain::grounded::BrainContextSource; 5] = [
+    let sources: [&dyn wiseowl_brain::grounded::BrainContextSource; 6] = [
         &session_source,
         &system_source,
+        &foundation_source,
         &kv_source,
         &memdb_source,
         &index_source,
@@ -272,8 +290,11 @@ fn handle_native_health(_msg: IpcMsg) -> IpcMsg {
     let _ = core::fmt::Write::write_fmt(
         &mut body,
         format_args!(
-            "ok total={} failed={} local={}",
-            snap.requests_total, snap.requests_failed, snap.provider_local_available as u8
+            "ok total={} failed={} local={} foundation={}",
+            snap.requests_total,
+            snap.requests_failed,
+            snap.provider_local_available as u8,
+            pipeline.foundation_state().status_label(),
         ),
     );
     let greeting =
@@ -289,7 +310,7 @@ fn handle_native_stats(_msg: IpcMsg) -> IpcMsg {
     let _ = core::fmt::Write::write_fmt(
         &mut body,
         format_args!(
-            "req={} greet={} ok={} rej={} kv_r={} kv_w={} first={} ret={}",
+            "req={} greet={} ok={} rej={} kv_r={} kv_w={} first={} ret={} foundation={} fr={} ft={}",
             d.requests_total.load(core::sync::atomic::Ordering::Relaxed),
             d.requests_greeting.load(core::sync::atomic::Ordering::Relaxed),
             d.responses_successful.load(core::sync::atomic::Ordering::Relaxed),
@@ -298,6 +319,9 @@ fn handle_native_stats(_msg: IpcMsg) -> IpcMsg {
             d.kv_writes.load(core::sync::atomic::Ordering::Relaxed),
             d.responses_first_visit.load(core::sync::atomic::Ordering::Relaxed),
             d.responses_returning_visit.load(core::sync::atomic::Ordering::Relaxed),
+            pipeline.foundation_state().status_label(),
+            d.foundation_record_count.load(core::sync::atomic::Ordering::Relaxed),
+            d.foundation_token_count.load(core::sync::atomic::Ordering::Relaxed),
         ),
     );
     let greeting =
@@ -408,6 +432,10 @@ fn handle_native_context(msg: IpcMsg, caller_uid: u64, caller_pid: u64) -> IpcMs
 
     let session_source = SessionContextSource;
     let system_source = SystemContextSource;
+    let pipeline = unsafe { PIPELINE.as_ref().unwrap() };
+    let foundation_source = FoundationContextSource {
+        foundation: pipeline.foundation(),
+    };
 
     use wiseowl_brain::grounded::BrainContextSource;
     let mut all_facts: Vec<wiseowl_brain::grounded::GroundedFact> = Vec::new();
@@ -427,12 +455,25 @@ fn handle_native_context(msg: IpcMsg, caller_uid: u64, caller_pid: u64) -> IpcMs
     for fact in system_facts {
         all_facts.push(fact);
     }
+    let foundation_facts = BrainContextSource::collect(
+        &foundation_source,
+        &wiseowl_brain::context::BrainBudget::default(),
+        &identity,
+    );
+    for fact in foundation_facts {
+        all_facts.push(fact);
+    }
 
     use core::fmt::Write;
     let mut summary = heapless::String::<256>::new();
     let _ = write!(&mut summary,
-        "facts={} uid={} pid={}",
-        all_facts.len(), caller_uid, caller_pid
+        "facts={} uid={} pid={} foundation={} fr={} ft={}",
+        all_facts.len(),
+        caller_uid,
+        caller_pid,
+        pipeline.foundation_state().status_label(),
+        pipeline.foundation_state().record_count(),
+        pipeline.foundation_state().token_count(),
     );
     let greeting = wiseowl_brain::protocol::GreetingResponseWire::simple("Context", &summary);
     let resp = wiseowl_brain::protocol::BrainResponseWire::greeting(greeting, msg.label as u64);

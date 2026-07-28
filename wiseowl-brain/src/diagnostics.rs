@@ -31,6 +31,10 @@ pub struct BrainDiagnostics {
     pub responses_with_machine_summary: AtomicU64,
     pub responses_with_index_status: AtomicU64,
     pub unauthorized_requests: AtomicU64,
+    pub foundation_load_success: AtomicU64,
+    pub foundation_load_failures: AtomicU64,
+    pub foundation_record_count: AtomicU64,
+    pub foundation_token_count: AtomicU64,
     pub last_error_code: AtomicU32,
 }
 
@@ -66,6 +70,10 @@ impl BrainDiagnostics {
             responses_with_machine_summary: AtomicU64::new(0),
             responses_with_index_status: AtomicU64::new(0),
             unauthorized_requests: AtomicU64::new(0),
+            foundation_load_success: AtomicU64::new(0),
+            foundation_load_failures: AtomicU64::new(0),
+            foundation_record_count: AtomicU64::new(0),
+            foundation_token_count: AtomicU64::new(0),
             last_error_code: AtomicU32::new(0),
         }
     }
@@ -99,6 +107,12 @@ impl BrainDiagnostics {
     pub fn inc_kv_write(&self) { self.kv_writes.fetch_add(1, Ordering::Relaxed); }
     pub fn inc_kv_write_fail(&self) { self.kv_write_failures.fetch_add(1, Ordering::Relaxed); }
     pub fn inc_unauthorized(&self) { self.unauthorized_requests.fetch_add(1, Ordering::Relaxed); }
+    pub fn note_foundation_loaded(&self, records: u64, tokens: u64) {
+        self.foundation_load_success.fetch_add(1, Ordering::Relaxed);
+        self.foundation_record_count.store(records, Ordering::Relaxed);
+        self.foundation_token_count.store(tokens, Ordering::Relaxed);
+    }
+    pub fn note_foundation_failed(&self) { self.foundation_load_failures.fetch_add(1, Ordering::Relaxed); }
     pub fn set_error(&self, code: u16) { self.last_error_code.store(code as u32, Ordering::Relaxed); }
 
     pub fn provider_local_available(&self) -> bool {

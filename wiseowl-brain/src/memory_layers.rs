@@ -1,6 +1,7 @@
 use core::fmt::Write;
 
 use crate::context::BrainContext;
+use crate::foundation::FoundationMemory;
 use crate::protocol::{
     MAX_HIGHLIGHT_LABEL, MAX_HIGHLIGHT_VALUE, MAX_NAME_LEN,
 };
@@ -73,12 +74,44 @@ pub struct LongTermMemory {
     pub indexed_doc_count: u64,
 }
 
+/// Foundation memory: immutable build-time identity and policy records.
+#[derive(Debug, Clone, Default)]
+pub struct FoundationMemoryLayer {
+    pub loaded: bool,
+    pub record_count: u16,
+    pub token_count: u32,
+}
+
+impl FoundationMemoryLayer {
+    pub fn from_foundation(foundation: Option<&FoundationMemory>) -> Self {
+        match foundation {
+            Some(foundation) => Self {
+                loaded: true,
+                record_count: foundation.record_count() as u16,
+                token_count: foundation.token_count() as u32,
+            },
+            None => Self::default(),
+        }
+    }
+}
+
+/// Runtime context: live per-boot and per-session facts.
+///
+/// This is intentionally a placeholder in Foundation Memory v1. The shape exists
+/// so later milestones can add runtime facts without changing layer boundaries.
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeContextLayer {
+    pub available: bool,
+}
+
 /// Bounded context set assembled from all three memory layers.
 #[derive(Debug, Clone)]
 pub struct BoundedContextSet {
+    pub foundation: FoundationMemoryLayer,
     pub stm: ShortTermMemory,
     pub mtm: MediumTermMemory,
     pub ltm: LongTermMemory,
+    pub runtime: RuntimeContextLayer,
     pub machine_summary_available: bool,
     pub network_online: Option<bool>,
 }
@@ -89,9 +122,11 @@ impl BoundedContextSet {
         let machine_available =
             stm.current_context.cpu_cores.is_some() || stm.current_context.ram_mib.is_some();
         Self {
+            foundation: FoundationMemoryLayer::default(),
             stm,
             mtm: MediumTermMemory::default(),
             ltm: LongTermMemory::default(),
+            runtime: RuntimeContextLayer::default(),
             machine_summary_available: machine_available,
             network_online: None,
         }
