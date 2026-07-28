@@ -44,7 +44,9 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     for &path in files {
         if path == b"-" {
             let fc = fold_fd(io, STDIN, width, break_spaces, count_bytes);
-            if fc != 0 { code = 1; }
+            if fc != 0 {
+                code = 1;
+            }
             continue;
         }
         let fd = match io.open(path) {
@@ -59,12 +61,17 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
         };
         let fc = fold_fd(io, fd, width, break_spaces, count_bytes);
         let _ = io.close(fd);
-        if fc != 0 { code = 1; }
+        if fc != 0 {
+            code = 1;
+        }
     }
     code
 }
 
-fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(u64, bool, bool, &'a [&'a [u8]]), i32> {
+fn parse_args<'a>(
+    args: &'a [&'a [u8]],
+    io: &mut impl Io,
+) -> Result<(u64, bool, bool, &'a [&'a [u8]]), i32> {
     let mut width: u64 = 80;
     let mut break_spaces = false;
     let mut count_bytes = false;
@@ -106,10 +113,14 @@ fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(u64, bool, 
 }
 
 fn parse_u64(slice: &[u8]) -> Option<u64> {
-    if slice.is_empty() { return None; }
+    if slice.is_empty() {
+        return None;
+    }
     let mut out = 0u64;
     for &b in slice {
-        if !b.is_ascii_digit() { return None; }
+        if !b.is_ascii_digit() {
+            return None;
+        }
         out = out.checked_mul(10)?.checked_add((b - b'0') as u64)?;
     }
     Some(out)
@@ -120,10 +131,9 @@ fn fold_fd(io: &mut impl Io, fd: Fd, width: u64, break_spaces: bool, count_bytes
     let mut retries = 0;
     let mut col: u64 = 0;
     let mut last_blank: Option<(u64, usize)> = None; // (column, buffer-index-of-space)
-    // We keep a small look-back buffer for -s mode
+                                                     // We keep a small look-back buffer for -s mode
     let mut hold_buf: [u8; 256] = [0u8; 256];
     let mut hold_len: usize = 0;
-
 
     loop {
         match io.read(fd, &mut buf) {
@@ -143,7 +153,9 @@ fn fold_fd(io: &mut impl Io, fd: Fd, width: u64, break_spaces: bool, count_bytes
                     let char_width = if b == b'\t' {
                         8 - (col % 8)
                     } else if b == 0x08 {
-                        if col > 0 { col -= 1; }
+                        if col > 0 {
+                            col -= 1;
+                        }
                         hold_buf[hold_len.min(255)] = b;
                         hold_len = (hold_len + 1).min(255);
                         continue;
@@ -281,9 +293,15 @@ mod tests {
         fn new(files: Vec<(&'static [u8], &'static [u8])>) -> Self {
             let fc = files.len();
             Self {
-                files, output: Vec::new(), errors: Vec::new(),
-                opens: 0, closes: 0, offsets: std::vec![0; fc],
-                fail_read: false, stdin_data: None, stdin_offset: 0,
+                files,
+                output: Vec::new(),
+                errors: Vec::new(),
+                opens: 0,
+                closes: 0,
+                offsets: std::vec![0; fc],
+                fail_read: false,
+                stdin_data: None,
+                stdin_offset: 0,
                 eagain_reads: 0,
             }
         }
@@ -299,7 +317,9 @@ mod tests {
             Ok(Fd(idx as u32 + 3))
         }
         fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
-            if self.fail_read { return Err(Errno::Failed); }
+            if self.fail_read {
+                return Err(Errno::Failed);
+            }
             if self.eagain_reads != 0 {
                 self.eagain_reads -= 1;
                 return Err(Errno::Again);
@@ -307,25 +327,40 @@ mod tests {
             if fd == STDIN {
                 let data = self.stdin_data.unwrap_or(b"");
                 let off = self.stdin_offset;
-                if off >= data.len() { return Ok(0); }
+                if off >= data.len() {
+                    return Ok(0);
+                }
                 let n = (data.len() - off).min(buf.len());
                 buf[..n].copy_from_slice(&data[off..off + n]);
                 self.stdin_offset += n;
                 return Ok(n);
             }
             let idx = (fd.0 - 3) as usize;
-            if idx >= self.files.len() { return Ok(0); }
+            if idx >= self.files.len() {
+                return Ok(0);
+            }
             let data = self.files[idx].1;
             let off = self.offsets[idx];
-            if off >= data.len() { return Ok(0); }
+            if off >= data.len() {
+                return Ok(0);
+            }
             let n = (data.len() - off).min(buf.len());
             buf[..n].copy_from_slice(&data[off..off + n]);
             self.offsets[idx] += n;
             Ok(n)
         }
-        fn close(&mut self, _fd: Fd) -> Result<(), Errno> { self.closes += 1; Ok(()) }
-        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> { self.output.extend_from_slice(b); Ok(()) }
-        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> { self.errors.extend_from_slice(b); Ok(()) }
+        fn close(&mut self, _fd: Fd) -> Result<(), Errno> {
+            self.closes += 1;
+            Ok(())
+        }
+        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.output.extend_from_slice(b);
+            Ok(())
+        }
+        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.errors.extend_from_slice(b);
+            Ok(())
+        }
         fn yield_now(&mut self) {}
     }
 

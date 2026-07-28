@@ -91,8 +91,7 @@ impl IndexerState {
         self.sources_by_path
             .insert((m.root_id, m.relative_path.clone()), m.source_id);
         if let Some(fi) = m.file_identity {
-            self.file_identity_index
-                .insert((fi.device, fi.inode), sid);
+            self.file_identity_index.insert((fi.device, fi.inode), sid);
         }
         if m.content_digest.is_set() {
             let fp = m.content_digest.fingerprint64();

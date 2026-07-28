@@ -112,7 +112,7 @@ pub const MAX_ACTION_LABEL: usize = 64;
 
 #[cfg(feature = "host")]
 pub mod host_types {
-    
+
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -383,20 +383,23 @@ impl GreetingRequestWire {
             pos = end;
         }
 
-        Ok((Self {
-            welcome_mode,
-            first_login,
-            first_after_upgrade,
-            machine_summary_requested,
-            display_name,
-            sunlight_version,
-            cpu_cores,
-            ram_mib,
-            device_class,
-            model_name,
-            screen_w,
-            screen_h,
-        }, pos))
+        Ok((
+            Self {
+                welcome_mode,
+                first_login,
+                first_after_upgrade,
+                machine_summary_requested,
+                display_name,
+                sunlight_version,
+                cpu_cores,
+                ram_mib,
+                device_class,
+                model_name,
+                screen_w,
+                screen_h,
+            },
+            pos,
+        ))
     }
 }
 
@@ -556,7 +559,15 @@ impl GreetingResponseWire {
             }
         }
 
-        Ok((Self { title, body, highlights, suggested_actions }, pos))
+        Ok((
+            Self {
+                title,
+                body,
+                highlights,
+                suggested_actions,
+            },
+            pos,
+        ))
     }
 }
 
@@ -587,7 +598,8 @@ impl BrainRequestWire {
 
         if let Some(ref g) = self.greeting {
             let g_body = g.encode();
-            out.extend_from_slice(&(g_body.len() as u16).to_le_bytes()).ok();
+            out.extend_from_slice(&(g_body.len() as u16).to_le_bytes())
+                .ok();
             out.extend_from_slice(&g_body).ok();
         } else {
             out.extend_from_slice(&0u16.to_le_bytes()).ok();
@@ -643,16 +655,19 @@ impl BrainRequestWire {
             None
         };
 
-        Ok((Self {
-            request_id,
-            caller_uid,
-            user_id,
-            session_id,
-            locale_len: locale_len as u8,
-            locale,
-            request_kind,
-            greeting,
-        }, pos))
+        Ok((
+            Self {
+                request_id,
+                caller_uid,
+                user_id,
+                session_id,
+                locale_len: locale_len as u8,
+                locale,
+                request_kind,
+                greeting,
+            },
+            pos,
+        ))
     }
 }
 
@@ -692,14 +707,16 @@ impl BrainResponseWire {
     pub fn encode(&self) -> heapless::Vec<u8, 2048> {
         let mut out = heapless::Vec::new();
         out.extend_from_slice(&self.request_id.to_le_bytes()).ok();
-        out.extend_from_slice(&self.response_kind.to_le_bytes()).ok();
+        out.extend_from_slice(&self.response_kind.to_le_bytes())
+            .ok();
         let _ = out.push(self.provider);
         let _ = out.push(self.confidence);
         out.extend_from_slice(&self.error_code.to_le_bytes()).ok();
 
         if let Some(ref g) = self.greeting {
             let g_body = g.encode();
-            out.extend_from_slice(&(g_body.len() as u16).to_le_bytes()).ok();
+            out.extend_from_slice(&(g_body.len() as u16).to_le_bytes())
+                .ok();
             out.extend_from_slice(&g_body).ok();
         } else {
             out.extend_from_slice(&0u16.to_le_bytes()).ok();
@@ -738,14 +755,17 @@ impl BrainResponseWire {
             None
         };
 
-        Ok((Self {
-            request_id,
-            response_kind,
-            provider,
-            confidence,
-            error_code,
-            greeting,
-        }, pos))
+        Ok((
+            Self {
+                request_id,
+                response_kind,
+                provider,
+                confidence,
+                error_code,
+                greeting,
+            },
+            pos,
+        ))
     }
 }
 
@@ -878,7 +898,11 @@ mod tests {
             let mut value: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
             let _ = value.push_str("value");
             if i < MAX_HIGHLIGHTS {
-                let _ = highlights.push(HighlightWire { kind: i as u8, label, value });
+                let _ = highlights.push(HighlightWire {
+                    kind: i as u8,
+                    label,
+                    value,
+                });
             }
         }
         assert_eq!(highlights.len(), MAX_HIGHLIGHTS);
@@ -891,7 +915,10 @@ mod tests {
             let mut label: heapless::String<MAX_ACTION_LABEL> = heapless::String::new();
             let _ = label.push_str("action");
             if i < MAX_ACTIONS {
-                let _ = actions.push(ActionWire { kind: i as u8, label });
+                let _ = actions.push(ActionWire {
+                    kind: i as u8,
+                    label,
+                });
             }
         }
         assert_eq!(actions.len(), MAX_ACTIONS);

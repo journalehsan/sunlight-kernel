@@ -176,8 +176,12 @@ impl MemoryDbConnectionState {
         retry_after: Option<u64>,
     ) {
         let last_success_at = match *self {
-            Self::Ready { last_success_at, .. } => Some(last_success_at),
-            Self::Degraded { last_success_at, .. } => last_success_at,
+            Self::Ready {
+                last_success_at, ..
+            } => Some(last_success_at),
+            Self::Degraded {
+                last_success_at, ..
+            } => last_success_at,
             _ => None,
         };
         // A newer Ready observation is never permanently locked out by an older
@@ -265,8 +269,7 @@ mod tests {
         let mut h = IndexHealth::default();
         assert_eq!(h.memorydb_ready(), false);
         assert_eq!(h.memorydb.memorydb_ready_flag(), 0);
-        h.memorydb
-            .observe_success(3, 7, 100);
+        h.memorydb.observe_success(3, 7, 100);
         assert!(h.memorydb_ready());
         assert_eq!(h.memorydb.memorydb_ready_flag(), 1);
         assert_eq!(h.memorydb_generation(), 7);

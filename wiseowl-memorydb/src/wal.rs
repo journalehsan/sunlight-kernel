@@ -181,7 +181,8 @@ pub fn scan_wal(data: &[u8], max_payload: u32) -> WalScanResult {
                 records.push(rec);
                 offset += n;
             }
-            Err(DbError::WalIncomplete) | Err(DbError::Corrupt { .. })
+            Err(DbError::WalIncomplete)
+            | Err(DbError::Corrupt { .. })
             | Err(DbError::PayloadTooLarge { .. }) => {
                 return WalScanResult {
                     records,

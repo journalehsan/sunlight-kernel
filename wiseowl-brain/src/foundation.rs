@@ -115,12 +115,16 @@ impl FoundationMemory {
 
         let format_version = read_u16(bytes, 8)?;
         if format_version != FOUNDATION_FORMAT_VERSION {
-            return Err(FoundationLoadError::UnsupportedFormatVersion(format_version));
+            return Err(FoundationLoadError::UnsupportedFormatVersion(
+                format_version,
+            ));
         }
 
         let schema_version = read_u16(bytes, 10)?;
         if schema_version != FOUNDATION_SCHEMA_VERSION {
-            return Err(FoundationLoadError::UnsupportedSchemaVersion(schema_version));
+            return Err(FoundationLoadError::UnsupportedSchemaVersion(
+                schema_version,
+            ));
         }
 
         let tokenizer_id = read_u32(bytes, 12)?;
@@ -130,7 +134,9 @@ impl FoundationMemory {
 
         let tokenizer_version = read_u32(bytes, 16)?;
         if tokenizer_version != FOUNDATION_EXPECTED_TOKENIZER_VERSION {
-            return Err(FoundationLoadError::TokenizerVersionMismatch(tokenizer_version));
+            return Err(FoundationLoadError::TokenizerVersionMismatch(
+                tokenizer_version,
+            ));
         }
 
         let tokenizer_fingerprint = read_array32(bytes, 20)?;
@@ -149,7 +155,10 @@ impl FoundationMemory {
         if records_offset != FOUNDATION_HEADER_LEN {
             return Err(FoundationLoadError::BadLayout);
         }
-        if records_offset.checked_add(records_len).ok_or(FoundationLoadError::BadLayout)? != tokens_offset
+        if records_offset
+            .checked_add(records_len)
+            .ok_or(FoundationLoadError::BadLayout)?
+            != tokens_offset
         {
             return Err(FoundationLoadError::BadLayout);
         }
@@ -269,11 +278,17 @@ impl FoundationLoadState {
     }
 
     pub fn record_count(&self) -> usize {
-        self.memory.as_ref().map(|memory| memory.record_count()).unwrap_or(0)
+        self.memory
+            .as_ref()
+            .map(|memory| memory.record_count())
+            .unwrap_or(0)
     }
 
     pub fn token_count(&self) -> usize {
-        self.memory.as_ref().map(|memory| memory.token_count()).unwrap_or(0)
+        self.memory
+            .as_ref()
+            .map(|memory| memory.token_count())
+            .unwrap_or(0)
     }
 
     pub fn status_label(&self) -> &'static str {
@@ -310,7 +325,8 @@ fn decode_records(
             .map_err(|_| FoundationLoadError::InvalidUtf8)?
             .to_string();
         cursor = value_end;
-        let key = FoundationKey::from_tag(key_tag).ok_or(FoundationLoadError::InvalidKey(key_tag))?;
+        let key =
+            FoundationKey::from_tag(key_tag).ok_or(FoundationLoadError::InvalidKey(key_tag))?;
         let offset = token_offset as usize;
         let count = token_count as usize;
         if offset > total_tokens || offset.saturating_add(count) > total_tokens {
@@ -363,28 +379,44 @@ fn decode_tokens(
 }
 
 fn read_u16(bytes: &[u8], offset: usize) -> Result<u16, FoundationLoadError> {
-    let end = offset.checked_add(2).ok_or(FoundationLoadError::Truncated)?;
-    let slice = bytes.get(offset..end).ok_or(FoundationLoadError::Truncated)?;
+    let end = offset
+        .checked_add(2)
+        .ok_or(FoundationLoadError::Truncated)?;
+    let slice = bytes
+        .get(offset..end)
+        .ok_or(FoundationLoadError::Truncated)?;
     Ok(u16::from_le_bytes([slice[0], slice[1]]))
 }
 
 fn read_u32(bytes: &[u8], offset: usize) -> Result<u32, FoundationLoadError> {
-    let end = offset.checked_add(4).ok_or(FoundationLoadError::Truncated)?;
-    let slice = bytes.get(offset..end).ok_or(FoundationLoadError::Truncated)?;
+    let end = offset
+        .checked_add(4)
+        .ok_or(FoundationLoadError::Truncated)?;
+    let slice = bytes
+        .get(offset..end)
+        .ok_or(FoundationLoadError::Truncated)?;
     Ok(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
 }
 
 fn read_u64(bytes: &[u8], offset: usize) -> Result<u64, FoundationLoadError> {
-    let end = offset.checked_add(8).ok_or(FoundationLoadError::Truncated)?;
-    let slice = bytes.get(offset..end).ok_or(FoundationLoadError::Truncated)?;
+    let end = offset
+        .checked_add(8)
+        .ok_or(FoundationLoadError::Truncated)?;
+    let slice = bytes
+        .get(offset..end)
+        .ok_or(FoundationLoadError::Truncated)?;
     Ok(u64::from_le_bytes([
         slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
     ]))
 }
 
 fn read_array32(bytes: &[u8], offset: usize) -> Result<[u8; 32], FoundationLoadError> {
-    let end = offset.checked_add(32).ok_or(FoundationLoadError::Truncated)?;
-    let slice = bytes.get(offset..end).ok_or(FoundationLoadError::Truncated)?;
+    let end = offset
+        .checked_add(32)
+        .ok_or(FoundationLoadError::Truncated)?;
+    let slice = bytes
+        .get(offset..end)
+        .ok_or(FoundationLoadError::Truncated)?;
     let mut out = [0u8; 32];
     out.copy_from_slice(slice);
     Ok(out)

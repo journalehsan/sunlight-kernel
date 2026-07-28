@@ -186,11 +186,9 @@ impl Segment {
             });
         }
         let encoded = encode_record_v2(header, state, payload)?;
-        let new_len = self
-            .plain
-            .len()
-            .checked_add(encoded.len())
-            .ok_or(MemoryError::InternalInvariantViolation("segment size overflow"))?;
+        let new_len = self.plain.len().checked_add(encoded.len()).ok_or(
+            MemoryError::InternalInvariantViolation("segment size overflow"),
+        )?;
         if new_len > max_segment_size as usize {
             return Err(MemoryError::QuotaExceeded("max segment size"));
         }
@@ -422,7 +420,9 @@ pub fn encode_record_v2(
         })
         .and_then(|s| s.checked_add(4 + 4))
         .and_then(|s| s.checked_add(payload.len()))
-        .ok_or(MemoryError::InternalInvariantViolation("record size overflow"))?;
+        .ok_or(MemoryError::InternalInvariantViolation(
+            "record size overflow",
+        ))?;
 
     let mut out = Vec::with_capacity(size);
     out.extend_from_slice(&RECORD_FORMAT_VERSION.to_le_bytes());
@@ -540,7 +540,8 @@ fn decode_record_v2_at(plain: &[u8], off: usize) -> Result<(RecoveredRecord, usi
     }
     need(p - off + producer_len)?;
     let producer = core::str::from_utf8(&plain[p..p + producer_len]).unwrap_or("");
-    provenance.producer_service = crate::provenance::heapless_string::HeaplessString::from_str(producer);
+    provenance.producer_service =
+        crate::provenance::heapless_string::HeaplessString::from_str(producer);
     p += producer_len;
 
     let token_stream = if flags & 0x01 != 0 {

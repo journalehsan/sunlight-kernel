@@ -83,10 +83,11 @@ pub fn create_epoll_fd(
         flags |= 0x0008_0000;
     }
     let process = sched.current_process_mut();
-    match process
-        .fd_table
-        .open(handle, CapRights::new(CapRights::READ | CapRights::WRITE), flags)
-    {
+    match process.fd_table.open(
+        handle,
+        CapRights::new(CapRights::READ | CapRights::WRITE),
+        flags,
+    ) {
         Ok(fd) => Ok(fd),
         Err(_) => {
             free_instance(idx);
@@ -119,13 +120,9 @@ pub fn ctl(
             if instance.interests.len() >= MAX_INTERESTS {
                 return Err(EpollError::NoSpace);
             }
-            instance.interests.insert(
-                target_fd,
-                Interest {
-                    events,
-                    data,
-                },
-            );
+            instance
+                .interests
+                .insert(target_fd, Interest { events, data });
             Ok(())
         }
         EPOLL_CTL_MOD => {

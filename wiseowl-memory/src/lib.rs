@@ -36,15 +36,18 @@ pub mod spill;
 pub mod stats;
 pub mod sunlightos_engine;
 
+pub use caller::CallerIdentity;
 pub use caps::{CapabilitySet, MemoryCapability};
 pub use compression::{compress_lz4, decompress_lz4_checked, COMPRESSION_LZ4, COMPRESSION_NONE};
 pub use entry::{
-    MemoryEntryHeader, MemoryState, TokenStreamRef, ENTRY_HEADER_VERSION, IMPORTANCE_MAX,
-    CONFIDENCE_MAX,
+    MemoryEntryHeader, MemoryState, TokenStreamRef, CONFIDENCE_MAX, ENTRY_HEADER_VERSION,
+    IMPORTANCE_MAX,
 };
 pub use error::MemoryError;
+pub use health::{degraded, ServiceHealth};
+pub use ids::{pack_id, unpack_id, IdAllocator, COUNTER_BITS, GENERATION_BITS};
 pub use ids::{
-    ClientId, EpisodeId, MemoryId, SegmentId, SessionId, SourceId, TokenStreamId, IdError,
+    ClientId, EpisodeId, IdError, MemoryId, SegmentId, SessionId, SourceId, TokenStreamId,
 };
 pub use kinds::{MemoryClass, MemoryKind, SourceKind, TrustLevel};
 pub use lifecycle::{LifecycleOp, TransitionCheck};
@@ -54,9 +57,8 @@ pub use protocol::{
 };
 pub use provenance::{Provenance, MAX_PROVENANCE_PARENTS};
 pub use quotas::{QuotaConfig, QuotaSnapshot};
+pub use segments::{encode_record_v2, parse_records_v2, RecoveredRecord, RECORD_FORMAT_VERSION};
 pub use segments::{ColdSegmentHeader, Segment, SegmentState, SEGMENT_FORMAT_VERSION};
-pub use caller::CallerIdentity;
-pub use health::{degraded, ServiceHealth};
 #[cfg(feature = "host")]
 pub use service::{
     InMemoryKv, KvBackend, KvPutOutcome, MemoryService, ServiceConfig, PROMOTION_RECORD_VERSION,
@@ -66,8 +68,4 @@ pub use spill::{
     QuarantineConfig, SpillRecordMeta, SpillStore, MAX_QUARANTINE_BYTES, MAX_QUARANTINE_FILES,
 };
 pub use stats::ServiceStats;
-pub use ids::{pack_id, unpack_id, IdAllocator, COUNTER_BITS, GENERATION_BITS};
-pub use segments::{
-    encode_record_v2, parse_records_v2, RecoveredRecord, RECORD_FORMAT_VERSION,
-};
 pub use sunlightos_engine::{NativeKvBackend, NativeKvPut, NativeMemoryEngine, RamKv};

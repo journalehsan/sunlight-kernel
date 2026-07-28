@@ -41,7 +41,10 @@ pub fn parse_owlql(input: &str) -> Result<MemoryQuery, DbError> {
 
     // Split roughly on keywords.
     let find_rest = &s[5..];
-    let (kinds_part, after_find) = split_keyword(find_rest, &["MATCH", "USING", "WHERE", "ORDER", "LIMIT", "AFTER"])?;
+    let (kinds_part, after_find) = split_keyword(
+        find_rest,
+        &["MATCH", "USING", "WHERE", "ORDER", "LIMIT", "AFTER"],
+    )?;
     parse_kinds(kinds_part.trim(), &mut q)?;
 
     let mut rest = after_find;
@@ -93,8 +96,7 @@ pub fn parse_owlql(input: &str) -> Result<MemoryQuery, DbError> {
 
     if starts_ci(rest, "WHERE") {
         let body = rest["WHERE".len()..].trim_start();
-        let (where_part, after) =
-            split_keyword(body, &["ORDER", "LIMIT", "AFTER"])?;
+        let (where_part, after) = split_keyword(body, &["ORDER", "LIMIT", "AFTER"])?;
         parse_where(where_part, &mut q)?;
         rest = after;
     }
@@ -220,9 +222,7 @@ fn parse_u64_list(s: &str) -> Result<Vec<u64>, DbError> {
 
 fn take_number(s: &str) -> Result<(&str, &str), DbError> {
     let s = s.trim_start();
-    let end = s
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(s.len());
+    let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
     if end == 0 {
         return Err(DbError::OwlQlParse("expected number"));
     }

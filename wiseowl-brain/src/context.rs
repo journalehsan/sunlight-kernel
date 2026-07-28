@@ -1,13 +1,11 @@
 use core::fmt::Write;
 
 use crate::error::BrainResult;
-use crate::grounded::{
-    AuthIdentity, BrainContextSource, ContextSourceMask, GroundedFact,
-};
+use crate::grounded::{AuthIdentity, BrainContextSource, ContextSourceMask, GroundedFact};
 use crate::mtm::{format_memory_mib, BrainPreferences, GreetingStyle, WelcomeMemoryState};
 use crate::protocol::{
-    MAX_DEVICE_CLASS_LEN, MAX_GREETING_LEN, MAX_LOCALE_LEN,
-    MAX_MODEL_LEN, MAX_NAME_LEN, MAX_VERSION_LEN,
+    MAX_DEVICE_CLASS_LEN, MAX_GREETING_LEN, MAX_LOCALE_LEN, MAX_MODEL_LEN, MAX_NAME_LEN,
+    MAX_VERSION_LEN,
 };
 
 #[derive(Debug, Clone)]

@@ -1,11 +1,15 @@
-use crate::context::{BrainContext, ContextBuilder, GroundedContextBuilder};
+use crate::action_intent::{
+    ActionEvaluation, ActionIntent, ActionIntentEvaluator, AuditLog, DEFAULT_AUDIT_CAPACITY,
+};
 use crate::adapters::{FoundationContextSource, RuntimeContextSource};
+use crate::context::{BrainContext, ContextBuilder, GroundedContextBuilder};
 use crate::diagnostics::BrainDiagnostics;
 use crate::error::{BrainError, BrainResult};
 use crate::foundation::{FoundationLoadState, FoundationMemory};
 use crate::greeting;
 use crate::grounded::{AuthIdentity, BrainContextSource, FactKind, GroundedFact};
 use crate::mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
+use crate::policy::PolicyEngine;
 use crate::protocol::{BrainRequestWire, BrainResponseWire};
 use crate::provenance::{BrainProviderKind, BrainResponseFlags, BrainResponseMeta};
 use crate::runtime_context::{RuntimeContextCache, RuntimeContextSnapshot};
@@ -14,6 +18,7 @@ pub struct CognitivePipeline {
     pub diagnostics: BrainDiagnostics,
     foundation: FoundationLoadState,
     runtime_context: RuntimeContextCache,
+    action_intents: ActionIntentEvaluator<DEFAULT_AUDIT_CAPACITY>,
 }
 
 impl CognitivePipeline {
@@ -21,6 +26,7 @@ impl CognitivePipeline {
         let diagnostics = BrainDiagnostics::new();
         let foundation = FoundationLoadState::load_embedded();
         let runtime_context = RuntimeContextCache::new();
+        let action_intents = ActionIntentEvaluator::new(PolicyEngine::v1());
         if foundation.is_ready() {
             diagnostics.note_foundation_loaded(
                 foundation.record_count() as u64,
@@ -33,6 +39,7 @@ impl CognitivePipeline {
             diagnostics,
             foundation,
             runtime_context,
+            action_intents,
         }
     }
 
@@ -46,6 +53,22 @@ impl CognitivePipeline {
 
     pub fn runtime_context(&self) -> &RuntimeContextSnapshot {
         self.runtime_context.snapshot()
+    }
+
+    pub fn policy(&self) -> &PolicyEngine {
+        self.action_intents.policy()
+    }
+
+    pub fn action_audit(&self) -> &AuditLog<DEFAULT_AUDIT_CAPACITY> {
+        self.action_intents.audit()
+    }
+
+    /// Refreshes Runtime Snapshot, validates the complete typed proposal, and
+    /// then evaluates policy. There is deliberately no operation-only path.
+    pub fn evaluate_action(&mut self, intent: &ActionIntent) -> ActionEvaluation {
+        self.refresh_runtime_context_if_due();
+        self.action_intents
+            .evaluate(intent, self.runtime_context.snapshot())
     }
 
     pub fn refresh_runtime_context_if_due(&mut self) {
@@ -136,12 +159,12 @@ impl CognitivePipeline {
         // Identity is still constrained by the native daemon's PID badge check.
 
         if request.request_kind == 1 && request.greeting.is_none() {
-            return Err(BrainError::InvalidRequest("greeting request missing payload"));
+            return Err(BrainError::InvalidRequest(
+                "greeting request missing payload",
+            ));
         }
 
-        if request.user_id != 0
-            && request.caller_uid != 0
-            && request.user_id != request.caller_uid
+        if request.user_id != 0 && request.caller_uid != 0 && request.user_id != request.caller_uid
         {
             return Err(BrainError::Unauthorized);
         }
@@ -156,7 +179,9 @@ impl CognitivePipeline {
             foundation: foundation_snapshot.as_ref(),
         };
         let snapshot = self.runtime_context().clone();
-        let source = RuntimeContextSource { snapshot: &snapshot };
+        let source = RuntimeContextSource {
+            snapshot: &snapshot,
+        };
         let identity = AuthIdentity {
             caller_uid: request.caller_uid,
             caller_pid: 0,
@@ -395,11 +420,12 @@ impl CognitivePipeline {
         for fact in facts {
             match fact.kind {
                 FactKind::FirstLogin => {
-                    builder = builder.first_login(fact.value.as_str() == "1" || !fact.value.is_empty());
+                    builder =
+                        builder.first_login(fact.value.as_str() == "1" || !fact.value.is_empty());
                 }
                 FactKind::FirstAfterUpgrade => {
-                    builder =
-                        builder.first_after_upgrade(fact.value.as_str() == "1" || !fact.value.is_empty());
+                    builder = builder
+                        .first_after_upgrade(fact.value.as_str() == "1" || !fact.value.is_empty());
                 }
                 FactKind::RamMib => {
                     if let Ok(v) = fact.value.parse::<u32>() {
@@ -466,7 +492,6 @@ impl CognitivePipeline {
         ctx.validate()?;
         Ok(ctx)
     }
-
 }
 
 fn parse_screen_dims(value: &str) -> Option<(u32, u32)> {
@@ -501,7 +526,9 @@ impl BrainRequestKindWire {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{GreetingRequestWire, MAX_DEVICE_CLASS_LEN, MAX_MODEL_LEN, MAX_NAME_LEN, MAX_VERSION_LEN};
+    use crate::protocol::{
+        GreetingRequestWire, MAX_DEVICE_CLASS_LEN, MAX_MODEL_LEN, MAX_NAME_LEN, MAX_VERSION_LEN,
+    };
 
     fn make_greeting_request(first_login: bool, name: &str) -> BrainRequestWire {
         let mut dn: heapless::String<MAX_NAME_LEN> = heapless::String::new();
@@ -626,7 +653,10 @@ mod tests {
     fn pipeline_preserves_request_id() {
         let mut pipeline = CognitivePipeline::new();
         let req = make_greeting_request(true, "Alice");
-        let req2 = BrainRequestWire { request_id: 999, ..req.clone() };
+        let req2 = BrainRequestWire {
+            request_id: 999,
+            ..req.clone()
+        };
         let resp2 = pipeline.handle_request(&req2);
         assert_eq!(resp2.request_id, 999);
     }
@@ -637,10 +667,34 @@ mod tests {
         let req = make_greeting_request(true, "Alice");
         let _ = pipeline.handle_request(&req);
 
-        assert_eq!(pipeline.diagnostics.requests_total.load(core::sync::atomic::Ordering::Relaxed), 1);
-        assert_eq!(pipeline.diagnostics.requests_greeting.load(core::sync::atomic::Ordering::Relaxed), 1);
-        assert_eq!(pipeline.diagnostics.provider_local_used.load(core::sync::atomic::Ordering::Relaxed), 1);
-        assert_eq!(pipeline.diagnostics.responses_successful.load(core::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(
+            pipeline
+                .diagnostics
+                .requests_total
+                .load(core::sync::atomic::Ordering::Relaxed),
+            1
+        );
+        assert_eq!(
+            pipeline
+                .diagnostics
+                .requests_greeting
+                .load(core::sync::atomic::Ordering::Relaxed),
+            1
+        );
+        assert_eq!(
+            pipeline
+                .diagnostics
+                .provider_local_used
+                .load(core::sync::atomic::Ordering::Relaxed),
+            1
+        );
+        assert_eq!(
+            pipeline
+                .diagnostics
+                .responses_successful
+                .load(core::sync::atomic::Ordering::Relaxed),
+            1
+        );
     }
 
     #[test]
@@ -679,11 +733,26 @@ mod tests {
         let mut pipeline = CognitivePipeline::new();
         for i in 0..5 {
             let req = make_greeting_request(true, "Test");
-            let req = BrainRequestWire { request_id: i, ..req };
+            let req = BrainRequestWire {
+                request_id: i,
+                ..req
+            };
             let _ = pipeline.handle_request(&req);
         }
-        assert_eq!(pipeline.diagnostics.requests_total.load(core::sync::atomic::Ordering::Relaxed), 5);
-        assert_eq!(pipeline.diagnostics.requests_greeting.load(core::sync::atomic::Ordering::Relaxed), 5);
+        assert_eq!(
+            pipeline
+                .diagnostics
+                .requests_total
+                .load(core::sync::atomic::Ordering::Relaxed),
+            5
+        );
+        assert_eq!(
+            pipeline
+                .diagnostics
+                .requests_greeting
+                .load(core::sync::atomic::Ordering::Relaxed),
+            5
+        );
     }
 
     #[test]
@@ -691,7 +760,11 @@ mod tests {
         use crate::adapters::SessionContextSource;
         let mut pipeline = CognitivePipeline::new();
         let req = make_greeting_request(true, "Alice");
-        let identity = AuthIdentity { caller_uid: 1000, caller_pid: 1, session_id: 42 };
+        let identity = AuthIdentity {
+            caller_uid: 1000,
+            caller_pid: 1,
+            session_id: 42,
+        };
         let session_source = SessionContextSource;
         let sources: [&dyn BrainContextSource; 1] = [&session_source];
         let (resp, meta) = pipeline.handle_request_grounded(&req, &identity, &sources);

@@ -540,11 +540,7 @@ mod tests {
             ..QuarantineConfig::default()
         };
         for i in 0..5 {
-            fs::write(
-                dir.path().join(format!("quarantine-seg-{i}.owls")),
-                b"x",
-            )
-            .unwrap();
+            fs::write(dir.path().join(format!("quarantine-seg-{i}.owls")), b"x").unwrap();
         }
         let store = SpillStore::open_with_quarantine(dir.path(), 64 * 1024, cfg).unwrap();
         assert!(store.quarantined.len() <= 2);

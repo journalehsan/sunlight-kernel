@@ -388,8 +388,7 @@ pub extern "C" fn _start() -> ! {
                 let reason = ThermalConstraintReason::from_u64(msg.words[2]);
                 let source = ThermalConstraintSource::from_u64(msg.words[3]);
                 let generation = msg.words[4];
-                match state.set_thermal_constraint(severity, max_mode, reason, source, generation)
-                {
+                match state.set_thermal_constraint(severity, max_mode, reason, source, generation) {
                     Ok(()) => {
                         serial_println!(
                             "[POWERD] thermal constraint gen={} max={} reason={}",

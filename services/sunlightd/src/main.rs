@@ -33,6 +33,12 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
+use sunlight_ipc::{
+    debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, monotonic_millis,
+    nameserver_lookup, nameserver_register, process_is_alive, CapabilityToken, IpcMsg,
+    SpawnRequest,
+};
+use sunlight_libc::{self as libc, Errno, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY};
 use sunlightd::graph::DepGraph;
 use sunlightd::ipc::{extract_unit_name, ControlReply, ListEntry, StatusReply, SunlightdOp};
 use sunlightd::supervisor::{
@@ -42,12 +48,6 @@ use sunlightd::supervisor::{
     DETAIL_TERMINATION_UNCONFIRMED, DETAIL_TRANSITION_BUSY, OP_RESTART, OP_START, OP_STOP,
 };
 use sunlightd::unit::{parse_service_unit, ServiceUnit, SocketUnit, MAX_UNITS};
-use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, monotonic_millis,
-    nameserver_lookup, nameserver_register, process_is_alive, CapabilityToken, IpcMsg,
-    SpawnRequest,
-};
-use sunlight_libc::{self as libc, Errno, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY};
 
 macro_rules! serial_println {
     ($($arg:tt)*) => {{
@@ -925,7 +925,9 @@ fn build_dep_graph(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProcessObservation {
     Alive,
-    Exited { code: u64 },
+    Exited {
+        code: u64,
+    },
     /// Process is gone; exit status unavailable (not our waitable child).
     Gone,
 }
@@ -975,11 +977,7 @@ fn entry_pid(entry: &ServiceEntry) -> Option<u32> {
     entry.state.pid()
 }
 
-fn clear_dead_instance_for_start(
-    services: &mut ServiceTable,
-    idx: usize,
-    exit_code: Option<i32>,
-) {
+fn clear_dead_instance_for_start(services: &mut ServiceTable, idx: usize, exit_code: Option<i32>) {
     let now = monotonic_millis();
     if let Some(entry) = services.get_mut(idx) {
         // Intentional start replaces crash-restart policy for this observation.
@@ -1107,11 +1105,7 @@ fn spawn_service_at(
             Ok(pid)
         }
         Err(kind) => {
-            serial_println!(
-                "[SUNLIGHTD] failed to spawn {} detail={}",
-                name_buf,
-                kind
-            );
+            serial_println!("[SUNLIGHTD] failed to spawn {} detail={}", name_buf, kind);
             if let Some(entry) = services.get_mut(idx) {
                 entry.record_result(kind, kind, 0);
                 entry.mark_failed(-1, monotonic_millis());
@@ -1581,11 +1575,7 @@ fn handle_control_message(
                     StopOutcome::Timeout { pid } => {
                         // Must not start a replacement while old instance may live.
                         if let Some(entry) = services.get_mut(idx) {
-                            entry.record_result(
-                                DETAIL_RESTART_ABORTED,
-                                DETAIL_STOP_TIMEOUT,
-                                pid,
-                            );
+                            entry.record_result(DETAIL_RESTART_ABORTED, DETAIL_STOP_TIMEOUT, pid);
                         }
                         reply.label = REPLY_TIMEOUT;
                         pack_control_err(
@@ -1598,11 +1588,7 @@ fn handle_control_message(
                     }
                     StopOutcome::KillFailed { pid } => {
                         if let Some(entry) = services.get_mut(idx) {
-                            entry.record_result(
-                                DETAIL_RESTART_ABORTED,
-                                DETAIL_KILL_FAILED,
-                                pid,
-                            );
+                            entry.record_result(DETAIL_RESTART_ABORTED, DETAIL_KILL_FAILED, pid);
                         }
                         reply.label = REPLY_TIMEOUT;
                         pack_control_err(

@@ -180,11 +180,7 @@ pub fn chunk_blocks(
                 }
                 let piece = &remaining[..end];
                 current_text.push_str(piece);
-                current_start = Some((
-                    byte_cursor,
-                    line_cursor,
-                    block.heading_path.clone(),
-                ));
+                current_start = Some((byte_cursor, line_cursor, block.heading_path.clone()));
                 current_end = (byte_cursor.saturating_add(end as u64), block.line_end);
                 flush(
                     &mut chunks,

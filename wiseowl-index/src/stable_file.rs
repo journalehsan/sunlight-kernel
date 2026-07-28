@@ -5,9 +5,9 @@
 
 use alloc::vec::Vec;
 
-use crate::digest::{digest_bytes, fast_fingerprint, ContentDigest, FastFingerprint};
 #[cfg(feature = "host")]
 use crate::digest::ContentDigestHasher;
+use crate::digest::{digest_bytes, fast_fingerprint, ContentDigest, FastFingerprint};
 use crate::error::IndexError;
 use crate::quotas::IndexQuotaConfig;
 use crate::source::FileIdentity;

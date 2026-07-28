@@ -187,14 +187,8 @@ impl GalleryApp {
                 .with_align(DigitalAlign::Left)
                 .with_colors(theme.accent, theme.panel_alt.lighten(16));
             let _ = w.set_value_str(text);
-            canvas.fill_rect(
-                Rect::new(x - 2, y - 2, 114, dh + 12),
-                theme.panel,
-            );
-            canvas.draw_rect(
-                Rect::new(x - 2, y - 2, 114, dh + 12),
-                theme.border,
-            );
+            canvas.fill_rect(Rect::new(x - 2, y - 2, 114, dh + 12), theme.panel);
+            canvas.draw_rect(Rect::new(x - 2, y - 2, 114, dh + 12), theme.border);
             w.draw(canvas, theme);
             F_SMALL.draw(canvas, text, x, y + dh as i32 + 12, theme.text_dim);
         }
@@ -226,7 +220,13 @@ impl GalleryApp {
         // Side legend / controls readout
         let lx = 260;
         let mut ly = 170;
-        F_MED.draw(canvas, DEMO_LABELS[self.time_idx % DEMO_LABELS.len()], lx, ly, theme.text);
+        F_MED.draw(
+            canvas,
+            DEMO_LABELS[self.time_idx % DEMO_LABELS.len()],
+            lx,
+            ly,
+            theme.text,
+        );
         ly += 20;
         F_SMALL.draw(
             canvas,
@@ -240,7 +240,13 @@ impl GalleryApp {
             theme.text_dim,
         );
         ly += 16;
-        F_SMALL.draw(canvas, "no hands · 60 sun rays · dual tracks", lx, ly, theme.text_dim);
+        F_SMALL.draw(
+            canvas,
+            "no hands · 60 sun rays · dual tracks",
+            lx,
+            ly,
+            theme.text_dim,
+        );
         ly += 16;
         F_SMALL.draw(
             canvas,
@@ -254,25 +260,24 @@ impl GalleryApp {
         let minis = [(0usize, 260i32), (1, 360), (3, 460), (4, 560)];
         for (idx, x) in minis {
             let (h, m, s) = DEMO_TIMES[idx];
-            SolarClockWidget::new(
-                Rect::new(x, 250, 72, 72),
-                SolarClockSnapshot::new(h, m, s),
-            )
-            .draw(canvas, theme);
+            SolarClockWidget::new(Rect::new(x, 250, 72, 72), SolarClockSnapshot::new(h, m, s))
+                .draw(canvas, theme);
             F_SMALL.draw(canvas, DEMO_LABELS[idx], x, 324, theme.text_dim);
         }
 
         // Large clock without date for comparison
-        SolarClockWidget::new(
-            Rect::new(660, 158, 220, 220),
-            snap,
-        )
-        .draw(canvas, theme);
+        SolarClockWidget::new(Rect::new(660, 158, 220, 220), snap).draw(canvas, theme);
         F_SMALL.draw(canvas, "no date text", 720, 380, theme.text_dim);
     }
 
     fn draw_map_section(&self, canvas: &mut Canvas, theme: &Theme) {
-        F_SMALL.draw(canvas, "WorldMapWidget (equirectangular)", 20, 344, theme.text_muted);
+        F_SMALL.draw(
+            canvas,
+            "WorldMapWidget (equirectangular)",
+            20,
+            344,
+            theme.text_muted,
+        );
 
         let map_rect = self.map_rect();
         let mut map = WorldMapWidget::new(map_rect)
@@ -307,7 +312,13 @@ impl GalleryApp {
                 F_SMALL.draw(canvas, s, fx, fy, theme.accent);
             }
         } else {
-            F_SMALL.draw(canvas, "click: (none — outside map ignored)", fx, fy, theme.text_dim);
+            F_SMALL.draw(
+                canvas,
+                "click: (none — outside map ignored)",
+                fx,
+                fy,
+                theme.text_dim,
+            );
         }
         fy += 16;
         if self.hover_valid {
@@ -320,9 +331,21 @@ impl GalleryApp {
             F_SMALL.draw(canvas, "hover: —", fx, fy, theme.text_dim);
         }
         fy += 20;
-        F_SMALL.draw(canvas, "markers: NYC Paris Tokyo Sydney", fx, fy, theme.text_dim);
+        F_SMALL.draw(
+            canvas,
+            "markers: NYC Paris Tokyo Sydney",
+            fx,
+            fy,
+            theme.text_dim,
+        );
         fy += 16;
-        F_SMALL.draw(canvas, "M cycles map size (aspect preserved)", fx, fy, theme.text_dim);
+        F_SMALL.draw(
+            canvas,
+            "M cycles map size (aspect preserved)",
+            fx,
+            fy,
+            theme.text_dim,
+        );
         fy += 16;
         F_SMALL.draw(
             canvas,

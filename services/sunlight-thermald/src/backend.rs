@@ -10,8 +10,8 @@
 
 #![allow(dead_code)]
 
-use sunlight_ipc::{system_identity, thermal_sensors, SystemIdentityRecord, ThermalSensorRecord};
 use sunlight_ipc::FanLevel;
+use sunlight_ipc::{system_identity, thermal_sensors, SystemIdentityRecord, ThermalSensorRecord};
 use sunlight_thermald::{HardwareModel, MilliC, SensorError, LEASE_TIMEOUT_MS};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

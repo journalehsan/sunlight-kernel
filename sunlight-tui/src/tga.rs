@@ -202,7 +202,13 @@ pub fn draw_tga_icon(
 /// After drawing the image a translucent black overlay is applied
 /// (`overlay_alpha` in 0–255, where 128 ≈ 50 % opaque).
 pub fn draw_tga_background(fb: &mut Framebuffer, img: &TgaImage, overlay_alpha: u8) {
-    draw_cover_background(fb, img.width(), img.height(), |sx, sy| img.pixel(sx, sy), overlay_alpha);
+    draw_cover_background(
+        fb,
+        img.width(),
+        img.height(),
+        |sx, sy| img.pixel(sx, sy),
+        overlay_alpha,
+    );
 }
 
 /// Aspect-fill ARGB8888 buffer (row-major, top-down) with optional dark overlay.

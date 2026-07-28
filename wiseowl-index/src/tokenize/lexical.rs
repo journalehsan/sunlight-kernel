@@ -32,11 +32,7 @@ impl RetrievalTokenizer for WiseOwlLexicalV1 {
         1
     }
 
-    fn normalize(
-        &self,
-        input: &str,
-        output: &mut NormalizedTextBuffer,
-    ) -> Result<(), IndexError> {
+    fn normalize(&self, input: &str, output: &mut NormalizedTextBuffer) -> Result<(), IndexError> {
         output.text = normalize_for_retrieval(input);
         Ok(())
     }
@@ -64,9 +60,9 @@ impl RetrievalTokenizer for WiseOwlLexicalV1 {
             }
             let id = dict.intern(self.tokenizer_id(), self.version(), &token, quotas, true)?;
             tokens_emitted = tokens_emitted.saturating_add(1);
-            let entry = freq.entry(id).or_insert_with(|| {
-                (token.clone(), 0, Vec::new(), false)
-            });
+            let entry = freq
+                .entry(id)
+                .or_insert_with(|| (token.clone(), 0, Vec::new(), false));
             entry.1 = entry.1.saturating_add(1);
             if (entry.2.len() as u32) < quotas.max_positions_per_token {
                 entry.2.push(ordinal);
@@ -169,8 +165,11 @@ mod tests {
         let mut dict = TokenDictionary::new();
         let q = IndexQuotaConfig::default();
         let mut norm = NormalizedTextBuffer::default();
-        t.normalize("sunlight-memorydb wiseowl_indexd network.timeout", &mut norm)
-            .unwrap();
+        t.normalize(
+            "sunlight-memorydb wiseowl_indexd network.timeout",
+            &mut norm,
+        )
+        .unwrap();
         let mut sink = TokenSink::default();
         t.tokenize(&norm.text, &mut dict, &q, &mut sink).unwrap();
         let canons: Vec<_> = sink.tokens.iter().map(|t| t.canonical.as_str()).collect();
@@ -206,7 +205,10 @@ mod tests {
         t.tokenize(&n.text, &mut dict, &q, &mut sink).unwrap();
         assert!(sink.tokens.iter().any(|t| t.canonical == "book"));
         // canonical should use ک and ی forms
-        assert!(sink.tokens.iter().any(|t| t.canonical.contains('ک') || t.canonical.contains('ا')));
+        assert!(sink
+            .tokens
+            .iter()
+            .any(|t| t.canonical.contains('ک') || t.canonical.contains('ا')));
     }
 
     #[test]

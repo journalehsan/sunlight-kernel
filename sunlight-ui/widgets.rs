@@ -65,9 +65,9 @@ pub use sidebar::{ArticleListItem, MetricBar, SegmentedTabs, UnitToggle, WidgetC
 pub use sidebar_item::{SidebarGroupHeader, SidebarItem, SidebarState};
 pub use slider::{Slider, SliderOrientation};
 pub use solar_clock::{
-    active_second_rays, format_hhmm, hour_progress_12, is_major_ray, minute_progress, ray_dirty_rect,
-    snapshot_dirty, SolarClockDirty, SolarClockLayout, SolarClockSnapshot, SolarClockWidget,
-    RAY_UNIT,
+    active_second_rays, format_hhmm, hour_progress_12, is_major_ray, minute_progress,
+    ray_dirty_rect, snapshot_dirty, SolarClockDirty, SolarClockLayout, SolarClockSnapshot,
+    SolarClockWidget, RAY_UNIT,
 };
 pub use status::StatusBar;
 pub use tabbar::TabBar;

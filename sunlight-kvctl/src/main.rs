@@ -263,7 +263,10 @@ fn print_stats(s: &stats_wire::StatsSnapshotV1) {
     println!("sunlight-kv stats (schema v{})", s.get(F_VERSION));
     println!("");
     println!("runtime (monotonic ms since boot)");
-    println!("  started_ms={}  now_ms={}  uptime_ms={}", started, now, uptime);
+    println!(
+        "  started_ms={}  now_ms={}  uptime_ms={}",
+        started, now, uptime
+    );
     println!(
         "  last_activity_ms={}  last_error_ms={}  last_error_code={}",
         s.get(F_LAST_ACTIVITY_MS),
@@ -344,7 +347,10 @@ fn print_stats(s: &stats_wire::StatsSnapshotV1) {
     );
 
     println!("");
-    println!("client attribution (kernel badge PID; fixed {} slots)", STATS_CLIENT_SLOTS);
+    println!(
+        "client attribution (kernel badge PID; fixed {} slots)",
+        STATS_CLIENT_SLOTS
+    );
     println!(
         "  slots_used={}  pids_tracked={}  other_client_requests={}",
         s.get(F_CLIENT_SLOTS_USED),

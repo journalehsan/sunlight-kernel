@@ -194,7 +194,13 @@ fn walk_root(root: &[u8], _assume_dir: bool, opts: &Options<'_>, io: &mut impl I
     code
 }
 
-fn push_path(stack: &mut [StackEntry; MAX_STACK], sp: &mut usize, path: &[u8], depth: usize, is_dir: bool) {
+fn push_path(
+    stack: &mut [StackEntry; MAX_STACK],
+    sp: &mut usize,
+    path: &[u8],
+    depth: usize,
+    is_dir: bool,
+) {
     if *sp >= MAX_STACK || path.len() > MAX_PATH {
         return;
     }
@@ -316,10 +322,7 @@ fn write_path_line(path: &[u8], io: &mut impl Io) -> Result<(), Errno> {
     io.write_stdout(b"\n")
 }
 
-fn parse_args<'a>(
-    args: &'a [&'a [u8]],
-    io: &mut impl Io,
-) -> Option<(Options<'a>, &'a [&'a [u8]])> {
+fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Option<(Options<'a>, &'a [&'a [u8]])> {
     let mut opts = Options::new();
     let mut i = 0usize;
     // Collect roots until first expression token (starts with `-` or is `!` / `(`).
@@ -447,10 +450,7 @@ mod tests {
             }
         }
         fn add_dir(&mut self, path: &[u8], children: &[(&[u8], bool)]) {
-            let list = children
-                .iter()
-                .map(|(n, d)| (n.to_vec(), *d))
-                .collect();
+            let list = children.iter().map(|(n, d)| (n.to_vec(), *d)).collect();
             self.tree.insert(path.to_vec(), list);
         }
     }
@@ -485,7 +485,9 @@ mod tests {
                         full.clear();
                     }
                     full.extend_from_slice(name);
-                    if full.as_slice() == path || (parent.as_slice() == b"." && name.as_slice() == path) {
+                    if full.as_slice() == path
+                        || (parent.as_slice() == b"." && name.as_slice() == path)
+                    {
                         return Ok(*is_dir);
                     }
                 }
@@ -504,7 +506,10 @@ mod tests {
     #[test]
     fn prints_tree_with_name_filter() {
         let mut fs = MockFs::new();
-        fs.add_dir(b".", &[(b"a.txt", false), (b"sub", true), (b"b.log", false)]);
+        fs.add_dir(
+            b".",
+            &[(b"a.txt", false), (b"sub", true), (b"b.log", false)],
+        );
         fs.add_dir(b"sub", &[(b"c.txt", false)]);
         assert_eq!(run(&[b"-name", b"*.txt"], &mut fs), 0);
         let text = core::str::from_utf8(&fs.out).unwrap();

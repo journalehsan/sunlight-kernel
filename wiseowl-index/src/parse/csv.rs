@@ -55,7 +55,13 @@ impl DocumentParser for CsvParser {
             }
             let row_text = parts.join("; ");
             if rows_in_batch >= quotas.max_csv_rows_per_block {
-                flush_csv_batch(output, quotas, &mut batch, batch_start_line, line.saturating_sub(1))?;
+                flush_csv_batch(
+                    output,
+                    quotas,
+                    &mut batch,
+                    batch_start_line,
+                    line.saturating_sub(1),
+                )?;
                 batch_start_line = line;
                 rows_in_batch = 0;
             }
@@ -66,7 +72,13 @@ impl DocumentParser for CsvParser {
             rows_in_batch = rows_in_batch.saturating_add(1);
             line = line.saturating_add(1);
         }
-        flush_csv_batch(output, quotas, &mut batch, batch_start_line, line.saturating_sub(1))?;
+        flush_csv_batch(
+            output,
+            quotas,
+            &mut batch,
+            batch_start_line,
+            line.saturating_sub(1),
+        )?;
 
         // Also emit header as key-value meta block.
         if !headers.is_empty() {
@@ -159,7 +171,11 @@ fn parse_csv_rows(input: &str, quotas: &IndexQuotaConfig) -> Result<Vec<Vec<Stri
             b'\n' => {
                 row.push(core::mem::take(&mut field));
                 rows.push(core::mem::take(&mut row));
-                if rows.len() as u32 > quotas.max_blocks_per_file.saturating_mul(quotas.max_csv_rows_per_block as u32) {
+                if rows.len() as u32
+                    > quotas
+                        .max_blocks_per_file
+                        .saturating_mul(quotas.max_csv_rows_per_block as u32)
+                {
                     return Err(IndexError::QuotaExceeded("csv rows"));
                 }
                 i += 1;

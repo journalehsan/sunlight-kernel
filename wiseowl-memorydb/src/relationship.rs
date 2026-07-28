@@ -88,12 +88,12 @@ impl MemoryRelationship {
     }
 
     pub fn decode(r: &mut BufReader<'_>) -> Result<Self, DbError> {
-        let source = MemoryId::from_raw(r.read_u64()?)
-            .map_err(|_| DbError::InvalidValue("rel source"))?;
-        let target = MemoryId::from_raw(r.read_u64()?)
-            .map_err(|_| DbError::InvalidValue("rel target"))?;
-        let kind = RelationshipKind::from_u8(r.read_u8()?)
-            .ok_or(DbError::InvalidValue("rel kind"))?;
+        let source =
+            MemoryId::from_raw(r.read_u64()?).map_err(|_| DbError::InvalidValue("rel source"))?;
+        let target =
+            MemoryId::from_raw(r.read_u64()?).map_err(|_| DbError::InvalidValue("rel target"))?;
+        let kind =
+            RelationshipKind::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("rel kind"))?;
         let confidence = r.read_u16()?;
         let created_at_ns = r.read_u64()?;
         let provenance = RelationshipProvenance::decode(r)?;

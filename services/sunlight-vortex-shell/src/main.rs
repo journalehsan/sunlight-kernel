@@ -89,8 +89,9 @@ use sunlight_shell_appstate::{
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
     image::{
+        decode_simg,
         icon_theme::{self, category as icon_category, name as icon_name},
-        decode_simg, mime_icon, RgbaImage, TgaImage,
+        mime_icon, RgbaImage, TgaImage,
     },
     set_client_cursor, App, Canvas, Color, CursorShape, Event, EventPollCounters, Point, Rect,
     Theme, Window, WindowConfig,
@@ -188,13 +189,11 @@ fn request_session_action(action: SessionAction) -> bool {
     .is_ok_and(|reply| reply.label == SessionMsg::REPLY)
 }
 /// Monochrome dock trash (empty) — tinted at draw time.
-static ICON_TRASH_TGA: &[u8] = include_bytes!(
-    "../../../docs/icons/SunlightOS/actions/scalable/xsi-user-trash-symbolic.tga"
-);
+static ICON_TRASH_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/scalable/xsi-user-trash-symbolic.tga");
 /// Monochrome dock trash (full) — tinted at draw time.
-static ICON_TRASH_FULL_TGA: &[u8] = include_bytes!(
-    "../../../docs/icons/SunlightOS/places/symbolic/user-trash-full-symbolic.tga"
-);
+static ICON_TRASH_FULL_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/symbolic/user-trash-full-symbolic.tga");
 static ICON_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.tga");
 static ICON_INODE_DIRECTORY_TGA: &[u8] =
@@ -1791,11 +1790,7 @@ impl VortexShell {
                     "Silicon Echoes: 1993",
                     AppId::SiliconEchoes,
                 ),
-                DockAppState::new(
-                    AppId::Welcome,
-                    "Welcome to SunlightOS",
-                    AppId::Welcome,
-                ),
+                DockAppState::new(AppId::Welcome, "Welcome to SunlightOS", AppId::Welcome),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),

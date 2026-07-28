@@ -123,8 +123,6 @@ pub enum FactFreshness {
     ServiceSnapshot = 4,
 }
 
-
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroundedFact {
     pub kind: FactKind,

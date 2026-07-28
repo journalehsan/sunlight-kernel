@@ -4331,18 +4331,8 @@ pub fn session_query_process(pid: u64) -> Option<SessionProcessCredentials> {
 }
 
 pub fn current_process_generation() -> u64 {
-    let (ret, _) = unsafe {
-        raw_syscall(
-            SunlightSyscall::GetProcessGeneration,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        )
-    };
+    let (ret, _) =
+        unsafe { raw_syscall(SunlightSyscall::GetProcessGeneration, 0, 0, 0, 0, 0, 0, 0) };
     ret
 }
 

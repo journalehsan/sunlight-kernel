@@ -127,8 +127,8 @@ pub(crate) fn push_block(
             if split == start {
                 split = end;
             }
-            let slice = core::str::from_utf8(&bytes[start..split])
-                .map_err(|_| IndexError::InvalidUtf8)?;
+            let slice =
+                core::str::from_utf8(&bytes[start..split]).map_err(|_| IndexError::InvalidUtf8)?;
             if !slice.trim().is_empty() {
                 if out.len() as u32 >= quotas.max_blocks_per_file {
                     return Err(IndexError::QuotaExceeded("blocks per file"));
@@ -183,7 +183,10 @@ mod tests {
 
     #[test]
     fn select_json() {
-        assert_eq!(select_parser("json").unwrap().parser_id(), PARSER_STRUCTURED);
+        assert_eq!(
+            select_parser("json").unwrap().parser_id(),
+            PARSER_STRUCTURED
+        );
     }
 
     #[test]

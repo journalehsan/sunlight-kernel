@@ -748,7 +748,10 @@ mod material_tests {
         let corner = pixels[0];
         assert_ne!(corner, 0xFFFF_0000, "outer corner must not be solid source");
         let g = (corner >> 8) & 0xFF;
-        assert!(g > 80, "outer corner keeps destination green: {corner:#010x}");
+        assert!(
+            g > 80,
+            "outer corner keeps destination green: {corner:#010x}"
+        );
         // Pixel clearly outside the destination rect is untouched (not drawn).
         // (covered by rounded_rect_coverage unit tests)
     }

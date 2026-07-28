@@ -48,8 +48,7 @@ static ICON_API_LAB_TGA: &[u8] =
 static ICON_MINES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/bomber.tga");
 static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
-static ICON_WELCOME_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
+static ICON_WELCOME_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
 
 static ICON_SEARCH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");

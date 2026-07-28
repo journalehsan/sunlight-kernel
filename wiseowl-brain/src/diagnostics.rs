@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicU64, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 #[derive(Debug)]
 pub struct BrainDiagnostics {
@@ -78,42 +78,113 @@ impl BrainDiagnostics {
         }
     }
 
-    pub fn inc_requests(&self) { self.requests_total.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_greeting(&self) { self.requests_greeting.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_rejected(&self) { self.requests_rejected.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_failed(&self) { self.requests_failed.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_timed_out(&self) { self.requests_timed_out.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_context_fail(&self) { self.context_build_failures.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_local(&self) { self.provider_local_used.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_fallback(&self) { self.provider_fallback_used.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_future(&self) { self.provider_future_used.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_success(&self) { self.responses_successful.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_alignment_fail(&self) { self.response_alignment_failures.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_welcome(&self) { self.welcome_client_requests.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_welcome_fallback(&self) { self.welcome_client_fallbacks.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_first_visit(&self) { self.responses_first_visit.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_returning_visit(&self) { self.responses_returning_visit.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_after_upgrade(&self) { self.responses_after_upgrade.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_machine_summary(&self) { self.responses_with_machine_summary.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_index_status(&self) { self.responses_with_index_status.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_kv_success(&self) { self.context_kv_success.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_kv_degraded(&self) { self.context_kv_degraded.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_memorydb_success(&self) { self.context_memorydb_success.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_memorydb_degraded(&self) { self.context_memorydb_degraded.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_index_success(&self) { self.context_index_success.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_index_degraded(&self) { self.context_index_degraded.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_kv_read(&self) { self.kv_reads.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_kv_read_fail(&self) { self.kv_read_failures.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_kv_write(&self) { self.kv_writes.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_kv_write_fail(&self) { self.kv_write_failures.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_unauthorized(&self) { self.unauthorized_requests.fetch_add(1, Ordering::Relaxed); }
+    pub fn inc_requests(&self) {
+        self.requests_total.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_greeting(&self) {
+        self.requests_greeting.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_rejected(&self) {
+        self.requests_rejected.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_failed(&self) {
+        self.requests_failed.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_timed_out(&self) {
+        self.requests_timed_out.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_context_fail(&self) {
+        self.context_build_failures.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_local(&self) {
+        self.provider_local_used.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_fallback(&self) {
+        self.provider_fallback_used.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_future(&self) {
+        self.provider_future_used.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_success(&self) {
+        self.responses_successful.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_alignment_fail(&self) {
+        self.response_alignment_failures
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_welcome(&self) {
+        self.welcome_client_requests.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_welcome_fallback(&self) {
+        self.welcome_client_fallbacks
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_first_visit(&self) {
+        self.responses_first_visit.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_returning_visit(&self) {
+        self.responses_returning_visit
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_after_upgrade(&self) {
+        self.responses_after_upgrade.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_machine_summary(&self) {
+        self.responses_with_machine_summary
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_index_status(&self) {
+        self.responses_with_index_status
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_kv_success(&self) {
+        self.context_kv_success.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_kv_degraded(&self) {
+        self.context_kv_degraded.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_memorydb_success(&self) {
+        self.context_memorydb_success
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_memorydb_degraded(&self) {
+        self.context_memorydb_degraded
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_index_success(&self) {
+        self.context_index_success.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_index_degraded(&self) {
+        self.context_index_degraded.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_kv_read(&self) {
+        self.kv_reads.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_kv_read_fail(&self) {
+        self.kv_read_failures.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_kv_write(&self) {
+        self.kv_writes.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_kv_write_fail(&self) {
+        self.kv_write_failures.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_unauthorized(&self) {
+        self.unauthorized_requests.fetch_add(1, Ordering::Relaxed);
+    }
     pub fn note_foundation_loaded(&self, records: u64, tokens: u64) {
         self.foundation_load_success.fetch_add(1, Ordering::Relaxed);
-        self.foundation_record_count.store(records, Ordering::Relaxed);
+        self.foundation_record_count
+            .store(records, Ordering::Relaxed);
         self.foundation_token_count.store(tokens, Ordering::Relaxed);
     }
-    pub fn note_foundation_failed(&self) { self.foundation_load_failures.fetch_add(1, Ordering::Relaxed); }
-    pub fn set_error(&self, code: u16) { self.last_error_code.store(code as u32, Ordering::Relaxed); }
+    pub fn note_foundation_failed(&self) {
+        self.foundation_load_failures
+            .fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn set_error(&self, code: u16) {
+        self.last_error_code.store(code as u32, Ordering::Relaxed);
+    }
 
     pub fn provider_local_available(&self) -> bool {
         true

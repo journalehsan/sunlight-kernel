@@ -128,12 +128,9 @@ impl<'a> BufReader<'a> {
     }
 
     fn take(&mut self, n: usize) -> Result<&'a [u8], DbError> {
-        let end = self
-            .pos
-            .checked_add(n)
-            .ok_or(DbError::Corrupt {
-                reason: "reader overflow",
-            })?;
+        let end = self.pos.checked_add(n).ok_or(DbError::Corrupt {
+            reason: "reader overflow",
+        })?;
         if end > self.data.len() {
             return Err(DbError::Corrupt {
                 reason: "truncated buffer",

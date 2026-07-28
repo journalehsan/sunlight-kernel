@@ -345,7 +345,8 @@ fn map_anonymous_kind(
     if !replace_fixed {
         for i in 0..page_count {
             let page_vaddr = VirtAddr::new(map_addr + i * 4096);
-            let page = Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
+            let page =
+                Page::from_start_address(page_vaddr).map_err(|_| MmapError::InvalidAddress)?;
             let process = sched
                 .process_mut_by_pid(pid)
                 .ok_or(MmapError::InternalInvariant)?;
@@ -402,13 +403,19 @@ fn map_anonymous_kind(
     let mut installed: Vec<InstalledAnonymousPage> = Vec::new();
     installed.try_reserve_exact(page_count_usize).map_err(|_| {
         if let Some(reservation) = reservation {
-            sched.current_process().address_space.cancel_region(reservation);
+            sched
+                .current_process()
+                .address_space
+                .cancel_region(reservation);
         }
         MmapError::NoMemory
     })?;
     if crate::memory::swap::reserve_candidates(page_count_usize).is_err() {
         if let Some(reservation) = reservation {
-            sched.current_process().address_space.cancel_region(reservation);
+            sched
+                .current_process()
+                .address_space
+                .cancel_region(reservation);
         }
         return Err(MmapError::NoMemory);
     }
@@ -432,7 +439,10 @@ fn map_anonymous_kind(
                 crate::process::address_space::note_frame_allocation_failure();
                 rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
                 if let Some(reservation) = reservation {
-                    sched.current_process().address_space.cancel_region(reservation);
+                    sched
+                        .current_process()
+                        .address_space
+                        .cancel_region(reservation);
                 }
                 return Err(MmapError::NoMemory);
             }
@@ -441,7 +451,10 @@ fn map_anonymous_kind(
             pmm.free_frame(frame_addr);
             rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
             if let Some(reservation) = reservation {
-                sched.current_process().address_space.cancel_region(reservation);
+                sched
+                    .current_process()
+                    .address_space
+                    .cancel_region(reservation);
             }
             return Err(MmapError::NoMemory);
         }
@@ -453,7 +466,10 @@ fn map_anonymous_kind(
                 pmm.free_frame(frame_addr);
                 rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
                 if let Some(reservation) = reservation {
-                    sched.current_process().address_space.cancel_region(reservation);
+                    sched
+                        .current_process()
+                        .address_space
+                        .cancel_region(reservation);
                 }
                 return Err(MmapError::InternalInvariant);
             }
@@ -498,13 +514,19 @@ fn map_anonymous_kind(
                     hhdm_offset,
                 )
             },
-            None => unsafe { proc.address_space.map_page(page, frame, page_flags, pmm, hhdm_offset) },
+            None => unsafe {
+                proc.address_space
+                    .map_page(page, frame, page_flags, pmm, hhdm_offset)
+            },
         };
         if let Err(error) = install_result {
             pmm.free_frame(frame_addr);
             rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
             if let Some(reservation) = reservation {
-                sched.current_process().address_space.cancel_region(reservation);
+                sched
+                    .current_process()
+                    .address_space
+                    .cancel_region(reservation);
             }
             return Err(match error {
                 MappingError::AlreadyMapped => MmapError::AlreadyMapped,
@@ -525,7 +547,11 @@ fn map_anonymous_kind(
     if let Some(plan) = replacement_plan {
         sched.current_process().address_space.commit_replace(plan);
     } else if let Some(reservation) = reservation {
-        if let Err(error) = sched.current_process().address_space.commit_region(reservation) {
+        if let Err(error) = sched
+            .current_process()
+            .address_space
+            .commit_region(reservation)
+        {
             rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
             return Err(mapping_error(error));
         }
@@ -535,7 +561,11 @@ fn map_anonymous_kind(
         if let Some(old) = installed_page.replaced {
             release_replaced_ownership(old, pmm, hhdm_offset);
         }
-        crate::memory::swap::track_anon(pid, installed_page.page.start_address(), installed_page.frame);
+        crate::memory::swap::track_anon(
+            pid,
+            installed_page.page.start_address(),
+            installed_page.frame,
+        );
     }
     if let Some(cursor) = deferred_cursor {
         cursor.commit(&mut sched.current_process_mut().mmap_next);
@@ -648,11 +678,11 @@ fn expected_replaceable_leaf(
     hhdm_offset: VirtAddr,
 ) -> Result<ExpectedMapping, MmapError> {
     let owner = match (region.kind, region.policy, region.backing) {
-        (MappingKind::Anonymous | MappingKind::Brk, policy, RegionBacking::AnonymousOwner(owner))
-            if policy.contains(RegionPolicy::MAY_REPLACE) =>
-        {
-            owner
-        }
+        (
+            MappingKind::Anonymous | MappingKind::Brk,
+            policy,
+            RegionBacking::AnonymousOwner(owner),
+        ) if policy.contains(RegionPolicy::MAY_REPLACE) => owner,
         _ => return Err(MmapError::Protected),
     };
     let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address))
@@ -662,10 +692,10 @@ fn expected_replaceable_leaf(
         return Err(MmapError::InternalInvariant);
     };
     if flags.contains(PageTableFlags::PRESENT) {
-        if flags.contains(PageTableFlags::USER_ACCESSIBLE) != (region.protection != RegionProtection::NONE)
+        if flags.contains(PageTableFlags::USER_ACCESSIBLE)
+            != (region.protection != RegionProtection::NONE)
             || pmm.owner_of(frame_or_marker) != Some(owner)
-            || crate::process::address_space::AddressSpace::protection_from_pte_flags(flags)
-                .ok()
+            || crate::process::address_space::AddressSpace::protection_from_pte_flags(flags).ok()
                 != Some(region.protection)
         {
             return Err(MmapError::InternalInvariant);
@@ -1155,8 +1185,7 @@ fn note_transition(
         (RegionProtection::READ_ONLY, RegionProtection::READ_EXECUTE) => transitions.r_to_rx += 1,
         (RegionProtection::READ_EXECUTE, RegionProtection::READ_ONLY) => transitions.rx_to_r += 1,
         (RegionProtection::READ_EXECUTE, RegionProtection::READ_WRITE) => transitions.rx_to_rw += 1,
-        (RegionProtection::NONE, _)
-        | (_, RegionProtection::NONE) => {}
+        (RegionProtection::NONE, _) | (_, RegionProtection::NONE) => {}
         _ => mprotect_invariant_failure("unsupported protection transition"),
     }
 }

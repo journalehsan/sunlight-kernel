@@ -15,8 +15,7 @@ const LOCK_PRESENTER_ENTRY_MAGIC: u64 = 0x4C4F_434B_5052_4553;
 /// Same asset as the TTY login screen (`services/tty_server` → `login_bg_simg`).
 /// Used for both glance (clock) and password surfaces so lock matches login.
 /// SIMG v2 (sub+lz4) — see `docs/SIMG_V2.md`.
-static LOGIN_BG_SIMG: &[u8] =
-    include_bytes!("../../../docs/images/sunlight-login-background.simg");
+static LOGIN_BG_SIMG: &[u8] = include_bytes!("../../../docs/images/sunlight-login-background.simg");
 
 pub fn requested(argc: u64, argv: *const *const u8) -> bool {
     if argc == LOCK_PRESENTER_ENTRY_MAGIC {

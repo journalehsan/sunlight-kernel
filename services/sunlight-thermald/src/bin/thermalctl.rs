@@ -453,7 +453,10 @@ fn print_identity() {
 }
 
 fn print_fans(cap: sunlight_ipc::CapabilityToken) {
-    let reply = ipc_call(cap, IpcMsg::with_label(ThermaldMsg::LIST_COOLING).word(0, 0));
+    let reply = ipc_call(
+        cap,
+        IpcMsg::with_label(ThermaldMsg::LIST_COOLING).word(0, 0),
+    );
     if reply.label != ThermaldMsg::REPLY {
         println!("thermalctl: no cooling devices");
         return;

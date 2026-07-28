@@ -76,11 +76,10 @@ impl ImportKey {
         let tokenizer_version = u32::from_le_bytes(data[61..65].try_into().unwrap());
         let chunking_id = u32::from_le_bytes(data[65..69].try_into().unwrap());
         let chunking_version = u32::from_le_bytes(data[69..73].try_into().unwrap());
-        let scope = MemoryScope::from_u8(data[73])
-            .ok_or(IndexError::InvalidValue("import key scope"))?;
+        let scope =
+            MemoryScope::from_u8(data[73]).ok_or(IndexError::InvalidValue("import key scope"))?;
         let owner = u64::from_le_bytes(data[74..82].try_into().unwrap());
-        let ingestion_config_generation =
-            u32::from_le_bytes(data[82..86].try_into().unwrap());
+        let ingestion_config_generation = u32::from_le_bytes(data[82..86].try_into().unwrap());
         Ok(Self {
             protocol_version,
             source_id,

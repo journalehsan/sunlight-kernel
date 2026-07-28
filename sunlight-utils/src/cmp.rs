@@ -66,7 +66,10 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     code
 }
 
-fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(Mode, &'a [&'a [u8]], u64, u64), i32> {
+fn parse_args<'a>(
+    args: &'a [&'a [u8]],
+    io: &mut impl Io,
+) -> Result<(Mode, &'a [&'a [u8]], u64, u64), i32> {
     let mut mode = Mode::Default;
     let mut rest = args;
 
@@ -81,8 +84,14 @@ fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(Mode, &'a [
             let mut consumed = false;
             for &b in &first[1..] {
                 match b {
-                    b'l' => { mode = Mode::Verbose; consumed = true; }
-                    b's' => { mode = Mode::Silent; consumed = true; }
+                    b'l' => {
+                        mode = Mode::Verbose;
+                        consumed = true;
+                    }
+                    b's' => {
+                        mode = Mode::Silent;
+                        consumed = true;
+                    }
                     _ => {
                         let _ = io.write_stderr(b"cmp: invalid option -- '-");
                         let _ = io.write_stderr(&[b]);
@@ -128,10 +137,13 @@ fn parse_u64(slice: &[u8]) -> Option<u64> {
 
 fn cmp_fds(
     io: &mut impl Io,
-    fd1: Fd, fd2: Fd,
-    name1: &[u8], name2: &[u8],
+    fd1: Fd,
+    fd2: Fd,
+    name1: &[u8],
+    name2: &[u8],
     mode: Mode,
-    skip1: u64, skip2: u64,
+    skip1: u64,
+    skip2: u64,
 ) -> i32 {
     let mut buf1 = [0u8; BUF_SIZE];
     let mut buf2 = [0u8; BUF_SIZE];
@@ -152,7 +164,10 @@ fn cmp_fds(
     loop {
         if off1 >= len1 && !eof1 {
             len1 = match io.read(fd1, &mut buf1) {
-                Ok(0) => { eof1 = true; 0 }
+                Ok(0) => {
+                    eof1 = true;
+                    0
+                }
                 Ok(n) => n,
                 Err(Errno::Again) if retries < READ_RETRY_LIMIT => {
                     retries += 1;
@@ -169,7 +184,10 @@ fn cmp_fds(
         }
         if off2 >= len2 && !eof2 {
             len2 = match io.read(fd2, &mut buf2) {
-                Ok(0) => { eof2 = true; 0 }
+                Ok(0) => {
+                    eof2 = true;
+                    0
+                }
                 Ok(n) => n,
                 Err(Errno::Again) if retries < READ_RETRY_LIMIT => {
                     retries += 1;
@@ -227,7 +245,9 @@ fn cmp_fds(
 
             if skipped1 < skip1 {
                 if i1 < len1 {
-                    if buf1[i1] == b'\n' { line_nr += 1; }
+                    if buf1[i1] == b'\n' {
+                        line_nr += 1;
+                    }
                     i1 += 1;
                     skipped1 += 1;
                 } else {
@@ -237,7 +257,9 @@ fn cmp_fds(
             }
             if skipped2 < skip2 {
                 if i2 < len2 {
-                    if buf2[i2] == b'\n' { line_nr += 1; }
+                    if buf2[i2] == b'\n' {
+                        line_nr += 1;
+                    }
                     i2 += 1;
                     skipped2 += 1;
                 } else {
@@ -278,11 +300,19 @@ fn cmp_fds(
         off2 = i2;
     }
 
-    if mode == Mode::Verbose { return 0; }
+    if mode == Mode::Verbose {
+        return 0;
+    }
     0
 }
 
-fn write_diff(io: &mut impl Io, name1: &[u8], name2: &[u8], byte: u64, line: u64) -> Result<(), Errno> {
+fn write_diff(
+    io: &mut impl Io,
+    name1: &[u8],
+    name2: &[u8],
+    byte: u64,
+    line: u64,
+) -> Result<(), Errno> {
     io.write_stdout(name1)?;
     io.write_stdout(b" ")?;
     io.write_stdout(name2)?;
@@ -369,8 +399,16 @@ mod tests {
     impl Mock {
         fn new(files: Vec<(&'static [u8], &'static [u8])>) -> Self {
             let fc = files.len();
-            Self { files, output: Vec::new(), errors: Vec::new(), opens: 0, closes: 0,
-                   offsets: std::vec![0; fc], fail_read: false, eagain_reads: 0 }
+            Self {
+                files,
+                output: Vec::new(),
+                errors: Vec::new(),
+                opens: 0,
+                closes: 0,
+                offsets: std::vec![0; fc],
+                fail_read: false,
+                eagain_reads: 0,
+            }
         }
     }
 
@@ -384,21 +422,39 @@ mod tests {
             Ok(Fd(idx as u32 + 3))
         }
         fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
-            if self.fail_read { return Err(Errno::Failed); }
-            if self.eagain_reads != 0 { self.eagain_reads -= 1; return Err(Errno::Again); }
+            if self.fail_read {
+                return Err(Errno::Failed);
+            }
+            if self.eagain_reads != 0 {
+                self.eagain_reads -= 1;
+                return Err(Errno::Again);
+            }
             let idx = (fd.0 - 3) as usize;
-            if idx >= self.files.len() { return Ok(0); }
+            if idx >= self.files.len() {
+                return Ok(0);
+            }
             let data = self.files[idx].1;
             let off = self.offsets[idx];
-            if off >= data.len() { return Ok(0); }
+            if off >= data.len() {
+                return Ok(0);
+            }
             let n = (data.len() - off).min(buf.len());
             buf[..n].copy_from_slice(&data[off..off + n]);
             self.offsets[idx] += n;
             Ok(n)
         }
-        fn close(&mut self, _fd: Fd) -> Result<(), Errno> { self.closes += 1; Ok(()) }
-        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> { self.output.extend_from_slice(b); Ok(()) }
-        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> { self.errors.extend_from_slice(b); Ok(()) }
+        fn close(&mut self, _fd: Fd) -> Result<(), Errno> {
+            self.closes += 1;
+            Ok(())
+        }
+        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.output.extend_from_slice(b);
+            Ok(())
+        }
+        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.errors.extend_from_slice(b);
+            Ok(())
+        }
         fn yield_now(&mut self) {}
     }
 
@@ -424,7 +480,10 @@ mod tests {
 
     #[test]
     fn middle_diff() {
-        let mut m = Mock::new(std::vec![(b"a", b"hello\nworld\n"), (b"b", b"hello\nWorLd\n")]);
+        let mut m = Mock::new(std::vec![
+            (b"a", b"hello\nworld\n"),
+            (b"b", b"hello\nWorLd\n")
+        ]);
         assert_eq!(run(&[b"a", b"b"], &mut m), 1);
         let s = std::str::from_utf8(&m.output).unwrap();
         assert!(s.contains("differ: char"));

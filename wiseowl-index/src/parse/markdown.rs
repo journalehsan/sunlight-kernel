@@ -5,7 +5,9 @@ use alloc::vec::Vec;
 
 use crate::config::PARSER_MARKDOWN;
 use crate::error::IndexError;
-use crate::parse::{line_of, line_starts, push_block, DocumentParser, ParseSummary, ParsedBlock, ParsedBlockKind};
+use crate::parse::{
+    line_of, line_starts, push_block, DocumentParser, ParseSummary, ParsedBlock, ParsedBlockKind,
+};
 use crate::quotas::IndexQuotaConfig;
 
 pub struct MarkdownParser;
@@ -45,8 +47,8 @@ impl DocumentParser for MarkdownParser {
         for (li, line) in lines.iter().enumerate() {
             let line_no = (li as u32) + 1;
             let line_byte = byte_pos;
-            let is_fence = line.trim_start().starts_with("```")
-                || (line.trim_start().starts_with("~~~"));
+            let is_fence =
+                line.trim_start().starts_with("```") || (line.trim_start().starts_with("~~~"));
 
             if is_fence {
                 if in_code {
@@ -312,14 +314,16 @@ fn is_list_item(line: &str) -> bool {
     t.starts_with("- ")
         || t.starts_with("* ")
         || t.starts_with("+ ")
-        || (t.len() >= 3
-            && t.as_bytes()[0].is_ascii_digit()
-            && t.contains(". "))
+        || (t.len() >= 3 && t.as_bytes()[0].is_ascii_digit() && t.contains(". "))
 }
 
 fn strip_list_marker(line: &str) -> String {
     let t = line.trim_start();
-    if let Some(r) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")).or_else(|| t.strip_prefix("+ ")) {
+    if let Some(r) = t
+        .strip_prefix("- ")
+        .or_else(|| t.strip_prefix("* "))
+        .or_else(|| t.strip_prefix("+ "))
+    {
         return r.to_string();
     }
     if let Some(idx) = t.find(". ") {
@@ -354,7 +358,11 @@ mod tests {
         let src = "# Title\n\nHello\n\n```\ncode\n```\n";
         p.parse(src, &q, &mut out).unwrap();
         assert!(out.iter().any(|b| b.block_kind == ParsedBlockKind::Heading));
-        assert!(out.iter().any(|b| b.block_kind == ParsedBlockKind::CodeBlock));
-        assert!(out.iter().any(|b| b.block_kind == ParsedBlockKind::Paragraph));
+        assert!(out
+            .iter()
+            .any(|b| b.block_kind == ParsedBlockKind::CodeBlock));
+        assert!(out
+            .iter()
+            .any(|b| b.block_kind == ParsedBlockKind::Paragraph));
     }
 }

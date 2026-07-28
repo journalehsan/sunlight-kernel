@@ -82,14 +82,62 @@ impl SortOpts {
     fn new() -> Self {
         Self {
             keys: [
-                KeyDef { start_field: 1, start_char: 1, end_field: 0, end_char: 0, modifiers: KeyMod::default() },
-                KeyDef { start_field: 1, start_char: 1, end_field: 0, end_char: 0, modifiers: KeyMod::default() },
-                KeyDef { start_field: 1, start_char: 1, end_field: 0, end_char: 0, modifiers: KeyMod::default() },
-                KeyDef { start_field: 1, start_char: 1, end_field: 0, end_char: 0, modifiers: KeyMod::default() },
-                KeyDef { start_field: 1, start_char: 1, end_field: 0, end_char: 0, modifiers: KeyMod::default() },
-                KeyDef { start_field: 1, start_char: 1, end_field: 0, end_char: 0, modifiers: KeyMod::default() },
-                KeyDef { start_field: 1, start_char: 1, end_field: 0, end_char: 0, modifiers: KeyMod::default() },
-                KeyDef { start_field: 1, start_char: 1, end_field: 0, end_char: 0, modifiers: KeyMod::default() },
+                KeyDef {
+                    start_field: 1,
+                    start_char: 1,
+                    end_field: 0,
+                    end_char: 0,
+                    modifiers: KeyMod::default(),
+                },
+                KeyDef {
+                    start_field: 1,
+                    start_char: 1,
+                    end_field: 0,
+                    end_char: 0,
+                    modifiers: KeyMod::default(),
+                },
+                KeyDef {
+                    start_field: 1,
+                    start_char: 1,
+                    end_field: 0,
+                    end_char: 0,
+                    modifiers: KeyMod::default(),
+                },
+                KeyDef {
+                    start_field: 1,
+                    start_char: 1,
+                    end_field: 0,
+                    end_char: 0,
+                    modifiers: KeyMod::default(),
+                },
+                KeyDef {
+                    start_field: 1,
+                    start_char: 1,
+                    end_field: 0,
+                    end_char: 0,
+                    modifiers: KeyMod::default(),
+                },
+                KeyDef {
+                    start_field: 1,
+                    start_char: 1,
+                    end_field: 0,
+                    end_char: 0,
+                    modifiers: KeyMod::default(),
+                },
+                KeyDef {
+                    start_field: 1,
+                    start_char: 1,
+                    end_field: 0,
+                    end_char: 0,
+                    modifiers: KeyMod::default(),
+                },
+                KeyDef {
+                    start_field: 1,
+                    start_char: 1,
+                    end_field: 0,
+                    end_char: 0,
+                    modifiers: KeyMod::default(),
+                },
             ],
             num_keys: 0,
             global: KeyMod::default(),
@@ -204,7 +252,14 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     if opts.check_only {
         let mut sorted = true;
         for i in 1..record_count {
-            if compare_records(&records[indices[i]], &records[indices[i - 1]], &keys[indices[i]], &keys[indices[i - 1]], &opts) == core::cmp::Ordering::Less {
+            if compare_records(
+                &records[indices[i]],
+                &records[indices[i - 1]],
+                &keys[indices[i]],
+                &keys[indices[i - 1]],
+                &opts,
+            ) == core::cmp::Ordering::Less
+            {
                 sorted = false;
                 break;
             }
@@ -223,7 +278,14 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     };
 
     // Write sorted output, handling unique
-    let code = write_output(io, out_fd, &records, &mut indices[..record_count], &keys, &opts);
+    let code = write_output(
+        io,
+        out_fd,
+        &records,
+        &mut indices[..record_count],
+        &keys,
+        &opts,
+    );
     if out_fd != STDOUT {
         let _ = io.close(out_fd);
     }
@@ -235,7 +297,14 @@ fn collect_files<'a>(args: &'a [&'a [u8]], out: &mut [&'a [u8]; 16]) -> usize {
     let mut i = 0;
     while i < args.len() {
         let a = args[i];
-        if a == b"-r" || a == b"-u" || a == b"-n" || a == b"-f" || a == b"-d" || a == b"-b" || a == b"-c" {
+        if a == b"-r"
+            || a == b"-u"
+            || a == b"-n"
+            || a == b"-f"
+            || a == b"-d"
+            || a == b"-b"
+            || a == b"-c"
+        {
             i += 1;
             continue;
         }
@@ -276,7 +345,12 @@ fn opts_output_fd(args: &[&[u8]], io: &mut impl Io) -> Result<Fd, i32> {
     Ok(STDOUT)
 }
 
-fn read_input(io: &mut impl Io, fd: Fd, records: &mut [Record; MAX_LINES], count: &mut usize) -> Result<(), i32> {
+fn read_input(
+    io: &mut impl Io,
+    fd: Fd,
+    records: &mut [Record; MAX_LINES],
+    count: &mut usize,
+) -> Result<(), i32> {
     let mut buf = [0u8; BUF_SIZE];
     let mut carry = [0u8; MAX_LINE_LEN];
     let mut carry_len: usize = 0;
@@ -427,7 +501,12 @@ fn apply_global_mods_to(line: &[u8], mods: &KeyMod, out: &mut SortKey) -> usize 
     }
 }
 
-fn apply_mods_inline(line: &[u8], mods: &KeyMod, buf: &mut [u8; MAX_LINE_LEN], offset: usize) -> usize {
+fn apply_mods_inline(
+    line: &[u8],
+    mods: &KeyMod,
+    buf: &mut [u8; MAX_LINE_LEN],
+    offset: usize,
+) -> usize {
     let effective = if mods.ignore_blanks {
         skip_leading_blanks(line)
     } else {
@@ -514,7 +593,12 @@ fn field_start(line: &[u8], field_num: usize, field_sep: &Option<u8>) -> usize {
     }
 }
 
-fn sort_indices(indices: &mut [usize], records: &[Record; MAX_LINES], keys: &[SortKey; MAX_LINES], opts: &SortOpts) {
+fn sort_indices(
+    indices: &mut [usize],
+    records: &[Record; MAX_LINES],
+    keys: &[SortKey; MAX_LINES],
+    opts: &SortOpts,
+) {
     // Insertion sort for simplicity and stability
     for i in 1..indices.len() {
         let mut j = i;
@@ -522,8 +606,10 @@ fn sort_indices(indices: &mut [usize], records: &[Record; MAX_LINES], keys: &[So
             let a_idx = indices[j];
             let b_idx = indices[j - 1];
             let ordering = compare_records(
-                &records[a_idx], &records[b_idx],
-                &keys[a_idx], &keys[b_idx],
+                &records[a_idx],
+                &records[b_idx],
+                &keys[a_idx],
+                &keys[b_idx],
                 opts,
             );
             if ordering == core::cmp::Ordering::Less {
@@ -537,8 +623,10 @@ fn sort_indices(indices: &mut [usize], records: &[Record; MAX_LINES], keys: &[So
 }
 
 fn compare_records(
-    a: &Record, b: &Record,
-    ka: &SortKey, kb: &SortKey,
+    a: &Record,
+    b: &Record,
+    ka: &SortKey,
+    kb: &SortKey,
     opts: &SortOpts,
 ) -> core::cmp::Ordering {
     let ordering = if opts.num_keys > 0 {
@@ -744,7 +832,8 @@ fn parse_keydef(input: &[u8], io: &mut impl Io) -> Result<KeyDef, i32> {
         if !end.is_empty() {
             (kd.end_field, kd.end_char) = parse_field_char(end, io)?;
             if kd.end_field == 0 {
-                let _ = io.write_stderr(b"sort: invalid key definition: field number must be >= 1\n");
+                let _ =
+                    io.write_stderr(b"sort: invalid key definition: field number must be >= 1\n");
                 return Err(1);
             }
         }
@@ -885,26 +974,39 @@ mod tests {
             }
         }
         fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
-            if self.fail_read { return Err(Errno::Failed); }
-            if self.eagain_count > 0 { self.eagain_count -= 1; return Err(Errno::Again); }
+            if self.fail_read {
+                return Err(Errno::Failed);
+            }
+            if self.eagain_count > 0 {
+                self.eagain_count -= 1;
+                return Err(Errno::Again);
+            }
             let idx = fd.0 as usize;
             let keys: Vec<Vec<u8>> = self.files.keys().cloned().collect();
-            if idx >= keys.len() { return Ok(0); }
+            if idx >= keys.len() {
+                return Ok(0);
+            }
             let key = &keys[idx];
             let (data, offset) = self.files.get_mut(key).unwrap();
-            if *offset >= data.len() { return Ok(0); }
+            if *offset >= data.len() {
+                return Ok(0);
+            }
             let end = (*offset + buf.len()).min(data.len());
             let n = end - *offset;
             buf[..n].copy_from_slice(&data[*offset..end]);
             *offset = end;
             Ok(n)
         }
-        fn close(&mut self, _fd: Fd) -> Result<(), Errno> { Ok(()) }
+        fn close(&mut self, _fd: Fd) -> Result<(), Errno> {
+            Ok(())
+        }
         fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
-            self.output.extend_from_slice(bytes); Ok(())
+            self.output.extend_from_slice(bytes);
+            Ok(())
         }
         fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
-            self.errors.extend_from_slice(bytes); Ok(())
+            self.errors.extend_from_slice(bytes);
+            Ok(())
         }
         fn yield_now(&mut self) {}
     }

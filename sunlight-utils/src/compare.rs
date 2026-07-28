@@ -95,10 +95,7 @@ pub fn numeric_cmp(a: &[u8], b: &[u8]) -> core::cmp::Ordering {
     let mult = if a_neg { -1 } else { 1 };
 
     if a_trim.len() != b_trim.len() {
-        return cmp_i32(
-            mult * (a_trim.len() as i32),
-            mult * (b_trim.len() as i32),
-        );
+        return cmp_i32(mult * (a_trim.len() as i32), mult * (b_trim.len() as i32));
     }
     for i in 0..a_trim.len() {
         match a_trim[i].cmp(&b_trim[i]) {
@@ -173,7 +170,9 @@ pub fn dict_cmp(a: &[u8], b: &[u8]) -> core::cmp::Ordering {
 }
 
 fn skip_non_print(b: &[u8]) -> &[u8] {
-    let pos = b.iter().position(|&x| x.is_ascii_alphanumeric() || x == b' ');
+    let pos = b
+        .iter()
+        .position(|&x| x.is_ascii_alphanumeric() || x == b' ');
     match pos {
         Some(p) => &b[p..],
         None => &b[b.len()..],

@@ -1,11 +1,6 @@
 //! Application controller and state loop.
 
-use crate::core::{
-    buffer::TextBuffer,
-    cursor::Cursor,
-    search::SearchState,
-    undo::UndoHistory,
-};
+use crate::core::{buffer::TextBuffer, cursor::Cursor, search::SearchState, undo::UndoHistory};
 use crate::file_ops::open_file;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -108,7 +103,8 @@ impl App {
             match key.code {
                 KeyCode::Char(c) => {
                     self.search_input.push(c);
-                    self.search.update_query(self.search_input.clone(), &self.buffer);
+                    self.search
+                        .update_query(self.search_input.clone(), &self.buffer);
                     if let Some(m) = self.search.current_match() {
                         self.cursor.line = m.line;
                         self.cursor.col = m.col;
@@ -116,7 +112,8 @@ impl App {
                 }
                 KeyCode::Backspace => {
                     self.search_input.pop();
-                    self.search.update_query(self.search_input.clone(), &self.buffer);
+                    self.search
+                        .update_query(self.search_input.clone(), &self.buffer);
                     if let Some(m) = self.search.current_match() {
                         self.cursor.line = m.line;
                         self.cursor.col = m.col;
@@ -127,18 +124,25 @@ impl App {
                 }
                 _ => {}
             }
-            self.cursor.adjust_viewport(view_width, view_height, &self.buffer, 4);
+            self.cursor
+                .adjust_viewport(view_width, view_height, &self.buffer, 4);
             return;
         }
 
         // Quit confirmation modal
         if self.show_quit_confirm {
             match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Char('s') | KeyCode::Char('S') => {
+                KeyCode::Char('y')
+                | KeyCode::Char('Y')
+                | KeyCode::Char('s')
+                | KeyCode::Char('S') => {
                     self.save();
                     self.should_quit = true;
                 }
-                KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Char('n') | KeyCode::Char('N') => {
+                KeyCode::Char('d')
+                | KeyCode::Char('D')
+                | KeyCode::Char('n')
+                | KeyCode::Char('N') => {
                     self.should_quit = true;
                 }
                 KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
@@ -152,7 +156,9 @@ impl App {
 
         // Help modal
         if self.show_help {
-            if key.code == KeyCode::Esc || (key.code == KeyCode::Char('g') && key.modifiers.contains(KeyModifiers::CONTROL)) {
+            if key.code == KeyCode::Esc
+                || (key.code == KeyCode::Char('g') && key.modifiers.contains(KeyModifiers::CONTROL))
+            {
                 self.show_help = false;
             }
             return;
@@ -179,13 +185,15 @@ impl App {
         // Undo / Redo
         if key.code == KeyCode::Char('z') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.perform_undo();
-            self.cursor.adjust_viewport(view_width, view_height, &self.buffer, 4);
+            self.cursor
+                .adjust_viewport(view_width, view_height, &self.buffer, 4);
             return;
         }
 
         if key.code == KeyCode::Char('y') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.perform_redo();
-            self.cursor.adjust_viewport(view_width, view_height, &self.buffer, 4);
+            self.cursor
+                .adjust_viewport(view_width, view_height, &self.buffer, 4);
             return;
         }
 
@@ -200,11 +208,16 @@ impl App {
             if let Some(m) = self.search.next_match() {
                 self.cursor.line = m.line;
                 self.cursor.col = m.col;
-                self.status_message = Some(format!("Match {}/{}", self.search.current_idx + 1, self.search.matches.len()));
+                self.status_message = Some(format!(
+                    "Match {}/{}",
+                    self.search.current_idx + 1,
+                    self.search.matches.len()
+                ));
             } else {
                 self.status_message = Some("No matches".to_string());
             }
-            self.cursor.adjust_viewport(view_width, view_height, &self.buffer, 4);
+            self.cursor
+                .adjust_viewport(view_width, view_height, &self.buffer, 4);
             return;
         }
 
@@ -213,19 +226,25 @@ impl App {
             match key.code {
                 KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') => {
                     self.push_undo_step();
-                    let (nl, nc) = self.buffer.insert_newline(self.cursor.line, self.cursor.col);
+                    let (nl, nc) = self
+                        .buffer
+                        .insert_newline(self.cursor.line, self.cursor.col);
                     self.cursor.line = nl;
                     self.cursor.col = nc;
                 }
                 KeyCode::Char(ch) => {
                     self.push_undo_step();
-                    let (nl, nc) = self.buffer.insert_char(self.cursor.line, self.cursor.col, ch);
+                    let (nl, nc) = self
+                        .buffer
+                        .insert_char(self.cursor.line, self.cursor.col, ch);
                     self.cursor.line = nl;
                     self.cursor.col = nc;
                 }
                 KeyCode::Backspace => {
                     self.push_undo_step();
-                    let (nl, nc) = self.buffer.delete_backspace(self.cursor.line, self.cursor.col);
+                    let (nl, nc) = self
+                        .buffer
+                        .delete_backspace(self.cursor.line, self.cursor.col);
                     self.cursor.line = nl;
                     self.cursor.col = nc;
                 }
@@ -235,7 +254,9 @@ impl App {
                 }
                 KeyCode::Tab => {
                     self.push_undo_step();
-                    let (nl, nc) = self.buffer.insert_char(self.cursor.line, self.cursor.col, '\t');
+                    let (nl, nc) = self
+                        .buffer
+                        .insert_char(self.cursor.line, self.cursor.col, '\t');
                     self.cursor.line = nl;
                     self.cursor.col = nc;
                 }
@@ -268,7 +289,8 @@ impl App {
             _ => {}
         }
 
-        self.cursor.adjust_viewport(view_width, view_height, &self.buffer, 4);
+        self.cursor
+            .adjust_viewport(view_width, view_height, &self.buffer, 4);
     }
 }
 

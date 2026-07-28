@@ -23,16 +23,16 @@ use sunlight_ui::{
 };
 use sunlight_welcome::{
     should_mark_onboarding_complete, ActionCard, ActionKind, CompletionOutcome, GreetingSource,
-    LaunchMode, WizardPage, WizardState, ACTION_CARDS, BUNDLE_ID, DISPLAY_NAME, SLIDE_COUNT,
-    SLIDES, MAX_GREETING, MAX_NAME,
+    LaunchMode, WizardPage, WizardState, ACTION_CARDS, BUNDLE_ID, DISPLAY_NAME, MAX_GREETING,
+    MAX_NAME, SLIDES, SLIDE_COUNT,
 };
 use wiseowl_brain::native_ipc::{
-    BrainIpcHeader, BrainOp, NATIVE_PROTOCOL_VERSION, BRAIN_ENDPOINT,
-    BRAIN_IPC_HEADER_LEN, SHM_PAGE_SIZE,
+    BrainIpcHeader, BrainOp, BRAIN_ENDPOINT, BRAIN_IPC_HEADER_LEN, NATIVE_PROTOCOL_VERSION,
+    SHM_PAGE_SIZE,
 };
 use wiseowl_brain::protocol::{
-    BrainRequestWire, BrainResponseWire, GreetingRequestWire,
-    MAX_DEVICE_CLASS_LEN, MAX_MODEL_LEN, MAX_VERSION_LEN,
+    BrainRequestWire, BrainResponseWire, GreetingRequestWire, MAX_DEVICE_CLASS_LEN, MAX_MODEL_LEN,
+    MAX_VERSION_LEN,
 };
 
 const WIN_W: u32 = 640;
@@ -100,7 +100,9 @@ fn draw_wrapped(
     }
 }
 
-fn collect_machine_summary(display_ep: Option<CapabilityToken>) -> sunlight_welcome::MachineSummary {
+fn collect_machine_summary(
+    display_ep: Option<CapabilityToken>,
+) -> sunlight_welcome::MachineSummary {
     let mut m = sunlight_welcome::MachineSummary::empty();
     if let Ok(info) = libc::sysinfo() {
         if info.total_ram_kb > 0 {
@@ -161,9 +163,7 @@ fn open_action(card: &ActionCard) -> Result<(), &'static str> {
         ActionKind::ComingSoon => {
             Err("Coming soon: available when Wise Owl gains interactive system actions.")
         }
-        ActionKind::AboutWelcome => {
-            Err("Welcome Wizard v0.1.0 — local onboarding for SunlightOS.")
-        }
+        ActionKind::AboutWelcome => Err("Welcome Wizard v0.1.0 — local onboarding for SunlightOS."),
         ActionKind::OpenApp { command } => {
             let source = sunlight_ipc::launch_trace::LaunchSource::Shell;
             let trace = sun_exec::next_cli_trace(source);
@@ -235,7 +235,13 @@ fn try_brain_greeting(state: &WizardState) -> Option<heapless::String<MAX_GREETI
         locale: HString::new(),
         request_kind: 1,
         greeting: Some(GreetingRequestWire {
-            welcome_mode: if state.first_login { 1 } else if state.first_after_upgrade { 2 } else { 3 },
+            welcome_mode: if state.first_login {
+                1
+            } else if state.first_after_upgrade {
+                2
+            } else {
+                3
+            },
             first_login: if state.first_login { 1 } else { 0 },
             first_after_upgrade: if state.first_after_upgrade { 1 } else { 0 },
             machine_summary_requested: 1,
@@ -274,11 +280,7 @@ fn try_brain_greeting(state: &WizardState) -> Option<heapless::String<MAX_GREETI
     let header_enc = header.encode();
     unsafe {
         core::ptr::copy_nonoverlapping(header_enc.as_ptr(), ptr, BRAIN_IPC_HEADER_LEN);
-        core::ptr::copy_nonoverlapping(
-            body.as_ptr(),
-            ptr.add(BRAIN_IPC_HEADER_LEN),
-            body.len(),
-        );
+        core::ptr::copy_nonoverlapping(body.as_ptr(), ptr.add(BRAIN_IPC_HEADER_LEN), body.len());
     }
 
     let msg = IpcMsg::with_label(BrainOp::Greeting.label())
@@ -548,8 +550,7 @@ impl WelcomeApp {
             prev.draw(canvas, theme);
         }
         if matches!(self.state.page, WizardPage::Slide(_)) {
-            let mut next =
-                Button::new(self.next_rect(), "Next").with_font(&Typography::UI_MEDIUM);
+            let mut next = Button::new(self.next_rect(), "Next").with_font(&Typography::UI_MEDIUM);
             next.state = self.btn_next;
             next.draw(canvas, theme);
         }
@@ -585,9 +586,8 @@ impl WelcomeApp {
             WizardPage::Slide(_) | WizardPage::Greeting | WizardPage::Actions
         ) && update(&mut self.btn_prev, prev_r)
             && release;
-        let next_hit = matches!(page, WizardPage::Slide(_))
-            && update(&mut self.btn_next, next_r)
-            && release;
+        let next_hit =
+            matches!(page, WizardPage::Slide(_)) && update(&mut self.btn_next, next_r) && release;
         if primary_hit {
             self.do_primary();
         }
@@ -800,13 +800,7 @@ impl App for WelcomeApp {
                     };
                     canvas.fill_rect(r, bg);
                     canvas.draw_rect(r, theme.border);
-                    draw_text(
-                        canvas,
-                        card.title,
-                        r.x + 14,
-                        r.y + 16,
-                        &card_title_style,
-                    );
+                    draw_text(canvas, card.title, r.x + 14, r.y + 16, &card_title_style);
                     draw_wrapped(
                         canvas,
                         card.description,

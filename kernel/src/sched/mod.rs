@@ -1660,8 +1660,7 @@ impl Scheduler {
             return;
         };
         let ticks = timeout_ticks.max(1);
-        self.processes[idx].linux_poll_wake_tick =
-            Some(self.global_tick.saturating_add(ticks));
+        self.processes[idx].linux_poll_wake_tick = Some(self.global_tick.saturating_add(ticks));
         self.processes[idx].block_start_tick = self.global_tick;
         self.set_state(idx, ProcessState::BlockedOnTimer);
     }
@@ -1671,12 +1670,9 @@ impl Scheduler {
         for idx in 0..self.processes.len() {
             let waiting_on_tab = self.processes[idx].state == ProcessState::BlockedOnTimer
                 && self.processes[idx].linux_poll_wake_tick.is_some()
-                && self.processes[idx]
-                    .fd_table
-                    .get(0)
-                    .is_some_and(|entry| {
-                        entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab
-                    });
+                && self.processes[idx].fd_table.get(0).is_some_and(|entry| {
+                    entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab
+                });
             if waiting_on_tab {
                 self.wake_linux_poll_index(idx);
             }

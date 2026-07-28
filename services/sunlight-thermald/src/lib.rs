@@ -122,7 +122,11 @@ pub fn validate_sensor(
     // Reject an instantaneous jump of > 40°C between consecutive valid samples
     // as abrupt invalid (EC glitch / wrong sensor). First sample is accepted.
     if let Some(prev) = previous_valid {
-        let delta = if temp > prev { temp - prev } else { prev - temp };
+        let delta = if temp > prev {
+            temp - prev
+        } else {
+            prev - temp
+        };
         if delta > 40_000 {
             return Err(SensorError::AbruptInvalid);
         }
@@ -210,7 +214,13 @@ pub fn classify_thermal_state(temp_mc: MilliC) -> ThermalState {
 /// Recommended powerd maximum mode for a thermal state.
 /// Does not touch requested mode — powerd applies the intersection.
 /// Unavailable/missing sensors must not create a constraint.
-pub fn recommended_max_power_mode(state: ThermalState) -> Option<(PowerProfile, ThermalConstraintSeverity, ThermalConstraintReason)> {
+pub fn recommended_max_power_mode(
+    state: ThermalState,
+) -> Option<(
+    PowerProfile,
+    ThermalConstraintSeverity,
+    ThermalConstraintReason,
+)> {
     match state {
         ThermalState::Normal | ThermalState::Unavailable => None,
         ThermalState::Warm => Some((
@@ -233,7 +243,10 @@ pub fn recommended_max_power_mode(state: ThermalState) -> Option<(PowerProfile, 
 
 /// Effective power mode = safest intersection of user preference and thermal max.
 /// `thermal_max` is the most aggressive mode still allowed while constrained.
-pub fn intersect_power_mode(requested: PowerProfile, thermal_max: Option<PowerProfile>) -> PowerProfile {
+pub fn intersect_power_mode(
+    requested: PowerProfile,
+    thermal_max: Option<PowerProfile>,
+) -> PowerProfile {
     let req = resolve_concrete(requested);
     let Some(tmax) = thermal_max.map(resolve_concrete) else {
         return req;
@@ -299,9 +312,7 @@ impl PersistedConfig {
     }
 
     pub fn pack_u64(self) -> u64 {
-        (self.magic as u64)
-            | ((self.version as u64) << 32)
-            | ((self.profile as u64) << 48)
+        (self.magic as u64) | ((self.version as u64) << 32) | ((self.profile as u64) << 48)
     }
 
     pub fn unpack_u64(v: u64) -> Result<Self, ()> {
@@ -783,12 +794,7 @@ mod tests {
             (90_000, FanLevel::FullSpeed),
         ];
         for (t, expected) in cases {
-            assert_eq!(
-                t440p_balanced_level_for(t),
-                expected,
-                "temp {} mC",
-                t
-            );
+            assert_eq!(t440p_balanced_level_for(t), expected, "temp {} mC", t);
         }
     }
 
@@ -1030,7 +1036,10 @@ mod tests {
         clock.advance(100);
         let action = p.tick_managed(clock.ms, 60_000);
         // Quiet raises thresholds so 60°C may map lower, but dwell blocks reduction.
-        assert!(matches!(action, PolicyAction::Hold | PolicyAction::SetLevel(_)));
+        assert!(matches!(
+            action,
+            PolicyAction::Hold | PolicyAction::SetLevel(_)
+        ));
         if let PolicyAction::SetLevel(l) = action {
             // If it did set, it must only be upward or equal path — Quiet shouldn't raise.
             assert!(l <= FanLevel::Level4 || clock.ms >= DWELL_MS);
@@ -1087,11 +1096,20 @@ mod tests {
     #[test]
     fn quiet_and_cool_bias() {
         // Cool starts earlier: 42°C under Cool may request level 1.
-        assert_eq!(level_for_temp(42_000, CoolingProfile::Cool), FanLevel::Level1);
+        assert_eq!(
+            level_for_temp(42_000, CoolingProfile::Cool),
+            FanLevel::Level1
+        );
         // Quiet delays: 47°C under Quiet may stay at 0.
-        assert_eq!(level_for_temp(47_000, CoolingProfile::Quiet), FanLevel::Level0);
+        assert_eq!(
+            level_for_temp(47_000, CoolingProfile::Quiet),
+            FanLevel::Level0
+        );
         // Balanced at 45°C is level 1.
-        assert_eq!(level_for_temp(45_000, CoolingProfile::Balanced), FanLevel::Level1);
+        assert_eq!(
+            level_for_temp(45_000, CoolingProfile::Balanced),
+            FanLevel::Level1
+        );
     }
 
     #[test]

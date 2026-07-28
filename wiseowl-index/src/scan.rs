@@ -355,12 +355,7 @@ impl ScanEngine {
             if let Some(existing) = state.get_by_path(root_id, rel).cloned() {
                 let pv = self.pipeline_versions(existing.parser_id.max(PARSER_PLAIN));
                 // Durable rejection cache: same digest + policy → no parse/tokenize.
-                if existing.can_reuse_rejection(
-                    &dig,
-                    meta.size_bytes,
-                    &pv,
-                    VALIDATOR_VERSION,
-                ) {
+                if existing.can_reuse_rejection(&dig, meta.size_bytes, &pv, VALIDATOR_VERSION) {
                     self.confirm_rejection(state, existing.source_id.get(), now_ns, stats);
                     outcome.files_processed = outcome.files_processed.saturating_add(1);
                     continue;
@@ -610,45 +605,48 @@ impl ScanEngine {
             IndexStats::sat_add(&mut stats.chunks_created, chunks.len() as u64);
 
             let tokenizer = WiseOwlLexicalV1;
-            let prepared =
-                match prepare_chunks_from_text(chunks, &tokenizer, &mut self.dict, &self.config.quotas)
-                {
-                    Ok(p) => {
-                        IndexStats::sat_add(&mut stats.files_retokenized, 1);
-                        p
-                    }
-                    Err(IndexError::TokenCollision) => {
-                        IndexStats::sat_add(&mut stats.token_collisions_detected, 1);
-                        self.record_failure(
-                            state,
-                            &root,
-                            rel,
-                            SourceFailureKind::TokenizationFailed,
-                            now_ns,
-                            stats,
-                            Some(dig),
-                            meta.size_bytes,
-                            meta.modified_at_ns,
-                            Some(ff),
-                        );
-                        continue;
-                    }
-                    Err(_) => {
-                        self.record_failure(
-                            state,
-                            &root,
-                            rel,
-                            SourceFailureKind::TokenizationFailed,
-                            now_ns,
-                            stats,
-                            Some(dig),
-                            meta.size_bytes,
-                            meta.modified_at_ns,
-                            Some(ff),
-                        );
-                        continue;
-                    }
-                };
+            let prepared = match prepare_chunks_from_text(
+                chunks,
+                &tokenizer,
+                &mut self.dict,
+                &self.config.quotas,
+            ) {
+                Ok(p) => {
+                    IndexStats::sat_add(&mut stats.files_retokenized, 1);
+                    p
+                }
+                Err(IndexError::TokenCollision) => {
+                    IndexStats::sat_add(&mut stats.token_collisions_detected, 1);
+                    self.record_failure(
+                        state,
+                        &root,
+                        rel,
+                        SourceFailureKind::TokenizationFailed,
+                        now_ns,
+                        stats,
+                        Some(dig),
+                        meta.size_bytes,
+                        meta.modified_at_ns,
+                        Some(ff),
+                    );
+                    continue;
+                }
+                Err(_) => {
+                    self.record_failure(
+                        state,
+                        &root,
+                        rel,
+                        SourceFailureKind::TokenizationFailed,
+                        now_ns,
+                        stats,
+                        Some(dig),
+                        meta.size_bytes,
+                        meta.modified_at_ns,
+                        Some(ff),
+                    );
+                    continue;
+                }
+            };
             for pc in &prepared {
                 IndexStats::sat_add(
                     &mut stats.tokens_emitted,
@@ -979,11 +977,7 @@ mod tests {
     use wiseowl_memorydb::record::MemoryScope;
     use wiseowl_memorydb::DbQuotaConfig;
 
-    fn setup() -> (
-        ScanEngine,
-        IndexerState,
-        HostMemoryDbBackend<MemoryStore>,
-    ) {
+    fn setup() -> (ScanEngine, IndexerState, HostMemoryDbBackend<MemoryStore>) {
         let config = IndexerConfig::default();
         let mut state = IndexerState::new();
         let root = IndexRootConfig {
@@ -1198,7 +1192,10 @@ mod tests {
         assert_eq!(stats2.files_reparsed, 1);
         assert_eq!(stats2.files_retokenized, 1);
         assert_eq!(stats2.database_generations_created, 1);
-        assert_eq!(state.get_by_path(1, "flip.txt").unwrap().state, SourceState::Indexed);
+        assert_eq!(
+            state.get_by_path(1, "flip.txt").unwrap().state,
+            SourceState::Indexed
+        );
 
         let mut stats3 = IndexStats::default();
         engine

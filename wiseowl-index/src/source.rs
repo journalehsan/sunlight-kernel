@@ -103,14 +103,22 @@ pub enum SourceFailureKind {
 impl SourceFailureKind {
     pub const fn from_u8(v: u8) -> Option<Self> {
         match v {
-            1 => Some(Self::PermissionDenied), 2 => Some(Self::FileTooLarge),
-            3 => Some(Self::UnsupportedFormat), 4 => Some(Self::InvalidUtf8),
-            5 => Some(Self::BinaryContent), 6 => Some(Self::ChangedDuringRead),
-            7 => Some(Self::ParseFailed), 8 => Some(Self::TokenizationFailed),
-            9 => Some(Self::DatabaseUnavailable), 10 => Some(Self::TransactionRejected),
-            11 => Some(Self::QuotaExceeded), 12 => Some(Self::SourceDisappeared),
-            13 => Some(Self::PathRejected), 14 => Some(Self::ImportConflict),
-            15 => Some(Self::DigestMigrationFailed), _ => None,
+            1 => Some(Self::PermissionDenied),
+            2 => Some(Self::FileTooLarge),
+            3 => Some(Self::UnsupportedFormat),
+            4 => Some(Self::InvalidUtf8),
+            5 => Some(Self::BinaryContent),
+            6 => Some(Self::ChangedDuringRead),
+            7 => Some(Self::ParseFailed),
+            8 => Some(Self::TokenizationFailed),
+            9 => Some(Self::DatabaseUnavailable),
+            10 => Some(Self::TransactionRejected),
+            11 => Some(Self::QuotaExceeded),
+            12 => Some(Self::SourceDisappeared),
+            13 => Some(Self::PathRejected),
+            14 => Some(Self::ImportConflict),
+            15 => Some(Self::DigestMigrationFailed),
+            _ => None,
         }
     }
 
@@ -214,10 +222,14 @@ pub enum PendingImportState {
 impl PendingImportState {
     pub const fn from_u8(v: u8) -> Option<Self> {
         match v {
-            1 => Some(Self::Prepared), 2 => Some(Self::TransactionStarted),
-            3 => Some(Self::CommitSent), 4 => Some(Self::ReconcileRequired),
-            5 => Some(Self::Committed), 6 => Some(Self::Aborted),
-            7 => Some(Self::Conflict), _ => None,
+            1 => Some(Self::Prepared),
+            2 => Some(Self::TransactionStarted),
+            3 => Some(Self::CommitSent),
+            4 => Some(Self::ReconcileRequired),
+            5 => Some(Self::Committed),
+            6 => Some(Self::Aborted),
+            7 => Some(Self::Conflict),
+            _ => None,
         }
     }
 }
@@ -520,6 +532,9 @@ mod tests {
         .mark_for_digest_upgrade(0xdead);
         assert!(m.needs_digest_upgrade);
         assert!(!m.has_strong_digest());
-        assert_eq!(m.legacy_content_hash, Some(LegacyFnvContentHash::new(0xdead)));
+        assert_eq!(
+            m.legacy_content_hash,
+            Some(LegacyFnvContentHash::new(0xdead))
+        );
     }
 }

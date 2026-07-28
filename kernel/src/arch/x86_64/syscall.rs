@@ -740,8 +740,9 @@ const ERR_ERANGE: u64 = u64::MAX - 9;
 fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
     match error {
         sunlight_fs::FsError::NotFound => ERR_NOENT,
-        sunlight_fs::FsError::PermissionDenied
-        | sunlight_fs::FsError::OperationNotPermitted => ERR_EACCES,
+        sunlight_fs::FsError::PermissionDenied | sunlight_fs::FsError::OperationNotPermitted => {
+            ERR_EACCES
+        }
         sunlight_fs::FsError::BadHandle => ERR_EBADF,
         sunlight_fs::FsError::InvalidPath => ERR_EINVAL,
         sunlight_fs::FsError::IsDir => ERR_EISDIR,
@@ -1061,9 +1062,7 @@ fn sys_validate_lock_caller(frame: &mut SyscallFrame) -> u64 {
         return 0;
     };
     match kind {
-        ::sunlight_ipc::LOCK_CALLER_TTY_SERVICE => {
-            u64::from(target.trusted_tty_session_service)
-        }
+        ::sunlight_ipc::LOCK_CALLER_TTY_SERVICE => u64::from(target.trusted_tty_session_service),
         ::sunlight_ipc::LOCK_CALLER_AUTHENTICATED_TTY => u64::from(
             target.tty_tab.is_some()
                 && target.service_lookup_restrictions.is_some_and(|mask| {
@@ -1114,9 +1113,7 @@ fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
     };
     match kind {
         ::sunlight_ipc::SESSION_CALLER_TTY_SERVICE => u64::from(target.trusted_tty_session_service),
-        ::sunlight_ipc::SESSION_CALLER_SESSION_SERVICE => {
-            u64::from(target.trusted_session_service)
-        }
+        ::sunlight_ipc::SESSION_CALLER_SESSION_SERVICE => u64::from(target.trusted_session_service),
         _ => 0,
     }
 }
@@ -1340,10 +1337,7 @@ fn endpoint_bind(token: u64) -> u64 {
         Ok(cap) => cap.0,
         Err(_) => {
             // Reject re-binding an already-public SEND_ONLY handle (no escalation).
-            if caps
-                .check(source, CapabilityRights::SEND_ONLY)
-                .is_ok()
-            {
+            if caps.check(source, CapabilityRights::SEND_ONLY).is_ok() {
                 crate::ipc::note_send_only_management_reject();
             }
             0
@@ -3496,7 +3490,9 @@ fn sys_linux_nanosleep(frame: &mut SyscallFrame) -> u64 {
     // Syscalls run with IF=0, so we cannot busy-wait out a real sleep against
     // the BSP timekeeper. Yield a few times so other cores can run, then return
     // success. Coarse but safe; real timed sleep needs a blocking wait path.
-    let _ms = (sec as u64).saturating_mul(1000).saturating_add((nsec as u64) / 1_000_000);
+    let _ms = (sec as u64)
+        .saturating_mul(1000)
+        .saturating_add((nsec as u64) / 1_000_000);
     for _ in 0..4 {
         process_yield();
     }
@@ -5253,7 +5249,10 @@ fn sys_system_identity(frame: &mut SyscallFrame) -> u64 {
     copy_str_field(&mut rec.manufacturer, id.manufacturer.as_bytes());
     copy_str_field(&mut rec.product_name, id.product_name.as_bytes());
     copy_str_field(&mut rec.product_version, id.product_version.as_bytes());
-    copy_str_field(&mut rec.board_manufacturer, id.board_manufacturer.as_bytes());
+    copy_str_field(
+        &mut rec.board_manufacturer,
+        id.board_manufacturer.as_bytes(),
+    );
     copy_str_field(&mut rec.board_product, id.board_product.as_bytes());
     copy_str_field(&mut rec.bios_vendor, id.bios_vendor.as_bytes());
     copy_str_field(&mut rec.bios_version, id.bios_version.as_bytes());
@@ -5321,12 +5320,7 @@ fn sys_thermal_sensors(frame: &mut SyscallFrame) -> u64 {
             value: e.value,
             mono_ms: e.mono_ms,
         };
-        let bytes = unsafe {
-            core::slice::from_raw_parts(
-                &rec as *const _ as *const u8,
-                rec_size,
-            )
-        };
+        let bytes = unsafe { core::slice::from_raw_parts(&rec as *const _ as *const u8, rec_size) };
         let dest = frame.rdi.saturating_add((i * rec_size) as u64);
         if let Err(error) = copy_to_user(dest, bytes) {
             return error;

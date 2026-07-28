@@ -410,10 +410,7 @@ mod tests {
 
     #[test]
     fn multiple_files_with_headers() {
-        let mut mock = Mock::new(std::vec![
-            (b"a", b"hello\n"),
-            (b"b", b"world\n"),
-        ]);
+        let mut mock = Mock::new(std::vec![(b"a", b"hello\n"), (b"b", b"world\n"),]);
         assert_eq!(run(&[b"a", b"b"], &mut mock), 0);
         let expected = b"==> a <==\nhello\n==> b <==\nworld\n".to_vec();
         assert_eq!(mock.output, expected);

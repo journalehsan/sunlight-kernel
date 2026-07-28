@@ -106,7 +106,13 @@ impl Cursor {
     }
 
     /// Synchronize viewport scroll offsets (`scroll_y`, `scroll_x`) with cursor position.
-    pub fn adjust_viewport(&mut self, view_width: usize, view_height: usize, buf: &TextBuffer, tab_width: usize) {
+    pub fn adjust_viewport(
+        &mut self,
+        view_width: usize,
+        view_height: usize,
+        buf: &TextBuffer,
+        tab_width: usize,
+    ) {
         if view_height == 0 || view_width == 0 {
             return;
         }

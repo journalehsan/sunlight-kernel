@@ -50,7 +50,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let view_height = area.height.saturating_sub(3) as usize;
                 let view_width = area.width.saturating_sub(6) as usize;
 
-                app.cursor.adjust_viewport(view_width, view_height, &app.buffer, 4);
+                app.cursor
+                    .adjust_viewport(view_width, view_height, &app.buffer, 4);
 
                 draw_ui(
                     f,

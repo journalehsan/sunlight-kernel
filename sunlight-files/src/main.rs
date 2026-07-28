@@ -904,7 +904,8 @@ fn draw_tga_bytes(canvas: &mut Canvas, data: &[u8], dst: Rect) {
     // `TgaImage` needs `'static`; preview buffer is a process static.
     // SAFETY: `data` must be a subslice of `PREVIEW_SRC_BUF` (or other 'static).
     // Callers only pass the static preview buffer.
-    let static_data: &'static [u8] = unsafe { core::slice::from_raw_parts(data.as_ptr(), data.len()) };
+    let static_data: &'static [u8] =
+        unsafe { core::slice::from_raw_parts(data.as_ptr(), data.len()) };
     if let Ok(img) = TgaImage::parse(static_data) {
         canvas.draw_tga_icon(&img, dst);
         return;
@@ -1172,8 +1173,7 @@ fn load_preview_sync(path: &[u8]) {
                 return;
             };
             let pixel_count = decoded.pixel_count();
-            let Some(need) = 18usize
-                .checked_add(pixel_count.checked_mul(4).unwrap_or(usize::MAX))
+            let Some(need) = 18usize.checked_add(pixel_count.checked_mul(4).unwrap_or(usize::MAX))
             else {
                 PREVIEW_READY = 2;
                 return;

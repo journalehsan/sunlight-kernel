@@ -123,7 +123,10 @@ mod tests {
         let r = decompress_lz4_checked(&c, 10_000_000, 1024);
         assert!(matches!(
             r,
-            Err(MemoryError::PayloadTooLarge { size: 10_000_000, max: 1024 })
+            Err(MemoryError::PayloadTooLarge {
+                size: 10_000_000,
+                max: 1024
+            })
         ));
     }
 

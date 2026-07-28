@@ -97,10 +97,12 @@ fn document_attrs(
     // Keep ≤ max_attributes_per_record (16). Strong digest is authoritative.
     let dig = &manifest.content_digest;
     // Pack alg+ver into one unsigned: (alg << 16) | ver
-    let digest_meta =
-        ((dig.algorithm.as_u8() as u64) << 16) | (dig.version as u64);
+    let digest_meta = ((dig.algorithm.as_u8() as u64) << 16) | (dig.version as u64);
     attrs(&[
-        ("record_role", AttributeValue::Text(String::from("document"))),
+        (
+            "record_role",
+            AttributeValue::Text(String::from("document")),
+        ),
         ("root_id", AttributeValue::Unsigned(manifest.root_id)),
         (
             "relative_path",
@@ -108,7 +110,10 @@ fn document_attrs(
         ),
         ("content_digest_meta", AttributeValue::Unsigned(digest_meta)),
         ("content_digest", AttributeValue::Text(dig.to_hex())),
-        ("parser_id", AttributeValue::Unsigned(manifest.parser_id as u64)),
+        (
+            "parser_id",
+            AttributeValue::Unsigned(manifest.parser_id as u64),
+        ),
         (
             "parser_version",
             AttributeValue::Unsigned(manifest.parser_version as u64),
@@ -131,7 +136,10 @@ fn document_attrs(
         ),
         ("chunk_count", AttributeValue::Unsigned(prepared_len as u64)),
         ("source_revision", AttributeValue::Unsigned(revision as u64)),
-        ("import_key", AttributeValue::Text(String::from(import_key_hex))),
+        (
+            "import_key",
+            AttributeValue::Text(String::from(import_key_hex)),
+        ),
         (
             "fast_fingerprint",
             AttributeValue::Unsigned(manifest.fast_fingerprint.map(|v| v.get()).unwrap_or(0)),
@@ -209,7 +217,9 @@ pub fn ingest_source_atomic<B: IndexMemoryDb>(
         ImportState::NotFound | ImportState::Aborted => {}
     }
 
-    let prev_doc = manifest.document_memory_id.and_then(|id| MemoryId::from_raw(id).ok());
+    let prev_doc = manifest
+        .document_memory_id
+        .and_then(|id| MemoryId::from_raw(id).ok());
     let key_hex = import_key.key_hex();
     let legacy_fnv = manifest
         .legacy_content_hash
@@ -490,8 +500,7 @@ mod tests {
         let q = IndexQuotaConfig::default();
         let chunks = chunk_blocks(sid, 1, 1, 1, &ChunkingProfile::default(), &blocks, &q).unwrap();
         let mut dict = TokenDictionary::new();
-        let prepared =
-            prepare_chunks_from_text(chunks, &WiseOwlLexicalV1, &mut dict, &q).unwrap();
+        let prepared = prepare_chunks_from_text(chunks, &WiseOwlLexicalV1, &mut dict, &q).unwrap();
         let res = ingest_source_atomic(&mut backend, &manifest, "notes.txt", &prepared, &q, 1000)
             .unwrap();
         assert!(!res.already_committed);
@@ -526,9 +535,8 @@ mod tests {
             chunk_blocks(sid, 2, 1, 1, &ChunkingProfile::default(), &blocks2, &q).unwrap();
         let prepared2 =
             prepare_chunks_from_text(chunks2, &WiseOwlLexicalV1, &mut dict, &q).unwrap();
-        let res3 =
-            ingest_source_atomic(&mut backend, &manifest, "notes.txt", &prepared2, &q, 2000)
-                .unwrap();
+        let res3 = ingest_source_atomic(&mut backend, &manifest, "notes.txt", &prepared2, &q, 2000)
+            .unwrap();
         assert_ne!(res.document_id, res3.document_id);
         assert!(!res3.already_committed);
     }

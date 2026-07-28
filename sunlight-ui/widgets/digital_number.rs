@@ -58,14 +58,14 @@ const SEG_G: u8 = 1 << 6;
 const DIGIT_SEGS: [u8; 10] = [
     SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F, // 0
     SEG_B | SEG_C,                                 // 1
-    SEG_A | SEG_B | SEG_D | SEG_E | SEG_G,          // 2
-    SEG_A | SEG_B | SEG_C | SEG_D | SEG_G,          // 3
-    SEG_B | SEG_C | SEG_F | SEG_G,                  // 4
-    SEG_A | SEG_C | SEG_D | SEG_F | SEG_G,          // 5
-    SEG_A | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G,  // 6
+    SEG_A | SEG_B | SEG_D | SEG_E | SEG_G,         // 2
+    SEG_A | SEG_B | SEG_C | SEG_D | SEG_G,         // 3
+    SEG_B | SEG_C | SEG_F | SEG_G,                 // 4
+    SEG_A | SEG_C | SEG_D | SEG_F | SEG_G,         // 5
+    SEG_A | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G, // 6
     SEG_A | SEG_B | SEG_C,                         // 7
     SEG_A | SEG_B | SEG_C | SEG_D | SEG_E | SEG_F | SEG_G, // 8
-    SEG_A | SEG_B | SEG_C | SEG_D | SEG_F | SEG_G,  // 9
+    SEG_A | SEG_B | SEG_C | SEG_D | SEG_F | SEG_G, // 9
 ];
 
 /// Cached segment layout for a single digit cell (relative to cell origin).
@@ -98,19 +98,11 @@ impl SegmentGeom {
 
         let a = Rect::new(inset as i32, 0, inner_w, t);
         let g = Rect::new(inset as i32, mid_y as i32 - (t as i32) / 2, inner_w, t);
-        let d = Rect::new(
-            inset as i32,
-            digit_h as i32 - t as i32,
-            inner_w,
-            t,
-        );
+        let d = Rect::new(inset as i32, digit_h as i32 - t as i32, inner_w, t);
 
         // Verticals sit between the horizontal bars.
         let top_h = mid_y.saturating_sub(t).max(1);
-        let bot_h = digit_h
-            .saturating_sub(mid_y)
-            .saturating_sub(t)
-            .max(1);
+        let bot_h = digit_h.saturating_sub(mid_y).saturating_sub(t).max(1);
         let top_y = t as i32;
         let bot_y = (mid_y + t / 2) as i32;
 
@@ -336,7 +328,12 @@ impl DigitalNumberWidget {
 
     /// Stable content size for `max_chars` cells (independent of current value).
     pub fn measure(&self) -> Size {
-        measure_digital(self.max_chars as u32, self.digit_w, self.digit_h, self.spacing)
+        measure_digital(
+            self.max_chars as u32,
+            self.digit_w,
+            self.digit_h,
+            self.spacing,
+        )
     }
 
     /// Measure an explicit character count at the current digit size.
@@ -364,9 +361,7 @@ impl DigitalNumberWidget {
     pub fn draw(&mut self, canvas: &mut Canvas, theme: &Theme) {
         self.refresh_geom();
         let fg = self.foreground.unwrap_or(theme.accent);
-        let dim = self
-            .inactive
-            .unwrap_or_else(|| theme.panel_alt.lighten(18));
+        let dim = self.inactive.unwrap_or_else(|| theme.panel_alt.lighten(18));
 
         let origin = self.content_origin();
         let cell_step = self.digit_w + self.spacing;
@@ -388,9 +383,7 @@ impl DigitalNumberWidget {
     /// Immutable draw when geometry is already current (no cache update).
     pub fn draw_immutable(&self, canvas: &mut Canvas, theme: &Theme) {
         let fg = self.foreground.unwrap_or(theme.accent);
-        let dim = self
-            .inactive
-            .unwrap_or_else(|| theme.panel_alt.lighten(18));
+        let dim = self.inactive.unwrap_or_else(|| theme.panel_alt.lighten(18));
         let origin = self.content_origin();
         let cell_step = self.digit_w + self.spacing;
         let n = self.max_chars as usize;
@@ -481,10 +474,7 @@ fn draw_segments(
 ) {
     let paint = |canvas: &mut Canvas, r: Rect, on: bool| {
         let color = if on { fg } else { dim };
-        canvas.fill_rect(
-            Rect::new(ox + r.x, oy + r.y, r.w, r.h),
-            color,
-        );
+        canvas.fill_rect(Rect::new(ox + r.x, oy + r.y, r.w, r.h), color);
     };
     paint(canvas, seg.a, mask & SEG_A != 0);
     paint(canvas, seg.b, mask & SEG_B != 0);

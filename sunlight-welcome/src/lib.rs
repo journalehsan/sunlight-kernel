@@ -588,7 +588,9 @@ mod tests {
         let mut w = WizardState::new(LaunchMode::Automatic);
         // Merely constructed / launched does not finish.
         assert!(!w.finished);
-        assert!(!should_mark_onboarding_complete(CompletionOutcome::DismissedIncomplete));
+        assert!(!should_mark_onboarding_complete(
+            CompletionOutcome::DismissedIncomplete
+        ));
         let outcome = w.finish();
         assert_eq!(outcome, CompletionOutcome::Finished);
         assert!(should_mark_onboarding_complete(outcome));
@@ -620,7 +622,10 @@ mod tests {
         for card in ACTION_CARDS.iter() {
             if matches!(card.kind, ActionKind::ComingSoon) {
                 assert!(card.placeholder_honest);
-                assert!(card.description.contains("Coming soon") || card.description.contains("available when"));
+                assert!(
+                    card.description.contains("Coming soon")
+                        || card.description.contains("available when")
+                );
             }
         }
     }

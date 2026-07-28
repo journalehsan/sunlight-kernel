@@ -438,10 +438,7 @@ pub mod intel_dts {
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum DtsProbeResult {
-        Ready {
-            package: bool,
-            tj_max_c: u8,
-        },
+        Ready { package: bool, tj_max_c: u8 },
         Unsupported,
     }
 
@@ -474,7 +471,8 @@ pub mod intel_dts {
         if tj < 60 || tj > 120 {
             return DtsProbeResult::Unsupported;
         }
-        let package = (thermal_eax & CPUID_PTM_BIT) != 0 && model_allows_package_therm(family, model);
+        let package =
+            (thermal_eax & CPUID_PTM_BIT) != 0 && model_allows_package_therm(family, model);
         DtsProbeResult::Ready {
             package,
             tj_max_c: tj,
@@ -521,8 +519,8 @@ mod tests {
 
     #[test]
     fn valid_milli_degree() {
-        let r = SensorReading::valid(SensorId::new(SensorClass::CpuPackage, 0), 61_000, 1000)
-            .unwrap();
+        let r =
+            SensorReading::valid(SensorId::new(SensorClass::CpuPackage, 0), 61_000, 1000).unwrap();
         assert_eq!(r.temp_milli_c(), Some(61_000));
     }
 
@@ -542,7 +540,10 @@ mod tests {
             .unwrap()
             .mark_stale_if_older_than(10_000, SENSOR_STALE_MS);
         assert_eq!(r.status, SensorStatus::Stale);
-        assert_eq!(r.mark_stale_if_older_than(20_000, SENSOR_STALE_MS).status, SensorStatus::Stale);
+        assert_eq!(
+            r.mark_stale_if_older_than(20_000, SENSOR_STALE_MS).status,
+            SensorStatus::Stale
+        );
     }
 
     #[test]
@@ -553,7 +554,10 @@ mod tests {
             monotonic_ms: 0,
             status: SensorStatus::Valid,
         };
-        assert_eq!(r.validate_combination(), Err(SensorModelError::InvalidTimestamp));
+        assert_eq!(
+            r.validate_combination(),
+            Err(SensorModelError::InvalidTimestamp)
+        );
     }
 
     #[test]
@@ -590,8 +594,11 @@ mod tests {
             SensorReading::valid(SensorId::new(SensorClass::CpuCore, 1), 61_000, 50).unwrap(),
         )
         .unwrap();
-        snap.push(SensorReading::unavailable(SensorId::new(SensorClass::CpuPackage, 0)))
-            .unwrap();
+        snap.push(SensorReading::unavailable(SensorId::new(
+            SensorClass::CpuPackage,
+            0,
+        )))
+        .unwrap();
         assert_eq!(snap.max_valid_temp_mc(), Some(61_000));
     }
 
@@ -609,7 +616,14 @@ mod tests {
 
     #[test]
     fn unknown_model_no_msr() {
-        let r = feature_gate(true, 20, CPUID_DTS_BIT | CPUID_PTM_BIT, 6, 0x9E, Some(0x64 << 16));
+        let r = feature_gate(
+            true,
+            20,
+            CPUID_DTS_BIT | CPUID_PTM_BIT,
+            6,
+            0x9E,
+            Some(0x64 << 16),
+        );
         assert_eq!(r, DtsProbeResult::Unsupported);
     }
 
@@ -617,7 +631,14 @@ mod tests {
     fn ivy_bridge_3e_not_allowlisted() {
         // 0x3E is Ivy Bridge-E/EN/EP, not Haswell; not justified for this phase.
         assert!(!model_allows_dts(6, 0x3E));
-        let r = feature_gate(true, 20, CPUID_DTS_BIT | CPUID_PTM_BIT, 6, 0x3E, Some(0x64 << 16));
+        let r = feature_gate(
+            true,
+            20,
+            CPUID_DTS_BIT | CPUID_PTM_BIT,
+            6,
+            0x3E,
+            Some(0x64 << 16),
+        );
         assert_eq!(r, DtsProbeResult::Unsupported);
         assert_eq!(model_uarch_name(6, 0x3C), "Haswell");
         assert!(model_uarch_name(6, 0x3E).contains("Ivy Bridge"));
@@ -689,13 +710,13 @@ mod tests {
         // Architectural note exercised by consumers: if package unavailable,
         // max core must be labeled "Maximum core temperature".
         let mut snap = SensorSnapshot::empty(1);
-        snap.push(
-            SensorReading::valid(SensorId::new(SensorClass::CpuCore, 0), 59_000, 1).unwrap(),
-        )
-        .unwrap();
+        snap.push(SensorReading::valid(SensorId::new(SensorClass::CpuCore, 0), 59_000, 1).unwrap())
+            .unwrap();
         assert_eq!(snap.max_valid_temp_mc(), Some(59_000));
         // No package sensor present.
-        assert!(!snap.iter().any(|r| r.sensor_id.class() == SensorClass::CpuPackage as u8
-            && r.status == SensorStatus::Valid));
+        assert!(!snap
+            .iter()
+            .any(|r| r.sensor_id.class() == SensorClass::CpuPackage as u8
+                && r.status == SensorStatus::Valid));
     }
 }

@@ -138,10 +138,18 @@ impl<'a> BrainContextSource for RuntimeContextSource<'a> {
         };
 
         if let Some(version) = self.snapshot.system.os_version.as_ref() {
-            push(FactKind::OsVersion, FactFreshness::CurrentBoot, version.as_str());
+            push(
+                FactKind::OsVersion,
+                FactFreshness::CurrentBoot,
+                version.as_str(),
+            );
         }
         if let Some(build) = self.snapshot.system.build.as_ref() {
-            push(FactKind::RuntimeBuild, FactFreshness::CurrentBoot, build.as_str());
+            push(
+                FactKind::RuntimeBuild,
+                FactFreshness::CurrentBoot,
+                build.as_str(),
+            );
         }
         if let Some(arch) = self.snapshot.system.architecture.as_ref() {
             push(
@@ -151,7 +159,11 @@ impl<'a> BrainContextSource for RuntimeContextSource<'a> {
             );
         }
         if let Some(locale) = self.snapshot.system.locale.as_ref() {
-            push(FactKind::Locale, FactFreshness::CurrentBoot, locale.as_str());
+            push(
+                FactKind::Locale,
+                FactFreshness::CurrentBoot,
+                locale.as_str(),
+            );
         }
         if let Some(timezone) = self.snapshot.timezone.identifier.as_ref() {
             push(
@@ -177,14 +189,22 @@ impl<'a> BrainContextSource for RuntimeContextSource<'a> {
         }
         if let Some(cpu_count) = self.snapshot.system.cpu_count {
             let value = fact_u64(cpu_count as u64);
-            push(FactKind::CpuCores, FactFreshness::CurrentBoot, value.as_str());
+            push(
+                FactKind::CpuCores,
+                FactFreshness::CurrentBoot,
+                value.as_str(),
+            );
         }
         if let Some(ram_mib) = self.snapshot.system.ram_mib {
             let value = fact_u64(ram_mib as u64);
             push(FactKind::RamMib, FactFreshness::CurrentBoot, value.as_str());
         }
         if let Some(user) = self.snapshot.session.current_user.as_ref() {
-            push(FactKind::UserName, FactFreshness::CurrentSession, user.as_str());
+            push(
+                FactKind::UserName,
+                FactFreshness::CurrentSession,
+                user.as_str(),
+            );
         }
         if let Some(boot_mode) = self.snapshot.session.boot_mode.as_ref() {
             push(
@@ -243,7 +263,10 @@ impl<'a> BrainContextSource for RuntimeContextSource<'a> {
                 value.as_str(),
             );
         }
-        if let (Some(width), Some(height)) = (self.snapshot.display.width_px, self.snapshot.display.height_px) {
+        if let (Some(width), Some(height)) = (
+            self.snapshot.display.width_px,
+            self.snapshot.display.height_px,
+        ) {
             let mut dims: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
             let _ = write!(&mut dims, "{}x{}", width, height);
             push(
@@ -261,20 +284,60 @@ impl<'a> BrainContextSource for RuntimeContextSource<'a> {
             );
         }
 
-        push_service(&mut facts, max, FactKind::ServiceSunlightd, self.snapshot.services.sunlightd);
-        push_service(&mut facts, max, FactKind::ServiceSessiond, self.snapshot.services.sessiond);
-        push_service(&mut facts, max, FactKind::ServiceNetworkd, self.snapshot.services.networkd);
-        push_service(&mut facts, max, FactKind::ServiceResolved, self.snapshot.services.resolved);
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServiceSunlightd,
+            self.snapshot.services.sunlightd,
+        );
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServiceSessiond,
+            self.snapshot.services.sessiond,
+        );
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServiceNetworkd,
+            self.snapshot.services.networkd,
+        );
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServiceResolved,
+            self.snapshot.services.resolved,
+        );
         push_service(
             &mut facts,
             max,
             FactKind::ServiceTimezone,
             self.snapshot.services.timezone_service,
         );
-        push_service(&mut facts, max, FactKind::ServiceTimed, self.snapshot.services.timed);
-        push_service(&mut facts, max, FactKind::ServicePowerd, self.snapshot.services.powerd);
-        push_service(&mut facts, max, FactKind::ServiceThermald, self.snapshot.services.thermald);
-        push_service(&mut facts, max, FactKind::ServiceDisplay, self.snapshot.services.display);
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServiceTimed,
+            self.snapshot.services.timed,
+        );
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServicePowerd,
+            self.snapshot.services.powerd,
+        );
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServiceThermald,
+            self.snapshot.services.thermald,
+        );
+        push_service(
+            &mut facts,
+            max,
+            FactKind::ServiceDisplay,
+            self.snapshot.services.display,
+        );
 
         facts
     }

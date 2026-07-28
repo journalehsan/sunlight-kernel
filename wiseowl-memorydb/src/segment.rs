@@ -126,7 +126,10 @@ impl SegmentHeader {
 }
 
 /// Build uncompressed body from records: prev_seg_id || record stream.
-fn build_body(records: &[LongTermMemoryRecord], previous_segment_id: u64) -> Result<Vec<u8>, DbError> {
+fn build_body(
+    records: &[LongTermMemoryRecord],
+    previous_segment_id: u64,
+) -> Result<Vec<u8>, DbError> {
     let mut body = Vec::new();
     body.extend_from_slice(&previous_segment_id.to_le_bytes());
     for rec in records {
@@ -161,7 +164,11 @@ pub fn seal_segment(
     let checksum = crc32_ieee(&body);
     let compressed = compress_lz4(&body).map_err(|_| DbError::CompressionFailure)?;
     let (flags, body_out, _uncompressed_hint) = if compressed.len() < body.len() {
-        (SEG_FLAG_LZ4, compressed, body.len().min(u32::MAX as usize) as u32)
+        (
+            SEG_FLAG_LZ4,
+            compressed,
+            body.len().min(u32::MAX as usize) as u32,
+        )
     } else {
         // Prefer raw if LZ4 does not shrink.
         (0u16, body.clone(), body.len() as u32)

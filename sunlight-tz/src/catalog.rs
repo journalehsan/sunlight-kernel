@@ -531,7 +531,13 @@ pub fn search_locations(query: &str, max_results: usize) -> SearchResults {
 
     for loc in LOCATIONS {
         if let Some(rank) = rank_location(loc, q) {
-            out.push_ranked(SearchHit { location: loc, rank }, cap);
+            out.push_ranked(
+                SearchHit {
+                    location: loc,
+                    rank,
+                },
+                cap,
+            );
         }
     }
     out

@@ -13,9 +13,15 @@ use crate::lifecycle::LifecycleOp;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MemoryError {
     InvalidRequest(&'static str),
-    UnsupportedProtocolVersion { got: u16, want: u16 },
+    UnsupportedProtocolVersion {
+        got: u16,
+        want: u16,
+    },
     MalformedIdentifier(&'static str),
-    PayloadTooLarge { size: u32, max: u32 },
+    PayloadTooLarge {
+        size: u32,
+        max: u32,
+    },
     QuotaExceeded(&'static str),
     SessionQuotaExceeded,
     EntryNotFound,

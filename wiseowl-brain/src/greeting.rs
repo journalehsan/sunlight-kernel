@@ -93,11 +93,7 @@ pub fn plan_greeting_with_flags(
         match style {
             GreetingStyle::Technical => {
                 if let Some(g) = ctx.system_generation {
-                    let _ = write!(
-                        &mut body,
-                        "SunlightOS generation {} is active. ",
-                        g
-                    );
+                    let _ = write!(&mut body, "SunlightOS generation {} is active. ", g);
                 }
                 push_greeting_str(
                     &mut body,
@@ -359,14 +355,18 @@ mod tests {
         ctx.welcome_memory.visit_count = 2;
         let resp = plan_greeting_response(&ctx).unwrap();
         assert!(
-            resp.title.to_lowercase().contains("back") || resp.body.to_lowercase().contains("back")
+            resp.title.to_lowercase().contains("back")
+                || resp.body.to_lowercase().contains("back")
                 || resp.title.contains("Welcome")
         );
     }
 
     #[test]
     fn technical_mentions_generation_when_grounded() {
-        let mut ctx = ContextBuilder::new().user_id(1000).first_login(true).build();
+        let mut ctx = ContextBuilder::new()
+            .user_id(1000)
+            .first_login(true)
+            .build();
         ctx.preferences = BrainPreferences {
             greeting_style: GreetingStyle::Technical,
             show_machine_summary: false,
@@ -438,9 +438,11 @@ mod tests {
         ctx.system_generation = Some(2);
         ctx.first_after_upgrade = false;
         let (resp, flags) = plan_greeting_with_flags(&ctx).unwrap();
-        assert!(flags
-            .response_flags
-            .has(BrainResponseFlags::AFTER_UPGRADE_GREETING)
-            || resp.body.contains("generation"));
+        assert!(
+            flags
+                .response_flags
+                .has(BrainResponseFlags::AFTER_UPGRADE_GREETING)
+                || resp.body.contains("generation")
+        );
     }
 }

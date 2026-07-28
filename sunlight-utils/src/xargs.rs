@@ -89,8 +89,15 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
                 token_lens[pending] = len;
                 pending += 1;
                 if pending >= room {
-                    let status =
-                        run_batch(path, command, initial, &token_storage, &token_lens, pending, io);
+                    let status = run_batch(
+                        path,
+                        command,
+                        initial,
+                        &token_storage,
+                        &token_lens,
+                        pending,
+                        io,
+                    );
                     if status != 0 {
                         code = status;
                     }
@@ -102,7 +109,15 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     }
 
     if pending > 0 {
-        let status = run_batch(path, command, initial, &token_storage, &token_lens, pending, io);
+        let status = run_batch(
+            path,
+            command,
+            initial,
+            &token_storage,
+            &token_lens,
+            pending,
+            io,
+        );
         if status != 0 {
             code = status;
         }
@@ -244,7 +259,11 @@ impl TokenReader {
         }
     }
 
-    fn next_token(&mut self, io: &mut impl Io, out: &mut [u8; MAX_TOKEN]) -> Result<Option<usize>, i32> {
+    fn next_token(
+        &mut self,
+        io: &mut impl Io,
+        out: &mut [u8; MAX_TOKEN],
+    ) -> Result<Option<usize>, i32> {
         // Skip leading delimiters / whitespace.
         loop {
             if self.pos >= self.end {

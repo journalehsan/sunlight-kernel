@@ -32,7 +32,8 @@ fn main() {
 }
 
 fn build_foundation_blob() -> Result<(), String> {
-    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").map_err(|err| err.to_string())?);
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").map_err(|err| err.to_string())?);
     let workspace_root = manifest_dir
         .parent()
         .ok_or_else(|| "wiseowl-brain has no workspace parent".to_string())?
@@ -41,7 +42,10 @@ fn build_foundation_blob() -> Result<(), String> {
     let foundation_source = manifest_dir.join("foundation/foundation_v1.txt");
 
     println!("cargo:rerun-if-changed={}", foundation_source.display());
-    println!("cargo:rerun-if-changed={}", manifest_dir.join("build.rs").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir.join("build.rs").display()
+    );
 
     let tokenizer_files = [
         workspace_root.join("wiseowl-index/src/config.rs"),
@@ -203,7 +207,11 @@ fn encode_tokens(tokens: &[CompiledToken]) -> Vec<u8> {
     for token in tokens {
         out.extend_from_slice(&token.token_id.to_le_bytes());
         out.extend_from_slice(&token.frequency.to_le_bytes());
-        let flags = if token.positions_truncated { 1u16 } else { 0u16 };
+        let flags = if token.positions_truncated {
+            1u16
+        } else {
+            0u16
+        };
         out.extend_from_slice(&flags.to_le_bytes());
         out.extend_from_slice(&(token.positions.len() as u16).to_le_bytes());
         for position in &token.positions {

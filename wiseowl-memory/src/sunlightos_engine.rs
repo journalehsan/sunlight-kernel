@@ -11,10 +11,14 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::caller::CallerIdentity;
 use crate::caps::MemoryCapability;
 use crate::compression::crc32_ieee;
-use crate::entry::{MemoryEntry, MemoryEntryHeader, MemoryState, TokenStreamRef, ENTRY_HEADER_VERSION};
+use crate::entry::{
+    MemoryEntry, MemoryEntryHeader, MemoryState, TokenStreamRef, ENTRY_HEADER_VERSION,
+};
 use crate::error::MemoryError;
+use crate::health::{degraded, ServiceHealth};
 use crate::ids::{ClientId, IdAllocator, MemoryId, SegmentId, SessionId};
 use crate::kinds::{MemoryClass, MemoryKind};
 use crate::lifecycle::LifecycleOp;
@@ -25,8 +29,6 @@ use crate::protocol::{
 use crate::provenance::Provenance;
 use crate::quotas::{QuotaConfig, QuotaSnapshot, SessionQuota};
 use crate::segments::{parse_records_v2, Segment, SegmentState};
-use crate::caller::CallerIdentity;
-use crate::health::{degraded, ServiceHealth};
 use crate::stats::ServiceStats;
 
 /// Pluggable KV backend (native sunlight-kv client or test double).
@@ -213,8 +215,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
 
     /// Install a recovered cold blob and reconstruct entries.
     pub fn recover_cold_blob(&mut self, blob: &[u8]) -> Result<(), MemoryError> {
-        let (mut seg, plain) =
-            Segment::from_spill_blob(blob, self.quotas.max_decompress_bytes)?;
+        let (mut seg, plain) = Segment::from_spill_blob(blob, self.quotas.max_decompress_bytes)?;
         let sid = seg.id;
         self.ids.note_seen(sid.get());
         let recs = parse_records_v2(&plain)?;
@@ -269,11 +270,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
         Ok(())
     }
 
-    pub fn handle(
-        &mut self,
-        caller: &CallerIdentity,
-        req: ProtocolRequest,
-    ) -> ProtocolResponse {
+    pub fn handle(&mut self, caller: &CallerIdentity, req: ProtocolRequest) -> ProtocolResponse {
         let version = request_version(&req);
         if let Err(e) = check_protocol_version(version) {
             ServiceStats::inc(&mut self.stats.malformed_ipc_requests);
@@ -418,9 +415,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
                 Ok(ProtocolResponse::Listed { headers })
             }
             ProtocolRequest::GetStats { .. } => {
-                caller
-                    .caps
-                    .require(MemoryCapability::InspectGlobalStats)?;
+                caller.caps.require(MemoryCapability::InspectGlobalStats)?;
                 self.refresh_gauges();
                 Ok(ProtocolResponse::Stats(self.stats.clone()))
             }
@@ -490,8 +485,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
         if snap.checked_add_ram(need, &self.quotas).is_err() {
             self.evict_for_space(need)?;
         }
-        self.quota_snapshot()
-            .checked_add_ram(need, &self.quotas)?;
+        self.quota_snapshot().checked_add_ram(need, &self.quotas)?;
         if let Some(s) = self.sessions.get(&session_id) {
             s.quota.can_add_ram(need, &self.quotas)?;
         } else {
@@ -584,8 +578,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
             (new_len, data.len() as u64, e.header.class)
         };
         let _ = new_len;
-        self.quota_snapshot()
-            .checked_add_ram(add, &self.quotas)?;
+        self.quota_snapshot().checked_add_ram(add, &self.quotas)?;
         let e = self
             .entries
             .get_mut(&memory_id)
@@ -661,8 +654,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
             .get(&sid)
             .cloned()
             .ok_or(MemoryError::SegmentNotFound)?;
-        let (_seg, plain) =
-            Segment::from_spill_blob(&blob, self.quotas.max_decompress_bytes)?;
+        let (_seg, plain) = Segment::from_spill_blob(&blob, self.quotas.max_decompress_bytes)?;
         let payload = parse_records_v2(&plain)?
             .into_iter()
             .find(|r| r.header.id == memory_id)
@@ -745,11 +737,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
                 .ok_or(MemoryError::EntryNotFound)?;
             self.ensure_session_access(caller, e.header.session_id, true)?;
             e.state.require(LifecycleOp::Delete)?;
-            (
-                e.header.session_id,
-                e.header.class,
-                e.payload.len() as u64,
-            )
+            (e.header.session_id, e.header.class, e.payload.len() as u64)
         };
         if let Some(e) = self.entries.get_mut(&memory_id) {
             e.state = MemoryState::Deleted;
@@ -808,12 +796,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
             } else {
                 req.namespace.as_str()
             };
-            let key = alloc::format!(
-                "{}.{}.{}",
-                ns,
-                e.header.session_id.get(),
-                e.header.id.get()
-            );
+            let key = alloc::format!("{}.{}.{}", ns, e.header.session_id.get(), e.header.id.get());
             let value = encode_promo(e, req.expected_record_version)?;
             (key, value)
         };
@@ -1050,7 +1033,11 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
         for (_, _, id) in candidates {
             let _ = self.spill_to_cold(id);
             ServiceStats::inc(&mut self.stats.evictions);
-            if self.quota_snapshot().checked_add_ram(need, &self.quotas).is_ok() {
+            if self
+                .quota_snapshot()
+                .checked_add_ram(need, &self.quotas)
+                .is_ok()
+            {
                 return Ok(());
             }
         }
@@ -1147,8 +1134,7 @@ impl<K: NativeKvBackend> NativeMemoryEngine<K> {
             .stats
             .working_bytes
             .saturating_add(self.stats.hot_bytes);
-        self.stats.logical_metadata_bytes =
-            (self.entries.len() as u64).saturating_mul(128);
+        self.stats.logical_metadata_bytes = (self.entries.len() as u64).saturating_mul(128);
         self.stats.logical_total_bytes = self
             .stats
             .logical_payload_bytes

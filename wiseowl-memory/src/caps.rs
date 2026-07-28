@@ -110,9 +110,7 @@ mod tests {
     fn default_client_cannot_global_stats() {
         let c = CapabilitySet::default_client();
         assert!(c.require(MemoryCapability::Create).is_ok());
-        assert!(c
-            .require(MemoryCapability::InspectGlobalStats)
-            .is_err());
+        assert!(c.require(MemoryCapability::InspectGlobalStats).is_err());
         assert!(c.require(MemoryCapability::ReadPayload).is_err());
     }
 

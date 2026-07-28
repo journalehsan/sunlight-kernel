@@ -47,7 +47,9 @@ pub fn note_free(class: PhysicalMemoryClass, frames: u64) {
         return;
     }
     if CLASS_FRAMES[class as usize]
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(frames))
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+            v.checked_sub(frames)
+        })
         .is_err()
     {
         DIAG_UNDERFLOW.fetch_add(1, Ordering::Relaxed);
@@ -59,7 +61,9 @@ pub fn note_reclass(from: PhysicalMemoryClass, to: PhysicalMemoryClass, frames: 
         return;
     }
     if CLASS_FRAMES[from as usize]
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(frames))
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+            v.checked_sub(frames)
+        })
         .is_err()
     {
         DIAG_UNDERFLOW.fetch_add(1, Ordering::Relaxed);
@@ -144,7 +148,10 @@ mod tests {
         reset();
         note_alloc(PhysicalMemoryClass::SharedMemory, 8);
         // Five mappers would still be 8 frames globally.
-        assert_eq!(class_bytes(PhysicalMemoryClass::SharedMemory), 8 * FRAME_BYTES);
+        assert_eq!(
+            class_bytes(PhysicalMemoryClass::SharedMemory),
+            8 * FRAME_BYTES
+        );
     }
 
     #[test]
@@ -157,7 +164,11 @@ mod tests {
         let cache = 0u64; // never residual
         assert_eq!(cache, 0);
         assert_eq!(unclassified, 70 * FRAME_BYTES);
-        assert!(conservation_ok(100 * FRAME_BYTES, 10 * FRAME_BYTES, accounted + unclassified));
+        assert!(conservation_ok(
+            100 * FRAME_BYTES,
+            10 * FRAME_BYTES,
+            accounted + unclassified
+        ));
     }
 
     #[test]

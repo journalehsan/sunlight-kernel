@@ -6,13 +6,12 @@ extern crate alloc;
 use alloc::boxed::Box;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_call_timeout, ipc_recv,
-    ipc_reply_and_try_recv,
+    ipc_reply_and_try_recv, kill,
     launch_trace::{LaunchSource, LaunchTrace},
-    kill, monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive,
-    process_yield, sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken,
-    IpcMsg, KbdMsg, MouseMsg, PointerReport, SessionAction, SessionComponentState, SessionKind,
-    SessionMsg, SessionState, SgpMsg, ShellMsg, SpawnMsg, TzMsg, SESSION_ENDPOINT,
-    SESSION_PROTOCOL_VERSION,
+    monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
+    sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
+    MouseMsg, PointerReport, SessionAction, SessionComponentState, SessionKind, SessionMsg,
+    SessionState, SgpMsg, ShellMsg, SpawnMsg, TzMsg, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
 };
 use sunlight_libc::sun_exec;
 use sunlight_telemetry::Telemetry;
@@ -53,11 +52,13 @@ fn decode_login_bg() -> Option<(u32, u32, alloc::vec::Vec<u32>)> {
 fn login_bg_view(
     decoded: &Option<(u32, u32, alloc::vec::Vec<u32>)>,
 ) -> Option<sunlight_tui::LoginBackground<'_>> {
-    decoded.as_ref().map(|(w, h, pixels)| sunlight_tui::LoginBackground::Argb {
-        width: *w,
-        height: *h,
-        pixels: pixels.as_slice(),
-    })
+    decoded
+        .as_ref()
+        .map(|(w, h, pixels)| sunlight_tui::LoginBackground::Argb {
+            width: *w,
+            height: *h,
+            pixels: pixels.as_slice(),
+        })
 }
 
 enum TtyState {
@@ -369,7 +370,8 @@ fn drive_welcome_wizard_gate(
             let Some(handle) = desktop_session else {
                 return;
             };
-            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running)
+            {
                 return;
             }
             // Desktop Running implies Shell Ready already happened (sessiond).
@@ -402,8 +404,7 @@ fn drive_welcome_wizard_gate(
                     welcome_wizard_log("MANUAL_RELAUNCH PASS");
                 }
                 // Session still Running after optional app activity.
-                if desktop_session
-                    .and_then(|h| query_desktop_session(h, DISPLAY_IPC_TIMEOUT_MS))
+                if desktop_session.and_then(|h| query_desktop_session(h, DISPLAY_IPC_TIMEOUT_MS))
                     == Some(SessionState::Running)
                 {
                     welcome_wizard_log("FAILURE_ISOLATION PASS");
@@ -449,7 +450,9 @@ fn session_foundation_log(marker: &str) {
 fn session_config_log(marker: &str) {
     // Always emit one complete serial line (ISO gate matchers require it).
     match marker {
-        "CURRENT_PLAN_IMMUTABLE PASS" => debug_log("[SESSION-CONFIG] CURRENT_PLAN_IMMUTABLE PASS\n"),
+        "CURRENT_PLAN_IMMUTABLE PASS" => {
+            debug_log("[SESSION-CONFIG] CURRENT_PLAN_IMMUTABLE PASS\n")
+        }
         "USER_ISOLATION PASS" => debug_log("[SESSION-CONFIG] USER_ISOLATION PASS\n"),
         "UNAVAILABLE_BUNDLE PASS" => debug_log("[SESSION-CONFIG] UNAVAILABLE_BUNDLE PASS\n"),
         "RESET_DEFAULTS PASS" => debug_log("[SESSION-CONFIG] RESET_DEFAULTS PASS\n"),
@@ -579,7 +582,8 @@ fn drive_session_configuration_gate(
             let Some(handle) = desktop_session else {
                 return;
             };
-            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running)
+            {
                 return;
             }
             *gate = SessionConfigGateState::ConfigureApps { session: handle };
@@ -620,12 +624,7 @@ fn drive_session_configuration_gate(
                 0,
             );
             session_config_log("FIRST_LOGIN_POLICY PASS");
-            if !session_profile_mutate(
-                SessionMsg::SESSION_PROFILE_ADD_APP,
-                "/bin/evil",
-                1,
-                0,
-            ) {
+            if !session_profile_mutate(SessionMsg::SESSION_PROFILE_ADD_APP, "/bin/evil", 1, 0) {
                 session_config_log("USER_ISOLATION PASS");
             }
             let _ = session_profile_mutate(SessionMsg::SESSION_PROFILE_RESET, "", 0, 0);
@@ -701,9 +700,7 @@ impl CreateDesktopError {
             | Self::Policy(SessionMsg::ERR_INVALID_STATE) => {
                 "Session handoff rejected; login stayed secure."
             }
-            Self::Policy(_) | Self::Transport => {
-                "Session start failed; login stayed secure."
-            }
+            Self::Policy(_) | Self::Transport => "Session start failed; login stayed secure.",
         }
     }
 }
@@ -773,10 +770,7 @@ fn session_action(
     .ok()
 }
 
-fn query_desktop_session(
-    handle: DesktopSessionHandle,
-    timeout_ms: u64,
-) -> Option<SessionState> {
+fn query_desktop_session(handle: DesktopSessionHandle, timeout_ms: u64) -> Option<SessionState> {
     let sessiond = nameserver_lookup(SESSION_ENDPOINT)?;
     let reply = ipc_call_timeout(
         sessiond,
@@ -848,15 +842,7 @@ fn activate_desktop_session(
         login.message = "Desktop unavailable; TTY retained.";
         debug_log("[SESSION] desktop activation failed; TTY retains framebuffer");
         if has_fb {
-            render_login_fb(
-                login,
-                fb_addr,
-                fb32_w,
-                fb32_h,
-                fb32_p,
-                mouse,
-                login_bg,
-            );
+            render_login_fb(login, fb_addr, fb32_w, fb32_h, fb32_p, mouse, login_bg);
         }
     }
 }
@@ -920,7 +906,8 @@ fn drive_session_foundation_gate(
             let Some(handle) = desktop_session else {
                 return;
             };
-            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running)
+            {
                 return;
             }
             let Some(component) = query_desktop_component(handle, DISPLAY_IPC_TIMEOUT_MS) else {
@@ -997,8 +984,7 @@ fn drive_session_foundation_gate(
                     }
                 }
             }
-            if monotonic_millis().saturating_sub(started_at_ms)
-                < SESSION_FOUNDATION_IDLE_WINDOW_MS
+            if monotonic_millis().saturating_sub(started_at_ms) < SESSION_FOUNDATION_IDLE_WINDOW_MS
             {
                 *gate_state = SessionFoundationGateState::MeasuringIdle {
                     first,
@@ -1027,7 +1013,8 @@ fn drive_session_foundation_gate(
             if handle.session_id == first.session_id {
                 return;
             }
-            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running) {
+            if query_desktop_session(handle, DISPLAY_IPC_TIMEOUT_MS) != Some(SessionState::Running)
+            {
                 return;
             }
             session_foundation_log("SECOND_SESSION PASS");
@@ -1429,7 +1416,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                     if has_fb {
                                         render_login_fb(
                                             &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
-                                    &login_bg);
+                                            &login_bg,
+                                        );
                                     }
                                     break 'kbd;
                                 }
@@ -1457,8 +1445,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             if has_fb {
                                                 render_login_fb(
                                                     &login, fb_addr, fb32_w, fb32_h, fb32_p,
-                                                    &mut mouse,
-                                    &login_bg);
+                                                    &mut mouse, &login_bg,
+                                                );
                                             }
                                         }
                                     }
@@ -1567,13 +1555,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     login.message = err.message();
                                                     if has_fb {
                                                         render_login_fb(
-                                                            &login,
-                                                            fb_addr,
-                                                            fb32_w,
-                                                            fb32_h,
-                                                            fb32_p,
-                                                            &mut mouse,
-                                                            &login_bg,
+                                                            &login, fb_addr, fb32_w, fb32_h,
+                                                            fb32_p, &mut mouse, &login_bg,
                                                         );
                                                     }
                                                     break 'kbd;
@@ -1584,13 +1567,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     "Desktop session failed before shell ready.";
                                                 if has_fb {
                                                     render_login_fb(
-                                                        &login,
-                                                        fb_addr,
-                                                        fb32_w,
-                                                        fb32_h,
-                                                        fb32_p,
-                                                        &mut mouse,
-                                                        &login_bg,
+                                                        &login, fb_addr, fb32_w, fb32_h, fb32_p,
+                                                        &mut mouse, &login_bg,
                                                     );
                                                 }
                                                 break 'kbd;
@@ -1673,8 +1651,9 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                 }
                 if has_fb && !logged_in && vt_is_active(active_vt, VirtualTerminal::Tty) {
                     if needs_render {
-                        render_login_fb(&login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse,
-                                    &login_bg);
+                        render_login_fb(
+                            &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse, &login_bg,
+                        );
                     } else if pointer_only_render {
                         redraw_mouse_overlay(fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse);
                     }
@@ -2081,8 +2060,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                 {
                                                     render_login_fb(
                                                         &login, fb_addr, fb32_w, fb32_h, fb32_p,
-                                                        &mut mouse,
-                                    &login_bg);
+                                                        &mut mouse, &login_bg,
+                                                    );
                                                 }
                                                 continue;
                                             }
@@ -2220,13 +2199,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             login.message = "Desktop session ended.";
                             if has_fb {
                                 render_login_fb(
-                                    &login,
-                                    fb_addr,
-                                    fb32_w,
-                                    fb32_h,
-                                    fb32_p,
-                                    &mut mouse,
-                                    &login_bg,
+                                    &login, fb_addr, fb32_w, fb32_h, fb32_p, &mut mouse, &login_bg,
                                 );
                             }
                         }
@@ -2285,18 +2258,18 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     // apps redraw in place (their alt-screen enter resets the
                     // buffer in append_term), streaming output simply scrolls.
                     let mut drained = false;
-                        if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
-                            let mut buf = [0u8; 1024];
-                            loop {
-                                let n = tty_stdout_pull(tab.shell_id as u32, &mut buf);
-                                if n == 0 {
-                                    break;
-                                }
-                                capture_foreground_bytes(tab, &buf[..n]);
-                                append_term(&mut tab.output, &mut tab.output_len, &buf[..n]);
-                                drained = true;
+                    if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
+                        let mut buf = [0u8; 1024];
+                        loop {
+                            let n = tty_stdout_pull(tab.shell_id as u32, &mut buf);
+                            if n == 0 {
+                                break;
                             }
+                            capture_foreground_bytes(tab, &buf[..n]);
+                            append_term(&mut tab.output, &mut tab.output_len, &buf[..n]);
+                            drained = true;
                         }
+                    }
 
                     if !process_is_alive(pid) {
                         // The app exited. Final drain to catch any output written

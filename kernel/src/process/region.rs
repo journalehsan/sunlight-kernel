@@ -416,7 +416,10 @@ impl RegionLedger {
     /// Stage a MAP_FIXED replacement. Only mappings which opted in through
     /// MAY_REPLACE may be displaced; system, shared, and protected ranges are
     /// rejected before any page-table mutation.
-    pub fn preflight_replace(&self, replacement: MappingRegion) -> Result<ReplacePlan, LedgerError> {
+    pub fn preflight_replace(
+        &self,
+        replacement: MappingRegion,
+    ) -> Result<ReplacePlan, LedgerError> {
         Self::validate_region(replacement)?;
         if self.pending_len != 0 {
             return Err(LedgerError::Inconsistent);
@@ -457,7 +460,10 @@ impl RegionLedger {
         if !inserted {
             Self::append_staged(&mut records, &mut output, replacement)?;
         }
-        Ok(ReplacePlan { records, len: output })
+        Ok(ReplacePlan {
+            records,
+            len: output,
+        })
     }
 
     /// Publish a fully staged unmap layout. The scheduler serializes mapping
@@ -470,7 +476,10 @@ impl RegionLedger {
     }
 
     pub fn commit_replace(&mut self, plan: ReplacePlan) {
-        assert_eq!(self.pending_len, 0, "ledger changed during staged replacement");
+        assert_eq!(
+            self.pending_len, 0,
+            "ledger changed during staged replacement"
+        );
         self.records = plan.records;
         self.len = plan.len;
         debug_assert_eq!(self.validate(), Ok(()));

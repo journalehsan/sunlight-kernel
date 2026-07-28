@@ -4,19 +4,19 @@
 use core::fmt::Write;
 use heapless::{String, Vec};
 use sunlight_ipc::{
-    debug_log, ipc_call_timeout, nameserver_lookup, process_is_alive, session_query_process, IpcMsg,
-    ServiceCapability, SessionComponentState, SessionMsg, SessionProcessCredentials, SpawnMsg,
-    SpawnRequest,
+    debug_log, ipc_call_timeout, nameserver_lookup, process_is_alive, session_query_process,
+    IpcMsg, ServiceCapability, SessionComponentState, SessionMsg, SessionProcessCredentials,
+    SpawnMsg, SpawnRequest,
 };
 use sunlight_sessiond::{
     default_profile, deserialize_profile, list_eligible, mark_policy_success, normalize_orders,
     parse_bundle_session_manifest, profile_add_app, profile_checksum, profile_move,
-    profile_remove_app, profile_reset, profile_set_enabled, profile_set_policy, resolve_session_plan,
-    serialize_profile, validate_bundle_id, validate_profile, CatalogBundle, OptionalComponentRestartPolicy,
-    ProfileError, ProfileLoadStatus, ResolvedComponentKind, ResolvedSessionPlan, SessionManifest,
-    SessionProfile, StartupAvailability, StartupLaunchResult, StartupPolicy, DEFAULT_SYSTEM_RELEASE_GENERATION,
-    MAX_ELIGIBLE_CATALOG, MAX_LAUNCH_PATH, MAX_SESSION_COMPONENTS, MAX_STARTUP_ENTRIES,
-    PROFILE_BLOB_MAX, PROTECTED_SHELL_APP_ID,
+    profile_remove_app, profile_reset, profile_set_enabled, profile_set_policy,
+    resolve_session_plan, serialize_profile, validate_bundle_id, validate_profile, CatalogBundle,
+    OptionalComponentRestartPolicy, ProfileError, ProfileLoadStatus, ResolvedComponentKind,
+    ResolvedSessionPlan, SessionManifest, SessionProfile, StartupAvailability, StartupLaunchResult,
+    StartupPolicy, DEFAULT_SYSTEM_RELEASE_GENERATION, MAX_ELIGIBLE_CATALOG, MAX_LAUNCH_PATH,
+    MAX_SESSION_COMPONENTS, MAX_STARTUP_ENTRIES, PROFILE_BLOB_MAX, PROTECTED_SHELL_APP_ID,
 };
 
 /// Profiles live under `/root/.config/sunlight/` because sessiond currently
@@ -186,9 +186,8 @@ pub fn load_or_default_profile(
     let plen = profile_path_for_uid(uid, &mut path);
     let Ok(fd) = sunlight_libc::open(&path[..plen]) else {
         stats.profiles_missing = stats.profiles_missing.saturating_add(1);
-        let profile = default_profile(uid, base_session_id, now).unwrap_or_else(|_| {
-            default_profile(uid, "org.sunlight.session.desktop", now).unwrap()
-        });
+        let profile = default_profile(uid, base_session_id, now)
+            .unwrap_or_else(|_| default_profile(uid, "org.sunlight.session.desktop", now).unwrap());
         return (profile, ProfileLoadStatus::Missing);
     };
     let mut bytes = [0u8; PROFILE_BLOB_MAX];
@@ -427,10 +426,17 @@ fn repair_welcome_optional(
     catalog: &[CatalogBundle],
     system_generation: u32,
 ) {
-    if frozen.optionals.iter().any(|o| is_welcome_app_id(o.app_id.as_str())) {
+    if frozen
+        .optionals
+        .iter()
+        .any(|o| is_welcome_app_id(o.app_id.as_str()))
+    {
         return;
     }
-    let Some(bundle) = catalog.iter().find(|b| is_welcome_app_id(b.app_id.as_str())) else {
+    let Some(bundle) = catalog
+        .iter()
+        .find(|b| is_welcome_app_id(b.app_id.as_str()))
+    else {
         debug_log("[SESSION-CONFIG] welcome not in catalog\n");
         return;
     };
@@ -472,10 +478,7 @@ fn repair_welcome_optional(
         return;
     }
     let mut launch_path = String::<MAX_LAUNCH_PATH>::new();
-    if launch_path
-        .push_str(bundle.launch_path.as_str())
-        .is_err()
-    {
+    if launch_path.push_str(bundle.launch_path.as_str()).is_err() {
         return;
     }
     let next_id = frozen
@@ -570,12 +573,7 @@ pub fn try_launch_deferred_optional(
     launched
 }
 
-pub fn spawn_optional(
-    path: &str,
-    name: &str,
-    uid: u32,
-    gid: u32,
-) -> Result<(u64, u64), u64> {
+pub fn spawn_optional(path: &str, name: &str, uid: u32, gid: u32) -> Result<(u64, u64), u64> {
     let Some(spawn_cap) = nameserver_lookup("spawn") else {
         return Err(SessionMsg::ERR_INVALID_STATE);
     };
@@ -742,12 +740,8 @@ pub fn supervise_optionals(
             {
                 // ProcessSuccess only: short-lived fixtures complete on exit.
                 // AppReported apps must call SESSION_STARTUP_COMPLETE instead.
-                if opt.completion_mode
-                    == sunlight_sessiond::StartupCompletionMode::ProcessSuccess
-                    && opt
-                        .launch_result
-                        .map(|r| r.is_success())
-                        .unwrap_or(false)
+                if opt.completion_mode == sunlight_sessiond::StartupCompletionMode::ProcessSuccess
+                    && opt.launch_result.map(|r| r.is_success()).unwrap_or(false)
                 {
                     if let Some(eid) = opt.entry_id {
                         if let Some(entry_id) = sunlight_sessiond::StartupEntryId::new(eid) {
@@ -757,14 +751,14 @@ pub fn supervise_optionals(
                                 .find(|p| p.entry_id == entry_id)
                                 .cloned();
                             mark_policy_success(profile, entry_id, system_generation, now);
-                            if let Some(after) = profile
-                                .policy_state
-                                .iter()
-                                .find(|p| p.entry_id == entry_id)
+                            if let Some(after) =
+                                profile.policy_state.iter().find(|p| p.entry_id == entry_id)
                             {
                                 if before
                                     .as_ref()
-                                    .map(|b| !b.completed_first_login && after.completed_first_login)
+                                    .map(|b| {
+                                        !b.completed_first_login && after.completed_first_login
+                                    })
                                     .unwrap_or(false)
                                 {
                                     stats.first_login_completions =
@@ -791,7 +785,8 @@ pub fn supervise_optionals(
                 if !stopping
                     && opt.restart_policy == OptionalComponentRestartPolicy::OnFailureOnce
                     && !opt.restart_used
-                    && opt.launch_result != Some(StartupLaunchResult::RunningWithoutReadinessProtocol)
+                    && opt.launch_result
+                        != Some(StartupLaunchResult::RunningWithoutReadinessProtocol)
                 {
                     opt.restart_used = true;
                     opt.state = SessionComponentState::RestartPending;
@@ -841,7 +836,9 @@ pub fn profile_error_code(err: ProfileError) -> u64 {
         ProfileError::IneligibleBundle | ProfileError::UnavailableBundle => {
             SessionMsg::ERR_INELIGIBLE
         }
-        ProfileError::DuplicateBundleId | ProfileError::DuplicateEntryId => SessionMsg::ERR_DUPLICATE,
+        ProfileError::DuplicateBundleId | ProfileError::DuplicateEntryId => {
+            SessionMsg::ERR_DUPLICATE
+        }
         ProfileError::TooManyEntries => SessionMsg::ERR_LIMIT,
         ProfileError::ShellAsOptional
         | ProfileError::ExecutablePathRejected
@@ -889,10 +886,7 @@ pub fn unpack_app_id(msg: &IpcMsg, len: usize) -> String<32> {
 
 const IPC_MAX_WORDS_LOCAL: usize = 8;
 
-pub fn authorize_own_profile(
-    caller: SessionProcessCredentials,
-    target_uid: u32,
-) -> bool {
+pub fn authorize_own_profile(caller: SessionProcessCredentials, target_uid: u32) -> bool {
     caller.uid == 0 || caller.uid == target_uid
 }
 
@@ -937,8 +931,7 @@ pub fn apply_mutation(
             config_log("DISABLE_APP PASS");
         }
         SessionMsg::SESSION_PROFILE_SET_POLICY => {
-            let policy =
-                StartupPolicy::from_u8(policy_raw).ok_or(ProfileError::InvalidPolicy)?;
+            let policy = StartupPolicy::from_u8(policy_raw).ok_or(ProfileError::InvalidPolicy)?;
             profile_set_policy(profile, app_id, policy, expected_revision, now)?;
             stats.profile_updates = stats.profile_updates.saturating_add(1);
         }
@@ -972,22 +965,24 @@ pub fn pack_profile_summary(profile: &SessionProfile, degraded: bool) -> IpcMsg 
         .word(3, profile.updated_at)
 }
 
-pub fn pack_eligible_entry(index: u64, catalog: &[CatalogBundle], profile: &SessionProfile) -> IpcMsg {
+pub fn pack_eligible_entry(
+    index: u64,
+    catalog: &[CatalogBundle],
+    profile: &SessionProfile,
+) -> IpcMsg {
     let list = list_eligible(catalog, profile);
     if index as usize >= list.len() {
         return IpcMsg::with_label(SessionMsg::ERROR).word(0, SessionMsg::ERR_NOT_FOUND);
     }
     let e = &list[index as usize];
-    let mut msg = IpcMsg::with_label(SessionMsg::REPLY)
-        .word(0, index)
-        .word(
-            1,
-            (list.len() as u64)
-                | ((e.default_policy as u64) << 16)
-                | ((e.single_instance as u64) << 24)
-                | ((e.currently_configured as u64) << 32)
-                | ((e.availability as u64) << 40),
-        );
+    let mut msg = IpcMsg::with_label(SessionMsg::REPLY).word(0, index).word(
+        1,
+        (list.len() as u64)
+            | ((e.default_policy as u64) << 16)
+            | ((e.single_instance as u64) << 24)
+            | ((e.currently_configured as u64) << 32)
+            | ((e.availability as u64) << 40),
+    );
     pack_app_id(&mut msg, e.app_id.as_str());
     // Overlay length into word1 high.
     msg.words[1] |= (e.app_id.len().min(32) as u64) << 48;
@@ -1005,24 +1000,20 @@ pub fn pack_startup_entry(index: u64, profile: &SessionProfile) -> IpcMsg {
     }
     for i in 1..indices.len() {
         let mut j = i;
-        while j > 0
-            && profile.entries[indices[j]].order < profile.entries[indices[j - 1]].order
-        {
+        while j > 0 && profile.entries[indices[j]].order < profile.entries[indices[j - 1]].order {
             indices.swap(j - 1, j);
             j -= 1;
         }
     }
     let e = &profile.entries[indices[index as usize]];
-    let mut msg = IpcMsg::with_label(SessionMsg::REPLY)
-        .word(0, index)
-        .word(
-            1,
-            (profile.entries.len() as u64)
-                | ((e.enabled as u64) << 16)
-                | ((e.policy as u64) << 24)
-                | ((e.order as u64) << 32)
-                | ((profile.revision & 0xffff) << 48),
-        );
+    let mut msg = IpcMsg::with_label(SessionMsg::REPLY).word(0, index).word(
+        1,
+        (profile.entries.len() as u64)
+            | ((e.enabled as u64) << 16)
+            | ((e.policy as u64) << 24)
+            | ((e.order as u64) << 32)
+            | ((profile.revision & 0xffff) << 48),
+    );
     pack_app_id(&mut msg, e.app_id.as_str());
     msg.words[1] = (profile.entries.len() as u64)
         | ((e.app_id.len().min(32) as u64) << 8)
@@ -1049,7 +1040,8 @@ pub fn complete_app_reported(
     use sunlight_sessiond::StartupCompletionMode;
     // Accept exact id or welcome-family id (legacy / repaired entries).
     let Some(opt) = frozen.optionals.iter_mut().find(|o| {
-        o.app_id.as_str() == app_id || (is_welcome_app_id(app_id) && is_welcome_app_id(o.app_id.as_str()))
+        o.app_id.as_str() == app_id
+            || (is_welcome_app_id(app_id) && is_welcome_app_id(o.app_id.as_str()))
     }) else {
         debug_log("[SESSION-CONFIG] complete: optional not found for app\n");
         return Err(SessionMsg::ERR_NOT_FOUND);
@@ -1063,9 +1055,7 @@ pub fn complete_app_reported(
     }
     if opt.process_id != Some(caller_pid) {
         // Still record completion if this pid is the live welcome process.
-        if !is_welcome_app_id(opt.app_id.as_str())
-            || !process_is_alive(caller_pid)
-        {
+        if !is_welcome_app_id(opt.app_id.as_str()) || !process_is_alive(caller_pid) {
             debug_log("[SESSION-CONFIG] complete: pid mismatch\n");
             return Err(SessionMsg::ERR_UNAUTHORIZED);
         }

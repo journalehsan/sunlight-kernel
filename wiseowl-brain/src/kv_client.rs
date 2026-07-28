@@ -227,7 +227,11 @@ pub fn load_mtm(store: &dyn MtmStore, uid: u64) -> MtmLoadResult {
     result
 }
 
-pub fn save_preferences(store: &dyn MtmStore, uid: u64, prefs: &BrainPreferences) -> Result<(), ()> {
+pub fn save_preferences(
+    store: &dyn MtmStore,
+    uid: u64,
+    prefs: &BrainPreferences,
+) -> Result<(), ()> {
     let mut key = heapless::String::<16>::new();
     if !format_user_key(uid, KEY_CODE_STYLE, &mut key) {
         return Err(());
@@ -236,15 +240,25 @@ pub fn save_preferences(store: &dyn MtmStore, uid: u64, prefs: &BrainPreferences
     if !format_user_key(uid, KEY_CODE_SMS, &mut key) {
         return Err(());
     }
-    store.put(key.as_str(), encode_bool(prefs.show_machine_summary).as_bytes())?;
+    store.put(
+        key.as_str(),
+        encode_bool(prefs.show_machine_summary).as_bytes(),
+    )?;
     if !format_user_key(uid, KEY_CODE_SIS, &mut key) {
         return Err(());
     }
-    store.put(key.as_str(), encode_bool(prefs.show_index_status).as_bytes())?;
+    store.put(
+        key.as_str(),
+        encode_bool(prefs.show_index_status).as_bytes(),
+    )?;
     Ok(())
 }
 
-pub fn save_welcome_state(store: &dyn MtmStore, uid: u64, state: &WelcomeMemoryState) -> Result<(), ()> {
+pub fn save_welcome_state(
+    store: &dyn MtmStore,
+    uid: u64,
+    state: &WelcomeMemoryState,
+) -> Result<(), ()> {
     let mut key = heapless::String::<16>::new();
     let mut num = heapless::String::<16>::new();
     if !format_user_key(uid, KEY_CODE_VISIT, &mut key) {

@@ -265,8 +265,8 @@ struct LightLensApp {
     current_index: usize,
     has_current_index: bool,
     /// Decoded photo pixels (straight ARGB u32). Prefer this over a TGA view so
-/// we can force-opaque blit the same way the File Manager preview fixed the
-/// gray SIMG v2 hole on alpha-capable surfaces.
+    /// we can force-opaque blit the same way the File Manager preview fixed the
+    /// gray SIMG v2 hole on alpha-capable surfaces.
     image: Option<RgbaImage>,
     info: ImageInfo,
     load_state: LoadState,

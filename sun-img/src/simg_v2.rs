@@ -602,9 +602,8 @@ pub fn decode_argb_u32(data: &[u8]) -> Result<(u32, u32, Vec<u32>), ImageError> 
         .map_err(|_| ImageError::DecodeFailed(alloc::string::String::from("out of memory")))?;
     words.resize(pixel_count, 0);
     // SAFETY: `Vec<u32>` is 4-byte aligned; length*4 == expected.
-    let bytes: &mut [u8] = unsafe {
-        core::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, expected)
-    };
+    let bytes: &mut [u8] =
+        unsafe { core::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, expected) };
 
     match header.compression {
         Compression::None => {

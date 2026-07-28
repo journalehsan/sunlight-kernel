@@ -7,8 +7,8 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use sunlight_ipc::{
-    ipc_call_timeout, nameserver_lookup, nameserver_lookup_timeout, shm_alloc, shm_create, shm_free, shm_map,
-    CapabilityToken, IpcMsg, SHM_PAGE,
+    ipc_call_timeout, nameserver_lookup, nameserver_lookup_timeout, shm_alloc, shm_create,
+    shm_free, shm_map, CapabilityToken, IpcMsg, SHM_PAGE,
 };
 use wiseowl_memory::{MemoryId, SourceId};
 use wiseowl_memorydb::database::InsertRequest;
@@ -103,7 +103,11 @@ impl NativeMemoryDbClient {
     #[cfg(feature = "phase375-test")]
     pub fn arm_memorydb_shm_crash(&mut self) -> Result<(), IndexError> {
         let reply = self.call(IpcMsg::with_label(MemoryDbOp::TestArmShmCrash as u64))?;
-        if reply.words[0] == 1 { Ok(()) } else { Err(IndexError::InvalidRequest("arm shm crash")) }
+        if reply.words[0] == 1 {
+            Ok(())
+        } else {
+            Err(IndexError::InvalidRequest("arm shm crash"))
+        }
     }
 
     fn endpoint_cap(&mut self) -> Result<CapabilityToken, IndexError> {
@@ -158,7 +162,10 @@ impl NativeMemoryDbClient {
         self.shm.shm_allocations = self.shm.shm_allocations.saturating_add(1);
         self.shm.shm_shares = self.shm.shm_shares.saturating_add(1);
         self.shm.active_shm_leases = self.shm.active_shm_leases.saturating_add(1);
-        self.shm.shm_bytes_active = self.shm.shm_bytes_active.saturating_add(allocation_bytes as u64);
+        self.shm.shm_bytes_active = self
+            .shm
+            .shm_bytes_active
+            .saturating_add(allocation_bytes as u64);
         self.shm.shm_bytes_peak = self.shm.shm_bytes_peak.max(self.shm.shm_bytes_active);
         self.shm_leases = self.shm_leases.saturating_add(1);
         unsafe {
@@ -285,7 +292,11 @@ impl IndexMemoryDb for NativeMemoryDbClient {
         Ok(())
     }
 
-    fn delete_source(&mut self, source_id: SourceId, batch: u32) -> Result<(u32, bool), IndexError> {
+    fn delete_source(
+        &mut self,
+        source_id: SourceId,
+        batch: u32,
+    ) -> Result<(u32, bool), IndexError> {
         let msg = IpcMsg::with_label(MemoryDbOp::DeleteSource as u64)
             .word(0, source_id.get())
             .word(1, batch as u64);
@@ -363,10 +374,9 @@ impl IndexMemoryDb for NativeMemoryDbClient {
                     let slice = core::slice::from_raw_parts(ptr, len);
                     rec.payload.extend_from_slice(slice);
                 }
-                self.shm_bytes_received =
-                    self.shm_bytes_received.saturating_add(len as u64);
-                let release = IpcMsg::with_label(MemoryDbOp::ReleaseLease as u64)
-                    .with_cap(0, reply.caps[0]);
+                self.shm_bytes_received = self.shm_bytes_received.saturating_add(len as u64);
+                let release =
+                    IpcMsg::with_label(MemoryDbOp::ReleaseLease as u64).with_cap(0, reply.caps[0]);
                 let _ = self.call(release);
                 let _ = shm_free(reply.caps[0]);
             }
@@ -394,7 +404,9 @@ impl IndexMemoryDb for NativeMemoryDbClient {
         let reply = match self.call(msg) {
             Ok(reply) => reply,
             Err(error) => {
-                if shm_free(token).is_ok() { self.note_owner_free(SHM_PAGE); }
+                if shm_free(token).is_ok() {
+                    self.note_owner_free(SHM_PAGE);
+                }
                 return Err(error);
             }
         };
@@ -406,25 +418,39 @@ impl IndexMemoryDb for NativeMemoryDbClient {
             let raw = u64::from_le_bytes(chunk.try_into().unwrap());
             ids.push(MemoryId::from_raw(raw).map_err(|_| IndexError::Internal("source id page"))?);
         }
-        if shm_free(token).is_ok() { self.note_owner_free(SHM_PAGE); }
+        if shm_free(token).is_ok() {
+            self.note_owner_free(SHM_PAGE);
+        }
         Ok((ids, reply.words[2] != 0))
     }
 
     fn query(&mut self, q: MemoryQuery) -> Result<QueryResult, IndexError> {
         let body = encode_native_query(&q).map_err(|_| IndexError::InvalidRequest("query"))?;
         if body.len() > SHM_PAGE {
-            return Err(IndexError::PayloadTooLarge { size: body.len() as u32, max: SHM_PAGE as u32 });
+            return Err(IndexError::PayloadTooLarge {
+                size: body.len() as u32,
+                max: SHM_PAGE as u32,
+            });
         }
-        let (request_ptr, request_token) = shm_alloc().map_err(|_| IndexError::Io("query request shm"))?;
+        let (request_ptr, request_token) =
+            shm_alloc().map_err(|_| IndexError::Io("query request shm"))?;
         let (result_ptr, result_token) = match shm_alloc() {
             Ok(v) => v,
-            Err(_) => { let _ = shm_free(request_token); return Err(IndexError::Io("query result shm")); }
+            Err(_) => {
+                let _ = shm_free(request_token);
+                return Err(IndexError::Io("query result shm"));
+            }
         };
-        unsafe { core::ptr::copy_nonoverlapping(body.as_ptr(), request_ptr, body.len()); }
+        unsafe {
+            core::ptr::copy_nonoverlapping(body.as_ptr(), request_ptr, body.len());
+        }
         self.shm.shm_allocations = self.shm.shm_allocations.saturating_add(2);
         self.shm.shm_shares = self.shm.shm_shares.saturating_add(2);
         self.shm.active_shm_leases = self.shm.active_shm_leases.saturating_add(2);
-        self.shm.shm_bytes_active = self.shm.shm_bytes_active.saturating_add((SHM_PAGE * 2) as u64);
+        self.shm.shm_bytes_active = self
+            .shm
+            .shm_bytes_active
+            .saturating_add((SHM_PAGE * 2) as u64);
         self.shm.shm_bytes_peak = self.shm.shm_bytes_peak.max(self.shm.shm_bytes_active);
         let msg = IpcMsg::with_label(MemoryDbOp::Query as u64)
             .word(0, body.len() as u64)
@@ -433,8 +459,12 @@ impl IndexMemoryDb for NativeMemoryDbClient {
         let reply = match self.call(msg) {
             Ok(r) => r,
             Err(e) => {
-                if shm_free(request_token).is_ok() { self.note_owner_free(SHM_PAGE); }
-                if shm_free(result_token).is_ok() { self.note_owner_free(SHM_PAGE); }
+                if shm_free(request_token).is_ok() {
+                    self.note_owner_free(SHM_PAGE);
+                }
+                if shm_free(result_token).is_ok() {
+                    self.note_owner_free(SHM_PAGE);
+                }
                 return Err(e);
             }
         };
@@ -443,19 +473,29 @@ impl IndexMemoryDb for NativeMemoryDbClient {
         let result_len = reply.words[0] as usize;
         let result = if result_len <= SHM_PAGE {
             let bytes = unsafe { core::slice::from_raw_parts(result_ptr, result_len) };
-            decode_native_query_result(bytes).map_err(|_| IndexError::InvalidRequest("query result"))
+            decode_native_query_result(bytes)
+                .map_err(|_| IndexError::InvalidRequest("query result"))
         } else {
-            Err(IndexError::PayloadTooLarge { size: result_len as u32, max: SHM_PAGE as u32 })
+            Err(IndexError::PayloadTooLarge {
+                size: result_len as u32,
+                max: SHM_PAGE as u32,
+            })
         };
-        if shm_free(request_token).is_ok() { self.note_owner_free(SHM_PAGE); }
-        if shm_free(result_token).is_ok() { self.note_owner_free(SHM_PAGE); }
+        if shm_free(request_token).is_ok() {
+            self.note_owner_free(SHM_PAGE);
+        }
+        if shm_free(result_token).is_ok() {
+            self.note_owner_free(SHM_PAGE);
+        }
         result
     }
 
     fn reconcile_import(&mut self, key: &ImportKey) -> Result<ImportReconcileResult, IndexError> {
         let key_hex = key.key_hex();
         let (ptr, token) = shm_alloc().map_err(|_| IndexError::Io("reconcile shm"))?;
-        unsafe { core::ptr::copy_nonoverlapping(key_hex.as_ptr(), ptr, key_hex.len()); }
+        unsafe {
+            core::ptr::copy_nonoverlapping(key_hex.as_ptr(), ptr, key_hex.len());
+        }
         let msg = IpcMsg::with_label(MemoryDbOp::ReconcileImport as u64)
             .word(0, key.source_id.get())
             .word(1, key.source_revision as u64)
@@ -523,8 +563,8 @@ fn write_atomic_native(tmp: &[u8], destination: &[u8], bytes: &[u8]) -> Result<(
     let fd = sunlight_libc::create(tmp).map_err(|_| IndexError::Io("create state temp"))?;
     let mut remaining = bytes;
     while !remaining.is_empty() {
-        let n = sunlight_libc::write(fd, remaining)
-            .map_err(|_| IndexError::Io("write state temp"))?;
+        let n =
+            sunlight_libc::write(fd, remaining).map_err(|_| IndexError::Io("write state temp"))?;
         if n == 0 {
             let _ = sunlight_libc::close(fd);
             return Err(IndexError::Io("short state write"));

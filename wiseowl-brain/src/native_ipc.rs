@@ -185,9 +185,7 @@ mod tests {
 
     #[test]
     fn inline_threshold_fits_page() {
-        assert!(
-            (BRAIN_IPC_HEADER_LEN as u32 + INLINE_PAYLOAD_THRESHOLD) <= SHM_PAGE_SIZE
-        );
+        assert!((BRAIN_IPC_HEADER_LEN as u32 + INLINE_PAYLOAD_THRESHOLD) <= SHM_PAGE_SIZE);
     }
 
     #[test]

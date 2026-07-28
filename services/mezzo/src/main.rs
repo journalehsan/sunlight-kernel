@@ -143,10 +143,7 @@ fn presenter_hello_reply(session: &LockSession, authority: CapabilityToken) -> I
         }
     }
     IpcMsg::with_label(MezzoMsg::REPLY)
-        .word(
-            0,
-            session.generation | ((session.safe_mode as u64) << 63),
-        )
+        .word(0, session.generation | ((session.safe_mode as u64) << 63))
         .word(
             1,
             (session.session_uid as u64) | ((session.session_gid as u64) << 32),
@@ -291,21 +288,14 @@ pub extern "C" fn _start() -> ! {
                         display_enter(generation).unwrap_or(CapabilityToken::INVALID)
                     };
                     if authority != CapabilityToken::INVALID {
-                        let _ = display_presenter(
-                            SgpMsg::LOCK_LEAVE,
-                            generation,
-                            0,
-                            authority,
-                        );
+                        let _ = display_presenter(SgpMsg::LOCK_LEAVE, generation, 0, authority);
                     }
                     // Always clear local lock state after a trusted Login reattach
                     // so desktop input is not permanently stuck behind lock.
                     session.finish_leave();
                     display_authority = CapabilityToken::INVALID;
                     expected_presenter_pid = 0;
-                    sunlight_ipc::debug_log(
-                        "[MEZZO] SESSION_FORCE_UNLOCK_TRUSTED: unlocked\n",
-                    );
+                    sunlight_ipc::debug_log("[MEZZO] SESSION_FORCE_UNLOCK_TRUSTED: unlocked\n");
                     status_reply(&session)
                 }
             }

@@ -146,6 +146,8 @@ mod tests {
 
     #[test]
     fn sealed_can_promote() {
-        assert!(MemoryState::Sealed.require(LifecycleOp::PromoteToKv).is_ok());
+        assert!(MemoryState::Sealed
+            .require(LifecycleOp::PromoteToKv)
+            .is_ok());
     }
 }

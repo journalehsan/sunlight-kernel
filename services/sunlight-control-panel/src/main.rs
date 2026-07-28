@@ -390,9 +390,8 @@ impl ControlPanelApp {
         let sens_slider = Slider::horizontal(Rect::default())
             .with_range(1, 10)
             .with_value(5);
-        let mut accel_cb =
-            Checkbox::new(Rect::default(), "Enable pointer acceleration")
-                .with_font(&Typography::UI_REGULAR);
+        let mut accel_cb = Checkbox::new(Rect::default(), "Enable pointer acceleration")
+            .with_font(&Typography::UI_REGULAR);
         accel_cb.checked = true;
         let wallpaper_config = load_desktop_config();
         let wallpaper_items = scan_wallpapers(&wallpaper_config.wallpaper);

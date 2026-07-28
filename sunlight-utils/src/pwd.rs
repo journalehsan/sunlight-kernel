@@ -71,6 +71,9 @@ mod tests {
             },
         );
         assert_eq!(status, 1);
-        assert_eq!(errors, b"pwd: cannot determine current directory\n".to_vec());
+        assert_eq!(
+            errors,
+            b"pwd: cannot determine current directory\n".to_vec()
+        );
     }
 }

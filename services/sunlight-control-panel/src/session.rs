@@ -6,9 +6,7 @@
 use core::fmt::Write;
 
 use sun_font::{self, FontRole, TextStyle, Typography};
-use sunlight_ipc::{
-    ipc_call, nameserver_lookup, IpcMsg, SessionMsg, SESSION_ENDPOINT,
-};
+use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg, SessionMsg, SESSION_ENDPOINT};
 use sunlight_ui::{
     widgets::{Button, ButtonState},
     Canvas, Color, Event, MaterialPalette, Point, Rect, Theme,
@@ -136,7 +134,10 @@ impl SessionPageState {
             self.status.set("Session service unavailable");
             return;
         };
-        let summary = ipc_call(ep, IpcMsg::with_label(SessionMsg::SESSION_PROFILE_GET).word(0, 0));
+        let summary = ipc_call(
+            ep,
+            IpcMsg::with_label(SessionMsg::SESSION_PROFILE_GET).word(0, 0),
+        );
         if summary.label != SessionMsg::REPLY {
             self.status.set("Could not load session profile");
             return;
@@ -395,7 +396,11 @@ impl SessionPageState {
                 theme,
                 Button::secondary(Rect::new(92, by, 80, 28), "Cancel"),
             );
-            draw_button(canvas, theme, Button::new(Rect::new(180, by, 72, 28), "Add"));
+            draw_button(
+                canvas,
+                theme,
+                Button::new(Rect::new(180, by, 72, 28), "Add"),
+            );
         } else {
             draw_button(canvas, theme, Button::new(Rect::new(92, by, 72, 28), "Add"));
             draw_button(
@@ -478,12 +483,7 @@ impl SessionPageState {
                                 .app_id
                                 .as_str(),
                         );
-                        self.mutate(
-                            SessionMsg::SESSION_PROFILE_REMOVE_APP,
-                            owned.as_str(),
-                            0,
-                            0,
-                        );
+                        self.mutate(SessionMsg::SESSION_PROFILE_REMOVE_APP, owned.as_str(), 0, 0);
                         return SessionAction::None;
                     }
                     if Rect::new(260, by, 80, 28).contains(pt) && self.entry_count > 0 {

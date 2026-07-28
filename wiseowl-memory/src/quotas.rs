@@ -78,7 +78,9 @@ impl QuotaSnapshot {
             crate::error::MemoryError::InternalInvariantViolation("ram overflow"),
         )?;
         if next > cfg.total_service_ram_bytes {
-            return Err(crate::error::MemoryError::QuotaExceeded("total service RAM"));
+            return Err(crate::error::MemoryError::QuotaExceeded(
+                "total service RAM",
+            ));
         }
         Ok(())
     }
@@ -115,13 +117,14 @@ pub struct SessionQuota {
 }
 
 impl SessionQuota {
-    pub fn can_add_ram(&self, add: u64, cfg: &QuotaConfig) -> Result<(), crate::error::MemoryError> {
-        let next = self
-            .ram_bytes
-            .checked_add(add)
-            .ok_or(crate::error::MemoryError::InternalInvariantViolation(
-                "session ram overflow",
-            ))?;
+    pub fn can_add_ram(
+        &self,
+        add: u64,
+        cfg: &QuotaConfig,
+    ) -> Result<(), crate::error::MemoryError> {
+        let next = self.ram_bytes.checked_add(add).ok_or(
+            crate::error::MemoryError::InternalInvariantViolation("session ram overflow"),
+        )?;
         if next > cfg.per_session_ram_bytes {
             return Err(crate::error::MemoryError::SessionQuotaExceeded);
         }
@@ -133,12 +136,9 @@ impl SessionQuota {
         add: u64,
         cfg: &QuotaConfig,
     ) -> Result<(), crate::error::MemoryError> {
-        let next = self
-            .cold_bytes
-            .checked_add(add)
-            .ok_or(crate::error::MemoryError::InternalInvariantViolation(
-                "session cold overflow",
-            ))?;
+        let next = self.cold_bytes.checked_add(add).ok_or(
+            crate::error::MemoryError::InternalInvariantViolation("session cold overflow"),
+        )?;
         if next > cfg.per_session_cold_bytes {
             return Err(crate::error::MemoryError::SessionQuotaExceeded);
         }

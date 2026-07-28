@@ -520,9 +520,7 @@ impl TasksApp {
             summary.x + 12,
             ram.bottom() + 6,
             summary.w.saturating_sub(24),
-            summary
-                .bottom()
-                .saturating_sub(ram.bottom() + 10) as u32,
+            summary.bottom().saturating_sub(ram.bottom() + 10) as u32,
         )
     }
 
@@ -671,7 +669,10 @@ impl TasksApp {
         n = 0;
         n += copy_tail(b"Tasks: ", &mut line3[n..]);
         n += write_num_into(task_n, &mut line3[n..]);
-        n += copy_tail(b"  Unique private physical (shared counted once)", &mut line3[n..]);
+        n += copy_tail(
+            b"  Unique private physical (shared counted once)",
+            &mut line3[n..],
+        );
         if acct.unclassified_bytes > 0 {
             n += copy_tail(b"  Unclass>0", &mut line3[n..]);
         }

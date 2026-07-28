@@ -212,7 +212,10 @@ impl ServiceState {
             self.powerd_ok = false;
             return;
         };
-        let reply = ipc_call(powerd, IpcMsg::with_label(PowerdMsg::GET_POWER_POLICY_STATUS));
+        let reply = ipc_call(
+            powerd,
+            IpcMsg::with_label(PowerdMsg::GET_POWER_POLICY_STATUS),
+        );
         if reply.label != PowerdMsg::REPLY {
             let reply = ipc_call(powerd, IpcMsg::with_label(PowerdMsg::GET_STATUS));
             if reply.label == PowerdMsg::REPLY {
@@ -331,7 +334,13 @@ impl ServiceState {
             .word(1, valid)
             .word(2, temp)
             .word(3, total as u64)
-            .word(4, (s.status as u64) | ((s.class as u64) << 8) | ((s.source as u64) << 16) | ((s.label as u64) << 24))
+            .word(
+                4,
+                (s.status as u64)
+                    | ((s.class as u64) << 8)
+                    | ((s.source as u64) << 16)
+                    | ((s.label as u64) << 24),
+            )
             .word(5, s.mono_ms)
     }
 
@@ -355,7 +364,11 @@ impl ServiceState {
     }
 
     fn reply_identity(&self) -> IpcMsg {
-        let Some(id) = self.backend.identity().or_else(sunlight_ipc::system_identity) else {
+        let Some(id) = self
+            .backend
+            .identity()
+            .or_else(sunlight_ipc::system_identity)
+        else {
             return IpcMsg::with_label(ThermaldMsg::ERROR).word(0, ThermaldMsg::ERR_UNAVAILABLE);
         };
         // Pack short tags into words; full strings via dedicated multi-message later.
@@ -507,9 +520,7 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
         ThermaldMsg::GET_IDENTITY => state.reply_identity(),
         ThermaldMsg::GET_PROFILE | ThermaldMsg::GET_POLICY => {
             let p = state.policy.profile() as u64;
-            IpcMsg::with_label(ThermaldMsg::REPLY)
-                .word(0, p)
-                .word(1, 0)
+            IpcMsg::with_label(ThermaldMsg::REPLY).word(0, p).word(1, 0)
         }
         ThermaldMsg::SET_PROFILE => {
             let profile = CoolingProfile::from_u64(msg.words[0]);

@@ -54,7 +54,11 @@ impl QueryCursor {
         }
     }
 
-    pub fn validate(&self, database_generation: u64, index_generation: u64) -> Result<(), crate::error::DbError> {
+    pub fn validate(
+        &self,
+        database_generation: u64,
+        index_generation: u64,
+    ) -> Result<(), crate::error::DbError> {
         let expect = Self::new(
             self.database_generation,
             self.index_generation,

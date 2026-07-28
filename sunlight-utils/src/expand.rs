@@ -79,7 +79,10 @@ fn parse_tablist(input: &[u8]) -> Result<TabStops, ()> {
     let mut part_count = 0;
     let mut has_comma = false;
     for &b in bytes {
-        if b == b',' { part_count += 1; has_comma = true; }
+        if b == b',' {
+            part_count += 1;
+            has_comma = true;
+        }
     }
     if part_count == 0 && !has_comma {
         part_count = if bytes.is_empty() { 0 } else { 1 };
@@ -93,7 +96,9 @@ fn parse_tablist(input: &[u8]) -> Result<TabStops, ()> {
 
     if part_count == 1 && !has_comma {
         let n = parse_u64(bytes).ok_or(())?;
-        if n == 0 { return Err(()); }
+        if n == 0 {
+            return Err(());
+        }
         return Ok(TabStops::Single(n));
     }
 
@@ -109,8 +114,12 @@ fn parse_tablist(input: &[u8]) -> Result<TabStops, ()> {
                 let part_trimmed = trim_bytes(part);
                 if !part_trimmed.is_empty() {
                     let n = parse_u64(part_trimmed).ok_or(())?;
-                    if n == 0 { return Err(()); }
-                    if n <= prev { return Err(()); }
+                    if n == 0 {
+                        return Err(());
+                    }
+                    if n <= prev {
+                        return Err(());
+                    }
                     if len < 64 {
                         stops[len] = n;
                         len += 1;
@@ -126,8 +135,12 @@ fn parse_tablist(input: &[u8]) -> Result<TabStops, ()> {
         let part_trimmed = trim_bytes(part);
         if !part_trimmed.is_empty() {
             let n = parse_u64(part_trimmed).ok_or(())?;
-            if n == 0 { return Err(()); }
-            if n <= prev { return Err(()); }
+            if n == 0 {
+                return Err(());
+            }
+            if n <= prev {
+                return Err(());
+            }
             if len < 64 {
                 stops[len] = n;
                 len += 1;
@@ -144,15 +157,22 @@ fn parse_tablist(input: &[u8]) -> Result<TabStops, ()> {
 
 fn trim_bytes(bytes: &[u8]) -> &[u8] {
     let start = bytes.iter().position(|&b| b != b' ').unwrap_or(bytes.len());
-    let end = bytes[start..].iter().rposition(|&b| b != b' ').map_or(bytes.len(), |p| start + p + 1);
+    let end = bytes[start..]
+        .iter()
+        .rposition(|&b| b != b' ')
+        .map_or(bytes.len(), |p| start + p + 1);
     &bytes[start..end]
 }
 
 fn parse_u64(slice: &[u8]) -> Option<u64> {
-    if slice.is_empty() { return None; }
+    if slice.is_empty() {
+        return None;
+    }
     let mut out = 0u64;
     for &b in slice {
-        if !b.is_ascii_digit() { return None; }
+        if !b.is_ascii_digit() {
+            return None;
+        }
         out = out.checked_mul(10)?.checked_add((b - b'0') as u64)?;
     }
     Some(out)
@@ -173,7 +193,9 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     for &path in files {
         if path == b"-" {
             let fc = expand_fd(io, STDIN, &tab_stops);
-            if fc != 0 { code = 1; }
+            if fc != 0 {
+                code = 1;
+            }
             continue;
         }
         let fd = match io.open(path) {
@@ -188,12 +210,17 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
         };
         let fc = expand_fd(io, fd, &tab_stops);
         let _ = io.close(fd);
-        if fc != 0 { code = 1; }
+        if fc != 0 {
+            code = 1;
+        }
     }
     code
 }
 
-fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(TabStops, &'a [&'a [u8]]), i32> {
+fn parse_args<'a>(
+    args: &'a [&'a [u8]],
+    io: &mut impl Io,
+) -> Result<(TabStops, &'a [&'a [u8]]), i32> {
     let mut tab_stops: TabStops = TabStops::Single(8);
     let mut rest = args;
 
@@ -248,7 +275,9 @@ fn expand_fd(io: &mut impl Io, fd: Fd, tab_stops: &TabStops) -> i32 {
                         }
                         0x08 => {
                             let _ = io.write_stdout(&[b]);
-                            if col > 0 { col -= 1; }
+                            if col > 0 {
+                                col -= 1;
+                            }
                         }
                         b'\r' => {
                             let _ = io.write_stdout(&[b]);
@@ -324,9 +353,15 @@ mod tests {
         fn new(files: Vec<(&'static [u8], &'static [u8])>) -> Self {
             let fc = files.len();
             Self {
-                files, output: Vec::new(), errors: Vec::new(),
-                opens: 0, closes: 0, offsets: std::vec![0; fc],
-                fail_read: false, stdin_data: None, stdin_offset: 0,
+                files,
+                output: Vec::new(),
+                errors: Vec::new(),
+                opens: 0,
+                closes: 0,
+                offsets: std::vec![0; fc],
+                fail_read: false,
+                stdin_data: None,
+                stdin_offset: 0,
                 eagain_reads: 0,
             }
         }
@@ -342,7 +377,9 @@ mod tests {
             Ok(Fd(idx as u32 + 3))
         }
         fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
-            if self.fail_read { return Err(Errno::Failed); }
+            if self.fail_read {
+                return Err(Errno::Failed);
+            }
             if self.eagain_reads != 0 {
                 self.eagain_reads -= 1;
                 return Err(Errno::Again);
@@ -350,25 +387,40 @@ mod tests {
             if fd == STDIN {
                 let data = self.stdin_data.unwrap_or(b"");
                 let off = self.stdin_offset;
-                if off >= data.len() { return Ok(0); }
+                if off >= data.len() {
+                    return Ok(0);
+                }
                 let n = (data.len() - off).min(buf.len());
                 buf[..n].copy_from_slice(&data[off..off + n]);
                 self.stdin_offset += n;
                 return Ok(n);
             }
             let idx = (fd.0 - 3) as usize;
-            if idx >= self.files.len() { return Ok(0); }
+            if idx >= self.files.len() {
+                return Ok(0);
+            }
             let data = self.files[idx].1;
             let off = self.offsets[idx];
-            if off >= data.len() { return Ok(0); }
+            if off >= data.len() {
+                return Ok(0);
+            }
             let n = (data.len() - off).min(buf.len());
             buf[..n].copy_from_slice(&data[off..off + n]);
             self.offsets[idx] += n;
             Ok(n)
         }
-        fn close(&mut self, _fd: Fd) -> Result<(), Errno> { self.closes += 1; Ok(()) }
-        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> { self.output.extend_from_slice(b); Ok(()) }
-        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> { self.errors.extend_from_slice(b); Ok(()) }
+        fn close(&mut self, _fd: Fd) -> Result<(), Errno> {
+            self.closes += 1;
+            Ok(())
+        }
+        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.output.extend_from_slice(b);
+            Ok(())
+        }
+        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.errors.extend_from_slice(b);
+            Ok(())
+        }
         fn yield_now(&mut self) {}
     }
 

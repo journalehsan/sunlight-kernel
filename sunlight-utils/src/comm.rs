@@ -246,12 +246,7 @@ fn open_one(io: &mut impl Io, path: &[u8]) -> Result<Fd, i32> {
     })
 }
 
-fn comm_fds(
-    io: &mut impl Io,
-    fd1: Fd,
-    fd2: Fd,
-    suppress: (bool, bool, bool),
-) -> i32 {
+fn comm_fds(io: &mut impl Io, fd1: Fd, fd2: Fd, suppress: (bool, bool, bool)) -> i32 {
     let (s1, s2, s3) = suppress;
     let mut r1 = LineReader::new();
     let mut r2 = LineReader::new();

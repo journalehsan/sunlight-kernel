@@ -52,11 +52,13 @@ pub struct GenerationVerifyResult {
 fn is_document(rec: &LongTermMemoryRecord) -> bool {
     match rec.attributes.get("record_role") {
         Some(AttributeValue::Text(role)) => role == "document",
-        _ => matches!(
-            rec.kind,
-            LongTermMemoryKind::ImportedRecord | LongTermMemoryKind::Observation
-        ) && rec.provenance.source_id.is_some()
-            && rec.attributes.get("import_key").is_some(),
+        _ => {
+            matches!(
+                rec.kind,
+                LongTermMemoryKind::ImportedRecord | LongTermMemoryKind::Observation
+            ) && rec.provenance.source_id.is_some()
+                && rec.attributes.get("import_key").is_some()
+        }
     }
 }
 
@@ -101,17 +103,22 @@ pub fn census_from_records(
                 continue;
             }
         }
-        let entry = by_source.entry(sid.get()).or_insert_with(|| SourceGenerationCensus {
-            source_id: sid.get(),
-            ..Default::default()
-        });
+        let entry = by_source
+            .entry(sid.get())
+            .or_insert_with(|| SourceGenerationCensus {
+                source_id: sid.get(),
+                ..Default::default()
+            });
         if is_document(rec) {
             all_doc_ids.entry(sid.get()).or_default().push(rec.id.get());
             match rec.state {
                 LongTermRecordState::Active => {
                     entry.active_document_generations =
                         entry.active_document_generations.saturating_add(1);
-                    active_doc_ids.entry(sid.get()).or_default().push(rec.id.get());
+                    active_doc_ids
+                        .entry(sid.get())
+                        .or_default()
+                        .push(rec.id.get());
                 }
                 LongTermRecordState::Superseded => {
                     entry.superseded_document_generations =
@@ -126,9 +133,7 @@ pub fn census_from_records(
             });
             if let Some(key) = import_key(rec) {
                 if rec.state == LongTermRecordState::Active {
-                    *import_keys
-                        .entry((sid.get(), key.to_string()))
-                        .or_default() += 1;
+                    *import_keys.entry((sid.get(), key.to_string())).or_default() += 1;
                 }
             }
         } else if is_chunk(rec) {
@@ -156,8 +161,9 @@ pub fn census_from_records(
     for ((sid, _), count) in &import_keys {
         if *count > 1 {
             if let Some(entry) = by_source.get_mut(sid) {
-                entry.duplicate_import_keys =
-                    entry.duplicate_import_keys.saturating_add(count.saturating_sub(1));
+                entry.duplicate_import_keys = entry
+                    .duplicate_import_keys
+                    .saturating_add(count.saturating_sub(1));
             }
         }
     }
@@ -234,7 +240,13 @@ mod tests {
     use crate::record::{LongTermMemoryKind, LongTermRecordState, MemoryScope, PayloadRef};
     use wiseowl_memory::{MemoryId, SourceId, SourceKind, TrustLevel};
 
-    fn doc(id: u64, sid: u64, rev: u32, state: LongTermRecordState, key: &str) -> LongTermMemoryRecord {
+    fn doc(
+        id: u64,
+        sid: u64,
+        rev: u32,
+        state: LongTermRecordState,
+        key: &str,
+    ) -> LongTermMemoryRecord {
         let mut attributes = AttributeSet {
             entries: alloc::vec![
                 Attribute {

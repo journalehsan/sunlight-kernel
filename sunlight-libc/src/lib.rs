@@ -126,13 +126,7 @@ pub fn close(fd: Fd) -> Result<(), Errno> {
 /// marshals the bounded output buffer and validates the kernel's returned
 /// pointer and NUL termination; it does not normalize `.`/`..` or slashes.
 pub fn getcwd(buf: &mut [u8; MAX_PATH]) -> Result<usize, Errno> {
-    let ret = unsafe {
-        sys::syscall2(
-            sys::SYS_GETCWD,
-            buf.as_mut_ptr() as u64,
-            buf.len() as u64,
-        )
-    };
+    let ret = unsafe { sys::syscall2(sys::SYS_GETCWD, buf.as_mut_ptr() as u64, buf.len() as u64) };
     let returned = sys::check(ret)?;
     if returned != buf.as_mut_ptr() as u64 {
         return Err(Errno::Failed);

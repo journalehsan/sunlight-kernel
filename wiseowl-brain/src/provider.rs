@@ -5,7 +5,11 @@ use crate::protocol::{BrainRequestWire, BrainResponseWire};
 pub trait BrainProvider {
     fn name(&self) -> &'static str;
     fn is_available(&self) -> bool;
-    fn handle(&self, request: &BrainRequestWire, ctx: &BrainContext) -> BrainResult<BrainResponseWire>;
+    fn handle(
+        &self,
+        request: &BrainRequestWire,
+        ctx: &BrainContext,
+    ) -> BrainResult<BrainResponseWire>;
 }
 
 pub struct LocalBoundedProvider;
@@ -19,7 +23,11 @@ impl BrainProvider for LocalBoundedProvider {
         true
     }
 
-    fn handle(&self, request: &BrainRequestWire, ctx: &BrainContext) -> BrainResult<BrainResponseWire> {
+    fn handle(
+        &self,
+        request: &BrainRequestWire,
+        ctx: &BrainContext,
+    ) -> BrainResult<BrainResponseWire> {
         let greeting = crate::greeting::plan_greeting_response(ctx)?;
         let resp = BrainResponseWire::greeting(greeting, request.request_id);
         Ok(resp)
@@ -37,7 +45,11 @@ impl BrainProvider for FutureOnlineProvider {
         false
     }
 
-    fn handle(&self, _request: &BrainRequestWire, _ctx: &BrainContext) -> BrainResult<BrainResponseWire> {
+    fn handle(
+        &self,
+        _request: &BrainRequestWire,
+        _ctx: &BrainContext,
+    ) -> BrainResult<BrainResponseWire> {
         Err(crate::error::BrainError::ProviderUnavailable)
     }
 }
@@ -90,9 +102,11 @@ mod tests {
 
         let mut dn: heapless::String<{ crate::protocol::MAX_NAME_LEN }> = heapless::String::new();
         let _ = dn.push_str("Alice");
-        let mut ver: heapless::String<{ crate::protocol::MAX_VERSION_LEN }> = heapless::String::new();
+        let mut ver: heapless::String<{ crate::protocol::MAX_VERSION_LEN }> =
+            heapless::String::new();
         let _ = ver.push_str("0.2.0");
-        let mut dc: heapless::String<{ crate::protocol::MAX_DEVICE_CLASS_LEN }> = heapless::String::new();
+        let mut dc: heapless::String<{ crate::protocol::MAX_DEVICE_CLASS_LEN }> =
+            heapless::String::new();
         let _ = dc.push_str("desktop");
         let mut mn: heapless::String<{ crate::protocol::MAX_MODEL_LEN }> = heapless::String::new();
 
@@ -133,9 +147,11 @@ mod tests {
         assert!(!p.is_available());
         let ctx = ContextBuilder::new().user_id(1000).build();
         let mut dn: heapless::String<{ crate::protocol::MAX_NAME_LEN }> = heapless::String::new();
-        let mut ver: heapless::String<{ crate::protocol::MAX_VERSION_LEN }> = heapless::String::new();
+        let mut ver: heapless::String<{ crate::protocol::MAX_VERSION_LEN }> =
+            heapless::String::new();
         let _ = ver.push_str("0.1.0");
-        let mut dc: heapless::String<{ crate::protocol::MAX_DEVICE_CLASS_LEN }> = heapless::String::new();
+        let mut dc: heapless::String<{ crate::protocol::MAX_DEVICE_CLASS_LEN }> =
+            heapless::String::new();
         let mut mn: heapless::String<{ crate::protocol::MAX_MODEL_LEN }> = heapless::String::new();
         let req = BrainRequestWire {
             request_id: 1,

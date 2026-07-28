@@ -23,17 +23,38 @@ pub enum IndexRequest {
         recursive: bool,
         maximum_depth: u16,
     },
-    RemoveRoot { root_id: u64 },
+    RemoveRoot {
+        root_id: u64,
+    },
     ListRoots,
-    StartScan { root_id: Option<u64> },
+    StartScan {
+        root_id: Option<u64>,
+    },
     GetScanStatus,
-    ListSources { offset: u32, limit: u32 },
-    InspectSource { source_id: u64 },
-    RetrySource { source_id: u64 },
-    ReindexSource { source_id: u64 },
-    ForgetSource { source_id: u64, dry_run: bool },
-    TokenizeText { text: String },
-    SearchText { text: String, limit: u32 },
+    ListSources {
+        offset: u32,
+        limit: u32,
+    },
+    InspectSource {
+        source_id: u64,
+    },
+    RetrySource {
+        source_id: u64,
+    },
+    ReindexSource {
+        source_id: u64,
+    },
+    ForgetSource {
+        source_id: u64,
+        dry_run: bool,
+    },
+    TokenizeText {
+        text: String,
+    },
+    SearchText {
+        text: String,
+        limit: u32,
+    },
     GetStats,
     GetHealth,
     /// Phase 3.5 diagnostics
@@ -41,7 +62,9 @@ pub enum IndexRequest {
     GetMemoryDb,
     GetPending,
     Reconcile,
-    GetDigest { source_id: u64 },
+    GetDigest {
+        source_id: u64,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -60,7 +83,10 @@ pub enum IndexResponse {
         more: bool,
     },
     Source(SourceManifest),
-    Forget { deleted: u32, more: bool },
+    Forget {
+        deleted: u32,
+        more: bool,
+    },
     Tokens {
         tokenizer_id: u32,
         tokenizer_version: u32,
@@ -78,8 +104,12 @@ pub enum IndexResponse {
         state: String,
         generation: u64,
     },
-    Pending { count: u64 },
-    Reconciled { count: u32 },
+    Pending {
+        count: u64,
+    },
+    Reconciled {
+        count: u32,
+    },
     Digest {
         algorithm: String,
         version: u16,
@@ -87,7 +117,10 @@ pub enum IndexResponse {
         source_revision: u32,
         manifest_version: u16,
     },
-    Error { code: String, message: String },
+    Error {
+        code: String,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone)]

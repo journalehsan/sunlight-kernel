@@ -338,7 +338,9 @@ pub fn capture_snapshot(
     zram_logical_bytes: u64,
     zram_physical_bytes: u64,
 ) -> PhysicalMemoryAccountingSnapshotV1 {
-    let gen = SAMPLE_GENERATION.fetch_add(1, Ordering::AcqRel).wrapping_add(1);
+    let gen = SAMPLE_GENERATION
+        .fetch_add(1, Ordering::AcqRel)
+        .wrapping_add(1);
 
     let managed_bytes = managed_frames.saturating_mul(FRAME_BYTES);
     let free_bytes = free_frames.saturating_mul(FRAME_BYTES);
@@ -403,7 +405,11 @@ pub fn capture_snapshot(
     // If zram_physical comes from aggregate stats (allocator_consumed), it may
     // already be reflected in CompressedMemory class. Prefer class when set to
     // avoid double-count when both are present and equal; if only stats set, use stats.
-    let zram_phys = if compressed > 0 { compressed } else { zram_phys };
+    let zram_phys = if compressed > 0 {
+        compressed
+    } else {
+        zram_phys
+    };
 
     let mut flags = MemoryAccountingFlags::empty();
     flags.insert(MemoryAccountingFlags::SNAPSHOT_CONSISTENT);
@@ -426,7 +432,8 @@ pub fn capture_snapshot(
     };
     // Retained boot image is informational when static assets live inside kernel
     // image; if nonzero and separate, it would need its own class. Phase 1: 0.
-    let retained_in_equation = if retained == PhysicalMemoryAccountingSnapshotV1::RETAINED_BOOT_UNMEASURED
+    let retained_in_equation = if retained
+        == PhysicalMemoryAccountingSnapshotV1::RETAINED_BOOT_UNMEASURED
         || retained == 0
     {
         0
@@ -525,16 +532,7 @@ pub fn run_memory_accounting_gate(pmm: &mut super::pmm::PhysicalMemoryManager) {
     crate::serial_println!("[MEMORY-ACCOUNTING] gate start");
 
     let (managed0, free0) = pmm.stats();
-    let base = capture_snapshot(
-        managed0 as u64,
-        free0 as u64,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-    );
+    let base = capture_snapshot(managed0 as u64, free0 as u64, 0, 0, 0, 1, 0, 0);
     crate::serial_println!(
         "[MEMORY-ACCOUNTING] baseline used={} KiB free={} KiB tasks={} ramfs={} unclassified={}",
         base.used_managed_bytes() / 1024,
@@ -645,9 +643,7 @@ pub fn run_memory_accounting_gate(pmm: &mut super::pmm::PhysicalMemoryManager) {
         );
     } else {
         // Still pass with measured zero (build without assets).
-        crate::serial_println!(
-            "[MEMORY-ACCOUNTING] WALLPAPER_DELTA PASS static_ramfs_file_data=0"
-        );
+        crate::serial_println!("[MEMORY-ACCOUNTING] WALLPAPER_DELTA PASS static_ramfs_file_data=0");
     }
 
     // Boot image residency measured at init.
@@ -676,10 +672,7 @@ pub fn run_memory_accounting_gate(pmm: &mut super::pmm::PhysicalMemoryManager) {
             crate::serial_println!("[MEMORY-ACCOUNTING] CONSERVATION PASS");
         }
         Err(e) => {
-            crate::serial_println!(
-                "[MEMORY-ACCOUNTING] CONSERVATION FAIL delta={}",
-                e.delta
-            );
+            crate::serial_println!("[MEMORY-ACCOUNTING] CONSERVATION FAIL delta={}", e.delta);
         }
     }
 
@@ -784,7 +777,10 @@ mod tests {
         reset_counters();
         // One SHM object of 8 frames mapped by five tasks → still 8 frames.
         note_alloc(PhysicalMemoryClass::SharedMemory, 8);
-        assert_eq!(class_bytes(PhysicalMemoryClass::SharedMemory), 8 * FRAME_BYTES);
+        assert_eq!(
+            class_bytes(PhysicalMemoryClass::SharedMemory),
+            8 * FRAME_BYTES
+        );
     }
 
     #[test]

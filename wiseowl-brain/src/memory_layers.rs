@@ -2,9 +2,7 @@ use core::fmt::Write;
 
 use crate::context::BrainContext;
 use crate::foundation::FoundationMemory;
-use crate::protocol::{
-    MAX_HIGHLIGHT_LABEL, MAX_HIGHLIGHT_VALUE, MAX_NAME_LEN,
-};
+use crate::protocol::{MAX_HIGHLIGHT_LABEL, MAX_HIGHLIGHT_VALUE, MAX_NAME_LEN};
 use crate::runtime_context::RuntimeContextSnapshot;
 
 /// Short-term memory: current request-local working context, fast and bounded.
@@ -75,7 +73,7 @@ pub struct LongTermMemory {
     pub indexed_doc_count: u64,
 }
 
-/// Foundation memory: immutable build-time identity and policy records.
+/// Foundation memory: immutable build-time identity and permanent principles.
 #[derive(Debug, Clone, Default)]
 pub struct FoundationMemoryLayer {
     pub loaded: bool,
@@ -177,7 +175,10 @@ impl BoundedContextSet {
         if let Some(cores) = ctx.cpu_cores {
             let mut v: heapless::String<MAX_HIGHLIGHT_VALUE> = heapless::String::new();
             let _ = write!(&mut v, "{} cores", cores);
-            let _ = facts.push(StmFact { key: s("cpu"), value: v });
+            let _ = facts.push(StmFact {
+                key: s("cpu"),
+                value: v,
+            });
         }
 
         if let Some(ram) = ctx.ram_mib {
@@ -187,7 +188,10 @@ impl BoundedContextSet {
             } else {
                 let _ = write!(&mut v, "{} MiB", ram);
             }
-            let _ = facts.push(StmFact { key: s("ram"), value: v });
+            let _ = facts.push(StmFact {
+                key: s("ram"),
+                value: v,
+            });
         }
 
         if !ctx.model_name.is_empty() {

@@ -44,11 +44,10 @@ enum Mode {
 }
 
 pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
-    let (mode, skip_fields, skip_chars, input_path, output_path) =
-        match parse_args(args, io) {
-            Ok(v) => v,
-            Err(code) => return code,
-        };
+    let (mode, skip_fields, skip_chars, input_path, output_path) = match parse_args(args, io) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
 
     let in_fd = match open_input(io, input_path) {
         Ok(fd) => fd,
@@ -264,7 +263,15 @@ fn uniq_fd(
                     } else {
                         // Flush previous run
                         if count > 0 {
-                            flush_run(io, out_fd, mode, count, &prev_full[..prev_full_len], prev_has_newline, &mut write_buf);
+                            flush_run(
+                                io,
+                                out_fd,
+                                mode,
+                                count,
+                                &prev_full[..prev_full_len],
+                                prev_has_newline,
+                                &mut write_buf,
+                            );
                         }
                         // Start new run
                         prev_key_len = key.len().min(MAX_LINE_LEN);
@@ -336,7 +343,15 @@ fn uniq_fd(
             }
         } else {
             if count > 0 {
-                flush_run(io, out_fd, mode, count, &prev_full[..prev_full_len], prev_has_newline, &mut write_buf);
+                flush_run(
+                    io,
+                    out_fd,
+                    mode,
+                    count,
+                    &prev_full[..prev_full_len],
+                    prev_has_newline,
+                    &mut write_buf,
+                );
             }
             let mut tmp = [0u8; MAX_LINE_LEN];
             let klen = key.len().min(MAX_LINE_LEN);
@@ -352,7 +367,15 @@ fn uniq_fd(
 
     // Flush final run
     if count > 0 {
-        flush_run(io, out_fd, mode, count, &prev_full[..prev_full_len], prev_has_newline, &mut write_buf);
+        flush_run(
+            io,
+            out_fd,
+            mode,
+            count,
+            &prev_full[..prev_full_len],
+            prev_has_newline,
+            &mut write_buf,
+        );
     }
 
     0
@@ -556,11 +579,11 @@ mod tests {
 
     // Override open_output for mock tests
     fn run_mock(args: &[&[u8]], mock: &mut Mock) -> i32 {
-        let (mode, skip_fields, skip_chars, input_path, _output_path) =
-            match parse_args(args, mock) {
-                Ok(v) => v,
-                Err(code) => return code,
-            };
+        let (mode, skip_fields, skip_chars, input_path, _output_path) = match parse_args(args, mock)
+        {
+            Ok(v) => v,
+            Err(code) => return code,
+        };
 
         let in_fd = match open_input(mock, input_path) {
             Ok(fd) => fd,

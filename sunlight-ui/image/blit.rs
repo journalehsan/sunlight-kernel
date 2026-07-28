@@ -128,7 +128,15 @@ pub fn clamp_corner_radius(w: u32, h: u32, radius: u32) -> u32 {
 ///
 /// Coordinates are framebuffer / canvas pixels (integer pixel indices).
 #[inline]
-pub fn rounded_rect_coverage(ox: i32, oy: i32, w: u32, h: u32, radius: u32, px: i32, py: i32) -> u8 {
+pub fn rounded_rect_coverage(
+    ox: i32,
+    oy: i32,
+    w: u32,
+    h: u32,
+    radius: u32,
+    px: i32,
+    py: i32,
+) -> u8 {
     if w == 0 || h == 0 {
         return 0;
     }
@@ -269,7 +277,13 @@ pub fn sample_bilinear_premul(
 
 /// Nearest-neighbour sample (for the 1:1 fast path and reference tests).
 #[inline]
-pub fn sample_nearest(sample: &dyn Fn(u32, u32) -> u32, src_w: u32, src_h: u32, x: u32, y: u32) -> u32 {
+pub fn sample_nearest(
+    sample: &dyn Fn(u32, u32) -> u32,
+    src_w: u32,
+    src_h: u32,
+    x: u32,
+    y: u32,
+) -> u32 {
     if src_w == 0 || src_h == 0 {
         return 0;
     }
@@ -375,7 +389,10 @@ mod tests {
         assert_eq!(rounded_rect_coverage(ox, oy, w, h, r, 8, 3), 0);
         // Outer corner pixel should be outside or partial, not full.
         let corner = rounded_rect_coverage(ox, oy, w, h, r, 0, 0);
-        assert!(corner < 255, "outer corner should not be fully covered: {corner}");
+        assert!(
+            corner < 255,
+            "outer corner should not be fully covered: {corner}"
+        );
         // Pixel clearly inside the top-left quarter-circle.
         let inner_corner = rounded_rect_coverage(ox, oy, w, h, r, 2, 2);
         assert_eq!(inner_corner, 255);

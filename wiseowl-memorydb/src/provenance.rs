@@ -149,8 +149,7 @@ impl LongTermProvenance {
             );
         }
         let insertion_time_ns = r.read_u64()?;
-        let trust =
-            TrustLevel::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("prov trust"))?;
+        let trust = TrustLevel::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("prov trust"))?;
         let source_content_hash = r.read_opt_u64()?;
         let external_ref = match r.read_u8()? {
             0 => None,
@@ -164,8 +163,8 @@ impl LongTermProvenance {
             }
             _ => return Err(DbError::InvalidValue("external_ref tag")),
         };
-        let derivation = DerivationKind::from_u8(r.read_u8()?)
-            .ok_or(DbError::InvalidValue("derivation"))?;
+        let derivation =
+            DerivationKind::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("derivation"))?;
         let p = Self {
             source_kind,
             source_id,
@@ -211,8 +210,7 @@ impl RelationshipProvenance {
                 .to_string()
         };
         let created_at_ns = r.read_u64()?;
-        let trust =
-            TrustLevel::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("rel trust"))?;
+        let trust = TrustLevel::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("rel trust"))?;
         Ok(Self {
             producer_service,
             created_at_ns,

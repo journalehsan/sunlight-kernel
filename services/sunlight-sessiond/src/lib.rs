@@ -169,12 +169,24 @@ impl SessionRecord {
         let valid = matches!(
             (self.state, next),
             (SessionState::Created, SessionState::Preparing)
-                | (SessionState::Preparing, SessionState::StartingRequiredComponents)
-                | (SessionState::StartingRequiredComponents, SessionState::Running)
-                | (SessionState::StartingRequiredComponents, SessionState::Degraded)
+                | (
+                    SessionState::Preparing,
+                    SessionState::StartingRequiredComponents
+                )
+                | (
+                    SessionState::StartingRequiredComponents,
+                    SessionState::Running
+                )
+                | (
+                    SessionState::StartingRequiredComponents,
+                    SessionState::Degraded
+                )
                 | (SessionState::Running, SessionState::Degraded)
                 | (SessionState::Running, SessionState::Stopping)
-                | (SessionState::Degraded, SessionState::StartingRequiredComponents)
+                | (
+                    SessionState::Degraded,
+                    SessionState::StartingRequiredComponents
+                )
                 | (SessionState::Degraded, SessionState::Failed)
                 | (SessionState::Failed, SessionState::Stopping)
                 | (SessionState::Locking, SessionState::Locked)

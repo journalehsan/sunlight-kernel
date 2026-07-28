@@ -447,12 +447,11 @@ pub const LINUX_MAP_STACK: u64 = 0x20_000;
 /// strict native mmap surface. MAP_STACK is advisory on Linux, so it is
 /// accepted and removed only after the complete request has been validated.
 pub fn translate_mmap_flags(flags: u64) -> Option<u32> {
-    const SUPPORTED: u64 =
-        LINUX_MAP_PRIVATE
-            | LINUX_MAP_FIXED
-            | LINUX_MAP_ANONYMOUS
-            | LINUX_MAP_FIXED_NOREPLACE
-            | LINUX_MAP_STACK;
+    const SUPPORTED: u64 = LINUX_MAP_PRIVATE
+        | LINUX_MAP_FIXED
+        | LINUX_MAP_ANONYMOUS
+        | LINUX_MAP_FIXED_NOREPLACE
+        | LINUX_MAP_STACK;
 
     if flags & !SUPPORTED != 0
         || flags & (LINUX_MAP_PRIVATE | LINUX_MAP_ANONYMOUS)

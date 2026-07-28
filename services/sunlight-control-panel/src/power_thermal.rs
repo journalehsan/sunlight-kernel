@@ -518,11 +518,7 @@ impl PowerThermalPageState {
 
             let mut fan_s = FixedStr::<96>::empty();
             if t.rpm > 0 {
-                let _ = write!(
-                    fan_s,
-                    "Fan: Firmware Auto  {} RPM",
-                    t.rpm
-                );
+                let _ = write!(fan_s, "Fan: Firmware Auto  {} RPM", t.rpm);
             } else {
                 let _ = write!(
                     fan_s,

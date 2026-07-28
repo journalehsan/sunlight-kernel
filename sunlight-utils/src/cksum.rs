@@ -203,9 +203,15 @@ mod tests {
         fn new(files: Vec<(&'static [u8], &'static [u8])>) -> Self {
             let fc = files.len();
             Self {
-                files, output: Vec::new(), errors: Vec::new(),
-                opens: 0, closes: 0, offsets: std::vec![0; fc],
-                fail_read: false, stdin_data: None, stdin_offset: 0,
+                files,
+                output: Vec::new(),
+                errors: Vec::new(),
+                opens: 0,
+                closes: 0,
+                offsets: std::vec![0; fc],
+                fail_read: false,
+                stdin_data: None,
+                stdin_offset: 0,
             }
         }
     }
@@ -220,29 +226,46 @@ mod tests {
             Ok(Fd(idx as u32 + 3))
         }
         fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
-            if self.fail_read { return Err(Errno::Failed); }
+            if self.fail_read {
+                return Err(Errno::Failed);
+            }
             if fd == STDIN {
                 let data = self.stdin_data.unwrap_or(b"");
                 let off = self.stdin_offset;
-                if off >= data.len() { return Ok(0); }
+                if off >= data.len() {
+                    return Ok(0);
+                }
                 let n = (data.len() - off).min(buf.len());
                 buf[..n].copy_from_slice(&data[off..off + n]);
                 self.stdin_offset += n;
                 return Ok(n);
             }
             let idx = (fd.0 - 3) as usize;
-            if idx >= self.files.len() { return Ok(0); }
+            if idx >= self.files.len() {
+                return Ok(0);
+            }
             let data = self.files[idx].1;
             let off = self.offsets[idx];
-            if off >= data.len() { return Ok(0); }
+            if off >= data.len() {
+                return Ok(0);
+            }
             let n = (data.len() - off).min(buf.len());
             buf[..n].copy_from_slice(&data[off..off + n]);
             self.offsets[idx] += n;
             Ok(n)
         }
-        fn close(&mut self, _fd: Fd) -> Result<(), Errno> { self.closes += 1; Ok(()) }
-        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> { self.output.extend_from_slice(b); Ok(()) }
-        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> { self.errors.extend_from_slice(b); Ok(()) }
+        fn close(&mut self, _fd: Fd) -> Result<(), Errno> {
+            self.closes += 1;
+            Ok(())
+        }
+        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.output.extend_from_slice(b);
+            Ok(())
+        }
+        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.errors.extend_from_slice(b);
+            Ok(())
+        }
     }
 
     #[test]
@@ -314,9 +337,7 @@ mod tests {
 
     #[test]
     fn multiple_files() {
-        let mut m = Mock::new(std::vec![
-            (b"a", b"hello\n"), (b"b", b"world\n"),
-        ]);
+        let mut m = Mock::new(std::vec![(b"a", b"hello\n"), (b"b", b"world\n"),]);
         assert_eq!(run(&[b"a", b"b"], &mut m), 0);
         let s = std::str::from_utf8(&m.output).unwrap();
         assert_eq!(s.lines().count(), 2);

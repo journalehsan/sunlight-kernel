@@ -111,10 +111,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
             }
         }
         let mut health = IndexHealth::default();
-        health.content_digest_label = alloc::format!(
-            "SHA-256 v{}",
-            CONTENT_DIGEST_FORMAT_VERSION
-        );
+        health.content_digest_label = alloc::format!("SHA-256 v{}", CONTENT_DIGEST_FORMAT_VERSION);
         health.manifest_format = 2;
         Self {
             state,
@@ -144,7 +141,8 @@ impl<B: IndexMemoryDb> IndexerService<B> {
                     h.database_generation,
                     self.now_ns,
                 );
-                self.health.clear_reason(DegradedReason::MemoryDbUnavailable);
+                self.health
+                    .clear_reason(DegradedReason::MemoryDbUnavailable);
                 self.health.clear_reason(DegradedReason::MemoryDbRecovering);
                 if self.health.state == HealthState::Starting {
                     self.health.state = HealthState::Ready;
@@ -167,8 +165,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
                     self.now_ns,
                     Some(self.reconnect.next_attempt_ns),
                 );
-                self.health
-                    .set_degraded(DegradedReason::MemoryDbRecovering);
+                self.health.set_degraded(DegradedReason::MemoryDbRecovering);
             }
             Err(_) => {
                 IndexStats::sat_add(&mut self.stats.memorydb_disconnects, 1);
@@ -272,7 +269,8 @@ impl<B: IndexMemoryDb> IndexerService<B> {
         root.validate(&self.engine.config.quotas)?;
         self.state.roots.insert(root_id, root);
         self.stats.configured_roots = self.state.roots.len() as u64;
-        self.stats.available_roots = self.state.roots.values().filter(|r| r.available).count() as u64;
+        self.stats.available_roots =
+            self.state.roots.values().filter(|r| r.available).count() as u64;
         Ok(root_id)
     }
 
@@ -337,11 +335,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
 
         let roots: Vec<u64> = match root_id {
             Some(id) => {
-                let r = self
-                    .state
-                    .roots
-                    .get(&id)
-                    .ok_or(IndexError::RootNotFound)?;
+                let r = self.state.roots.get(&id).ok_or(IndexError::RootNotFound)?;
                 if r.owner != caller.owner && !caller.is_system {
                     return Err(IndexError::Unauthorized("root"));
                 }
@@ -779,10 +773,7 @@ mod tests {
         assert!(direct.ready);
         assert!(svc.health.memorydb_ready());
         assert_eq!(svc.health.memorydb.memorydb_ready_flag(), 1);
-        assert_eq!(
-            svc.health.memorydb_generation(),
-            direct.database_generation
-        );
+        assert_eq!(svc.health.memorydb_generation(), direct.database_generation);
         // Health and transport report the same readiness snapshot.
         let h = svc.health();
         let t = svc.transport_info();

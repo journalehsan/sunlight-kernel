@@ -369,7 +369,14 @@ mod tests {
         let org_secs = 0xA5A5_1234;
         let org_frac = 0x1111_2222;
         let pkt = make_server_response(
-            org_secs, org_frac, ntp_t2, ntp_t3, 2, 0, MODE_SERVER, NTP_VERSION,
+            org_secs,
+            org_frac,
+            ntp_t2,
+            ntp_t3,
+            2,
+            0,
+            MODE_SERVER,
+            NTP_VERSION,
         );
 
         // Local wall is behind: T1 local ms corresponds to unix 1_700_000_000
@@ -399,8 +406,16 @@ mod tests {
 
     #[test]
     fn rejects_unsync_li() {
-        let pkt =
-            make_server_response(1, 0, 3_000_000_000, 3_000_000_000, 1, LI_UNSYNC, MODE_SERVER, 4);
+        let pkt = make_server_response(
+            1,
+            0,
+            3_000_000_000,
+            3_000_000_000,
+            1,
+            LI_UNSYNC,
+            MODE_SERVER,
+            4,
+        );
         let r = parse_and_validate(&pkt, 1, 0, 0, 10);
         assert_eq!(r, Err(NtpError::InvalidResponse));
     }
@@ -480,7 +495,13 @@ mod tests {
         let pkt = build_client_request(0xAABB_CCDD, 0x1122_3344);
         assert_eq!(pkt[0] & 0x07, MODE_CLIENT);
         assert_eq!((pkt[0] >> 3) & 0x07, NTP_VERSION);
-        assert_eq!(u32::from_be_bytes([pkt[40], pkt[41], pkt[42], pkt[43]]), 0xAABB_CCDD);
-        assert_eq!(u32::from_be_bytes([pkt[44], pkt[45], pkt[46], pkt[47]]), 0x1122_3344);
+        assert_eq!(
+            u32::from_be_bytes([pkt[40], pkt[41], pkt[42], pkt[43]]),
+            0xAABB_CCDD
+        );
+        assert_eq!(
+            u32::from_be_bytes([pkt[44], pkt[45], pkt[46], pkt[47]]),
+            0x1122_3344
+        );
     }
 }

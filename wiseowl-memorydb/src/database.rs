@@ -17,9 +17,7 @@ use crate::codec::fnv1a64;
 use crate::error::DbError;
 use crate::health::{DbHealth, HealthState};
 use crate::index::{IndexSet, RecordLocation};
-use crate::query::{
-    DedupPolicy, MemoryQuery, QueryCursor, QueryOrder, QueryResult, TrustFilter,
-};
+use crate::query::{DedupPolicy, MemoryQuery, QueryCursor, QueryOrder, QueryResult, TrustFilter};
 use crate::quotas::DbQuotaConfig;
 use crate::record::{
     LongTermMemoryKind, LongTermMemoryRecord, LongTermRecordState, MemoryScope, OwnerId,
@@ -29,9 +27,7 @@ use crate::relationship::{MemoryRelationship, RelationshipKind};
 use crate::segment::{open_segment, seal_segment, SegmentHeader};
 use crate::stats::DbStats;
 use crate::tokens::{normalize_tokens, IndexedToken, TokenSetRef};
-use crate::wal::{
-    committed_tx_ids, scan_wal, WalRecord, WalRecordType, WAL_FORMAT_VERSION,
-};
+use crate::wal::{committed_tx_ids, scan_wal, WalRecord, WalRecordType, WAL_FORMAT_VERSION};
 
 /// Caller identity for capability and scope checks.
 #[derive(Debug, Clone)]
@@ -144,7 +140,10 @@ impl DurableStore for MemoryStore {
     }
 
     fn append_file(&mut self, rel: &str, data: &[u8]) -> Result<(), DbError> {
-        self.files.entry(rel.to_string()).or_default().extend_from_slice(data);
+        self.files
+            .entry(rel.to_string())
+            .or_default()
+            .extend_from_slice(data);
         Ok(())
     }
 
@@ -288,20 +287,12 @@ mod host_store {
         }
 
         fn ensure_layout(&mut self) -> Result<(), DbError> {
-            for d in [
-                "WAL",
-                "SEGMENTS",
-                "INDEX",
-                "SNAPSHOTS",
-                "QUARANTINE",
-                "TMP",
-            ] {
+            for d in ["WAL", "SEGMENTS", "INDEX", "SNAPSHOTS", "QUARANTINE", "TMP"] {
                 fs::create_dir_all(self.path(d)).map_err(|_| DbError::Io("mkdir layout"))?;
             }
             Ok(())
         }
     }
-
 }
 
 #[cfg(feature = "host")]
@@ -346,7 +337,10 @@ impl Database<MemoryStore> {
 
 #[cfg(feature = "host")]
 impl Database<FsStore> {
-    pub fn open_fs(root: impl AsRef<std::path::Path>, quotas: DbQuotaConfig) -> Result<Self, DbError> {
+    pub fn open_fs(
+        root: impl AsRef<std::path::Path>,
+        quotas: DbQuotaConfig,
+    ) -> Result<Self, DbError> {
         let store = FsStore::open(root)?;
         Self::open_with_store(store, quotas)
     }
@@ -461,7 +455,8 @@ impl<S: DurableStore> Database<S> {
                                 };
                                 self.indexes.apply_record(rec, loc);
                             }
-                            self.next_segment = self.next_segment.max(header.segment_id.saturating_add(1));
+                            self.next_segment =
+                                self.next_segment.max(header.segment_id.saturating_add(1));
                             self.segments.insert(
                                 header.segment_id,
                                 SegmentMem {
@@ -552,9 +547,8 @@ impl<S: DurableStore> Database<S> {
                 self.install_record(rec, None)?;
             }
             WalRecordType::InsertRelationship => {
-                let rel = MemoryRelationship::decode(&mut crate::codec::BufReader::new(
-                    &op.payload,
-                ))?;
+                let rel =
+                    MemoryRelationship::decode(&mut crate::codec::BufReader::new(&op.payload))?;
                 self.relationships.push(rel.clone());
                 self.indexes.apply_relationship(&rel);
             }
@@ -780,8 +774,7 @@ impl<S: DurableStore> Database<S> {
                 }
             }
             DedupPolicy::ReturnExistingExactPayload => {
-                if let Some(&existing) = self.indexes.source.by_payload_hash(payload_hash).first()
-                {
+                if let Some(&existing) = self.indexes.source.by_payload_hash(payload_hash).first() {
                     return MemoryId::from_raw(existing)
                         .map_err(|_| DbError::Internal("bad existing id"));
                 }
@@ -825,11 +818,10 @@ impl<S: DurableStore> Database<S> {
                 }
                 id
             }
-            None => {
-                self.ids
-                    .alloc_memory()
-                    .map_err(|_| DbError::Internal("id exhausted"))?
-            }
+            None => self
+                .ids
+                .alloc_memory()
+                .map_err(|_| DbError::Internal("id exhausted"))?,
         };
 
         let rec = LongTermMemoryRecord {
@@ -912,8 +904,7 @@ impl<S: DurableStore> Database<S> {
         rel.validate()?;
         if rel.kind == RelationshipKind::Supersedes {
             // Check simple loop via index once committed edges exist.
-            if self.indexes.relationship.supersedes_loop(rel.target, 8)
-                && rel.target == rel.source
+            if self.indexes.relationship.supersedes_loop(rel.target, 8) && rel.target == rel.source
             {
                 return Err(DbError::SupersessionLoop);
             }
@@ -1002,12 +993,7 @@ impl<S: DurableStore> Database<S> {
 
         // Seal if enough unsealed.
         if self.unsealed.len() >= 8
-            || self
-                .unsealed
-                .iter()
-                .map(|r| r.payload.len())
-                .sum::<usize>()
-                > 32 * 1024
+            || self.unsealed.iter().map(|r| r.payload.len()).sum::<usize>() > 32 * 1024
         {
             let _ = self.seal_unsealed();
         }
@@ -1155,11 +1141,7 @@ impl<S: DurableStore> Database<S> {
         }
     }
 
-    pub fn list_revisions(
-        &self,
-        caller: &DbCaller,
-        id: MemoryId,
-    ) -> Result<Vec<u32>, DbError> {
+    pub fn list_revisions(&self, caller: &DbCaller, id: MemoryId) -> Result<Vec<u32>, DbError> {
         let rec = self.records.get(&id.get()).ok_or(DbError::NotFound)?;
         self.check_scope_read(caller, rec)?;
         let mut revs = vec![rec.revision];
@@ -1225,7 +1207,12 @@ impl<S: DurableStore> Database<S> {
             } else if let Some(h) = sq.source_content_hash {
                 self.indexes.source.by_source_content_hash(h).to_vec()
             } else {
-                self.indexes.primary.ids().into_iter().map(|i| i.get()).collect()
+                self.indexes
+                    .primary
+                    .ids()
+                    .into_iter()
+                    .map(|i| i.get())
+                    .collect()
             }
         } else if let Some(ref rq) = q.relationship {
             self.indexes
@@ -1235,7 +1222,12 @@ impl<S: DurableStore> Database<S> {
                 .map(|r| r.source.get())
                 .collect()
         } else {
-            self.indexes.primary.ids().into_iter().map(|i| i.get()).collect()
+            self.indexes
+                .primary
+                .ids()
+                .into_iter()
+                .map(|i| i.get())
+                .collect()
         };
 
         candidates.sort_unstable();
@@ -1325,16 +1317,21 @@ impl<S: DurableStore> Database<S> {
         // Order
         match q.order {
             QueryOrder::IdAsc => matched.sort_by_key(|r| r.id.get()),
-            QueryOrder::ConfidenceDesc => {
-                matched.sort_by(|a, b| b.confidence.cmp(&a.confidence).then(a.id.get().cmp(&b.id.get())))
-            }
-            QueryOrder::ImportanceDesc => {
-                matched.sort_by(|a, b| b.importance.cmp(&a.importance).then(a.id.get().cmp(&b.id.get())))
-            }
-            QueryOrder::RecencyDesc => {
-                matched
-                    .sort_by(|a, b| b.created_at_ns.cmp(&a.created_at_ns).then(a.id.get().cmp(&b.id.get())))
-            }
+            QueryOrder::ConfidenceDesc => matched.sort_by(|a, b| {
+                b.confidence
+                    .cmp(&a.confidence)
+                    .then(a.id.get().cmp(&b.id.get()))
+            }),
+            QueryOrder::ImportanceDesc => matched.sort_by(|a, b| {
+                b.importance
+                    .cmp(&a.importance)
+                    .then(a.id.get().cmp(&b.id.get()))
+            }),
+            QueryOrder::RecencyDesc => matched.sort_by(|a, b| {
+                b.created_at_ns
+                    .cmp(&a.created_at_ns)
+                    .then(a.id.get().cmp(&b.id.get()))
+            }),
             QueryOrder::TokenRelevanceDesc => {
                 // Rank by matched token count if token query present.
                 if let Some(ref tq) = q.token_match {
@@ -1411,7 +1408,10 @@ impl<S: DurableStore> Database<S> {
         // Stage via mini auto-transaction for durability.
         let tx = self.begin_transaction(caller)?;
         {
-            let t = self.open_txs.get_mut(&tx).ok_or(DbError::InvalidTransaction)?;
+            let t = self
+                .open_txs
+                .get_mut(&tx)
+                .ok_or(DbError::InvalidTransaction)?;
             t.staged_source_deletes.push(source);
             t.ops = t.ops.saturating_add(1);
         }
@@ -1432,7 +1432,11 @@ impl<S: DurableStore> Database<S> {
         batch: usize,
     ) -> Result<(u32, bool), DbError> {
         let ids: Vec<u64> = self.indexes.source.by_source_id(source).to_vec();
-        let start = self.source_delete_cursor.get(&source.get()).copied().unwrap_or(0);
+        let start = self
+            .source_delete_cursor
+            .get(&source.get())
+            .copied()
+            .unwrap_or(0);
         let end = (start + batch).min(ids.len());
         let mut n = 0u32;
         for &id in &ids[start..end] {
@@ -1617,7 +1621,10 @@ impl<S: DurableStore> Database<S> {
         }
         // Prefer latest from self.records
         for rec in self.records.values() {
-            if !pairs.iter().any(|(_, r)| r.id == rec.id && r.revision == rec.revision) {
+            if !pairs
+                .iter()
+                .any(|(_, r)| r.id == rec.id && r.revision == rec.revision)
+            {
                 pairs.push((
                     RecordLocation {
                         segment_id: 0,
@@ -1702,9 +1709,7 @@ fn encode_manifest(meta: &CheckpointMeta) -> Result<Vec<u8>, DbError> {
 
 fn decode_manifest(data: &[u8]) -> Result<CheckpointMeta, DbError> {
     if data.len() < 8 {
-        return Err(DbError::Corrupt {
-            reason: "manifest",
-        });
+        return Err(DbError::Corrupt { reason: "manifest" });
     }
     // Optional trailing crc
     let body = if data.len() > 4 {
@@ -1977,7 +1982,13 @@ mod tests {
         let db = Database::open_with_store(store, DbQuotaConfig::default()).unwrap();
         assert!(db.stats().quarantined_files >= 1 || db.segments.is_empty());
         // Service still opens.
-        assert!(db.health().ready || matches!(db.health().state, HealthState::Degraded | HealthState::Ready));
+        assert!(
+            db.health().ready
+                || matches!(
+                    db.health().state,
+                    HealthState::Degraded | HealthState::Ready
+                )
+        );
     }
 
     #[test]

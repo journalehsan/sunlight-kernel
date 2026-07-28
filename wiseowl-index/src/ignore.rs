@@ -110,7 +110,9 @@ impl IgnoreSet {
                 return true;
             }
             // Prefix directory match for patterns ending as path prefixes.
-            if is_dir && (rel == rule.pattern || rel.starts_with(&alloc::format!("{}/", rule.pattern))) {
+            if is_dir
+                && (rel == rule.pattern || rel.starts_with(&alloc::format!("{}/", rule.pattern)))
+            {
                 return true;
             }
         }
@@ -129,7 +131,8 @@ fn path_matches_dir_prefix(rel: &str, dir_pat: &str) -> bool {
     let prefix = alloc::format!("{dir_pat}/");
     rel.starts_with(&prefix) || {
         // Also match if any path component equals dir_pat (e.g. .git)
-        rel.split('/').any(|c| c == dir_pat || glob_match(dir_pat, c))
+        rel.split('/')
+            .any(|c| c == dir_pat || glob_match(dir_pat, c))
     }
 }
 

@@ -115,14 +115,18 @@ impl StrongContentDigest {
         let algorithm = ContentDigestAlgorithm::from_u8(data[0])
             .ok_or(IndexError::InvalidValue("content digest algorithm"))?;
         if algorithm != ContentDigestAlgorithm::Sha256 {
-            return Err(IndexError::InvalidValue("content digest algorithm unsupported"));
+            return Err(IndexError::InvalidValue(
+                "content digest algorithm unsupported",
+            ));
         }
         let version = u16::from_le_bytes([data[1], data[2]]);
         if version == 0 {
             return Err(IndexError::InvalidValue("content digest version"));
         }
         if version > CONTENT_DIGEST_FORMAT_VERSION {
-            return Err(IndexError::InvalidValue("content digest version unsupported"));
+            return Err(IndexError::InvalidValue(
+                "content digest version unsupported",
+            ));
         }
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&data[3..35]);

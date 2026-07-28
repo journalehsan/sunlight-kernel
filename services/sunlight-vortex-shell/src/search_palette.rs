@@ -842,9 +842,7 @@ impl SearchPaletteState {
                 let entry = &SEARCH_REGISTRY[entry_index];
                 match entry.action {
                     SearchAction::LaunchApp(id) => SearchPaletteAction::Launch(id),
-                    SearchAction::Preferences(page) => {
-                        SearchPaletteAction::LaunchPreferences(page)
-                    }
+                    SearchAction::Preferences(page) => SearchPaletteAction::LaunchPreferences(page),
                 }
             }
         }

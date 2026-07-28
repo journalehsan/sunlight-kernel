@@ -256,10 +256,7 @@ impl StartupLaunchResult {
     }
 
     pub const fn is_success(self) -> bool {
-        matches!(
-            self,
-            Self::Ready | Self::RunningWithoutReadinessProtocol
-        )
+        matches!(self, Self::Ready | Self::RunningWithoutReadinessProtocol)
     }
 }
 
@@ -455,10 +452,7 @@ pub fn profile_checksum(profile: &SessionProfile) -> u32 {
             mix(&mut h, *b);
         }
         mix(&mut h, p.completed_first_login as u8);
-        mix_u64(
-            &mut h,
-            p.completed_system_generation.unwrap_or(0) as u64,
-        );
+        mix_u64(&mut h, p.completed_system_generation.unwrap_or(0) as u64);
         mix_u64(&mut h, p.last_successful_start_at.unwrap_or(0));
     }
     mix_u64(&mut h, profile.created_at);
@@ -466,7 +460,11 @@ pub fn profile_checksum(profile: &SessionProfile) -> u32 {
     h
 }
 
-pub fn default_profile(user_id: u32, base_session_id: &str, now: u64) -> Result<SessionProfile, ProfileError> {
+pub fn default_profile(
+    user_id: u32,
+    base_session_id: &str,
+    now: u64,
+) -> Result<SessionProfile, ProfileError> {
     let mut base = String::new();
     base.push_str(base_session_id)
         .map_err(|_| ProfileError::InvalidString)?;
@@ -574,8 +572,8 @@ pub fn normalize_orders(profile: &mut SessionProfile) {
         while j > 0 {
             let a = &profile.entries[indices[j - 1]];
             let b = &profile.entries[indices[j]];
-            let less = b.order < a.order
-                || (b.order == a.order && b.entry_id.get() < a.entry_id.get());
+            let less =
+                b.order < a.order || (b.order == a.order && b.entry_id.get() < a.entry_id.get());
             if less {
                 indices.swap(j - 1, j);
                 j -= 1;
@@ -659,7 +657,11 @@ pub fn profile_remove_app(
     now: u64,
 ) -> Result<(), ProfileError> {
     ensure_revision(profile, expected_revision)?;
-    let Some(pos) = profile.entries.iter().position(|e| e.app_id.as_str() == app_id) else {
+    let Some(pos) = profile
+        .entries
+        .iter()
+        .position(|e| e.app_id.as_str() == app_id)
+    else {
         return Err(ProfileError::NotFound);
     };
     let entry_id = profile.entries[pos].entry_id;
@@ -684,7 +686,11 @@ pub fn profile_set_enabled(
     now: u64,
 ) -> Result<(), ProfileError> {
     ensure_revision(profile, expected_revision)?;
-    let Some(entry) = profile.entries.iter_mut().find(|e| e.app_id.as_str() == app_id) else {
+    let Some(entry) = profile
+        .entries
+        .iter_mut()
+        .find(|e| e.app_id.as_str() == app_id)
+    else {
         return Err(ProfileError::NotFound);
     };
     entry.enabled = enabled;
@@ -705,7 +711,11 @@ pub fn profile_set_policy(
     now: u64,
 ) -> Result<(), ProfileError> {
     ensure_revision(profile, expected_revision)?;
-    let Some(entry) = profile.entries.iter_mut().find(|e| e.app_id.as_str() == app_id) else {
+    let Some(entry) = profile
+        .entries
+        .iter_mut()
+        .find(|e| e.app_id.as_str() == app_id)
+    else {
         return Err(ProfileError::NotFound);
     };
     entry.policy = policy;
@@ -741,7 +751,11 @@ pub fn profile_move(
 ) -> Result<(), ProfileError> {
     ensure_revision(profile, expected_revision)?;
     normalize_orders(profile);
-    let Some(pos) = profile.entries.iter().position(|e| e.app_id.as_str() == app_id) else {
+    let Some(pos) = profile
+        .entries
+        .iter()
+        .position(|e| e.app_id.as_str() == app_id)
+    else {
         return Err(ProfileError::NotFound);
     };
     let order = profile.entries[pos].order as isize;
@@ -822,12 +836,10 @@ pub fn policy_should_launch(
     match entry.policy {
         StartupPolicy::EveryLogin => true,
         StartupPolicy::FirstLoginOnly => !state.map(|s| s.completed_first_login).unwrap_or(false),
-        StartupPolicy::FirstLoginAfterSystemUpgrade => {
-            state
-                .and_then(|s| s.completed_system_generation)
-                .map(|g| g != system_generation)
-                .unwrap_or(true)
-        }
+        StartupPolicy::FirstLoginAfterSystemUpgrade => state
+            .and_then(|s| s.completed_system_generation)
+            .map(|g| g != system_generation)
+            .unwrap_or(true),
         StartupPolicy::Disabled => false,
     }
 }
@@ -984,7 +996,9 @@ pub fn resolve_session_plan(
             }
         }
         for (_, e) in optional.iter() {
-            let Some(bundle) = catalog.iter().find(|b| b.app_id.as_str() == e.app_id.as_str())
+            let Some(bundle) = catalog
+                .iter()
+                .find(|b| b.app_id.as_str() == e.app_id.as_str())
             else {
                 // Missing bundle: skip launch, keep entry in profile (caller records status).
                 continue;
@@ -1169,8 +1183,8 @@ pub fn parse_bundle_session_manifest(
             }
             ("session", "completion_mode") => {
                 if let Some(s) = toml_string_value(value) {
-                    completion_mode =
-                        StartupCompletionMode::parse(s).unwrap_or(StartupCompletionMode::ProcessSuccess);
+                    completion_mode = StartupCompletionMode::parse(s)
+                        .unwrap_or(StartupCompletionMode::ProcessSuccess);
                 }
             }
             ("session", "launch_path") => {
@@ -1196,7 +1210,8 @@ pub fn parse_bundle_session_manifest(
         }
     })?;
 
-    let runtime_native = runtime.as_str() == "native" || !entry_exec.is_empty() && entry_exec.starts_with('/');
+    let runtime_native =
+        runtime.as_str() == "native" || !entry_exec.is_empty() && entry_exec.starts_with('/');
     let mut launch_path = String::new();
     if entry_exec.starts_with('/') {
         let _ = launch_path.push_str(entry_exec.as_str());
@@ -1341,16 +1356,8 @@ pub fn serialize_profile(profile: &SessionProfile, out: &mut [u8]) -> Result<usi
             &mut cursor,
             p.completed_system_generation.is_some() as u8,
         )?;
-        put_u32(
-            out,
-            &mut cursor,
-            p.completed_system_generation.unwrap_or(0),
-        )?;
-        put_u8(
-            out,
-            &mut cursor,
-            p.last_successful_start_at.is_some() as u8,
-        )?;
+        put_u32(out, &mut cursor, p.completed_system_generation.unwrap_or(0))?;
+        put_u8(out, &mut cursor, p.last_successful_start_at.is_some() as u8)?;
         put_u64(out, &mut cursor, p.last_successful_start_at.unwrap_or(0))?;
     }
     // profile_checksum does not include the checksum field itself.
@@ -1359,7 +1366,10 @@ pub fn serialize_profile(profile: &SessionProfile, out: &mut [u8]) -> Result<usi
     Ok(cursor)
 }
 
-pub fn deserialize_profile(bytes: &[u8], expected_user: u32) -> Result<SessionProfile, ProfileError> {
+pub fn deserialize_profile(
+    bytes: &[u8],
+    expected_user: u32,
+) -> Result<SessionProfile, ProfileError> {
     if bytes.len() < 20 || bytes[0..4] != PROFILE_MAGIC {
         return Err(ProfileError::ChecksumFailure);
     }
@@ -1396,7 +1406,8 @@ pub fn deserialize_profile(bytes: &[u8], expected_user: u32) -> Result<SessionPr
         if *c + len > bytes.len() {
             return Err(ProfileError::ChecksumFailure);
         }
-        let s = core::str::from_utf8(&bytes[*c..*c + len]).map_err(|_| ProfileError::InvalidString)?;
+        let s =
+            core::str::from_utf8(&bytes[*c..*c + len]).map_err(|_| ProfileError::InvalidString)?;
         *c += len;
         let mut out = String::new();
         out.push_str(s).map_err(|_| ProfileError::InvalidString)?;
@@ -1404,7 +1415,8 @@ pub fn deserialize_profile(bytes: &[u8], expected_user: u32) -> Result<SessionPr
     };
 
     let format_version = take_u16(bytes, &mut c)?;
-    let profile_id = SessionProfileId::new(take_u64(bytes, &mut c)?).ok_or(ProfileError::ZeroIdentifier)?;
+    let profile_id =
+        SessionProfileId::new(take_u64(bytes, &mut c)?).ok_or(ProfileError::ZeroIdentifier)?;
     let user_id = take_u32(bytes, &mut c)?;
     let base = take_str(bytes, &mut c)?;
     let mut base_session_id = String::<48>::new();
@@ -1420,14 +1432,16 @@ pub fn deserialize_profile(bytes: &[u8], expected_user: u32) -> Result<SessionPr
     }
     let mut entries = Vec::new();
     for _ in 0..n_entries {
-        let entry_id = StartupEntryId::new(take_u64(bytes, &mut c)?).ok_or(ProfileError::ZeroIdentifier)?;
+        let entry_id =
+            StartupEntryId::new(take_u64(bytes, &mut c)?).ok_or(ProfileError::ZeroIdentifier)?;
         let app = take_str(bytes, &mut c)?;
         let mut app_id = String::<MAX_APP_ID>::new();
         app_id
             .push_str(app.as_str())
             .map_err(|_| ProfileError::InvalidString)?;
         let enabled = take_u8(bytes, &mut c)? != 0;
-        let policy = StartupPolicy::from_u8(take_u8(bytes, &mut c)?).ok_or(ProfileError::InvalidPolicy)?;
+        let policy =
+            StartupPolicy::from_u8(take_u8(bytes, &mut c)?).ok_or(ProfileError::InvalidPolicy)?;
         let launch_phase = StartupLaunchPhase::from_u8(take_u8(bytes, &mut c)?)
             .ok_or(ProfileError::InvalidLaunchPhase)?;
         let order = take_u16(bytes, &mut c)?;
@@ -1450,7 +1464,8 @@ pub fn deserialize_profile(bytes: &[u8], expected_user: u32) -> Result<SessionPr
     let n_state = take_u8(bytes, &mut c)? as usize;
     let mut policy_state = Vec::new();
     for _ in 0..n_state {
-        let entry_id = StartupEntryId::new(take_u64(bytes, &mut c)?).ok_or(ProfileError::ZeroIdentifier)?;
+        let entry_id =
+            StartupEntryId::new(take_u64(bytes, &mut c)?).ok_or(ProfileError::ZeroIdentifier)?;
         let app = take_str(bytes, &mut c)?;
         let mut app_id = String::<MAX_APP_ID>::new();
         app_id
@@ -1574,7 +1589,13 @@ order = 0
     fn shell_as_optional_rejected() {
         let mut p = default_profile(1000, "org.sunlight.session.desktop", 1).unwrap();
         assert_eq!(
-            profile_add_app(&mut p, PROTECTED_SHELL_APP_ID, StartupPolicy::EveryLogin, 1, 2),
+            profile_add_app(
+                &mut p,
+                PROTECTED_SHELL_APP_ID,
+                StartupPolicy::EveryLogin,
+                1,
+                2
+            ),
             Err(ProfileError::ShellAsOptional)
         );
     }
@@ -1598,51 +1619,38 @@ order = 0
     #[test]
     fn add_remove_enable_policy_reorder() {
         let mut p = default_profile(1000, "org.sunlight.session.desktop", 1).unwrap();
-        profile_add_app(
-            &mut p,
-            "org.sun.test.su1",
-            StartupPolicy::EveryLogin,
-            1,
-            2,
-        )
-        .unwrap();
+        profile_add_app(&mut p, "org.sun.test.su1", StartupPolicy::EveryLogin, 1, 2).unwrap();
         assert_eq!(p.revision, 2);
         assert_eq!(p.entries.len(), 1);
-        profile_add_app(
-            &mut p,
-            "org.sun.test.su2",
-            StartupPolicy::EveryLogin,
-            2,
-            3,
-        )
-        .unwrap();
+        profile_add_app(&mut p, "org.sun.test.su2", StartupPolicy::EveryLogin, 2, 3).unwrap();
         assert_eq!(p.entries.len(), 2);
         // Duplicate add
         assert_eq!(
-            profile_add_app(
-                &mut p,
-                "org.sun.test.su1",
-                StartupPolicy::EveryLogin,
-                3,
-                4
-            ),
+            profile_add_app(&mut p, "org.sun.test.su1", StartupPolicy::EveryLogin, 3, 4),
             Err(ProfileError::DuplicateBundleId)
         );
         // Revision conflict
         assert_eq!(
-            profile_add_app(
-                &mut p,
-                "org.example.other",
-                StartupPolicy::EveryLogin,
-                1,
-                5
-            ),
+            profile_add_app(&mut p, "org.example.other", StartupPolicy::EveryLogin, 1, 5),
             Err(ProfileError::RevisionConflict)
         );
         profile_move(&mut p, "org.sun.test.su2", -1, 3, 6).unwrap();
-        assert_eq!(p.entries.iter().find(|e| e.app_id.as_str() == "org.sun.test.su2").unwrap().order, 0);
+        assert_eq!(
+            p.entries
+                .iter()
+                .find(|e| e.app_id.as_str() == "org.sun.test.su2")
+                .unwrap()
+                .order,
+            0
+        );
         profile_set_enabled(&mut p, "org.sun.test.su1", false, 4, 7).unwrap();
-        assert!(!p.entries.iter().find(|e| e.app_id.as_str() == "org.sun.test.su1").unwrap().enabled);
+        assert!(
+            !p.entries
+                .iter()
+                .find(|e| e.app_id.as_str() == "org.sun.test.su1")
+                .unwrap()
+                .enabled
+        );
         profile_set_policy(
             &mut p,
             "org.sun.test.su2",
@@ -1680,7 +1688,10 @@ order = 0
     fn checksum_failure_detected() {
         let mut p = default_profile(1000, "org.sunlight.session.desktop", 1).unwrap();
         p.checksum ^= 0xffff;
-        assert_eq!(validate_profile(&p, 1000), Err(ProfileError::ChecksumFailure));
+        assert_eq!(
+            validate_profile(&p, 1000),
+            Err(ProfileError::ChecksumFailure)
+        );
     }
 
     #[test]
@@ -1763,14 +1774,7 @@ order = 0
     fn unavailable_bundle_skipped_entry_preserved() {
         let manifest = base_manifest();
         let mut p = default_profile(1000, "org.sunlight.session.desktop", 1).unwrap();
-        profile_add_app(
-            &mut p,
-            "org.sun.test.su1",
-            StartupPolicy::EveryLogin,
-            1,
-            2,
-        )
-        .unwrap();
+        profile_add_app(&mut p, "org.sun.test.su1", StartupPolicy::EveryLogin, 1, 2).unwrap();
         let empty: [CatalogBundle; 0] = [];
         let plan = resolve_session_plan(&manifest, &p, &empty, 1, 1, 1, 1, false);
         assert_eq!(plan.components.len(), 1);
@@ -1782,14 +1786,7 @@ order = 0
         let manifest = base_manifest();
         let p = default_profile(1000, "org.sunlight.session.desktop", 1).unwrap();
         let mut p2 = p.clone();
-        profile_add_app(
-            &mut p2,
-            "org.sun.test.su1",
-            StartupPolicy::EveryLogin,
-            1,
-            2,
-        )
-        .unwrap();
+        profile_add_app(&mut p2, "org.sun.test.su1", StartupPolicy::EveryLogin, 1, 2).unwrap();
         let cat = catalog_two();
         let plan = resolve_session_plan(&manifest, &p2, &cat, 1, 1, 1, 1, true);
         assert_eq!(plan.components.len(), 1);
@@ -1818,11 +1815,15 @@ default_policy = "every-login"
 single_instance = true
 launch_path = "/bin/su1"
 "#;
-        let parsed = parse_bundle_session_manifest(text, "/Applications/StartupOne.sunapp").unwrap();
+        let parsed =
+            parse_bundle_session_manifest(text, "/Applications/StartupOne.sunapp").unwrap();
         assert!(parsed.startup_eligible);
         assert_eq!(parsed.launch_path.as_str(), "/bin/su1");
         assert_eq!(parsed.default_policy, StartupPolicy::EveryLogin);
-        assert_eq!(parsed.completion_mode, StartupCompletionMode::ProcessSuccess);
+        assert_eq!(
+            parsed.completion_mode,
+            StartupCompletionMode::ProcessSuccess
+        );
     }
 
     #[test]
@@ -1904,10 +1905,7 @@ launch_path = "/bin/welcome"
         assert!(parsed.default_enabled);
         assert_eq!(parsed.app_id.as_str(), "org.sunlight.welcome");
         assert_eq!(parsed.launch_path.as_str(), "/bin/welcome");
-        assert_eq!(
-            parsed.completion_mode,
-            StartupCompletionMode::AppReported
-        );
+        assert_eq!(parsed.completion_mode, StartupCompletionMode::AppReported);
         assert_eq!(
             parsed.default_policy,
             StartupPolicy::FirstLoginAfterSystemUpgrade
@@ -1952,7 +1950,8 @@ launch_path = "/bin/welcome"
             .filter(|c| c.kind == ResolvedComponentKind::OptionalStartup)
             .count();
         assert_eq!(
-            optional, 1,
+            optional,
+            1,
             "seeded welcome must appear as optional in plan, got components={:?}",
             plan.components
                 .iter()

@@ -7,13 +7,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use crate::caps::{CapabilitySet, MemoryCapability};
-use crate::entry::{
-    MemoryEntry, MemoryEntryHeader, MemoryState, ENTRY_HEADER_VERSION,
-};
+use crate::entry::{MemoryEntry, MemoryEntryHeader, MemoryState, ENTRY_HEADER_VERSION};
 use crate::error::MemoryError;
-use crate::ids::{
-    ClientId, IdAllocator, MemoryId, SegmentId, SessionId,
-};
+use crate::ids::{ClientId, IdAllocator, MemoryId, SegmentId, SessionId};
 use crate::kinds::MemoryClass;
 use crate::lifecycle::LifecycleOp;
 use crate::protocol::{
@@ -217,13 +213,13 @@ impl<K: KvBackend> MemoryService<K> {
                                 for rec in recs {
                                     svc.ids.note_seen(rec.header.id.get());
                                     svc.ids.note_seen(rec.header.session_id.get());
-                                    svc.sessions
-                                        .entry(rec.header.session_id)
-                                        .or_insert_with(|| SessionRec {
+                                    svc.sessions.entry(rec.header.session_id).or_insert_with(
+                                        || SessionRec {
                                             owner: None,
                                             quota: SessionQuota::default(),
                                             open_segment: None,
-                                        });
+                                        },
+                                    );
                                     // Cold entry without RAM payload (rehydrate on read).
                                     let payload_len = rec.payload.len() as u32;
                                     let mut entry = MemoryEntry {
@@ -251,8 +247,7 @@ impl<K: KvBackend> MemoryService<K> {
                                 .stats
                                 .cold_uncompressed_logical_bytes
                                 .saturating_add(plain_len);
-                            svc.stats.segment_count =
-                                svc.stats.segment_count.saturating_add(1);
+                            svc.stats.segment_count = svc.stats.segment_count.saturating_add(1);
                             svc.segments.insert(sid, seg);
                         }
                         Err(MemoryError::ChecksumMismatch) => {
@@ -387,11 +382,7 @@ impl<K: KvBackend> MemoryService<K> {
     }
 
     /// Dispatch a protocol request.
-    pub fn handle(
-        &mut self,
-        caller: &CallerIdentity,
-        req: ProtocolRequest,
-    ) -> ProtocolResponse {
+    pub fn handle(&mut self, caller: &CallerIdentity, req: ProtocolRequest) -> ProtocolResponse {
         let version = request_version(&req);
         if let Err(e) = check_protocol_version(version) {
             ServiceStats::inc(&mut self.stats.malformed_ipc_requests);
@@ -423,9 +414,10 @@ impl<K: KvBackend> MemoryService<K> {
     ) -> Result<ProtocolResponse, MemoryError> {
         match req {
             ProtocolRequest::RegisterClient { name, .. } => {
-                let id = self.ids.alloc_client().map_err(|_| {
-                    MemoryError::InternalInvariantViolation("client id exhausted")
-                })?;
+                let id = self
+                    .ids
+                    .alloc_client()
+                    .map_err(|_| MemoryError::InternalInvariantViolation("client id exhausted"))?;
                 self.clients.insert(id, name);
                 Ok(ProtocolResponse::ClientRegistered { client_id: id })
             }
@@ -520,9 +512,7 @@ impl<K: KvBackend> MemoryService<K> {
                 Ok(ProtocolResponse::Listed { headers })
             }
             ProtocolRequest::GetStats { .. } => {
-                caller
-                    .caps
-                    .require(MemoryCapability::InspectGlobalStats)?;
+                caller.caps.require(MemoryCapability::InspectGlobalStats)?;
                 self.refresh_gauges();
                 Ok(ProtocolResponse::Stats(self.stats.clone()))
             }
@@ -640,9 +630,7 @@ impl<K: KvBackend> MemoryService<K> {
             MemoryClass::Hot => self.cfg.default_hot_ttl_ns,
             MemoryClass::Cold => self.cfg.default_cold_ttl_ns,
         };
-        let expires = ttl_ns
-            .or(default_ttl)
-            .map(|t| now.saturating_add(t));
+        let expires = ttl_ns.or(default_ttl).map(|t| now.saturating_add(t));
 
         let header = MemoryEntryHeader {
             version: ENTRY_HEADER_VERSION,
@@ -691,11 +679,7 @@ impl<K: KvBackend> MemoryService<K> {
         Ok(id)
     }
 
-    fn ensure_ram_budget(
-        &mut self,
-        session_id: SessionId,
-        add: u64,
-    ) -> Result<(), MemoryError> {
+    fn ensure_ram_budget(&mut self, session_id: SessionId, add: u64) -> Result<(), MemoryError> {
         let snap = self.quota_snapshot();
         if snap.checked_add_ram(add, &self.cfg.quotas).is_err() {
             self.evict_for_space(add)?;
@@ -894,8 +878,8 @@ impl<K: KvBackend> MemoryService<K> {
                 Err(e) => return Err(e),
             };
 
-        let payload = parse_payload_from_plain(&plain, memory_id)?
-            .ok_or(MemoryError::EntryNotFound)?;
+        let payload =
+            parse_payload_from_plain(&plain, memory_id)?.ok_or(MemoryError::EntryNotFound)?;
 
         // Cache segment rehydrated state lightly
         if let Some(existing) = self.segments.get_mut(&seg_id) {
@@ -1055,12 +1039,7 @@ impl<K: KvBackend> MemoryService<K> {
             } else {
                 req.namespace.clone()
             };
-            let key = format!(
-                "{}.{}.{}",
-                ns,
-                e.header.session_id.get(),
-                e.header.id.get()
-            );
+            let key = format!("{}.{}.{}", ns, e.header.session_id.get(), e.header.id.get());
             // Encode versioned record: version | header fields | provenance | checksum | payload
             let value = encode_promotion_blob(e, req.expected_record_version)?;
             (key, value, e.header.session_id)
@@ -1216,10 +1195,7 @@ impl<K: KvBackend> MemoryService<K> {
     }
 
     /// Move sealed hot entries into a cold segment (compress + optional spill).
-    pub fn spill_entry_to_cold(
-        &mut self,
-        memory_id: MemoryId,
-    ) -> Result<SegmentId, MemoryError> {
+    pub fn spill_entry_to_cold(&mut self, memory_id: MemoryId) -> Result<SegmentId, MemoryError> {
         let now = self.now_ns;
         let (session_id, payload, importance, expires) = {
             let e = self
@@ -1241,10 +1217,7 @@ impl<K: KvBackend> MemoryService<K> {
 
         // Get or create open segment for session
         let seg_id = {
-            let open = self
-                .sessions
-                .get(&session_id)
-                .and_then(|s| s.open_segment);
+            let open = self.sessions.get(&session_id).and_then(|s| s.open_segment);
             if let Some(sid) = open {
                 if let Some(seg) = self.segments.get(&sid) {
                     if seg.state == SegmentState::Open {
@@ -1423,7 +1396,11 @@ impl<K: KvBackend> MemoryService<K> {
         // 1-3: expire first
         self.expire_all(now);
 
-        if self.quota_snapshot().checked_add_ram(need, &self.cfg.quotas).is_ok() {
+        if self
+            .quota_snapshot()
+            .checked_add_ram(need, &self.cfg.quotas)
+            .is_ok()
+        {
             return Ok(());
         }
 
@@ -1450,7 +1427,11 @@ impl<K: KvBackend> MemoryService<K> {
                 let _ = self.spill_entry_to_cold(id);
             }
             ServiceStats::inc(&mut self.stats.evictions);
-            if self.quota_snapshot().checked_add_ram(need, &self.cfg.quotas).is_ok() {
+            if self
+                .quota_snapshot()
+                .checked_add_ram(need, &self.cfg.quotas)
+                .is_ok()
+            {
                 return Ok(());
             }
         }
@@ -1479,7 +1460,11 @@ impl<K: KvBackend> MemoryService<K> {
                 self.unaccount(sid, class, len, state);
                 ServiceStats::inc(&mut self.stats.evictions);
             }
-            if self.quota_snapshot().checked_add_ram(need, &self.cfg.quotas).is_ok() {
+            if self
+                .quota_snapshot()
+                .checked_add_ram(need, &self.cfg.quotas)
+                .is_ok()
+            {
                 return Ok(());
             }
         }
@@ -1562,7 +1547,11 @@ impl<K: KvBackend> MemoryService<K> {
             self.stats.cold_compressed_bytes =
                 self.stats.cold_compressed_bytes.saturating_sub(size);
             ServiceStats::inc(&mut self.stats.evictions);
-            if self.quota_snapshot().checked_add_cold(need, &self.cfg.quotas).is_ok() {
+            if self
+                .quota_snapshot()
+                .checked_add_cold(need, &self.cfg.quotas)
+                .is_ok()
+            {
                 return Ok(());
             }
         }
@@ -1578,7 +1567,12 @@ impl<K: KvBackend> MemoryService<K> {
             if let Some(exp) = e.header.expires_at_ns {
                 if now >= exp {
                     e.state = MemoryState::Expired;
-                    expired.push((*id, e.header.session_id, e.header.class, e.payload.len() as u64));
+                    expired.push((
+                        *id,
+                        e.header.session_id,
+                        e.header.class,
+                        e.payload.len() as u64,
+                    ));
                     e.payload.clear();
                 }
             }
@@ -1723,10 +1717,7 @@ fn parse_payload_from_plain(
 /// Promotion record format version (Phase 1.1).
 pub const PROMOTION_RECORD_VERSION: u16 = 1;
 
-fn encode_promotion_blob(
-    entry: &MemoryEntry,
-    record_version: u16,
-) -> Result<Vec<u8>, MemoryError> {
+fn encode_promotion_blob(entry: &MemoryEntry, record_version: u16) -> Result<Vec<u8>, MemoryError> {
     // version(2) + id(8) + session(8) + class(1) + kind(1) + importance(2) + confidence(2)
     // + payload_len(4) + checksum(4) + created(8) + provenance + payload
     // + service_version marker (producer name) for source service version.
@@ -1773,8 +1764,7 @@ fn promotion_blobs_identical(existing: &[u8], expected: &[u8]) -> bool {
     // Compare version, memory id, session id, payload_len, checksum.
     // Offsets: 0..2 version, 2..10 id, 10..18 session, 18 class, 19 kind,
     // 20..22 imp, 22..24 conf, 24..28 len, 28..32 checksum
-    existing[0..18] == expected[0..18]
-        && existing[24..32] == expected[24..32]
+    existing[0..18] == expected[0..18] && existing[24..32] == expected[24..32]
 }
 
 // Silence unused import for RequestContext in this module
@@ -1787,8 +1777,8 @@ const _: fn() = || {
 mod tests {
     use super::*;
     use crate::kinds::{MemoryKind, SourceKind, TrustLevel};
-    use crate::provenance::Provenance;
     use crate::protocol::PROTOCOL_VERSION;
+    use crate::provenance::Provenance;
     use tempfile::tempdir;
 
     fn prov() -> Provenance {
@@ -2076,7 +2066,10 @@ mod tests {
             },
         );
         assert!(
-            matches!(resp, ProtocolResponse::Error(MemoryError::PromotionConflict { .. })),
+            matches!(
+                resp,
+                ProtocolResponse::Error(MemoryError::PromotionConflict { .. })
+            ),
             "got {resp:?}"
         );
         // Local record preserved
@@ -2332,7 +2325,16 @@ mod tests {
 
         // Restart must not panic
         let svc2 = MemoryService::new(cfg).unwrap();
-        assert!(svc2.stats().quarantined_spill_records >= 1 || svc2.spill.as_ref().map(|s| s.quarantined.len()).unwrap_or(0) >= 1 || true);
+        assert!(
+            svc2.stats().quarantined_spill_records >= 1
+                || svc2
+                    .spill
+                    .as_ref()
+                    .map(|s| s.quarantined.len())
+                    .unwrap_or(0)
+                    >= 1
+                || true
+        );
         // Service is up
         assert!(!svc2.is_shutting_down());
     }

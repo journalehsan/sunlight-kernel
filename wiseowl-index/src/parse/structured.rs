@@ -270,8 +270,8 @@ fn walk_object(
         if field.is_empty() {
             continue;
         }
-        let (k, v) = split_top_level_once(field, ':')
-            .ok_or(IndexError::ParseFailed("json field"))?;
+        let (k, v) =
+            split_top_level_once(field, ':').ok_or(IndexError::ParseFailed("json field"))?;
         let key = k.trim().trim_matches('"');
         if key.is_empty() {
             return Err(IndexError::ParseFailed("json key"));

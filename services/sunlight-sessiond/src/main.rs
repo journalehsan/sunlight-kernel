@@ -6,9 +6,9 @@ mod config_ops;
 
 use config_ops::{
     apply_mutation, authorize_own_profile, build_frozen_plan, config_log, discover_catalog,
-    load_or_default_profile, load_system_release_generation, pack_eligible_entry, pack_preview_plan,
-    pack_profile_summary, pack_startup_entry, persist_profile, profile_error_code,
-    schedule_optionals_after_shell_ready, stop_optionals, supervise_optionals,
+    load_or_default_profile, load_system_release_generation, pack_eligible_entry,
+    pack_preview_plan, pack_profile_summary, pack_startup_entry, persist_profile,
+    profile_error_code, schedule_optionals_after_shell_ready, stop_optionals, supervise_optionals,
     try_launch_deferred_optional, unpack_app_id, ConfigStats, FrozenPlanRuntime,
 };
 use heapless::Vec;
@@ -16,9 +16,9 @@ use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_reply_and_try_recv, kill,
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
     session_consume_auth_grant, session_query_process, validate_session_caller, IpcMsg, MezzoMsg,
-    ServiceCapability, SessionAction, SessionComponentRole, SessionComponentState, SessionGeneration,
-    SessionId, SessionKind, SessionMsg, SessionProcessCredentials, SessionState, SpawnMsg,
-    SpawnRequest, SESSION_CALLER_TTY_SERVICE, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
+    ServiceCapability, SessionAction, SessionComponentRole, SessionComponentState,
+    SessionGeneration, SessionId, SessionKind, SessionMsg, SessionProcessCredentials, SessionState,
+    SpawnMsg, SpawnRequest, SESSION_CALLER_TTY_SERVICE, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
 };
 use sunlight_sessiond::{
     parse_manifest, resolve_session_plan, CatalogBundle, ComponentExitReason, ManifestComponent,
@@ -184,10 +184,7 @@ fn create_reply(record: &SessionRecord) -> IpcMsg {
     IpcMsg::with_label(SessionMsg::REPLY)
         .word(0, record.session_id.get())
         .word(1, record.generation.get())
-        .word(
-            2,
-            record.state as u64 | ((record.kind as u64) << 8),
-        )
+        .word(2, record.state as u64 | ((record.kind as u64) << 8))
         .word(
             3,
             record
@@ -295,13 +292,11 @@ fn health_reply(state: &ServiceState) -> IpcMsg {
         )
         .word(
             1,
-            (state.stats.sessions_created as u64)
-                | ((state.stats.sessions_started as u64) << 32),
+            (state.stats.sessions_created as u64) | ((state.stats.sessions_started as u64) << 32),
         )
         .word(
             2,
-            (state.stats.sessions_failed as u64)
-                | ((state.stats.sessions_stopped as u64) << 32),
+            (state.stats.sessions_failed as u64) | ((state.stats.sessions_stopped as u64) << 32),
         )
         .word(
             3,
@@ -316,16 +311,16 @@ fn pack_request_meta(kind: SessionKind, username_len: usize) -> u32 {
         | ((username_len.min(USERNAME_MAX) as u32) << 24)
 }
 
-fn find_session<'a>(
-    state: &'a ServiceState,
-    session_id: u64,
-) -> Option<&'a SessionRecord> {
+fn find_session<'a>(state: &'a ServiceState, session_id: u64) -> Option<&'a SessionRecord> {
     if let Some(active) = state.active.as_ref() {
         if active.record.session_id.get() == session_id {
             return Some(&active.record);
         }
     }
-    state.last_closed.as_ref().filter(|record| record.session_id.get() == session_id)
+    state
+        .last_closed
+        .as_ref()
+        .filter(|record| record.session_id.get() == session_id)
 }
 
 fn find_session_mut<'a>(
@@ -588,7 +583,9 @@ fn supervise(state: &mut ServiceState) {
     }
 }
 
-fn decode_create(msg: &IpcMsg) -> Result<(u64, u32, u32, SessionKind, [u8; USERNAME_MAX], usize), u64> {
+fn decode_create(
+    msg: &IpcMsg,
+) -> Result<(u64, u32, u32, SessionKind, [u8; USERNAME_MAX], usize), u64> {
     let version = (msg.words[3] & 0xffff) as u16;
     if version != SESSION_PROTOCOL_VERSION {
         return Err(SessionMsg::ERR_INVALID_VERSION);
@@ -841,9 +838,7 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
             .plan
             .components
             .iter()
-            .filter(|c| {
-                c.kind == sunlight_sessiond::ResolvedComponentKind::OptionalStartup
-            })
+            .filter(|c| c.kind == sunlight_sessiond::ResolvedComponentKind::OptionalStartup)
             .count();
         let optional_rt = frozen.optionals.len();
         let _ = write!(
@@ -978,7 +973,10 @@ fn session_action(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
             let Some(active) = find_session_mut(state, session_id) else {
                 return error(SessionMsg::ERR_STALE);
             };
-            if let Some(pid) = active.record.shell_component().and_then(|component| component.process_id)
+            if let Some(pid) = active
+                .record
+                .shell_component()
+                .and_then(|component| component.process_id)
             {
                 let _ = kill(pid, 15);
             }
@@ -1236,8 +1234,10 @@ fn handle_profile_mutation(state: &mut ServiceState, msg: IpcMsg, op: u64) -> Ip
         }
         Err(e) => {
             if matches!(e, sunlight_sessiond::ProfileError::RevisionConflict) {
-                state.config_stats.profile_update_conflicts =
-                    state.config_stats.profile_update_conflicts.saturating_add(1);
+                state.config_stats.profile_update_conflicts = state
+                    .config_stats
+                    .profile_update_conflicts
+                    .saturating_add(1);
             }
             if matches!(e, sunlight_sessiond::ProfileError::WrongUser) {
                 config_log("USER_ISOLATION PASS");

@@ -260,7 +260,7 @@ impl ListEntry {
 mod tests {
     use super::*;
     use crate::supervisor::{
-        DETAIL_STOP_TIMEOUT, OP_STOP, ServiceDiagnostics, ServiceState, STATE_STOPPING,
+        ServiceDiagnostics, ServiceState, DETAIL_STOP_TIMEOUT, OP_STOP, STATE_STOPPING,
     };
 
     #[test]

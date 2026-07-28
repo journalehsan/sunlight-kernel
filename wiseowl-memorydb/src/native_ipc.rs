@@ -218,7 +218,11 @@ pub fn decode_native_query(data: &[u8]) -> Result<MemoryQuery, DbError> {
     }
     let count = u16::from_le_bytes(data[6..8].try_into().unwrap()) as usize;
     let expected = QUERY_HEADER_LEN
-        .checked_add(count.checked_mul(8).ok_or(DbError::InvalidRequest("query overflow"))?)
+        .checked_add(
+            count
+                .checked_mul(8)
+                .ok_or(DbError::InvalidRequest("query overflow"))?,
+        )
         .ok_or(DbError::InvalidRequest("query overflow"))?;
     if count == 0 || count > MAX_NATIVE_QUERY_TOKENS || data.len() != expected {
         return Err(DbError::InvalidRequest("native query length"));
@@ -243,7 +247,11 @@ pub fn decode_native_query(data: &[u8]) -> Result<MemoryQuery, DbError> {
         return Err(DbError::QuotaExceeded("native query results"));
     }
     let owner_raw = u64::from_le_bytes(data[28..36].try_into().unwrap());
-    let owner = if flags & 1 != 0 { Some(owner_raw) } else { None };
+    let owner = if flags & 1 != 0 {
+        Some(owner_raw)
+    } else {
+        None
+    };
     let cursor = if flags & 2 != 0 {
         Some(QueryCursor::decode(&data[36..68])?)
     } else {
@@ -306,15 +314,21 @@ pub fn decode_native_query_result(data: &[u8]) -> Result<QueryResult, DbError> {
     }
     let count = u16::from_le_bytes(data[8..10].try_into().unwrap()) as usize;
     let expected = RESULT_HEADER_LEN
-        .checked_add(count.checked_mul(8).ok_or(DbError::InvalidRequest("result overflow"))?)
+        .checked_add(
+            count
+                .checked_mul(8)
+                .ok_or(DbError::InvalidRequest("result overflow"))?,
+        )
         .ok_or(DbError::InvalidRequest("result overflow"))?;
     if count > 64 || data.len() != expected {
         return Err(DbError::InvalidRequest("native query result length"));
     }
     let mut ids = Vec::with_capacity(count);
     for chunk in data[RESULT_HEADER_LEN..].chunks_exact(8) {
-        ids.push(MemoryId::from_raw(u64::from_le_bytes(chunk.try_into().unwrap()))
-            .map_err(|_| DbError::InvalidValue("query result id"))?);
+        ids.push(
+            MemoryId::from_raw(u64::from_le_bytes(chunk.try_into().unwrap()))
+                .map_err(|_| DbError::InvalidValue("query result id"))?,
+        );
     }
     Ok(QueryResult {
         ids,
@@ -413,7 +427,10 @@ mod tests {
         assert_eq!(decoded.limit, q.limit);
 
         let result = QueryResult {
-            ids: vec![MemoryId::from_raw_unchecked(1), MemoryId::from_raw_unchecked(9)],
+            ids: vec![
+                MemoryId::from_raw_unchecked(1),
+                MemoryId::from_raw_unchecked(9),
+            ],
             next_cursor: Some(QueryCursor::new(4, 5, 9)),
             degraded: false,
             total_scanned: 12,

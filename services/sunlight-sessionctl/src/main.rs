@@ -127,7 +127,10 @@ fn mutate(op: u64, app_id: &str, expected_revision: u64, policy: u8, direction: 
 
 fn profile_revision() -> Option<u64> {
     let ep = session_ep()?;
-    let reply = ipc_call(ep, IpcMsg::with_label(SessionMsg::SESSION_PROFILE_GET).word(0, 0));
+    let reply = ipc_call(
+        ep,
+        IpcMsg::with_label(SessionMsg::SESSION_PROFILE_GET).word(0, 0),
+    );
     if reply.label != SessionMsg::REPLY {
         return None;
     }
@@ -139,7 +142,10 @@ fn startup_list() -> i32 {
         println!("session service unavailable");
         return 1;
     };
-    let summary = ipc_call(ep, IpcMsg::with_label(SessionMsg::SESSION_PROFILE_GET).word(0, 0));
+    let summary = ipc_call(
+        ep,
+        IpcMsg::with_label(SessionMsg::SESSION_PROFILE_GET).word(0, 0),
+    );
     if summary.label != SessionMsg::REPLY {
         println!("profile unavailable");
         return 1;
@@ -269,7 +275,9 @@ fn lookup_uid_name(uid: u32) -> heapless::String<32> {
                     let mut parts = line.split(':');
                     let Some(name) = parts.next() else { continue };
                     let _ = parts.next();
-                    let Some(uid_part) = parts.next() else { continue };
+                    let Some(uid_part) = parts.next() else {
+                        continue;
+                    };
                     if uid_part.parse::<u32>().ok() == Some(uid) {
                         let _ = out.push_str(name);
                         let _ = sunlight_libc::close(fd);

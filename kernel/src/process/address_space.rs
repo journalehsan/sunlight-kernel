@@ -928,9 +928,8 @@ impl AddressSpace {
             return Err(MappingError::UnsupportedReplacement);
         }
 
-        let permission_bits = PageTableFlags::USER_ACCESSIBLE
-            | PageTableFlags::WRITABLE
-            | PageTableFlags::NO_EXECUTE;
+        let permission_bits =
+            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
         let mut replacement = expected_flags;
         replacement.remove(permission_bits);
         replacement |= desired & permission_bits;
@@ -1468,9 +1467,9 @@ impl AddressSpace {
         created: &mut Option<(*mut PageTableEntry, PhysAddr)>,
     ) -> Result<&'static mut PageTable, MappingError> {
         if entry.is_unused() {
-            let frame_addr = match pmm.alloc_frame_class(
-                crate::memory::accounting::PhysicalMemoryClass::PageTable,
-            ) {
+            let frame_addr = match pmm
+                .alloc_frame_class(crate::memory::accounting::PhysicalMemoryClass::PageTable)
+            {
                 Some(frame) => frame,
                 None => {
                     PAGE_TABLE_ALLOCATION_FAILURES.fetch_add(1, Ordering::Relaxed);

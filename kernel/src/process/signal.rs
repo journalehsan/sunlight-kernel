@@ -73,8 +73,13 @@ impl Signal {
     /// Signals whose default action is process termination (when not ignored).
     pub fn default_terminates(self) -> bool {
         match self {
-            Signal::SIGCHLD | Signal::SIGWINCH | Signal::SIGCONT | Signal::SIGSTOP | Signal::SIGTSTP
-            | Signal::SIGTTIN | Signal::SIGTTOU => false,
+            Signal::SIGCHLD
+            | Signal::SIGWINCH
+            | Signal::SIGCONT
+            | Signal::SIGSTOP
+            | Signal::SIGTSTP
+            | Signal::SIGTTIN
+            | Signal::SIGTTOU => false,
             _ => true,
         }
     }

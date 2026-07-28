@@ -79,35 +79,15 @@ fn print_accounting(acct: &MemoryAccountingSnapshot, details: bool) {
         kib(acct.installed_bytes)
     );
     emit_line(&mut w);
-    let _ = write!(
-        w,
-        "Usable:    {} MiB",
-        mib(acct.usable_bytes)
-    );
+    let _ = write!(w, "Usable:    {} MiB", mib(acct.usable_bytes));
     emit_line(&mut w);
-    let _ = write!(
-        w,
-        "Managed:   {} MiB",
-        mib(acct.managed_bytes)
-    );
+    let _ = write!(w, "Managed:   {} MiB", mib(acct.managed_bytes));
     emit_line(&mut w);
-    let _ = write!(
-        w,
-        "Used:      {} MiB",
-        mib(acct.used_bytes())
-    );
+    let _ = write!(w, "Used:      {} MiB", mib(acct.used_bytes()));
     emit_line(&mut w);
-    let _ = write!(
-        w,
-        "Free:      {} MiB",
-        mib(acct.free_bytes)
-    );
+    let _ = write!(w, "Free:      {} MiB", mib(acct.free_bytes));
     emit_line(&mut w);
-    let _ = write!(
-        w,
-        "Reserved:  {} MiB",
-        mib(acct.reserved_bytes)
-    );
+    let _ = write!(w, "Reserved:  {} MiB", mib(acct.reserved_bytes));
     emit_line(&mut w);
     let _ = write!(w, "");
     emit_line(&mut w);
@@ -234,11 +214,7 @@ fn print_accounting(acct: &MemoryAccountingSnapshot, details: bool) {
 fn print_tasks(telem: &Telemetry) {
     let snap = telem.snapshot();
     let mut w = BufWriter::new();
-    let _ = write!(
-        w,
-        "Tasks ({}): pid gen mapped_KiB name",
-        snap.proc_count
-    );
+    let _ = write!(w, "Tasks ({}): pid gen mapped_KiB name", snap.proc_count);
     emit_line(&mut w);
     for i in 0..snap.proc_count {
         let p = &snap.procs[i];
@@ -327,11 +303,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     let details = arg_has(argc, argv, "--details");
     let tasks = arg_has(argc, argv, "--tasks");
     let verify = arg_has(argc, argv, "--verify");
-    let accounting = arg_has(argc, argv, "accounting")
-        || argc <= 1
-        || verify
-        || details
-        || tasks;
+    let accounting = arg_has(argc, argv, "accounting") || argc <= 1 || verify || details || tasks;
 
     if !accounting {
         emit("Usage: memoryctl accounting [--details] [--tasks] [--verify]\n");

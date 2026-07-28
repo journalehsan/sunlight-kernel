@@ -72,8 +72,7 @@ impl BrainCapabilitySet {
 
     /// Diagnostic operator.
     pub fn diagnostic() -> Self {
-        Self::default_client()
-            .grant(BrainCapability::InspectAnyBrainContext)
+        Self::default_client().grant(BrainCapability::InspectAnyBrainContext)
     }
 
     pub fn admin() -> Self {

@@ -85,15 +85,28 @@ fn to_simg_and_from_simg_roundtrip() {
     let back = temp_path("rt-back.tga");
     fs::write(&input, fixture_tga()).unwrap();
     let out = Command::new(cli_bin())
-        .args(["to-simg", "--verify", &input.to_string_lossy(), &simg.to_string_lossy()])
+        .args([
+            "to-simg",
+            "--verify",
+            &input.to_string_lossy(),
+            &simg.to_string_lossy(),
+        ])
         .output()
         .unwrap();
-    assert!(out.status.success(), "stderr={}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(stdout.contains("method:"));
     assert!(stdout.contains("verify: ok"));
     let status = Command::new(cli_bin())
-        .args(["from-simg", &simg.to_string_lossy(), &back.to_string_lossy()])
+        .args([
+            "from-simg",
+            &simg.to_string_lossy(),
+            &back.to_string_lossy(),
+        ])
         .status()
         .unwrap();
     assert!(status.success());

@@ -154,8 +154,7 @@ impl DateTimePageState {
         if let Some(loc) = location_by_zone_id(self.applied_zone.as_str()) {
             self.proposed_city.set(loc.city);
             self.proposed_country.set(loc.country);
-            self.proposed_coord =
-                Some(GeoCoord::new(md_to_deg(loc.lon_md), md_to_deg(loc.lat_md)));
+            self.proposed_coord = Some(GeoCoord::new(md_to_deg(loc.lon_md), md_to_deg(loc.lat_md)));
         } else {
             self.proposed_city.clear();
             self.proposed_country.clear();
@@ -227,8 +226,10 @@ impl DateTimePageState {
                     self.applied_zone.set(id);
                     if changed || self.proposed_zone.is_empty() {
                         // Keep proposed only if user already has a pending selection.
-                        if !selection_is_pending(self.applied_zone.as_str(), self.proposed_zone.as_str())
-                        {
+                        if !selection_is_pending(
+                            self.applied_zone.as_str(),
+                            self.proposed_zone.as_str(),
+                        ) {
                             self.seed_proposed_from_applied();
                         }
                     }
@@ -382,7 +383,8 @@ impl DateTimePageState {
         } else {
             // Unsupported catalog/zone pairing — keep selection invalid for Apply.
             self.proposed_zone.set(zone);
-            self.proposed_city.set(self.search_hits_cities[index].as_str());
+            self.proposed_city
+                .set(self.search_hits_cities[index].as_str());
             self.proposed_country
                 .set(self.search_hits_countries[index].as_str());
             self.proposed_coord = None;
@@ -489,12 +491,7 @@ impl DateTimePageState {
 
     fn results_band_rect() -> Rect {
         // Exactly SEARCH_VISIBLE rows of RESULT_ROW_H.
-        Rect::new(
-            12,
-            308,
-            220,
-            (SEARCH_VISIBLE as i32 * RESULT_ROW_H) as u32,
-        )
+        Rect::new(12, 308, 220, (SEARCH_VISIBLE as i32 * RESULT_ROW_H) as u32)
     }
 
     fn result_row_rect(index: usize) -> Rect {
@@ -578,8 +575,8 @@ impl DateTimePageState {
         );
 
         let snap = self.last_snapshot;
-        let clock = SolarClockWidget::new(Self::clock_rect(), snap)
-            .with_date(self.date_line.as_str());
+        let clock =
+            SolarClockWidget::new(Self::clock_rect(), snap).with_date(self.date_line.as_str());
         clock.draw(canvas, theme);
 
         let info_x = 160i32;
@@ -738,13 +735,7 @@ impl DateTimePageState {
         draw_button(canvas, theme, btn);
     }
 
-    fn draw_timezone_section(
-        &self,
-        canvas: &mut Canvas,
-        theme: &Theme,
-        win_w: u32,
-        win_h: u32,
-    ) {
+    fn draw_timezone_section(&self, canvas: &mut Canvas, theme: &Theme, win_w: u32, win_h: u32) {
         // 1) Search field (left)
         self.search.draw(
             canvas,
@@ -759,7 +750,12 @@ impl DateTimePageState {
         if self.search_hits_len == 0 {
             draw_text_clipped(
                 canvas,
-                Rect::new(results_band.x + 4, results_band.y + 2, results_band.w - 8, 16),
+                Rect::new(
+                    results_band.x + 4,
+                    results_band.y + 2,
+                    results_band.w - 8,
+                    16,
+                ),
                 "No matching cities",
                 FontRole::UiSmall,
                 theme.text_dim,
@@ -1022,13 +1018,7 @@ fn draw_text(
 
 /// Draw left-aligned text vertically centred in `rect`, truncating with an
 /// ellipsis so glyphs never paint outside the allocated band.
-fn draw_text_clipped(
-    canvas: &mut Canvas,
-    rect: Rect,
-    text: &str,
-    role: FontRole,
-    color: Color,
-) {
+fn draw_text_clipped(canvas: &mut Canvas, rect: Rect, text: &str, role: FontRole, color: Color) {
     if rect.w == 0 || rect.h == 0 || text.is_empty() {
         return;
     }

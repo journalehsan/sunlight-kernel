@@ -486,9 +486,21 @@ mod tests {
 
     #[test]
     fn detail_from_spawn_error_maps_kernel_codes() {
-        assert_eq!(detail_from_spawn_error(SPAWN_ERR_NOT_FOUND), DETAIL_EXEC_NOT_FOUND);
-        assert_eq!(detail_from_spawn_error(SPAWN_ERR_PERMISSION), DETAIL_EXEC_DENIED);
-        assert_eq!(detail_from_spawn_error(SPAWN_ERR_ELF_LOAD), DETAIL_EXEC_LOAD);
-        assert_eq!(detail_from_spawn_error(SPAWN_ERR_NO_MEMORY), DETAIL_SPAWN_NOMEM);
+        assert_eq!(
+            detail_from_spawn_error(SPAWN_ERR_NOT_FOUND),
+            DETAIL_EXEC_NOT_FOUND
+        );
+        assert_eq!(
+            detail_from_spawn_error(SPAWN_ERR_PERMISSION),
+            DETAIL_EXEC_DENIED
+        );
+        assert_eq!(
+            detail_from_spawn_error(SPAWN_ERR_ELF_LOAD),
+            DETAIL_EXEC_LOAD
+        );
+        assert_eq!(
+            detail_from_spawn_error(SPAWN_ERR_NO_MEMORY),
+            DETAIL_SPAWN_NOMEM
+        );
     }
 }

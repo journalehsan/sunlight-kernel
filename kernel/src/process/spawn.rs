@@ -170,11 +170,11 @@ fn build_exec_image(
             Ok(hdr) => {
                 let at_phdr = compute_at_phdr(bytes, &hdr);
                 alloc::vec![
-                    (3, at_phdr),               // AT_PHDR
-                    (4, hdr.phentsize as u64),  // AT_PHENT (ELF64 = 56)
-                    (5, hdr.phnum as u64),      // AT_PHNUM
-                    (6, 4096u64),               // AT_PAGESZ
-                    (9, hdr.entry),             // AT_ENTRY
+                    (3, at_phdr),              // AT_PHDR
+                    (4, hdr.phentsize as u64), // AT_PHENT (ELF64 = 56)
+                    (5, hdr.phnum as u64),     // AT_PHNUM
+                    (6, 4096u64),              // AT_PAGESZ
+                    (9, hdr.entry),            // AT_ENTRY
                 ]
             }
             Err(_) => alloc::vec![],
@@ -635,15 +635,12 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         // from /bin or /usr/bin and dispatch by argv[0] inside the multi-call
         // binary. Native-libc cat and pwd are mapped just below.
         "/bin/ls" | "/bin/cp" | "/bin/mv" | "/bin/rm" | "/bin/mkdir" | "/bin/rmdir"
-        | "/bin/touch" | "/bin/tail"
-        | "/bin/file" | "/bin/stat" | "/bin/date"
-        | "/bin/whoami" | "/bin/id" | "/bin/uname"
-        | "/bin/nice" | "/bin/renice" | "/bin/free" | "/bin/freezram" | "/bin/kill"
-        | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls" | "/usr/bin/cp"
-        | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
-        | "/usr/bin/touch" | "/usr/bin/tail"
-        | "/usr/bin/file" | "/usr/bin/stat" | "/usr/bin/date"
-        | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname"
+        | "/bin/touch" | "/bin/tail" | "/bin/file" | "/bin/stat" | "/bin/date" | "/bin/whoami"
+        | "/bin/id" | "/bin/uname" | "/bin/nice" | "/bin/renice" | "/bin/free"
+        | "/bin/freezram" | "/bin/kill" | "/bin/killall" | "/bin/pkill" | "/usr/bin/ls"
+        | "/usr/bin/cp" | "/usr/bin/mv" | "/usr/bin/rm" | "/usr/bin/mkdir" | "/usr/bin/rmdir"
+        | "/usr/bin/touch" | "/usr/bin/tail" | "/usr/bin/file" | "/usr/bin/stat"
+        | "/usr/bin/date" | "/usr/bin/whoami" | "/usr/bin/id" | "/usr/bin/uname"
         | "/usr/bin/nice" | "/usr/bin/renice" | "/usr/bin/free" | "/usr/bin/freezram"
         | "/usr/bin/kill" | "/usr/bin/killall" | "/usr/bin/pkill" => {
             Ok(crate::SUNLIGHT_UTILS_ELF_BYTES)
@@ -666,15 +663,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/head" | "/usr/bin/head" | "/sunlight-utils/head" => {
             Ok(crate::SUNLIGHT_HEAD_ELF_BYTES)
         }
-        "/bin/cmp" | "/usr/bin/cmp" | "/sunlight-utils/cmp" => {
-            Ok(crate::SUNLIGHT_CMP_ELF_BYTES)
-        }
-        "/bin/wc" | "/usr/bin/wc" | "/sunlight-utils/wc" => {
-            Ok(crate::SUNLIGHT_WC_ELF_BYTES)
-        }
-        "/bin/cut" | "/usr/bin/cut" | "/sunlight-utils/cut" => {
-            Ok(crate::SUNLIGHT_CUT_ELF_BYTES)
-        }
+        "/bin/cmp" | "/usr/bin/cmp" | "/sunlight-utils/cmp" => Ok(crate::SUNLIGHT_CMP_ELF_BYTES),
+        "/bin/wc" | "/usr/bin/wc" | "/sunlight-utils/wc" => Ok(crate::SUNLIGHT_WC_ELF_BYTES),
+        "/bin/cut" | "/usr/bin/cut" | "/sunlight-utils/cut" => Ok(crate::SUNLIGHT_CUT_ELF_BYTES),
         "/bin/fold" | "/usr/bin/fold" | "/sunlight-utils/fold" => {
             Ok(crate::SUNLIGHT_FOLD_ELF_BYTES)
         }
@@ -696,9 +687,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/comm" | "/usr/bin/comm" | "/sunlight-utils/comm" => {
             Ok(crate::SUNLIGHT_COMM_ELF_BYTES)
         }
-        "/bin/tr" | "/usr/bin/tr" | "/sunlight-utils/tr" => {
-            Ok(crate::SUNLIGHT_TR_ELF_BYTES)
-        }
+        "/bin/tr" | "/usr/bin/tr" | "/sunlight-utils/tr" => Ok(crate::SUNLIGHT_TR_ELF_BYTES),
         "/bin/paste" | "/usr/bin/paste" | "/sunlight-utils/paste" => {
             Ok(crate::SUNLIGHT_PASTE_ELF_BYTES)
         }
@@ -708,15 +697,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/printf" | "/usr/bin/printf" | "/sunlight-utils/printf" => {
             Ok(crate::SUNLIGHT_PRINTF_ELF_BYTES)
         }
-        "/bin/tee" | "/usr/bin/tee" | "/sunlight-utils/tee" => {
-            Ok(crate::SUNLIGHT_TEE_ELF_BYTES)
-        }
-        "/bin/nl" | "/usr/bin/nl" | "/sunlight-utils/nl" => {
-            Ok(crate::SUNLIGHT_NL_ELF_BYTES)
-        }
-        "/bin/od" | "/usr/bin/od" | "/sunlight-utils/od" => {
-            Ok(crate::SUNLIGHT_OD_ELF_BYTES)
-        }
+        "/bin/tee" | "/usr/bin/tee" | "/sunlight-utils/tee" => Ok(crate::SUNLIGHT_TEE_ELF_BYTES),
+        "/bin/nl" | "/usr/bin/nl" | "/sunlight-utils/nl" => Ok(crate::SUNLIGHT_NL_ELF_BYTES),
+        "/bin/od" | "/usr/bin/od" | "/sunlight-utils/od" => Ok(crate::SUNLIGHT_OD_ELF_BYTES),
         "/bin/split" | "/usr/bin/split" | "/sunlight-utils/split" => {
             Ok(crate::SUNLIGHT_SPLIT_ELF_BYTES)
         }
@@ -891,9 +874,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunlight-vortex-shell"
         | "/usr/bin/sunlight-vortex-shell"
         | "/bin/vortex-lock-presenter"
-        | "/usr/bin/vortex-lock-presenter" => {
-            Ok(crate::SUNLIGHT_VORTEX_SHELL_ELF_BYTES)
-        }
+        | "/usr/bin/vortex-lock-presenter" => Ok(crate::SUNLIGHT_VORTEX_SHELL_ELF_BYTES),
         // control-panel: System Preferences (Mouse + Monitor settings).
         "/bin/control-panel" | "/usr/bin/control-panel" => {
             Ok(crate::SUNLIGHT_CONTROL_PANEL_ELF_BYTES)
@@ -916,15 +897,11 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/wiseowl-memorydbctl" | "/usr/bin/wiseowl-memorydbctl" => {
             Ok(crate::WISEOWL_MEMORYDBCTL_ELF_BYTES)
         }
-        "/sbin/wiseowl-indexd" | "/usr/sbin/wiseowl-indexd" => {
-            Ok(crate::WISEOWL_INDEXD_ELF_BYTES)
-        }
+        "/sbin/wiseowl-indexd" | "/usr/sbin/wiseowl-indexd" => Ok(crate::WISEOWL_INDEXD_ELF_BYTES),
         "/bin/wiseowl-indexctl" | "/usr/bin/wiseowl-indexctl" => {
             Ok(crate::WISEOWL_INDEXCTL_ELF_BYTES)
         }
-        "/sbin/wiseowl-braind" | "/usr/sbin/wiseowl-braind" => {
-            Ok(crate::WISEOWL_BRAIND_ELF_BYTES)
-        }
+        "/sbin/wiseowl-braind" | "/usr/sbin/wiseowl-braind" => Ok(crate::WISEOWL_BRAIND_ELF_BYTES),
         "/bin/wiseowl-brainctl" | "/usr/bin/wiseowl-brainctl" => {
             Ok(crate::WISEOWL_BRAINCTL_ELF_BYTES)
         }

@@ -4,8 +4,8 @@
 //! spawns CLI tools or parses their text output.
 
 use sunlight_ipc::{
-    ipc_call_timeout, nameserver_lookup_timeout, CapabilityToken, IpcCallError, IpcMsg, NtpSyncState,
-    TimeMsg, TzMsg,
+    ipc_call_timeout, nameserver_lookup_timeout, CapabilityToken, IpcCallError, IpcMsg,
+    NtpSyncState, TimeMsg, TzMsg,
 };
 
 /// Lookup / request timeouts (milliseconds).
@@ -111,7 +111,11 @@ impl TimeClient {
     }
 
     pub fn get_utc(&self) -> Result<u64, TimeClientError> {
-        let reply = call(self.cap, IpcMsg::with_label(TimeMsg::GET_UTC), QUERY_TIMEOUT_MS)?;
+        let reply = call(
+            self.cap,
+            IpcMsg::with_label(TimeMsg::GET_UTC),
+            QUERY_TIMEOUT_MS,
+        )?;
         if reply.label != TimeMsg::REPLY {
             return Err(TimeClientError::Unexpected);
         }
@@ -269,7 +273,11 @@ impl TzClient {
     }
 
     pub fn get_zone(&self) -> Result<ZoneSnapshot, TzClientError> {
-        let reply = call_tz(self.cap, IpcMsg::with_label(TzMsg::GET_ZONE), QUERY_TIMEOUT_MS)?;
+        let reply = call_tz(
+            self.cap,
+            IpcMsg::with_label(TzMsg::GET_ZONE),
+            QUERY_TIMEOUT_MS,
+        )?;
         if reply.label != TzMsg::REPLY {
             return Err(map_tz_error(&reply));
         }
@@ -395,11 +403,7 @@ fn map_tz_error(reply: &IpcMsg) -> TzClientError {
     }
 }
 
-fn call(
-    cap: CapabilityToken,
-    msg: IpcMsg,
-    timeout_ms: u64,
-) -> Result<IpcMsg, TimeClientError> {
+fn call(cap: CapabilityToken, msg: IpcMsg, timeout_ms: u64) -> Result<IpcMsg, TimeClientError> {
     match ipc_call_timeout(cap, msg, timeout_ms) {
         Ok(r) => Ok(r),
         Err(IpcCallError::Timeout) => Err(TimeClientError::Timeout),
@@ -407,11 +411,7 @@ fn call(
     }
 }
 
-fn call_tz(
-    cap: CapabilityToken,
-    msg: IpcMsg,
-    timeout_ms: u64,
-) -> Result<IpcMsg, TzClientError> {
+fn call_tz(cap: CapabilityToken, msg: IpcMsg, timeout_ms: u64) -> Result<IpcMsg, TzClientError> {
     match ipc_call_timeout(cap, msg, timeout_ms) {
         Ok(r) => Ok(r),
         Err(IpcCallError::Timeout) => Err(TzClientError::Timeout),

@@ -61,7 +61,10 @@ struct Selection {
 
 impl Selection {
     fn new() -> Self {
-        Self { ranges: [Range { lo: 0, hi: 0 }; 64], len: 0 }
+        Self {
+            ranges: [Range { lo: 0, hi: 0 }; 64],
+            len: 0,
+        }
     }
 
     fn add(&mut self, r: Range) {
@@ -122,31 +125,43 @@ fn parse_range_part(part: &str, sel: &mut Selection) -> Result<(), ()> {
         }
         if a_str.is_empty() {
             let hi = parse_u64_bytes(b_str.as_bytes()).ok_or(())?;
-            if hi == 0 { return Err(()); }
+            if hi == 0 {
+                return Err(());
+            }
             sel.add(Range { lo: 1, hi });
         } else if b_str.is_empty() {
             let lo = parse_u64_bytes(a_str.as_bytes()).ok_or(())?;
-            if lo == 0 { return Err(()); }
+            if lo == 0 {
+                return Err(());
+            }
             sel.add(Range { lo, hi: 0 });
         } else {
             let lo = parse_u64_bytes(a_str.as_bytes()).ok_or(())?;
             let hi = parse_u64_bytes(b_str.as_bytes()).ok_or(())?;
-            if lo == 0 || hi == 0 || lo > hi { return Err(()); }
+            if lo == 0 || hi == 0 || lo > hi {
+                return Err(());
+            }
             sel.add(Range { lo, hi });
         }
     } else {
         let n = parse_u64_bytes(part.as_bytes()).ok_or(())?;
-        if n == 0 { return Err(()); }
+        if n == 0 {
+            return Err(());
+        }
         sel.add(Range { lo: n, hi: n });
     }
     Ok(())
 }
 
 fn parse_u64_bytes(slice: &[u8]) -> Option<u64> {
-    if slice.is_empty() { return None; }
+    if slice.is_empty() {
+        return None;
+    }
     let mut out = 0u64;
     for &b in slice {
-        if !b.is_ascii_digit() { return None; }
+        if !b.is_ascii_digit() {
+            return None;
+        }
         out = out.checked_mul(10)?.checked_add((b - b'0') as u64)?;
     }
     Some(out)
@@ -167,7 +182,9 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     for &path in files {
         if path == b"-" {
             let fc = cut_fd(io, STDIN, mode, &selection, delimiter, suppress);
-            if fc != 0 { code = 1; }
+            if fc != 0 {
+                code = 1;
+            }
             continue;
         }
         let fd = match io.open(path) {
@@ -182,12 +199,17 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
         };
         let fc = cut_fd(io, fd, mode, &selection, delimiter, suppress);
         let _ = io.close(fd);
-        if fc != 0 { code = 1; }
+        if fc != 0 {
+            code = 1;
+        }
     }
     code
 }
 
-fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(Mode, Selection, u8, bool, &'a [&'a [u8]]), i32> {
+fn parse_args<'a>(
+    args: &'a [&'a [u8]],
+    io: &mut impl Io,
+) -> Result<(Mode, Selection, u8, bool, &'a [&'a [u8]]), i32> {
     let mut mode: Option<Mode> = None;
     let mut list: Option<&[u8]> = None;
     let mut delimiter: u8 = b'\t';
@@ -196,7 +218,9 @@ fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(Mode, Selec
 
     while let Some((first, tail)) = rest.split_first() {
         if *first == b"-b" {
-            if mode.is_some() { return Err(1); }
+            if mode.is_some() {
+                return Err(1);
+            }
             mode = Some(Mode::Bytes);
             if tail.is_empty() {
                 let _ = io.write_stderr(b"cut: option requires an argument -- 'b'\n");
@@ -205,7 +229,9 @@ fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(Mode, Selec
             list = Some(tail[0]);
             rest = &tail[1..];
         } else if *first == b"-c" {
-            if mode.is_some() { return Err(1); }
+            if mode.is_some() {
+                return Err(1);
+            }
             mode = Some(Mode::Chars);
             if tail.is_empty() {
                 let _ = io.write_stderr(b"cut: option requires an argument -- 'c'\n");
@@ -214,7 +240,9 @@ fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(Mode, Selec
             list = Some(tail[0]);
             rest = &tail[1..];
         } else if *first == b"-f" {
-            if mode.is_some() { return Err(1); }
+            if mode.is_some() {
+                return Err(1);
+            }
             mode = Some(Mode::Fields);
             if tail.is_empty() {
                 let _ = io.write_stderr(b"cut: option requires an argument -- 'f'\n");
@@ -268,7 +296,14 @@ fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(Mode, Selec
     Ok((mode, selection, delimiter, suppress, rest))
 }
 
-fn cut_fd(io: &mut impl Io, fd: Fd, mode: Mode, selection: &Selection, delim: u8, suppress: bool) -> i32 {
+fn cut_fd(
+    io: &mut impl Io,
+    fd: Fd,
+    mode: Mode,
+    selection: &Selection,
+    delim: u8,
+    suppress: bool,
+) -> i32 {
     match mode {
         Mode::Bytes => cut_bytes_fd(io, fd, selection),
         Mode::Chars => cut_chars_fd(io, fd, selection),
@@ -300,7 +335,8 @@ fn cut_bytes_fd(io: &mut impl Io, fd: Fd, selection: &Selection) -> i32 {
                         // Flush line up to this byte including the newline
                         let chunk_len = i + 1 - start;
                         if line_len + chunk_len <= line_buf.len() {
-                            line_buf[line_len..line_len + chunk_len].copy_from_slice(&buf[start..i + 1]);
+                            line_buf[line_len..line_len + chunk_len]
+                                .copy_from_slice(&buf[start..i + 1]);
                             line_len += chunk_len;
                         }
                         output_selected_bytes(io, &line_buf[..line_len], selection);
@@ -355,7 +391,13 @@ fn cut_chars_fd(io: &mut impl Io, fd: Fd, selection: &Selection) -> i32 {
     cut_bytes_fd(io, fd, selection)
 }
 
-fn cut_fields_fd(io: &mut impl Io, fd: Fd, selection: &Selection, delim: u8, suppress: bool) -> i32 {
+fn cut_fields_fd(
+    io: &mut impl Io,
+    fd: Fd,
+    selection: &Selection,
+    delim: u8,
+    suppress: bool,
+) -> i32 {
     let mut buf = [0u8; BUF_SIZE];
     let mut line_buf: [u8; BUF_SIZE * 4] = [0u8; BUF_SIZE * 4];
     let mut line_len: usize = 0;
@@ -375,10 +417,17 @@ fn cut_fields_fd(io: &mut impl Io, fd: Fd, selection: &Selection, delim: u8, sup
                     if b == b'\n' {
                         let chunk_len = i + 1 - start;
                         if line_len + chunk_len <= line_buf.len() {
-                            line_buf[line_len..line_len + chunk_len].copy_from_slice(&buf[start..i + 1]);
+                            line_buf[line_len..line_len + chunk_len]
+                                .copy_from_slice(&buf[start..i + 1]);
                             line_len += chunk_len;
                         }
-                        output_selected_fields(io, &line_buf[..line_len], selection, delim, suppress);
+                        output_selected_fields(
+                            io,
+                            &line_buf[..line_len],
+                            selection,
+                            delim,
+                            suppress,
+                        );
                         line_len = 0;
                         start = i + 1;
                     }
@@ -394,7 +443,9 @@ fn cut_fields_fd(io: &mut impl Io, fd: Fd, selection: &Selection, delim: u8, sup
                 }
                 retries = 0;
             }
-            Ok(_) => { return 1; }
+            Ok(_) => {
+                return 1;
+            }
             Err(Errno::Again) if retries < READ_RETRY_LIMIT => {
                 retries += 1;
                 io.yield_now();
@@ -408,7 +459,13 @@ fn cut_fields_fd(io: &mut impl Io, fd: Fd, selection: &Selection, delim: u8, sup
     0
 }
 
-fn output_selected_fields(io: &mut impl Io, line: &[u8], selection: &Selection, delim: u8, suppress: bool) {
+fn output_selected_fields(
+    io: &mut impl Io,
+    line: &[u8],
+    selection: &Selection,
+    delim: u8,
+    suppress: bool,
+) {
     // Strip trailing newline for field analysis
     let content = if line.last() == Some(&b'\n') {
         &line[..line.len() - 1]
@@ -512,9 +569,15 @@ mod tests {
         fn new(files: Vec<(&'static [u8], &'static [u8])>) -> Self {
             let fc = files.len();
             Self {
-                files, output: Vec::new(), errors: Vec::new(),
-                opens: 0, closes: 0, offsets: std::vec![0; fc],
-                fail_read: false, stdin_data: None, stdin_offset: 0,
+                files,
+                output: Vec::new(),
+                errors: Vec::new(),
+                opens: 0,
+                closes: 0,
+                offsets: std::vec![0; fc],
+                fail_read: false,
+                stdin_data: None,
+                stdin_offset: 0,
                 eagain_reads: 0,
             }
         }
@@ -530,7 +593,9 @@ mod tests {
             Ok(Fd(idx as u32 + 3))
         }
         fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
-            if self.fail_read { return Err(Errno::Failed); }
+            if self.fail_read {
+                return Err(Errno::Failed);
+            }
             if self.eagain_reads != 0 {
                 self.eagain_reads -= 1;
                 return Err(Errno::Again);
@@ -538,25 +603,40 @@ mod tests {
             if fd == STDIN {
                 let data = self.stdin_data.unwrap_or(b"");
                 let off = self.stdin_offset;
-                if off >= data.len() { return Ok(0); }
+                if off >= data.len() {
+                    return Ok(0);
+                }
                 let n = (data.len() - off).min(buf.len());
                 buf[..n].copy_from_slice(&data[off..off + n]);
                 self.stdin_offset += n;
                 return Ok(n);
             }
             let idx = (fd.0 - 3) as usize;
-            if idx >= self.files.len() { return Ok(0); }
+            if idx >= self.files.len() {
+                return Ok(0);
+            }
             let data = self.files[idx].1;
             let off = self.offsets[idx];
-            if off >= data.len() { return Ok(0); }
+            if off >= data.len() {
+                return Ok(0);
+            }
             let n = (data.len() - off).min(buf.len());
             buf[..n].copy_from_slice(&data[off..off + n]);
             self.offsets[idx] += n;
             Ok(n)
         }
-        fn close(&mut self, _fd: Fd) -> Result<(), Errno> { self.closes += 1; Ok(()) }
-        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> { self.output.extend_from_slice(b); Ok(()) }
-        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> { self.errors.extend_from_slice(b); Ok(()) }
+        fn close(&mut self, _fd: Fd) -> Result<(), Errno> {
+            self.closes += 1;
+            Ok(())
+        }
+        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.output.extend_from_slice(b);
+            Ok(())
+        }
+        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.errors.extend_from_slice(b);
+            Ok(())
+        }
         fn yield_now(&mut self) {}
     }
 

@@ -182,7 +182,11 @@ fn print_status(cap: sunlight_ipc::CapabilityToken) {
             5 => "FanFailure",
             _ => "Unknown",
         };
-        println!("  constraint: thermal max={} ({})", profile_str(max), reason_s);
+        println!(
+            "  constraint: thermal max={} ({})",
+            profile_str(max),
+            reason_s
+        );
         if sel != eff {
             println!("  note:      effective reduced by thermal safety");
         }

@@ -115,6 +115,8 @@ pub struct ServiceRuntimeContext {
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeContextSnapshot {
     pub available: bool,
+    /// Monotonically identifies each snapshot published by this cache.
+    pub generation: u64,
     pub captured_mono_ms: u64,
     pub provider_count: u8,
     pub provider_failures: u8,
@@ -252,6 +254,7 @@ impl RuntimeContextCache {
 
     fn refresh_at(&mut self, now: u64, force: bool) {
         let mut next = self.snapshot.clone();
+        let mut refreshed = force && self.providers.is_empty();
         for entry in self.providers.iter_mut() {
             let due = force
                 || match (
@@ -265,6 +268,7 @@ impl RuntimeContextCache {
             if !due {
                 continue;
             }
+            refreshed = true;
 
             let mut cleared = next.clone();
             entry.provider.clear(&mut cleared);
@@ -278,7 +282,11 @@ impl RuntimeContextCache {
             }
             entry.last_refresh_mono_ms = Some(now);
         }
+        if !refreshed {
+            return;
+        }
         next.captured_mono_ms = now;
+        next.generation = self.snapshot.generation.saturating_add(1);
         next.provider_count = self.providers.len() as u8;
         next.provider_failures = self.providers.iter().filter(|entry| entry.failed).count() as u8;
         next.recompute_available();
@@ -921,10 +929,16 @@ mod tests {
             .is_ok());
 
         cache.refresh_at(100, false);
+        let first_generation = cache.snapshot().generation;
         cache.refresh_at(4_999, false);
         assert_eq!(calls.get(), 1);
+        assert_eq!(cache.snapshot().generation, first_generation);
         cache.refresh_at(5_100, false);
         assert_eq!(calls.get(), 2);
+        assert_eq!(
+            cache.snapshot().generation,
+            first_generation.saturating_add(1)
+        );
     }
 
     #[test]

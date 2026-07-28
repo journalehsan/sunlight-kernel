@@ -117,8 +117,7 @@ static SUNLIGHT_CMP_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/cmp");
 static SUNLIGHT_CKSUM_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/cksum");
-static SUNLIGHT_WC_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/wc");
+static SUNLIGHT_WC_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/wc");
 static SUNLIGHT_CUT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/cut");
 static SUNLIGHT_FOLD_ELF_BYTES: &[u8] =
@@ -133,8 +132,7 @@ static SUNLIGHT_UNIQ_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uniq");
 static SUNLIGHT_COMM_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/comm");
-static SUNLIGHT_TR_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/tr");
+static SUNLIGHT_TR_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/tr");
 static SUNLIGHT_PASTE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/paste");
 static SUNLIGHT_JOIN_ELF_BYTES: &[u8] =
@@ -143,10 +141,8 @@ static SUNLIGHT_PRINTF_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/printf");
 static SUNLIGHT_TEE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/tee");
-static SUNLIGHT_NL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/nl");
-static SUNLIGHT_OD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/od");
+static SUNLIGHT_NL_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/nl");
+static SUNLIGHT_OD_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/od");
 static SUNLIGHT_SPLIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/split");
 static SUNLIGHT_FIND_ELF_BYTES: &[u8] =
@@ -417,8 +413,7 @@ pub extern "C" fn _start() -> ! {
         splash.set_ram((total * 4 / 1024) as u32);
         // Physical memory accounting Phase 1: measure static INITRAMFS file data
         // embedded in the kernel image. No second copy is created at mount time.
-        let ramfs_bytes =
-            sunlight_fs::initramfs_static_file_data_bytes(sunlight_fs::INITRAMFS);
+        let ramfs_bytes = sunlight_fs::initramfs_static_file_data_bytes(sunlight_fs::INITRAMFS);
         memory::accounting::set_ramfs_static_file_bytes(ramfs_bytes);
         // Boot-image residency: static assets live inside the kernel image only.
         // retained_boot_image_bytes = 0 (measured): no separate retained copy.
@@ -427,9 +422,7 @@ pub extern "C" fn _start() -> ! {
             "[MEMORY-ACCOUNTING] RAMFS static file data={} KiB (embedded in kernel image)",
             ramfs_bytes / 1024
         );
-        serial_println!(
-            "[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)"
-        );
+        serial_println!("[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)");
         // OSOD smoke test (Rust panic path, not #DE).
         // Set the static to 1, rebuild/boot, confirm orange screen, then set back to 0.
         // Uses read_volatile so enabling it does not trip unreachable_code under deny(warnings).
@@ -3918,7 +3911,9 @@ fn build_wiseowl_phase375_sequence() -> [u8; 12288] {
         b"wiseowl-indexctl pending".as_slice(),
         b"wiseowl-indexctl stats".as_slice(),
         b"wiseowl-indexctl phase375-verdict".as_slice(),
-    ].into_iter() {
+    ]
+    .into_iter()
+    {
         append_injected_delay(&mut s, &mut len, 24);
         append_injected_command(&mut s, &mut len, command);
         // Let each foreground diagnostic process exit before typing the next
@@ -4157,7 +4152,11 @@ fn build_phase6_5_utils_sequence() -> [u8; 12288] {
         b"fold -w 10 /tests/fold-long".as_slice(),
         b"expand /tests/expand-tabs".as_slice(),
     ] {
-        let extra = if command == b"echo hello world".as_slice() { 0 } else { 0 };
+        let extra = if command == b"echo hello world".as_slice() {
+            0
+        } else {
+            0
+        };
         append_injected_delay(&mut s, &mut len, 48 + extra);
         append_injected_command(&mut s, &mut len, command);
     }
@@ -4321,7 +4320,9 @@ fn injected_scancode(byte: u8) -> (u8, bool) {
         b'7' => 0x08,
         b'8' => 0x09,
         b'9' => 0x0a,
-        b':' => { return (0x27, true); }
+        b':' => {
+            return (0x27, true);
+        }
         b';' => 0x27,
         b'=' => 0x0d,
         _ => 0,

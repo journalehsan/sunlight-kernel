@@ -151,10 +151,8 @@ impl PhysicalMemoryManager {
                     kernel_managed_frames += 1;
                 }
                 BITMAP[f / 8] |= 1 << (f % 8);
-                FRAME_OWNER[f] = pack_owner(
-                    PMM_OWNER_KERNEL,
-                    PhysicalMemoryClass::ReservedKernelImage,
-                );
+                FRAME_OWNER[f] =
+                    pack_owner(PMM_OWNER_KERNEL, PhysicalMemoryClass::ReservedKernelImage);
             }
         }
         accounting::note_alloc(

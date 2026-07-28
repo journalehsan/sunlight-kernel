@@ -99,11 +99,7 @@ impl TextBuffer {
         }
 
         let l = &mut self.lines[line];
-        let byte_idx = l
-            .char_indices()
-            .map(|(i, _)| i)
-            .nth(col)
-            .unwrap_or(l.len());
+        let byte_idx = l.char_indices().map(|(i, _)| i).nth(col).unwrap_or(l.len());
 
         l.insert(byte_idx, ch);
         self.modified = true;
@@ -120,11 +116,7 @@ impl TextBuffer {
         }
 
         let l = &self.lines[line];
-        let byte_idx = l
-            .char_indices()
-            .map(|(i, _)| i)
-            .nth(col)
-            .unwrap_or(l.len());
+        let byte_idx = l.char_indices().map(|(i, _)| i).nth(col).unwrap_or(l.len());
 
         let remainder = self.lines[line][byte_idx..].to_string();
         self.lines[line].truncate(byte_idx);

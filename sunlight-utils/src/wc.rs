@@ -47,7 +47,12 @@ struct CountModes {
 
 impl CountModes {
     fn default() -> Self {
-        Self { lines: true, words: true, bytes: true, chars: false }
+        Self {
+            lines: true,
+            words: true,
+            bytes: true,
+            chars: false,
+        }
     }
 
     fn any_set(&self) -> bool {
@@ -58,7 +63,12 @@ impl CountModes {
         if !lines && !words && !bytes && !chars {
             return None;
         }
-        Some(Self { lines, words, bytes, chars })
+        Some(Self {
+            lines,
+            words,
+            bytes,
+            chars,
+        })
     }
 
     fn output_order(&self) -> [bool; 4] {
@@ -124,7 +134,10 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     code
 }
 
-fn parse_args<'a>(args: &'a [&'a [u8]], io: &mut impl Io) -> Result<(CountModes, &'a [&'a [u8]]), i32> {
+fn parse_args<'a>(
+    args: &'a [&'a [u8]],
+    io: &mut impl Io,
+) -> Result<(CountModes, &'a [&'a [u8]]), i32> {
     let mut lines = false;
     let mut words = false;
     let mut bytes = false;
@@ -392,9 +405,15 @@ mod tests {
         fn new(files: Vec<(&'static [u8], &'static [u8])>) -> Self {
             let fc = files.len();
             Self {
-                files, output: Vec::new(), errors: Vec::new(),
-                opens: 0, closes: 0, offsets: std::vec![0; fc],
-                fail_read: false, stdin_data: None, stdin_offset: 0,
+                files,
+                output: Vec::new(),
+                errors: Vec::new(),
+                opens: 0,
+                closes: 0,
+                offsets: std::vec![0; fc],
+                fail_read: false,
+                stdin_data: None,
+                stdin_offset: 0,
                 eagain_reads: 0,
             }
         }
@@ -410,7 +429,9 @@ mod tests {
             Ok(Fd(idx as u32 + 3))
         }
         fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
-            if self.fail_read { return Err(Errno::Failed); }
+            if self.fail_read {
+                return Err(Errno::Failed);
+            }
             if self.eagain_reads != 0 {
                 self.eagain_reads -= 1;
                 return Err(Errno::Again);
@@ -418,25 +439,40 @@ mod tests {
             if fd == STDIN {
                 let data = self.stdin_data.unwrap_or(b"");
                 let off = self.stdin_offset;
-                if off >= data.len() { return Ok(0); }
+                if off >= data.len() {
+                    return Ok(0);
+                }
                 let n = (data.len() - off).min(buf.len());
                 buf[..n].copy_from_slice(&data[off..off + n]);
                 self.stdin_offset += n;
                 return Ok(n);
             }
             let idx = (fd.0 - 3) as usize;
-            if idx >= self.files.len() { return Ok(0); }
+            if idx >= self.files.len() {
+                return Ok(0);
+            }
             let data = self.files[idx].1;
             let off = self.offsets[idx];
-            if off >= data.len() { return Ok(0); }
+            if off >= data.len() {
+                return Ok(0);
+            }
             let n = (data.len() - off).min(buf.len());
             buf[..n].copy_from_slice(&data[off..off + n]);
             self.offsets[idx] += n;
             Ok(n)
         }
-        fn close(&mut self, _fd: Fd) -> Result<(), Errno> { self.closes += 1; Ok(()) }
-        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> { self.output.extend_from_slice(b); Ok(()) }
-        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> { self.errors.extend_from_slice(b); Ok(()) }
+        fn close(&mut self, _fd: Fd) -> Result<(), Errno> {
+            self.closes += 1;
+            Ok(())
+        }
+        fn write_stdout(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.output.extend_from_slice(b);
+            Ok(())
+        }
+        fn write_stderr(&mut self, b: &[u8]) -> Result<(), Errno> {
+            self.errors.extend_from_slice(b);
+            Ok(())
+        }
         fn yield_now(&mut self) {}
     }
 
@@ -472,7 +508,10 @@ mod tests {
         let nbytes = text.len() as u64;
         assert_eq!(run(&[b"f"], &mut m), 0);
         let s = output_as_str(&m.output);
-        assert!(s.contains(&format!(" {nlines} {nwords} {nbytes} f")), "got: {s}");
+        assert!(
+            s.contains(&format!(" {nlines} {nwords} {nbytes} f")),
+            "got: {s}"
+        );
     }
 
     #[test]
@@ -525,9 +564,7 @@ mod tests {
 
     #[test]
     fn multiple_files_with_total() {
-        let mut m = Mock::new(std::vec![
-            (b"a", b"hi\n"), (b"b", b"there\n"),
-        ]);
+        let mut m = Mock::new(std::vec![(b"a", b"hi\n"), (b"b", b"there\n"),]);
         assert_eq!(run(&[b"a", b"b"], &mut m), 0);
         let s = output_as_str(&m.output);
         assert!(s.contains("total"), "got: {s}");
@@ -608,7 +645,10 @@ mod tests {
         let mut m = Mock::new(std::vec![(b"over", &DATA)]);
         assert_eq!(run(&[b"over"], &mut m), 0);
         let s = output_as_str(&m.output);
-        assert!(s.contains(&format!("0 1 {} over", BUF_SIZE + 1)), "got: {s}");
+        assert!(
+            s.contains(&format!("0 1 {} over", BUF_SIZE + 1)),
+            "got: {s}"
+        );
     }
 
     #[test]

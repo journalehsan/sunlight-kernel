@@ -5,7 +5,9 @@ use alloc::vec::Vec;
 
 use crate::config::PARSER_PLAIN;
 use crate::error::IndexError;
-use crate::parse::{line_of, line_starts, push_block, DocumentParser, ParseSummary, ParsedBlock, ParsedBlockKind};
+use crate::parse::{
+    line_of, line_starts, push_block, DocumentParser, ParseSummary, ParsedBlock, ParsedBlockKind,
+};
 use crate::quotas::IndexQuotaConfig;
 
 pub struct PlainTextParser;
@@ -22,8 +24,21 @@ impl DocumentParser for PlainTextParser {
     fn supports(&self, extension: &str, _media_hint: Option<&str>) -> bool {
         matches!(
             extension,
-            "txt" | "log" | "rs" | "c" | "h" | "cpp" | "hpp" | "py" | "js" | "ts" | "tsx"
-                | "jsx" | "html" | "css" | "sh"
+            "txt"
+                | "log"
+                | "rs"
+                | "c"
+                | "h"
+                | "cpp"
+                | "hpp"
+                | "py"
+                | "js"
+                | "ts"
+                | "tsx"
+                | "jsx"
+                | "html"
+                | "css"
+                | "sh"
         )
     }
 

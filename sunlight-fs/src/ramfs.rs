@@ -599,13 +599,16 @@ static WC_TEXT: &[u8] = b"hello world\nline two\n  line three  \n";
 static WC_EMPTY: &[u8] = b"";
 static WC_NO_NL: &[u8] = b"no newline here";
 static WC_SPACES: &[u8] = b"   \t  \n";
-static WC_UTF8: &[u8] = &[0x68, 0xC3, 0xA9, 0x6C, 0x6C, 0x6F, 0x0A, 0x77, 0xC3, 0xB6, 0x72, 0x6C, 0x64, 0x0A];
+static WC_UTF8: &[u8] = &[
+    0x68, 0xC3, 0xA9, 0x6C, 0x6C, 0x6F, 0x0A, 0x77, 0xC3, 0xB6, 0x72, 0x6C, 0x64, 0x0A,
+];
 
 static CUT_DELIM: &[u8] = b"a:b:c:d\n1:2:3:4\n";
 static CUT_NO_DELIM: &[u8] = b"no delimiters here\n";
 static CUT_BYTES: &[u8] = b"abcdefghij\n";
 
-static FOLD_LONG: &[u8] = b"this is a very long line that should be folded at the specified width\n";
+static FOLD_LONG: &[u8] =
+    b"this is a very long line that should be folded at the specified width\n";
 static FOLD_EXACT: &[u8] = b"1234567890\n";
 static FOLD_OVER: &[u8] = b"12345678901\n";
 static FOLD_TABS: &[u8] = b"hello\tworld\t!\n";

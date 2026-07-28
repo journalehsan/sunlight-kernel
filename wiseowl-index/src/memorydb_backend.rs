@@ -51,7 +51,8 @@ pub trait IndexMemoryDb {
 
     fn abort_transaction(&mut self, tx: u64) -> Result<(), IndexError>;
 
-    fn delete_source(&mut self, source_id: SourceId, batch: u32) -> Result<(u32, bool), IndexError>;
+    fn delete_source(&mut self, source_id: SourceId, batch: u32)
+        -> Result<(u32, bool), IndexError>;
 
     fn delete_source_dry_run(&mut self, source_id: SourceId) -> Result<u32, IndexError>;
 
@@ -145,7 +146,11 @@ impl<S: DurableStore> IndexMemoryDb for HostMemoryDbBackend<S> {
         Ok(self.db.abort_transaction(&self.caller, tx)?)
     }
 
-    fn delete_source(&mut self, source_id: SourceId, batch: u32) -> Result<(u32, bool), IndexError> {
+    fn delete_source(
+        &mut self,
+        source_id: SourceId,
+        batch: u32,
+    ) -> Result<(u32, bool), IndexError> {
         Ok(self.db.delete_source(&self.caller, source_id, batch)?)
     }
 
@@ -167,12 +172,9 @@ impl<S: DurableStore> IndexMemoryDb for HostMemoryDbBackend<S> {
         offset: u32,
         limit: u32,
     ) -> Result<(Vec<MemoryId>, bool), IndexError> {
-        Ok(self.db.source_lookup(
-            &self.caller,
-            source_id,
-            offset as usize,
-            limit as usize,
-        )?)
+        Ok(self
+            .db
+            .source_lookup(&self.caller, source_id, offset as usize, limit as usize)?)
     }
 
     fn query(&mut self, q: MemoryQuery) -> Result<QueryResult, IndexError> {

@@ -614,7 +614,10 @@ fn field_u8(table: &[u8], base: usize, rel: usize, formatted_len: u8) -> Result<
         return Ok(0); // field not present → no string
     }
     let idx = base.checked_add(rel).ok_or(SmbiosError::Overflow)?;
-    table.get(idx).copied().ok_or(SmbiosError::MalformedStructure)
+    table
+        .get(idx)
+        .copied()
+        .ok_or(SmbiosError::MalformedStructure)
 }
 
 fn parse_string_area(
@@ -764,15 +767,17 @@ mod tests {
         append_struct(
             &mut t,
             0,
-            &[1, 2, 0x00, 0xE8, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[
+                1, 2, 0x00, 0xE8, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             &["Lenovo", "GJET75WW (2.25 )", "06/25/2019"],
         );
         // Type 1
         let mut formatted = std::vec![1u8, 2, 3, 4]; // mfr, product, version, serial indices
-        // UUID 16 bytes
+                                                     // UUID 16 bytes
         formatted.extend_from_slice(&[
-            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF,
-            0x01,
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+            0xFF, 0x01,
         ]);
         // wake-up etc padding to length
         formatted.extend_from_slice(&[0, 0, 0, 0, 0]);
@@ -792,10 +797,10 @@ mod tests {
         // Type 4
         let mut p = std::vec![0u8; 0x2A];
         p[0] = 1; // socket
-        p[3] = 2; // manufacturer @ offset 7 from structure start → rel 3 from formatted? 
-        // formatted starts at structure offset 4; socket is at offset 4 → formatted[0]
-        // manufacturer at offset 7 → formatted[3]
-        // version at offset 0x10 → formatted[0x0C]
+        p[3] = 2; // manufacturer @ offset 7 from structure start → rel 3 from formatted?
+                  // formatted starts at structure offset 4; socket is at offset 4 → formatted[0]
+                  // manufacturer at offset 7 → formatted[3]
+                  // version at offset 0x10 → formatted[0x0C]
         p[0x0C] = 3;
         p[0x1F] = 4; // core count at structure offset 0x23 → formatted offset 0x1F
         p[0x21] = 8; // thread count at 0x25
@@ -883,7 +888,10 @@ mod tests {
     #[test]
     fn oversized_table() {
         let ep = make_ep64(0x1000, (MAX_TABLE_BYTES as u32) + 1, 3, 0);
-        assert_eq!(validate_entry_point_64(&ep), Err(SmbiosError::OversizedTable));
+        assert_eq!(
+            validate_entry_point_64(&ep),
+            Err(SmbiosError::OversizedTable)
+        );
     }
 
     #[test]
@@ -1003,7 +1011,9 @@ mod tests {
         append_struct(
             &mut t,
             1,
-            &[1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            &[
+                1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
             &["To Be Filled By O.E.M.", "System Version"],
         );
         end_of_table(&mut t);

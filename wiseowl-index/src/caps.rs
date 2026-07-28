@@ -79,9 +79,7 @@ impl IndexCapabilitySet {
 
     /// Full admin set.
     pub fn admin() -> Self {
-        Self {
-            bits: 0xFFFF_FFFF,
-        }
+        Self { bits: 0xFFFF_FFFF }
     }
 }
 

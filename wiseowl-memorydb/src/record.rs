@@ -258,12 +258,12 @@ impl LongTermMemoryRecord {
         if format_version != LT_RECORD_FORMAT_VERSION {
             return Err(DbError::InvalidValue("record format version"));
         }
-        let id = MemoryId::from_raw(r.read_u64()?).map_err(|_| DbError::InvalidValue("memory id"))?;
+        let id =
+            MemoryId::from_raw(r.read_u64()?).map_err(|_| DbError::InvalidValue("memory id"))?;
         let revision = r.read_u32()?;
-        let kind = LongTermMemoryKind::from_u8(r.read_u8()?)
-            .ok_or(DbError::InvalidValue("kind"))?;
-        let scope =
-            MemoryScope::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("scope"))?;
+        let kind =
+            LongTermMemoryKind::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("kind"))?;
+        let scope = MemoryScope::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("scope"))?;
         let owner = r.read_u64()?;
         let created_at_ns = r.read_u64()?;
         let updated_at_ns = r.read_u64()?;
@@ -271,8 +271,7 @@ impl LongTermMemoryRecord {
         let valid_until_ns = r.read_opt_u64()?;
         let importance = r.read_u16()?;
         let confidence = r.read_u16()?;
-        let trust =
-            TrustLevel::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("trust"))?;
+        let trust = TrustLevel::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("trust"))?;
         let provenance = LongTermProvenance::decode(&mut r, quotas)?;
         let content_hash = r.read_u64()?;
         let length = r.read_u32()?;
@@ -282,8 +281,8 @@ impl LongTermMemoryRecord {
             _ => return Err(DbError::InvalidValue("tokens tag")),
         };
         let attributes = AttributeSet::decode(&mut r, quotas)?;
-        let state = LongTermRecordState::from_u8(r.read_u8()?)
-            .ok_or(DbError::InvalidValue("state"))?;
+        let state =
+            LongTermRecordState::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("state"))?;
         let supersedes = match r.read_u8()? {
             0 => None,
             1 => Some(

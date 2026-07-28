@@ -155,7 +155,7 @@ pub fn init() {
     st.family = family;
     st.model = model;
     st.logical_count = 1; // refined when SMP known
-    // Topology leaf 0xB not fully wired — label as logical-CPU until reliable.
+                          // Topology leaf 0xB not fully wired — label as logical-CPU until reliable.
     st.topology_reliable = false;
     for i in 0..MAX_LOGICAL {
         st.physical_core_of[i] = i as u8;

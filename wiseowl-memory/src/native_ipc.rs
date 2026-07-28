@@ -204,12 +204,9 @@ impl MemoryShmDescriptor {
                 "write access not permitted",
             ));
         }
-        let end = self
-            .offset
-            .checked_add(self.length)
-            .ok_or(MemoryError::SharedMemoryValidationFailure(
-                "offset+length overflow",
-            ))?;
+        let end = self.offset.checked_add(self.length).ok_or(
+            MemoryError::SharedMemoryValidationFailure("offset+length overflow"),
+        )?;
         if end > mapping_len {
             return Err(MemoryError::SharedMemoryValidationFailure(
                 "out of range mapping",
@@ -300,8 +297,6 @@ mod tests {
 
     #[test]
     fn inline_threshold_fits_page() {
-        assert!(
-            (MEMORY_IPC_HEADER_LEN as u32 + INLINE_PAYLOAD_THRESHOLD) <= SHM_PAGE_SIZE
-        );
+        assert!((MEMORY_IPC_HEADER_LEN as u32 + INLINE_PAYLOAD_THRESHOLD) <= SHM_PAGE_SIZE);
     }
 }

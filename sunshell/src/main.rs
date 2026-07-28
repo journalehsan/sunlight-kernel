@@ -1487,28 +1487,30 @@ mod sunlight {
                     let mut seen: [[u8; 32]; 48] = [[0; 32]; 48];
                     let mut seen_len = 0usize;
 
-                    let already_seen = |zone_id: &str, seen: &[[u8; 32]; 48], seen_len: usize| -> bool {
-                        let zb = zone_id.as_bytes();
-                        for i in 0..seen_len {
-                            let s = &seen[i];
-                            let slen = s.iter().position(|&b| b == 0).unwrap_or(32);
-                            if slen == zb.len() && s[..slen] == zb[..] {
-                                return true;
+                    let already_seen =
+                        |zone_id: &str, seen: &[[u8; 32]; 48], seen_len: usize| -> bool {
+                            let zb = zone_id.as_bytes();
+                            for i in 0..seen_len {
+                                let s = &seen[i];
+                                let slen = s.iter().position(|&b| b == 0).unwrap_or(32);
+                                if slen == zb.len() && s[..slen] == zb[..] {
+                                    return true;
+                                }
                             }
-                        }
-                        false
-                    };
+                            false
+                        };
 
-                    let record_seen = |zone_id: &str, seen: &mut [[u8; 32]; 48], seen_len: &mut usize| {
-                        if *seen_len >= seen.len() {
-                            return;
-                        }
-                        let zb = zone_id.as_bytes();
-                        let n = zb.len().min(31);
-                        seen[*seen_len][..n].copy_from_slice(&zb[..n]);
-                        seen[*seen_len][n] = 0;
-                        *seen_len += 1;
-                    };
+                    let record_seen =
+                        |zone_id: &str, seen: &mut [[u8; 32]; 48], seen_len: &mut usize| {
+                            if *seen_len >= seen.len() {
+                                return;
+                            }
+                            let zb = zone_id.as_bytes();
+                            let n = zb.len().min(31);
+                            seen[*seen_len][..n].copy_from_slice(&zb[..n]);
+                            seen[*seen_len][n] = 0;
+                            *seen_len += 1;
+                        };
 
                     let write_zone_row = |out: &mut [u8],
                                           pos: &mut usize,

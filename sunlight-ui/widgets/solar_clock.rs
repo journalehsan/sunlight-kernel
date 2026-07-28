@@ -254,7 +254,12 @@ impl SolarClockLayout {
         let dig_h = (radius / 4).max(14).min(36);
         let dig_w = (dig_h * 5 * 3 / 5) + 16; // rough 5 cells
         let dig_w = dig_w.min(radius.saturating_mul(5) / 4);
-        let digital = Rect::new(cx - dig_w as i32 / 2, cy - dig_h as i32 / 2 - 2, dig_w, dig_h);
+        let digital = Rect::new(
+            cx - dig_w as i32 / 2,
+            cy - dig_h as i32 / 2 - 2,
+            dig_w,
+            dig_h,
+        );
 
         let date_h = 14u32;
         let date = Rect::new(
@@ -336,9 +341,7 @@ impl<'a> SolarClockWidget<'a> {
         }
 
         let accent = self.accent.unwrap_or(theme.accent);
-        let muted = self
-            .muted
-            .unwrap_or_else(|| theme.border.lighten(20));
+        let muted = self.muted.unwrap_or_else(|| theme.border.lighten(20));
         let face = self.face.unwrap_or(theme.panel);
         let edge = theme.border;
 
@@ -538,14 +541,7 @@ fn hspan(canvas: &mut Canvas, x: i32, y: i32, len: u32, color: Color) {
     canvas.hline(x, y, len, color);
 }
 
-fn stroke_circle(
-    canvas: &mut Canvas,
-    cx: i32,
-    cy: i32,
-    radius: i32,
-    stroke: u32,
-    color: Color,
-) {
+fn stroke_circle(canvas: &mut Canvas, cx: i32, cy: i32, radius: i32, stroke: u32, color: Color) {
     if radius <= 0 {
         return;
     }

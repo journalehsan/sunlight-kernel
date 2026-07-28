@@ -61,11 +61,7 @@ impl Default for NormalizedTextBuffer {
 pub trait RetrievalTokenizer {
     fn tokenizer_id(&self) -> u32;
     fn version(&self) -> u32;
-    fn normalize(
-        &self,
-        input: &str,
-        output: &mut NormalizedTextBuffer,
-    ) -> Result<(), IndexError>;
+    fn normalize(&self, input: &str, output: &mut NormalizedTextBuffer) -> Result<(), IndexError>;
     fn tokenize(
         &self,
         normalized: &str,
@@ -76,9 +72,7 @@ pub trait RetrievalTokenizer {
 }
 
 /// Convert sink to memorydb IndexedToken list (sorted later by normalize_tokens).
-pub fn to_indexed_tokens(
-    sink: &TokenSink,
-) -> Vec<wiseowl_memorydb::tokens::IndexedToken> {
+pub fn to_indexed_tokens(sink: &TokenSink) -> Vec<wiseowl_memorydb::tokens::IndexedToken> {
     sink.tokens
         .iter()
         .map(|t| {

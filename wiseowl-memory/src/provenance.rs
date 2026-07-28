@@ -117,9 +117,8 @@ pub mod heapless_vec {
                 len: 0,
             };
             for item in items {
-                out.push(item).map_err(|_| {
-                    serde::de::Error::custom("provenance parent limit exceeded")
-                })?;
+                out.push(item)
+                    .map_err(|_| serde::de::Error::custom("provenance parent limit exceeded"))?;
             }
             Ok(out)
         }
@@ -285,9 +284,7 @@ mod tests {
             p.push_parent(MemoryId::from_raw(i as u64).unwrap())
                 .unwrap();
         }
-        assert!(p
-            .push_parent(MemoryId::from_raw(99).unwrap())
-            .is_err());
+        assert!(p.push_parent(MemoryId::from_raw(99).unwrap()).is_err());
         assert_eq!(p.parent_count(), MAX_PROVENANCE_PARENTS);
     }
 

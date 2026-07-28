@@ -154,10 +154,7 @@ fn detail_str(kind: u32) -> &'static str {
 
 fn print_next_action_for_timeout(unit: &str, pid: u32) {
     println!("   Termination is unconfirmed; service was NOT marked stopped.");
-    println!(
-        "   Next: sunlightctl status {}  (inspect state)",
-        unit
-    );
+    println!("   Next: sunlightctl status {}  (inspect state)", unit);
     if pid != 0 {
         println!(
             "   Next: kill -9 {}  (force, after kill-semantics audit)",
@@ -211,10 +208,7 @@ fn cmd_list(cap: CapabilityToken) {
         let enabled_s = if enabled { "enabled" } else { "disabled" };
 
         let mut pid_s = heapless::String::<16>::new();
-        if state == STATE_RUNNING
-            || state == STATE_STARTING
-            || state == STATE_STOPPING
-        {
+        if state == STATE_RUNNING || state == STATE_STARTING || state == STATE_STOPPING {
             use core::fmt::Write;
             let _ = write!(&mut pid_s, "{}", pid);
         } else {
@@ -320,11 +314,7 @@ fn cmd_start(cap: CapabilityToken, unit: &str) {
             println!("{}.service is already running (pid={})", unit, pid);
         }
         _ => {
-            println!(
-                "ERROR: Failed to start '{}': {}",
-                unit,
-                detail_str(kind)
-            );
+            println!("ERROR: Failed to start '{}': {}", unit, detail_str(kind));
         }
     }
 }
@@ -353,11 +343,7 @@ fn cmd_stop(cap: CapabilityToken, unit: &str) {
             }
         }
         _ => {
-            println!(
-                "ERROR: Failed to stop '{}': {}",
-                unit,
-                detail_str(kind)
-            );
+            println!("ERROR: Failed to stop '{}': {}", unit, detail_str(kind));
         }
     }
 }
@@ -387,11 +373,7 @@ fn cmd_restart(cap: CapabilityToken, unit: &str) {
             }
         }
         _ => {
-            println!(
-                "ERROR: Failed to restart '{}': {}",
-                unit,
-                detail_str(kind)
-            );
+            println!("ERROR: Failed to restart '{}': {}", unit, detail_str(kind));
         }
     }
 }

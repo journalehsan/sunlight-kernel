@@ -24,25 +24,60 @@ pub const ENDPOINT_NAME: &str = "wiseowl.memorydb.v1";
 #[cfg_attr(feature = "host", derive(serde::Serialize, serde::Deserialize))]
 pub enum DbRequest {
     BeginTransaction,
-    InsertRecord { tx_id: u64, req: InsertRequestWire },
-    InsertRelationship { tx_id: u64, rel: MemoryRelationship },
-    Tombstone { tx_id: u64, id: MemoryId },
-    Commit { tx_id: u64 },
-    Abort { tx_id: u64 },
-    Get { id: MemoryId, payload: bool },
-    History { id: MemoryId },
-    Source { source_id: SourceId, offset: u32, limit: u32 },
-    Relationships { id: MemoryId },
-    Query { query: MemoryQuery },
-    OwlQl { text: String },
-    DeleteSource { source_id: SourceId, batch: u32 },
-    DeleteSourceDryRun { source_id: SourceId },
+    InsertRecord {
+        tx_id: u64,
+        req: InsertRequestWire,
+    },
+    InsertRelationship {
+        tx_id: u64,
+        rel: MemoryRelationship,
+    },
+    Tombstone {
+        tx_id: u64,
+        id: MemoryId,
+    },
+    Commit {
+        tx_id: u64,
+    },
+    Abort {
+        tx_id: u64,
+    },
+    Get {
+        id: MemoryId,
+        payload: bool,
+    },
+    History {
+        id: MemoryId,
+    },
+    Source {
+        source_id: SourceId,
+        offset: u32,
+        limit: u32,
+    },
+    Relationships {
+        id: MemoryId,
+    },
+    Query {
+        query: MemoryQuery,
+    },
+    OwlQl {
+        text: String,
+    },
+    DeleteSource {
+        source_id: SourceId,
+        batch: u32,
+    },
+    DeleteSourceDryRun {
+        source_id: SourceId,
+    },
     Checkpoint,
     Compact,
     RebuildIndexes,
     Stats,
     Health,
-    Verify { max_segments: u32 },
+    Verify {
+        max_segments: u32,
+    },
 }
 
 /// Wire form of insert request (payload as bytes).
@@ -106,10 +141,16 @@ pub enum DbResponse {
     MemoryId(MemoryId),
     Record(LongTermMemoryRecord),
     Revisions(Vec<u32>),
-    SourcePage { ids: Vec<MemoryId>, more: bool },
+    SourcePage {
+        ids: Vec<MemoryId>,
+        more: bool,
+    },
     Relationships(Vec<MemoryRelationship>),
     Query(QueryResult),
-    SourceDelete { deleted: u32, more: bool },
+    SourceDelete {
+        deleted: u32,
+        more: bool,
+    },
     SourceCount(u32),
     Stats(DbStats),
     Health {
@@ -117,9 +158,17 @@ pub enum DbResponse {
         state: String,
         reasons: Vec<String>,
     },
-    Verify { ok: u32, bad: u32 },
-    Compacted { reclaimed: u64 },
-    Error { code: String, message: String },
+    Verify {
+        ok: u32,
+        bad: u32,
+    },
+    Compacted {
+        reclaimed: u64,
+    },
+    Error {
+        code: String,
+        message: String,
+    },
 }
 
 impl DbResponse {

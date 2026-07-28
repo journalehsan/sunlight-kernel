@@ -8,9 +8,7 @@ use alloc::vec::Vec;
 use crate::config::IndexRootConfig;
 use crate::error::IndexError;
 use crate::ignore::IgnoreSet;
-use crate::path_security::{
-    extension_of, relative_depth, validate_discovered_path,
-};
+use crate::path_security::{extension_of, relative_depth, validate_discovered_path};
 use crate::quotas::IndexQuotaConfig;
 
 /// A discovered candidate file (relative path + metadata prefilter).
@@ -90,9 +88,7 @@ pub fn discover_files_host(
         budget.directories_visited = budget.directories_visited.saturating_add(1);
 
         let read = fs::read_dir(&dir).map_err(|_| IndexError::Io("readdir"))?;
-        let mut entries: Vec<_> = read
-            .filter_map(|e| e.ok())
-            .collect();
+        let mut entries: Vec<_> = read.filter_map(|e| e.ok()).collect();
         entries.sort_by_key(|e| e.file_name());
 
         for ent in entries {
@@ -113,7 +109,8 @@ pub fn discover_files_host(
                 continue;
             }
 
-            let is_dir = ft.is_dir() || (ft.is_symlink() && root.follow_symlinks && ent.path().is_dir());
+            let is_dir =
+                ft.is_dir() || (ft.is_symlink() && root.follow_symlinks && ent.path().is_dir());
             if ignore.is_ignored(&child_rel, is_dir) {
                 continue;
             }
@@ -142,7 +139,8 @@ pub fn discover_files_host(
     all_paths.sort_by(|a, b| a.0.cmp(&b.0));
 
     for (rel, path, depth) in all_paths {
-        if !cursor.after_relative_path.is_empty() && rel.as_str() <= cursor.after_relative_path.as_str()
+        if !cursor.after_relative_path.is_empty()
+            && rel.as_str() <= cursor.after_relative_path.as_str()
         {
             continue;
         }
@@ -235,7 +233,9 @@ pub fn discover_from_listing(
     let mut files: Vec<_> = listing
         .iter()
         .filter(|(rel, _)| {
-            if !cursor.after_relative_path.is_empty() && rel.as_str() <= cursor.after_relative_path.as_str() {
+            if !cursor.after_relative_path.is_empty()
+                && rel.as_str() <= cursor.after_relative_path.as_str()
+            {
                 return false;
             }
             if ignore.is_ignored(rel, false) {
@@ -315,8 +315,8 @@ mod tests {
             (String::from("c.md"), 20),
             (String::from("d.pdf"), 20),
         ];
-        let (files, cur) = discover_from_listing(&r, &listing, &ig, &q, &ScanCursor::default())
-            .unwrap();
+        let (files, cur) =
+            discover_from_listing(&r, &listing, &ig, &q, &ScanCursor::default()).unwrap();
         assert!(files.iter().any(|f| f.relative_path == "a.txt"));
         assert!(files.iter().any(|f| f.relative_path == "c.md"));
         assert!(!files.iter().any(|f| f.relative_path == "b.tmp"));

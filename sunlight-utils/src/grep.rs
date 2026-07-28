@@ -63,16 +63,24 @@ struct Options {
 impl Options {
     fn new() -> Self {
         Self {
-            fixed: false, extended: false, count_only: false,
-            files_with_matches: false, files_without_matches: false,
-            quiet: false, icase: false, line_number: false,
-            silent_err: false, invert: false, whole_line: false,
+            fixed: false,
+            extended: false,
+            count_only: false,
+            files_with_matches: false,
+            files_without_matches: false,
+            quiet: false,
+            icase: false,
+            line_number: false,
+            silent_err: false,
+            invert: false,
+            whole_line: false,
         }
     }
 }
 
 pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
-    let (opts, mut pattern_data, pattern_lens_in, pattern_count, files) = match parse_args(args, io) {
+    let (opts, mut pattern_data, pattern_lens_in, pattern_count, files) = match parse_args(args, io)
+    {
         Ok(v) => v,
         Err(code) => return code,
     };
@@ -96,7 +104,16 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
     let mut overall_code = 0i32;
 
     if use_stdin {
-        match grep_fd(io, STDIN, b"-", false, &opts, &pattern_slices, &pattern_lens, pattern_count) {
+        match grep_fd(
+            io,
+            STDIN,
+            b"-",
+            false,
+            &opts,
+            &pattern_slices,
+            &pattern_lens,
+            pattern_count,
+        ) {
             Ok(found) => {
                 if !found && !opts.quiet {
                     found_any = true;
@@ -112,7 +129,16 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
 
     for &path in files {
         if path == b"-" {
-            match grep_fd(io, STDIN, b"-", show_filename, &opts, &pattern_slices, &pattern_lens, pattern_count) {
+            match grep_fd(
+                io,
+                STDIN,
+                b"-",
+                show_filename,
+                &opts,
+                &pattern_slices,
+                &pattern_lens,
+                pattern_count,
+            ) {
                 Ok(found) => found_any = found_any || found,
                 Err(_) => overall_code = 1,
             }
@@ -132,7 +158,16 @@ pub fn run(args: &[&[u8]], io: &mut impl Io) -> i32 {
             }
         };
 
-        let file_code = match grep_fd(io, fd, path, show_filename, &opts, &pattern_slices, &pattern_lens, pattern_count) {
+        let file_code = match grep_fd(
+            io,
+            fd,
+            path,
+            show_filename,
+            &opts,
+            &pattern_slices,
+            &pattern_lens,
+            pattern_count,
+        ) {
             Ok(found) => {
                 found_any = found_any || found;
                 0
@@ -162,7 +197,16 @@ fn exit_code(found_any: bool, error_code: i32, quiet: bool) -> i32 {
 fn parse_args<'a>(
     args: &'a [&'a [u8]],
     io: &mut impl Io,
-) -> Result<(Options, [[u8; MAX_PATTERN_LEN]; MAX_PATTERNS], [usize; MAX_PATTERNS], usize, &'a [&'a [u8]]), i32> {
+) -> Result<
+    (
+        Options,
+        [[u8; MAX_PATTERN_LEN]; MAX_PATTERNS],
+        [usize; MAX_PATTERNS],
+        usize,
+        &'a [&'a [u8]],
+    ),
+    i32,
+> {
     let mut opts = Options::new();
     let mut patterns: [[u8; MAX_PATTERN_LEN]; MAX_PATTERNS] = [[0; MAX_PATTERN_LEN]; MAX_PATTERNS];
     let mut pattern_lens: [usize; MAX_PATTERNS] = [0; MAX_PATTERNS];
@@ -173,17 +217,50 @@ fn parse_args<'a>(
     while i < args.len() {
         let a = args[i];
         match a {
-            b"-F" => { opts.fixed = true; i += 1; }
-            b"-E" => { opts.extended = true; i += 1; }
-            b"-c" => { opts.count_only = true; i += 1; }
-            b"-l" => { opts.files_with_matches = true; i += 1; }
-            b"-L" => { opts.files_without_matches = true; i += 1; }
-            b"-q" => { opts.quiet = true; i += 1; }
-            b"-i" => { opts.icase = true; i += 1; }
-            b"-n" => { opts.line_number = true; i += 1; }
-            b"-s" => { opts.silent_err = true; i += 1; }
-            b"-v" => { opts.invert = true; i += 1; }
-            b"-x" => { opts.whole_line = true; i += 1; }
+            b"-F" => {
+                opts.fixed = true;
+                i += 1;
+            }
+            b"-E" => {
+                opts.extended = true;
+                i += 1;
+            }
+            b"-c" => {
+                opts.count_only = true;
+                i += 1;
+            }
+            b"-l" => {
+                opts.files_with_matches = true;
+                i += 1;
+            }
+            b"-L" => {
+                opts.files_without_matches = true;
+                i += 1;
+            }
+            b"-q" => {
+                opts.quiet = true;
+                i += 1;
+            }
+            b"-i" => {
+                opts.icase = true;
+                i += 1;
+            }
+            b"-n" => {
+                opts.line_number = true;
+                i += 1;
+            }
+            b"-s" => {
+                opts.silent_err = true;
+                i += 1;
+            }
+            b"-v" => {
+                opts.invert = true;
+                i += 1;
+            }
+            b"-x" => {
+                opts.whole_line = true;
+                i += 1;
+            }
             b"-e" => {
                 if i + 1 >= args.len() {
                     let _ = io.write_stderr(b"grep: option requires an argument -- 'e'\n");
@@ -211,7 +288,10 @@ fn parse_args<'a>(
                 explicit_pattern = true;
                 i += 1;
             }
-            b"--" => { i += 1; break; }
+            b"--" => {
+                i += 1;
+                break;
+            }
             _a if _a.starts_with(b"-") && _a.len() > 1 => {
                 let _ = io.write_stderr(b"grep: invalid option -- '");
                 let _ = io.write_stderr(_a);
@@ -296,12 +376,18 @@ fn read_pattern_file(
                 }
                 retries = 0;
             }
-            Ok(_) => { let _ = io.close(fd); return Err(2); }
+            Ok(_) => {
+                let _ = io.close(fd);
+                return Err(2);
+            }
             Err(Errno::Again) if retries < READ_RETRY_LIMIT => {
                 retries += 1;
                 io.yield_now();
             }
-            Err(_) => { let _ = io.close(fd); return Err(2); }
+            Err(_) => {
+                let _ = io.close(fd);
+                return Err(2);
+            }
         }
     }
 
@@ -399,8 +485,10 @@ fn grep_fd(
                         matched_any = true;
                         match_count += 1;
 
-                        if !opts.quiet && !opts.count_only
-                            && !opts.files_with_matches && !opts.files_without_matches
+                        if !opts.quiet
+                            && !opts.count_only
+                            && !opts.files_with_matches
+                            && !opts.files_without_matches
                         {
                             if show_filename && !opts.files_with_matches {
                                 let _ = io.write_stdout(filename);
@@ -455,8 +543,10 @@ fn grep_fd(
             matched_any = true;
             match_count += 1;
 
-            if !opts.quiet && !opts.count_only
-                && !opts.files_with_matches && !opts.files_without_matches
+            if !opts.quiet
+                && !opts.count_only
+                && !opts.files_with_matches
+                && !opts.files_without_matches
             {
                 if show_filename && !opts.files_with_matches {
                     let _ = io.write_stdout(filename);
@@ -508,7 +598,12 @@ fn fixed_match(
         let pat = &data[i][..lens[i]];
         if opts.whole_line {
             if opts.icase {
-                if pat.len() == line.len() && pat.iter().zip(line.iter()).all(|(a, b)| a.to_ascii_lowercase() == b.to_ascii_lowercase()) {
+                if pat.len() == line.len()
+                    && pat
+                        .iter()
+                        .zip(line.iter())
+                        .all(|(a, b)| a.to_ascii_lowercase() == b.to_ascii_lowercase())
+                {
                     return true;
                 }
             } else if pat == line {
@@ -516,7 +611,11 @@ fn fixed_match(
             }
         } else {
             if opts.icase {
-                if line.windows(pat.len()).any(|w| w.iter().zip(pat.iter()).all(|(a, b)| a.to_ascii_lowercase() == b.to_ascii_lowercase())) {
+                if line.windows(pat.len()).any(|w| {
+                    w.iter()
+                        .zip(pat.iter())
+                        .all(|(a, b)| a.to_ascii_lowercase() == b.to_ascii_lowercase())
+                }) {
                     return true;
                 }
             } else if contains_substring(line, pat) {
@@ -552,10 +651,14 @@ fn format_u64<'a>(v: u64, buf: &'a mut [u8; 24]) -> &'a [u8] {
         buf[n] = b'0' + (v % 10) as u8;
         n += 1;
         v /= 10;
-        if v == 0 { break; }
+        if v == 0 {
+            break;
+        }
     }
     let end = n;
-    for i in 0..end / 2 { buf.swap(i, end - 1 - i); }
+    for i in 0..end / 2 {
+        buf.swap(i, end - 1 - i);
+    }
     &buf[..end]
 }
 

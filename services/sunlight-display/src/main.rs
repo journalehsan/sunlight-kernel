@@ -7309,7 +7309,11 @@ pub extern "C" fn _start() -> ! {
                     let persisted =
                         sunlight_ipc::notification_kv_put("display.vmware.mode", &value[..len]);
                     debug_log("[DISPLAY-MODE] confirmed persisted=");
-                    debug_log(if persisted { "yes\n" } else { "no (best-effort)\n" });
+                    debug_log(if persisted {
+                        "yes\n"
+                    } else {
+                        "no (best-effort)\n"
+                    });
                     state.mode_transaction = None;
                     true
                 } else {

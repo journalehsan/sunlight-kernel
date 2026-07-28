@@ -101,10 +101,8 @@ pub fn decode_insert_request(
             want: INSERT_WIRE_VERSION,
         });
     }
-    let kind = LongTermMemoryKind::from_u8(r.read_u8()?)
-        .ok_or(DbError::InvalidValue("kind"))?;
-    let scope = MemoryScope::from_u8(r.read_u8()?)
-        .ok_or(DbError::InvalidValue("scope"))?;
+    let kind = LongTermMemoryKind::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("kind"))?;
+    let scope = MemoryScope::from_u8(r.read_u8()?).ok_or(DbError::InvalidValue("scope"))?;
     let owner = r.read_u64()?;
     let payload = r.read_bytes_len_u32()?.to_vec();
     if payload.len() as u32 > quotas.max_payload_bytes {

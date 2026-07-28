@@ -58,8 +58,14 @@ impl RelationshipIndex {
             let mut next = Vec::new();
             for id in frontier {
                 let edges: Vec<&MemoryRelationship> = match q.direction {
-                    RelDirection::Outgoing => self.outgoing(MemoryId::from_raw_unchecked(id)).iter().collect(),
-                    RelDirection::Incoming => self.incoming(MemoryId::from_raw_unchecked(id)).iter().collect(),
+                    RelDirection::Outgoing => self
+                        .outgoing(MemoryId::from_raw_unchecked(id))
+                        .iter()
+                        .collect(),
+                    RelDirection::Incoming => self
+                        .incoming(MemoryId::from_raw_unchecked(id))
+                        .iter()
+                        .collect(),
                     RelDirection::Both => {
                         let mut v: Vec<&MemoryRelationship> = self
                             .outgoing(MemoryId::from_raw_unchecked(id))

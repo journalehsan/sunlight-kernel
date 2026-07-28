@@ -1281,72 +1281,64 @@ fn cmd_head(args: &[&str]) -> i32 {
 // ---------------------------------------------------------------------------
 
 fn cmd_grep(args: &[&str]) -> i32 {
-    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
-        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
-    });
+    let byte_args: [&[u8]; MAX_ARGS] =
+        core::array::from_fn(|i| args.get(i).map_or(b"".as_slice(), |s| s.as_bytes()));
     let count = args.len().min(MAX_ARGS);
     let mut io = MultiCallIo;
     sunlight_utils::grep::run(&byte_args[..count], &mut io)
 }
 
 fn cmd_wc(args: &[&str]) -> i32 {
-    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
-        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
-    });
+    let byte_args: [&[u8]; MAX_ARGS] =
+        core::array::from_fn(|i| args.get(i).map_or(b"".as_slice(), |s| s.as_bytes()));
     let count = args.len().min(MAX_ARGS);
     let mut io = MultiCallIo;
     sunlight_utils::wc::run(&byte_args[..count], &mut io)
 }
 
 fn cmd_cut(args: &[&str]) -> i32 {
-    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
-        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
-    });
+    let byte_args: [&[u8]; MAX_ARGS] =
+        core::array::from_fn(|i| args.get(i).map_or(b"".as_slice(), |s| s.as_bytes()));
     let count = args.len().min(MAX_ARGS);
     let mut io = MultiCallIo;
     sunlight_utils::cut::run(&byte_args[..count], &mut io)
 }
 
 fn cmd_fold(args: &[&str]) -> i32 {
-    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
-        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
-    });
+    let byte_args: [&[u8]; MAX_ARGS] =
+        core::array::from_fn(|i| args.get(i).map_or(b"".as_slice(), |s| s.as_bytes()));
     let count = args.len().min(MAX_ARGS);
     let mut io = MultiCallIo;
     sunlight_utils::fold::run(&byte_args[..count], &mut io)
 }
 
 fn cmd_expand(args: &[&str]) -> i32 {
-    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
-        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
-    });
+    let byte_args: [&[u8]; MAX_ARGS] =
+        core::array::from_fn(|i| args.get(i).map_or(b"".as_slice(), |s| s.as_bytes()));
     let count = args.len().min(MAX_ARGS);
     let mut io = MultiCallIo;
     sunlight_utils::expand::run(&byte_args[..count], &mut io)
 }
 
 fn cmd_sort(args: &[&str]) -> i32 {
-    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
-        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
-    });
+    let byte_args: [&[u8]; MAX_ARGS] =
+        core::array::from_fn(|i| args.get(i).map_or(b"".as_slice(), |s| s.as_bytes()));
     let count = args.len().min(MAX_ARGS);
     let mut io = MultiCallIo;
     sunlight_utils::sort::run(&byte_args[..count], &mut io)
 }
 
 fn cmd_uniq(args: &[&str]) -> i32 {
-    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
-        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
-    });
+    let byte_args: [&[u8]; MAX_ARGS] =
+        core::array::from_fn(|i| args.get(i).map_or(b"".as_slice(), |s| s.as_bytes()));
     let count = args.len().min(MAX_ARGS);
     let mut io = MultiCallIo;
     sunlight_utils::uniq::run(&byte_args[..count], &mut io)
 }
 
 fn cmd_comm(args: &[&str]) -> i32 {
-    let byte_args: [&[u8]; MAX_ARGS] = core::array::from_fn(|i| {
-        args.get(i).map_or(b"".as_slice(), |s| s.as_bytes())
-    });
+    let byte_args: [&[u8]; MAX_ARGS] =
+        core::array::from_fn(|i| args.get(i).map_or(b"".as_slice(), |s| s.as_bytes()));
     let count = args.len().min(MAX_ARGS);
     let mut io = MultiCallIo;
     sunlight_utils::comm::run(&byte_args[..count], &mut io)
@@ -1355,75 +1347,171 @@ fn cmd_comm(args: &[&str]) -> i32 {
 struct MultiCallIo;
 
 impl sunlight_utils::wc::Io for MultiCallIo {
-    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
-    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
-    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
-    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn yield_now(&mut self) { libc::yield_now(); }
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        libc::open(path)
+    }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+        libc::read(fd, buf)
+    }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        libc::close(fd)
+    }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn yield_now(&mut self) {
+        libc::yield_now();
+    }
 }
 
 impl sunlight_utils::cut::Io for MultiCallIo {
-    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
-    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
-    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
-    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn yield_now(&mut self) { libc::yield_now(); }
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        libc::open(path)
+    }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+        libc::read(fd, buf)
+    }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        libc::close(fd)
+    }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn yield_now(&mut self) {
+        libc::yield_now();
+    }
 }
 
 impl sunlight_utils::fold::Io for MultiCallIo {
-    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
-    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
-    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
-    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn yield_now(&mut self) { libc::yield_now(); }
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        libc::open(path)
+    }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+        libc::read(fd, buf)
+    }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        libc::close(fd)
+    }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn yield_now(&mut self) {
+        libc::yield_now();
+    }
 }
 
 impl sunlight_utils::expand::Io for MultiCallIo {
-    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
-    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
-    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
-    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn yield_now(&mut self) { libc::yield_now(); }
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        libc::open(path)
+    }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+        libc::read(fd, buf)
+    }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        libc::close(fd)
+    }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn yield_now(&mut self) {
+        libc::yield_now();
+    }
 }
 
 impl sunlight_utils::grep::Io for MultiCallIo {
-    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
-    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
-    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
-    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn yield_now(&mut self) { libc::yield_now(); }
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        libc::open(path)
+    }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+        libc::read(fd, buf)
+    }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        libc::close(fd)
+    }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn yield_now(&mut self) {
+        libc::yield_now();
+    }
 }
 
 impl sunlight_utils::sort::Io for MultiCallIo {
-    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
-    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
-    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
-    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn yield_now(&mut self) { libc::yield_now(); }
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        libc::open(path)
+    }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+        libc::read(fd, buf)
+    }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        libc::close(fd)
+    }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn yield_now(&mut self) {
+        libc::yield_now();
+    }
 }
 
 impl sunlight_utils::uniq::Io for MultiCallIo {
-    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
-    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
-    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
-    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn yield_now(&mut self) { libc::yield_now(); }
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        libc::open(path)
+    }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+        libc::read(fd, buf)
+    }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        libc::close(fd)
+    }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn yield_now(&mut self) {
+        libc::yield_now();
+    }
 }
 
 impl sunlight_utils::comm::Io for MultiCallIo {
-    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> { libc::open(path) }
-    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> { libc::read(fd, buf) }
-    fn close(&mut self, fd: Fd) -> Result<(), Errno> { libc::close(fd) }
-    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> { write_all(bytes) }
-    fn yield_now(&mut self) { libc::yield_now(); }
+    fn open(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        libc::open(path)
+    }
+    fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+        libc::read(fd, buf)
+    }
+    fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        libc::close(fd)
+    }
+    fn write_stdout(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn write_stderr(&mut self, bytes: &[u8]) -> Result<(), Errno> {
+        write_all(bytes)
+    }
+    fn yield_now(&mut self) {
+        libc::yield_now();
+    }
 }
 
 #[derive(Clone, Copy)]
