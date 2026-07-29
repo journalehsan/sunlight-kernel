@@ -1,25 +1,26 @@
-use sunlight_ui::{Canvas, Color, Rect};
-use sun_font::{draw_text, FontRole, TextStyle};
+use sunlight_ui::{
+    widgets::{Label, Panel},
+    Canvas, Rect, Theme,
+};
 
-pub struct ActivityPage {
-}
+use crate::ui::{FONT_UI_MEDIUM, FONT_UI_SMALL};
+
+pub struct ActivityPage {}
 
 impl ActivityPage {
     pub fn new() -> Self {
         Self {}
     }
 
-    pub fn draw(&mut self, canvas: &mut Canvas, rect: Rect) {
-        let style = TextStyle::new(FontRole::UiMedium, Color::rgb(255, 255, 255));
-        draw_text(canvas, "Activity", rect.x + 20, rect.y + 20, &style);
-        
-        let style_small = TextStyle::new(FontRole::UiSmall, Color::rgb(180, 180, 180));
-        draw_text(
-            canvas,
+    pub fn draw(&mut self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
+        let panel = Panel::with_title(rect, "Activity").with_font(&FONT_UI_MEDIUM);
+        panel.draw(canvas, theme);
+        Label::new(
+            panel.content_rect().inset(18),
             "Action receipts will appear here.",
-            rect.x + 20,
-            rect.y + 60,
-            &style_small,
-        );
+        )
+        .dim()
+        .with_font(&FONT_UI_SMALL)
+        .draw(canvas, theme);
     }
 }

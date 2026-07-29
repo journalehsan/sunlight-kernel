@@ -1,25 +1,26 @@
 #![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
 
+#[cfg(not(test))]
 use sunlight_ipc::{debug_log, process_yield, ProcessExit};
-use sunlight_ui::{
-    request_close, App, Canvas, Event, Theme, Window, WindowConfig, WindowDecoration,
-    WindowMaterial,
-};
+use sunlight_ui::{request_close, App, Canvas, Event, Theme};
+#[cfg(not(test))]
+use sunlight_ui::{Window, WindowConfig, WindowDecoration, WindowMaterial};
 
 mod activity;
-mod character;
 mod conversation;
 mod health;
 mod privacy;
+mod transport;
 mod ui;
 
 const WIN_W: u32 = 900;
 const WIN_H: u32 = 640;
 const KEY_ESC: u8 = 0x01;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[WISEOWL-GUI] panic\n");
@@ -40,14 +41,18 @@ impl WiseOwlApp {
     }
 }
 
+#[cfg(feature = "conversation-v1-test")]
+fn run_conversation_v1_gate() {
+    ui::run_conversation_v1_gate();
+}
+
 impl App for WiseOwlApp {
-    fn view(&mut self, canvas: &mut Canvas, _theme: &Theme) {
-        self.ui.draw(canvas);
+    fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        self.ui.draw(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
-            Event::Click { x, y } => self.ui.handle_click(x, y),
             Event::KeyPress {
                 keycode,
                 pressed: true,
@@ -56,16 +61,18 @@ impl App for WiseOwlApp {
                 request_close();
                 false
             }
-            Event::Tick => true,
-            _ => false,
+            _ => self.ui.update(event),
         }
     }
 }
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
     debug_log("[WISEOWL-GUI] Starting Wise Owl Console\n");
+    #[cfg(feature = "conversation-v1-test")]
+    run_conversation_v1_gate();
 
     let mut app = WiseOwlApp::new();
     let mut window = match Window::connect_with_material(

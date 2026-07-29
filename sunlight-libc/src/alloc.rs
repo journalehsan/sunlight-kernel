@@ -768,7 +768,7 @@ unsafe impl core::alloc::GlobalAlloc for SunlightAlloc {
     }
 }
 
-#[cfg(feature = "global-alloc")]
+#[cfg(all(feature = "global-alloc", target_os = "none"))]
 #[global_allocator]
 static GLOBAL_ALLOC: SunlightAlloc = SunlightAlloc;
 

@@ -369,8 +369,15 @@ case "$PHASE" in
         NEED_DISK=true
         TIMEOUT=360
         ;;
+    wiseowl-gui-conversation-v1)
+        EXPECTED_FILE="tools/tests/wiseowl_gui_conversation_v1.expected"
+        FINAL_MARKER="[WISEOWL-GUI-CHAT] COMPLETE PASS"
+        PASS_LABEL="Wise Owl GUI Conversation v1"
+        NEED_DISK=true
+        TIMEOUT=360
+        ;;
     *)
-        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration welcome-wizard wiseowl-phase4a wiseowl-phase4b wiseowl-foundation-v1 wiseowl-executor-v1 wiseowl-planner-v1 wiseowl-coordinator-v1 wiseowl-outcome-observer-v1 wiseowl-action-receipt-v1 wiseowl-graphical-console-v1 sunlightd top tzctl memory-accounting"
+        echo "[test] Unsupported gate '$PHASE'. Supported: phase0.9 phase2.6 phase2b1 phase3.0 phase3.5 phase3.6 phase3.7 phase3.8 phase3.9 phase4.5 phase5.0 phase5.1 phase5.2 phase5.3 phase5.4 phase5.5 phase5.6 phase5.7 phase5x.0 phase5x.1 phase5x.2 phase5x.3 phase5x.4 phase5x.5 phase5x.6 dns_hosts phase6.5.1 phase6.5.3 phase6.5.utils phase_shm phase_sec mm2b mm2d mm2e swap1 session-foundation session-configuration welcome-wizard wiseowl-phase4a wiseowl-phase4b wiseowl-foundation-v1 wiseowl-executor-v1 wiseowl-planner-v1 wiseowl-coordinator-v1 wiseowl-outcome-observer-v1 wiseowl-action-receipt-v1 wiseowl-graphical-console-v1 wiseowl-gui-conversation-v1 sunlightd top tzctl memory-accounting"
         exit 2
         ;;
 esac
@@ -425,6 +432,8 @@ else
 fi
 if [[ "$PHASE" == "wiseowl-graphical-console-v1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-console --bin wiseowl --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "wiseowl-gui-conversation-v1" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-console --bin wiseowl --features conversation-v1-test --release >>"$BUILD_LOG" 2>&1
 fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release >>"$BUILD_LOG" 2>&1
@@ -514,7 +523,7 @@ fi
 
 # --- Step 2: Build kernel ---
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" ]]; then
+if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -561,6 +570,8 @@ elif [[ "$PHASE" == "welcome-wizard" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=welcome_wizard)
 elif [[ "$PHASE" == "wiseowl-graphical-console-v1" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=wiseowl_graphical_console_v1)
+elif [[ "$PHASE" == "wiseowl-gui-conversation-v1" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=wiseowl_gui_conversation_v1)
 elif [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=welcome_wizard)
 elif [[ "$PHASE" == "phase4.5" ]]; then
@@ -657,6 +668,9 @@ if [[ "$PHASE" == "phase3.875" ]]; then
 fi
 if [[ "$PHASE" == "wiseowl-graphical-console-v1" ]]; then
     cp "$QEMU_OUTPUT" target/wiseowl-graphical-console-v1-serial.log
+fi
+if [[ "$PHASE" == "wiseowl-gui-conversation-v1" ]]; then
+    cp "$QEMU_OUTPUT" target/wiseowl-gui-conversation-v1-serial.log
 fi
 
 ALL_FOUND=true

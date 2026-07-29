@@ -3797,6 +3797,7 @@ fn setup_key_injection() {
         "wiseowl3.75" => build_wiseowl_phase375_sequence(),
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
         "wiseowl_graphical_console_v1" => build_wiseowl_graphical_console_v1_sequence(),
+        "wiseowl_gui_conversation_v1" => build_wiseowl_graphical_console_v1_sequence(),
         "session_foundation" => build_session_foundation_sequence(),
         "session_configuration" => build_session_configuration_sequence(),
         "welcome_wizard" => build_session_configuration_sequence(),
@@ -3978,13 +3979,18 @@ fn build_wiseowl_phase3875_sequence() -> [u8; 12288] {
 fn build_wiseowl_graphical_console_v1_sequence() -> [u8; 12288] {
     let mut s = [0u8; 12288];
     let mut len = 0usize;
-    append_injected_delay(&mut s, &mut len, 768);
-    append_injected_scancode(&mut s, &mut len, 0x1c);
-    append_injected_delay(&mut s, &mut len, 96);
-    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
-        append_injected_scancode(&mut s, &mut len, scancode);
-    }
+    // Start only after the login surface and session services have settled,
+    // then use the same explicit TTY→Desktop selection as the session gates.
     append_injected_delay(&mut s, &mut len, 1536);
+    for code in build_desktop_login_sequence()
+        .into_iter()
+        .take_while(|code| *code != 0)
+    {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+    // The graphical session needs to own input before the shell receives the
+    // deterministic console-launch command.
+    append_injected_delay(&mut s, &mut len, 4096);
     append_injected_command(&mut s, &mut len, b"wiseowl");
     s
 }

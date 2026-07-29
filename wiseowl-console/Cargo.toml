@@ -1,6 +1,10 @@
 [package]
 name = "wiseowl-console"
-version = "0.2.3747-alpha.1"
+version = "0.2.3773-alpha.1"
+
+
+
+
 
 
 edition = "2021"
@@ -11,9 +15,13 @@ description = "Wise Owl Graphical Console"
 name = "wiseowl"
 path = "src/main.rs"
 
+[features]
+conversation-v1-test = []
+
 [dependencies]
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap"] }
 sun-font = { path = "../sun-font" }
+heapless = "0.8"
 wiseowl-brain = { path = "../wiseowl-brain", default-features = false, features = ["sunlightos"] }

@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, process_yield,
-    shm_alloc, shm_map, IpcMsg,
+    shm_alloc, shm_free, shm_map, IpcMsg,
 };
 use sunlight_libc as libc;
 
@@ -18,7 +18,9 @@ use wiseowl_brain::native_ipc::{
     NATIVE_PROTOCOL_VERSION, REG_INLINE_BODY_MAX, SHM_PAGE_SIZE,
 };
 use wiseowl_brain::pipeline::CognitivePipeline;
-use wiseowl_brain::protocol::BrainRequestWire;
+use wiseowl_brain::protocol::{
+    BrainRequestWire, ConsoleUiCommandWire, ConsoleUiRequestWire, ConsoleUiResponseWire,
+};
 use wiseowl_brain::provenance::BrainProviderKind;
 
 macro_rules! serial_println {
@@ -76,13 +78,13 @@ pub extern "C" fn _start() -> ! {
         libc::exit(1);
     }
 
+    let mut msg = ipc_recv(ep);
     loop {
-        let msg = ipc_recv(ep);
-
         let op = match BrainOp::from_u16(msg.label as u16) {
             Some(o) => o,
             None => {
                 serial_println!("[WISEOWL-BRAIN] unknown op 0x{:04X}", msg.label as u16);
+                msg = ipc_reply_and_wait(ep, make_error_reply(msg, 3));
                 continue;
             }
         };
@@ -91,40 +93,18 @@ pub extern "C" fn _start() -> ! {
         let caller_pid = msg.badge;
         let caller_uid = 0u64; // UID is not available from badge; use request body.
 
-        match op {
-            BrainOp::Greeting => {
-                let response = handle_native_greeting(msg, caller_uid, caller_pid);
-                let _ = ipc_reply_and_wait(ep, response);
-            }
-            BrainOp::Health => {
-                let response = handle_native_health(msg);
-                let _ = ipc_reply_and_wait(ep, response);
-            }
-            BrainOp::Stats => {
-                let response = handle_native_stats(msg);
-                let _ = ipc_reply_and_wait(ep, response);
-            }
-            BrainOp::Context => {
-                let response = handle_native_context(msg, caller_uid, caller_pid);
-                let _ = ipc_reply_and_wait(ep, response);
-            }
-            BrainOp::PreferencesGet => {
-                let response = handle_preferences_get(msg, caller_pid);
-                let _ = ipc_reply_and_wait(ep, response);
-            }
-            BrainOp::PreferencesSet => {
-                let response = handle_preferences_set(msg, caller_pid);
-                let _ = ipc_reply_and_wait(ep, response);
-            }
-            BrainOp::WelcomeCompleted => {
-                let response = handle_welcome_completed(msg, caller_pid);
-                let _ = ipc_reply_and_wait(ep, response);
-            }
-            _ => {
-                let reply = make_error_reply(msg, 3);
-                let _ = ipc_reply_and_wait(ep, reply);
-            }
-        }
+        let response = match op {
+            BrainOp::Greeting => handle_native_greeting(msg, caller_uid, caller_pid),
+            BrainOp::Health => handle_native_health(msg),
+            BrainOp::Stats => handle_native_stats(msg),
+            BrainOp::Context => handle_native_context(msg, caller_uid, caller_pid),
+            BrainOp::PreferencesGet => handle_preferences_get(msg, caller_pid),
+            BrainOp::PreferencesSet => handle_preferences_set(msg, caller_pid),
+            BrainOp::WelcomeCompleted => handle_welcome_completed(msg, caller_pid),
+            BrainOp::ConsoleUi => handle_console_ui(msg, caller_pid),
+            _ => make_error_reply(msg, 3),
+        };
+        msg = ipc_reply_and_wait(ep, response);
     }
 }
 
@@ -1485,6 +1465,90 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
     make_reply(msg, &response)
 }
 
+fn handle_console_ui(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
+    let body = read_native_body(msg);
+    let (request, _) = match ConsoleUiRequestWire::decode(&body) {
+        Ok(request) => request,
+        Err(_) => {
+            serial_println!("[WISEOWL-BRAIN] CONSOLE_UI_MALFORMED");
+            return make_console_ui_reply(
+                msg,
+                &ConsoleUiResponseWire::rejected(0, 400, "Malformed conversation request."),
+            );
+        }
+    };
+
+    if caller_pid == 0 {
+        let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+        pipeline.diagnostics.inc_unauthorized();
+        return make_console_ui_reply(
+            msg,
+            &ConsoleUiResponseWire::rejected(
+                request.request_id,
+                403,
+                "Conversation request is not authorized.",
+            ),
+        );
+    }
+
+    let response = match request.command {
+        ConsoleUiCommandWire::SubmitTurn { text, .. } => {
+            if text.trim().is_empty() {
+                ConsoleUiResponseWire::rejected(
+                    request.request_id,
+                    400,
+                    "Conversation text must not be empty.",
+                )
+            } else {
+                serial_println!("[WISEOWL-BRAIN] CONSOLE_UI_CHAT PASS");
+                ConsoleUiResponseWire::assistant_text(
+                    request.request_id,
+                    local_console_reply(text.as_str()),
+                )
+            }
+        }
+        ConsoleUiCommandWire::QueryConversationState => ConsoleUiResponseWire::assistant_text(
+            request.request_id,
+            "Wise Owl local conversation is online.",
+        ),
+        ConsoleUiCommandWire::SelectClarification { .. }
+        | ConsoleUiCommandWire::SubmitConfirmation { .. }
+        | ConsoleUiCommandWire::CancelPendingAction => ConsoleUiResponseWire::rejected(
+            request.request_id,
+            501,
+            "Conversational actions are not available yet.",
+        ),
+    };
+    make_console_ui_reply(msg, &response)
+}
+
+fn local_console_reply(text: &str) -> &'static str {
+    if contains_ascii_case_insensitive(text, "hello")
+        || contains_ascii_case_insensitive(text, "hi")
+        || text.contains("سلام")
+    {
+        "Hello. Wise Owl local conversation is ready."
+    } else if contains_ascii_case_insensitive(text, "status")
+        || contains_ascii_case_insensitive(text, "health")
+        || text.contains("وضعیت")
+    {
+        "Wise Owl is online. The local conversation service is responding."
+    } else {
+        "I received your message. Local conversation is online; action requests are not enabled yet."
+    }
+}
+
+fn contains_ascii_case_insensitive(text: &str, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    !needle.is_empty()
+        && text.as_bytes().windows(needle.len()).any(|window| {
+            window
+                .iter()
+                .zip(needle)
+                .all(|(left, right)| left.to_ascii_lowercase() == *right)
+        })
+}
+
 fn handle_native_health(_msg: IpcMsg) -> IpcMsg {
     let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
     let snap = pipeline.diagnostics.snapshot();
@@ -1710,8 +1774,19 @@ fn read_native_body(msg: IpcMsg) -> Vec<u8> {
         if let Ok(ptr) = shm_map(msg.caps[0]) {
             let slice =
                 unsafe { core::slice::from_raw_parts(ptr as *const u8, SHM_PAGE_SIZE as usize) };
-            let header = match BrainIpcHeader::decode(slice) {
-                Ok(h) => h,
+            let body = match BrainIpcHeader::decode(slice) {
+                Ok(header) if header.operation == msg.label as u16 => {
+                    let body_start = BRAIN_IPC_HEADER_LEN;
+                    let body_end = body_start + header.body_len as usize;
+                    if body_end <= SHM_PAGE_SIZE as usize {
+                        let mut body = Vec::with_capacity(header.body_len as usize);
+                        body.extend_from_slice(&slice[body_start..body_end]);
+                        body
+                    } else {
+                        Vec::new()
+                    }
+                }
+                Ok(_) => Vec::new(),
                 Err(_) => {
                     // Some clients write raw body without BrainIpcHeader.
                     let body_len = if msg.word_count >= 1 {
@@ -1720,20 +1795,16 @@ fn read_native_body(msg: IpcMsg) -> Vec<u8> {
                         0
                     };
                     if body_len == 0 {
-                        return Vec::new();
+                        Vec::new()
+                    } else {
+                        let mut body = Vec::with_capacity(body_len);
+                        body.extend_from_slice(&slice[..body_len]);
+                        body
                     }
-                    let mut body = Vec::with_capacity(body_len);
-                    body.extend_from_slice(&slice[..body_len]);
-                    return body;
                 }
             };
-            let body_start = BRAIN_IPC_HEADER_LEN;
-            let body_end = body_start + header.body_len as usize;
-            if body_end <= SHM_PAGE_SIZE as usize {
-                let mut body = Vec::with_capacity(header.body_len as usize);
-                body.extend_from_slice(&slice[body_start..body_end]);
-                return body;
-            }
+            let _ = shm_free(msg.caps[0]);
+            return body;
         }
     }
 
@@ -1801,6 +1872,34 @@ fn make_reply(msg: IpcMsg, response: &wiseowl_brain::protocol::BrainResponseWire
         reply = reply.with_cap(0, shm_cap);
         reply
     }
+}
+
+fn make_console_ui_reply(msg: IpcMsg, response: &ConsoleUiResponseWire) -> IpcMsg {
+    let response_bytes = response.encode();
+    if response_bytes.len() + BRAIN_IPC_HEADER_LEN > SHM_PAGE_SIZE as usize || msg.cap_count < 2 {
+        return IpcMsg::with_label(BrainOp::Error.label()).word(0, 500);
+    }
+    let header = BrainIpcHeader {
+        protocol_version: NATIVE_PROTOCOL_VERSION,
+        operation: BrainOp::Reply.as_u16(),
+        flags: 0,
+        request_id: response.request_id(),
+        body_len: response_bytes.len() as u32,
+        reserved: 0,
+    };
+
+    let response_cap = msg.caps[1];
+    let response_ptr = match shm_map(response_cap) {
+        Ok(ptr) => ptr,
+        Err(_) => return IpcMsg::with_label(BrainOp::Error.label()).word(0, 500),
+    };
+    let slice = unsafe { core::slice::from_raw_parts_mut(response_ptr, SHM_PAGE_SIZE as usize) };
+    let header_bytes = header.encode();
+    slice[..BRAIN_IPC_HEADER_LEN].copy_from_slice(&header_bytes);
+    slice[BRAIN_IPC_HEADER_LEN..BRAIN_IPC_HEADER_LEN + response_bytes.len()]
+        .copy_from_slice(&response_bytes);
+    let _ = shm_free(response_cap);
+    IpcMsg::with_label(BrainOp::Reply.label()).word(0, response_bytes.len() as u64)
 }
 
 fn make_error_reply(msg: IpcMsg, code: u16) -> IpcMsg {

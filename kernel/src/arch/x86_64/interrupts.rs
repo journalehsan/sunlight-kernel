@@ -10,6 +10,7 @@ use x86_64::structures::tss::TaskStateSegment;
 use x86_64::VirtAddr;
 
 static mut IDT: InterruptDescriptorTable = InterruptDescriptorTable::new();
+const PERFORMANCE_DIAGNOSTIC_INTERVAL_TICKS: u64 = 6_000;
 
 /// Return a shared reference to the kernel IDT for AP loading.
 ///
@@ -913,7 +914,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
             crate::telemetry::commit_telemetry_snapshot(&snap);
         }
         let tel_end = now_ns();
-        if ticks_total % 100 == 0 {
+        if ticks_total % PERFORMANCE_DIAGNOSTIC_INTERVAL_TICKS == 0 {
             serial_println!(
                 "[DIAG] sched_lock_hold_ns={} telemetry_update_ns={}",
                 sched_lock_end - sched_lock_start,
@@ -922,7 +923,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         }
     }
 
-    if cpu_id == 0 && ticks_total % 100 == 0 {
+    if cpu_id == 0 && ticks_total % PERFORMANCE_DIAGNOSTIC_INTERVAL_TICKS == 0 {
         // Also report per-core activity and parked state via existing diag if enabled.
         // (timer_ticks / ctx_switches already updated in tick() and visible in SCHED-DIAG)
     }

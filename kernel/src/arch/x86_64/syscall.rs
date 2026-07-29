@@ -2556,10 +2556,7 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         .fd_table
         .open(handle, rights, flags as u32)
     {
-        Ok(fd) => {
-            crate::serial_println!("[HELIOS] open({}) -> ok", path);
-            fd as u64
-        }
+        Ok(fd) => fd as u64,
         Err(e) => {
             crate::serial_println!("[HELIOS] open({}) -> fd error {:?}", path, e);
             drop(sched);
@@ -5377,6 +5374,30 @@ fn dhcp_message_type(frame: &[u8]) -> Option<u8> {
     None
 }
 
+const SHM_SUCCESS_LOG_BUDGET: u64 = 8;
+static SHM_ALLOC_SUCCESS_LOGS: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(SHM_SUCCESS_LOG_BUDGET);
+static SHM_MAP_SUCCESS_LOGS: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(SHM_SUCCESS_LOG_BUDGET);
+static SHM_FREE_SUCCESS_LOGS: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(SHM_SUCCESS_LOG_BUDGET);
+
+fn consume_success_log_budget(budget: &core::sync::atomic::AtomicU64) -> bool {
+    let mut remaining = budget.load(core::sync::atomic::Ordering::Relaxed);
+    while remaining != 0 {
+        match budget.compare_exchange_weak(
+            remaining,
+            remaining - 1,
+            core::sync::atomic::Ordering::Relaxed,
+            core::sync::atomic::Ordering::Relaxed,
+        ) {
+            Ok(_) => return true,
+            Err(observed) => remaining = observed,
+        }
+    }
+    false
+}
+
 fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
     let size = frame.rdi as usize; // 0 => 4KiB (compat); >0 for multi-page regions
     let Some(hhdm) = crate::HHDM_REQ.response() else {
@@ -5395,11 +5416,13 @@ fn sys_shm_alloc(frame: &mut SyscallFrame) -> u64 {
         size,
     ) {
         Ok((virt, token)) => {
-            // Preserve legacy message for test expectations when using the 1-page path
-            if size == 0 || size == 4096 {
-                crate::serial_println!("[SHM]  alloc_shared_page: OK");
-            } else {
-                crate::serial_println!("[SHM]  alloc_shared_region: OK ({} bytes)", size);
+            if consume_success_log_budget(&SHM_ALLOC_SUCCESS_LOGS) {
+                // Preserve legacy message for test expectations when using the 1-page path.
+                if size == 0 || size == 4096 {
+                    crate::serial_println!("[SHM]  alloc_shared_page: OK");
+                } else {
+                    crate::serial_println!("[SHM]  alloc_shared_region: OK ({} bytes)", size);
+                }
             }
             // Return virt in rax, token in rdx + r13 (for direct callers and ipc raw_syscall caps[0])
             frame.rdx = token.0;
@@ -5424,7 +5447,9 @@ fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
     match crate::memory::shared::map_shared_page(process, token, &mut *pmm, &mut *caps, hhdm_offset)
     {
         Ok(virt) => {
-            crate::serial_println!("[SHM]  map_shared_page: OK");
+            if consume_success_log_budget(&SHM_MAP_SUCCESS_LOGS) {
+                crate::serial_println!("[SHM]  map_shared_page: OK");
+            }
             virt.as_u64()
         }
         Err(_) => u64::MAX,
@@ -5449,7 +5474,9 @@ fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
         hhdm_offset,
     ) {
         Ok(()) => {
-            crate::serial_println!("[SHM]  shm_free: page unmapped OK");
+            if consume_success_log_budget(&SHM_FREE_SUCCESS_LOGS) {
+                crate::serial_println!("[SHM]  shm_free: page unmapped OK");
+            }
             0
         }
         Err(_) => u64::MAX,

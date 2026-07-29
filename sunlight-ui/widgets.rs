@@ -1,11 +1,13 @@
 pub mod button;
 pub mod calendar;
 pub mod checkbox;
+pub mod conversation_bubble;
 pub mod digital_number;
 pub mod disclosure;
 pub mod document_canvas;
 pub mod drive_card;
 pub mod label;
+pub mod owl_avatar;
 pub mod panel;
 pub mod pro_app;
 pub mod search_palette;
@@ -33,6 +35,7 @@ pub use calendar::{
     FormFieldStyle, StatusTextKind,
 };
 pub use checkbox::Checkbox;
+pub use conversation_bubble::{ConversationBubble, ConversationBubbleKind};
 pub use digital_number::{
     digit_segment_mask, is_supported_char, measure_digital, DigitalAlign, DigitalNumberWidget,
     DIGITAL_VALUE_CAP, SUPPORTED_CHARS,
@@ -51,6 +54,7 @@ pub use document_canvas::{
 };
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
 pub use label::Label;
+pub use owl_avatar::{OwlAvatar, OwlAvatarState};
 pub use panel::{BadgeKind, Histogram, Panel, ProgressBar, StatusBadge};
 pub use pro_app::{
     AppMenuCommand, AppMenuSecondaryItem, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar,

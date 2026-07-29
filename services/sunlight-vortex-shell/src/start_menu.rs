@@ -49,8 +49,7 @@ static ICON_MINES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/ap
 static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
 static ICON_WELCOME_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
-static ICON_WISEOWL_TGA: &[u8] =
-    include_bytes!("../../../WiseOwl.sunapp/Resources/icon.tga");
+static ICON_WISEOWL_TGA: &[u8] = include_bytes!("../../../WiseOwl.sunapp/Resources/icon.tga");
 
 static ICON_SEARCH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");

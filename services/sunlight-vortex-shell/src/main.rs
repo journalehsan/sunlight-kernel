@@ -979,6 +979,7 @@ static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 /// Cap for desktop wallpaper file reads (SIMG v2 compressed). Peak decode RAM
 /// is separate (~decoded ARGB); shell heap is 16 MiB for that path.
 const WALLPAPER_MAX_BYTES: usize = 8 * 1024 * 1024;
+const DESKTOP_CONFIG_POLL_INTERVAL_MS: u64 = 5_000;
 const SHELL_DIAGNOSTIC_INTERVAL_MS: u64 = 30_000;
 
 // ---------------------------------------------------------------------------
@@ -1501,6 +1502,7 @@ struct VortexShell {
     // Effective locale for formatting (LC_TIME or LANG from /etc/locale.conf)
     locale: [u8; 48],
     locale_len: usize,
+    locale_needs_refresh: bool,
     /// Cached bounded summary of the primary Ethernet state.
     network: NetworkShellState,
     /// Next monotonic deadline for best-effort status polling.
@@ -1722,6 +1724,7 @@ impl VortexShell {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
             locale_len: 7,
+            locale_needs_refresh: true,
             network: NetworkShellState::new(),
             next_status_poll_ms: 0,
             next_network_poll_ms: 0,
@@ -1839,7 +1842,9 @@ impl VortexShell {
 
     fn maybe_reload_wallpaper(&mut self, now: u64, width: u32, height: u32) {
         let res_changed = self.screen_w != width || self.screen_h != height;
-        if !res_changed && now.saturating_sub(self.wallpaper_last_reload_ms) < 1000 {
+        if !res_changed
+            && now.saturating_sub(self.wallpaper_last_reload_ms) < DESKTOP_CONFIG_POLL_INTERVAL_MS
+        {
             return;
         }
         let next_overrides = load_desktop_icon_overrides();
@@ -1863,6 +1868,7 @@ impl VortexShell {
 
     fn refresh_status(&mut self) -> bool {
         let mut dirty = false;
+        let mut clock_changed = false;
 
         let mut tmp_tz = [0u8; 48];
         let mut tmp_tz_l = 0usize;
@@ -1879,6 +1885,7 @@ impl VortexShell {
                 self.status_hour = h;
                 self.status_min = mi;
                 self.status_sec = s;
+                clock_changed = true;
                 if self.show_calendar_popover && (1..=12).contains(&mon) && y >= 1970 {
                     self.cal_view_month = mon;
                     self.cal_view_year = y;
@@ -1891,8 +1898,9 @@ impl VortexShell {
             }
         }
 
-        // Load locale infrequently (file read is cheap here; 1/min ok)
-        if self.status_min % 5 == 0 || self.locale_len == 0 {
+        // Load initially and then only once per five-minute boundary.
+        if self.locale_needs_refresh || (clock_changed && self.status_min % 5 == 0) {
+            self.locale_needs_refresh = false;
             if let Some(loc) = read_locale_effective() {
                 let b = loc.as_bytes();
                 let n = b.len().min(47);

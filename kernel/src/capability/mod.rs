@@ -698,12 +698,6 @@ impl CapabilityBroker {
             revoked: false,
             map_count: 0,
         });
-        serial_println!(
-            "[CAP] Minted shm-region token {:#x} size={}KiB owner={}",
-            token.as_u64(),
-            size / 1024,
-            owner_pid
-        );
         token
     }
 
@@ -765,10 +759,6 @@ impl CapabilityBroker {
         }
         if self.shared_regions[idx].map_count == 0 {
             let entry = self.shared_regions.swap_remove(idx);
-            serial_println!(
-                "[CAP] Released shm-region {:#x} (last unmap, freeing frames)",
-                entry.token.as_u64()
-            );
             return Some(entry.obj.frames);
         }
         None

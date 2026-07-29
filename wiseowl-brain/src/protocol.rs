@@ -925,86 +925,112 @@ mod tests {
     }
 }
 
-// ── UI to Brain boundary ──
+// ── Console UI to Brain boundary ──
+
+/// A ConsoleUi request shares a 4 KiB page with its `BrainIpcHeader`.
+pub const CONSOLE_UI_MAX_TEXT_BYTES: usize = 4000;
+pub const CONSOLE_UI_MAX_LOCALE_BYTES: usize = 16;
+pub const CONSOLE_UI_MAX_RESPONSE_TEXT_BYTES: usize = 512;
+pub const CONSOLE_UI_MAX_ERROR_BYTES: usize = 160;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WiseOwlUiRequestWire {
-    SubmitConversationTurn {
-        text: heapless::String<256>,
+pub enum ConsoleUiCommandWire {
+    SubmitTurn {
+        locale: heapless::String<CONSOLE_UI_MAX_LOCALE_BYTES>,
+        text: heapless::String<CONSOLE_UI_MAX_TEXT_BYTES>,
     },
-    SubmitClarificationSelection {
+    SelectClarification {
         candidate_id: u64,
     },
-    SubmitConfirmationResponse {
-        level: u8,
+    SubmitConfirmation {
         approved: bool,
     },
     CancelPendingAction,
-    QueryCurrentConversation,
-    QueryRecentReceipts,
-    QueryComponentHealth,
-    QueryPrivacyStatus,
+    QueryConversationState,
 }
 
-impl WiseOwlUiRequestWire {
-    pub fn encode(&self) -> heapless::Vec<u8, 512> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsoleUiRequestWire {
+    pub conversation_id: u64,
+    pub session_id: u64,
+    pub request_id: u64,
+    pub runtime_snapshot_generation: u64,
+    pub command: ConsoleUiCommandWire,
+}
+
+impl ConsoleUiRequestWire {
+    pub fn encode(&self) -> heapless::Vec<u8, 4096> {
         let mut out = heapless::Vec::new();
-        match self {
-            Self::SubmitConversationTurn { text } => {
-                let _ = out.push(1);
-                let _ = out.push(text.len() as u8);
+        let tag = match &self.command {
+            ConsoleUiCommandWire::SubmitTurn { .. } => 1,
+            ConsoleUiCommandWire::SelectClarification { .. } => 2,
+            ConsoleUiCommandWire::SubmitConfirmation { .. } => 3,
+            ConsoleUiCommandWire::CancelPendingAction => 4,
+            ConsoleUiCommandWire::QueryConversationState => 5,
+        };
+        let _ = out.push(tag);
+        out.extend_from_slice(&self.conversation_id.to_le_bytes())
+            .ok();
+        out.extend_from_slice(&self.session_id.to_le_bytes()).ok();
+        out.extend_from_slice(&self.request_id.to_le_bytes()).ok();
+        out.extend_from_slice(&self.runtime_snapshot_generation.to_le_bytes())
+            .ok();
+
+        match &self.command {
+            ConsoleUiCommandWire::SubmitTurn { locale, text } => {
+                let _ = out.push(locale.len() as u8);
+                out.extend_from_slice(&(text.len() as u16).to_le_bytes())
+                    .ok();
+                out.extend_from_slice(locale.as_bytes()).ok();
                 out.extend_from_slice(text.as_bytes()).ok();
             }
-            Self::SubmitClarificationSelection { candidate_id } => {
-                let _ = out.push(2);
+            ConsoleUiCommandWire::SelectClarification { candidate_id } => {
                 out.extend_from_slice(&candidate_id.to_le_bytes()).ok();
             }
-            Self::SubmitConfirmationResponse { level, approved } => {
-                let _ = out.push(3);
-                let _ = out.push(*level);
+            ConsoleUiCommandWire::SubmitConfirmation { approved } => {
                 let _ = out.push(if *approved { 1 } else { 0 });
             }
-            Self::CancelPendingAction => {
-                let _ = out.push(4);
-            }
-            Self::QueryCurrentConversation => {
-                let _ = out.push(5);
-            }
-            Self::QueryRecentReceipts => {
-                let _ = out.push(6);
-            }
-            Self::QueryComponentHealth => {
-                let _ = out.push(7);
-            }
-            Self::QueryPrivacyStatus => {
-                let _ = out.push(8);
-            }
+            ConsoleUiCommandWire::CancelPendingAction
+            | ConsoleUiCommandWire::QueryConversationState => {}
         }
         out
     }
 
     pub fn decode(data: &[u8]) -> BrainResult<(Self, usize)> {
-        if data.is_empty() {
+        const FIXED_PREFIX_LEN: usize = 33;
+        if data.len() < FIXED_PREFIX_LEN {
             return Err(BrainError::TruncatedBody);
         }
         let tag = data[0];
-        let mut pos = 1;
-        match tag {
+        let conversation_id = u64::from_le_bytes(data[1..9].try_into().unwrap());
+        let session_id = u64::from_le_bytes(data[9..17].try_into().unwrap());
+        let request_id = u64::from_le_bytes(data[17..25].try_into().unwrap());
+        let runtime_snapshot_generation = u64::from_le_bytes(data[25..33].try_into().unwrap());
+        let mut pos = FIXED_PREFIX_LEN;
+
+        let command = match tag {
             1 => {
-                if pos >= data.len() {
+                if pos + 3 > data.len() {
                     return Err(BrainError::TruncatedBody);
                 }
-                let len = data[pos] as usize;
-                pos += 1;
-                if pos + len > data.len() {
-                    return Err(BrainError::TruncatedBody);
+                let locale_len = data[pos] as usize;
+                let text_len = u16::from_le_bytes([data[pos + 1], data[pos + 2]]) as usize;
+                pos += 3;
+                let end = pos
+                    .checked_add(locale_len)
+                    .and_then(|value| value.checked_add(text_len))
+                    .ok_or(BrainError::BadEncoding)?;
+                if locale_len > CONSOLE_UI_MAX_LOCALE_BYTES
+                    || text_len > CONSOLE_UI_MAX_TEXT_BYTES
+                    || end > data.len()
+                {
+                    return Err(BrainError::BadEncoding);
                 }
-                let mut text: heapless::String<256> = heapless::String::new();
-                for &b in &data[pos..pos + len] {
-                    let _ = text.push(b as char);
-                }
-                pos += len;
-                Ok((Self::SubmitConversationTurn { text }, pos))
+                let locale = decode_console_locale(&data[pos..pos + locale_len])?;
+                pos += locale_len;
+                let text = decode_console_text(&data[pos..pos + text_len])?;
+                pos += text_len;
+                ConsoleUiCommandWire::SubmitTurn { locale, text }
             }
             2 => {
                 if pos + 8 > data.len() {
@@ -1012,85 +1038,260 @@ impl WiseOwlUiRequestWire {
                 }
                 let candidate_id = u64::from_le_bytes(data[pos..pos + 8].try_into().unwrap());
                 pos += 8;
-                Ok((Self::SubmitClarificationSelection { candidate_id }, pos))
+                ConsoleUiCommandWire::SelectClarification { candidate_id }
+            }
+            3 => {
+                if pos >= data.len() || data[pos] > 1 {
+                    return Err(BrainError::BadEncoding);
+                }
+                let approved = data[pos] != 0;
+                pos += 1;
+                ConsoleUiCommandWire::SubmitConfirmation { approved }
+            }
+            4 => ConsoleUiCommandWire::CancelPendingAction,
+            5 => ConsoleUiCommandWire::QueryConversationState,
+            _ => return Err(BrainError::BadEncoding),
+        };
+
+        Ok((
+            Self {
+                conversation_id,
+                session_id,
+                request_id,
+                runtime_snapshot_generation,
+                command,
+            },
+            pos,
+        ))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConsoleUiResponseWire {
+    AssistantText {
+        request_id: u64,
+        text: heapless::String<CONSOLE_UI_MAX_RESPONSE_TEXT_BYTES>,
+    },
+    Rejected {
+        request_id: u64,
+        code: u16,
+        message: heapless::String<CONSOLE_UI_MAX_ERROR_BYTES>,
+    },
+    Cancelled {
+        request_id: u64,
+        label: heapless::String<CONSOLE_UI_MAX_RESPONSE_TEXT_BYTES>,
+    },
+    Unavailable {
+        request_id: u64,
+    },
+}
+
+impl ConsoleUiResponseWire {
+    pub fn assistant_text(request_id: u64, text: &str) -> Self {
+        Self::AssistantText {
+            request_id,
+            text: bounded_console_response(text),
+        }
+    }
+
+    pub fn rejected(request_id: u64, code: u16, message: &str) -> Self {
+        Self::Rejected {
+            request_id,
+            code,
+            message: bounded_console_error(message),
+        }
+    }
+
+    pub fn request_id(&self) -> u64 {
+        match self {
+            Self::AssistantText { request_id, .. }
+            | Self::Rejected { request_id, .. }
+            | Self::Cancelled { request_id, .. }
+            | Self::Unavailable { request_id } => *request_id,
+        }
+    }
+
+    pub fn encode(&self) -> heapless::Vec<u8, 768> {
+        let mut out = heapless::Vec::new();
+        match self {
+            Self::AssistantText { request_id, text } => {
+                let _ = out.push(1);
+                out.extend_from_slice(&request_id.to_le_bytes()).ok();
+                out.extend_from_slice(&(text.len() as u16).to_le_bytes())
+                    .ok();
+                out.extend_from_slice(text.as_bytes()).ok();
+            }
+            Self::Rejected {
+                request_id,
+                code,
+                message,
+            } => {
+                let _ = out.push(2);
+                out.extend_from_slice(&request_id.to_le_bytes()).ok();
+                out.extend_from_slice(&code.to_le_bytes()).ok();
+                let _ = out.push(message.len() as u8);
+                out.extend_from_slice(message.as_bytes()).ok();
+            }
+            Self::Cancelled { request_id, label } => {
+                let _ = out.push(3);
+                out.extend_from_slice(&request_id.to_le_bytes()).ok();
+                out.extend_from_slice(&(label.len() as u16).to_le_bytes())
+                    .ok();
+                out.extend_from_slice(label.as_bytes()).ok();
+            }
+            Self::Unavailable { request_id } => {
+                let _ = out.push(4);
+                out.extend_from_slice(&request_id.to_le_bytes()).ok();
+            }
+        }
+        out
+    }
+
+    pub fn decode(data: &[u8]) -> BrainResult<(Self, usize)> {
+        if data.len() < 9 {
+            return Err(BrainError::TruncatedBody);
+        }
+        let tag = data[0];
+        let request_id = u64::from_le_bytes(data[1..9].try_into().unwrap());
+        let mut pos = 9;
+        let response = match tag {
+            1 => {
+                if pos + 2 > data.len() {
+                    return Err(BrainError::TruncatedBody);
+                }
+                let text_len = u16::from_le_bytes([data[pos], data[pos + 1]]) as usize;
+                pos += 2;
+                if text_len > CONSOLE_UI_MAX_RESPONSE_TEXT_BYTES || pos + text_len > data.len() {
+                    return Err(BrainError::BadEncoding);
+                }
+                let text = decode_console_response(&data[pos..pos + text_len])?;
+                pos += text_len;
+                Self::AssistantText { request_id, text }
+            }
+            2 => {
+                if pos + 3 > data.len() {
+                    return Err(BrainError::TruncatedBody);
+                }
+                let code = u16::from_le_bytes([data[pos], data[pos + 1]]);
+                let message_len = data[pos + 2] as usize;
+                pos += 3;
+                if message_len > CONSOLE_UI_MAX_ERROR_BYTES || pos + message_len > data.len() {
+                    return Err(BrainError::BadEncoding);
+                }
+                let message = decode_console_error(&data[pos..pos + message_len])?;
+                pos += message_len;
+                Self::Rejected {
+                    request_id,
+                    code,
+                    message,
+                }
             }
             3 => {
                 if pos + 2 > data.len() {
                     return Err(BrainError::TruncatedBody);
                 }
-                let level = data[pos];
-                let approved = data[pos + 1] != 0;
+                let label_len = u16::from_le_bytes([data[pos], data[pos + 1]]) as usize;
                 pos += 2;
-                Ok((Self::SubmitConfirmationResponse { level, approved }, pos))
+                if label_len > CONSOLE_UI_MAX_RESPONSE_TEXT_BYTES || pos + label_len > data.len() {
+                    return Err(BrainError::BadEncoding);
+                }
+                let label = decode_console_response(&data[pos..pos + label_len])?;
+                pos += label_len;
+                Self::Cancelled { request_id, label }
             }
-            4 => Ok((Self::CancelPendingAction, pos)),
-            5 => Ok((Self::QueryCurrentConversation, pos)),
-            6 => Ok((Self::QueryRecentReceipts, pos)),
-            7 => Ok((Self::QueryComponentHealth, pos)),
-            8 => Ok((Self::QueryPrivacyStatus, pos)),
-            _ => Err(BrainError::BadEncoding),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WiseOwlUiResponseWire {
-    ConversationUpdated,
-    ClarificationRequired,
-    ConfirmationRequired,
-    ActionProgressUpdated,
-    ActionCompleted,
-    ActionFailed,
-    ReceiptsReturned,
-    HealthReturned,
-    PrivacyStatusReturned,
-    NoChange,
-    Rejected,
-    Unavailable,
-}
-
-impl WiseOwlUiResponseWire {
-    pub fn encode(&self) -> heapless::Vec<u8, 64> {
-        let mut out = heapless::Vec::new();
-        let tag: u8 = match self {
-            Self::ConversationUpdated => 1,
-            Self::ClarificationRequired => 2,
-            Self::ConfirmationRequired => 3,
-            Self::ActionProgressUpdated => 4,
-            Self::ActionCompleted => 5,
-            Self::ActionFailed => 6,
-            Self::ReceiptsReturned => 7,
-            Self::HealthReturned => 8,
-            Self::PrivacyStatusReturned => 9,
-            Self::NoChange => 10,
-            Self::Rejected => 11,
-            Self::Unavailable => 12,
-        };
-        let _ = out.push(tag);
-        out
-    }
-
-    pub fn decode(data: &[u8]) -> BrainResult<(Self, usize)> {
-        if data.is_empty() {
-            return Err(BrainError::TruncatedBody);
-        }
-        let tag = data[0];
-        let pos = 1;
-        let res = match tag {
-            1 => Self::ConversationUpdated,
-            2 => Self::ClarificationRequired,
-            3 => Self::ConfirmationRequired,
-            4 => Self::ActionProgressUpdated,
-            5 => Self::ActionCompleted,
-            6 => Self::ActionFailed,
-            7 => Self::ReceiptsReturned,
-            8 => Self::HealthReturned,
-            9 => Self::PrivacyStatusReturned,
-            10 => Self::NoChange,
-            11 => Self::Rejected,
-            12 => Self::Unavailable,
+            4 => Self::Unavailable { request_id },
             _ => return Err(BrainError::BadEncoding),
         };
-        Ok((res, pos))
+        Ok((response, pos))
+    }
+}
+
+fn decode_console_locale(
+    bytes: &[u8],
+) -> BrainResult<heapless::String<CONSOLE_UI_MAX_LOCALE_BYTES>> {
+    let text = core::str::from_utf8(bytes).map_err(|_| BrainError::BadEncoding)?;
+    heapless::String::try_from(text).map_err(|_| BrainError::BadEncoding)
+}
+
+fn decode_console_text(bytes: &[u8]) -> BrainResult<heapless::String<CONSOLE_UI_MAX_TEXT_BYTES>> {
+    let text = core::str::from_utf8(bytes).map_err(|_| BrainError::BadEncoding)?;
+    heapless::String::try_from(text).map_err(|_| BrainError::BadEncoding)
+}
+
+fn decode_console_response(
+    bytes: &[u8],
+) -> BrainResult<heapless::String<CONSOLE_UI_MAX_RESPONSE_TEXT_BYTES>> {
+    let text = core::str::from_utf8(bytes).map_err(|_| BrainError::BadEncoding)?;
+    heapless::String::try_from(text).map_err(|_| BrainError::BadEncoding)
+}
+
+fn decode_console_error(bytes: &[u8]) -> BrainResult<heapless::String<CONSOLE_UI_MAX_ERROR_BYTES>> {
+    let text = core::str::from_utf8(bytes).map_err(|_| BrainError::BadEncoding)?;
+    heapless::String::try_from(text).map_err(|_| BrainError::BadEncoding)
+}
+
+fn bounded_console_response(text: &str) -> heapless::String<CONSOLE_UI_MAX_RESPONSE_TEXT_BYTES> {
+    let mut result = heapless::String::new();
+    for character in text.chars() {
+        if result.push(character).is_err() {
+            break;
+        }
+    }
+    result
+}
+
+fn bounded_console_error(text: &str) -> heapless::String<CONSOLE_UI_MAX_ERROR_BYTES> {
+    let mut result = heapless::String::new();
+    for character in text.chars() {
+        if result.push(character).is_err() {
+            break;
+        }
+    }
+    result
+}
+
+#[cfg(test)]
+mod console_ui_tests {
+    use super::*;
+
+    #[test]
+    fn console_ui_submit_roundtrips_utf8() {
+        let request = ConsoleUiRequestWire {
+            conversation_id: 1,
+            session_id: 2,
+            request_id: 3,
+            runtime_snapshot_generation: 4,
+            command: ConsoleUiCommandWire::SubmitTurn {
+                locale: heapless::String::try_from("fa").unwrap(),
+                text: heapless::String::try_from("سلام Wise Owl").unwrap(),
+            },
+        };
+        let encoded = request.encode();
+        let (decoded, consumed) = ConsoleUiRequestWire::decode(&encoded).unwrap();
+        assert_eq!(consumed, encoded.len());
+        assert_eq!(decoded, request);
+    }
+
+    #[test]
+    fn console_ui_response_roundtrips() {
+        let response = ConsoleUiResponseWire::assistant_text(7, "Wise Owl is ready.");
+        let encoded = response.encode();
+        let (decoded, consumed) = ConsoleUiResponseWire::decode(&encoded).unwrap();
+        assert_eq!(consumed, encoded.len());
+        assert_eq!(decoded, response);
+    }
+
+    #[test]
+    fn console_ui_rejects_invalid_utf8() {
+        let mut bytes = heapless::Vec::<u8, 64>::new();
+        let _ = bytes.push(1);
+        bytes.extend_from_slice(&1u64.to_le_bytes()).unwrap();
+        bytes.extend_from_slice(&2u64.to_le_bytes()).unwrap();
+        bytes.extend_from_slice(&3u64.to_le_bytes()).unwrap();
+        bytes.extend_from_slice(&4u64.to_le_bytes()).unwrap();
+        let _ = bytes.push(0);
+        bytes.extend_from_slice(&2u16.to_le_bytes()).unwrap();
+        bytes.extend_from_slice(&[0xff, 0xff]).unwrap();
+        assert!(ConsoleUiRequestWire::decode(&bytes).is_err());
     }
 }
