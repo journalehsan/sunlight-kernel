@@ -43,6 +43,21 @@ pub fn is_trusted_session_service_path(path: &str) -> bool {
     )
 }
 
+pub fn is_trusted_wiseowl_braind_path(path: &str) -> bool {
+    matches!(path, "/sbin/wiseowl-braind" | "/usr/sbin/wiseowl-braind")
+}
+
+pub fn is_trusted_wiseowl_console_path(path: &str) -> bool {
+    matches!(path, "/bin/wiseowl" | "/usr/bin/wiseowl")
+}
+
+pub fn is_trusted_control_panel_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/bin/sunlight-control-panel" | "/usr/bin/sunlight-control-panel"
+    )
+}
+
 const LOCK_PRESENTER_ENTRY_MAGIC: u64 = 0x4C4F_434B_5052_4553;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +92,9 @@ pub fn exec_into_process(
     let old_trusted_zram_diagnostic = process.trusted_zram_diagnostic;
     let old_trusted_pty_service = process.trusted_pty_service;
     let old_trusted_session_service = process.trusted_session_service;
+    let old_trusted_wiseowl_braind = process.trusted_wiseowl_braind;
+    let old_trusted_wiseowl_console = process.trusted_wiseowl_console;
+    let old_trusted_control_panel = process.trusted_control_panel;
     let old_linux_compat = process.is_linux_compat;
     let old_brk_base = process.brk_base;
     let old_brk_current = process.brk_current;
@@ -85,6 +103,9 @@ pub fn exec_into_process(
     process.trusted_zram_diagnostic = false;
     process.trusted_pty_service = false;
     process.trusted_session_service = false;
+    process.trusted_wiseowl_braind = false;
+    process.trusted_wiseowl_console = false;
+    process.trusted_control_panel = false;
 
     // Phase 4.5: Detect if this is a Linux-compatible ELF binary
     process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
@@ -108,6 +129,9 @@ pub fn exec_into_process(
             process.trusted_zram_diagnostic = old_trusted_zram_diagnostic;
             process.trusted_pty_service = old_trusted_pty_service;
             process.trusted_session_service = old_trusted_session_service;
+            process.trusted_wiseowl_braind = old_trusted_wiseowl_braind;
+            process.trusted_wiseowl_console = old_trusted_wiseowl_console;
+            process.trusted_control_panel = old_trusted_control_panel;
             process.is_linux_compat = old_linux_compat;
             process.brk_base = old_brk_base;
             process.brk_current = old_brk_current;
@@ -604,6 +628,9 @@ pub fn spawn_from_path_with_restrictions(
     process.trusted_pty_service = is_trusted_pty_service_path(path);
     process.trusted_lock_service = is_trusted_lock_service_path(path);
     process.trusted_session_service = is_trusted_session_service_path(path);
+    process.trusted_wiseowl_braind = is_trusted_wiseowl_braind_path(path);
+    process.trusted_wiseowl_console = is_trusted_wiseowl_console_path(path);
+    process.trusted_control_panel = is_trusted_control_panel_path(path);
     process.set_initial_args(
         if matches!(
             path,

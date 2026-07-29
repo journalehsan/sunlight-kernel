@@ -37,13 +37,14 @@ impl LaunchCorrelationToken {
         self.0
     }
 
-    /// Bounded tag carried by the existing launch-trace path. Trusted
-    /// lifecycle aggregation resolves it against the pending full token; it is
-    /// never sufficient by itself to complete an observation.
-    pub const fn launch_trace_id(self) -> u64 {
-        u64::from_le_bytes([
-            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7],
-        ])
+    #[cfg(any(
+        test,
+        feature = "gui-bridge-foundation-v1-test",
+        feature = "trusted-session-readiness-v1-test",
+        feature = "gui-live-action-activation-v1-test"
+    ))]
+    pub(crate) const fn new_for_test(bytes: [u8; 32]) -> Self {
+        Self(bytes)
     }
 }
 
@@ -853,48 +854,14 @@ impl TrustedLaunchAdapter for SunlightLaunchAdapter {
         }
     }
 
-    fn launch_application(&mut self, request: LaunchApplicationRequest) -> DispatchStatus {
-        use sunlight_ipc::launch_trace::{LaunchSource, LaunchTrace};
-
-        let trace = LaunchTrace::new(
-            request.correlation_token().launch_trace_id(),
-            LaunchSource::Runner,
-            sunlight_ipc::monotonic_millis(),
-        );
-        match sunlight_libc::sun_exec::launch_registered_application(
-            sunlight_libc::sun_exec::RegisteredApplicationRequest {
-                trace,
-                source: LaunchSource::Runner,
-                app_id: request.bundle_id().as_str().as_bytes(),
-            },
-        ) {
-            Ok(_) => DispatchStatus::Accepted,
-            Err(_) => DispatchStatus::Failed,
-        }
+    fn launch_application(&mut self, _request: LaunchApplicationRequest) -> DispatchStatus {
+        // v1 deliberately installs trust plumbing without enabling actions.
+        // The former argv/log launch-trace adapter is not an authority path.
+        DispatchStatus::Failed
     }
 
-    fn open_settings_page(&mut self, request: OpenSettingsPageRequest) -> DispatchStatus {
-        use sunlight_ipc::launch_trace::{LaunchSource, LaunchTrace};
-        use sunlight_libc::sun_exec::{
-            open_registered_settings_page, ControlPanelPage, RegisteredSettingsPageRequest,
-        };
-
-        let Some(page) = ControlPanelPage::from_id(request.page_id().as_str().as_bytes()) else {
-            return DispatchStatus::Failed;
-        };
-        let trace = LaunchTrace::new(
-            request.correlation_token().launch_trace_id(),
-            LaunchSource::Runner,
-            sunlight_ipc::monotonic_millis(),
-        );
-        match open_registered_settings_page(RegisteredSettingsPageRequest {
-            trace,
-            source: LaunchSource::Runner,
-            page,
-        }) {
-            Ok(_) => DispatchStatus::Accepted,
-            Err(_) => DispatchStatus::Failed,
-        }
+    fn open_settings_page(&mut self, _request: OpenSettingsPageRequest) -> DispatchStatus {
+        DispatchStatus::Failed
     }
 }
 

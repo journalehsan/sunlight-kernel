@@ -845,6 +845,20 @@ fn mediate_nameserver_lookup(
         .iter()
         .find(|process| process.pid == caller_pid)
         .ok_or(IpcError::InvalidArgument)?;
+    if msg.words[0] == name_hash(sunlight_ipc::WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT) {
+        return if process.trusted_display_service {
+            Ok(())
+        } else {
+            Err(IpcError::InvalidCapability)
+        };
+    }
+    if msg.words[0] == name_hash(sunlight_ipc::WISEOWL_CONTROL_PANEL_LIFECYCLE_ENDPOINT) {
+        return if process.trusted_control_panel {
+            Ok(())
+        } else {
+            Err(IpcError::InvalidCapability)
+        };
+    }
     let Some(mask) = process.service_lookup_restrictions else {
         return Ok(());
     };
@@ -892,6 +906,12 @@ fn registration_identity_matches(process_name: &str, registered_name: u64) -> bo
         name if name == name_hash("wiseowl.index.v1") => "wiseowl-indexd",
         name if name == name_hash("wiseowl-braind") => "wiseowl-braind",
         name if name == name_hash("wiseowl.brain.v1") => "wiseowl-braind",
+        name if name == name_hash(sunlight_ipc::WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT) => {
+            "wiseowl-braind"
+        }
+        name if name == name_hash(sunlight_ipc::WISEOWL_CONTROL_PANEL_LIFECYCLE_ENDPOINT) => {
+            "wiseowl-braind"
+        }
         name if name == name_hash("dialogd") => "sunlight-dialogd",
         name if name == name_hash("thumbd") => "sunlight-thumbd",
         name if name == name_hash("gcd") || name == name_hash("proc") => "gcd",

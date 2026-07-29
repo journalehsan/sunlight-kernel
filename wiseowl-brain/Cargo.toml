@@ -1,6 +1,7 @@
 [package]
 name = "wiseowl-brain"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
+
 
 
 
@@ -56,6 +57,10 @@ planner-v1-test = []
 coordinator-v1-test = []
 outcome-observer-v1-test = []
 action-receipt-v1-test = []
+gui-bridge-foundation-v1-test = []
+trusted-session-readiness-v1-test = []
+gui-live-action-activation-v1-test = []
+delegated-session-lifecycle-ipc-v1-test = []
 
 [dependencies]
 heapless = "0.8"

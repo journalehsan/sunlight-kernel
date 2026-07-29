@@ -17,6 +17,18 @@ pub const IPC_MAX_WORDS: usize = 8;
 pub const IPC_REGISTER_WORDS: usize = 4;
 pub const IPC_MAX_CAPS: usize = 2;
 pub const INIT_NAMESERVER_ENDPOINT: u64 = 0;
+pub const WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT: &str = "wiseowl.display-lifecycle.v1";
+pub const WISEOWL_CONTROL_PANEL_LIFECYCLE_ENDPOINT: &str = "wiseowl.control-lifecycle.v1";
+
+#[allow(non_snake_case)]
+pub mod WiseOwlLifecycleMsg {
+    pub const SOURCE_HELLO: u64 = 0xB140;
+    pub const EVENT: u64 = 0xB141;
+    pub const REPLY: u64 = 0xB1FF;
+    pub const ERROR: u64 = 0xB1FE;
+    pub const SOURCE_DISPLAY: u64 = 1;
+    pub const SOURCE_CONTROL_PANEL: u64 = 2;
+}
 
 /// Syscall numbers for SunlightOS.
 #[repr(u64)]
@@ -113,6 +125,15 @@ pub enum SunlightSyscall {
     SessionGetCredentials = 140,
     /// Current process generation (address-space identity generation).
     GetProcessGeneration = 141,
+    /// Braind-only: capture the authenticated caller of its current IPC request.
+    WiseOwlDelegateCaller = 142,
+    /// Sessiond-only: consume a fixed Wise Owl session-attestation delegation.
+    WiseOwlValidateDelegatedCaller = 143,
+    /// Sessiond-only: publish/revoke the active session authority generation.
+    WiseOwlSetActiveSession = 144,
+    WiseOwlConsumeSessionProof = 145,
+    /// Braind-only authentication of a lifecycle endpoint's immediate caller.
+    WiseOwlValidateLifecycleSource = 146,
     DebugLog = 99,
     /// Trusted PTY service credential lookup for an IPC caller PID.
     PtyGetCredentials = 103,
@@ -1838,6 +1859,8 @@ pub mod SessionMsg {
     /// words[0] = app_id length; words[2..] packed app_id bytes (up to 32).
     /// Caller must be the live optional process for that app in the active plan.
     pub const SESSION_STARTUP_COMPLETE: u64 = 0xC11C;
+    /// Braind -> sessiond: one-shot kernel-backed Console attestation.
+    pub const ATTEST_DELEGATED_WISEOWL_CONSOLE: u64 = 0xC120;
     pub const REPLY: u64 = 0xC1FF;
     pub const ERROR: u64 = 0xC1FE;
 
@@ -1863,6 +1886,207 @@ pub struct SessionProcessCredentials {
     pub uid: u32,
     pub gid: u32,
     pub generation: u64,
+}
+
+pub const WISEOWL_DELEGATION_LIFETIME_MS: u64 = 2_000;
+pub const WISEOWL_DELEGATION_PROTOCOL_VERSION: u16 = 1;
+
+/// Opaque, fixed-purpose caller delegation. It is intentionally non-Copy,
+/// non-Clone and non-Debug, has no public constructor, and can only be turned
+/// into the one sessiond request for which the kernel minted it.
+pub struct DelegatedCallerCapability {
+    opaque_id: u64,
+    integrity_tag: u64,
+}
+
+impl DelegatedCallerCapability {
+    pub fn into_session_attestation_request(
+        self,
+        client_instance_id: u64,
+        requested_protocol_version: u16,
+    ) -> IpcMsg {
+        IpcMsg::with_label(SessionMsg::ATTEST_DELEGATED_WISEOWL_CONSOLE)
+            .word(0, self.opaque_id)
+            .word(1, self.integrity_tag)
+            .word(2, client_instance_id)
+            .word(3, requested_protocol_version as u64)
+    }
+}
+
+pub struct SessionAuthorityProof {
+    opaque_id: u64,
+    integrity_tag: u64,
+    client_instance_id: u64,
+}
+
+impl SessionAuthorityProof {
+    pub fn from_sessiond_reply(reply: &IpcMsg) -> Option<Self> {
+        if reply.label != SessionMsg::REPLY || reply.word_count < 3 {
+            return None;
+        }
+        if reply.words[0] == 0 || reply.words[1] == 0 {
+            return None;
+        }
+        Some(Self {
+            opaque_id: reply.words[0],
+            integrity_tag: reply.words[1],
+            client_instance_id: reply.words[2],
+        })
+    }
+
+    fn into_reply(self) -> IpcMsg {
+        IpcMsg::with_label(SessionMsg::REPLY)
+            .word(0, self.opaque_id)
+            .word(1, self.integrity_tag)
+            .word(2, self.client_instance_id)
+    }
+}
+
+pub struct SessiondDelegationValidation {
+    pub caller_pid: u64,
+    pub caller_process_generation: u64,
+    pub caller_uid: u32,
+    proof: SessionAuthorityProof,
+}
+
+impl SessiondDelegationValidation {
+    pub fn into_authority_proof_reply(self) -> IpcMsg {
+        self.proof.into_reply()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ValidatedWiseOwlSessionProof {
+    pub caller_pid: u64,
+    pub caller_process_generation: u64,
+    pub caller_uid: u32,
+    pub session_id: u64,
+    pub session_generation: u64,
+}
+
+/// Must be called by braind while its authenticated Console IPC request is
+/// still active. There is deliberately no caller PID/destination/scope input.
+pub fn wiseowl_delegate_authenticated_caller(
+    lifetime_ms: u64,
+) -> Option<DelegatedCallerCapability> {
+    let (opaque_id, reply) = unsafe {
+        raw_syscall(
+            SunlightSyscall::WiseOwlDelegateCaller,
+            lifetime_ms.min(WISEOWL_DELEGATION_LIFETIME_MS),
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if opaque_id == u64::MAX || opaque_id == 0 || reply.words[0] == 0 {
+        return None;
+    }
+    Some(DelegatedCallerCapability {
+        opaque_id,
+        integrity_tag: reply.words[0],
+    })
+}
+
+/// Sessiond-only validation. The one-shot kernel entry is consumed even if a
+/// subsequent sessiond component check rejects the request.
+pub fn wiseowl_validate_delegated_caller(msg: &IpcMsg) -> Option<SessiondDelegationValidation> {
+    if msg.label != SessionMsg::ATTEST_DELEGATED_WISEOWL_CONSOLE || msg.word_count < 4 {
+        return None;
+    }
+    let (caller_uid, reply) = unsafe {
+        raw_syscall(
+            SunlightSyscall::WiseOwlValidateDelegatedCaller,
+            msg.words[0],
+            msg.words[1],
+            msg.words[2],
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if caller_uid == u64::MAX {
+        return None;
+    }
+    Some(SessiondDelegationValidation {
+        caller_pid: reply.words[1],
+        caller_process_generation: reply.words[2],
+        caller_uid: reply.words[3] as u32,
+        proof: SessionAuthorityProof {
+            opaque_id: caller_uid,
+            integrity_tag: reply.words[0],
+            client_instance_id: reply.words[2],
+        },
+    })
+}
+
+pub fn wiseowl_consume_session_authority_proof(
+    proof: SessionAuthorityProof,
+) -> Option<ValidatedWiseOwlSessionProof> {
+    let (caller_uid, reply) = unsafe {
+        raw_syscall(
+            SunlightSyscall::WiseOwlConsumeSessionProof,
+            proof.opaque_id,
+            proof.integrity_tag,
+            proof.client_instance_id,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if caller_uid == u64::MAX {
+        return None;
+    }
+    Some(ValidatedWiseOwlSessionProof {
+        caller_pid: reply.words[0],
+        caller_process_generation: reply.words[1],
+        caller_uid: caller_uid as u32,
+        session_id: reply.words[2],
+        session_generation: reply.words[3],
+    })
+}
+
+pub fn wiseowl_set_active_session_authority(
+    session_id: u64,
+    generation: u64,
+    uid: u32,
+    active: bool,
+) -> bool {
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::WiseOwlSetActiveSession,
+            session_id,
+            generation,
+            uid as u64,
+            u64::from(active),
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 0
+}
+
+/// Authenticate a lifecycle caller PID taken from the kernel-overwritten IPC
+/// badge. Only braind may invoke the syscall.
+pub fn wiseowl_validate_lifecycle_source(caller_pid: u64, source: u64) -> Option<u64> {
+    let (generation, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::WiseOwlValidateLifecycleSource,
+            caller_pid,
+            source,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    (generation != u64::MAX).then_some(generation)
 }
 
 /// IPC protocol between `tty_server` and a native `sshl` process.

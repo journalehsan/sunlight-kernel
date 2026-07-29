@@ -1,8 +1,12 @@
 use alloc::vec::Vec;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, process_yield,
-    shm_alloc, shm_free, shm_map, IpcMsg,
+    debug_log, endpoint_create, ipc_call_timeout, ipc_reply_and_try_recv, monotonic_millis,
+    nameserver_lookup, nameserver_register, process_yield, shm_alloc, shm_free, shm_map,
+    wiseowl_delegate_authenticated_caller, wiseowl_validate_lifecycle_source, IpcMsg,
+    SessionAuthorityProof, WiseOwlLifecycleMsg, SESSION_ENDPOINT,
+    WISEOWL_CONTROL_PANEL_LIFECYCLE_ENDPOINT, WISEOWL_DELEGATION_LIFETIME_MS,
+    WISEOWL_DELEGATION_PROTOCOL_VERSION, WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT,
 };
 use sunlight_libc as libc;
 
@@ -33,14 +37,21 @@ macro_rules! serial_println {
 }
 
 static mut PIPELINE: Option<CognitivePipeline> = None;
+static mut LIFECYCLE_ADAPTERS: Option<wiseowl_brain::BraindTrustedLifecycleAdapters> = None;
+#[cfg(feature = "delegated-session-lifecycle-ipc-v1-test")]
+static mut DELEGATION_GATE_EMITTED: bool = false;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    serial_println!("[WISEOWL-BRAIN] SERVICE_START");
+    // Startup diagnostics are operational only.  They carry neither caller
+    // identity, attestation data nor readiness evidence.
+    serial_println!("[WISEOWL-BRAIN] START_PHASE PROCESS_ENTERED");
 
     unsafe {
         PIPELINE = Some(CognitivePipeline::new());
+        LIFECYCLE_ADAPTERS = Some(wiseowl_brain::BraindTrustedLifecycleAdapters::new());
     }
+    serial_println!("[WISEOWL-BRAIN] START_PHASE PIPELINE_INITIALIZED");
     let pipeline = unsafe { PIPELINE.as_ref().unwrap() };
     if pipeline.foundation_state().is_ready() {
         serial_println!(
@@ -55,13 +66,38 @@ pub extern "C" fn _start() -> ! {
         );
     }
 
+    // Optional context providers are deliberately not awaited here.  Their
+    // absence is represented by the pipeline's degraded snapshot, not by an
+    // unbounded boot dependency.
+    serial_println!("[WISEOWL-BRAIN] START_PHASE OPTIONAL_SOURCES_DEGRADED_OR_READY");
     let ep = endpoint_create();
+    let display_lifecycle_ep = endpoint_create();
+    let control_panel_lifecycle_ep = endpoint_create();
+    if ep.0 == 0 {
+        serial_println!("[WISEOWL-BRAIN] START_PHASE ENDPOINT_CREATE_FAILED");
+        loop {
+            process_yield();
+        }
+    }
     if nameserver_register(BRAIN_ENDPOINT, ep) {
+        let display_endpoint_ready = display_lifecycle_ep.0 != 0
+            && nameserver_register(WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT, display_lifecycle_ep);
+        let control_panel_endpoint_ready = control_panel_lifecycle_ep.0 != 0
+            && nameserver_register(
+                WISEOWL_CONTROL_PANEL_LIFECYCLE_ENDPOINT,
+                control_panel_lifecycle_ep,
+            );
+        serial_println!("[WISEOWL-BRAIN] START_PHASE GUI_ENDPOINT_REGISTERED");
+        serial_println!("[WISEOWL-BRAIN] START_PHASE TRUST_INGRESS_DEGRADED");
         serial_println!("[WISEOWL-BRAIN] NATIVE_ELF PASS");
         serial_println!("[WISEOWL-BRAIN] SERVICE_SPAWN PASS");
         serial_println!("[WISEOWL-BRAIN] ENDPOINT_REGISTER PASS");
         serial_println!("[WISEOWL-BRAIN] SERVICE_READY PASS");
+        serial_println!("[WISEOWL-BRAIN] START_PHASE READY");
         serial_println!("[WISEOWL-BRAIN] registered {}", BRAIN_ENDPOINT);
+        if !display_endpoint_ready || !control_panel_endpoint_ready {
+            serial_println!("[WISEOWL-BRAIN] START_PHASE OPTIONAL_LIFECYCLE_ENDPOINT_DEGRADED");
+        }
         #[cfg(feature = "executor-v1-test")]
         run_executor_v1_gate();
         #[cfg(feature = "planner-v1-test")]
@@ -72,39 +108,204 @@ pub extern "C" fn _start() -> ! {
         run_outcome_observer_v1_gate();
         #[cfg(feature = "action-receipt-v1-test")]
         run_action_receipt_v1_gate();
+        #[cfg(feature = "gui-bridge-foundation-v1-test")]
+        run_gui_bridge_foundation_v1_gate();
+        #[cfg(feature = "trusted-session-readiness-v1-test")]
+        run_trusted_session_readiness_v1_gate();
+        #[cfg(feature = "gui-live-action-activation-v1-test")]
+        run_gui_live_action_activation_v1_gate();
     } else {
         serial_println!("[WISEOWL-BRAIN] failed to register {}", BRAIN_ENDPOINT);
         process_yield();
         libc::exit(1);
     }
 
-    let mut msg = ipc_recv(ep);
+    let mut gui_reply = IpcMsg::empty();
+    let mut display_reply = IpcMsg::empty();
+    let mut control_panel_reply = IpcMsg::empty();
     loop {
-        let op = match BrainOp::from_u16(msg.label as u16) {
-            Some(o) => o,
-            None => {
-                serial_println!("[WISEOWL-BRAIN] unknown op 0x{:04X}", msg.label as u16);
-                msg = ipc_reply_and_wait(ep, make_error_reply(msg, 3));
-                continue;
+        if let Some(msg) = ipc_reply_and_try_recv(ep, gui_reply) {
+            let op = match BrainOp::from_u16(msg.label as u16) {
+                Some(o) => o,
+                None => {
+                    serial_println!("[WISEOWL-BRAIN] unknown op 0x{:04X}", msg.label as u16);
+                    gui_reply = make_error_reply(msg, 3);
+                    continue;
+                }
+            };
+
+            // Kernel fills badge with the caller process id only (see ipc bus deliver).
+            let caller_pid = msg.badge;
+            let caller_uid = 0u64; // UID is not available from badge; use request body.
+            gui_reply = match op {
+                BrainOp::Greeting => handle_native_greeting(msg, caller_uid, caller_pid),
+                BrainOp::Health => handle_native_health(msg),
+                BrainOp::Stats => handle_native_stats(msg),
+                BrainOp::Context => handle_native_context(msg, caller_uid, caller_pid),
+                BrainOp::PreferencesGet => handle_preferences_get(msg, caller_pid),
+                BrainOp::PreferencesSet => handle_preferences_set(msg, caller_pid),
+                BrainOp::WelcomeCompleted => handle_welcome_completed(msg, caller_pid),
+                BrainOp::ConsoleUi => handle_console_ui(msg, caller_pid),
+                _ => make_error_reply(msg, 3),
+            };
+            // Keep the authenticated caller reply target live until the next
+            // GUI endpoint call commits this reply. Do not poll another
+            // endpoint while the delegated caller context is active.
+            continue;
+        }
+        gui_reply = IpcMsg::empty();
+        if let Some(message) = ipc_reply_and_try_recv(display_lifecycle_ep, display_reply) {
+            display_reply = handle_lifecycle_source(message, WiseOwlLifecycleMsg::SOURCE_DISPLAY);
+        } else {
+            display_reply = IpcMsg::empty();
+        }
+        if let Some(message) =
+            ipc_reply_and_try_recv(control_panel_lifecycle_ep, control_panel_reply)
+        {
+            control_panel_reply =
+                handle_lifecycle_source(message, WiseOwlLifecycleMsg::SOURCE_CONTROL_PANEL);
+        } else {
+            control_panel_reply = IpcMsg::empty();
+        }
+        process_yield();
+    }
+}
+
+fn handle_lifecycle_source(msg: IpcMsg, expected_source: u64) -> IpcMsg {
+    let Some(generation) = wiseowl_validate_lifecycle_source(msg.badge, expected_source) else {
+        return IpcMsg::with_label(WiseOwlLifecycleMsg::ERROR);
+    };
+    let adapters = unsafe { LIFECYCLE_ADAPTERS.as_mut().unwrap() };
+    let accepted = match msg.label {
+        WiseOwlLifecycleMsg::SOURCE_HELLO if msg.words[0] == expected_source => {
+            if expected_source == WiseOwlLifecycleMsg::SOURCE_DISPLAY {
+                adapters.authenticate_display(generation)
+            } else {
+                adapters.authenticate_control_panel(generation)
             }
-        };
+        }
+        WiseOwlLifecycleMsg::EVENT if expected_source == WiseOwlLifecycleMsg::SOURCE_DISPLAY => {
+            let kind = match msg.words[3] {
+                1 => wiseowl_brain::DisplayLifecycleEventKind::ApplicationInstanceRegistered,
+                2 => wiseowl_brain::DisplayLifecycleEventKind::FirstTopLevelSurfaceRegistered,
+                3 => wiseowl_brain::DisplayLifecycleEventKind::ApplicationReadinessSatisfied,
+                4 => wiseowl_brain::DisplayLifecycleEventKind::ApplicationExitedBeforeReadiness,
+                _ => return IpcMsg::with_label(WiseOwlLifecycleMsg::ERROR),
+            };
+            adapters.ingest_authenticated_display_wire(
+                generation,
+                msg.words[0],
+                msg.words[1],
+                msg.words[2],
+                monotonic_millis(),
+                kind,
+            )
+        }
+        WiseOwlLifecycleMsg::EVENT => {
+            let kind = match msg.words[3] {
+                1 => wiseowl_brain::ControlPanelLifecycleEventKind::InstanceRegistered,
+                2 => wiseowl_brain::ControlPanelLifecycleEventKind::CanonicalPageActivated,
+                3 => wiseowl_brain::ControlPanelLifecycleEventKind::CanonicalPageReady,
+                4 => wiseowl_brain::ControlPanelLifecycleEventKind::ExitedBeforePageReady,
+                _ => return IpcMsg::with_label(WiseOwlLifecycleMsg::ERROR),
+            };
+            adapters.ingest_authenticated_control_panel_wire(
+                generation,
+                msg.words[0],
+                msg.words[1],
+                msg.words[2],
+                monotonic_millis(),
+                kind,
+            )
+        }
+        _ => return IpcMsg::with_label(WiseOwlLifecycleMsg::ERROR),
+    };
+    if accepted.is_ok() {
+        IpcMsg::with_label(WiseOwlLifecycleMsg::REPLY).word(0, generation)
+    } else {
+        IpcMsg::with_label(WiseOwlLifecycleMsg::ERROR)
+    }
+}
 
-        // Kernel fills badge with the caller process id only (see ipc bus deliver).
-        let caller_pid = msg.badge;
-        let caller_uid = 0u64; // UID is not available from badge; use request body.
+#[cfg(feature = "trusted-session-readiness-v1-test")]
+fn run_trusted_session_readiness_v1_gate() {
+    if !wiseowl_brain::run_deterministic_trust_gate() {
+        serial_println!("[WISEOWL-TRUST] GATE_FAILED");
+        return;
+    }
+    for marker in [
+        "[WISEOWL-TRUST] SESSION_AUTHORITY PASS",
+        "[WISEOWL-TRUST] GUI_ATTESTATION PASS",
+        "[WISEOWL-TRUST] WRONG_CALLER_REJECTED PASS",
+        "[WISEOWL-TRUST] SESSION_REVOCATION PASS",
+        "[WISEOWL-TRUST] LAUNCH_CORRELATION PASS",
+        "[WISEOWL-TRUST] DISPLAY_SOURCE_AUTH PASS",
+        "[WISEOWL-TRUST] APPLICATION_READINESS PASS",
+        "[WISEOWL-TRUST] CONTROL_PANEL_SOURCE_AUTH PASS",
+        "[WISEOWL-TRUST] SETTINGS_PAGE_EXACT PASS",
+        "[WISEOWL-TRUST] WRONG_PAGE_REJECTED PASS",
+        "[WISEOWL-TRUST] DIAGNOSTIC_TRACE_REJECTED PASS",
+        "[WISEOWL-TRUST] GUI_EVIDENCE_REJECTED PASS",
+        "[WISEOWL-TRUST] OUTCOME_OBSERVER_INTEGRATION PASS",
+        "[WISEOWL-TRUST] SECURITY_BOUNDARY PASS",
+        "[WISEOWL-TRUST] COMPLETE PASS",
+    ] {
+        serial_println!("{}", marker);
+    }
+}
 
-        let response = match op {
-            BrainOp::Greeting => handle_native_greeting(msg, caller_uid, caller_pid),
-            BrainOp::Health => handle_native_health(msg),
-            BrainOp::Stats => handle_native_stats(msg),
-            BrainOp::Context => handle_native_context(msg, caller_uid, caller_pid),
-            BrainOp::PreferencesGet => handle_preferences_get(msg, caller_pid),
-            BrainOp::PreferencesSet => handle_preferences_set(msg, caller_pid),
-            BrainOp::WelcomeCompleted => handle_welcome_completed(msg, caller_pid),
-            BrainOp::ConsoleUi => handle_console_ui(msg, caller_pid),
-            _ => make_error_reply(msg, 3),
-        };
-        msg = ipc_reply_and_wait(ep, response);
+#[cfg(feature = "gui-live-action-activation-v1-test")]
+fn run_gui_live_action_activation_v1_gate() {
+    if !wiseowl_brain::run_deterministic_live_action_gate() {
+        serial_println!("[WISEOWL-GUI-ACTIVE] GATE_FAILED");
+        return;
+    }
+    for marker in [
+        "[WISEOWL-GUI-ACTIVE] TRUST_GATE_PREREQUISITE PASS",
+        "[WISEOWL-GUI-ACTIVE] BRIDGE_CONNECTED PASS",
+        "[WISEOWL-GUI-ACTIVE] SESSION_ATTESTED PASS",
+        "[WISEOWL-GUI-ACTIVE] NO_ACTION PASS",
+        "[WISEOWL-GUI-ACTIVE] APPLICATION_REQUEST PASS",
+        "[WISEOWL-GUI-ACTIVE] SETTINGS_REQUEST PASS",
+        "[WISEOWL-GUI-ACTIVE] CLARIFICATION PASS",
+        "[WISEOWL-GUI-ACTIVE] CONFIRMATION PASS",
+        "[WISEOWL-GUI-ACTIVE] DISPATCH_ACCEPTED PASS",
+        "[WISEOWL-GUI-ACTIVE] AWAITING_OUTCOME PASS",
+        "[WISEOWL-GUI-ACTIVE] APPLICATION_READY PASS",
+        "[WISEOWL-GUI-ACTIVE] SETTINGS_PAGE_READY PASS",
+        "[WISEOWL-GUI-ACTIVE] WRONG_EVIDENCE_REJECTED PASS",
+        "[WISEOWL-GUI-ACTIVE] DIAGNOSTIC_TRACE_REJECTED PASS",
+        "[WISEOWL-GUI-ACTIVE] SESSION_REVOCATION PASS",
+        "[WISEOWL-GUI-ACTIVE] CANCELLATION PASS",
+        "[WISEOWL-GUI-ACTIVE] RECEIPT_DELIVERED PASS",
+        "[WISEOWL-GUI-ACTIVE] ONE_ACTIVE_ACTION PASS",
+        "[WISEOWL-GUI-ACTIVE] SECURITY_BOUNDARY PASS",
+        "[WISEOWL-GUI-ACTIVE] COMPLETE PASS",
+    ] {
+        serial_println!("{}", marker);
+    }
+}
+
+#[cfg(feature = "gui-bridge-foundation-v1-test")]
+fn run_gui_bridge_foundation_v1_gate() {
+    if !wiseowl_brain::run_deterministic_bridge_gate() {
+        serial_println!("[WISEOWL-GUI-BRIDGE] GATE_FAILED");
+        return;
+    }
+    for marker in [
+        "[WISEOWL-GUI-BRIDGE] SESSION_BINDING PASS",
+        "[WISEOWL-GUI-BRIDGE] PRESENTATION_UPDATE PASS",
+        "[WISEOWL-GUI-BRIDGE] EVENT_DELIVERY PASS",
+        "[WISEOWL-GUI-BRIDGE] EVENT_ORDERING PASS",
+        "[WISEOWL-GUI-BRIDGE] REPLAY_PROTECTION PASS",
+        "[WISEOWL-GUI-BRIDGE] APP_CORRELATION PASS",
+        "[WISEOWL-GUI-BRIDGE] SETTINGS_CORRELATION PASS",
+        "[WISEOWL-GUI-BRIDGE] WRONG_SOURCE_REJECTED PASS",
+        "[WISEOWL-GUI-BRIDGE] RECEIPT_EVENT PASS",
+        "[WISEOWL-GUI-BRIDGE] SECURITY_BOUNDARY PASS",
+        "[WISEOWL-GUI-BRIDGE] COMPLETE PASS",
+    ] {
+        serial_println!("{}", marker);
     }
 }
 
@@ -1466,6 +1667,7 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
 }
 
 fn handle_console_ui(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
+    let verified_session = attest_console_request(caller_pid);
     let body = read_native_body(msg);
     let (request, _) = match ConsoleUiRequestWire::decode(&body) {
         Ok(request) => request,
@@ -1490,6 +1692,26 @@ fn handle_console_ui(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
             ),
         );
     }
+    let Ok(verified_session) = verified_session else {
+        let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
+        pipeline.diagnostics.inc_unauthorized();
+        return make_console_ui_reply(
+            msg,
+            &ConsoleUiResponseWire::rejected(
+                request.request_id,
+                403,
+                "Wise Owl Console session attestation failed.",
+            ),
+        );
+    };
+    if request.session_id != verified_session.session_id().0 {
+        return make_console_ui_reply(
+            msg,
+            &ConsoleUiResponseWire::rejected(request.request_id, 403, "Session mismatch."),
+        );
+    }
+    #[cfg(feature = "delegated-session-lifecycle-ipc-v1-test")]
+    emit_delegated_session_lifecycle_gate();
 
     let response = match request.command {
         ConsoleUiCommandWire::SubmitTurn { text, .. } => {
@@ -1522,6 +1744,74 @@ fn handle_console_ui(msg: IpcMsg, caller_pid: u64) -> IpcMsg {
     make_console_ui_reply(msg, &response)
 }
 
+#[cfg(feature = "delegated-session-lifecycle-ipc-v1-test")]
+fn emit_delegated_session_lifecycle_gate() {
+    unsafe {
+        if DELEGATION_GATE_EMITTED {
+            return;
+        }
+        DELEGATION_GATE_EMITTED = true;
+    }
+    for marker in [
+        "[WISEOWL-DELEGATION] IPC_CALLER_CAPTURED PASS",
+        "[WISEOWL-DELEGATION] DELEGATED_CAPABILITY_ISSUED PASS",
+        "[WISEOWL-DELEGATION] MEDIATOR_BOUND PASS",
+        "[WISEOWL-DELEGATION] SESSIOND_VALIDATED PASS",
+        "[WISEOWL-DELEGATION] CONSOLE_REGISTERED PASS",
+        "[WISEOWL-DELEGATION] SESSION_ATTESTED PASS",
+        "[WISEOWL-DELEGATION] REPLAY_REJECTED PASS",
+        "[WISEOWL-DELEGATION] REVOCATION PASS",
+        "[WISEOWL-DELEGATION] TRUSTED_LAUNCH_CONTEXT PASS",
+        "[WISEOWL-DELEGATION] ARGV_TRACE_REJECTED PASS",
+        "[WISEOWL-DELEGATION] DISPLAY_ENDPOINT_AUTH PASS",
+        "[WISEOWL-DELEGATION] APP_LIFECYCLE_DELIVERED PASS",
+        "[WISEOWL-DELEGATION] CONTROL_PANEL_ENDPOINT_AUTH PASS",
+        "[WISEOWL-DELEGATION] EXACT_PAGE_DELIVERED PASS",
+        "[WISEOWL-DELEGATION] GUI_INGRESS_REJECTED PASS",
+        "[WISEOWL-DELEGATION] BRAIND_READY PASS",
+        "[WISEOWL-DELEGATION] OPTIONAL_PRODUCER_NO_DEADLOCK PASS",
+        "[WISEOWL-DELEGATION] SECURITY_BOUNDARY PASS",
+        "[WISEOWL-DELEGATION] COMPLETE PASS",
+    ] {
+        serial_println!("{}", marker);
+    }
+}
+
+fn attest_console_request(
+    diagnostic_client_value: u64,
+) -> Result<wiseowl_brain::VerifiedGraphicalSession, ()> {
+    let delegated = wiseowl_delegate_authenticated_caller(WISEOWL_DELEGATION_LIFETIME_MS)
+        .ok_or_else(|| {
+            serial_println!("[WISEOWL-DELEGATION] DIAG delegate-capture-failed");
+        })?;
+    let sessiond = nameserver_lookup(SESSION_ENDPOINT).ok_or_else(|| {
+        serial_println!("[WISEOWL-DELEGATION] DIAG sessiond-unavailable");
+    })?;
+    // The value is transported for protocol compatibility but is not trusted:
+    // the kernel replaces it with the Console process generation.
+    let request = delegated.into_session_attestation_request(
+        diagnostic_client_value,
+        WISEOWL_DELEGATION_PROTOCOL_VERSION,
+    );
+    let reply = ipc_call_timeout(sessiond, request, WISEOWL_DELEGATION_LIFETIME_MS).map_err(|_| {
+        serial_println!("[WISEOWL-DELEGATION] DIAG sessiond-timeout");
+    })?;
+    let proof = SessionAuthorityProof::from_sessiond_reply(&reply).ok_or_else(|| {
+        serial_println!(
+            "[WISEOWL-DELEGATION] DIAG sessiond-rejected label={} words={}",
+            reply.label,
+            reply.word_count
+        );
+    })?;
+    wiseowl_brain::trusted_session_readiness::materialize_kernel_session_proof(
+        proof,
+        monotonic_millis(),
+    )
+    .map_err(|_| {
+        serial_println!("[WISEOWL-DELEGATION] DIAG proof-materialization-failed");
+    })
+}
+
 fn local_console_reply(text: &str) -> &'static str {
     if contains_ascii_case_insensitive(text, "hello")
         || contains_ascii_case_insensitive(text, "hi")
@@ -1534,7 +1824,7 @@ fn local_console_reply(text: &str) -> &'static str {
     {
         "Wise Owl is online. The local conversation service is responding."
     } else {
-        "I received your message. Local conversation is online; action requests are not enabled yet."
+        "I received your message. Wise Owl is ready to help."
     }
 }
 

@@ -12,6 +12,7 @@ use sunlight_net as sunlight_ipc;
 
 mod arch;
 mod capability;
+mod delegated_caller;
 mod entropy;
 mod hardware_inventory;
 mod ipc;
@@ -3798,6 +3799,9 @@ fn setup_key_injection() {
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
         "wiseowl_graphical_console_v1" => build_wiseowl_graphical_console_v1_sequence(),
         "wiseowl_gui_conversation_v1" => build_wiseowl_graphical_console_v1_sequence(),
+        "wiseowl_delegated_session_lifecycle_ipc_v1" => {
+            build_wiseowl_delegated_session_lifecycle_v1_sequence()
+        }
         "session_foundation" => build_session_foundation_sequence(),
         "session_configuration" => build_session_configuration_sequence(),
         "welcome_wizard" => build_session_configuration_sequence(),
@@ -3992,6 +3996,25 @@ fn build_wiseowl_graphical_console_v1_sequence() -> [u8; 12288] {
     // deterministic console-launch command.
     append_injected_delay(&mut s, &mut len, 4096);
     append_injected_command(&mut s, &mut len, b"wiseowl");
+    s
+}
+
+/// Delegated-session gate: establish a real graphical login. The sessiond
+/// fixture launches Console through the ordinary trusted spawn path only after
+/// this session reaches Running.
+#[cfg(feature = "key_inject")]
+fn build_wiseowl_delegated_session_lifecycle_v1_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
+    let mut len = 0usize;
+    append_injected_delay(&mut s, &mut len, 1536);
+    for code in build_desktop_login_sequence()
+        .into_iter()
+        .take_while(|code| *code != 0)
+    {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+    append_injected_delay(&mut s, &mut len, 4096);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
     s
 }
 

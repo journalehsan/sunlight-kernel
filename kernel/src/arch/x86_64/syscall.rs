@@ -107,6 +107,11 @@ pub enum SunlightSyscall {
     SessionGetCredentials = 140,
     /// Current process generation (address-space identity generation).
     GetProcessGeneration = 141,
+    WiseOwlDelegateCaller = 142,
+    WiseOwlValidateDelegatedCaller = 143,
+    WiseOwlSetActiveSession = 144,
+    WiseOwlConsumeSessionProof = 145,
+    WiseOwlValidateLifecycleSource = 146,
     ClockGetTime = 88,
     /// Administrative UTC wall-clock step (gated to `timed`). Does not move
     /// monotonic time. rdi = new Unix UTC seconds.
@@ -665,6 +670,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         139 => sys_validate_session_caller(frame),
         140 => sys_session_get_credentials(frame),
         141 => sys_get_process_generation(),
+        142 => sys_wiseowl_delegate_caller(frame),
+        143 => sys_wiseowl_validate_delegated_caller(frame),
+        144 => sys_wiseowl_set_active_session(frame),
+        145 => sys_wiseowl_consume_session_proof(frame),
+        146 => sys_wiseowl_validate_lifecycle_source(frame),
         1000 => sys_brk(frame),
         1001 => sys_arch_prctl(frame),
         1002 => sys_linux_set_tid_address(frame),
@@ -1814,6 +1824,15 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
             process.trusted_zram_diagnostic =
                 crate::process::spawn::is_trusted_zram_diagnostic_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            process.trusted_wiseowl_braind =
+                crate::process::spawn::is_trusted_wiseowl_braind_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            process.trusted_wiseowl_console =
+                crate::process::spawn::is_trusted_wiseowl_console_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            process.trusted_control_panel =
+                crate::process::spawn::is_trusted_control_panel_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
             // Request immediate reschedule so the next timer tick switches context
             crate::sched::request_reschedule();
@@ -2092,6 +2111,15 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             child.trusted_zram_diagnostic =
                 crate::process::spawn::is_trusted_zram_diagnostic_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            child.trusted_wiseowl_braind =
+                crate::process::spawn::is_trusted_wiseowl_braind_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            child.trusted_wiseowl_console =
+                crate::process::spawn::is_trusted_wiseowl_console_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            child.trusted_control_panel =
+                crate::process::spawn::is_trusted_control_panel_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             // [LAUNCH-TRACE] Point 5: spawn returned successfully
             trace.spawn_returned_ns = now_ns();
         }
@@ -2173,6 +2201,261 @@ fn sys_getpid() -> u64 {
 
 fn sys_get_process_generation() -> u64 {
     sched::with_scheduler(|s| s.current_process().address_space.identity().generation)
+}
+
+/// Capture the authenticated caller of the current Console -> braind IPC
+/// request. Destination and operation are fixed; the only input is lifetime.
+fn sys_wiseowl_delegate_caller(frame: &mut SyscallFrame) -> u64 {
+    let lifetime = frame
+        .rdi
+        .max(1)
+        .min(crate::delegated_caller::MAX_DELEGATION_LIFETIME_MS);
+    let now_ms = now_ns() / 1_000_000;
+    let sched = crate::sched::SCHEDULER.lock();
+    let mediator = sched.current_process();
+    if !mediator.trusted_wiseowl_braind {
+        crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-mediator-untrusted");
+        return u64::MAX;
+    }
+    let Some(reply_target) = mediator.ipc_reply_target else {
+        crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-no-reply-target");
+        return u64::MAX;
+    };
+    let Some(caller) = sched.processes.iter().find(|process| {
+        process.pid == reply_target.call.pid
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    }) else {
+        crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-caller-not-live");
+        return u64::MAX;
+    };
+    if !caller.trusted_wiseowl_console {
+        crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-caller-untrusted");
+        return u64::MAX;
+    }
+    let active = crate::delegated_caller::DELEGATED_CALLERS
+        .lock()
+        .active_session();
+    if !active.active || active.uid != caller.uid {
+        crate::serial_println!(
+            "[WISEOWL-DELEGATION] DIAG kernel-session-binding active={} binding_uid={} caller_uid={}",
+            active.active,
+            active.uid,
+            caller.uid
+        );
+        return u64::MAX;
+    }
+    let caller_pid = caller.pid;
+    let caller_generation = caller.address_space.identity().generation;
+    let caller_uid = caller.uid;
+    let mediator_pid = mediator.pid;
+    let mediator_generation = mediator.address_space.identity().generation;
+    drop(sched);
+
+    let Some(opaque_id) = crate::entropy::next_u64() else {
+        return u64::MAX;
+    };
+    let Some(integrity_tag) = crate::entropy::next_u64() else {
+        return u64::MAX;
+    };
+    if opaque_id == 0 || integrity_tag == 0 {
+        return u64::MAX;
+    }
+    let record = crate::delegated_caller::DelegationRecord {
+        opaque_id,
+        integrity_tag,
+        caller_pid,
+        caller_process_generation: caller_generation,
+        caller_uid,
+        mediator_pid,
+        mediator_process_generation: mediator_generation,
+        session_id: active.session_id,
+        session_generation: active.generation,
+        issued_at_ms: now_ms,
+        expires_at_ms: now_ms.saturating_add(lifetime),
+    };
+    if !crate::delegated_caller::DELEGATED_CALLERS
+        .lock()
+        .issue(record)
+    {
+        return u64::MAX;
+    }
+    frame.r8 = integrity_tag;
+    opaque_id
+}
+
+/// Consume the fixed-purpose delegation. Only sessiond can call this.
+fn sys_wiseowl_validate_delegated_caller(frame: &mut SyscallFrame) -> u64 {
+    let now_ms = now_ns() / 1_000_000;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_session_service {
+        return u64::MAX;
+    }
+    drop(sched);
+    let Some(record) = crate::delegated_caller::DELEGATED_CALLERS
+        .lock()
+        .take(frame.rdi, frame.rsi)
+    else {
+        return u64::MAX;
+    };
+    if now_ms > record.expires_at_ms || record.issued_at_ms > now_ms {
+        return u64::MAX;
+    }
+    let active = crate::delegated_caller::DELEGATED_CALLERS
+        .lock()
+        .active_session();
+    if !active.active
+        || active.session_id != record.session_id
+        || active.generation != record.session_generation
+        || active.uid != record.caller_uid
+    {
+        return u64::MAX;
+    }
+    let sched = crate::sched::SCHEDULER.lock();
+    let caller_ok = sched.processes.iter().any(|process| {
+        process.pid == record.caller_pid
+            && process.address_space.identity().generation == record.caller_process_generation
+            && process.uid == record.caller_uid
+            && process.trusted_wiseowl_console
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    });
+    let mediator_ok = sched.processes.iter().any(|process| {
+        process.pid == record.mediator_pid
+            && process.address_space.identity().generation == record.mediator_process_generation
+            && process.trusted_wiseowl_braind
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    });
+    if !caller_ok || !mediator_ok {
+        return u64::MAX;
+    }
+    drop(sched);
+    let Some(proof_id) = crate::entropy::next_u64() else {
+        return u64::MAX;
+    };
+    let Some(proof_tag) = crate::entropy::next_u64() else {
+        return u64::MAX;
+    };
+    let proof = crate::delegated_caller::SessionAuthorityProofRecord {
+        opaque_id: proof_id,
+        integrity_tag: proof_tag,
+        caller_pid: record.caller_pid,
+        caller_process_generation: record.caller_process_generation,
+        caller_uid: record.caller_uid,
+        mediator_pid: record.mediator_pid,
+        mediator_process_generation: record.mediator_process_generation,
+        client_instance_id: record.caller_process_generation,
+        session_id: record.session_id,
+        session_generation: record.session_generation,
+        issued_at_ms: now_ms,
+        expires_at_ms: now_ms.saturating_add(2_000),
+    };
+    if !crate::delegated_caller::DELEGATED_CALLERS
+        .lock()
+        .issue_proof(proof)
+    {
+        return u64::MAX;
+    }
+    frame.r8 = proof_tag;
+    frame.r9 = record.caller_pid as u64;
+    frame.r10 = record.caller_process_generation;
+    frame.r12 = record.caller_uid as u64;
+    proof_id
+}
+
+/// Changing the session authority binding revokes all outstanding handles.
+fn sys_wiseowl_set_active_session(frame: &mut SyscallFrame) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_session_service {
+        return u64::MAX;
+    }
+    drop(sched);
+    let active = frame.r10 == 1;
+    if active && (frame.rdi == 0 || frame.rsi == 0) {
+        return u64::MAX;
+    }
+    crate::delegated_caller::DELEGATED_CALLERS
+        .lock()
+        .set_active_session(crate::delegated_caller::ActiveSessionBinding {
+            session_id: frame.rdi,
+            generation: frame.rsi,
+            uid: frame.rdx as u32,
+            active,
+        });
+    0
+}
+
+/// Braind-only one-shot materialization input. The proof never exposes a
+/// constructor for VerifiedGraphicalSession and cannot be consumed elsewhere.
+fn sys_wiseowl_consume_session_proof(frame: &mut SyscallFrame) -> u64 {
+    let now_ms = now_ns() / 1_000_000;
+    let sched = crate::sched::SCHEDULER.lock();
+    let mediator = sched.current_process();
+    if !mediator.trusted_wiseowl_braind {
+        return u64::MAX;
+    }
+    let mediator_pid = mediator.pid;
+    let mediator_generation = mediator.address_space.identity().generation;
+    drop(sched);
+    let Some(proof) = crate::delegated_caller::DELEGATED_CALLERS
+        .lock()
+        .take_proof(frame.rdi, frame.rsi)
+    else {
+        return u64::MAX;
+    };
+    if now_ms > proof.expires_at_ms
+        || proof.issued_at_ms > now_ms
+        || proof.mediator_pid != mediator_pid
+        || proof.mediator_process_generation != mediator_generation
+        || frame.rdx != proof.client_instance_id
+    {
+        return u64::MAX;
+    }
+    let active = crate::delegated_caller::DELEGATED_CALLERS
+        .lock()
+        .active_session();
+    if !active.active
+        || active.session_id != proof.session_id
+        || active.generation != proof.session_generation
+        || active.uid != proof.caller_uid
+    {
+        return u64::MAX;
+    }
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.processes.iter().any(|process| {
+        process.pid == proof.caller_pid
+            && process.address_space.identity().generation == proof.caller_process_generation
+            && process.trusted_wiseowl_console
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    }) {
+        return u64::MAX;
+    }
+    frame.r8 = proof.caller_pid as u64;
+    frame.r9 = proof.caller_process_generation;
+    frame.r10 = proof.session_id;
+    frame.r12 = proof.session_generation;
+    proof.caller_uid as u64
+}
+
+fn sys_wiseowl_validate_lifecycle_source(frame: &mut SyscallFrame) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_wiseowl_braind {
+        return u64::MAX;
+    }
+    let Some(source) = sched.processes.iter().find(|process| {
+        process.pid == frame.rdi as usize
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    }) else {
+        return u64::MAX;
+    };
+    let allowed = match frame.rsi {
+        ::sunlight_ipc::WiseOwlLifecycleMsg::SOURCE_DISPLAY => source.trusted_display_service,
+        ::sunlight_ipc::WiseOwlLifecycleMsg::SOURCE_CONTROL_PANEL => source.trusted_control_panel,
+        _ => false,
+    };
+    if allowed {
+        source.address_space.identity().generation
+    } else {
+        u64::MAX
+    }
 }
 
 /// Syscall: Getppid (34)

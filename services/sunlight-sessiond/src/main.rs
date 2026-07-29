@@ -15,10 +15,12 @@ use heapless::Vec;
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_reply_and_try_recv, kill,
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
-    session_consume_auth_grant, session_query_process, validate_session_caller, IpcMsg, MezzoMsg,
+    session_consume_auth_grant, session_query_process, validate_session_caller,
+    wiseowl_set_active_session_authority, wiseowl_validate_delegated_caller, IpcMsg, MezzoMsg,
     ServiceCapability, SessionAction, SessionComponentRole, SessionComponentState,
     SessionGeneration, SessionId, SessionKind, SessionMsg, SessionProcessCredentials, SessionState,
     SpawnMsg, SpawnRequest, SESSION_CALLER_TTY_SERVICE, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
+    WISEOWL_DELEGATION_PROTOCOL_VERSION,
 };
 use sunlight_sessiond::{
     parse_manifest, resolve_session_plan, CatalogBundle, ComponentExitReason, ManifestComponent,
@@ -30,6 +32,17 @@ const MANIFEST_MAX_BYTES: usize = 2048;
 const USERNAME_MAX: usize = 12;
 const COMPONENT_SHELL_ID: u64 = 1;
 const LOGOUT_GRACE_MS: u64 = 3_000;
+const MAX_WISEOWL_CONSOLES_PER_SESSION: usize = 2;
+
+#[derive(Clone, Copy)]
+struct WiseOwlConsoleRegistration {
+    process_id: u64,
+    process_generation: u64,
+    client_instance_id: u64,
+    user_id: u32,
+    session_id: u64,
+    session_generation: u64,
+}
 
 fn write_log(text: &str) {
     debug_log(text);
@@ -129,6 +142,8 @@ struct ServiceState {
     config_stats: ConfigStats,
     catalog: Vec<CatalogBundle, 32>,
     system_release_generation: u32,
+    wiseowl_consoles: Vec<WiseOwlConsoleRegistration, MAX_WISEOWL_CONSOLES_PER_SESSION>,
+    delegated_console_fixture_launched: bool,
 }
 
 impl ServiceState {
@@ -149,12 +164,100 @@ impl ServiceState {
             config_stats,
             catalog,
             system_release_generation: load_system_release_generation(),
+            wiseowl_consoles: Vec::new(),
+            delegated_console_fixture_launched: false,
         }
     }
 
     fn refresh_catalog(&mut self) {
         self.catalog = discover_catalog(&mut self.config_stats);
     }
+}
+
+fn sync_wiseowl_session_authority(state: &mut ServiceState) {
+    let binding = state.active.as_ref().and_then(|active| {
+        matches!(
+            active.record.state,
+            SessionState::Running | SessionState::Degraded | SessionState::Locked
+        )
+        .then_some((
+            active.record.session_id.get(),
+            active.record.generation.get(),
+            active.record.uid,
+        ))
+    });
+    if let Some((session_id, generation, uid)) = binding {
+        let _ = wiseowl_set_active_session_authority(session_id, generation, uid, true);
+        state.wiseowl_consoles.retain(|entry| {
+            entry.session_id == session_id && entry.session_generation == generation
+        });
+    } else {
+        let _ = wiseowl_set_active_session_authority(0, 0, 0, false);
+        state.wiseowl_consoles.clear();
+    }
+}
+
+fn attest_delegated_wiseowl_console(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
+    if msg.words[3] as u16 != WISEOWL_DELEGATION_PROTOCOL_VERSION {
+        return error(SessionMsg::ERR_INVALID_VERSION);
+    }
+    let Some(active) = state.active.as_ref() else {
+        return error(SessionMsg::ERR_INVALID_STATE);
+    };
+    if !matches!(
+        active.record.state,
+        SessionState::Running | SessionState::Degraded
+    ) {
+        return error(SessionMsg::ERR_INVALID_STATE);
+    }
+    let session_id = active.record.session_id.get();
+    let session_generation = active.record.generation.get();
+    let session_uid = active.record.uid;
+    let Some(validated) = wiseowl_validate_delegated_caller(&msg) else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    // The canonical client instance is the kernel process generation. It is
+    // never accepted as identity on its own; the kernel already authenticated
+    // exact embedded Console launch provenance before returning `validated`.
+    if validated.caller_uid != session_uid {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    state.wiseowl_consoles.retain(|entry| {
+        let same_instance = entry.process_id == validated.caller_pid
+            && entry.process_generation == validated.caller_process_generation
+            && entry.client_instance_id == validated.caller_process_generation;
+        let unrelated = entry.process_id != validated.caller_pid
+            && entry.client_instance_id != validated.caller_process_generation;
+        entry.session_id == session_id
+            && entry.session_generation == session_generation
+            && entry.user_id == session_uid
+            && (same_instance || unrelated)
+    });
+    let already_registered = state.wiseowl_consoles.iter().any(|entry| {
+        entry.process_id == validated.caller_pid
+            && entry.process_generation == validated.caller_process_generation
+            && entry.client_instance_id == validated.caller_process_generation
+    });
+    if !already_registered {
+        if state.wiseowl_consoles.is_full() {
+            return error(SessionMsg::ERR_LIMIT);
+        }
+        if state
+            .wiseowl_consoles
+            .push(WiseOwlConsoleRegistration {
+                process_id: validated.caller_pid,
+                process_generation: validated.caller_process_generation,
+                client_instance_id: validated.caller_process_generation,
+                user_id: session_uid,
+                session_id,
+                session_generation,
+            })
+            .is_err()
+        {
+            return error(SessionMsg::ERR_LIMIT);
+        }
+    }
+    validated.into_authority_proof_reply()
 }
 
 fn load_manifest() -> Result<SessionManifest, ManifestParseError> {
@@ -365,6 +468,14 @@ fn tick_deferred_optionals(state: &mut ServiceState, now: u64) {
     }
     let uid = active.record.uid;
     let gid = active.record.gid;
+    if option_env!("SUNLIGHT_INJECT_PHASE")
+        == Some("wiseowl_delegated_session_lifecycle_ipc_v1")
+        && !state.delegated_console_fixture_launched
+        && now >= active.record.started_at.unwrap_or(now).saturating_add(5_000)
+    {
+        state.delegated_console_fixture_launched = true;
+        let _ = config_ops::spawn_optional("/bin/wiseowl", "Wise Owl", uid, gid);
+    }
     let gen = active.system_release_generation;
     let Some(frozen) = active.frozen.as_mut() else {
         return;
@@ -1397,6 +1508,7 @@ pub extern "C" fn _start() -> ! {
     let mut reply = IpcMsg::empty();
     loop {
         supervise(&mut state);
+        sync_wiseowl_session_authority(&mut state);
         let Some(message) = ipc_reply_and_try_recv(endpoint, reply) else {
             reply = IpcMsg::empty();
             process_yield();
@@ -1431,6 +1543,9 @@ pub extern "C" fn _start() -> ! {
             SessionMsg::SESSION_PROFILE_PREVIEW_PLAN => handle_preview_plan(&mut state, message),
             SessionMsg::SESSION_PROFILE_STATUS => handle_profile_status(&mut state, message),
             SessionMsg::SESSION_STARTUP_COMPLETE => handle_startup_complete(&mut state, message),
+            SessionMsg::ATTEST_DELEGATED_WISEOWL_CONSOLE => {
+                attest_delegated_wiseowl_console(&mut state, message)
+            }
             _ => error(SessionMsg::ERR_INVALID_ARGUMENT),
         };
     }

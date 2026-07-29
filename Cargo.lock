@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "certificatectl"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "chronos-core"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "cipher"
@@ -349,7 +349,7 @@ checksum = "413d67b29ef1021b4d60f4aa1e925ca031751e213832b4b1d588fae623c05c60"
 
 [[package]]
 name = "cpu-utils"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-libc",
 ]
@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "eyes"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "golden-fish"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "tl",
 ]
@@ -846,7 +846,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "helios-note"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "crossterm 0.25.0",
  "libc",
@@ -1075,7 +1075,7 @@ checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 
 [[package]]
 name = "memoryctl"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-telemetry",
@@ -1083,7 +1083,7 @@ dependencies = [
 
 [[package]]
 name = "mezzo"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1091,7 +1091,7 @@ dependencies = [
 
 [[package]]
 name = "mezzoctl"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "pty_server"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
@@ -1465,14 +1465,14 @@ dependencies = [
 
 [[package]]
 name = "rand_service"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "rappid-rabbit"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "golden-fish",
  "linked_list_allocator",
@@ -1775,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "secret_store_test"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -2018,7 +2018,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sun-exec"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "sun-font"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "rustybuzz",
@@ -2036,21 +2036,21 @@ dependencies = [
 
 [[package]]
 name = "sun-img"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "lz4_flex",
 ]
 
 [[package]]
 name = "sun-imgc"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-img",
 ]
 
 [[package]]
 name = "sun-open"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -2058,7 +2058,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-api-lab"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "serde_json",
  "sun-font",
@@ -2071,7 +2071,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-bench"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2081,11 +2081,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-block"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-calculator"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2095,7 +2095,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-calendar"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-chronos"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "chronos-core",
  "sun-font",
@@ -2120,7 +2120,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-clipd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2129,7 +2129,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-clipman"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-clipd",
@@ -2140,14 +2140,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-compat-linux"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
 ]
 
 [[package]]
 name = "sunlight-control-panel"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "image",
@@ -2162,7 +2162,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-deviced"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2171,7 +2171,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-devices"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2183,7 +2183,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-dialogd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sun-font",
@@ -2195,21 +2195,21 @@ dependencies = [
 
 [[package]]
 name = "sunlight-dialogs"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
 ]
 
 [[package]]
 name = "sunlight-dict"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-display"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2220,11 +2220,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-drivers"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-edit"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2236,11 +2236,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-elf"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-emoji-picker"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2250,14 +2250,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-fat"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-block",
 ]
 
 [[package]]
 name = "sunlight-fetch"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "log",
  "rustls",
@@ -2270,7 +2270,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-files"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2280,7 +2280,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-fs"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-block",
  "sunlight-fat",
@@ -2288,7 +2288,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-gcd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2297,36 +2297,36 @@ dependencies = [
 
 [[package]]
 name = "sunlight-hangman"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-http"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-init"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-ipc"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-kbd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-kernel"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "limine",
@@ -2350,7 +2350,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-kv"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "bincode",
  "crc32fast",
@@ -2367,7 +2367,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-kvctl"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "bincode",
  "heapless",
@@ -2381,14 +2381,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-libc"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-light-lens"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2399,18 +2399,18 @@ dependencies = [
 
 [[package]]
 name = "sunlight-locale"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-mouse"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-net"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "log",
  "smoltcp",
@@ -2421,7 +2421,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-server"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "linked_list_allocator",
  "smoltcp",
@@ -2432,7 +2432,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-net-utils"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -2440,7 +2440,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-networkd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2449,7 +2449,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-niced"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2458,7 +2458,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-powerd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2467,7 +2467,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-reminders"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2478,7 +2478,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-resolved"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2487,7 +2487,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-runner"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2497,11 +2497,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-sensors"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-sessionctl"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2510,7 +2510,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-sessiond"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2519,11 +2519,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-shell-appstate"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-silicon-echoes"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2533,7 +2533,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-sm"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2542,11 +2542,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-smbios"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-solar"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "linked_list_allocator",
@@ -2557,7 +2557,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-startup-fixture"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -2565,21 +2565,21 @@ dependencies = [
 
 [[package]]
 name = "sunlight-sunsay"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlight-swapd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-tasks"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2590,14 +2590,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-telemetry"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-terminal"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2608,7 +2608,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-thermald"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2617,7 +2617,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-thumbd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-libc",
@@ -2626,7 +2626,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-timed"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-tz",
@@ -2634,14 +2634,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-timer-server"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-tls"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "getrandom 0.2.17",
  "heapless",
@@ -2655,7 +2655,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-top"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-telemetry",
@@ -2663,7 +2663,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tty"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
@@ -2673,7 +2673,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tty-server"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-img",
  "sunlight-fs",
@@ -2693,7 +2693,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-tz"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2702,7 +2702,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-uac"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "argon2",
  "heapless",
@@ -2716,7 +2716,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-ui"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-img",
  "sunlight-ipc",
@@ -2724,14 +2724,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-usb-mouse"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-utils"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "memchr",
  "sunlight-ipc",
@@ -2740,7 +2740,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-vfs-server"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-fat",
@@ -2750,11 +2750,11 @@ dependencies = [
 
 [[package]]
 name = "sunlight-virtio"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 
 [[package]]
 name = "sunlight-vortex-shell"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2775,7 +2775,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-wallpaper"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-img",
  "sunlight-libc",
@@ -2783,7 +2783,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-welcome"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sun-font",
@@ -2795,7 +2795,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-widget-gallery"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sun-font",
  "sunlight-ipc",
@@ -2805,7 +2805,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-writer"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
@@ -2816,14 +2816,14 @@ dependencies = [
 
 [[package]]
 name = "sunlight-zoxide"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-libc",
 ]
 
 [[package]]
 name = "sunlightctl"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-ipc",
@@ -2832,7 +2832,7 @@ dependencies = [
 
 [[package]]
 name = "sunlightd"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sunlight-fs",
@@ -2842,7 +2842,7 @@ dependencies = [
 
 [[package]]
 name = "sunshell"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "libm",
  "sunlight-ipc",
@@ -2939,7 +2939,7 @@ dependencies = [
 
 [[package]]
 name = "timezone_service"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "sunlight-ipc",
  "sunlight-tz",
@@ -3388,7 +3388,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "wiseowl-brain"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "bincode",
  "heapless",
@@ -3407,7 +3407,7 @@ dependencies = [
 
 [[package]]
 name = "wiseowl-console"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "heapless",
  "sun-font",
@@ -3419,7 +3419,7 @@ dependencies = [
 
 [[package]]
 name = "wiseowl-index"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "bincode",
  "heapless",
@@ -3435,7 +3435,7 @@ dependencies = [
 
 [[package]]
 name = "wiseowl-memory"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "bincode",
  "heapless",
@@ -3450,7 +3450,7 @@ dependencies = [
 
 [[package]]
 name = "wiseowl-memorydb"
-version = "0.2.3773-alpha.1"
+version = "0.2.3783-alpha.1"
 dependencies = [
  "bincode",
  "heapless",

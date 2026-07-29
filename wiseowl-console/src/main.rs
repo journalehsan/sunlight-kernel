@@ -46,6 +46,25 @@ fn run_conversation_v1_gate() {
     ui::run_conversation_v1_gate();
 }
 
+#[cfg(all(not(test), feature = "delegated-session-lifecycle-ipc-v1-test"))]
+fn run_delegated_session_lifecycle_gate() {
+    use crate::transport::{
+        ConversationTransport, NativeConversationTransport, WiseOwlConversationUiRequest,
+        WiseOwlConversationUiResponse,
+    };
+    let mut transport = NativeConversationTransport::new();
+    let response = transport.submit(WiseOwlConversationUiRequest::QueryConversationState {
+        conversation_id: transport::ConversationId(1),
+        session_id: transport::SessionId(1),
+    });
+    if matches!(
+        response,
+        WiseOwlConversationUiResponse::Rejected { .. } | WiseOwlConversationUiResponse::Unavailable
+    ) {
+        debug_log("[WISEOWL-DELEGATION] CONSOLE_FIXTURE_FAILED\n");
+    }
+}
+
 impl App for WiseOwlApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         self.ui.draw(canvas, theme);
@@ -73,6 +92,8 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     debug_log("[WISEOWL-GUI] Starting Wise Owl Console\n");
     #[cfg(feature = "conversation-v1-test")]
     run_conversation_v1_gate();
+    #[cfg(feature = "delegated-session-lifecycle-ipc-v1-test")]
+    run_delegated_session_lifecycle_gate();
 
     let mut app = WiseOwlApp::new();
     let mut window = match Window::connect_with_material(

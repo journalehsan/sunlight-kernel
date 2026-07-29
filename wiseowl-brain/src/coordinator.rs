@@ -1999,7 +1999,7 @@ fn localized_text(
             }
             (PublicActionStatus::AlreadyPending, _) => (
                 "درخواست در انتظار است",
-                "ابتدا درخواست در انتظار را لغو کنید.",
+                "یک عملیات دیگر در حال انجام است.",
             ),
             (_, PublicReasonCode::TargetNotFound) => ("یافت نشد", "هدف درخواستی پیدا نشد."),
             (_, PublicReasonCode::DispatchFailed) => ("ناموفق", "باز کردن هدف انجام نشد."),
@@ -2009,7 +2009,7 @@ fn localized_text(
                 "محیط تغییر کرده است؛ درخواست را دوباره آغاز کنید.",
             ),
             (PublicActionStatus::Unsupported, _) => {
-                ("پشتیبانی نمی‌شود", "این درخواست پشتیبانی نمی‌شود.")
+                ("پشتیبانی نمی‌شود", "این عملیات هنوز پشتیبانی نمی‌شود.")
             }
             (PublicActionStatus::Rejected, _) => ("رد شد", "این درخواست انجام نشد."),
             (PublicActionStatus::InvalidInput, _) => ("نامعتبر", "ورودی معتبر نیست."),
@@ -2036,7 +2036,7 @@ fn localized_text(
         (PublicActionStatus::Expired, _) => ("Expired", "The request expired."),
         (PublicActionStatus::AlreadyPending, _) => (
             "Action already pending",
-            "Cancel the pending action before starting another.",
+            "Another action is already in progress.",
         ),
         (_, PublicReasonCode::TargetNotFound) => {
             ("Not found", "I could not find that registered target.")
@@ -2047,7 +2047,7 @@ fn localized_text(
             "Request invalidated",
             "The environment changed. Start the request again.",
         ),
-        (PublicActionStatus::Unsupported, _) => ("Unsupported", "This request is not supported."),
+        (PublicActionStatus::Unsupported, _) => ("Unsupported", "That action is not supported yet."),
         (PublicActionStatus::Rejected, _) => ("Rejected", "The request was not performed."),
         (PublicActionStatus::InvalidInput, _) => ("Invalid input", "The input is not valid."),
         _ => ("", ""),

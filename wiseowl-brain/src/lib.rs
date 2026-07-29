@@ -11,11 +11,14 @@ pub mod confirmation;
 pub mod context;
 pub mod coordinator;
 pub mod diagnostics;
+pub mod delegated_session_lifecycle;
 pub mod error;
 pub mod executor;
 pub mod foundation;
 pub mod greeting;
 pub mod grounded;
+pub mod gui_bridge;
+pub mod gui_live_action_activation;
 pub mod kv_client;
 pub mod memory_layers;
 pub mod mtm;
@@ -28,6 +31,7 @@ pub mod protocol;
 pub mod provenance;
 pub mod provider;
 pub mod runtime_context;
+pub mod trusted_session_readiness;
 
 pub use action_intent::{
     ActionDecision, ActionEvaluation, ActionIntent, ActionIntentEvaluator, ActionOperation,
@@ -64,6 +68,10 @@ pub use coordinator::{
     RuntimeInvalidation, SessionEndedInput,
 };
 pub use diagnostics::BrainDiagnostics;
+pub use delegated_session_lifecycle::{
+    AcceptedLifecycleEvent, BraindTrustedLifecycleAdapters, ControlPanelLifecycleEventKind,
+    DisplayLifecycleEventKind, LifecycleIngressError, LifecycleTargetKind, TrustedLaunchContext,
+};
 #[cfg(feature = "sunlightos")]
 pub use executor::SunlightLaunchAdapter;
 pub use executor::{
@@ -71,6 +79,19 @@ pub use executor::{
     ExecutionContext, ExecutionId, ExecutionResult, ExecutionResultCode, LaunchApplicationRequest,
     LaunchCorrelationToken, OpenSettingsPageRequest, RegistryStatus, TrustedActionExecutor,
     TrustedActionFlow, TrustedLaunchAdapter,
+};
+#[cfg(feature = "gui-bridge-foundation-v1-test")]
+pub use gui_bridge::run_deterministic_bridge_gate;
+#[cfg(all(feature = "sunlightos", feature = "gui-live-action-activation-v1-test"))]
+pub use gui_live_action_activation::run_deterministic_live_action_gate;
+pub use gui_bridge::{
+    CoordinatorPresentationKind, CoordinatorPresentationUpdate, CorrelatedGuiReadinessEvidence,
+    GuiBindingError, GuiEventBroker, GuiEventError, GuiEventId, GuiReadinessEvidenceId,
+    GuiSessionBindingAuthority, GuiSessionBindingId, PublicPresentationPayload,
+    ReadinessCorrelationError, ReceiptSealedView, TrustedGuiReadinessKind,
+    TrustedReadinessCorrelation, TrustedReadinessSource, VerifiedGraphicalSession, WiseOwlGuiEvent,
+    WiseOwlGuiEventPayload, WiseOwlGuiSessionBinding, GUI_BRIDGE_PROTOCOL_VERSION,
+    MAX_GUI_BRIDGE_DEDUP, MAX_GUI_BRIDGE_EVENTS,
 };
 pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
 pub use outcome::{
@@ -100,4 +121,13 @@ pub use provider::{BrainProvider, FutureOnlineProvider, LocalBoundedProvider, Pr
 pub use runtime_context::{
     ContextProvider, ContextProviderError, RefreshClass, RuntimeContextCache,
     RuntimeContextSnapshot,
+};
+#[cfg(feature = "trusted-session-readiness-v1-test")]
+pub use trusted_session_readiness::run_deterministic_trust_gate;
+pub use trusted_session_readiness::{
+    AuthorityGeneration, GuiClientInstanceId, ProcessId, SessionAttestationError,
+    SessionAttestationId, SessionGeneration, TrustedGraphicalSessionAuthority,
+    TrustedLifecycleSource, TrustedReadinessError, TrustedReadinessIngress,
+    TrustedReadinessSourceCapability, WiseOwlAuthorityConnections,
+    WiseOwlLiveActionAvailability, TRUSTED_SESSION_PROTOCOL_VERSION,
 };

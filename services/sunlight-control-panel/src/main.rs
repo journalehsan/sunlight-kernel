@@ -34,13 +34,14 @@ use core::cmp;
 use sun_font::{self, FontRole, TextStyle, Typography};
 use sunlight_ipc::{
     attach_display_mode_dialog, begin_display_mode_change, confirm_display_mode_change, debug_log,
-    ipc_call,
+    ipc_call, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, nameserver_lookup, notification_dnd_enabled, notification_set_dnd,
-    process_yield, query_display_mode, query_display_mode_capabilities, revert_display_mode_change,
-    show_notification, CapabilityToken, DisplayMode, DisplayModeCapabilities,
-    DisplayModeManagement, DisplayModeTransaction, IpcMsg, NotificationKind, ProcessExit,
-    ScreenBackend, SgpMsg, DEFAULT_MODE_PREVIEW_TIMEOUT_MS,
+    monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, notification_dnd_enabled,
+    notification_set_dnd, process_yield, query_display_mode, query_display_mode_capabilities,
+    revert_display_mode_change, show_notification, CapabilityToken, DisplayMode,
+    DisplayModeCapabilities, DisplayModeManagement, DisplayModeTransaction, IpcMsg,
+    NotificationKind, ProcessExit, ScreenBackend, SgpMsg, WiseOwlLifecycleMsg,
+    DEFAULT_MODE_PREVIEW_TIMEOUT_MS, WISEOWL_CONTROL_PANEL_LIFECYCLE_ENDPOINT,
 };
 use sunlight_libc::{crt0, sun_exec::ControlPanelPage};
 use sunlight_ui::{
@@ -1945,6 +1946,17 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         Some(sunlight_ipc::getpid()),
     );
     debug_log("[CONTROL-PANEL] starting\n");
+
+    if let Some(lifecycle) =
+        nameserver_lookup_timeout(WISEOWL_CONTROL_PANEL_LIFECYCLE_ENDPOINT, 250)
+    {
+        let _ = ipc_call_timeout(
+            lifecycle,
+            IpcMsg::with_label(WiseOwlLifecycleMsg::SOURCE_HELLO)
+                .word(0, WiseOwlLifecycleMsg::SOURCE_CONTROL_PANEL),
+            250,
+        );
+    }
 
     let display_ep = nameserver_lookup("display_server");
     let (screen_w, screen_h) = display_ep

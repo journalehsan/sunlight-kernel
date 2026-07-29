@@ -20,8 +20,8 @@ use sunlight_ipc::{
     sgp::SgpMsg,
     validate_size, CapabilityToken, DisplayMetrics, DisplayMode, DisplayModeManagement,
     DisplayModeReadOnlyReason, EndpointId, IpcMsg, MezzoMsg, MouseMsg, NotificationKind,
-    PixelFormat, ScreenBackend, DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES,
-    SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+    PixelFormat, ScreenBackend, WiseOwlLifecycleMsg, DEFAULT_MODE_PREVIEW_TIMEOUT_MS,
+    MAX_DISPLAY_MODES, SAFE_FALLBACK_H, SAFE_FALLBACK_W, WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Point, Rect};
@@ -6310,6 +6310,8 @@ pub extern "C" fn _start() -> ! {
     let my_ep = endpoint_create();
     nameserver_register("display_server", my_ep);
     debug_log("[DISPLAY] registered as display_server\n");
+    let mut wiseowl_lifecycle_connected = connect_wiseowl_lifecycle();
+    let mut next_wiseowl_lifecycle_retry = monotonic_millis().saturating_add(2_000);
 
     let framebuffer_info = match sunlight_ipc::framebuffer_info() {
         Some(v) => v,
@@ -6720,6 +6722,11 @@ pub extern "C" fn _start() -> ! {
 
     let mut next_win_id: u64 = 1;
     loop {
+        let lifecycle_now = monotonic_millis();
+        if !wiseowl_lifecycle_connected && lifecycle_now >= next_wiseowl_lifecycle_retry {
+            wiseowl_lifecycle_connected = connect_wiseowl_lifecycle();
+            next_wiseowl_lifecycle_retry = lifecycle_now.saturating_add(2_000);
+        }
         let msg = if let Some(timeout_ms) = compositor_poll_timeout_ms(&state) {
             if let Some(msg) = ipc_recv_timeout(my_ep, timeout_ms) {
                 msg
@@ -8491,4 +8498,20 @@ pub extern "C" fn _start() -> ! {
             }
         }
     }
+}
+
+#[cfg(not(test))]
+fn connect_wiseowl_lifecycle() -> bool {
+    let Some(lifecycle) = nameserver_lookup_timeout(WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT, 50) else {
+        return false;
+    };
+    matches!(
+        ipc_call_timeout(
+            lifecycle,
+            IpcMsg::with_label(WiseOwlLifecycleMsg::SOURCE_HELLO)
+                .word(0, WiseOwlLifecycleMsg::SOURCE_DISPLAY),
+            50,
+        ),
+        Ok(reply) if reply.label == WiseOwlLifecycleMsg::REPLY
+    )
 }

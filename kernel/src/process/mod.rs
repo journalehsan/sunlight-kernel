@@ -148,6 +148,11 @@ pub struct Process {
     pub trusted_tty_session_service: bool,
     /// Set only for the native desktop session manager service.
     pub trusted_session_service: bool,
+    /// Kernel-installed identities derived from exact embedded executable
+    /// paths. These are provenance markers, not process-name checks.
+    pub trusted_wiseowl_braind: bool,
+    pub trusted_wiseowl_console: bool,
+    pub trusted_control_panel: bool,
     /// Trust-chain markers used only for the authenticated-session broker.
     pub trusted_service_manager: bool,
     pub trusted_auth_broker: bool,
@@ -355,6 +360,9 @@ impl Process {
             trusted_lock_service: false,
             trusted_tty_session_service: false,
             trusted_session_service: false,
+            trusted_wiseowl_braind: false,
+            trusted_wiseowl_console: false,
+            trusted_control_panel: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
             service_lookup_restrictions: None,
@@ -516,6 +524,9 @@ impl Process {
             trusted_lock_service: false,
             trusted_tty_session_service: false,
             trusted_session_service: false,
+            trusted_wiseowl_braind: false,
+            trusted_wiseowl_console: false,
+            trusted_control_panel: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
             service_lookup_restrictions: None,
