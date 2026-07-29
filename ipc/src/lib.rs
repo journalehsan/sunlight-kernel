@@ -53,6 +53,8 @@ pub enum SunlightSyscall {
     IpcCompleteDeferredReply = 16,
     /// Query whether a deferred server reply target is still live.
     IpcDeferredReplyIsLive = 17,
+    /// Make one receive attempt without blocking the calling process.
+    IpcTryRecv = 18,
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
@@ -4034,6 +4036,13 @@ pub fn ipc_recv(ep: EndpointId) -> IpcMsg {
     }
 }
 
+/// Make one non-blocking receive attempt without changing process state.
+pub fn ipc_try_recv(ep: EndpointId) -> Option<IpcMsg> {
+    // SAFETY: ipc_try_recv passes the endpoint owner token; kernel validates receive rights.
+    let (ret, msg) = unsafe { raw_syscall_ipc(SunlightSyscall::IpcTryRecv, ep.0, IpcMsg::empty()) };
+    (ret == 0).then_some(msg)
+}
+
 /// Receive a message with a kernel-enforced absolute monotonic deadline.
 ///
 /// Returns `None` if no message arrives before `timeout_ms` elapses.
@@ -4144,13 +4153,8 @@ pub fn ipc_reply_and_wait(ep: EndpointId, reply: IpcMsg) -> IpcMsg {
 /// pending yet, so callers can do periodic work (e.g. clock refresh) while
 /// waiting for the next message.
 pub fn ipc_reply_and_try_recv(ep: EndpointId, reply: IpcMsg) -> Option<IpcMsg> {
-    // SAFETY: ipc_reply_and_try_recv passes the endpoint owner token and fixed reply message.
-    let (ret, msg) = unsafe { raw_syscall_ipc(SunlightSyscall::IpcReplyWait, ep.0, reply) };
-    if would_block(ret) {
-        None
-    } else {
-        Some(msg)
-    }
+    ipc_reply(reply);
+    ipc_try_recv(ep)
 }
 
 pub fn notify_send(cap: CapabilityToken) {

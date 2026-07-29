@@ -674,6 +674,23 @@ pub(crate) fn terminal_transition_allowed(
     current_outcome.is_none() && pending_generation == Some(candidate_generation)
 }
 
+/// Prove that a server currently owns the reply path for a caller's exact
+/// in-flight IPC generation. This remains stable while the server handles the
+/// request, unlike the caller's scheduler state, which may change as part of
+/// SMP wakeup and timeout bookkeeping.
+pub(crate) fn reply_target_matches_pending_request(
+    requester_pid: usize,
+    pending: Option<PendingIpcCall>,
+    reply_target: Option<IpcReplyTarget>,
+) -> bool {
+    let (Some(pending), Some(reply_target)) = (pending, reply_target) else {
+        return false;
+    };
+    reply_target.endpoint_id == pending.endpoint_id
+        && reply_target.call.pid == requester_pid
+        && reply_target.call.generation == pending.generation
+}
+
 pub(crate) fn deadline_should_expire(
     deadline_entry: Option<(u64, u64)>,
     pending_generation: Option<u64>,
@@ -1039,6 +1056,29 @@ pub fn handle_ipc_recv(
     Err(IpcError::WouldBlock)
 }
 
+pub fn handle_ipc_try_recv(
+    receiver_pid: usize,
+    endpoint_id: u32,
+    sched: &mut Scheduler,
+    bus: &mut IpcBus,
+) -> Result<IpcMsg, IpcError> {
+    let Some(idx) = sched
+        .processes
+        .iter()
+        .position(|process| process.pid == receiver_pid)
+    else {
+        return Err(IpcError::InvalidArgument);
+    };
+    if sched.processes[idx].ipc_reply_target.is_some() {
+        return Err(IpcError::InvalidArgument);
+    }
+    let Some(msg) = bus.pop_pending(endpoint_id) else {
+        return Err(IpcError::WouldBlock);
+    };
+    set_reply_target(sched, receiver_pid, endpoint_id, msg.call);
+    Ok(msg.msg)
+}
+
 pub fn handle_ipc_reply(
     server_pid: usize,
     reply: IpcMsg,
@@ -1329,9 +1369,10 @@ pub fn finish_peer_closed_calls(
 mod tests {
     use super::{
         cancel_reply_target, deadline_should_expire, recv_deadline_should_expire,
-        terminal_transition_allowed, IpcBus, IpcError, IpcMsg, ENDPOINT_QUEUE_CAPACITY,
+        reply_target_matches_pending_request, terminal_transition_allowed, IpcBus, IpcError,
+        IpcMsg, ENDPOINT_QUEUE_CAPACITY,
     };
-    use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget};
+    use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget, PendingIpcCall};
 
     fn call(pid: usize, generation: u64) -> IpcCallId {
         IpcCallId { pid, generation }
@@ -1358,6 +1399,41 @@ mod tests {
             call: call(12, 8),
         });
         assert!(!cancel_reply_target(&mut newer_call, expected));
+    }
+
+    #[test]
+    fn auth_reply_target_is_bound_to_exact_pending_generation() {
+        let pending = PendingIpcCall {
+            target_cap: 0x1234,
+            endpoint_id: 13,
+            msg: IpcMsg::with_label(7),
+            generation: 9,
+        };
+        let target = IpcReplyTarget {
+            endpoint_id: 13,
+            call: call(4, 9),
+        };
+        assert!(reply_target_matches_pending_request(
+            4,
+            Some(pending),
+            Some(target)
+        ));
+
+        let stale = IpcReplyTarget {
+            endpoint_id: 13,
+            call: call(4, 8),
+        };
+        assert!(!reply_target_matches_pending_request(
+            4,
+            Some(pending),
+            Some(stale)
+        ));
+        assert!(!reply_target_matches_pending_request(
+            5,
+            Some(pending),
+            Some(target)
+        ));
+        assert!(!reply_target_matches_pending_request(4, None, Some(target)));
     }
 
     #[test]

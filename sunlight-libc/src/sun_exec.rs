@@ -151,7 +151,11 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
     ApplicationRegistryEntry {
         canonical_id: "wiseowl",
         display_name: "Wise Owl",
-        aliases: aliases![("en", "wise-owl"), ("en", "wiseowl-console"), ("fa", "جغد دانا")],
+        aliases: aliases![
+            ("en", "wise-owl"),
+            ("en", "wiseowl-console"),
+            ("fa", "جغد دانا")
+        ],
         executable: b"/bin/wiseowl",
     },
     ApplicationRegistryEntry {

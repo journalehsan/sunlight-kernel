@@ -10,8 +10,8 @@ pub mod caps;
 pub mod confirmation;
 pub mod context;
 pub mod coordinator;
-pub mod diagnostics;
 pub mod delegated_session_lifecycle;
+pub mod diagnostics;
 pub mod error;
 pub mod executor;
 pub mod foundation;
@@ -67,11 +67,11 @@ pub use coordinator::{
     ObservedOutcomeInput, PublicActionStatus, PublicReasonCode, QueryPendingAction,
     RuntimeInvalidation, SessionEndedInput,
 };
-pub use diagnostics::BrainDiagnostics;
 pub use delegated_session_lifecycle::{
     AcceptedLifecycleEvent, BraindTrustedLifecycleAdapters, ControlPanelLifecycleEventKind,
     DisplayLifecycleEventKind, LifecycleIngressError, LifecycleTargetKind, TrustedLaunchContext,
 };
+pub use diagnostics::BrainDiagnostics;
 #[cfg(feature = "sunlightos")]
 pub use executor::SunlightLaunchAdapter;
 pub use executor::{
@@ -82,8 +82,6 @@ pub use executor::{
 };
 #[cfg(feature = "gui-bridge-foundation-v1-test")]
 pub use gui_bridge::run_deterministic_bridge_gate;
-#[cfg(all(feature = "sunlightos", feature = "gui-live-action-activation-v1-test"))]
-pub use gui_live_action_activation::run_deterministic_live_action_gate;
 pub use gui_bridge::{
     CoordinatorPresentationKind, CoordinatorPresentationUpdate, CorrelatedGuiReadinessEvidence,
     GuiBindingError, GuiEventBroker, GuiEventError, GuiEventId, GuiReadinessEvidenceId,
@@ -93,6 +91,8 @@ pub use gui_bridge::{
     WiseOwlGuiEventPayload, WiseOwlGuiSessionBinding, GUI_BRIDGE_PROTOCOL_VERSION,
     MAX_GUI_BRIDGE_DEDUP, MAX_GUI_BRIDGE_EVENTS,
 };
+#[cfg(all(feature = "sunlightos", feature = "gui-live-action-activation-v1-test"))]
+pub use gui_live_action_activation::run_deterministic_live_action_gate;
 pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
 pub use outcome::{
     AchievedReadiness, ActionOutcomeObserver, EvidenceId, EvidenceSummary, ObservationAuditEntry,
@@ -128,6 +128,6 @@ pub use trusted_session_readiness::{
     AuthorityGeneration, GuiClientInstanceId, ProcessId, SessionAttestationError,
     SessionAttestationId, SessionGeneration, TrustedGraphicalSessionAuthority,
     TrustedLifecycleSource, TrustedReadinessError, TrustedReadinessIngress,
-    TrustedReadinessSourceCapability, WiseOwlAuthorityConnections,
-    WiseOwlLiveActionAvailability, TRUSTED_SESSION_PROTOCOL_VERSION,
+    TrustedReadinessSourceCapability, WiseOwlAuthorityConnections, WiseOwlLiveActionAvailability,
+    TRUSTED_SESSION_PROTOCOL_VERSION,
 };

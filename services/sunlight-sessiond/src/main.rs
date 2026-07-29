@@ -468,10 +468,14 @@ fn tick_deferred_optionals(state: &mut ServiceState, now: u64) {
     }
     let uid = active.record.uid;
     let gid = active.record.gid;
-    if option_env!("SUNLIGHT_INJECT_PHASE")
-        == Some("wiseowl_delegated_session_lifecycle_ipc_v1")
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("wiseowl_delegated_session_lifecycle_ipc_v1")
         && !state.delegated_console_fixture_launched
-        && now >= active.record.started_at.unwrap_or(now).saturating_add(5_000)
+        && now
+            >= active
+                .record
+                .started_at
+                .unwrap_or(now)
+                .saturating_add(5_000)
     {
         state.delegated_console_fixture_launched = true;
         let _ = config_ops::spawn_optional("/bin/wiseowl", "Wise Owl", uid, gid);

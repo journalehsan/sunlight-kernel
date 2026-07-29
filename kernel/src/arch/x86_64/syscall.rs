@@ -568,6 +568,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         15 => ipc_defer_reply(),
         16 => ipc_complete_deferred_reply(frame),
         17 => ipc_deferred_reply_is_live(frame.rdi),
+        18 => ipc_try_recv(frame),
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
         22 => thread_spawn(frame),
@@ -1002,24 +1003,56 @@ fn sys_mint_auth_session_grant(frame: &mut SyscallFrame) -> u64 {
     let sched = crate::sched::SCHEDULER.lock();
     let caller = sched.current_process();
     if !caller.trusted_auth_broker {
+        crate::serial_println!("[UAC-GRANT] rejected reason=untrusted-broker");
         return u64::MAX;
     }
+    let reply_target = caller.ipc_reply_target;
     let Some(requester) = sched
         .processes
         .iter()
         .find(|process| process.pid == requester_pid)
     else {
+        crate::serial_println!(
+            "[UAC-GRANT] rejected requester_pid={} reason=requester-not-found",
+            requester_pid
+        );
         return u64::MAX;
     };
-    if requester.state != ProcessState::BlockedOnIpc || requester.pending_call.is_none() {
+    // Bind the grant to the exact generation-tagged request that UAC is
+    // currently servicing. Requiring `BlockedOnIpc` here was racy on SMP: the
+    // caller's scheduler state is transient, while pending_call + UAC's reply
+    // target are the authoritative synchronous-IPC relationship.
+    if !crate::ipc::reply_target_matches_pending_request(
+        requester_pid,
+        requester.pending_call,
+        reply_target,
+    ) {
+        crate::serial_println!(
+            "[UAC-GRANT] rejected requester_pid={} reason=ipc-generation-mismatch",
+            requester_pid
+        );
         return u64::MAX;
     }
     let expires_at_tick = sched.global_tick.saturating_add(500);
     drop(sched);
-    crate::capability::CAP_BROKER
+    let grant = crate::capability::CAP_BROKER
         .lock()
         .mint_auth_session_grant(requester_pid, uid, gid, expires_at_tick)
-        .map_or(u64::MAX, |token| token.0)
+        .map_or(u64::MAX, |token| token.0);
+    if grant == u64::MAX {
+        crate::serial_println!(
+            "[UAC-GRANT] rejected requester_pid={} reason=grant-allocation",
+            requester_pid
+        );
+    } else {
+        crate::serial_println!(
+            "[UAC-GRANT] minted requester_pid={} uid={} gid={}",
+            requester_pid,
+            uid,
+            gid
+        );
+    }
+    grant
 }
 
 fn sys_lock_auth_consume(frame: &mut SyscallFrame) -> u64 {
@@ -1270,6 +1303,26 @@ fn ipc_recv(frame: &mut SyscallFrame) -> u64 {
                 IpcError::WouldBlock as u64
             }
             Err(e) => e as u64,
+        }
+    })
+}
+
+fn ipc_try_recv(frame: &mut SyscallFrame) -> u64 {
+    let endpoint_token = CapabilityToken(frame.rsi);
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let caps = crate::capability::CAP_BROKER.lock();
+    let receiver_pid = sched.current_process().pid;
+    let endpoint_id = match caps.token_owner(endpoint_token, CapabilityRights::RECV_ONLY) {
+        Ok((id, owner_pid)) if owner_pid == receiver_pid => id,
+        _ => return IpcError::InvalidCapability as u64,
+    };
+    crate::ipc::with_shard(endpoint_id, |bus| {
+        match crate::ipc::handle_ipc_try_recv(receiver_pid, endpoint_id, &mut sched, bus) {
+            Ok(message) => {
+                message.to_registers(frame);
+                0
+            }
+            Err(error) => error as u64,
         }
     })
 }
@@ -2368,7 +2421,7 @@ fn sys_wiseowl_set_active_session(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     }
     drop(sched);
-    let active = frame.r10 == 1;
+    let active = frame.r8 == 1;
     if active && (frame.rdi == 0 || frame.rsi == 0) {
         return u64::MAX;
     }

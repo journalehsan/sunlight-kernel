@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call_timeout, ipc_reply_and_try_recv, monotonic_millis,
+    debug_log, endpoint_create, ipc_call_timeout, ipc_reply, ipc_try_recv, monotonic_millis,
     nameserver_lookup, nameserver_register, process_yield, shm_alloc, shm_free, shm_map,
     wiseowl_delegate_authenticated_caller, wiseowl_validate_lifecycle_source, IpcMsg,
     SessionAuthorityProof, WiseOwlLifecycleMsg, SESSION_ENDPOINT,
@@ -120,16 +120,13 @@ pub extern "C" fn _start() -> ! {
         libc::exit(1);
     }
 
-    let mut gui_reply = IpcMsg::empty();
-    let mut display_reply = IpcMsg::empty();
-    let mut control_panel_reply = IpcMsg::empty();
     loop {
-        if let Some(msg) = ipc_reply_and_try_recv(ep, gui_reply) {
+        if let Some(msg) = ipc_try_recv(ep) {
             let op = match BrainOp::from_u16(msg.label as u16) {
                 Some(o) => o,
                 None => {
                     serial_println!("[WISEOWL-BRAIN] unknown op 0x{:04X}", msg.label as u16);
-                    gui_reply = make_error_reply(msg, 3);
+                    ipc_reply(make_error_reply(msg, 3));
                     continue;
                 }
             };
@@ -137,7 +134,7 @@ pub extern "C" fn _start() -> ! {
             // Kernel fills badge with the caller process id only (see ipc bus deliver).
             let caller_pid = msg.badge;
             let caller_uid = 0u64; // UID is not available from badge; use request body.
-            gui_reply = match op {
+            let reply = match op {
                 BrainOp::Greeting => handle_native_greeting(msg, caller_uid, caller_pid),
                 BrainOp::Health => handle_native_health(msg),
                 BrainOp::Stats => handle_native_stats(msg),
@@ -148,24 +145,22 @@ pub extern "C" fn _start() -> ! {
                 BrainOp::ConsoleUi => handle_console_ui(msg, caller_pid),
                 _ => make_error_reply(msg, 3),
             };
-            // Keep the authenticated caller reply target live until the next
-            // GUI endpoint call commits this reply. Do not poll another
-            // endpoint while the delegated caller context is active.
+            ipc_reply(reply);
             continue;
         }
-        gui_reply = IpcMsg::empty();
-        if let Some(message) = ipc_reply_and_try_recv(display_lifecycle_ep, display_reply) {
-            display_reply = handle_lifecycle_source(message, WiseOwlLifecycleMsg::SOURCE_DISPLAY);
-        } else {
-            display_reply = IpcMsg::empty();
+        if let Some(message) = ipc_try_recv(display_lifecycle_ep) {
+            ipc_reply(handle_lifecycle_source(
+                message,
+                WiseOwlLifecycleMsg::SOURCE_DISPLAY,
+            ));
+            continue;
         }
-        if let Some(message) =
-            ipc_reply_and_try_recv(control_panel_lifecycle_ep, control_panel_reply)
-        {
-            control_panel_reply =
-                handle_lifecycle_source(message, WiseOwlLifecycleMsg::SOURCE_CONTROL_PANEL);
-        } else {
-            control_panel_reply = IpcMsg::empty();
+        if let Some(message) = ipc_try_recv(control_panel_lifecycle_ep) {
+            ipc_reply(handle_lifecycle_source(
+                message,
+                WiseOwlLifecycleMsg::SOURCE_CONTROL_PANEL,
+            ));
+            continue;
         }
         process_yield();
     }
@@ -1793,9 +1788,10 @@ fn attest_console_request(
         diagnostic_client_value,
         WISEOWL_DELEGATION_PROTOCOL_VERSION,
     );
-    let reply = ipc_call_timeout(sessiond, request, WISEOWL_DELEGATION_LIFETIME_MS).map_err(|_| {
-        serial_println!("[WISEOWL-DELEGATION] DIAG sessiond-timeout");
-    })?;
+    let reply =
+        ipc_call_timeout(sessiond, request, WISEOWL_DELEGATION_LIFETIME_MS).map_err(|_| {
+            serial_println!("[WISEOWL-DELEGATION] DIAG sessiond-timeout");
+        })?;
     let proof = SessionAuthorityProof::from_sessiond_reply(&reply).ok_or_else(|| {
         serial_println!(
             "[WISEOWL-DELEGATION] DIAG sessiond-rejected label={} words={}",
