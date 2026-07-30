@@ -993,9 +993,10 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     }
 }
 
-/// UAC calls this only while servicing an authentication IPC request. The
-/// target must still be blocked on an IPC call to UAC, which binds the grant to
-/// the caller that supplied the password rather than to a claimed PID.
+/// UAC calls this only while servicing an authentication IPC request. Its
+/// generation-tagged reply target must match the requester's pending call,
+/// binding the grant to the caller that supplied the password rather than to a
+/// claimed PID or a transient scheduler state.
 fn sys_mint_auth_session_grant(frame: &mut SyscallFrame) -> u64 {
     let requester_pid = frame.rdi as usize;
     let uid = frame.rsi as u32;

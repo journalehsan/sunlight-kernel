@@ -50,6 +50,9 @@ const DRAIN_TIMEOUT_MS: u64 = 2;
 /// Extra drain passes after the last boot spawn so late REGISTERs land.
 const DRAIN_MSGS_AFTER_BOOT: usize = 16;
 const DRAIN_TIMEOUT_AFTER_BOOT_MS: u64 = 5;
+const REGISTRY_CAPACITY: usize = 64;
+
+type Registry = [RegistryEntry; REGISTRY_CAPACITY];
 
 /// Spawn a service by absolute path using the kernel spawn capability.
 fn spawn_service(spawn_cap: CapabilityToken, path: &str) -> bool {
@@ -74,7 +77,7 @@ fn spawn_service(spawn_cap: CapabilityToken, path: &str) -> bool {
     reply.label == SpawnMsg::REPLY
 }
 
-fn handle_nameserver_msg(registry: &mut [RegistryEntry; 32], msg: IpcMsg) -> IpcMsg {
+fn handle_nameserver_msg(registry: &mut Registry, msg: IpcMsg) -> IpcMsg {
     match msg.label {
         InitMsg::REGISTER => register_service(
             registry,
@@ -92,12 +95,7 @@ fn handle_nameserver_msg(registry: &mut [RegistryEntry; 32], msg: IpcMsg) -> Ipc
 ///
 /// Critical during boot so tty_server can register `"tty"` (and kbd can look it
 /// up) while init is still launching the rest of the service tree.
-fn drain_nameserver(
-    ep: EndpointId,
-    registry: &mut [RegistryEntry; 32],
-    budget: usize,
-    timeout_ms: u64,
-) {
+fn drain_nameserver(ep: EndpointId, registry: &mut Registry, budget: usize, timeout_ms: u64) {
     for _ in 0..budget {
         match ipc_recv_timeout(ep, timeout_ms) {
             Some(msg) => {
@@ -127,7 +125,7 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         debug_log("[init] ERROR: nameserver long-name key collision");
     }
 
-    let mut registry = [RegistryEntry::empty(); 32];
+    let mut registry = [RegistryEntry::empty(); REGISTRY_CAPACITY];
     run_registry_self_tests();
 
     // Register the kernel spawn endpoint if token was passed.
@@ -193,11 +191,7 @@ impl RegistryEntry {
     }
 }
 
-fn registry_insert_kernel(
-    registry: &mut [RegistryEntry; 32],
-    name: u64,
-    cap: CapabilityToken,
-) -> bool {
+fn registry_insert_kernel(registry: &mut Registry, name: u64, cap: CapabilityToken) -> bool {
     for entry in registry.iter_mut() {
         if entry.is_empty() {
             *entry = RegistryEntry {
@@ -214,7 +208,7 @@ fn registry_insert_kernel(
 }
 
 fn register_service(
-    registry: &mut [RegistryEntry; 32],
+    registry: &mut Registry,
     name: u64,
     public_cap: CapabilityToken,
     endpoint_id: u32,
@@ -242,7 +236,7 @@ fn register_service(
 }
 
 fn register_new(
-    registry: &mut [RegistryEntry; 32],
+    registry: &mut Registry,
     emit_diagnostics: bool,
     name: u64,
     public_cap: CapabilityToken,
@@ -266,7 +260,7 @@ fn register_new(
 }
 
 fn register_existing(
-    registry: &mut [RegistryEntry; 32],
+    registry: &mut Registry,
     index: usize,
     current_is_live: bool,
     emit_diagnostics: bool,
@@ -312,7 +306,7 @@ fn register_existing(
 }
 
 fn lookup_existing(
-    registry: &mut [RegistryEntry; 32],
+    registry: &mut Registry,
     index: usize,
     entry_is_live: bool,
     emit_diagnostics: bool,
@@ -331,7 +325,7 @@ fn lookup_existing(
         .word(1, InitStatus::OK)
 }
 
-fn lookup_service(registry: &mut [RegistryEntry; 32], name: u64) -> IpcMsg {
+fn lookup_service(registry: &mut Registry, name: u64) -> IpcMsg {
     let Some(index) = registry.iter().position(|entry| entry.name == name) else {
         return deny(InitStatus::NOT_FOUND);
     };
@@ -343,7 +337,7 @@ fn run_registry_self_tests() {
     let name = name_to_u64("registry-self-test");
     let old_cap = CapabilityToken(0x1111);
     let new_cap = CapabilityToken(0x2222);
-    let mut registry = [RegistryEntry::empty(); 32];
+    let mut registry = [RegistryEntry::empty(); REGISTRY_CAPACITY];
     registry[0] = RegistryEntry {
         name,
         public_cap: old_cap,
@@ -367,7 +361,7 @@ fn run_registry_self_tests() {
     let stale_removed =
         stale_lookup.label == InitMsg::DENY && registry[0] == RegistryEntry::empty();
 
-    let mut full = [RegistryEntry::empty(); 32];
+    let mut full = [RegistryEntry::empty(); REGISTRY_CAPACITY];
     for (index, entry) in full.iter_mut().enumerate() {
         *entry = RegistryEntry {
             name: (index + 1) as u64,

@@ -3091,11 +3091,13 @@ mod sunlight {
         }
         let mut name_buf = [0u8; 16];
         let name = shell_name(shell_id, &mut name_buf);
-        nameserver_register(name, ep);
-        if shell_id == 0 {
-            nameserver_register("sshl", ep);
+        let numbered_registered = nameserver_register(name, ep);
+        let alias_registered = shell_id != 0 || nameserver_register("sshl", ep);
+        if numbered_registered && alias_registered {
+            debug_log("[TTY]  sunshell registered as 'sshl'");
+        } else {
+            debug_log("[TTY]  FATAL: sunshell nameserver registration failed");
         }
-        debug_log("[TTY]  sunshell registered as 'sshl'");
         if TRACE_SHELL_IPC {
             debug_log("[SSHL-IPC] registered with nameserver");
         }
