@@ -6,6 +6,7 @@ pub mod ioapic;
 pub mod keyboard;
 pub mod lapic;
 pub mod mouse;
+mod pit;
 pub mod rtc;
 mod rtc_codec;
 pub mod serial;

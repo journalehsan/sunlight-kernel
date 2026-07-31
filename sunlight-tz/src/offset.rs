@@ -481,8 +481,12 @@ mod tests {
         let boundaries = [
             (1_754_006_399, (2025, 7, 31, 23, 59, 59)),
             (1_754_006_400, (2025, 8, 1, 0, 0, 0)),
+            (1_788_220_799, (2026, 8, 31, 23, 59, 59)),
+            (1_788_220_800, (2026, 9, 1, 0, 0, 0)),
             (1_740_787_199, (2025, 2, 28, 23, 59, 59)),
             (1_740_787_200, (2025, 3, 1, 0, 0, 0)),
+            (1_709_164_799, (2024, 2, 28, 23, 59, 59)),
+            (1_709_164_800, (2024, 2, 29, 0, 0, 0)),
             (1_709_251_199, (2024, 2, 29, 23, 59, 59)),
             (1_709_251_200, (2024, 3, 1, 0, 0, 0)),
             (1_798_761_599, (2026, 12, 31, 23, 59, 59)),
@@ -499,6 +503,59 @@ mod tests {
         assert_eq!(weekday_iso(2024, 2, 29), 4);
         assert_eq!(weekday_iso(2026, 7, 23), 4);
         assert_eq!(weekday_iso(2026, 7, 24), 5);
+        assert_eq!(weekday_iso(2026, 7, 31), 5);
+        assert_eq!(weekday_iso(2026, 8, 1), 6);
+    }
+
+    #[test]
+    fn weekday_stays_consistent_across_calendar_boundaries() {
+        let transitions = [
+            (1_785_542_399, 1_785_542_400),
+            (1_788_220_799, 1_788_220_800),
+            (1_740_787_199, 1_740_787_200),
+            (1_709_164_799, 1_709_164_800),
+            (1_709_251_199, 1_709_251_200),
+            (1_798_761_599, 1_798_761_600),
+        ];
+        for (before, after) in transitions {
+            let a = decompose(before);
+            let b = decompose(after);
+            let weekday_a = weekday_iso(a.0 as i32, a.1, a.2);
+            let weekday_b = weekday_iso(b.0 as i32, b.1, b.2);
+            assert_eq!(weekday_b, if weekday_a == 7 { 1 } else { weekday_a + 1 });
+        }
+    }
+
+    #[test]
+    fn long_uptime_progression_and_timezone_changes_preserve_utc() {
+        let start_utc = 1_785_456_000;
+        let elapsed = 132 * 3_600 + 17 * 60;
+        let end_utc = start_utc + elapsed;
+
+        let start = local_now(start_utc, &IRAN);
+        let end = local_now(end_utc, &IRAN);
+        assert_eq!(
+            (start.year, start.month, start.day, start.hour, start.minute),
+            (2026, 7, 31, 3, 30)
+        );
+        assert_eq!(
+            (end.year, end.month, end.day, end.hour, end.minute),
+            (2026, 8, 5, 15, 47)
+        );
+        assert_eq!(end_utc - start_utc, elapsed);
+
+        let utc_view = local_now(end_utc, &UTC);
+        assert_eq!(
+            (
+                utc_view.year,
+                utc_view.month,
+                utc_view.day,
+                utc_view.hour,
+                utc_view.minute
+            ),
+            (2026, 8, 5, 12, 17)
+        );
+        assert_eq!(end_utc, start_utc + elapsed);
     }
 
     #[test]

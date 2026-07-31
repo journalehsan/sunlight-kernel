@@ -7,7 +7,7 @@
 //! Top-right status cluster (implemented here):
 //!   [power] [network] [battery] HH:MM AM/PM
 //!
-//! Clock source: "tz" service via TzMsg::GET_LOCAL_TIME (word0 packed y/m/d/h/min/s).
+//! Clock source: "tz" service via TzMsg::GET_LOCAL_TIME (civil fields plus weekday).
 //!   Same path used internally by sunlight-top (telemetry fill_local_time calls tz).
 //!   Compact 12h format (e.g. "5:29 AM").
 //!
@@ -1496,6 +1496,7 @@ struct VortexShell {
     status_month: u8,
     status_day: u8,
     status_sec: u8,
+    status_weekday_iso: u8,
     // TZ id bytes for tooltip (from /etc/localtime or GET_ZONE best effort)
     tz_id: [u8; 48],
     tz_id_len: usize,
@@ -1714,6 +1715,7 @@ impl VortexShell {
             status_month: 1,
             status_day: 1,
             status_sec: 0,
+            status_weekday_iso: 4,
             tz_id: [
                 b'U', b'T', b'C', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1872,11 +1874,14 @@ impl VortexShell {
 
         let mut tmp_tz = [0u8; 48];
         let mut tmp_tz_l = 0usize;
-        if let Some((y, mon, d, h, mi, s)) = query_local_full(&mut tmp_tz, &mut tmp_tz_l) {
+        if let Some((y, mon, d, h, mi, s, weekday_iso)) =
+            query_local_full(&mut tmp_tz, &mut tmp_tz_l)
+        {
             if mi != self.status_min
                 || d != self.status_day
                 || mon != self.status_month
                 || y != self.status_year
+                || weekday_iso != self.status_weekday_iso
                 || self.status_min == 0xff
             {
                 self.status_year = y;
@@ -1885,6 +1890,7 @@ impl VortexShell {
                 self.status_hour = h;
                 self.status_min = mi;
                 self.status_sec = s;
+                self.status_weekday_iso = weekday_iso;
                 clock_changed = true;
                 if self.show_calendar_popover && (1..=12).contains(&mon) && y >= 1970 {
                     self.cal_view_month = mon;
@@ -4162,12 +4168,12 @@ fn draw_running_app_button(
 // Status cluster: clock (tz), network (networkd), battery (placeholder), power
 // ---------------------------------------------------------------------------
 
-/// Query "tz" for full local time + basic zone info. Returns (y,m,d,h,min,s) on success.
+/// Query "tz" for full local time + service-derived ISO weekday.
 /// Also fills a small tz id buffer from reply or fallback.
 pub(crate) fn query_local_full(
     out_tz: &mut [u8; 48],
     out_tz_len: &mut usize,
-) -> Option<(u16, u8, u8, u8, u8, u8)> {
+) -> Option<(u16, u8, u8, u8, u8, u8, u8)> {
     let Some(tz) = nameserver_lookup("tz") else {
         return None;
     };
@@ -4181,14 +4187,7 @@ pub(crate) fn query_local_full(
     if reply.label != TzMsg::REPLY {
         return None;
     }
-    // word(0): year(u16)<<48 | mon<<40 | day<<32 | h<<24 | min<<16 | s<<8
-    let w = reply.words[0];
-    let y = ((w >> 48) & 0xffff) as u16;
-    let mon = ((w >> 40) & 0xff) as u8;
-    let d = ((w >> 32) & 0xff) as u8;
-    let h = ((w >> 24) & 0xff) as u8;
-    let mi = ((w >> 16) & 0xff) as u8;
-    let s = ((w >> 8) & 0xff) as u8;
+    let local = sunlight_tz::decode_local_time(&reply.words)?;
 
     // Try GET_ZONE for id (best effort, non fatal)
     *out_tz_len = 3;
@@ -4217,7 +4216,15 @@ pub(crate) fn query_local_full(
             }
         }
     }
-    Some((y, mon, d, h, mi, s))
+    Some((
+        local.year,
+        local.month,
+        local.day,
+        local.hour,
+        local.minute,
+        local.second,
+        local.weekday_iso,
+    ))
 }
 
 /// Format hour/min (0-23,0-59) into compact "H:MM AM" style in a stack buffer.
@@ -4444,6 +4451,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
         shell.status_day,
         shell.status_hour,
         shell.status_min,
+        shell.status_weekday_iso,
         core::str::from_utf8(&shell.locale[..shell.locale_len]).unwrap_or("C.UTF-8"),
     );
     let tw = measure_text(&center_text, FontRole::UiMedium).w as i32;
@@ -4605,11 +4613,19 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
 /// en_US.UTF-8-ish: "Wed, Jul 8   12:39 AM"
 /// C / C.UTF-8:     "2026-07-08   00:39"
 /// Uses sunlight-locale helpers. 12h only for en style in this polish.
-fn format_center_datetime(y: u16, mon: u8, d: u8, h: u8, mi: u8, loc: &str) -> String {
+fn format_center_datetime(
+    y: u16,
+    mon: u8,
+    d: u8,
+    h: u8,
+    mi: u8,
+    weekday_iso: u8,
+    loc: &str,
+) -> String {
     let is_en = loc.to_ascii_lowercase().starts_with("en_us")
         || loc.to_ascii_lowercase().starts_with("en-us");
     if is_en {
-        let wd = sunlight_locale::weekday_name(calendar_math::weekday_iso(y, mon, d), false, loc);
+        let wd = sunlight_locale::weekday_name(weekday_iso, false, loc);
         let mon_s = sunlight_locale::month_name(mon, false, loc);
         let mut hh = h % 12;
         if hh == 0 {
@@ -6460,11 +6476,7 @@ impl VortexShell {
             hour: self.status_hour,
             minute: self.status_min,
             second: self.status_sec,
-            weekday_iso: calendar_math::weekday_iso(
-                self.status_year,
-                self.status_month,
-                self.status_day,
-            ),
+            weekday_iso: self.status_weekday_iso,
         };
         let long_date = sunlight_locale::format_long_date(&dt, loc_str);
         let long_time = alloc::format!(
@@ -7554,6 +7566,18 @@ mod shelf_control_tests {
             // Trash sits left of Search inside the right shelf cluster.
             assert!(bot_right_cluster_width() > SEARCH_BTN + CLUSTER_PAD as u32 * 2);
         }
+    }
+
+    #[test]
+    fn panel_formats_july_31_and_august_1_from_service_weekday() {
+        assert_eq!(
+            format_center_datetime(2026, 7, 31, 23, 59, 5, "en_US.UTF-8"),
+            "Fri, Jul 31   11:59 PM"
+        );
+        assert_eq!(
+            format_center_datetime(2026, 8, 1, 0, 0, 6, "en_US.UTF-8"),
+            "Sat, Aug 1   12:00 AM"
+        );
     }
 }
 

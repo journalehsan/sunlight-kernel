@@ -351,16 +351,14 @@ fn acknowledge_external_irq(irq: u8) {
 fn init_pit() {
     const PIT_CMD: u16 = 0x43;
     const PIT_CH0: u16 = 0x40;
-    const MODE_3: u8 = 0x36;
-    const DIVISOR: u16 = 11932;
 
     let mut cmd: Port<u8> = Port::new(PIT_CMD);
     let mut ch0: Port<u8> = Port::new(PIT_CH0);
 
     unsafe {
-        cmd.write(MODE_3);
-        ch0.write((DIVISOR & 0xFF) as u8);
-        ch0.write((DIVISOR >> 8) as u8);
+        cmd.write(super::pit::MODE_2_RATE_GENERATOR);
+        ch0.write((super::pit::RELOAD & 0xFF) as u8);
+        ch0.write((super::pit::RELOAD >> 8) as u8);
     }
 }
 
@@ -382,49 +380,44 @@ fn read_pit_count() -> u16 {
 /// Computes fixed-point multiplier for cheap now_ns() in hot paths.
 /// Safe to call with interrupts disabled; spins briefly (~1-2 ms).
 pub fn calibrate_tsc_from_pit() {
-    const PIT_INPUT_HZ: u64 = 1_193_182;
-    // Measure over a modest delta to get decent precision without long spin.
-    let start_count = read_pit_count() as u64;
+    let start_count = read_pit_count();
     let tsc0 = unsafe { core::arch::x86_64::_rdtsc() };
-    // Target ~2000 PIT counts drop (~1.6 ms at 1.19MHz). Enough for ~GHz class CPU.
-    let target_drop: u64 = 2000;
     let mut spins: u32 = 0;
-    loop {
-        let cur = read_pit_count() as u64;
-        let dropped = if start_count >= cur {
-            start_count - cur
-        } else {
-            // handle wrap of 16-bit counter
-            start_count + ((0xFFFFu64 - cur) + 1)
+    let (end_count, dropped) = loop {
+        let current = read_pit_count();
+        let Some(dropped) = super::pit::elapsed_counts(start_count, current) else {
+            crate::serial_println!(
+                "[TIME] PIT calibration rejected invalid snapshot start_count={} current_count={} reload={}",
+                start_count,
+                current,
+                super::pit::RELOAD
+            );
+            return;
         };
-        if dropped >= target_drop {
-            break;
+        if dropped >= super::pit::CALIBRATION_COUNTS {
+            break (current, dropped);
         }
         spins += 1;
         if spins > 10_000_000 {
-            // Safety timeout: leave uncalibrated, fallbacks will be used.
+            crate::serial_println!(
+                "[TIME] PIT calibration timed out start_count={} last_count={} elapsed_counts={}",
+                start_count,
+                current,
+                dropped
+            );
             return;
         }
         core::hint::spin_loop();
-    }
+    };
     let tsc1 = unsafe { core::arch::x86_64::_rdtsc() };
     let tsc_delta = tsc1.saturating_sub(tsc0);
-    let dropped = {
-        let cur = read_pit_count() as u64;
-        if start_count >= cur {
-            start_count - cur
-        } else {
-            start_count + (0xFFFF - cur) + 1
-        }
-    };
-    if tsc_delta < 1000 || dropped == 0 {
+    if tsc_delta < 1000 {
         return;
     }
-    // freq_hz = (tsc_delta / time_seconds)
-    // time_s = dropped / PIT_INPUT_HZ
-    let hz = tsc_delta.saturating_mul(PIT_INPUT_HZ) / dropped;
+    let Some(hz) = super::pit::tsc_frequency_hz(tsc_delta, dropped) else {
+        return;
+    };
     if hz < 100_000_000 {
-        // Unrealistically low (or calibration on very slow emu); keep fallback.
         return;
     }
     TSC_HZ_APPROX.store(hz, Ordering::SeqCst);
@@ -433,6 +426,16 @@ pub fn calibrate_tsc_from_pit() {
     let mul = ((1_000_000_000u128 << 32) / (hz as u128)) as u64;
     TSC_TO_NS_MUL.store(mul, Ordering::SeqCst);
     TSC_ORIGIN.store(tsc0, Ordering::SeqCst);
+    crate::serial_println!(
+        "[TIME] PIT calibration mode=2 input_hz={} reload={} start_count={} end_count={} elapsed_counts={} tsc_delta={} tsc_hz={}",
+        super::pit::INPUT_HZ,
+        super::pit::RELOAD,
+        start_count,
+        end_count,
+        dropped,
+        tsc_delta,
+        hz
+    );
 }
 
 /// Return current monotonic time in nanoseconds since an arbitrary boot origin.
@@ -825,8 +828,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // APs do not touch the centralized global timekeeper or the key-injection
     // buffer. They only drive local preemption/accounting.
     let ticks_total = if cpu_id == 0 {
-        let monotonic_ns = now_ns();
-        let ticks = crate::timekeeping::advance_global_tick(cpu_id, monotonic_ns);
+        let calibrated_monotonic_ns = if tsc_hz() == 0 { None } else { Some(now_ns()) };
+        let ticks = crate::timekeeping::advance_global_tick(cpu_id, calibrated_monotonic_ns);
+        crate::arch::x86_64::rtc::diagnostic_checkpoint(cpu_id, ticks);
         // Poll key injection buffer for test automation (no IRQ1 needed)
         keyboard::poll_inject_buffer();
         ticks

@@ -66,7 +66,11 @@ struct LockPresenter {
 fn current_time() -> (u16, u8, u8, u8, u8, u8) {
     let mut tz_buf = [0u8; 48];
     let mut tz_len = 0;
-    crate::query_local_full(&mut tz_buf, &mut tz_len).unwrap_or((2026, 7, 25, 12, 0, 0))
+    crate::query_local_full(&mut tz_buf, &mut tz_len)
+        .map(|(year, month, day, hour, minute, second, _weekday_iso)| {
+            (year, month, day, hour, minute, second)
+        })
+        .unwrap_or((2026, 7, 25, 12, 0, 0))
 }
 
 fn month_name(mon: u8) -> &'static str {

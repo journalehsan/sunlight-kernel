@@ -13,6 +13,7 @@ pub mod csv; // TzEntry, all_zones, tz_by_id, tz_by_display_name
 pub mod localtime;
 pub mod ntp_region; // continent → NTP pool region mapping
 pub mod offset; // local_offset_secs, local_now, LocalDateTime, is_dst_active // LocalTimeCfg, read_localtime, write_localtime, TzError
+pub mod wire;
 
 // Re-export the most commonly used items at crate root
 pub use catalog::{
@@ -32,6 +33,7 @@ pub use ntp_region::{
     NtpRegion, NTP_HOSTNAME_MAX, NTP_POOL_SERVER_COUNT,
 };
 pub use offset::{local_now, local_offset_secs, weekday_iso, weekday_sun0, LocalDateTime};
+pub use wire::{decode_local_time, encode_local_time, LocalTimeWireSnapshot};
 
 /// Convenience: look up zone by id (or None), then compute LocalDateTime.
 /// If lookup fails, returns None.

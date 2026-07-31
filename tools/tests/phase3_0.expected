@@ -1,4 +1,7 @@
 # Phase 3.0 Storage Bootstrap + VFS/RamFs gate
+[TIME] PIT calibration mode=2
+rtc: decoded_utc=
+timezone: zone=
 [VFS]  Registered as 'vfs'
 [VFS]  Test open /etc/motd
 [VFS]  Test read /etc/motd

@@ -3,6 +3,8 @@
 
 extern crate alloc;
 
+use core::sync::atomic::{AtomicUsize, Ordering};
+
 struct BumpAllocator;
 
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
@@ -51,6 +53,9 @@ static mut ACTIVE_CFG: LocalTimeCfg = LocalTimeCfg {
     dst_start_month: 0,
     dst_end_month: 0,
 };
+
+static NEXT_DIAGNOSTIC_CHECKPOINT: AtomicUsize = AtomicUsize::new(0);
+const DIAGNOSTIC_CHECKPOINT_SECS: [u64; 5] = [60, 3_600, 21_600, 86_400, 476_220];
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -141,28 +146,16 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
                 dst_end_month: cfg.dst_end_month,
             };
             let ldt = local_now(utc, &entry);
+            let weekday = sunlight_tz::weekday_iso(ldt.year as i32, ldt.month, ldt.day);
+            diagnostic_checkpoint(utc, &ldt, weekday, cfg.id_str());
 
-            // Pack per spec into 80-byte msg:
-            // word(0): year(u16)<<48 | m<<40 | d<<32 | h<<24 | min<<16 | s<<8
-            let mut w0: u64 = (ldt.year as u64) << 48;
-            w0 |= (ldt.month as u64) << 40;
-            w0 |= (ldt.day as u64) << 32;
-            w0 |= (ldt.hour as u64) << 24;
-            w0 |= (ldt.minute as u64) << 16;
-            w0 |= (ldt.second as u64) << 8;
-
-            let mut reply = IpcMsg::with_label(TzMsg::REPLY)
-                .word(0, w0)
-                .word(1, ldt.utc_offset_secs as u64)
-                .word(2, ldt.is_dst as u64);
-
-            // abbr into words[3] low bytes (8 bytes total)
-            let mut ab = 0u64;
-            for i in 0..8 {
-                ab |= (ldt.abbr[i] as u64) << (i * 8);
-            }
-            reply = reply.word(3, ab);
-            reply
+            let words = sunlight_tz::encode_local_time(&ldt, weekday);
+            IpcMsg::with_label(TzMsg::REPLY)
+                .word(0, words[0])
+                .word(1, words[1])
+                .word(2, words[2])
+                .word(3, words[3])
+                .word(4, words[4])
         }
 
         TzMsg::GET_ZONE => {
@@ -296,6 +289,45 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
         }
 
         _ => IpcMsg::with_label(TzMsg::ERROR),
+    }
+}
+
+fn diagnostic_checkpoint(utc: u64, local: &sunlight_tz::LocalDateTime, weekday: u8, zone_id: &str) {
+    let monotonic_ms = sunlight_ipc::monotonic_millis();
+    loop {
+        let checkpoint_index = NEXT_DIAGNOSTIC_CHECKPOINT.load(Ordering::Relaxed);
+        let Some(&checkpoint_secs) = DIAGNOSTIC_CHECKPOINT_SECS.get(checkpoint_index) else {
+            return;
+        };
+        if monotonic_ms / 1_000 < checkpoint_secs {
+            return;
+        }
+        if NEXT_DIAGNOSTIC_CHECKPOINT
+            .compare_exchange(
+                checkpoint_index,
+                checkpoint_index + 1,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            )
+            .is_err()
+        {
+            continue;
+        }
+        debug_log(&alloc::format!(
+            "[TIME-CHECKPOINT] layer=timezone_service elapsed_target_secs={} monotonic_ms={} realtime_utc_unix={} zone={} offset_seconds={} local={:04}-{:02}-{:02}T{:02}:{:02}:{:02} weekday={}",
+            checkpoint_secs,
+            monotonic_ms,
+            utc,
+            zone_id,
+            local.utc_offset_secs,
+            local.year,
+            local.month,
+            local.day,
+            local.hour,
+            local.minute,
+            local.second,
+            weekday_name(weekday)
+        ));
     }
 }
 

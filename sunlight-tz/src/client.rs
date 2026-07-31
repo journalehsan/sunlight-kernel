@@ -248,6 +248,7 @@ pub struct LocalTimeSnapshot {
     pub hour: u8,
     pub minute: u8,
     pub second: u8,
+    pub weekday_iso: u8,
     pub utc_offset_secs: i64,
     pub is_dst: bool,
     pub abbr: [u8; 8],
@@ -315,21 +316,18 @@ impl TzClient {
         if reply.label != TzMsg::REPLY {
             return Err(map_tz_error(&reply));
         }
-        let w0 = reply.words[0];
-        let mut abbr = [0u8; 8];
-        for i in 0..8 {
-            abbr[i] = ((reply.words[3] >> (i * 8)) & 0xff) as u8;
-        }
+        let decoded = crate::decode_local_time(&reply.words).ok_or(TzClientError::Unexpected)?;
         Ok(LocalTimeSnapshot {
-            year: ((w0 >> 48) & 0xffff) as u16,
-            month: ((w0 >> 40) & 0xff) as u8,
-            day: ((w0 >> 32) & 0xff) as u8,
-            hour: ((w0 >> 24) & 0xff) as u8,
-            minute: ((w0 >> 16) & 0xff) as u8,
-            second: ((w0 >> 8) & 0xff) as u8,
-            utc_offset_secs: reply.words[1] as i64,
-            is_dst: reply.words[2] != 0,
-            abbr,
+            year: decoded.year,
+            month: decoded.month,
+            day: decoded.day,
+            hour: decoded.hour,
+            minute: decoded.minute,
+            second: decoded.second,
+            weekday_iso: decoded.weekday_iso,
+            utc_offset_secs: decoded.utc_offset_secs,
+            is_dst: decoded.is_dst,
+            abbr: decoded.abbr,
         })
     }
 

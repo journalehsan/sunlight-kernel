@@ -749,6 +749,12 @@ pub mod NtpSyncState {
 /// Timezone service opcodes (registered as "tz")
 #[allow(non_snake_case)]
 pub mod TzMsg {
+    /// Reply:
+    /// - word(0): year<<48 | month<<40 | day<<32 | hour<<24 | minute<<16 | second<<8
+    /// - word(1): signed UTC offset seconds
+    /// - word(2): DST active
+    /// - word(3): timezone abbreviation bytes
+    /// - word(4): ISO weekday, Monday=1 through Sunday=7
     pub const GET_LOCAL_TIME: u64 = 0x7001;
     pub const GET_ZONE: u64 = 0x7002;
     pub const SET_ZONE: u64 = 0x7003; // arg: zone id in data[0..64]

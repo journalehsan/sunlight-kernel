@@ -322,7 +322,9 @@ mod tests {
     fn civil_boundaries_advance_by_one_second() {
         let pairs = [
             ((2026, 7, 31), (2026, 8, 1)),
+            ((2026, 8, 31), (2026, 9, 1)),
             ((2025, 2, 28), (2025, 3, 1)),
+            ((2024, 2, 28), (2024, 2, 29)),
             ((2024, 2, 29), (2024, 3, 1)),
             ((2026, 12, 31), (2027, 1, 1)),
         ];
@@ -351,13 +353,47 @@ mod tests {
 
     #[test]
     fn wall_and_uptime_share_exact_unadjusted_progression() {
-        let elapsed = (6 * 60 + 46) * 60;
-        let boot_wall = 1_800_000_000;
-        let boot_ticks = 12_345;
-        let now_ticks = boot_ticks + elapsed * 100;
-        assert_eq!(
-            wall_time_from_ticks(boot_wall, boot_ticks, now_ticks, 100),
-            Some(boot_wall + elapsed)
-        );
+        for elapsed in [1, 60, 86_400, 132 * 3_600 + 17 * 60] {
+            let boot_wall = 1_800_000_000;
+            let boot_ticks = 12_345;
+            let now_ticks = boot_ticks + elapsed * 100;
+            assert_eq!(
+                wall_time_from_ticks(boot_wall, boot_ticks, now_ticks, 100),
+                Some(boot_wall + elapsed)
+            );
+        }
+    }
+
+    #[test]
+    fn realtime_steps_do_not_change_monotonic_progression() {
+        let ticks = 50_000;
+        let forward_base = 1_900_000_000;
+        let backward_base = 1_700_000_000;
+        let later_ticks = ticks + 12_345;
+
+        let forward = wall_time_from_ticks(forward_base, ticks, later_ticks, 100).unwrap();
+        let backward = wall_time_from_ticks(backward_base, ticks, later_ticks, 100).unwrap();
+        assert_eq!(forward - forward_base, 123);
+        assert_eq!(backward - backward_base, 123);
+        assert_eq!(later_ticks - ticks, 12_345);
+    }
+
+    #[test]
+    fn repeated_reads_around_midnight_are_idempotent() {
+        let boot = unix_seconds(RtcDateTime {
+            year: 2026,
+            month: 7,
+            day: 31,
+            hour: 23,
+            minute: 59,
+            second: 59,
+        })
+        .unwrap();
+        let boot_ticks = 100;
+        let midnight_ticks = boot_ticks + 100;
+        let first = wall_time_from_ticks(boot, boot_ticks, midnight_ticks, 100);
+        let second = wall_time_from_ticks(boot, boot_ticks, midnight_ticks, 100);
+        assert_eq!(first, second);
+        assert_eq!(first, Some(boot + 1));
     }
 }

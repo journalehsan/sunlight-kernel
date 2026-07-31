@@ -720,6 +720,9 @@ fi
 if [[ "$PHASE" == "wiseowl-trusted-session-readiness-v1" ]]; then
     cp "$QEMU_OUTPUT" target/wiseowl-trusted-session-readiness-v1-serial.log
 fi
+if [[ "$PHASE" == "phase3.0" ]]; then
+    cp "$QEMU_OUTPUT" target/timekeeping-phase3-serial.log
+fi
 
 ALL_FOUND=true
 PMM_LINE=$(grep -E '^\[PMM\] [0-9]+/[0-9]+ MiB free$' "$QEMU_OUTPUT" | head -n1 || true)
