@@ -40,7 +40,17 @@ pub enum Event {
         super_key: bool,
     },
 
-    /// Timer tick or idle poll — no user input pending.
+    /// Mouse wheel scrolled at window-local coordinates.
+    /// `delta` is the vertical scroll delta: positive = scroll down, negative = scroll up.
+    /// For high-resolution touchpads the delta may be fractional steps using a fixed-point
+    /// representation where 120 units = one conventional wheel detent (Windows WHEEL_DELTA).
+    MouseWheel {
+        x: i32,
+        y: i32,
+        delta: i16,
+    },
+
+    // Timer tick or idle poll — no user input pending.
     Tick,
 }
 
@@ -83,13 +93,18 @@ impl Event {
         }
     }
 
+    pub fn mouse_wheel(x: i32, y: i32, delta: i16) -> Self {
+        Self::MouseWheel { x, y, delta }
+    }
+
     /// Return the mouse position if this is a pointer event.
     pub fn pos(&self) -> Option<Point> {
         match self {
             Self::Click { x, y }
             | Self::MouseDown { x, y, .. }
             | Self::MouseUp { x, y, .. }
-            | Self::MouseMove { x, y } => Some(Point::new(*x, *y)),
+            | Self::MouseMove { x, y }
+            | Self::MouseWheel { x, y, .. } => Some(Point::new(*x, *y)),
             _ => None,
         }
     }

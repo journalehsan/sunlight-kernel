@@ -744,13 +744,23 @@ impl TerminalViewport {
         Self { rect }
     }
 
-    fn draw(&self, canvas: &mut Canvas, grid: &mut ModelGrid, theme: &sunlight_ui::Theme) {
+    fn draw(
+        &self,
+        canvas: &mut Canvas,
+        grid: &mut ModelGrid,
+        theme: &sunlight_ui::Theme,
+        scrollback_offset: usize,
+    ) {
         canvas.fill_rect(self.rect, theme.panel);
         canvas.draw_rect(self.rect, theme.border);
 
         let cols = grid.cols;
         let rows = grid.rows;
-        let cells = grid.to_term_cells(&ANSI_COLORS);
+        let cells = if scrollback_offset == 0 || grid.in_alt_screen() {
+            grid.to_term_cells(&ANSI_COLORS)
+        } else {
+            grid.to_term_cells_with_offset(&ANSI_COLORS, scrollback_offset)
+        };
         let mut clipped = canvas.sub_canvas(self.rect.inset(1));
         for row in 0..rows {
             for col in 0..cols {
@@ -865,6 +875,9 @@ struct TerminalTab {
     /// Set once `App::view` has drawn this tab for the first time, so the
     /// `first_tab_frame` phase is logged exactly once per tab.
     first_frame_logged: bool,
+    /// Scrollback viewport offset: 0 = live output, 1..N = history lines
+    /// above the visible screen.
+    scrollback_offset: usize,
 }
 
 impl TerminalTab {
@@ -884,6 +897,7 @@ impl TerminalTab {
             status: TabStatus::Connecting,
             dirty: false,
             first_frame_logged: false,
+            scrollback_offset: 0,
         };
         tab.set_title(title);
         tab
@@ -926,6 +940,7 @@ impl TerminalTab {
             return false;
         }
         self.ingest(&read_buf[..n], console_buf, debug);
+        self.scrollback_offset = 0;
         true
     }
 
@@ -1901,7 +1916,7 @@ impl App for TerminalApp {
             log_tab_phase(tab.id, "first_tab_frame");
         }
 
-        TerminalViewport::new(content).draw(canvas, &mut tab.grid, theme);
+        TerminalViewport::new(content).draw(canvas, &mut tab.grid, theme, tab.scrollback_offset);
 
         let status_label = match tab.status {
             TabStatus::Connecting => Some("Connecting..."),
@@ -2095,6 +2110,26 @@ impl App for TerminalApp {
                 self.window_focused = true;
             }
             Event::MouseUp { .. } | Event::MouseMove { .. } | Event::PointerOwnership { .. } => {}
+            Event::MouseWheel { x, y, delta } => {
+                let content = content_rect();
+                if content.contains(sunlight_ui::Point::new(x, y)) {
+                    if let Some(tab) = self.active_tab_mut() {
+                        if delta > 0 {
+                            let max = tab.grid.scrollback_len();
+                            if tab.scrollback_offset < max {
+                                tab.scrollback_offset =
+                                    (tab.scrollback_offset + 1).min(max);
+                                dirty = true;
+                            }
+                        } else if delta < 0 {
+                            if tab.scrollback_offset > 0 {
+                                tab.scrollback_offset -= 1;
+                                dirty = true;
+                            }
+                        }
+                    }
+                }
+            }
         }
         dirty
     }

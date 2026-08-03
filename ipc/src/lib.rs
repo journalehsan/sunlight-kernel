@@ -964,6 +964,11 @@ pub mod sgp {
         /// The requested window ID resolved to a live compositor window. A
         /// reply without this flag is an explicit stale/wrong-window result.
         pub const EVENT_FLAG_WINDOW_VALID: u64 = 1 << 12;
+        /// wheel delta data is present in this poll.
+        pub const EVENT_FLAG_WHEEL_VALID: u64 = 1 << 13;
+        /// EVENT_POLL reply words[0] bits 32..47 carry the signed wheel delta.
+        pub const EVENT_WHEEL_DELTA_SHIFT: u32 = 32;
+        pub const EVENT_WHEEL_DELTA_MASK: u64 = 0xFFFF << EVENT_WHEEL_DELTA_SHIFT;
         /// EVENT_POLL reply words[3] bits 16..23 contain the active workspace id.
         pub const EVENT_DESKTOP_ACTIVE_WORKSPACE_SHIFT: u32 = 16;
         pub const EVENT_DESKTOP_ACTIVE_WORKSPACE_MASK: u64 =
@@ -1496,6 +1501,9 @@ pub mod KbdMsg {
 pub mod MouseMsg {
     /// Raw mouse motion event: dx(i16) | dy(i16)<<16 | buttons(u8)<<32
     pub const RAW_MOTION: u64 = 0x3;
+    /// Raw wheel scroll event from the pointing device.
+    /// words[0] low 16 bits carry the signed wheel delta.
+    pub const RAW_WHEEL: u64 = 0x4;
 }
 
 /// Device-independent relative pointer report shared by PS/2, USB HID, TTY,

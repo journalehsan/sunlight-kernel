@@ -692,6 +692,7 @@ struct Window {
     client_cursor: CursorShape,
     pending_keys: KeyEventQueue,
     pending_pointer_buttons: PointerButtonEventQueue,
+    pending_pointer_wheels: PointerWheelEventQueue,
     /// Last mouse state delivered to this window while it owned the pointer.
     /// Non-target windows keep their own cached state so they do not synthesize
     /// pointer transitions from someone else's clicks.
@@ -800,6 +801,7 @@ impl Window {
 
 const KEY_EVENT_QUEUE_CAP: usize = 32;
 const POINTER_BUTTON_EVENT_QUEUE_INITIAL_CAPACITY: usize = 32;
+const POINTER_WHEEL_EVENT_QUEUE_CAP: usize = 32;
 
 #[derive(Clone, Copy)]
 struct KeyEventQueue {
@@ -860,6 +862,46 @@ struct PointerButtonEvent {
 
 struct PointerButtonEventQueue {
     events: VecDeque<PointerButtonEvent>,
+}
+
+#[derive(Clone, Copy)]
+struct PointerWheelEvent {
+    x: u16,
+    y: u16,
+    delta: i16,
+}
+
+struct PointerWheelEventQueue {
+    events: VecDeque<PointerWheelEvent>,
+}
+
+impl PointerWheelEventQueue {
+    fn new() -> Self {
+        Self {
+            events: VecDeque::with_capacity(POINTER_BUTTON_EVENT_QUEUE_INITIAL_CAPACITY),
+        }
+    }
+
+    fn push(&mut self, event: PointerWheelEvent) {
+        if let Some(last) = self.events.back_mut() {
+            if last.x == event.x && last.y == event.y {
+                last.delta = last.delta.saturating_add(event.delta);
+                return;
+            }
+        }
+        if self.events.len() == POINTER_WHEEL_EVENT_QUEUE_CAP {
+            self.events.pop_front();
+        }
+        self.events.push_back(event);
+    }
+
+    fn pop(&mut self) -> Option<PointerWheelEvent> {
+        self.events.pop_front()
+    }
+
+    fn clear(&mut self) {
+        self.events.clear();
+    }
 }
 
 impl PointerButtonEventQueue {
@@ -1429,7 +1471,11 @@ fn topmost_window_id_at(state: &CompositorState, cx: u32, cy: u32) -> Option<u64
     topmost_window_idx_at(state, cx, cy).map(|idx| state.windows[idx].id)
 }
 
-fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (u64, u64, bool) {
+fn mouse_poll_words_for_window_with_wheel(
+    state: &mut CompositorState,
+    win_idx: usize,
+    allow_wheel: bool,
+) -> (u64, u64, bool, bool) {
     let mouse_x = state.mouse_x;
     let mouse_y = state.mouse_y;
     let target_id = topmost_window_id_at(&state, mouse_x as u32, mouse_y as u32);
@@ -1465,7 +1511,26 @@ fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (
             (event.x as u64) | ((event.y as u64) << 16),
             event.delivered_buttons as u64 | flags,
             true,
+            false,
         );
+    }
+    if allow_wheel {
+        if let Some(event) = win.pending_pointer_wheels.pop() {
+            let mut flags = SgpMsg::EVENT_FLAG_POINTER_OWNED | SgpMsg::EVENT_FLAG_WHEEL_VALID;
+            if focused_id == Some(win.id) {
+                flags |= SgpMsg::EVENT_FLAG_FOCUSED;
+            }
+            win.last_mouse_x = event.x;
+            win.last_mouse_y = event.y;
+            return (
+                (event.x as u64)
+                    | ((event.y as u64) << 16)
+                    | ((event.delta as u16 as u64) << SgpMsg::EVENT_WHEEL_DELTA_SHIFT),
+                win.last_buttons as u64 | flags,
+                false,
+                true,
+            );
+        }
     }
     let pointer_owned = target_id == Some(win.id) || captured_id == Some(win.id);
     let mut flags = 0;
@@ -1490,14 +1555,24 @@ fn mouse_poll_words_for_window(state: &mut CompositorState, win_idx: usize) -> (
             (mouse_x as u64) | ((mouse_y as u64) << 16),
             state.prev_buttons as u64 | flags,
             false,
+            false,
         )
     } else {
         (
             (win.last_mouse_x as u64) | ((win.last_mouse_y as u64) << 16),
             win.last_buttons as u64 | flags,
             false,
+            false,
         )
     }
+}
+
+#[cfg(test)]
+fn mouse_poll_words_for_window(
+    state: &mut CompositorState,
+    win_idx: usize,
+) -> (u64, u64, bool, bool) {
+    mouse_poll_words_for_window_with_wheel(state, win_idx, true)
 }
 
 fn queue_pointer_button_transitions(
@@ -1580,6 +1655,26 @@ fn queue_pointer_button_transitions(
         #[cfg(not(test))]
         log_pointer_button_event(event, queued, false);
     }
+}
+
+fn queue_pointer_wheel(state: &mut CompositorState, x: u16, y: u16, delta: i16) -> bool {
+    if delta == 0 {
+        return false;
+    }
+    let Some(target_id) = topmost_window_id_at(state, x as u32, y as u32) else {
+        return false;
+    };
+    let Some(window) = state
+        .windows
+        .iter_mut()
+        .find(|window| window.id == target_id)
+    else {
+        return false;
+    };
+    window
+        .pending_pointer_wheels
+        .push(PointerWheelEvent { x, y, delta });
+    true
 }
 
 const fn mouse_requires_scene_redraw(
@@ -5026,6 +5121,7 @@ mod tests {
             client_cursor: CursorShape::Pointer,
             pending_keys: KeyEventQueue::new(),
             pending_pointer_buttons: PointerButtonEventQueue::new(),
+            pending_pointer_wheels: PointerWheelEventQueue::new(),
             last_mouse_x: 0,
             last_mouse_y: 0,
             last_buttons: 0,
@@ -5348,6 +5444,39 @@ mod tests {
         assert!(!steady.2);
         assert_eq!(steady.1 & 0xff, 0);
         assert_eq!(state.windows[0].pending_pointer_buttons.len(), 0);
+    }
+
+    #[test]
+    fn wheel_is_queued_for_topmost_window_and_encoded_once() {
+        let mut state = test_state(vec![test_window(
+            7,
+            40,
+            40,
+            220,
+            180,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        )]);
+        state.mouse_x = 100;
+        state.mouse_y = 100;
+
+        assert!(queue_pointer_wheel(&mut state, 100, 100, -3));
+        let wheel = mouse_poll_words_for_window(&mut state, 0);
+        assert!(!wheel.2);
+        assert!(wheel.3);
+        assert_ne!(wheel.1 & SgpMsg::EVENT_FLAG_WHEEL_VALID, 0);
+        assert_eq!(wheel.0 & 0xFFFF, 100);
+        assert_eq!((wheel.0 >> 16) & 0xFFFF, 100);
+        assert_eq!(
+            ((wheel.0 & SgpMsg::EVENT_WHEEL_DELTA_MASK) >> SgpMsg::EVENT_WHEEL_DELTA_SHIFT) as u16
+                as i16,
+            -3
+        );
+
+        let steady = mouse_poll_words_for_window(&mut state, 0);
+        assert!(!steady.3);
+        assert_eq!(steady.1 & SgpMsg::EVENT_FLAG_WHEEL_VALID, 0);
     }
 
     #[test]
@@ -6905,6 +7034,7 @@ pub extern "C" fn _start() -> ! {
                                 client_cursor: CursorShape::Pointer,
                                 pending_keys: KeyEventQueue::new(),
                                 pending_pointer_buttons: PointerButtonEventQueue::new(),
+                                pending_pointer_wheels: PointerWheelEventQueue::new(),
                                 last_mouse_x: 0,
                                 last_mouse_y: 0,
                                 last_buttons: 0,
@@ -7556,20 +7686,27 @@ pub extern "C" fn _start() -> ! {
                             ));
                         }
                     }
-                    let (mouse_word, button_word, button_event_dequeued) = if lock_isolates_this {
-                        // Keep WINDOW_VALID, but never deliver pointer ownership or
-                        // queued button edges under the lock overlay.
-                        let win = &mut state.windows[win_idx];
-                        win.pending_pointer_buttons.clear();
-                        win.focus_press_pending = false;
-                        (
-                            (win.last_mouse_x as u64) | ((win.last_mouse_y as u64) << 16),
-                            win.last_buttons as u64,
-                            false,
-                        )
-                    } else {
-                        mouse_poll_words_for_window(&mut state, win_idx)
-                    };
+                    let (mouse_word, button_word, button_event_dequeued, wheel_event_dequeued) =
+                        if lock_isolates_this {
+                            // Keep WINDOW_VALID, but never deliver pointer ownership or
+                            // queued button edges under the lock overlay.
+                            let win = &mut state.windows[win_idx];
+                            win.pending_pointer_buttons.clear();
+                            win.pending_pointer_wheels.clear();
+                            win.focus_press_pending = false;
+                            (
+                                (win.last_mouse_x as u64) | ((win.last_mouse_y as u64) << 16),
+                                win.last_buttons as u64,
+                                false,
+                                false,
+                            )
+                        } else {
+                            mouse_poll_words_for_window_with_wheel(
+                                &mut state,
+                                win_idx,
+                                key_event.is_none(),
+                            )
+                        };
                     if button_event_dequeued {
                         state.debug_counters.pointer_button_dequeued_count = state
                             .debug_counters
@@ -7583,6 +7720,7 @@ pub extern "C" fn _start() -> ! {
                     let event_available = key_event.is_some()
                         || (!lock_isolates_this && focus_press)
                         || button_event_dequeued
+                        || wheel_event_dequeued
                         || (pointer_owned
                             && (delivered_mouse_x != previous_mouse_x
                                 || delivered_mouse_y != previous_mouse_y
@@ -8303,6 +8441,16 @@ pub extern "C" fn _start() -> ! {
                 if INPUT_DEBUG && state.debug_counters.mouse_event_count % COUNTER_LOG_INTERVAL == 0
                 {
                     log_debug_counters(&state, "mouse");
+                }
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+            }
+
+            MouseMsg::RAW_WHEEL => {
+                let delta = ((msg.words[0] & 0xFFFF) as u16) as i16;
+                if delta != 0 && state.session_active {
+                    let x = state.mouse_x;
+                    let y = state.mouse_y;
+                    let _ = queue_pointer_wheel(&mut state, x, y, delta);
                 }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
             }

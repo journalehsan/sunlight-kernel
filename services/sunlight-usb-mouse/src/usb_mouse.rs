@@ -124,6 +124,7 @@ pub struct MouseEvent {
     pub dx: i16,
     pub dy: i16,
     pub buttons: u8,
+    pub wheel: i16,
 }
 
 #[derive(Clone, Copy)]
@@ -635,15 +636,13 @@ impl XhciMouse {
                         }
                     };
                 self.diagnose_report(&report[..actual_length], decoded);
-                // Wheel remains decoded for protocol completeness. MouseEvent
-                // is ABI-compatible with the existing PS/2 event (no wheel).
-                let _wheel = decoded.wheel.unwrap_or(0);
                 let result = MouseEvent {
                     buttons: decoded.buttons & 0x07,
                     dx: decoded.dx,
                     // HID boot reports positive Y down, which already matches
                     // display_server's top-down coordinate system.
                     dy: decoded.dy,
+                    wheel: decoded.wheel.unwrap_or(0),
                 };
                 self.submit_interrupt();
                 Some(result)

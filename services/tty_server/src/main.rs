@@ -74,6 +74,7 @@ enum VirtualTerminal {
 
 const KBD_LABEL: u64 = ShellMsg::KEY;
 const MOUSE_LABEL: u64 = MouseMsg::RAW_MOTION;
+const WHEEL_LABEL: u64 = MouseMsg::RAW_WHEEL;
 const OUTPUT_LABEL: u64 = ShellMsg::OUTPUT;
 const EXIT_LABEL: u64 = ShellMsg::EXIT;
 const DRAIN_LABEL: u64 = ShellMsg::DRAIN;
@@ -1048,6 +1049,11 @@ fn forward_pointer_to_display(
     send_display_request(display_cap, routed)
 }
 
+fn forward_wheel_to_display(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) -> bool {
+    let routed = IpcMsg::with_label(MouseMsg::RAW_WHEEL).word(0, msg.words[0]);
+    send_display_request(display_cap, routed)
+}
+
 /// Per-tab scrollback viewport state
 #[derive(Clone, Copy)]
 struct TabScrollback {
@@ -1605,7 +1611,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                         }
                     } // end 'kbd
                 }
-                if msg.label != MOUSE_LABEL {
+                if msg.label != MOUSE_LABEL && msg.label != WHEEL_LABEL {
                     let was_locked = login.locked_ticks > 0;
                     login.tick();
                     needs_render |= was_locked && login.locked_ticks == 0;
@@ -1648,6 +1654,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             pointer_only_render = true;
                         }
                     }
+                } else if msg.label == WHEEL_LABEL && active_vt == VirtualTerminal::Desktop {
+                    let _ = forward_wheel_to_display(&mut display_cap, msg);
                 }
                 if has_fb && !logged_in && vt_is_active(active_vt, VirtualTerminal::Tty) {
                     if needs_render {
@@ -1722,6 +1730,8 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                             pointer_only_render = true;
                         }
                     }
+                } else if msg.label == WHEEL_LABEL && active_vt == VirtualTerminal::Desktop {
+                    let _ = forward_wheel_to_display(&mut display_cap, msg);
                 }
 
                 // Lazy lookup: try to find sshl once it registers after being spawned.

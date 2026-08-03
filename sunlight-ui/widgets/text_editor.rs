@@ -25,6 +25,7 @@ const KEY_DELETE: u8 = 0x53;
 const KEY_ESC: u8 = 0x01;
 const DOUBLE_CLICK_MS: u64 = 350;
 const TRIPLE_CLICK_MS: u64 = 520;
+const WHEEL_SCROLL_LINES: usize = 3;
 
 #[derive(Debug)]
 pub struct TextEditorState {
@@ -327,6 +328,7 @@ impl<'a> TextEditor<'a> {
                 self.update_text_cursor(x, y);
                 self.handle_drag(x, y)
             }
+            Event::MouseWheel { x, y, delta } => self.handle_mouse_wheel(x, y, delta),
             Event::Key(ch) if self.state.focused && self.editable && self.state.menu.is_none() => {
                 self.handle_text(ch)
             }
@@ -367,6 +369,37 @@ impl<'a> TextEditor<'a> {
             self.ensure_cursor_visible();
         }
         response
+    }
+
+    fn handle_mouse_wheel(&mut self, x: i32, y: i32, delta: i16) -> TextEditorResponse {
+        if delta == 0 || !self.rect.contains(Point::new(x, y)) {
+            return TextEditorResponse::default();
+        }
+
+        let detents = if delta.unsigned_abs() >= 120 {
+            delta as i32 / 120
+        } else {
+            delta.signum() as i32
+        };
+        let line_delta = detents.saturating_mul(WHEEL_SCROLL_LINES as i32);
+        let old_scroll = self.state.scroll_line;
+        let max_scroll = self
+            .buffer
+            .line_count()
+            .saturating_sub(self.visible_line_count());
+        self.state.scroll_line = if line_delta > 0 {
+            old_scroll
+                .saturating_add(line_delta as usize)
+                .min(max_scroll)
+        } else {
+            old_scroll.saturating_sub(line_delta.unsigned_abs() as usize)
+        };
+
+        if self.state.scroll_line != old_scroll {
+            TextEditorResponse::consumed()
+        } else {
+            TextEditorResponse::default()
+        }
     }
 
     /// Execute a widget-local editing command (for example from an application
@@ -868,5 +901,29 @@ mod tests {
         assert!(editor.state.context_menu_open());
         assert!(editor.update(Event::mouse_down(12, 12, 0)).consumed);
         assert!(editor.state.context_menu_open());
+    }
+
+    #[test]
+    fn mouse_wheel_scrolls_and_clamps_inside_editor() {
+        let mut buffer = TextBuffer::from_utf8("0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
+        let mut state = TextEditorState::new();
+        let rect = Rect::new(0, 0, 200, 1);
+        let mut editor = TextEditor::new(rect, &mut buffer, &mut state);
+
+        assert!(editor.update(Event::mouse_wheel(10, 0, 1)).consumed);
+        assert_eq!(editor.state.scroll_line, 3);
+
+        assert!(editor.update(Event::mouse_wheel(10, 0, 120)).consumed);
+        assert_eq!(editor.state.scroll_line, 6);
+
+        assert!(editor.update(Event::mouse_wheel(10, 0, -1)).consumed);
+        assert_eq!(editor.state.scroll_line, 3);
+
+        assert!(!editor.update(Event::mouse_wheel(250, 0, 1)).consumed);
+        assert_eq!(editor.state.scroll_line, 3);
+
+        assert!(editor.update(Event::mouse_wheel(10, 0, 1200)).consumed);
+        assert_eq!(editor.state.scroll_line, 9);
+        assert!(!editor.update(Event::mouse_wheel(10, 0, 1)).consumed);
     }
 }

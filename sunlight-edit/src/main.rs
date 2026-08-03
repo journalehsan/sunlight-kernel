@@ -2135,6 +2135,12 @@ impl App for EditApp {
                 }
                 find_redraw
             }
+            Event::MouseWheel { .. } => {
+                if self.active_dialog != ActiveDialog::None || self.menu.is_some() {
+                    return false;
+                }
+                self.update_shared_editor(event)
+            }
             Event::Key(ch) => self.handle_text_key(ch),
             Event::KeyPress {
                 keycode,

@@ -37,6 +37,7 @@ pub mod image;
 pub mod layout;
 pub mod material;
 pub mod paint;
+pub mod scroll;
 pub mod theme;
 pub mod widgets;
 
@@ -58,6 +59,7 @@ pub use material::{
     DecorationGeometry, Material, MaterialKind, MaterialPalette, ReadabilityRole, SurfaceRole,
 };
 pub use paint::Canvas;
+pub use scroll::{draw_scrollbar, hit_test_scrollbar, ScrollPolicy, ScrollState, SCROLLBAR_WIDTH};
 pub use theme::{ChromeRoles, Color, Theme};
 
 #[cfg(feature = "app")]

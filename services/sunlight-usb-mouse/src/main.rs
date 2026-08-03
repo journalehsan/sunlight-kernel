@@ -91,6 +91,13 @@ fn dispatch(event: usb_mouse::MouseEvent, tty: sunlight_ipc::CapabilityToken) {
         .word(0, report.pack())
         .word(1, 1); // one HID report in this batch
     let _ = ipc_call_timeout(tty, message, FORWARD_TIMEOUT_MS);
+    if event.wheel != 0 {
+        // USB HID positive wheel values mean scrolling up; the UI event ABI
+        // uses positive values for scrolling down.
+        let delta = event.wheel.saturating_neg();
+        let message = IpcMsg::with_label(MouseMsg::RAW_WHEEL).word(0, delta as u16 as u64);
+        let _ = ipc_call_timeout(tty, message, FORWARD_TIMEOUT_MS);
+    }
 }
 
 #[panic_handler]

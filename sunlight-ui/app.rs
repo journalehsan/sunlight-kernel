@@ -501,6 +501,14 @@ impl Window {
         // mode for apps that handle FocusChanged and then expect the next
         // poll to still carry the key.
         let key_word = reply.words[2];
+        let wheel_event = if input_word & SgpMsg::EVENT_FLAG_WHEEL_VALID != 0 {
+            let raw = ((packed & SgpMsg::EVENT_WHEEL_DELTA_MASK) >> SgpMsg::EVENT_WHEEL_DELTA_SHIFT)
+                as u16;
+            let delta = raw as i16;
+            (delta != 0).then_some(Event::mouse_wheel(local_x, local_y, delta))
+        } else {
+            None
+        };
 
         if focused != self.prev_focused {
             self.prev_focused = focused;
@@ -520,6 +528,8 @@ impl Window {
             if self.pending_event.is_none() {
                 if let Some(key_event) = decode_key_event_word(key_word) {
                     self.pending_event = Some(key_event);
+                } else if let Some(wheel_event) = wheel_event {
+                    self.pending_event = Some(wheel_event);
                 }
             }
             self.prev_buttons = buttons;
@@ -534,6 +544,14 @@ impl Window {
 
         if let Some(key_event) = decode_key_event_word(key_word) {
             return key_event;
+        }
+
+        if let Some(wheel_event) = wheel_event {
+            // Update tracking so stale movement is not replayed as
+            // a redundant MouseMove on the next poll.
+            self.prev_mouse_x = mouse_x;
+            self.prev_mouse_y = mouse_y;
+            return wheel_event;
         }
 
         // Detect button transitions (press/release) for each of the 3 buttons.

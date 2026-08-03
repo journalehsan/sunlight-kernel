@@ -20,7 +20,8 @@ use sunlight_ui::image::{decode_simg, mime_icon, TgaImage};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::{
-    App, Canvas, Event, HBox, Rect, Theme, UiSymbol, VBox, Window, WindowConfig, WindowMaterial,
+    draw_scrollbar, App, Canvas, Event, HBox, Rect, ScrollPolicy, ScrollState, Theme, UiSymbol,
+    VBox, Window, WindowConfig, WindowMaterial,
 };
 
 // ── Central GUI font instance (vector / Inter) ───────────────────────────────
@@ -1694,6 +1695,12 @@ impl State {
 // App
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScrollFocus {
+    Sidebar,
+    Main,
+}
+
 struct FilesApp {
     state: State,
     mime_icons: MimeIconTheme,
@@ -1714,10 +1721,25 @@ struct FilesApp {
     window_focused: bool,
     /// Tracks pointer hover over sidebar items for hover state rendering.
     hovered_sidebar: Option<usize>,
+    /// Scroll state for the left navigation sidebar.
+    sidebar_scroll: ScrollState,
+    /// Scroll state for the main file/directory list.
+    main_scroll: ScrollState,
+    /// Scrollable region that receives keyboard navigation.
+    scroll_focus: ScrollFocus,
+    /// Region whose scrollbar owns the current left-button interaction.
+    pressed_scrollbar: Option<ScrollFocus>,
+    /// Previous path for detecting directory changes (scroll reset).
+    prev_path: PathBuf,
+    /// Previous view mode for detecting mode changes.
+    prev_view_mode: ViewMode,
 }
 
 impl FilesApp {
     fn new() -> Self {
+        let sidebar_scroll = ScrollState::new();
+        let mut main_scroll = ScrollState::new();
+        main_scroll.focused = true;
         Self {
             state: State::new(),
             mime_icons: MimeIconTheme::load(),
@@ -1732,6 +1754,12 @@ impl FilesApp {
             status_is_error: false,
             window_focused: true,
             hovered_sidebar: None,
+            sidebar_scroll,
+            main_scroll,
+            scroll_focus: ScrollFocus::Main,
+            pressed_scrollbar: None,
+            prev_path: PathBuf::root(),
+            prev_view_mode: ViewMode::Home,
         }
     }
 
@@ -1771,6 +1799,171 @@ impl FilesApp {
         let sidebar = cols.next().unwrap_or_default();
         let main = cols.next().unwrap_or_default();
         (sidebar, main)
+    }
+
+    fn sidebar_scroll_region(sidebar: Rect) -> Rect {
+        sidebar.inset(PAD)
+    }
+
+    fn main_scroll_region(main: Rect) -> Rect {
+        let inner = main.inset(PAD);
+        Rect::new(
+            inner.x,
+            inner.y + COL_HEADER_H as i32,
+            inner.w,
+            inner.h.saturating_sub(COL_HEADER_H),
+        )
+    }
+
+    fn scroll_regions() -> (Rect, Rect) {
+        let (_, body, _, _) = Self::root_layout();
+        let (sidebar, main) = Self::body_layout(body);
+        (
+            Self::sidebar_scroll_region(sidebar),
+            Self::main_scroll_region(main),
+        )
+    }
+
+    fn set_scroll_focus(&mut self, focus: ScrollFocus) -> bool {
+        if self.scroll_focus == focus {
+            return false;
+        }
+        self.scroll_focus = focus;
+        self.sidebar_scroll.focused = focus == ScrollFocus::Sidebar;
+        self.main_scroll.focused = focus == ScrollFocus::Main;
+        true
+    }
+
+    fn handle_scroll_pointer_event(&mut self, event: Event) -> Option<bool> {
+        let (sidebar_region, main_region) = Self::scroll_regions();
+        match event {
+            Event::MouseWheel { x, y, delta } => {
+                let point = sunlight_ui::Point::new(x, y);
+                let focus = if sidebar_region.contains(point) {
+                    ScrollFocus::Sidebar
+                } else if main_region.contains(point) {
+                    ScrollFocus::Main
+                } else {
+                    return None;
+                };
+                let focus_changed = self.set_scroll_focus(focus);
+                let scrolled = match focus {
+                    ScrollFocus::Sidebar => self
+                        .sidebar_scroll
+                        .scroll_by_wheel(delta, (SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32),
+                    ScrollFocus::Main => self.main_scroll.scroll_by_wheel(delta, ROW_H as i32),
+                };
+                Some(focus_changed || scrolled)
+            }
+            Event::MouseDown { x, y, button: 0 } => {
+                let point = sunlight_ui::Point::new(x, y);
+                let focus = if sidebar_region.contains(point) {
+                    Some(ScrollFocus::Sidebar)
+                } else if main_region.contains(point) {
+                    Some(ScrollFocus::Main)
+                } else {
+                    None
+                };
+                let Some(focus) = focus else {
+                    return None;
+                };
+                let focus_changed = self.set_scroll_focus(focus);
+                let (region, state) = match focus {
+                    ScrollFocus::Sidebar => (sidebar_region, &mut self.sidebar_scroll),
+                    ScrollFocus::Main => (main_region, &mut self.main_scroll),
+                };
+                if !state.can_scroll_y() {
+                    return focus_changed.then_some(true);
+                }
+                match sunlight_ui::hit_test_scrollbar(region, state, x, y) {
+                    Some(true) => {
+                        state.hovered = true;
+                        state.start_drag(state.track_rect(region), y);
+                        self.pressed_scrollbar = Some(focus);
+                        Some(true)
+                    }
+                    Some(false) => {
+                        state.hovered = true;
+                        state.handle_track_click(state.track_rect(region), y);
+                        self.pressed_scrollbar = Some(focus);
+                        Some(true)
+                    }
+                    None => focus_changed.then_some(true),
+                }
+            }
+            Event::MouseMove { x, y } => {
+                if let Some(focus) = self.pressed_scrollbar {
+                    let (region, state) = match focus {
+                        ScrollFocus::Sidebar => (sidebar_region, &mut self.sidebar_scroll),
+                        ScrollFocus::Main => (main_region, &mut self.main_scroll),
+                    };
+                    state.hovered = true;
+                    state.update_drag(state.track_rect(region), y);
+                    return Some(true);
+                }
+
+                let sidebar_hovered = self.sidebar_scroll.can_scroll_y()
+                    && sunlight_ui::hit_test_scrollbar(sidebar_region, &self.sidebar_scroll, x, y)
+                        .is_some();
+                let main_hovered = self.main_scroll.can_scroll_y()
+                    && sunlight_ui::hit_test_scrollbar(main_region, &self.main_scroll, x, y)
+                        .is_some();
+                let changed = self.sidebar_scroll.hovered != sidebar_hovered
+                    || self.main_scroll.hovered != main_hovered;
+                self.sidebar_scroll.hovered = sidebar_hovered;
+                self.main_scroll.hovered = main_hovered;
+                changed.then_some(true)
+            }
+            Event::Click { x, y } | Event::MouseUp { x, y, button: 0 } => {
+                let focus = self.pressed_scrollbar.take()?;
+                let (region, state) = match focus {
+                    ScrollFocus::Sidebar => (sidebar_region, &mut self.sidebar_scroll),
+                    ScrollFocus::Main => (main_region, &mut self.main_scroll),
+                };
+                state.end_drag();
+                state.hovered = sunlight_ui::hit_test_scrollbar(region, state, x, y).is_some();
+                Some(true)
+            }
+            Event::PointerOwnership { owned: false, .. } => {
+                let had_interaction = self.pressed_scrollbar.take().is_some()
+                    | self.sidebar_scroll.end_drag()
+                    | self.main_scroll.end_drag();
+                self.sidebar_scroll.hovered = false;
+                self.main_scroll.hovered = false;
+                had_interaction.then_some(true)
+            }
+            _ => None,
+        }
+    }
+
+    /// Total content height of the sidebar (groups + headers + items + gaps).
+    fn sidebar_content_height() -> u32 {
+        let mut h: u32 = 0;
+        for group in SIDEBAR_GROUPS {
+            h += SIDEBAR_HEADER_H + SIDEBAR_SECTION_GAP;
+            let count = group.indices.len() as u32;
+            h += count * SIDEBAR_ITEM_H + count.saturating_sub(1) * SIDEBAR_ITEM_GAP;
+            h += 4; // trailing gap after group
+        }
+        h
+    }
+
+    /// Draw scrollbars for sidebar and main content regions.
+    fn draw_scrollbars(&self, canvas: &mut Canvas, theme: &Theme, sidebar: Rect, main: Rect) {
+        draw_scrollbar(
+            canvas,
+            theme,
+            Self::sidebar_scroll_region(sidebar),
+            &self.sidebar_scroll,
+            ScrollPolicy::Auto,
+        );
+        draw_scrollbar(
+            canvas,
+            theme,
+            Self::main_scroll_region(main),
+            &self.main_scroll,
+            ScrollPolicy::Auto,
+        );
     }
 
     // ── Preview methods ───────────────────────────────────────────────────
@@ -1878,6 +2071,16 @@ impl FilesApp {
             self.select_item(new_idx)
         } else {
             false
+        }
+    }
+
+    /// Ensure the selected row is visible in the main scroll viewport.
+    fn ensure_selected_visible(&mut self) {
+        if let Some(idx) = self.state.selected_row {
+            let item_y = idx as i32 * ROW_H as i32;
+            if self.main_scroll.ensure_visible(item_y, ROW_H) {
+                // scroll state changed — no extra action needed, view() will respect new offset
+            }
         }
     }
 
@@ -2208,8 +2411,10 @@ impl FilesApp {
         Rect::default()
     }
 
-    fn hit_test_sidebar(sidebar: Rect, x: i32, y: i32) -> Option<usize> {
-        let point = sunlight_ui::Point::new(x, y);
+    fn hit_test_sidebar(sidebar: Rect, x: i32, y: i32, scroll_y: i32) -> Option<usize> {
+        // Adjust pointer y into content space by adding scroll offset
+        let content_y = y + scroll_y;
+        let point = sunlight_ui::Point::new(x, content_y);
         for idx in 0..SIDEBAR_COUNT {
             if Self::sidebar_item_rect(sidebar, idx).contains(point) {
                 return Some(idx);
@@ -2218,21 +2423,21 @@ impl FilesApp {
         None
     }
 
-    fn row_rect(main: Rect, idx: usize) -> Rect {
+    fn row_rect(main: Rect, idx: usize, scroll_y: i32) -> Rect {
         let inner = main.inset(PAD);
         let header_bottom = inner.y + COL_HEADER_H as i32;
         Rect::new(
             inner.x,
-            header_bottom + (idx as u32 * ROW_H) as i32,
+            header_bottom + (idx as u32 * ROW_H) as i32 - scroll_y,
             inner.w,
             ROW_H,
         )
     }
 
-    fn hit_test_row(main: Rect, x: i32, y: i32, rows: usize) -> Option<usize> {
+    fn hit_test_row(main: Rect, x: i32, y: i32, rows: usize, scroll_y: i32) -> Option<usize> {
         let point = sunlight_ui::Point::new(x, y);
         for idx in 0..rows {
-            if Self::row_rect(main, idx).contains(point) {
+            if Self::row_rect(main, idx, scroll_y).contains(point) {
                 return Some(idx);
             }
         }
@@ -2314,7 +2519,7 @@ impl FilesApp {
         if self.state.view_mode == ViewMode::Directory {
             let (_, body, _, _) = Self::root_layout();
             let (_, main) = Self::body_layout(body);
-            if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count) {
+            if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count, self.main_scroll.offset_y) {
                 return self.open_context_menu(x, y, ContextTarget::Row(idx));
             }
             // Empty space → background menu (Properties for the current folder).
@@ -2747,7 +2952,13 @@ impl FilesApp {
         );
 
         let inner = sidebar.inset(PAD);
-        let mut y = inner.y;
+        let scroll = self.sidebar_scroll.offset_y;
+        let clip_top = inner.y;
+        let clip_bottom = inner.bottom();
+
+        // Content is built at Y=inner.y and shifted up by the scroll offset.
+        let content_y = inner.y - scroll;
+        let mut y = content_y;
 
         // Measure item X before any per-group layout — used for hit-test helpers
         let items_x = inner.x + 2;
@@ -2760,14 +2971,17 @@ impl FilesApp {
                 inner.w,
                 SIDEBAR_HEADER_H,
             );
-            sf_vcenter(
-                canvas,
-                group.label,
-                header_rect.x + 6,
-                header_rect.y,
-                header_rect.h,
-                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
-            );
+            // Only draw if header is at least partially visible
+            if header_rect.bottom() > clip_top && header_rect.y < clip_bottom {
+                sf_vcenter(
+                    canvas,
+                    group.label,
+                    header_rect.x + 6,
+                    header_rect.y,
+                    header_rect.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
+            }
             y += SIDEBAR_HEADER_H as i32 + SIDEBAR_SECTION_GAP as i32;
 
             // VBox layout the items in this group
@@ -2775,6 +2989,13 @@ impl FilesApp {
             let items_h = count as u32 * SIDEBAR_ITEM_H
                 + (count.saturating_sub(1) as u32) * SIDEBAR_ITEM_GAP;
             let items_area = Rect::new(items_x, y, items_w, items_h);
+
+            // Quick reject: skip group entirely if outside clip
+            if items_area.bottom() <= clip_top || items_area.y >= clip_bottom {
+                y += items_h as i32 + 4;
+                continue;
+            }
+
             let heights = [SIDEBAR_ITEM_H; SIDEBAR_COUNT]; // big enough for max
             let mut layout_iter = VBox::new(items_area)
                 .with_spacing(SIDEBAR_ITEM_GAP)
@@ -2784,6 +3005,13 @@ impl FilesApp {
                 let Some(item_rect) = layout_iter.next() else {
                     break;
                 };
+                // Skip items fully outside the viewport
+                if item_rect.bottom() <= clip_top {
+                    continue;
+                }
+                if item_rect.y >= clip_bottom {
+                    break;
+                }
                 let state = if idx == self.state.selected_sidebar {
                     SidebarState::Selected
                 } else if self.hovered_sidebar == Some(idx) {
@@ -3150,11 +3378,11 @@ impl FilesApp {
         let size_x = type_x + TYPE_W as i32;
         let mod_x = size_x + SIZE_W as i32;
 
-        let visible_rows = (list_h as u32 / ROW_H) as usize;
-        let row_count = self.state.entry_count.min(visible_rows);
+        let entry_count = self.state.entry_count;
+        let scroll = self.main_scroll.offset_y;
 
         // ── Empty state ────────────────────────────────────────────────────
-        if row_count == 0 {
+        if entry_count == 0 {
             let empty_y = list_top + (list_h as i32) / 2 - 28;
             let icon_x = inner.x + (inner.w as i32 - 20) / 2;
             canvas.draw_ui_symbol(icon_x, empty_y, UiSymbol::Folder, theme.text_dim);
@@ -3167,11 +3395,25 @@ impl FilesApp {
             return;
         }
 
-        for idx in 0..row_count {
+        // Compute visible row range with one extra row of overscan to prevent
+        // visual gaps during wheel scrolls.
+        let first_visible = (scroll as u32 / ROW_H) as usize;
+        let visible_count = (list_h as u32 / ROW_H) as usize + 1;
+        let last_visible = (first_visible + visible_count).min(entry_count);
+
+        // Column widths for row separator
+        let row_full_w = inner.w;
+
+        for idx in first_visible..last_visible {
             let entry = self.state.entries[idx];
-            let row_y = list_top + (idx as u32 * ROW_H) as i32;
-            let row = Rect::new(inner.x, row_y, inner.w, ROW_H);
+            let row_y = list_top + (idx as u32 * ROW_H) as i32 - scroll;
+            let row = Rect::new(inner.x, row_y, row_full_w, ROW_H);
             let selected = self.state.selected_row == Some(idx);
+
+            // Skip rows fully outside the clip area (top of header or below pane)
+            if row.bottom() <= list_top || row.y >= inner.bottom() {
+                continue;
+            }
 
             let fill = if selected {
                 if self.window_focused {
@@ -3264,7 +3506,7 @@ impl FilesApp {
             );
 
             // Subtle row separator
-            if idx + 1 < row_count {
+            if idx + 1 < entry_count {
                 canvas.hbar(
                     row.x + ICON_SLOT as i32 + 4,
                     row_y + ROW_H as i32 - 1,
@@ -3905,11 +4147,53 @@ impl App for FilesApp {
         canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
         let (toolbar, body, details, status) = Self::root_layout();
         let (sidebar, main) = Self::body_layout(body);
+
+        // Update scroll geometry before drawing — content sizes are driven by
+        // the current view mode and directory state.
+        {
+            let sidebar_inner = sidebar.inset(PAD);
+            self.sidebar_scroll.set_viewport(
+                sidebar_inner.w,
+                sidebar_inner.h,
+            );
+            let sidebar_content_h = Self::sidebar_content_height();
+            self.sidebar_scroll.content_h = sidebar_content_h;
+            self.sidebar_scroll.clamp();
+        }
+        {
+            let main_inner = main.inset(PAD);
+            let list_h = main_inner
+                .h
+                .saturating_sub(COL_HEADER_H);
+            self.main_scroll.set_viewport(main_inner.w, list_h);
+            let main_content_h = self.state.entry_count as u32 * ROW_H;
+            self.main_scroll.content_h = main_content_h;
+
+            // Reset main-list scroll when the directory or view mode changes
+            let current_path = self.state.current_path;
+            let same_dir = path_matches(
+                current_path.as_str(),
+                self.prev_path.as_str(),
+            );
+            if !same_dir || self.state.view_mode != self.prev_view_mode {
+                self.main_scroll.scroll_to_y(0);
+            }
+            self.main_scroll.clamp();
+
+            self.prev_path = current_path;
+            self.prev_view_mode = self.state.view_mode;
+        }
+
         self.draw_toolbar(canvas, theme, toolbar);
         self.draw_sidebar(canvas, theme, sidebar);
         self.draw_main(canvas, theme, main);
         self.draw_details_pane(canvas, theme, details);
         self.draw_status(canvas, theme, status);
+
+        // Scrollbars draw over content (painted last within their region so
+        // they stay above the clipped content).  We draw them after all
+        // content layers so they stay on top.
+        self.draw_scrollbars(canvas, theme, sidebar, main);
 
         // Overlays draw last so they sit above all other content.
         if let Some(menu) = self.context_menu {
@@ -3928,13 +4212,25 @@ impl App for FilesApp {
         const KEY_UP: u8 = 0x48;
         const KEY_DOWN: u8 = 0x50;
         const KEY_V: u8 = 0x2F;
+        const KEY_PAGE_UP: u8 = 0x49;
+        const KEY_PAGE_DOWN: u8 = 0x51;
+        const KEY_HOME: u8 = 0x47;
+        const KEY_END: u8 = 0x4F;
 
         if let Event::FocusChanged { focused } = event {
+            let mut changed = false;
             if self.window_focused != focused {
                 self.window_focused = focused;
-                return true;
+                changed = true;
             }
-            return false;
+            if !focused {
+                changed |= self.pressed_scrollbar.take().is_some();
+                changed |= self.sidebar_scroll.end_drag();
+                changed |= self.main_scroll.end_drag();
+                self.sidebar_scroll.hovered = false;
+                self.main_scroll.hovered = false;
+            }
+            return changed;
         }
 
         // Properties dialog is modal-lite: while open it swallows every event
@@ -3961,29 +4257,8 @@ impl App for FilesApp {
             };
         }
 
-        // Track sidebar hover for visual feedback (must be before the click handler
-        // since it fires on mouse-move, not click).
-        if let Event::MouseMove { x, y } = event {
-            let (_, body, _, _) = Self::root_layout();
-            let (sidebar_rect, _) = Self::body_layout(body);
-            let new_hover = Self::hit_test_sidebar(sidebar_rect, x, y);
-            if self.hovered_sidebar != new_hover {
-                self.hovered_sidebar = new_hover;
-                return true;
-            }
-            return false;
-        }
-
-        // Right-click opens (or repositions) the context menu. Checked before
-        // the menu-grab below so a second right-click moves/replaces the menu.
-        if let Event::MouseDown { x, y, button } = event {
-            if button == 1 {
-                return self.handle_right_click(x, y);
-            }
-        }
-
         // While a context menu is open it grabs pointer + keyboard input so
-        // underlying rows never see the events used to drive it.
+        // underlying rows and scroll regions never see those events.
         if self.context_menu.is_some() {
             return match event {
                 Event::Click { x, y } => self.handle_context_menu_click(x, y),
@@ -4004,6 +4279,31 @@ impl App for FilesApp {
                 }
                 _ => false,
             };
+        }
+
+        if let Some(redraw) = self.handle_scroll_pointer_event(event) {
+            return redraw;
+        }
+
+        // Track sidebar hover for visual feedback (must be before the click handler
+        // since it fires on mouse-move, not click).
+        if let Event::MouseMove { x, y } = event {
+            let (_, body, _, _) = Self::root_layout();
+            let (sidebar_rect, _) = Self::body_layout(body);
+            let new_hover = Self::hit_test_sidebar(sidebar_rect, x, y, self.sidebar_scroll.offset_y);
+            if self.hovered_sidebar != new_hover {
+                self.hovered_sidebar = new_hover;
+                return true;
+            }
+            return false;
+        }
+
+        // Right-click opens (or repositions) the context menu. Checked before
+        // the menu-grab below so a second right-click moves/replaces the menu.
+        if let Event::MouseDown { x, y, button } = event {
+            if button == 1 {
+                return self.handle_right_click(x, y);
+            }
         }
 
         match event {
@@ -4032,7 +4332,7 @@ impl App for FilesApp {
                         return self.state.navigate_to(target);
                     }
                 }
-                if let Some(idx) = Self::hit_test_sidebar(sidebar, x, y) {
+                if let Some(idx) = Self::hit_test_sidebar(sidebar, x, y, self.sidebar_scroll.offset_y) {
                     debug_log("[FILES] hit_test sidebar idx=");
                     log_usize(idx);
                     debug_log(" label=\"");
@@ -4092,7 +4392,7 @@ impl App for FilesApp {
                     }
                     ViewMode::Network => {}
                     ViewMode::Directory => {
-                        if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count) {
+                        if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count, self.main_scroll.offset_y) {
                             debug_log("[FILES] hit_test directory_row idx=");
                             log_usize(idx);
                             debug_log("\n");
@@ -4148,12 +4448,101 @@ impl App for FilesApp {
                 keycode: KEY_UP,
                 pressed: true,
                 ..
-            } => self.change_row_selection(-1),
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll
+                        .scroll_by(-((SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32))
+                } else {
+                    let changed = self.change_row_selection(-1);
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
             Event::KeyPress {
                 keycode: KEY_DOWN,
                 pressed: true,
                 ..
-            } => self.change_row_selection(1),
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll
+                        .scroll_by((SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32)
+                } else {
+                    let changed = self.change_row_selection(1);
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_PAGE_UP,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll.page_up()
+                } else {
+                    let mut changed = self.main_scroll.page_up();
+                    let visible = ((self.main_scroll.offset_y as u32) / ROW_H) as usize;
+                    let target = visible.min(self.state.entry_count.saturating_sub(1));
+                    if self.state.entry_count > 0 && self.state.selected_row != Some(target) {
+                        changed |= self.select_item(target);
+                    }
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_PAGE_DOWN,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll.page_down()
+                } else {
+                    let mut changed = self.main_scroll.page_down();
+                    let visible = ((self.main_scroll.offset_y as u32) / ROW_H) as usize;
+                    let target = visible.min(self.state.entry_count.saturating_sub(1));
+                    if self.state.entry_count > 0 && self.state.selected_row != Some(target) {
+                        changed |= self.select_item(target);
+                    }
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_HOME,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll.scroll_to_y(0)
+                } else {
+                    let mut changed = self.main_scroll.scroll_to_y(0);
+                    if self.state.entry_count > 0 {
+                        changed |= self.select_item(0);
+                    }
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_END,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll
+                        .scroll_to_y(self.sidebar_scroll.max_offset_y())
+                } else {
+                    let last = self.state.entry_count.saturating_sub(1);
+                    let mut changed = self
+                        .main_scroll
+                        .scroll_to_y(self.main_scroll.max_offset_y());
+                    if self.state.entry_count > 0 {
+                        changed |= self.select_item(last);
+                    }
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
             Event::KeyPress {
                 keycode: KEY_V,
                 pressed: true,
