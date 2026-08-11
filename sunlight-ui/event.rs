@@ -7,25 +7,44 @@ use crate::geom::Point;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Event {
     /// Mouse button released (click complete) at window-local coordinates.
-    Click { x: i32, y: i32 },
+    Click {
+        x: i32,
+        y: i32,
+    },
 
     /// Mouse button pressed down at window-local coordinates.
     /// `button`: 0 = left, 1 = right, 2 = middle.
-    MouseDown { x: i32, y: i32, button: u8 },
+    MouseDown {
+        x: i32,
+        y: i32,
+        button: u8,
+    },
 
     /// Mouse button released at window-local coordinates.
     /// `button`: 0 = left, 1 = right, 2 = middle.
-    MouseUp { x: i32, y: i32, button: u8 },
+    MouseUp {
+        x: i32,
+        y: i32,
+        button: u8,
+    },
 
     /// Pointer moved (no button change). Coordinates are window-local.
-    MouseMove { x: i32, y: i32 },
+    MouseMove {
+        x: i32,
+        y: i32,
+    },
 
     /// The compositor changed keyboard/input focus for this window.
-    FocusChanged { focused: bool },
+    FocusChanged {
+        focused: bool,
+    },
 
     /// The native pointer entered or left this window's owned client input
     /// region. Captured drags remain owned until their final release.
-    PointerOwnership { owned: bool, captured: bool },
+    PointerOwnership {
+        owned: bool,
+        captured: bool,
+    },
 
     /// Decoded character input.
     Key(char),
@@ -108,6 +127,16 @@ impl Event {
             _ => None,
         }
     }
+}
+
+/// Window-system events delivered once at the application host boundary.
+/// Widgets continue receiving ordinary [`Event`] values and react to layout
+/// constraints rather than compositor protocol details.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowEvent {
+    /// A replacement drawable client surface is active. Dimensions exclude
+    /// borders, titlebars, and other compositor-owned decorations.
+    Resized { width: u32, height: u32 },
 }
 
 /// Trait for widgets that can process events.

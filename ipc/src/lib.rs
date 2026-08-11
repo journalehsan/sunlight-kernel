@@ -966,6 +966,16 @@ pub mod sgp {
         pub const EVENT_FLAG_WINDOW_VALID: u64 = 1 << 12;
         /// wheel delta data is present in this poll.
         pub const EVENT_FLAG_WHEEL_VALID: u64 = 1 << 13;
+        /// The reply is a surface-replacement notification rather than an
+        /// input snapshot. `words[0]` contains drawable client width/height,
+        /// `words[1]` contains the new surface generation, `words[2]` contains
+        /// stride/length, and `caps[0]` is the replacement SHM surface.
+        pub const EVENT_FLAG_RESIZED: u64 = 1 << 14;
+        /// Opt-in marker in EVENT_POLL request `words[1]`. The low 63 bits are
+        /// the last surface generation successfully mapped by the client.
+        /// Old clients leave this word zero and retain the legacy poll format.
+        pub const EVENT_RESIZE_PROTOCOL_V1: u64 = 1 << 63;
+        pub const EVENT_SURFACE_GENERATION_MASK: u64 = !EVENT_RESIZE_PROTOCOL_V1;
         /// EVENT_POLL reply words[0] bits 32..47 carry the signed wheel delta.
         pub const EVENT_WHEEL_DELTA_SHIFT: u32 = 32;
         pub const EVENT_WHEEL_DELTA_MASK: u64 = 0xFFFF << EVENT_WHEEL_DELTA_SHIFT;

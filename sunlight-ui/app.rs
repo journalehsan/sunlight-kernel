@@ -28,7 +28,7 @@ use sunlight_ipc::{
     CapabilityToken, IpcMsg, SgpMsg,
 };
 
-use crate::event::Event;
+use crate::event::{Event, WindowEvent};
 use crate::paint::Canvas;
 use crate::theme::Theme;
 
@@ -42,6 +42,8 @@ const WINDOW_CREATE_BASE_TIMEOUT_MS: u64 = 2_000;
 const WINDOW_CREATE_PER_MIB_TIMEOUT_MS: u64 = 1_000;
 const WINDOW_CREATE_MAX_TIMEOUT_MS: u64 = 15_000;
 const MIB_BYTES: u64 = 1024 * 1024;
+const SURFACE_BYTES_PER_PIXEL: usize = core::mem::size_of::<u32>();
+const MAX_CLIENT_SURFACE_DIM: u32 = 8192;
 static CLOSE_REQUESTED: AtomicBool = AtomicBool::new(false);
 static CLIENT_CURSOR: AtomicU8 = AtomicU8::new(u8::MAX);
 static CLIENT_WIDTH: AtomicU32 = AtomicU32::new(0);
@@ -59,6 +61,56 @@ fn window_create_timeout_ms(width: u32, height: u32) -> u64 {
     WINDOW_CREATE_BASE_TIMEOUT_MS
         .saturating_add(surface_mib.saturating_mul(WINDOW_CREATE_PER_MIB_TIMEOUT_MS))
         .min(WINDOW_CREATE_MAX_TIMEOUT_MS)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ResizeSurfaceReply {
+    width: u32,
+    height: u32,
+    generation: u64,
+    stride_pixels: u32,
+    buffer_size: usize,
+    cap: CapabilityToken,
+}
+
+/// Validate every compositor-provided value before constructing a slice from
+/// the replacement mapping. Current surfaces are tightly packed XRGB/ARGB32;
+/// rejecting any other stride keeps the existing Canvas/commit path simple.
+fn decode_resize_surface_reply(reply: &IpcMsg) -> Option<ResizeSurfaceReply> {
+    if reply.label != SgpMsg::REPLY
+        || reply.words[3] & SgpMsg::EVENT_FLAG_WINDOW_VALID == 0
+        || reply.words[3] & SgpMsg::EVENT_FLAG_RESIZED == 0
+        || reply.cap_count == 0
+        || reply.caps[0] == CapabilityToken::INVALID
+    {
+        return None;
+    }
+    let width = reply.words[0] as u32;
+    let height = (reply.words[0] >> 32) as u32;
+    let generation = reply.words[1] & SgpMsg::EVENT_SURFACE_GENERATION_MASK;
+    let stride_bytes = reply.words[2] as u32;
+    let buffer_size = (reply.words[2] >> 32) as usize;
+    if width == 0
+        || height == 0
+        || width > MAX_CLIENT_SURFACE_DIM
+        || height > MAX_CLIENT_SURFACE_DIM
+        || generation == 0
+        || stride_bytes != width.checked_mul(SURFACE_BYTES_PER_PIXEL as u32)?
+    {
+        return None;
+    }
+    let required = (stride_bytes as usize).checked_mul(height as usize)?;
+    if required > buffer_size {
+        return None;
+    }
+    Some(ResizeSurfaceReply {
+        width,
+        height,
+        generation,
+        stride_pixels: stride_bytes / SURFACE_BYTES_PER_PIXEL as u32,
+        buffer_size,
+        cap: reply.caps[0],
+    })
 }
 
 /// Decode a packed display-server key word into an [`Event`].
@@ -251,6 +303,8 @@ pub struct Window {
     title: &'static str,
     buffer: *mut u32,
     buffer_size: usize,
+    buffer_stride_pixels: u32,
+    surface_generation: u64,
     display_ep: CapabilityToken,
     shm_cap: CapabilityToken,
     launch_trace: LaunchTrace,
@@ -268,6 +322,7 @@ pub struct Window {
     prev_pointer_owned: bool,
     prev_pointer_captured: bool,
     pending_event: Option<Event>,
+    pending_window_event: Option<WindowEvent>,
     event_counters: EventPollCounters,
     /// Last cursor shape sent to the compositor, to avoid redundant IPC.
     current_cursor: CursorShape,
@@ -351,6 +406,7 @@ impl Window {
 
         let win_id = reply.words[0];
         let buffer_size = reply.words[1] as usize;
+        let buffer_stride_pixels = (reply.words[2] as u32) / SURFACE_BYTES_PER_PIXEL as u32;
         let shm_cap = reply.caps[0];
 
         // Map the shared framebuffer
@@ -390,6 +446,8 @@ impl Window {
             title: config.title,
             buffer,
             buffer_size,
+            buffer_stride_pixels,
+            surface_generation: 1,
             display_ep,
             shm_cap,
             launch_trace: trace,
@@ -402,6 +460,7 @@ impl Window {
             prev_pointer_owned: false,
             prev_pointer_captured: false,
             pending_event: None,
+            pending_window_event: None,
             event_counters: EventPollCounters {
                 window_id: win_id,
                 ..EventPollCounters::default()
@@ -450,7 +509,13 @@ impl Window {
         // Unbounded wait for the display reply — see doc comment above.
         let reply = ipc_call(
             self.display_ep,
-            IpcMsg::with_label(SgpMsg::EVENT_POLL).word(0, self.win_id),
+            IpcMsg::with_label(SgpMsg::EVENT_POLL)
+                .word(0, self.win_id)
+                .word(
+                    1,
+                    SgpMsg::EVENT_RESIZE_PROTOCOL_V1
+                        | (self.surface_generation & SgpMsg::EVENT_SURFACE_GENERATION_MASK),
+                ),
         );
         if reply.label != SgpMsg::REPLY {
             idle_wait_remaining(poll_started, idle_ms);
@@ -465,6 +530,36 @@ impl Window {
             return Event::Tick;
         }
         self.window_valid = true;
+
+        if reply.words[3] & SgpMsg::EVENT_FLAG_RESIZED != 0 {
+            let Some(resized) = decode_resize_surface_reply(&reply) else {
+                idle_wait_remaining(poll_started, idle_ms);
+                return Event::Tick;
+            };
+            let Ok(mapped) = shm_map(resized.cap) else {
+                // Keep the old valid pointer and generation. The compositor
+                // will repeat its current generation on the next poll.
+                idle_wait_remaining(poll_started, idle_ms);
+                return Event::Tick;
+            };
+
+            let old_cap = self.shm_cap;
+            self.buffer = mapped as *mut u32;
+            self.buffer_size = resized.buffer_size;
+            self.buffer_stride_pixels = resized.stride_pixels;
+            self.shm_cap = resized.cap;
+            self.surface_generation = resized.generation;
+            self.width = resized.width;
+            self.height = resized.height;
+            CLIENT_WIDTH.store(resized.width, Ordering::Relaxed);
+            CLIENT_HEIGHT.store(resized.height, Ordering::Relaxed);
+            let _ = shm_free(old_cap);
+            self.pending_window_event = Some(WindowEvent::Resized {
+                width: resized.width,
+                height: resized.height,
+            });
+            return Event::Tick;
+        }
 
         let desktop_state = reply.words[3];
         self.event_counters.active_workspace_id =
@@ -680,7 +775,14 @@ impl Window {
         let frame_len = self.frame_len();
         let offset = self.draw_buffer_offset();
         let pixels = unsafe { core::slice::from_raw_parts_mut(self.buffer.add(offset), frame_len) };
-        Canvas::new(pixels, self.width, self.width, self.height)
+        Canvas::new(pixels, self.buffer_stride_pixels, self.width, self.height)
+    }
+
+    /// Take a pending host/window-system event. Applications using [`run`](Self::run)
+    /// receive these through [`App::window_event`]; manual event loops can use
+    /// this method after `poll_event` returns.
+    pub fn take_window_event(&mut self) -> Option<WindowEvent> {
+        self.pending_window_event.take()
     }
 
     /// Run the application event loop.
@@ -760,9 +862,13 @@ impl Window {
                     self.event_counters.events_dequeued.wrapping_add(1);
             }
             let event_poll_redraw = app.event_poll_counters(self.event_counters);
+            let window_event_redraw = self
+                .take_window_event()
+                .map(|event| app.window_event(event))
+                .unwrap_or(false);
 
             // Redraw requested?
-            let needs_redraw = app.update(event) || event_poll_redraw;
+            let needs_redraw = app.update(event) || event_poll_redraw || window_event_redraw;
 
             // Apply any cursor shape the app requested during update().
             if let Some(shape) = take_requested_cursor() {
@@ -797,9 +903,26 @@ impl Window {
 #[cfg(test)]
 mod tests {
     use super::{
-        should_deliver_local_tick, window_create_timeout_ms, WindowDecoration,
-        MAX_LOCAL_TICKS_BEFORE_EVENT_POLL,
+        decode_resize_surface_reply, should_deliver_local_tick, window_create_timeout_ms,
+        WindowDecoration, WindowEvent, MAX_LOCAL_TICKS_BEFORE_EVENT_POLL,
     };
+    use sunlight_ipc::{CapabilityToken, IpcMsg, SgpMsg};
+
+    fn resize_reply(width: u32, height: u32, generation: u64) -> IpcMsg {
+        IpcMsg::with_label(SgpMsg::REPLY)
+            .word(0, u64::from(width) | (u64::from(height) << 32))
+            .word(1, generation)
+            .word(
+                2,
+                u64::from(width.saturating_mul(4))
+                    | (u64::from(width.saturating_mul(height).saturating_mul(4)) << 32),
+            )
+            .word(
+                3,
+                SgpMsg::EVENT_FLAG_WINDOW_VALID | SgpMsg::EVENT_FLAG_RESIZED,
+            )
+            .with_cap(0, CapabilityToken(7))
+    }
 
     #[test]
     fn decoration_flag_bits_match_protocol_layout() {
@@ -830,6 +953,41 @@ mod tests {
         assert_eq!(window_create_timeout_ms(960, 620), 5_000);
         assert_eq!(window_create_timeout_ms(1220, 760), 6_000);
         assert_eq!(window_create_timeout_ms(8192, 8192), 15_000);
+    }
+
+    #[test]
+    fn resize_reply_carries_authoritative_client_geometry() {
+        let decoded = decode_resize_surface_reply(&resize_reply(1024, 700, 2)).unwrap();
+        assert_eq!((decoded.width, decoded.height), (1024, 700));
+        assert_eq!(decoded.stride_pixels, 1024);
+        assert_eq!(decoded.buffer_size, 1024 * 700 * 4);
+        assert_eq!(decoded.generation, 2);
+    }
+
+    #[test]
+    fn resize_reply_rejects_tiny_invalid_and_oversized_surfaces() {
+        assert!(decode_resize_surface_reply(&resize_reply(0, 1, 2)).is_none());
+        assert!(decode_resize_surface_reply(&resize_reply(1, 0, 2)).is_none());
+        assert!(decode_resize_surface_reply(&resize_reply(8193, 1, 2)).is_none());
+        assert!(decode_resize_surface_reply(&resize_reply(1, 8193, 2)).is_none());
+        assert!(decode_resize_surface_reply(&resize_reply(1, 1, 0)).is_none());
+
+        let truncated = resize_reply(10, 10, 2).word(2, 40 | (399u64 << 32));
+        assert!(decode_resize_surface_reply(&truncated).is_none());
+    }
+
+    #[test]
+    fn resize_window_event_is_typed_and_exact() {
+        assert_eq!(
+            WindowEvent::Resized {
+                width: 800,
+                height: 600
+            },
+            WindowEvent::Resized {
+                width: 800,
+                height: 600
+            },
+        );
     }
 }
 
@@ -890,6 +1048,12 @@ pub trait App {
     ///
     /// Return `true` to request a redraw (your `view()` will be called).
     fn update(&mut self, event: Event) -> bool;
+
+    /// Handle a host/window-system event. The default preserves existing
+    /// applications; responsive roots opt in here and invalidate layout once.
+    fn window_event(&mut self, _event: WindowEvent) -> bool {
+        false
+    }
 
     /// Maximum event-poll sleep between update opportunities. Returning zero
     /// requests an immediate app-local [`Event::Tick`] without a display IPC

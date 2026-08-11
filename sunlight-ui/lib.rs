@@ -48,13 +48,17 @@ pub mod app;
 pub mod clipboard;
 
 // Top-level re-exports for convenience
-pub use event::Event;
+pub use event::{Event, WindowEvent};
 pub use font::{UiGlyph, UiSymbol, VecText};
 pub use geom::{Point, Rect, Size};
 pub use horizon::{
     HorizonControl, HorizonControlState, HorizonLayout, HorizonMetrics, HorizonPalette,
 };
-pub use layout::{GridColIter, GridRow, HBox, VBox};
+pub use layout::{
+    distribute_axis, Arrange, AxisRequirement, AxisSizing, Column, GridColIter, GridRow, HBox,
+    LayoutBox, LayoutConstraints, LayoutError, LayoutInvalidation, LayoutPadding, Measure, Row,
+    Sizing, Spacer, VBox, MAX_LINEAR_CHILDREN,
+};
 pub use material::{
     DecorationGeometry, Material, MaterialKind, MaterialPalette, ReadabilityRole, SurfaceRole,
 };

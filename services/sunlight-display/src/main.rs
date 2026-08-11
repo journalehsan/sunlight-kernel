@@ -675,6 +675,9 @@ struct Window {
     surface_height_rows: u32,
     surface_stride_bytes: usize,
     surface_len_bytes: usize,
+    /// Monotonic identity of the currently attached client surface. Generation
+    /// one is the CREATE_WINDOW surface; zero is never published.
+    surface_generation: u64,
     x: u32, // chrome top-left on screen
     y: u32,
     // Saved normal geometry for restore from maximized/fullscreen.
@@ -797,6 +800,66 @@ impl Window {
             FLOATING_PANEL_RESERVED_H
         }
     }
+
+    /// Authoritative drawable client size for the window's current state.
+    /// Decorations and panel reservations are compositor policy and never need
+    /// to be reconstructed by applications.
+    fn desired_client_size(&self, fb_width: u32, fb_height: u32) -> (u32, u32) {
+        match self.config.state {
+            WindowState::Fullscreen => {
+                if self.config.border == BorderStyle::None {
+                    (fb_width, fb_height)
+                } else {
+                    (
+                        fb_width.saturating_sub(BORDER_W * 2),
+                        fb_height
+                            .saturating_sub(self.titlebar_height())
+                            .saturating_sub(BORDER_W),
+                    )
+                }
+            }
+            WindowState::Maximized => (
+                fb_width.saturating_sub(BORDER_W * 2),
+                fb_height
+                    .saturating_sub(self.maximized_top_reserved_h())
+                    .saturating_sub(self.titlebar_height())
+                    .saturating_sub(BORDER_W),
+            ),
+            WindowState::Normal | WindowState::Minimized => (self.width, self.height),
+        }
+    }
+}
+
+/// Replace a compositor-owned client surface atomically. The compositor drops
+/// only its old mapping after all new metadata is installed. Any client still
+/// drawing through the old mapping keeps the backing frames alive through the
+/// kernel SHM map count until it observes the new generation and unmaps them.
+fn replace_client_surface(win: &mut Window, width: u32, height: u32) -> bool {
+    if win.surface_width_pixels == width && win.surface_height_rows == height {
+        return true;
+    }
+    let Ok(layout) = surface::SurfaceLayout::for_new_surface(width, height) else {
+        return false;
+    };
+    let Ok((new_buffer, new_cap)) = sunlight_ipc::shm_create(layout.surface_len_bytes, 0) else {
+        return false;
+    };
+
+    let old_cap = win.shm_cap;
+    win.shm_cap = new_cap;
+    win.buffer = new_buffer as *mut u32;
+    win.surface_width_pixels = layout.width;
+    win.surface_height_rows = layout.height;
+    win.surface_stride_bytes = layout.stride_bytes;
+    win.surface_len_bytes = layout.surface_len_bytes;
+    win.surface_generation =
+        win.surface_generation.wrapping_add(1) & SgpMsg::EVENT_SURFACE_GENERATION_MASK;
+    if win.surface_generation == 0 {
+        win.surface_generation = 1;
+    }
+
+    let _ = sunlight_ipc::shm_free(old_cap);
+    true
 }
 
 const KEY_EVENT_QUEUE_CAP: usize = 32;
@@ -4163,6 +4226,20 @@ impl LogLine {
     }
 }
 
+fn log_client_surface_resize(win: &Window) {
+    let mut line = LogLine::new();
+    line.push_str("[DISPLAY-RESIZE] win=");
+    line.push_dec_u64(win.id);
+    line.push_str(" client=");
+    line.push_dim(win.surface_width_pixels, win.surface_height_rows);
+    line.push_str(" generation=");
+    line.push_dec_u64(win.surface_generation);
+    line.push_str(" surface_bytes=");
+    line.push_dec_u64(win.surface_len_bytes as u64);
+    line.push_str("\n");
+    line.flush();
+}
+
 /// Allocate a page-aligned, tightly-packed pixel buffer. VirtIO GPU backing
 /// must start on a page boundary (the device scans whole pages, and the kernel
 /// rejects misaligned buffers). Returns an empty buffer on allocation failure.
@@ -5094,6 +5171,7 @@ mod tests {
             surface_height_rows: h,
             surface_stride_bytes: w as usize * surface::BYTES_PER_PIXEL as usize,
             surface_len_bytes: w as usize * h as usize * surface::BYTES_PER_PIXEL as usize,
+            surface_generation: 1,
             x,
             y,
             saved_x: x,
@@ -5136,6 +5214,75 @@ mod tests {
             has_presented_frame: true,
             first_present_logged: false,
         }
+    }
+
+    #[test]
+    fn drawable_size_is_client_area_not_decorated_outer_bounds() {
+        let normal = test_window(
+            1,
+            10,
+            20,
+            800,
+            600,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        assert_eq!(normal.desired_client_size(1280, 800), (800, 600));
+        assert_eq!(
+            normal.chrome_rect(1280, 800),
+            (
+                10,
+                20,
+                800 + BORDER_W * 2,
+                600 + normal.titlebar_height() + BORDER_W
+            )
+        );
+    }
+
+    #[test]
+    fn maximized_and_fullscreen_client_sizes_are_saturating() {
+        let mut win = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Normal,
+            WindowState::Maximized,
+            ZIndexType::Normal,
+        );
+        assert_eq!(
+            win.desired_client_size(1024, 700),
+            (
+                1024 - BORDER_W * 2,
+                700 - INTEGRATED_PANEL_H - win.titlebar_height() - BORDER_W
+            )
+        );
+        assert_eq!(win.desired_client_size(1, 1), (0, 0));
+
+        win.config.state = WindowState::Fullscreen;
+        win.config.border = BorderStyle::None;
+        assert_eq!(win.desired_client_size(1280, 800), (1280, 800));
+    }
+
+    #[test]
+    fn matching_surface_geometry_needs_no_generation_change() {
+        let win = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::Normal,
+        );
+        assert_eq!(
+            (win.surface_width_pixels, win.surface_height_rows),
+            win.desired_client_size(1920, 1080)
+        );
+        assert_eq!(win.surface_generation, 1);
     }
 
     fn test_state(windows: Vec<Window>) -> CompositorState {
@@ -7014,6 +7161,7 @@ pub extern "C" fn _start() -> ! {
                                 surface_height_rows: layout.height,
                                 surface_stride_bytes: layout.stride_bytes,
                                 surface_len_bytes: layout.surface_len_bytes,
+                                surface_generation: 1,
                                 x: win_x,
                                 y: win_y,
                                 saved_x: win_x,
@@ -7638,6 +7786,54 @@ pub extern "C" fn _start() -> ! {
                 state.debug_counters.display_poll_count =
                     state.debug_counters.display_poll_count.wrapping_add(1);
                 if let Some(win_idx) = event_poll_window_idx(&state, win_id) {
+                    // Resize-aware clients opt in and include the last surface
+                    // generation they mapped. Allocate at most once per poll,
+                    // using the latest logical geometry, so rapid pointer
+                    // motion is naturally coalesced. Input queues are not
+                    // touched when a resize notification takes this reply.
+                    let resize_v1 = msg.words[1] & SgpMsg::EVENT_RESIZE_PROTOCOL_V1 != 0;
+                    if resize_v1 {
+                        let requested_generation =
+                            msg.words[1] & SgpMsg::EVENT_SURFACE_GENERATION_MASK;
+                        let desired = state.windows[win_idx]
+                            .desired_client_size(state.fb_width, state.fb_height);
+                        if desired
+                            != (
+                                state.windows[win_idx].surface_width_pixels,
+                                state.windows[win_idx].surface_height_rows,
+                            )
+                        {
+                            let replaced = replace_client_surface(
+                                &mut state.windows[win_idx],
+                                desired.0,
+                                desired.1,
+                            );
+                            if replaced {
+                                log_client_surface_resize(&state.windows[win_idx]);
+                            }
+                        }
+
+                        let win = &state.windows[win_idx];
+                        if requested_generation != win.surface_generation {
+                            let geometry = u64::from(win.surface_width_pixels)
+                                | (u64::from(win.surface_height_rows) << 32);
+                            let surface_metadata = (win.surface_stride_bytes as u64)
+                                | ((win.surface_len_bytes as u64) << 32);
+                            let mut resized = IpcMsg::with_label(SgpMsg::REPLY)
+                                .word(0, geometry)
+                                .word(1, win.surface_generation)
+                                .word(2, surface_metadata)
+                                .word(
+                                    3,
+                                    SgpMsg::EVENT_FLAG_WINDOW_VALID | SgpMsg::EVENT_FLAG_RESIZED,
+                                );
+                            resized.caps[0] = win.shm_cap;
+                            resized.cap_count = 1;
+                            let _ = ipc_reply(resized);
+                            continue;
+                        }
+                    }
+
                     let lock_isolates_this = state.lock_generation != 0
                         && state.windows[win_idx].id != state.lock_presenter_window;
                     let (cx, cy) = {

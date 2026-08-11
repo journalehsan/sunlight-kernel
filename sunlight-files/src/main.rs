@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
 
@@ -20,8 +20,9 @@ use sunlight_ui::image::{decode_simg, mime_icon, TgaImage};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::{
-    draw_scrollbar, App, Canvas, Event, HBox, Rect, ScrollPolicy, ScrollState, Theme, UiSymbol,
-    VBox, Window, WindowConfig, WindowMaterial,
+    draw_scrollbar, App, AxisSizing, Canvas, Column, Event, LayoutBox, LayoutInvalidation, Rect,
+    Row, ScrollPolicy, ScrollState, Size, Sizing, Theme, UiSymbol, VBox, Window, WindowConfig,
+    WindowEvent, WindowMaterial,
 };
 
 // ── Central GUI font instance (vector / Inter) ───────────────────────────────
@@ -207,7 +208,6 @@ const PAD: i32 = 10;
 /// Shared chrome corner radius (aligned with card materials / decoration family).
 const RADIUS: u32 = 8;
 const NAV_BTN_W: u32 = 64;
-const NAV_BTN_H: u32 = 28;
 const SEARCH_W: u32 = 224;
 const SEARCH_H: u32 = 28;
 /// Height passed to VBox for each SidebarItem — fits inside the sidebar.
@@ -1068,6 +1068,7 @@ fn draw_argb_image(canvas: &mut Canvas, img: &sunlight_ui::image::RgbaImage, dst
     }
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     debug_log("[FILES] panic\n");
@@ -1733,6 +1734,26 @@ struct FilesApp {
     prev_path: PathBuf,
     /// Previous view mode for detecting mode changes.
     prev_view_mode: ViewMode,
+    /// The application-host boundary for authoritative drawable client bounds.
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: FilesLayout,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct FilesLayout {
+    root: Rect,
+    toolbar: Rect,
+    body: Rect,
+    details: Rect,
+    status: Rect,
+    sidebar: Rect,
+    main: Rect,
+    back: Rect,
+    forward: Rect,
+    up: Rect,
+    search: Rect,
+    breadcrumb: Rect,
 }
 
 impl FilesApp {
@@ -1760,45 +1781,118 @@ impl FilesApp {
             pressed_scrollbar: None,
             prev_path: PathBuf::root(),
             prev_view_mode: ViewMode::Home,
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: FilesLayout::default(),
         }
     }
 
     // ── Layout helpers ────────────────────────────────────────────────────
 
-    /// Compute the details pane height, shrinking it on short windows.
-    fn details_height() -> u32 {
-        // Keep at least ~260px for the file list; otherwise clamp the pane down.
-        let reserved = TOOLBAR_H + STATUS_H + DETAILS_H;
-        if WIN_H > reserved + 260 {
-            DETAILS_H
-        } else {
-            DETAILS_MIN_H
+    fn compute_layout(root: Rect) -> FilesLayout {
+        let fill = Sizing::new(AxisSizing::Fill, AxisSizing::Fill);
+        let mut root_children = [
+            LayoutBox::new(Rect::new(0, 0, 0, TOOLBAR_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(TOOLBAR_H))),
+            LayoutBox::new(Rect::new(0, 0, 0, 0))
+                .with_sizing(fill)
+                .with_min_size(Size::new(0, 260)),
+            LayoutBox::new(Rect::new(0, 0, 0, DETAILS_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Flex(1)))
+                .with_natural_size(Size::new(0, DETAILS_H))
+                .with_min_size(Size::new(0, DETAILS_MIN_H))
+                .with_max_size(Size::new(u32::MAX, DETAILS_H)),
+            LayoutBox::new(Rect::new(0, 0, 0, STATUS_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(STATUS_H))),
+        ];
+        let _ = Column::new(root).arrange(&mut root_children);
+        let toolbar = root_children[0].bounds();
+        let body = root_children[1].bounds();
+        let details = root_children[2].bounds();
+        let status = root_children[3].bounds();
+
+        let mut body_children = [
+            LayoutBox::new(Rect::new(0, 0, SIDEBAR_W, 0))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(SIDEBAR_W), AxisSizing::Fill)),
+            LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill),
+        ];
+        let _ = Row::new(body).with_gap(GAP).arrange(&mut body_children);
+
+        // Explicit fixed gap boxes preserve the existing 8/16 px toolbar
+        // rhythm while only the breadcrumb/path field receives Fill.
+        let fixed = |width| {
+            LayoutBox::new(Rect::new(0, 0, width, SEARCH_H)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(width),
+                AxisSizing::Fixed(SEARCH_H),
+            ))
+        };
+        let mut toolbar_children = [
+            fixed(NAV_BTN_W),
+            fixed(8),
+            fixed(NAV_BTN_W),
+            fixed(8),
+            fixed(NAV_BTN_W),
+            fixed(16),
+            LayoutBox::new(Rect::new(0, 0, 0, SEARCH_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(SEARCH_H))),
+            fixed(16),
+            fixed(SEARCH_W),
+        ];
+        let toolbar_inner = Rect::new(
+            toolbar.x + PAD,
+            toolbar.y + (toolbar.h as i32 - SEARCH_H as i32) / 2,
+            toolbar
+                .w
+                .saturating_sub((PAD.max(0) as u32).saturating_mul(2)),
+            SEARCH_H,
+        );
+        let _ = Row::new(toolbar_inner).arrange(&mut toolbar_children);
+
+        FilesLayout {
+            root,
+            toolbar,
+            body,
+            details,
+            status,
+            sidebar: body_children[0].bounds(),
+            main: body_children[1].bounds(),
+            back: toolbar_children[0].bounds(),
+            forward: toolbar_children[2].bounds(),
+            up: toolbar_children[4].bounds(),
+            breadcrumb: toolbar_children[6].bounds(),
+            search: toolbar_children[8].bounds(),
         }
     }
 
-    fn root_layout() -> (Rect, Rect, Rect, Rect) {
-        let root = Rect::new(0, 0, WIN_W, WIN_H);
-        let details_h = Self::details_height();
-        let body_h = WIN_H
-            .saturating_sub(TOOLBAR_H)
-            .saturating_sub(STATUS_H)
-            .saturating_sub(details_h);
-        let heights = [TOOLBAR_H, body_h, details_h, STATUS_H];
-        let mut rows = VBox::new(root).with_spacing(0).layout(&heights);
-        let toolbar = rows.next().unwrap_or_default();
-        let body = rows.next().unwrap_or_default();
-        let details = rows.next().unwrap_or_default();
-        let status = rows.next().unwrap_or_default();
-        (toolbar, body, details, status)
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds);
+        true
     }
 
-    fn body_layout(body: Rect) -> (Rect, Rect) {
-        let main_w = body.w.saturating_sub(SIDEBAR_W + GAP);
-        let widths = [SIDEBAR_W, main_w];
-        let mut cols = HBox::new(body).with_spacing(GAP).layout(&widths);
-        let sidebar = cols.next().unwrap_or_default();
-        let main = cols.next().unwrap_or_default();
-        (sidebar, main)
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        self.ensure_layout()
+    }
+
+    fn root_layout(&self) -> (Rect, Rect, Rect, Rect) {
+        (
+            self.layout.toolbar,
+            self.layout.body,
+            self.layout.details,
+            self.layout.status,
+        )
+    }
+
+    fn body_layout(&self) -> (Rect, Rect) {
+        (self.layout.sidebar, self.layout.main)
     }
 
     fn sidebar_scroll_region(sidebar: Rect) -> Rect {
@@ -1815,9 +1909,8 @@ impl FilesApp {
         )
     }
 
-    fn scroll_regions() -> (Rect, Rect) {
-        let (_, body, _, _) = Self::root_layout();
-        let (sidebar, main) = Self::body_layout(body);
+    fn scroll_regions(&self) -> (Rect, Rect) {
+        let (sidebar, main) = self.body_layout();
         (
             Self::sidebar_scroll_region(sidebar),
             Self::main_scroll_region(main),
@@ -1835,7 +1928,7 @@ impl FilesApp {
     }
 
     fn handle_scroll_pointer_event(&mut self, event: Event) -> Option<bool> {
-        let (sidebar_region, main_region) = Self::scroll_regions();
+        let (sidebar_region, main_region) = self.scroll_regions();
         match event {
             Event::MouseWheel { x, y, delta } => {
                 let point = sunlight_ui::Point::new(x, y);
@@ -2317,28 +2410,19 @@ impl FilesApp {
             .map_err(|_| "Invalid clipboard item")
     }
 
-    fn toolbar_layout(toolbar: Rect) -> (Rect, Rect, Rect, Rect, Rect) {
-        let btn_y = toolbar.y + (toolbar.h as i32 - NAV_BTN_H as i32) / 2;
-        let nav_x = toolbar.x + PAD;
-        let back = Rect::new(nav_x, btn_y, NAV_BTN_W, NAV_BTN_H);
-        let forward = Rect::new(back.right() + 8, btn_y, NAV_BTN_W, NAV_BTN_H);
-        let up = Rect::new(forward.right() + 8, btn_y, NAV_BTN_W, NAV_BTN_H);
-        let search_x = toolbar.right() - SEARCH_W as i32 - PAD;
-        let search_y = toolbar.y + (toolbar.h as i32 - SEARCH_H as i32) / 2;
-        let search = Rect::new(search_x, search_y, SEARCH_W, SEARCH_H);
-        let breadcrumb_x = up.right() + 16;
-        let breadcrumb_w = (search.x - breadcrumb_x - 16).max(0) as u32;
-        let breadcrumb = Rect::new(breadcrumb_x, search_y, breadcrumb_w, SEARCH_H);
-        (back, forward, up, search, breadcrumb)
+    fn toolbar_layout(&self) -> (Rect, Rect, Rect, Rect, Rect) {
+        (
+            self.layout.back,
+            self.layout.forward,
+            self.layout.up,
+            self.layout.search,
+            self.layout.breadcrumb,
+        )
     }
 
     /// Zero-alloc breadcrumb hit test. Iterates path components inline and
     /// returns the path up to (including) the clicked component as a PathBuf.
-    fn hit_test_breadcrumb(
-        breadcrumb: Rect,
-        x: i32,
-        path: &str,
-    ) -> Option<PathBuf> {
+    fn hit_test_breadcrumb(breadcrumb: Rect, x: i32, path: &str) -> Option<PathBuf> {
         let fudge = 6; // extra click margin
 
         if x < breadcrumb.x - fudge || x > breadcrumb.right() + fudge {
@@ -2401,8 +2485,8 @@ impl FilesApp {
             let group_start = y as i32;
             for (local_idx, &gidx) in group.indices.iter().enumerate() {
                 if gidx == idx {
-                    let item_y = group_start
-                        + local_idx as i32 * (SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32;
+                    let item_y =
+                        group_start + local_idx as i32 * (SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32;
                     return Rect::new(items_x, item_y, items_w, SIDEBAR_ITEM_H);
                 }
             }
@@ -2517,9 +2601,14 @@ impl FilesApp {
     fn handle_right_click(&mut self, x: i32, y: i32) -> bool {
         // The context menu only applies to the directory listing.
         if self.state.view_mode == ViewMode::Directory {
-            let (_, body, _, _) = Self::root_layout();
-            let (_, main) = Self::body_layout(body);
-            if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count, self.main_scroll.offset_y) {
+            let (_, main) = self.body_layout();
+            if let Some(idx) = Self::hit_test_row(
+                main,
+                x,
+                y,
+                self.state.entry_count,
+                self.main_scroll.offset_y,
+            ) {
                 return self.open_context_menu(x, y, ContextTarget::Row(idx));
             }
             // Empty space → background menu (Properties for the current folder).
@@ -2774,7 +2863,7 @@ impl FilesApp {
             theme.panel.lighten(20),
             1,
         );
-        let (back, forward, up, search, breadcrumb) = Self::toolbar_layout(toolbar);
+        let (back, forward, up, search, breadcrumb) = self.toolbar_layout();
         let up_disabled = match self.state.view_mode {
             ViewMode::Directory => self.state.current_path.parent().is_none(),
             _ => true,
@@ -2808,13 +2897,7 @@ impl FilesApp {
         );
 
         // ── Breadcrumb bar ─────────────────────────────────────────────────
-        canvas.fill_rounded_rect_with_border(
-            breadcrumb,
-            RADIUS,
-            theme.panel,
-            theme.border,
-            1,
-        );
+        canvas.fill_rounded_rect_with_border(breadcrumb, RADIUS, theme.panel, theme.border, 1);
 
         match self.state.view_mode {
             ViewMode::Home => {
@@ -2965,12 +3048,7 @@ impl FilesApp {
         let items_w = inner.w.saturating_sub(4);
 
         for group in SIDEBAR_GROUPS {
-            let header_rect = Rect::new(
-                inner.x,
-                y,
-                inner.w,
-                SIDEBAR_HEADER_H,
-            );
+            let header_rect = Rect::new(inner.x, y, inner.w, SIDEBAR_HEADER_H);
             // Only draw if header is at least partially visible
             if header_rect.bottom() > clip_top && header_rect.y < clip_bottom {
                 sf_vcenter(
@@ -2986,8 +3064,8 @@ impl FilesApp {
 
             // VBox layout the items in this group
             let count = group.indices.len();
-            let items_h = count as u32 * SIDEBAR_ITEM_H
-                + (count.saturating_sub(1) as u32) * SIDEBAR_ITEM_GAP;
+            let items_h =
+                count as u32 * SIDEBAR_ITEM_H + (count.saturating_sub(1) as u32) * SIDEBAR_ITEM_GAP;
             let items_area = Rect::new(items_x, y, items_w, items_h);
 
             // Quick reject: skip group entirely if outside clip
@@ -3231,8 +3309,19 @@ impl FilesApp {
 
         if self.state.volume_count == 0 {
             let empty_card = Rect::new(inner.x, y, inner.w, 80);
-            canvas.fill_rounded_rect_with_border(empty_card, RADIUS, theme.panel_alt, theme.border, 1);
-            canvas.draw_ui_symbol(inner.x + (inner.w as i32 - 16) / 2, y + 16, UiSymbol::Volume, theme.text_dim);
+            canvas.fill_rounded_rect_with_border(
+                empty_card,
+                RADIUS,
+                theme.panel_alt,
+                theme.border,
+                1,
+            );
+            canvas.draw_ui_symbol(
+                inner.x + (inner.w as i32 - 16) / 2,
+                y + 16,
+                UiSymbol::Volume,
+                theme.text_dim,
+            );
             sf_centered(
                 canvas,
                 Rect::new(inner.x, y + 34, inner.w, 18),
@@ -3455,7 +3544,11 @@ impl FilesApp {
             }
 
             let text_x = row.x + ICON_SLOT as i32 + 8;
-            let name_color = if selected { theme.accent_hover } else { theme.text };
+            let name_color = if selected {
+                theme.accent_hover
+            } else {
+                theme.text
+            };
             sf_draw(
                 canvas,
                 entry_name_str(&entry),
@@ -3603,13 +3696,25 @@ impl FilesApp {
         y += lh_rg + 8;
 
         y = Self::draw_prop_row(
-            canvas, left.x, y, label_w, "Type", "Directory", FontRole::UiSmall, theme,
+            canvas,
+            left.x,
+            y,
+            label_w,
+            "Type",
+            "Directory",
+            FontRole::UiSmall,
+            theme,
         );
 
         y = Self::draw_prop_row(
-            canvas, left.x, y, label_w, "Path",
+            canvas,
+            left.x,
+            y,
+            label_w,
+            "Path",
             self.state.current_path.as_str(),
-            FontRole::MonoRegular, theme,
+            FontRole::MonoRegular,
+            theme,
         );
 
         let mut buf = [0u8; 48];
@@ -3618,7 +3723,14 @@ impl FilesApp {
         len += write_to_buf(&mut buf[len..], b" items");
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
             y = Self::draw_prop_row(
-                canvas, left.x, y, label_w, "Items", s, FontRole::UiSmall, theme,
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Items",
+                s,
+                FontRole::UiSmall,
+                theme,
             );
         }
 
@@ -3626,7 +3738,14 @@ impl FilesApp {
         len += write_usize(&mut buf[len..], self.state.file_count);
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
             y = Self::draw_prop_row(
-                canvas, left.x, y, label_w, "Files", s, FontRole::UiSmall, theme,
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Files",
+                s,
+                FontRole::UiSmall,
+                theme,
             );
         }
 
@@ -3634,7 +3753,14 @@ impl FilesApp {
         len += write_usize(&mut buf[len..], self.state.folder_count);
         if let Ok(s) = core::str::from_utf8(&buf[..len]) {
             y = Self::draw_prop_row(
-                canvas, left.x, y, label_w, "Directories", s, FontRole::UiSmall, theme,
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Directories",
+                s,
+                FontRole::UiSmall,
+                theme,
             );
         }
 
@@ -3644,7 +3770,14 @@ impl FilesApp {
                 len += write_usize(&mut buf[len..], selected_count);
                 if let Ok(s) = core::str::from_utf8(&buf[..len]) {
                     Self::draw_prop_row(
-                        canvas, left.x, y, label_w, "Selected", s, FontRole::UiSmall, theme,
+                        canvas,
+                        left.x,
+                        y,
+                        label_w,
+                        "Selected",
+                        s,
+                        FontRole::UiSmall,
+                        theme,
                     );
                 }
             }
@@ -3655,10 +3788,7 @@ impl FilesApp {
         let icon_x = preview.x + (preview.w as i32 - icon_size as i32) / 2;
         let icon_y = preview.y + (preview.h as i32 - icon_size as i32) / 2;
         if let Some(icon) = self.mime_icons.folder.or(self.mime_icons.inode_directory) {
-            canvas.draw_tga_icon(
-                &icon,
-                Rect::new(icon_x, icon_y, icon_size, icon_size),
-            );
+            canvas.draw_tga_icon(&icon, Rect::new(icon_x, icon_y, icon_size, icon_size));
         } else {
             canvas.draw_ui_symbol_centered(
                 Rect::new(icon_x, icon_y, icon_size, icon_size),
@@ -3694,7 +3824,14 @@ impl FilesApp {
         let mime = mime_for_name(name_bytes);
         let type_label = file_type_label(name_bytes, mime);
         y = Self::draw_prop_row(
-            canvas, left.x, y, label_w, "Type", type_label, FontRole::UiSmall, theme,
+            canvas,
+            left.x,
+            y,
+            label_w,
+            "Type",
+            type_label,
+            FontRole::UiSmall,
+            theme,
         );
 
         // Path
@@ -3705,7 +3842,14 @@ impl FilesApp {
         };
         if let Some(ep) = entry_path {
             y = Self::draw_prop_row(
-                canvas, left.x, y, label_w, "Path", ep.as_str(), FontRole::MonoRegular, theme,
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Path",
+                ep.as_str(),
+                FontRole::MonoRegular,
+                theme,
             );
         }
 
@@ -3714,7 +3858,14 @@ impl FilesApp {
         let size_len = write_size(entry.size, &mut size_buf);
         if let Ok(s) = core::str::from_utf8(&size_buf[..size_len]) {
             y = Self::draw_prop_row(
-                canvas, left.x, y, label_w, "Size", s, FontRole::UiSmall, theme,
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Size",
+                s,
+                FontRole::UiSmall,
+                theme,
             );
         }
 
@@ -3727,7 +3878,14 @@ impl FilesApp {
             dlen += write_usize(&mut dim_buf[dlen..], self.preview_src_h as usize);
             if let Ok(s) = core::str::from_utf8(&dim_buf[..dlen]) {
                 y = Self::draw_prop_row(
-                    canvas, left.x, y, label_w, "Dimensions", s, FontRole::UiSmall, theme,
+                    canvas,
+                    left.x,
+                    y,
+                    label_w,
+                    "Dimensions",
+                    s,
+                    FontRole::UiSmall,
+                    theme,
                 );
             }
 
@@ -3737,7 +3895,14 @@ impl FilesApp {
                 "TGA"
             };
             Self::draw_prop_row(
-                canvas, left.x, y, label_w, "Format", format_label, FontRole::UiSmall, theme,
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Format",
+                format_label,
+                FontRole::UiSmall,
+                theme,
             );
         }
 
@@ -3819,7 +3984,8 @@ impl FilesApp {
         };
         if !summary.is_empty() {
             // Separator dot
-            let dot_x = status.x + 24 + sun_font::measure_text(count_text, FontRole::UiSmall).w as i32;
+            let dot_x =
+                status.x + 24 + sun_font::measure_text(count_text, FontRole::UiSmall).w as i32;
             sf_vcenter(
                 canvas,
                 "\u{2022}",
@@ -4143,38 +4309,36 @@ fn take_slice<'a>(bytes: &'a [u8], index: &mut usize, len: usize) -> Option<&'a 
 
 impl App for FilesApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
         // WindowGlass root: leave unused pixels transparent for compositor glass.
-        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
-        let (toolbar, body, details, status) = Self::root_layout();
-        let (sidebar, main) = Self::body_layout(body);
+        canvas.clear_transparent(self.layout.root);
+        let (toolbar, _body, details, status) = self.root_layout();
+        let (sidebar, main) = self.body_layout();
 
         // Update scroll geometry before drawing — content sizes are driven by
         // the current view mode and directory state.
         {
             let sidebar_inner = sidebar.inset(PAD);
-            self.sidebar_scroll.set_viewport(
-                sidebar_inner.w,
-                sidebar_inner.h,
-            );
+            self.sidebar_scroll
+                .set_viewport(sidebar_inner.w, sidebar_inner.h);
             let sidebar_content_h = Self::sidebar_content_height();
             self.sidebar_scroll.content_h = sidebar_content_h;
             self.sidebar_scroll.clamp();
         }
         {
             let main_inner = main.inset(PAD);
-            let list_h = main_inner
-                .h
-                .saturating_sub(COL_HEADER_H);
+            let list_h = main_inner.h.saturating_sub(COL_HEADER_H);
             self.main_scroll.set_viewport(main_inner.w, list_h);
             let main_content_h = self.state.entry_count as u32 * ROW_H;
             self.main_scroll.content_h = main_content_h;
 
             // Reset main-list scroll when the directory or view mode changes
             let current_path = self.state.current_path;
-            let same_dir = path_matches(
-                current_path.as_str(),
-                self.prev_path.as_str(),
-            );
+            let same_dir = path_matches(current_path.as_str(), self.prev_path.as_str());
             if !same_dir || self.state.view_mode != self.prev_view_mode {
                 self.main_scroll.scroll_to_y(0);
             }
@@ -4288,9 +4452,9 @@ impl App for FilesApp {
         // Track sidebar hover for visual feedback (must be before the click handler
         // since it fires on mouse-move, not click).
         if let Event::MouseMove { x, y } = event {
-            let (_, body, _, _) = Self::root_layout();
-            let (sidebar_rect, _) = Self::body_layout(body);
-            let new_hover = Self::hit_test_sidebar(sidebar_rect, x, y, self.sidebar_scroll.offset_y);
+            let (sidebar_rect, _) = self.body_layout();
+            let new_hover =
+                Self::hit_test_sidebar(sidebar_rect, x, y, self.sidebar_scroll.offset_y);
             if self.hovered_sidebar != new_hover {
                 self.hovered_sidebar = new_hover;
                 return true;
@@ -4314,9 +4478,9 @@ impl App for FilesApp {
                 log_i32(y);
                 debug_log("\n");
 
-                let (toolbar, body, _details, _) = Self::root_layout();
-                let (sidebar, main) = Self::body_layout(body);
-                let (_, _, up, _, _) = Self::toolbar_layout(toolbar);
+                let (_toolbar, _body, _details, _) = self.root_layout();
+                let (sidebar, main) = self.body_layout();
+                let (_, _, up, _, _) = self.toolbar_layout();
                 if up.contains(sunlight_ui::Point::new(x, y)) {
                     debug_log("[FILES] hit_test up_button\n");
                     return self.state.update(Message::NavigateUp);
@@ -4324,7 +4488,7 @@ impl App for FilesApp {
 
                 // Breadcrumb click in Directory mode
                 if self.state.view_mode == ViewMode::Directory {
-                    let (_, _, _, _, breadcrumb) = Self::toolbar_layout(toolbar);
+                    let (_, _, _, _, breadcrumb) = self.toolbar_layout();
                     if let Some(target) =
                         Self::hit_test_breadcrumb(breadcrumb, x, self.state.current_path.as_str())
                     {
@@ -4332,7 +4496,9 @@ impl App for FilesApp {
                         return self.state.navigate_to(target);
                     }
                 }
-                if let Some(idx) = Self::hit_test_sidebar(sidebar, x, y, self.sidebar_scroll.offset_y) {
+                if let Some(idx) =
+                    Self::hit_test_sidebar(sidebar, x, y, self.sidebar_scroll.offset_y)
+                {
                     debug_log("[FILES] hit_test sidebar idx=");
                     log_usize(idx);
                     debug_log(" label=\"");
@@ -4392,7 +4558,13 @@ impl App for FilesApp {
                     }
                     ViewMode::Network => {}
                     ViewMode::Directory => {
-                        if let Some(idx) = Self::hit_test_row(main, x, y, self.state.entry_count, self.main_scroll.offset_y) {
+                        if let Some(idx) = Self::hit_test_row(
+                            main,
+                            x,
+                            y,
+                            self.state.entry_count,
+                            self.main_scroll.offset_y,
+                        ) {
                             debug_log("[FILES] hit_test directory_row idx=");
                             log_usize(idx);
                             debug_log("\n");
@@ -4552,6 +4724,31 @@ impl App for FilesApp {
             Event::Tick => false,
             _ => false,
         }
+    }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        let changed = self.set_client_bounds(width, height);
+        if changed {
+            debug_log("[FILES-RESIZE] client=");
+            log_usize(width as usize);
+            debug_log("x");
+            log_usize(height as usize);
+            debug_log(" sidebar=");
+            log_usize(self.layout.sidebar.w as usize);
+            debug_log(" content=");
+            log_usize(self.layout.main.w as usize);
+            debug_log("x");
+            log_usize(self.layout.main.h as usize);
+            debug_log(" path=");
+            log_usize(self.layout.breadcrumb.w as usize);
+            debug_log(" info=");
+            log_usize(self.layout.details.w as usize);
+            debug_log("x");
+            log_usize(self.layout.details.h as usize);
+            debug_log("\n");
+        }
+        changed
     }
 }
 
@@ -4927,6 +5124,7 @@ fn draw_pill(
 // ---------------------------------------------------------------------------
 
 #[no_mangle]
+#[cfg(not(test))]
 pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(_argc, _argv);
     let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
@@ -4962,4 +5160,56 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
     let mut app = FilesApp::new();
     window.run(&mut app);
     ProcessExit::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn major_regions_track_client_width_and_height() {
+        for (width, height) in [(800, 600), (1024, 700), (1280, 800)] {
+            let layout = FilesApp::compute_layout(Rect::new(0, 0, width, height));
+            assert_eq!(layout.root, Rect::new(0, 0, width, height));
+            assert_eq!(layout.toolbar.w, width);
+            assert_eq!(layout.details.w, width);
+            assert_eq!(layout.status.w, width);
+            assert_eq!(layout.status.bottom(), height as i32);
+            assert_eq!(layout.sidebar.h, layout.body.h);
+            assert_eq!(layout.main.h, layout.body.h);
+        }
+    }
+
+    #[test]
+    fn sidebar_stays_fixed_while_content_and_path_fill_grow() {
+        let narrow = FilesApp::compute_layout(Rect::new(0, 0, 800, 600));
+        let wide = FilesApp::compute_layout(Rect::new(0, 0, 1280, 600));
+        assert_eq!(narrow.sidebar.w, SIDEBAR_W);
+        assert_eq!(wide.sidebar.w, SIDEBAR_W);
+        assert_eq!(wide.main.w - narrow.main.w, 480);
+        assert_eq!(wide.breadcrumb.w - narrow.breadcrumb.w, 480);
+        assert_eq!(narrow.search.w, SEARCH_W);
+        assert_eq!(wide.search.w, SEARCH_W);
+    }
+
+    #[test]
+    fn shrink_recomputes_instead_of_retaining_old_geometry() {
+        let initial = FilesApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        let shorter = FilesApp::compute_layout(Rect::new(0, 0, 800, 500));
+        assert_ne!(shorter.main, initial.main);
+        assert!(shorter.main.w < initial.main.w);
+        assert!(shorter.main.h < initial.main.h);
+        assert!(shorter.details.h >= DETAILS_MIN_H);
+        assert!(shorter.details.h <= DETAILS_H);
+        assert_eq!(shorter.details.w, 800);
+    }
+
+    #[test]
+    fn repeated_files_layout_is_identical() {
+        let bounds = Rect::new(0, 0, 1024, 700);
+        assert_eq!(
+            FilesApp::compute_layout(bounds),
+            FilesApp::compute_layout(bounds)
+        );
+    }
 }

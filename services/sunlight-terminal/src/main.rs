@@ -2117,8 +2117,7 @@ impl App for TerminalApp {
                         if delta > 0 {
                             let max = tab.grid.scrollback_len();
                             if tab.scrollback_offset < max {
-                                tab.scrollback_offset =
-                                    (tab.scrollback_offset + 1).min(max);
+                                tab.scrollback_offset = (tab.scrollback_offset + 1).min(max);
                                 dirty = true;
                             }
                         } else if delta < 0 {
