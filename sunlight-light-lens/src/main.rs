@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
 
@@ -19,8 +19,9 @@ use sunlight_libc::{self as libc, crt0, DirEntry, FT_FILE};
 use sunlight_ui::image::{decode_simg, RgbaImage, TgaImage};
 use sunlight_ui::widgets::StatusBar;
 use sunlight_ui::{
-    request_close, App, Canvas, Color, Event, Point, Rect, Theme, UiSymbol, Window, WindowConfig,
-    WindowDecoration, WindowMaterial,
+    request_close, App, AxisSizing, Canvas, Color, Column, Event, LayoutBox, LayoutInvalidation,
+    Point, Rect, Row, Size, Sizing, Theme, UiSymbol, Window, WindowConfig, WindowDecoration,
+    WindowEvent, WindowMaterial,
 };
 
 const WIN_W: u32 = 1220;
@@ -273,6 +274,27 @@ struct LightLensApp {
     message: TextBuf<MSG_LEN>,
     app_icon: Option<TgaImage>,
     missing_icon: Option<TgaImage>,
+    /// Authoritative drawable bounds supplied by the application host.
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: LightLensLayout,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct LightLensLayout {
+    root: Rect,
+    header: Rect,
+    toolbar: Rect,
+    body: Rect,
+    left: Rect,
+    /// Layout-owned image-viewer region. Preview chrome and image fitting stay
+    /// inside this rectangle and never influence the surrounding layout.
+    viewport: Rect,
+    right: Rect,
+    status: Rect,
+    back: Rect,
+    next: Rect,
+    tools: [Rect; 6],
 }
 
 impl LightLensApp {
@@ -289,6 +311,9 @@ impl LightLensApp {
             message: TextBuf::empty(),
             app_icon: TgaImage::parse(APP_ICON_TGA).ok(),
             missing_icon: TgaImage::parse(MISSING_ICON_TGA).ok(),
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: LightLensLayout::default(),
         };
         if let Some(path) = initial_path {
             app.open_path(path);
@@ -298,49 +323,108 @@ impl LightLensApp {
         app
     }
 
-    fn root_layout() -> (Rect, Rect, Rect, Rect, Rect, Rect) {
-        let header = Rect::new(0, 0, WIN_W, HEADER_H);
-        let toolbar = Rect::new(0, HEADER_H as i32, WIN_W, TOOLBAR_H);
-        let status = Rect::new(0, WIN_H as i32 - STATUS_H as i32, WIN_W, STATUS_H);
-        let body_y = toolbar.bottom() + GAP;
-        let body_h = status.y - GAP - body_y;
-        let left = Rect::new(OUTER_PAD, body_y, LEFT_W, body_h.max(0) as u32);
-        let right = Rect::new(
-            WIN_W as i32 - OUTER_PAD - RIGHT_W as i32,
-            body_y,
-            RIGHT_W,
-            body_h.max(0) as u32,
+    fn compute_layout(root: Rect) -> LightLensLayout {
+        let fill = Sizing::new(AxisSizing::Fill, AxisSizing::Fill);
+        let fixed_height = |height| {
+            LayoutBox::new(Rect::new(0, 0, 0, height))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(height)))
+        };
+        let mut root_children = [
+            fixed_height(HEADER_H),
+            fixed_height(TOOLBAR_H),
+            LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill),
+            fixed_height(STATUS_H),
+        ];
+        let _ = Column::new(root).arrange(&mut root_children);
+        let header = root_children[0].bounds();
+        let toolbar = root_children[1].bounds();
+        let body = root_children[2].bounds();
+        let status = root_children[3].bounds();
+
+        let body_inner = body.inset(OUTER_PAD);
+        let mut body_children = [
+            LayoutBox::new(Rect::new(0, 0, LEFT_W, 0))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(LEFT_W), AxisSizing::Fill)),
+            LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill),
+            LayoutBox::new(Rect::new(0, 0, RIGHT_W, 0))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(RIGHT_W), AxisSizing::Fill)),
+        ];
+        let _ = Row::new(body_inner)
+            .with_gap(GAP.max(0) as u32)
+            .arrange(&mut body_children);
+
+        // Preserve the existing left/right clusters. Only the middle spacer
+        // consumes changing toolbar width.
+        let tool_widths = [54u32, 54, 62, 62, 48, 56];
+        let button_height = toolbar.h.saturating_sub(16);
+        let toolbar_inner = Rect::new(
+            toolbar.x + 10,
+            toolbar.y + 8,
+            toolbar.w.saturating_sub(20),
+            button_height,
         );
-        let center_x = left.right() + GAP;
-        let center_w = (right.x - GAP - center_x).max(0) as u32;
-        let center = Rect::new(center_x, body_y, center_w, body_h.max(0) as u32);
-        (header, toolbar, left, center, right, status)
+        let fixed = |width| {
+            LayoutBox::new(Rect::new(0, 0, width, button_height)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(width),
+                AxisSizing::Fixed(button_height),
+            ))
+        };
+        let mut toolbar_children = [
+            fixed(84),
+            fixed(84),
+            LayoutBox::new(Rect::new(0, 0, 0, button_height)).with_sizing(Sizing::new(
+                AxisSizing::Fill,
+                AxisSizing::Fixed(button_height),
+            )),
+            fixed(tool_widths[0]),
+            fixed(tool_widths[1]),
+            fixed(tool_widths[2]),
+            fixed(tool_widths[3]),
+            fixed(tool_widths[4]),
+            fixed(tool_widths[5]),
+        ];
+        let _ = Row::new(toolbar_inner)
+            .with_gap(6)
+            .arrange(&mut toolbar_children);
+
+        LightLensLayout {
+            root,
+            header,
+            toolbar,
+            body,
+            left: body_children[0].bounds(),
+            viewport: body_children[1].bounds(),
+            right: body_children[2].bounds(),
+            status,
+            back: toolbar_children[0].bounds(),
+            next: toolbar_children[1].bounds(),
+            tools: [
+                toolbar_children[3].bounds(),
+                toolbar_children[4].bounds(),
+                toolbar_children[5].bounds(),
+                toolbar_children[6].bounds(),
+                toolbar_children[7].bounds(),
+                toolbar_children[8].bounds(),
+            ],
+        }
     }
 
-    /// Layout the toolbar: a left cluster of navigation buttons (Back, Next)
-    /// and a right cluster of compact decorative tool chips. The wide middle
-    /// stays free for a subtle keyboard hint.
-    fn toolbar_buttons(toolbar: Rect) -> (Rect, Rect, [Rect; 6]) {
-        let btn_h = toolbar.h.saturating_sub(16);
-        let pad = 10i32;
-
-        // Navigation cluster (left): Back then Next.
-        let nav_w = 84u32;
-        let nav_gap = 6i32;
-        let back = Rect::new(toolbar.x + pad, toolbar.y + 8, nav_w, btn_h);
-        let next = Rect::new(back.right() + nav_gap, toolbar.y + 8, nav_w, btn_h);
-
-        // Decorative tool cluster (right): six compact placeholder chips.
-        let tool_w = [54u32, 54, 62, 62, 48, 56];
-        let tool_gap = 6u32;
-        let total_w = tool_w.iter().copied().sum::<u32>() + (tool_w.len() as u32 - 1) * tool_gap;
-        let mut x = toolbar.right() - pad - total_w as i32;
-        let mut tools = [Rect::new(0, 0, 0, 0); 6];
-        for (idx, &width) in tool_w.iter().enumerate() {
-            tools[idx] = Rect::new(x, toolbar.y + 8, width, btn_h);
-            x += width as i32 + tool_gap as i32;
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
         }
-        (back, next, tools)
+        self.layout = Self::compute_layout(self.client_bounds);
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        self.ensure_layout()
     }
 
     /// Draw a titled panel using the MiniType vector font, matching the look
@@ -348,24 +432,30 @@ impl LightLensApp {
     /// Returns the content rect (everything below the title bar).
     fn draw_panel(canvas: &mut Canvas, theme: &Theme, rect: Rect, title: &str) -> Rect {
         const TITLE_H: u32 = 20;
+        if rect.w == 0 || rect.h == 0 {
+            return Rect::new(rect.x, rect.y, 0, 0);
+        }
+        let title_h = rect.h.min(TITLE_H);
         canvas.fill_rect(rect, theme.panel);
-        let title_rect = Rect::new(rect.x, rect.y, rect.w, TITLE_H);
+        let title_rect = Rect::new(rect.x, rect.y, rect.w, title_h);
         canvas.fill_rect(title_rect, theme.panel_alt);
         sf_vcenter(
             canvas,
             title,
             rect.x + 8,
             rect.y,
-            TITLE_H,
+            title_h,
             &TextStyle::new(FontRole::UiMedium, theme.accent),
         );
-        canvas.hbar(rect.x, rect.y + TITLE_H as i32, rect.w, 1, theme.border);
+        if rect.h > TITLE_H {
+            canvas.hbar(rect.x, rect.y + TITLE_H as i32, rect.w, 1, theme.border);
+        }
         canvas.draw_rect(rect, theme.border);
         Rect::new(
             rect.x,
-            rect.y + TITLE_H as i32,
+            rect.y + title_h as i32,
             rect.w,
-            rect.h.saturating_sub(TITLE_H),
+            rect.h.saturating_sub(title_h),
         )
     }
 
@@ -470,26 +560,28 @@ impl LightLensApp {
         y + 18
     }
 
-    fn preview_fit_rect(viewport: Rect, width: u32, height: u32) -> Rect {
-        let area = viewport.inset(16);
-        if width == 0 || height == 0 || area.w == 0 || area.h == 0 {
-            return area;
+    /// Compute the deterministic Fit presentation rectangle owned by the
+    /// image renderer. The layout system owns `viewport`; this helper never
+    /// changes it and never returns geometry for an unusable source/viewport.
+    fn fit_image_rect(viewport: Rect, width: u32, height: u32) -> Option<Rect> {
+        if width == 0 || height == 0 || viewport.w == 0 || viewport.h == 0 {
+            return None;
         }
-        let scale_w = area.w as u64 * height as u64;
-        let scale_h = area.h as u64 * width as u64;
+        let scale_w = u64::from(viewport.w).saturating_mul(u64::from(height));
+        let scale_h = u64::from(viewport.h).saturating_mul(u64::from(width));
         let (fit_w, fit_h) = if scale_w <= scale_h {
-            let h = (area.w as u64 * height as u64 / width as u64) as u32;
-            (area.w.max(1), h.max(1))
+            let h = u64::from(viewport.w).saturating_mul(u64::from(height)) / u64::from(width);
+            (viewport.w, (h as u32).max(1).min(viewport.h))
         } else {
-            let w = (area.h as u64 * width as u64 / height as u64) as u32;
-            (w.max(1), area.h.max(1))
+            let w = u64::from(viewport.h).saturating_mul(u64::from(width)) / u64::from(height);
+            ((w as u32).max(1).min(viewport.w), viewport.h)
         };
-        Rect::new(
-            area.x + (area.w as i32 - fit_w as i32) / 2,
-            area.y + (area.h as i32 - fit_h as i32) / 2,
+        Some(Rect::new(
+            viewport.x + (viewport.w.saturating_sub(fit_w) / 2) as i32,
+            viewport.y + (viewport.h.saturating_sub(fit_h) / 2) as i32,
             fit_w,
             fit_h,
-        )
+        ))
     }
 
     /// Fit-blit decoded photo pixels with **forced opaque ARGB**.
@@ -722,6 +814,9 @@ impl LightLensApp {
     }
 
     fn draw_header(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
+        if rect.w == 0 || rect.h == 0 {
+            return;
+        }
         canvas.fill_rect(rect, theme.panel);
         canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
         if let Some(icon) = self.app_icon {
@@ -776,10 +871,15 @@ impl LightLensApp {
     }
 
     fn draw_toolbar(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
+        if rect.w == 0 || rect.h == 0 {
+            return;
+        }
         canvas.fill_rect(rect, theme.panel_alt);
         canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
 
-        let (back_rect, next_rect, tool_rects) = Self::toolbar_buttons(rect);
+        let back_rect = self.layout.back;
+        let next_rect = self.layout.next;
+        let tool_rects = self.layout.tools;
 
         // Functional navigation (left cluster) — prominent, accent-highlighted.
         Self::draw_nav_button(
@@ -823,6 +923,9 @@ impl LightLensApp {
 
     fn draw_left_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
         let content = Self::draw_panel(canvas, theme, rect, "Edit Tools");
+        if content.w == 0 || content.h == 0 {
+            return;
+        }
         let pad = 12i32;
         let inner_w = (content.w as i32 - pad * 2).max(0) as u32;
         let chip_h = 26u32;
@@ -910,20 +1013,35 @@ impl LightLensApp {
     }
 
     fn draw_preview_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
+        if rect.w == 0 || rect.h == 0 {
+            return;
+        }
         let content = Self::draw_panel(canvas, theme, rect, "Preview").inset(8);
+        if content.w == 0 || content.h == 0 {
+            return;
+        }
 
         Self::draw_checkerboard(canvas, content, theme.bg, theme.bg.lighten(7), 18);
         canvas.draw_rect(content, theme.border);
 
         match (self.load_state, self.image.as_ref()) {
             (LoadState::Ready, Some(image)) => {
-                let fit = Self::preview_fit_rect(content, image.width, image.height);
-                // Opaque backdrop under the photo (not alpha-hole gray).
-                canvas.fill_rect(fit, Color::rgb(theme.bg.r(), theme.bg.g(), theme.bg.b()));
-                Self::draw_photo(canvas, image, fit);
-                canvas.draw_rect(fit, theme.border);
-                let outer = fit.inset(-1);
-                canvas.draw_rect(outer, theme.border);
+                // All photo operations use viewport-local coordinates. The
+                // shared Canvas clip therefore makes it impossible for scaled
+                // pixels to reach the toolbar, side panels, or status bar.
+                let mut viewport_canvas = canvas.sub_canvas(content);
+                let local_viewport = Rect::new(0, 0, content.w, content.h).inset(16);
+                if let Some(image_rect) =
+                    Self::fit_image_rect(local_viewport, image.width, image.height)
+                {
+                    viewport_canvas.fill_rect(
+                        image_rect,
+                        Color::rgb(theme.bg.r(), theme.bg.g(), theme.bg.b()),
+                    );
+                    Self::draw_photo(&mut viewport_canvas, image, image_rect);
+                    viewport_canvas.draw_rect(image_rect, theme.border);
+                    viewport_canvas.draw_rect(image_rect.inset(-1), theme.border);
+                }
             }
             (LoadState::Error, _) => {
                 if let Some(icon) = self.missing_icon {
@@ -959,7 +1077,12 @@ impl LightLensApp {
                     );
                     canvas.draw_tga_icon_tinted(&icon, icon_rect, theme.icon_muted);
                 }
-                let msg_rect = Rect::new(content.x + 20, content.bottom() - 72, content.w - 40, 24);
+                let msg_rect = Rect::new(
+                    content.x + 20,
+                    content.bottom() - 72,
+                    content.w.saturating_sub(40),
+                    24,
+                );
                 sf_centered(
                     canvas,
                     msg_rect,
@@ -1004,6 +1127,9 @@ impl LightLensApp {
 
     fn draw_info_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
         let content = Self::draw_panel(canvas, theme, rect, "Image Info").inset(12);
+        if content.w == 0 || content.h == 0 {
+            return;
+        }
 
         const ROWS: usize = 8;
         const ROW_H: i32 = 32;
@@ -1064,6 +1190,9 @@ impl LightLensApp {
     }
 
     fn draw_status(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
+        if rect.w == 0 || rect.h == 0 {
+            return;
+        }
         let mut center_buf = [0u8; 48];
         let mut right_buf = [0u8; 24];
         let mut left_buf: TextBuf<VALUE_LEN> = TextBuf::empty();
@@ -1123,25 +1252,28 @@ impl LightLensApp {
 
 impl App for LightLensApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
-        let (header, toolbar, left, center, right, status) = Self::root_layout();
-        self.draw_header(canvas, theme, header);
-        self.draw_toolbar(canvas, theme, toolbar);
-        self.draw_left_panel(canvas, theme, left);
-        self.draw_preview_panel(canvas, theme, center);
-        self.draw_info_panel(canvas, theme, right);
-        self.draw_status(canvas, theme, status);
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
+        let layout = self.layout;
+        canvas.fill_rect(layout.root, theme.bg);
+        self.draw_header(canvas, theme, layout.header);
+        self.draw_toolbar(canvas, theme, layout.toolbar);
+        self.draw_left_panel(canvas, theme, layout.left);
+        self.draw_preview_panel(canvas, theme, layout.viewport);
+        self.draw_info_panel(canvas, theme, layout.right);
+        self.draw_status(canvas, theme, layout.status);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Click { x, y } => {
-                let (_header, toolbar, _left, _center, _right, _status) = Self::root_layout();
-                let (back_rect, next_rect, _tool_rects) = Self::toolbar_buttons(toolbar);
-                if back_rect.contains(Point::new(x, y)) {
+                if self.layout.back.contains(Point::new(x, y)) {
                     return self.show_previous();
                 }
-                if next_rect.contains(Point::new(x, y)) {
+                if self.layout.next.contains(Point::new(x, y)) {
                     return self.show_next();
                 }
                 false
@@ -1165,8 +1297,14 @@ impl App for LightLensApp {
             _ => false,
         }
     }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
+    }
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[LIGHT-LENS] panic\n");
@@ -1176,6 +1314,7 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 }
 
 #[no_mangle]
+#[cfg(not(test))]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
     let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
@@ -1440,4 +1579,163 @@ fn fill_status_right<'a>(state: LoadState, out: &'a mut [u8; 24]) -> &'a str {
     };
     let len = write_bytes(out, text);
     core::str::from_utf8(&out[..len]).unwrap_or("Waiting")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+
+    fn fit(viewport: Rect, width: u32, height: u32) -> Rect {
+        LightLensApp::fit_image_rect(viewport, width, height).expect("valid fit")
+    }
+
+    #[test]
+    fn responsive_layout_assigns_toolbar_and_remaining_viewport() {
+        let root = Rect::new(0, 0, 1220, 760);
+        let layout = LightLensApp::compute_layout(root);
+        assert_eq!(layout.root, root);
+        assert_eq!(layout.toolbar.w, root.w);
+        assert_eq!(
+            layout.viewport.w,
+            1220 - 2 * OUTER_PAD as u32 - LEFT_W - RIGHT_W - 20
+        );
+        assert_eq!(layout.viewport.h, layout.body.h.saturating_sub(20));
+        assert_eq!(layout.left.h, layout.viewport.h);
+        assert_eq!(layout.right.h, layout.viewport.h);
+        assert_eq!(layout.status.bottom(), root.bottom());
+    }
+
+    #[test]
+    fn resizing_recomputes_toolbar_and_viewport_without_stale_geometry() {
+        let initial = LightLensApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        let wider = LightLensApp::compute_layout(Rect::new(0, 0, WIN_W + 200, WIN_H));
+        let taller = LightLensApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H + 160));
+        let smaller = LightLensApp::compute_layout(Rect::new(0, 0, 900, 520));
+        assert_eq!(wider.toolbar.w, initial.toolbar.w + 200);
+        assert_eq!(wider.viewport.w, initial.viewport.w + 200);
+        assert_eq!(taller.viewport.h, initial.viewport.h + 160);
+        assert!(smaller.viewport.w < initial.viewport.w);
+        assert!(smaller.viewport.h < initial.viewport.h);
+    }
+
+    #[test]
+    fn repeated_and_grow_shrink_grow_layouts_are_stable() {
+        let large_bounds = Rect::new(0, 0, 1440, 900);
+        let first = LightLensApp::compute_layout(large_bounds);
+        let _small = LightLensApp::compute_layout(Rect::new(0, 0, 760, 420));
+        let restored = LightLensApp::compute_layout(large_bounds);
+        assert_eq!(first, restored);
+        assert_eq!(first, LightLensApp::compute_layout(large_bounds));
+    }
+
+    #[test]
+    fn tiny_and_zero_client_dimensions_are_safe() {
+        for bounds in [
+            Rect::new(0, 0, 0, 0),
+            Rect::new(0, 0, 1, 1),
+            Rect::new(0, 0, 400, TOOLBAR_H),
+        ] {
+            let layout = LightLensApp::compute_layout(bounds);
+            assert_eq!(layout.root, bounds);
+            assert_eq!(layout.viewport.w, 0);
+            assert_eq!(layout.viewport.h, 0);
+        }
+    }
+
+    #[test]
+    fn landscape_fits_inside_portrait_viewport_and_centers_vertically() {
+        let viewport = Rect::new(10, 20, 300, 600);
+        let image = fit(viewport, 1600, 900);
+        assert_eq!(image, Rect::new(10, 236, 300, 168));
+        assert!(image.y > viewport.y);
+        assert!(image.bottom() <= viewport.bottom());
+    }
+
+    #[test]
+    fn portrait_fits_inside_landscape_viewport_and_centers_horizontally() {
+        let viewport = Rect::new(10, 20, 600, 300);
+        let image = fit(viewport, 900, 1600);
+        assert_eq!(image, Rect::new(226, 20, 168, 300));
+        assert!(image.x > viewport.x);
+        assert!(image.right() <= viewport.right());
+    }
+
+    #[test]
+    fn square_and_exact_ratio_fits_preserve_aspect_and_center() {
+        let square = fit(Rect::new(0, 0, 300, 200), 100, 100);
+        assert_eq!(square, Rect::new(50, 0, 200, 200));
+
+        let exact = fit(Rect::new(7, 11, 1000, 600), 4, 3);
+        assert_eq!(exact, Rect::new(107, 11, 800, 600));
+        assert_eq!(u64::from(exact.w) * 3, u64::from(exact.h) * 4);
+    }
+
+    #[test]
+    fn fitted_image_never_exceeds_viewport() {
+        for (viewport, width, height) in [
+            (Rect::new(3, 5, 1, 1), 1, 1),
+            (Rect::new(3, 5, 37, 91), 4000, 3),
+            (Rect::new(3, 5, 91, 37), 3, 4000),
+            (Rect::new(3, 5, 640, 480), 1920, 1080),
+        ] {
+            let image = fit(viewport, width, height);
+            assert!(image.x >= viewport.x && image.y >= viewport.y);
+            assert!(image.right() <= viewport.right());
+            assert!(image.bottom() <= viewport.bottom());
+        }
+    }
+
+    #[test]
+    fn zero_source_or_viewport_produces_no_image_geometry() {
+        let viewport = Rect::new(0, 0, 100, 100);
+        assert_eq!(LightLensApp::fit_image_rect(viewport, 0, 10), None);
+        assert_eq!(LightLensApp::fit_image_rect(viewport, 10, 0), None);
+        assert_eq!(
+            LightLensApp::fit_image_rect(Rect::new(0, 0, 0, 100), 10, 10),
+            None
+        );
+        assert_eq!(
+            LightLensApp::fit_image_rect(Rect::new(0, 0, 100, 0), 10, 10),
+            None
+        );
+    }
+
+    #[test]
+    fn fit_is_deterministic_and_large_dimensions_do_not_overflow() {
+        let viewport = Rect::new(17, 29, 4096, 2160);
+        let first = fit(viewport, u32::MAX, u32::MAX - 1);
+        let second = fit(viewport, u32::MAX, u32::MAX - 1);
+        assert_eq!(first, second);
+        assert!(first.w <= viewport.w && first.h <= viewport.h);
+        assert!(first.right() <= viewport.right());
+        assert!(first.bottom() <= viewport.bottom());
+    }
+
+    #[test]
+    fn viewport_clip_prevents_photo_pixels_from_reaching_toolbar() {
+        const TOOLBAR: u32 = 5;
+        const WIDTH: u32 = 20;
+        const HEIGHT: u32 = 20;
+        let toolbar_pixel = 0xFF11_2233;
+        let photo_pixel = 0xFFAA_BBCC;
+        let mut pixels = vec![toolbar_pixel; (WIDTH * HEIGHT) as usize];
+        let image = RgbaImage {
+            width: 1,
+            height: 1,
+            pixels: vec![photo_pixel],
+        };
+        let mut canvas = Canvas::new(&mut pixels, WIDTH, WIDTH, HEIGHT);
+        {
+            let mut viewport =
+                canvas.sub_canvas(Rect::new(0, TOOLBAR as i32, WIDTH, HEIGHT - TOOLBAR));
+            LightLensApp::draw_photo(&mut viewport, &image, Rect::new(-5, -5, 30, 30));
+        }
+        assert!(pixels[..(WIDTH * TOOLBAR) as usize]
+            .iter()
+            .all(|pixel| *pixel == toolbar_pixel));
+        assert!(pixels[(WIDTH * TOOLBAR) as usize..]
+            .iter()
+            .all(|pixel| *pixel == photo_pixel));
+    }
 }
