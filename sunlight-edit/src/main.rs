@@ -1,5 +1,6 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
+#![cfg_attr(test, allow(dead_code, unused_imports))]
 
 extern crate alloc;
 
@@ -30,8 +31,8 @@ use sunlight_ui::widgets::{
     StatusBar, TextCommand, TextEditor, TextEditorResponse, TextEditorState, TextInput,
 };
 use sunlight_ui::{
-    request_close, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
-    WindowDecoration,
+    request_close, App, AxisSizing, Canvas, Color, Column, Event, LayoutBox, LayoutInvalidation,
+    Point, Rect, Size, Sizing, Theme, Window, WindowConfig, WindowDecoration, WindowEvent,
 };
 
 const WIN_W: u32 = 900;
@@ -103,7 +104,9 @@ static ICON_PREV_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_pre
 // Hamburger replaces the text "Menu" label on the toolbar.
 static ICON_MENU_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_menu.tga"));
 
+#[cfg(not(test))]
 struct BumpAllocator;
+#[cfg(not(test))]
 unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         static mut HEAP: [u8; 2 * 1024 * 1024] = [0; 2 * 1024 * 1024];
@@ -119,9 +122,11 @@ unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
 }
 
+#[cfg(not(test))]
 #[global_allocator]
 static ALLOC: BumpAllocator = BumpAllocator;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[EDIT] panic\n");
@@ -403,6 +408,19 @@ struct EditApp {
     icons: EditorIcons,
     focus: FocusTarget,
     document_revision: u64,
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: EditLayout,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct EditLayout {
+    root: Rect,
+    header: Rect,
+    toolbar: Rect,
+    find: Rect,
+    editor: Rect,
+    status: Rect,
 }
 
 impl EditApp {
@@ -438,12 +456,79 @@ impl EditApp {
             icons: EditorIcons::load(),
             focus: FocusTarget::Editor,
             document_revision: 0,
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: EditLayout::default(),
         };
         app.refresh_header_title();
         app.refresh_status_right();
         app.refresh_status_left();
+        let _ = app.ensure_layout();
         app.layout_find_panel();
         app
+    }
+
+    fn compute_layout(root: Rect, find_visible: bool) -> EditLayout {
+        let fill = Sizing::new(AxisSizing::Fill, AxisSizing::Fill);
+        let fixed_height = |height| {
+            LayoutBox::new(Rect::new(0, 0, 0, height))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(height)))
+        };
+        let find_height = if find_visible { FIND_PANEL_H } else { 0 };
+        let mut children = [
+            fixed_height(HEADER_H),
+            fixed_height(TOOLBAR_H),
+            fixed_height(find_height),
+            LayoutBox::new(Rect::default()).with_sizing(fill),
+            fixed_height(STATUS_H),
+        ];
+        let _ = Column::new(root).arrange(&mut children);
+        EditLayout {
+            root,
+            header: children[0].bounds(),
+            toolbar: children[1].bounds(),
+            find: children[2].bounds(),
+            editor: children[3].bounds(),
+            status: children[4].bounds(),
+        }
+    }
+
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds, self.find.visible);
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        let changed = self.ensure_layout();
+        self.revalidate_editor_scroll();
+        self.layout_find_panel();
+        self.layout_dialog_buttons();
+        changed
+    }
+
+    fn invalidate_structure(&mut self) {
+        self.layout_invalidation.invalidate();
+        let _ = self.ensure_layout();
+        self.revalidate_editor_scroll();
+    }
+
+    fn revalidate_editor_scroll(&mut self) {
+        self.ensure_cursor_visible();
+        let max_scroll = self
+            .buffer
+            .line_count()
+            .saturating_sub(self.visible_line_count());
+        self.scroll_line = self.scroll_line.min(max_scroll);
+        self.selection.scroll_line = self.scroll_line;
     }
 
     fn display_name(&self) -> &str {
@@ -729,14 +814,16 @@ impl EditApp {
     }
 
     fn dialog_panel_rect(&self) -> Rect {
-        let h = match self.active_dialog {
+        let desired_h = match self.active_dialog {
             ActiveDialog::SaveBeforeClose | ActiveDialog::SaveBeforeCloseTemporary => 132,
             ActiveDialog::None => 0,
         };
+        let w = DIALOG_W.min(self.layout.root.w);
+        let h = desired_h.min(self.layout.root.h);
         Rect::new(
-            ((WIN_W - DIALOG_W) / 2) as i32,
-            ((WIN_H - h) / 2) as i32,
-            DIALOG_W,
+            self.layout.root.x + ((self.layout.root.w.saturating_sub(w)) / 2) as i32,
+            self.layout.root.y + ((self.layout.root.h.saturating_sub(h)) / 2) as i32,
+            w,
             h,
         )
     }
@@ -759,7 +846,8 @@ impl EditApp {
             ActiveDialog::None => 0,
             _ => 3,
         };
-        let total_w = count as u32 * DIALOG_BTN_W + (count as u32 - 1) * DIALOG_BTN_GAP;
+        let total_w =
+            count as u32 * DIALOG_BTN_W + (count as u32).saturating_sub(1) * DIALOG_BTN_GAP;
         let mut x = panel.x + ((panel.w as i32 - total_w as i32) / 2);
         let y = panel.bottom() - DIALOG_PAD - DIALOG_BTN_H as i32;
         self.dialog_button_count = count;
@@ -794,16 +882,11 @@ impl EditApp {
     }
 
     fn find_panel_rect(&self) -> Rect {
-        Rect::new(0, HEADER_H as i32 + TOOLBAR_H as i32, WIN_W, FIND_PANEL_H)
+        self.layout.find
     }
 
     fn editor_rect(&self) -> Rect {
-        let mut top = HEADER_H + TOOLBAR_H;
-        if self.find.visible {
-            top += FIND_PANEL_H;
-        }
-        let bottom = WIN_H.saturating_sub(STATUS_H);
-        Rect::new(0, top as i32, WIN_W, bottom.saturating_sub(top))
+        self.layout.editor
     }
 
     fn visible_line_count(&self) -> usize {
@@ -828,7 +911,7 @@ impl EditApp {
         let response = TextEditor::new(rect, &mut self.buffer, &mut self.selection)
             .with_font(&F_MONO)
             .with_gutter_width(GUTTER_W)
-            .with_menu_bounds(Rect::new(0, 0, WIN_W, WIN_H - STATUS_H))
+            .with_menu_bounds(self.layout.root)
             .with_clipboard_source(CLIP_SOURCE_APP)
             .update(event);
         self.scroll_line = self.selection.scroll_line;
@@ -842,7 +925,7 @@ impl EditApp {
         let response = TextEditor::new(rect, &mut self.buffer, &mut self.selection)
             .with_font(&F_MONO)
             .with_gutter_width(GUTTER_W)
-            .with_menu_bounds(Rect::new(0, 0, WIN_W, WIN_H - STATUS_H))
+            .with_menu_bounds(self.layout.root)
             .with_clipboard_source(CLIP_SOURCE_APP)
             .command(command);
         self.scroll_line = self.selection.scroll_line;
@@ -873,7 +956,7 @@ impl EditApp {
     }
 
     fn toolbar_rect(&self) -> Rect {
-        Rect::new(0, HEADER_H as i32, WIN_W, TOOLBAR_H)
+        self.layout.toolbar
     }
 
     fn toolbar_buttons(&self) -> [ToolbarButton; 6] {
@@ -1025,8 +1108,8 @@ impl EditApp {
     fn open_menu(&mut self, x: i32, y: i32) {
         let specs = Self::menu_specs();
         let menu_h = MENU_ITEM_H * specs.len() as u32 + 8;
-        let max_x = WIN_W as i32 - MENU_W as i32 - 6;
-        let max_y = WIN_H as i32 - menu_h as i32 - STATUS_H as i32 - 6;
+        let max_x = self.layout.root.right() - MENU_W as i32 - 6;
+        let max_y = self.layout.status.y - menu_h as i32 - 6;
         let rect = Rect::new(
             x.clamp(6, max_x.max(6)),
             y.clamp(6, max_y.max(6)),
@@ -1130,6 +1213,7 @@ impl EditApp {
                 }
                 self.create_temp_document();
                 self.find.visible = false;
+                self.invalidate_structure();
                 self.close_menu();
                 self.set_status_message("New document");
                 true
@@ -1402,6 +1486,7 @@ impl EditApp {
     }
 
     fn show_find(&mut self, replace: bool) {
+        let was_visible = self.find.visible;
         self.find.visible = true;
         self.find.replace_visible = replace;
         if let Some(text) = self.selected_text() {
@@ -1412,16 +1497,23 @@ impl EditApp {
         }
         self.focus = FocusTarget::Find;
         self.find.focus = FocusTarget::Find;
+        if !was_visible {
+            self.invalidate_structure();
+        }
         self.layout_find_panel();
         self.sync_find_matches();
     }
 
     fn hide_find(&mut self) {
+        let was_visible = self.find.visible;
         self.find.visible = false;
         self.find.replace_visible = false;
         self.focus = FocusTarget::Editor;
         self.find.focus = FocusTarget::Editor;
         self.find.current_match = None;
+        if was_visible {
+            self.invalidate_structure();
+        }
         self.layout_find_panel();
     }
 
@@ -1534,7 +1626,7 @@ impl EditApp {
     }
 
     fn draw_header(&self, canvas: &mut Canvas, theme: &Theme) {
-        let rect = Rect::new(0, 0, WIN_W, HEADER_H);
+        let rect = self.layout.header;
         canvas.fill_rect(rect, theme.panel);
         canvas.hbar(rect.x, rect.bottom() - 1, rect.w, 1, theme.border);
         draw_text_vcenter(
@@ -1667,7 +1759,7 @@ impl EditApp {
                 .with_font(&F_MONO)
                 .with_caret_visible(self.caret_visible)
                 .with_gutter_width(GUTTER_W)
-                .with_menu_bounds(Rect::new(0, 0, WIN_W, WIN_H - STATUS_H))
+                .with_menu_bounds(self.layout.root)
                 .with_clipboard_source(CLIP_SOURCE_APP);
             editor.draw_surface(canvas, theme);
         }
@@ -1690,7 +1782,7 @@ impl EditApp {
         let editor = TextEditor::new(rect, &mut self.buffer, &mut self.selection)
             .with_font(&F_MONO)
             .with_gutter_width(GUTTER_W)
-            .with_menu_bounds(Rect::new(0, 0, WIN_W, WIN_H - STATUS_H))
+            .with_menu_bounds(self.layout.root)
             .with_clipboard_source(CLIP_SOURCE_APP);
         editor.draw_context_menu(canvas, theme);
     }
@@ -1817,7 +1909,12 @@ impl EditApp {
         if self.startup_error.len == 0 {
             return;
         }
-        let rect = Rect::new(PAD, (HEADER_H + TOOLBAR_H + 4) as i32, WIN_W - 16, 20);
+        let rect = Rect::new(
+            self.layout.editor.x + PAD,
+            self.layout.editor.y + 4,
+            self.layout.editor.w.saturating_sub(16),
+            20,
+        );
         draw_text(
             canvas,
             self.startup_error.as_str(),
@@ -1855,7 +1952,7 @@ impl EditApp {
         if self.active_dialog == ActiveDialog::None {
             return;
         }
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg.darken(70));
+        canvas.fill_rect(self.layout.root, theme.bg.darken(70));
         let panel = self.dialog_panel_rect();
         canvas.fill_rounded_rect_with_border(panel, 8, theme.panel, theme.border, 1);
 
@@ -1927,7 +2024,7 @@ impl EditApp {
     }
 
     fn draw_status(&self, canvas: &mut Canvas, theme: &Theme) {
-        let rect = Rect::new(0, (WIN_H - STATUS_H) as i32, WIN_W, STATUS_H);
+        let rect = self.layout.status;
         StatusBar::new(
             rect,
             self.status_left.as_str(),
@@ -1989,8 +2086,13 @@ impl EditApp {
 
 impl App for EditApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
         self.layout_find_panel();
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.fill_rect(self.layout.root, theme.bg);
         self.draw_header(canvas, theme);
         self.draw_toolbar(canvas, theme);
         self.draw_find_panel(canvas, theme);
@@ -2160,6 +2262,11 @@ impl App for EditApp {
                 find_changed | self.update_shared_editor(event)
             }
         }
+    }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
     }
 }
 
@@ -2475,6 +2582,7 @@ fn dialog_error_message(err: DialogError) -> &'static str {
     }
 }
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
@@ -2506,4 +2614,117 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
     window.run(&mut app);
     ProcessExit::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EditApp, Rect, TextBuffer, WIN_H, WIN_W};
+    use sunlight_ui::widgets::TextPosition;
+
+    fn document(line_count: usize) -> TextBuffer {
+        let mut text = String::new();
+        for line in 0..line_count {
+            if line > 0 {
+                text.push('\n');
+            }
+            super::push_usize(&mut text, line);
+        }
+        TextBuffer::from_utf8(&text)
+    }
+
+    #[test]
+    fn responsive_root_assigns_fill_width_and_remaining_editor_height() {
+        let initial = EditApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H), false);
+        let resized = EditApp::compute_layout(Rect::new(0, 0, 1120, 760), false);
+        assert_eq!(initial.header.w, WIN_W);
+        assert_eq!(resized.header.w, 1120);
+        assert_eq!(resized.toolbar.w, 1120);
+        assert_eq!(resized.editor.w, 1120);
+        assert_eq!(resized.status.w, 1120);
+        assert_eq!(resized.status.bottom(), resized.root.bottom());
+        assert_eq!(
+            resized.editor.h,
+            760 - super::HEADER_H - super::TOOLBAR_H - super::STATUS_H
+        );
+    }
+
+    #[test]
+    fn find_panel_consumes_fixed_space_without_moving_status() {
+        let root = Rect::new(0, 0, WIN_W, WIN_H);
+        let hidden = EditApp::compute_layout(root, false);
+        let shown = EditApp::compute_layout(root, true);
+        assert_eq!(hidden.find.h, 0);
+        assert_eq!(shown.find.h, super::FIND_PANEL_H);
+        assert_eq!(shown.editor.h, hidden.editor.h - super::FIND_PANEL_H);
+        assert_eq!(shown.status, hidden.status);
+    }
+
+    #[test]
+    fn shrink_and_grow_update_live_editor_viewport() {
+        let mut app = EditApp::new(None);
+        let original = app.editor_rect();
+        assert!(app.set_client_bounds(640, 360));
+        let small = app.editor_rect();
+        assert!(small.w < original.w && small.h < original.h);
+        assert!(app.set_client_bounds(1180, 800));
+        let large = app.editor_rect();
+        assert!(large.w > original.w && large.h > original.h);
+    }
+
+    #[test]
+    fn resize_clamps_scroll_without_resetting_valid_position() {
+        let mut app = EditApp::new(None);
+        app.buffer = document(80);
+        app.buffer.cursor_line = 40;
+        app.scroll_line = 35;
+        app.selection.scroll_line = 35;
+        assert!(app.set_client_bounds(700, 300));
+        assert!(app.scroll_line > 0);
+        let preserved = app.scroll_line;
+        assert!(!app.set_client_bounds(700, 300));
+        assert_eq!(app.scroll_line, preserved);
+
+        app.buffer.cursor_line = 79;
+        app.scroll_line = 79;
+        assert!(app.set_client_bounds(1200, 900));
+        let max_scroll = app
+            .buffer
+            .line_count()
+            .saturating_sub(app.visible_line_count());
+        assert_eq!(app.scroll_line, max_scroll);
+    }
+
+    #[test]
+    fn resize_preserves_logical_caret_and_selection() {
+        let mut app = EditApp::new(None);
+        app.buffer = document(30);
+        app.buffer.cursor_line = 18;
+        app.buffer.cursor_col = 1;
+        app.selection.anchor = Some(TextPosition { line: 2, col: 0 });
+        let caret = app.buffer.cursor();
+        let anchor = app.selection.anchor;
+        app.set_client_bounds(520, 220);
+        assert_eq!(app.buffer.cursor(), caret);
+        assert_eq!(app.selection.anchor, anchor);
+        assert!(app.buffer.cursor_line >= app.scroll_line);
+        assert!(app.buffer.cursor_line < app.scroll_line + app.visible_line_count());
+    }
+
+    #[test]
+    fn zero_and_tiny_roots_produce_zero_content_viewports_safely() {
+        for bounds in [Rect::new(0, 0, 0, 0), Rect::new(0, 0, 1, 1)] {
+            let layout = EditApp::compute_layout(bounds, true);
+            assert_eq!(layout.root, bounds);
+            assert_eq!(layout.editor.w, bounds.w);
+            assert_eq!(layout.editor.h, 0);
+        }
+    }
+
+    #[test]
+    fn grow_shrink_grow_layout_is_deterministic() {
+        let large = Rect::new(0, 0, 1100, 760);
+        let first = EditApp::compute_layout(large, false);
+        let _ = EditApp::compute_layout(Rect::new(0, 0, 430, 180), false);
+        assert_eq!(first, EditApp::compute_layout(large, false));
+    }
 }

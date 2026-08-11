@@ -25,8 +25,9 @@ use sunlight_ui::widgets::{
     TextEditState, TextLineLayout, TwoPaneAppMenu,
 };
 use sunlight_ui::{
-    request_close, set_client_cursor, App, Color, CursorShape, Event, Point, Rect, Theme, Window,
-    WindowConfig, WindowDecoration,
+    request_close, set_client_cursor, App, AxisSizing, Color, Column, CursorShape, Event,
+    LayoutBox, LayoutInvalidation, Point, Rect, Size, Sizing, Theme, Window, WindowConfig,
+    WindowDecoration, WindowEvent,
 };
 
 const WIN_W: u32 = 1240;
@@ -803,13 +804,25 @@ struct WriterApp {
     edit_state: TextEditState,
     document_modified: bool,
     prev_document_cursor: CursorShape,
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: WriterLayout,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct WriterLayout {
+    root: Rect,
+    header: Rect,
+    ribbon: Rect,
+    workspace: Rect,
+    status: Rect,
 }
 
 impl WriterApp {
     fn new() -> Self {
         let mut status_center = TextSlot::empty();
         status_center.set("Document Canvas Ready");
-        Self {
+        let mut app = Self {
             icons: WriterIcons::load(),
             document: WriterDocument::sample(),
             menu_open: false,
@@ -825,7 +838,52 @@ impl WriterApp {
             edit_state: TextEditState::default(),
             document_modified: false,
             prev_document_cursor: CursorShape::Pointer,
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: WriterLayout::default(),
+        };
+        let _ = app.ensure_layout();
+        app
+    }
+
+    fn compute_layout(root: Rect) -> WriterLayout {
+        let fixed_height = |height| {
+            LayoutBox::new(Rect::new(0, 0, 0, height))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(height)))
+        };
+        let mut children = [
+            fixed_height(TOP_BAR_H),
+            fixed_height(RIBBON_H),
+            LayoutBox::new(Rect::default())
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fill)),
+            fixed_height(STATUS_H),
+        ];
+        let _ = Column::new(root).arrange(&mut children);
+        WriterLayout {
+            root,
+            header: children[0].bounds(),
+            ribbon: children[1].bounds(),
+            workspace: children[2].bounds(),
+            status: children[3].bounds(),
         }
+    }
+
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds);
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        self.ensure_layout()
     }
 
     fn set_status_message(&mut self, text: &str) {
@@ -834,20 +892,19 @@ impl WriterApp {
     }
 
     fn top_bar_rect(&self) -> Rect {
-        Rect::new(0, 0, WIN_W, TOP_BAR_H)
+        self.layout.header
     }
 
     fn ribbon_rect(&self) -> Rect {
-        Rect::new(0, TOP_BAR_H as i32, WIN_W, RIBBON_H)
+        self.layout.ribbon
     }
 
     fn content_rect(&self) -> Rect {
-        let top = TOP_BAR_H + RIBBON_H;
-        Rect::new(0, top as i32, WIN_W, WIN_H.saturating_sub(top + STATUS_H))
+        self.layout.workspace
     }
 
     fn status_rect(&self) -> Rect {
-        Rect::new(0, (WIN_H - STATUS_H) as i32, WIN_W, STATUS_H)
+        self.layout.status
     }
 
     fn menu_visible_secondary(&self) -> bool {
@@ -1533,9 +1590,14 @@ impl WriterApp {
 
 impl App for WriterApp {
     fn view(&mut self, canvas: &mut sunlight_ui::Canvas, theme: &Theme) {
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
         let document_items = self.document_items();
         let document_canvas = self.document_canvas(document_items.as_slice());
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.fill_rect(self.layout.root, theme.bg);
         self.with_header(|header| header.draw(canvas, theme));
         self.with_ribbon_bar(|bar| bar.draw(canvas, theme));
         document_canvas.draw(canvas, theme);
@@ -1799,6 +1861,11 @@ impl App for WriterApp {
             _ => false,
         }
     }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
+    }
 }
 
 #[cfg(not(test))]
@@ -1835,7 +1902,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
 #[cfg(test)]
 mod tests {
-    use super::{DocumentCanvasItem, DocumentCanvasMode, WriterDocument};
+    use super::{
+        DocumentCanvasItem, DocumentCanvasMode, Rect, WriterApp, WriterDocument, RIBBON_H,
+        STATUS_H, TOP_BAR_H,
+    };
 
     #[test]
     fn sample_document_converts_to_non_empty_canvas_items() {
@@ -1864,5 +1934,77 @@ mod tests {
     fn empty_document_converts_without_panic() {
         let items = WriterDocument::empty(DocumentCanvasMode::Editable).to_canvas_items();
         assert!(items.is_empty());
+    }
+
+    #[test]
+    fn responsive_chrome_and_workspace_follow_client_bounds() {
+        let mut app = WriterApp::new();
+        assert!(app.set_client_bounds(900, 700));
+        assert_eq!(app.top_bar_rect(), Rect::new(0, 0, 900, TOP_BAR_H));
+        assert_eq!(
+            app.ribbon_rect(),
+            Rect::new(0, TOP_BAR_H as i32, 900, RIBBON_H)
+        );
+        assert_eq!(
+            app.content_rect(),
+            Rect::new(
+                0,
+                (TOP_BAR_H + RIBBON_H) as i32,
+                900,
+                700 - TOP_BAR_H - RIBBON_H - STATUS_H,
+            )
+        );
+        assert_eq!(app.status_rect(), Rect::new(0, 678, 900, STATUS_H));
+    }
+
+    #[test]
+    fn document_canvas_receives_current_workspace() {
+        let mut app = WriterApp::new();
+        let _ = app.set_client_bounds(780, 610);
+        let items = app.document_items();
+        let canvas = app.document_canvas(items.as_slice());
+        assert_eq!(canvas.rect, app.content_rect());
+    }
+
+    #[test]
+    fn wider_workspace_recenters_without_stretching_writer_page() {
+        let mut app = WriterApp::new();
+        let initial_items = app.document_items();
+        let initial_page = app.document_canvas(initial_items.as_slice()).page_rect();
+        let initial_item_count = initial_items.len();
+        drop(initial_items);
+
+        let _ = app.set_client_bounds(1600, 860);
+        let wide_items = app.document_items();
+        let wide_page = app.document_canvas(wide_items.as_slice()).page_rect();
+
+        assert_eq!(initial_page.w, 860);
+        assert_eq!(wide_page.w, initial_page.w);
+        assert!(wide_page.x > initial_page.x);
+        assert_eq!(wide_items.len(), initial_item_count);
+    }
+
+    #[test]
+    fn tiny_and_zero_workspace_are_safe() {
+        let mut app = WriterApp::new();
+        let _ = app.set_client_bounds(0, 0);
+        assert_eq!(app.content_rect().size(), sunlight_ui::Size::new(0, 0));
+        let items = app.document_items();
+        let canvas = app.document_canvas(items.as_slice());
+        assert_eq!(canvas.viewport_size(), sunlight_ui::Size::new(0, 0));
+
+        let _ = app.set_client_bounds(3, 1);
+        assert_eq!(app.content_rect().size(), sunlight_ui::Size::new(3, 0));
+    }
+
+    #[test]
+    fn grow_shrink_grow_layout_is_deterministic_and_identical_is_ignored() {
+        let mut app = WriterApp::new();
+        assert!(app.set_client_bounds(1500, 1000));
+        let large = app.layout;
+        assert!(!app.set_client_bounds(1500, 1000));
+        assert!(app.set_client_bounds(320, 180));
+        assert!(app.set_client_bounds(1500, 1000));
+        assert_eq!(app.layout, large);
     }
 }

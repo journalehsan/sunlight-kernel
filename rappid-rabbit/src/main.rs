@@ -1,6 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(feature = "dom", allow(dead_code, unused_imports))]
-#![no_main]
+#![cfg_attr(not(test), no_main)]
 // Required for the custom OOM handler below; matches kernel/src/main.rs.
 #![feature(alloc_error_handler)]
 
@@ -56,16 +56,17 @@ use sunlight_ipc::{
 };
 use sunlight_libc::crt0;
 use sunlight_ui::widgets::{
-    Button, ButtonState, Column, DocumentCanvas, DocumentCanvasPresentation, Label, Panel, TabBar,
-    Table, TextInput, TextView, TreeHitTarget, TreeView,
+    Button, ButtonState, Column as TableColumn, DocumentCanvas, DocumentCanvasPresentation, Label,
+    Panel, TabBar, Table, TextInput, TextView, TreeHitTarget, TreeView,
 };
 #[cfg(feature = "dom")]
 use sunlight_ui::widgets::{
     DocumentFontFamily, DocumentNodeId, RenderInteraction, RenderObjectKind,
 };
 use sunlight_ui::{
-    request_close, App, Canvas, Color, Event, Point, Rect, Theme, VecText, Window, WindowConfig,
-    WindowDecoration,
+    request_close, App, AxisSizing, Canvas, Color, Column, Event, LayoutBox, LayoutInvalidation,
+    Point, Rect, Row, Size, Sizing, Theme, VecText, Window, WindowConfig, WindowDecoration,
+    WindowEvent,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -302,6 +303,22 @@ struct RabbitApp {
     #[cfg(feature = "dom")]
     image_cache: ImageCache,
     document_lifecycle: DocumentLifecycle,
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: RabbitLayout,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct RabbitLayout {
+    root: Rect,
+    top_bar: Rect,
+    content: Rect,
+    method: Rect,
+    url_bar: Rect,
+    fetch: Rect,
+    view: Rect,
+    devtools: Rect,
+    status: Rect,
 }
 
 impl RabbitApp {
@@ -350,7 +367,11 @@ impl RabbitApp {
             #[cfg(feature = "dom")]
             image_cache: ImageCache::default(),
             document_lifecycle: DocumentLifecycle::default(),
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: RabbitLayout::default(),
         };
+        let _ = app.ensure_layout();
         if let Some(url) = initial_url {
             app.url_input.set_text(url);
             app.queue_fetch();
@@ -1191,49 +1212,103 @@ impl RabbitApp {
             .push(ConsoleSeverity::Warn, ConsoleSource::Browser, message);
     }
 
+    fn compute_layout(root: Rect) -> RabbitLayout {
+        let fill = Sizing::new(AxisSizing::Fill, AxisSizing::Fill);
+        let inner = root.inset(PAD);
+        let mut root_children = [
+            LayoutBox::new(Rect::new(0, 0, 0, TOP_BAR_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(TOP_BAR_H))),
+            LayoutBox::new(Rect::default()).with_sizing(fill),
+        ];
+        let _ = Column::new(inner)
+            .with_gap(PAD.max(0) as u32)
+            .arrange(&mut root_children);
+        let top_bar = root_children[0].bounds();
+        let content = root_children[1].bounds();
+
+        let controls = top_bar.inset(8);
+        let fixed = |width| {
+            LayoutBox::new(Rect::new(0, 0, width, 28))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(width), AxisSizing::Fixed(28)))
+        };
+        let mut toolbar = [
+            fixed(METHOD_W),
+            LayoutBox::new(Rect::new(0, 0, 0, 28))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(28))),
+            fixed(FETCH_W),
+            fixed(VIEW_W),
+            fixed(DEVTOOLS_W),
+            fixed(STATUS_W),
+        ];
+        let _ = Row::new(controls).with_gap(8).arrange(&mut toolbar);
+        let status_box = toolbar[5].bounds();
+
+        RabbitLayout {
+            root,
+            top_bar,
+            content,
+            method: toolbar[0].bounds(),
+            url_bar: toolbar[1].bounds(),
+            fetch: toolbar[2].bounds(),
+            view: toolbar[3].bounds(),
+            devtools: toolbar[4].bounds(),
+            status: Rect::new(
+                status_box.x,
+                status_box.y.saturating_sub(1),
+                status_box.w,
+                30,
+            ),
+        }
+    }
+
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds);
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        let changed = self.ensure_layout();
+        #[cfg(feature = "dom")]
+        self.refresh_render_viewport();
+        self.clamp_scrolls();
+        changed
+    }
+
     fn top_bar_rect(&self) -> Rect {
-        Rect::new(PAD, PAD, WIN_W.saturating_sub((PAD * 2) as u32), TOP_BAR_H)
+        self.layout.top_bar
     }
 
     fn method_rect(&self) -> Rect {
-        let top = self.top_bar_rect();
-        Rect::new(top.x + 8, top.y + 7, METHOD_W, 28)
+        self.layout.method
     }
 
     fn status_rect(&self) -> Rect {
-        let top = self.top_bar_rect();
-        Rect::new(top.right() - STATUS_W as i32 - 8, top.y + 6, STATUS_W, 30)
+        self.layout.status
     }
 
     fn devtools_button_rect(&self) -> Rect {
-        let status = self.status_rect();
-        Rect::new(
-            status.x - DEVTOOLS_W as i32 - 8,
-            status.y + 1,
-            DEVTOOLS_W,
-            28,
-        )
+        self.layout.devtools
     }
 
     fn view_button_rect(&self) -> Rect {
-        let devtools = self.devtools_button_rect();
-        Rect::new(devtools.x - VIEW_W as i32 - 8, devtools.y, VIEW_W, 28)
+        self.layout.view
     }
 
     fn fetch_rect(&self) -> Rect {
-        let view = self.view_button_rect();
-        Rect::new(view.x - FETCH_W as i32 - 8, view.y, FETCH_W, 28)
+        self.layout.fetch
     }
 
     fn url_bar_rect(&self) -> Rect {
-        let method = self.method_rect();
-        let fetch = self.fetch_rect();
-        Rect::new(
-            method.right() + 8,
-            method.y,
-            (fetch.x - method.right() - 16).max(120) as u32,
-            method.h,
-        )
+        self.layout.url_bar
     }
 
     fn url_site_rect(&self) -> Rect {
@@ -1274,13 +1349,7 @@ impl RabbitApp {
     }
 
     fn content_rect(&self) -> Rect {
-        let top = self.top_bar_rect();
-        Rect::new(
-            PAD,
-            top.bottom() + PAD,
-            WIN_W.saturating_sub((PAD * 2) as u32),
-            (WIN_H as i32 - PAD - top.bottom() - PAD).max(MIN_MAIN_CONTENT_H as i32) as u32,
-        )
+        self.layout.content
     }
 
     fn developer_panel_layout(&mut self) -> DeveloperPanelLayout {
@@ -2037,7 +2106,7 @@ impl RabbitApp {
         let list_scroll_offset = self.developer_tools.network.list_scroll_offset();
         let rows = self.developer_tools.network.summary_rows();
         let columns = [
-            Column {
+            TableColumn {
                 header: "Name",
                 width: list_panel
                     .content_rect()
@@ -2045,27 +2114,27 @@ impl RabbitApp {
                     .saturating_sub(92 + 108 + 96 + 88 + 92),
                 right_align: false,
             },
-            Column {
+            TableColumn {
                 header: "Method",
                 width: 92,
                 right_align: false,
             },
-            Column {
+            TableColumn {
                 header: "Status",
                 width: 108,
                 right_align: false,
             },
-            Column {
+            TableColumn {
                 header: "Type",
                 width: 96,
                 right_align: false,
             },
-            Column {
+            TableColumn {
                 header: "Size",
                 width: 88,
                 right_align: true,
             },
-            Column {
+            TableColumn {
                 header: "Time",
                 width: 92,
                 right_align: true,
@@ -2560,7 +2629,12 @@ fn discover_stylesheet_images(
 
 impl App for RabbitApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
+        canvas.fill_rect(self.layout.root, theme.bg);
         self.draw_top_bar(canvas, theme);
 
         match self.document_view {
@@ -2834,6 +2908,11 @@ impl App for RabbitApp {
             _ => false,
         }
     }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
+    }
 }
 
 #[cfg(not(test))]
@@ -2909,5 +2988,64 @@ fn adjust_scroll(
         *scroll = scroll.saturating_sub(step);
     } else if delta > 0 {
         *scroll = (*scroll + step).min(max_scroll);
+    }
+}
+
+#[cfg(test)]
+mod responsive_tests {
+    use super::{RabbitApp, Rect, Size, WIN_H, WIN_W};
+
+    #[test]
+    fn toolbar_and_page_area_follow_live_root() {
+        let initial = RabbitApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        let resized = RabbitApp::compute_layout(Rect::new(0, 0, 1360, 880));
+        assert_eq!(initial.root.w, WIN_W);
+        assert_eq!(resized.root.w, 1360);
+        assert_eq!(resized.top_bar.w, 1360 - 24);
+        assert_eq!(resized.content.w, resized.top_bar.w);
+        assert_eq!(resized.content.bottom(), resized.root.bottom() - 12);
+        assert!(resized.content.h > initial.content.h);
+    }
+
+    #[test]
+    fn address_field_is_the_horizontal_fill_participant() {
+        let narrow = RabbitApp::compute_layout(Rect::new(0, 0, 820, 720));
+        let wide = RabbitApp::compute_layout(Rect::new(0, 0, 1280, 720));
+        assert_eq!(narrow.method.w, wide.method.w);
+        assert_eq!(narrow.fetch.w, wide.fetch.w);
+        assert_eq!(narrow.status.w, wide.status.w);
+        assert_eq!(wide.url_bar.w - narrow.url_bar.w, 460);
+    }
+
+    #[test]
+    fn resize_updates_browser_viewport_without_queuing_navigation() {
+        let mut app = RabbitApp::new(None);
+        let initial = app.render_viewport();
+        let pending_fetch = app.pending_fetch;
+        let request = app.active_navigation_request_id;
+        assert!(app.set_client_bounds(840, 540));
+        let smaller = app.render_viewport();
+        assert!(smaller.w < initial.w && smaller.h < initial.h);
+        assert_eq!(app.pending_fetch, pending_fetch);
+        assert_eq!(app.active_navigation_request_id, request);
+        assert!(!app.set_client_bounds(840, 540));
+    }
+
+    #[test]
+    fn zero_and_tiny_roots_produce_zero_page_area_safely() {
+        for root in [Rect::new(0, 0, 0, 0), Rect::new(0, 0, 1, 1)] {
+            let layout = RabbitApp::compute_layout(root);
+            assert_eq!(layout.root, root);
+            assert_eq!(layout.content.size(), Size::new(0, 0));
+            assert_eq!(layout.url_bar.w, 0);
+        }
+    }
+
+    #[test]
+    fn grow_shrink_grow_is_deterministic() {
+        let large = Rect::new(0, 0, 1280, 800);
+        let first = RabbitApp::compute_layout(large);
+        let _ = RabbitApp::compute_layout(Rect::new(0, 0, 600, 240));
+        assert_eq!(first, RabbitApp::compute_layout(large));
     }
 }
