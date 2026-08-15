@@ -155,7 +155,6 @@ fn handle(msg: &IpcMsg) -> IpcMsg {
                 .word(1, words[1])
                 .word(2, words[2])
                 .word(3, words[3])
-                .word(4, words[4])
         }
 
         TzMsg::GET_ZONE => {

@@ -238,8 +238,10 @@ mod sunlight {
     const MAX_OUT: usize = 64;
     const LONG_OUT_MAX: usize = 16384;
     const IPC_OUTPUT_BYTES: usize = 16;
-    const TZCTL_QUERY_TIMEOUT_MS: u64 = 75;
-    const TZCTL_SET_TIMEOUT_MS: u64 = 150;
+    // Match sunlight-tz's bounded client policy. SET persists /etc/localtime,
+    // which can take longer than a scheduler quantum during service startup.
+    const TZCTL_QUERY_TIMEOUT_MS: u64 = 2_000;
+    const TZCTL_SET_TIMEOUT_MS: u64 = 3_000;
     const OS_NAME: &str = "SunlightOS";
     const KERNEL_NAME: &str = "SunlightX";
     const OS_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -1434,7 +1436,7 @@ mod sunlight {
                     if r.label == TzMsg::REPLY {
                         let _ = copy_bytes(out, &mut pos, b"Active: ");
                         // simplistic id from first word bytes
-                        for wi in 2..5 {
+                        for wi in 2..4 {
                             for b in 0..8 {
                                 let ch = ((r.words[wi] >> (b * 8)) & 0xff) as u8;
                                 if ch == 0 || pos >= 500 {

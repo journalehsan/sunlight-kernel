@@ -8,6 +8,8 @@ pub struct TzutilsArgs {
     pub force: bool,
     pub status: bool,
     pub help: bool,
+    /// An option or positional argument not supported by the NTP client.
+    pub invalid: bool,
 }
 
 /// Parse `tzutils` argv tokens (including optional program name at index 0).
@@ -17,6 +19,7 @@ pub fn parse_tzutils_args(argv: &[&str]) -> TzutilsArgs {
         force: false,
         status: false,
         help: false,
+        invalid: false,
     };
     let skip0 = argv
         .first()
@@ -39,15 +42,17 @@ pub fn parse_tzutils_args(argv: &[&str]) -> TzutilsArgs {
                     b'f' => args.force = true,
                     b'S' => args.status = true,
                     b'h' => args.help = true,
-                    _ => {}
+                    _ => args.invalid = true,
                 }
             }
+        } else {
+            args.invalid = true;
         }
     }
     if args.force {
         args.sync = true;
     }
-    if !args.sync && !args.status && !args.help {
+    if !args.sync && !args.status && !args.help && !args.invalid {
         args.status = true;
     }
     args
@@ -75,5 +80,18 @@ mod tests {
     fn default_is_status() {
         let a = parse_tzutils_args(&["tzutils"]);
         assert!(a.status && !a.sync);
+    }
+
+    #[test]
+    fn timezone_set_syntax_is_rejected_instead_of_becoming_status() {
+        let a = parse_tzutils_args(&["tzutils", "set", "Asia/Tehran"]);
+        assert!(a.invalid);
+        assert!(!a.status && !a.sync);
+    }
+
+    #[test]
+    fn unknown_short_option_is_rejected() {
+        let a = parse_tzutils_args(&["tzutils", "-x"]);
+        assert!(a.invalid);
     }
 }

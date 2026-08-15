@@ -42,12 +42,15 @@ pub struct SyncStatusSnapshot {
     pub last_delay_ms: u64,
     pub last_error: u64,
     pub last_sync_unix: u64,
+    /// Reserved for a future extended-status transport; zero in compact ABI.
     pub next_attempt_mono_ms: u64,
+    /// Reserved for a future extended-status transport; zero in compact ABI.
     pub backoff_ms: u64,
-    /// Last successful server name (up to 8 packed bytes from the wire).
+    /// Reserved for a future extended-status transport. Empty in the compact
+    /// four-register ABI.
     pub last_server: [u8; 8],
     pub last_server_len: usize,
-    /// First 8 bytes of zone id as reported by timed.
+    /// Reserved for compatibility. Query [`TzClient`] for authoritative zone.
     pub zone_prefix: [u8; 8],
     pub zone_prefix_len: usize,
 }
@@ -163,26 +166,12 @@ impl TimeClient {
 
 fn unpack_sync_status(r: &IpcMsg) -> SyncStatusSnapshot {
     let flags = (r.words[0] >> 32) & 0xff;
-    let mut last_server = [0u8; 8];
-    let mut last_server_len = 0usize;
-    for i in 0..8 {
-        let ch = ((r.words[6] >> (i * 8)) & 0xff) as u8;
-        if ch == 0 {
-            break;
-        }
-        last_server[i] = ch;
-        last_server_len = i + 1;
-    }
-    let mut zone_prefix = [0u8; 8];
-    let mut zone_prefix_len = 0usize;
-    for i in 0..8 {
-        let ch = ((r.words[7] >> (i * 8)) & 0xff) as u8;
-        if ch == 0 {
-            break;
-        }
-        zone_prefix[i] = ch;
-        zone_prefix_len = i + 1;
-    }
+    let last_server = [0u8; 8];
+    let last_server_len = 0usize;
+    // The register ABI transports only words 0..3. Extended fields remain
+    // unavailable until a separate bounded transport is defined.
+    let zone_prefix = [0u8; 8];
+    let zone_prefix_len = 0usize;
     SyncStatusSnapshot {
         state: r.words[0] & 0xff,
         stratum: ((r.words[0] >> 8) & 0xff) as u8,
@@ -195,8 +184,8 @@ fn unpack_sync_status(r: &IpcMsg) -> SyncStatusSnapshot {
         last_delay_ms: r.words[2] & 0xffff_ffff_ffff,
         last_error: r.words[2] >> 48,
         last_sync_unix: r.words[3],
-        next_attempt_mono_ms: r.words[4],
-        backoff_ms: r.words[5],
+        next_attempt_mono_ms: 0,
+        backoff_ms: 0,
         last_server,
         last_server_len,
         zone_prefix,
@@ -286,7 +275,7 @@ impl TzClient {
         let w1 = reply.words[1];
         let mut id = [0u8; 64];
         let mut id_len = 0usize;
-        'words: for wi in 2..6 {
+        'words: for wi in 2..4 {
             for b in 0..8 {
                 let ch = ((reply.words[wi] >> (b * 8)) & 0xff) as u8;
                 if ch == 0 || id_len >= 63 {
@@ -379,7 +368,7 @@ impl TzClient {
         let region = (reply.words[0] & 0xff) as u8;
         let mut id = [0u8; 64];
         let mut id_len = 0usize;
-        'words: for wi in 2..6 {
+        'words: for wi in 2..4 {
             for b in 0..8 {
                 let ch = ((reply.words[wi] >> (b * 8)) & 0xff) as u8;
                 if ch == 0 || id_len >= 63 {
@@ -414,5 +403,33 @@ fn call_tz(cap: CapabilityToken, msg: IpcMsg, timeout_ms: u64) -> Result<IpcMsg,
         Ok(r) => Ok(r),
         Err(IpcCallError::Timeout) => Err(TzClientError::Timeout),
         Err(_) => Err(TzClientError::Transport),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compact_sync_status_ignores_untransported_extended_words() {
+        let flags = 1u64;
+        let reply = IpcMsg::with_label(TimeMsg::REPLY)
+            .word(0, NtpSyncState::SYNCHRONIZED | (3 << 8) | (2 << 16) | (4 << 24) | (flags << 32))
+            .word(1, 1_337)
+            .word(2, 250)
+            .word(3, 1_786_804_757)
+            .word(4, u64::MAX)
+            .word(5, u64::MAX)
+            .word(6, u64::MAX)
+            .word(7, u64::MAX);
+
+        let status = unpack_sync_status(&reply);
+        assert_eq!(status.state, NtpSyncState::SYNCHRONIZED);
+        assert_eq!(status.region_label(), "asia");
+        assert_eq!(status.last_sync_unix, 1_786_804_757);
+        assert_eq!(status.next_attempt_mono_ms, 0);
+        assert_eq!(status.backoff_ms, 0);
+        assert!(status.last_server_str().is_empty());
+        assert_eq!(status.zone_prefix_len, 0);
     }
 }

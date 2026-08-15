@@ -188,10 +188,8 @@ fn pack_sync_status(sync: &SyncStatus, utc: u64) -> IpcMsg {
     // w1: last_offset_ms as u64 (bitcast i64)
     // w2: last_delay_ms | last_error<<48
     // w3: last_sync_unix
-    // w4: next_attempt_mono_ms
-    // w5: backoff_ms
-    // w6: first server name packed (8 bytes) — full list via zone id in last word
-    // w7: zone id first 8 bytes
+    // The register IPC ABI transports exactly w0..w3. Timezone identity is
+    // queried from the authoritative timezone service, not duplicated here.
     let flags = u64::from(sync.ntp_synced)
         | (u64::from(sync.rtc_updated) << 1)
         | (u64::from(sync.explicit_servers) << 2);
@@ -202,26 +200,12 @@ fn pack_sync_status(sync: &SyncStatus, utc: u64) -> IpcMsg {
         | (flags << 32);
     let w1 = sync.last_offset_ms as u64;
     let w2 = sync.last_delay_ms | (sync.last_error << 48);
-    let mut w6 = 0u64;
-    if sync.last_server_len > 0 {
-        for i in 0..8.min(sync.last_server_len) {
-            w6 |= (sync.last_server[i] as u64) << (i * 8);
-        }
-    }
-    let mut w7 = 0u64;
-    for i in 0..8.min(sync.zone_len) {
-        w7 |= (sync.zone_id[i] as u64) << (i * 8);
-    }
     let _ = utc;
     IpcMsg::with_label(TimeMsg::REPLY)
         .word(0, w0)
         .word(1, w1)
         .word(2, w2)
         .word(3, sync.last_sync_unix)
-        .word(4, sync.next_attempt_mono_ms)
-        .word(5, sync.backoff_ms)
-        .word(6, w6)
-        .word(7, w7)
 }
 
 fn run_sync_attempt(

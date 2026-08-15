@@ -40,7 +40,7 @@ static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_ipc::{NtpSyncState, ProcessExit, TimeMsg};
 use sunlight_tz::cli_flags::{parse_tzutils_args, TzutilsArgs};
-use sunlight_tz::client::{TimeClient, TimeClientError};
+use sunlight_tz::client::{TimeClient, TimeClientError, TzClient};
 
 const MAX_ARGS: usize = 16;
 
@@ -83,6 +83,11 @@ fn run(args: TzutilsArgs) -> i32 {
     if args.help {
         print_usage();
         return 0;
+    }
+    if args.invalid {
+        println!("tzutils: unsupported argument (use tzctl to view or change timezones)");
+        print_usage();
+        return 2;
     }
 
     let Ok(client) = TimeClient::connect() else {
@@ -134,8 +139,10 @@ fn run(args: TzutilsArgs) -> i32 {
 fn print_status(st: &sunlight_tz::client::SyncStatusSnapshot) {
     println!("Synchronization state: {}", state_name(st.state));
     println!("NTP region: {}", st.region_label());
-    let zone = core::str::from_utf8(&st.zone_prefix[..st.zone_prefix_len]).unwrap_or("");
-    println!("Timezone: {}", zone);
+    match TzClient::connect().and_then(|client| client.get_zone()) {
+        Ok(zone) => println!("Timezone: {}", zone.id_str()),
+        Err(_) => println!("Timezone: unavailable"),
+    }
     println!(
         "Configured servers: {} ({})",
         st.server_count,
@@ -145,14 +152,11 @@ fn print_status(st: &sunlight_tz::client::SyncStatusSnapshot) {
             "regional pool"
         }
     );
-    println!("Last successful server: {}", st.last_server_str());
     println!("Stratum: {}", st.stratum);
     println!("Last offset (ms): {}", st.last_offset_ms);
     println!("Last delay (ms): {}", st.last_delay_ms);
     println!("Last successful sync (UTC unix): {}", st.last_sync_unix);
     println!("Last error: {}", err_name(st.last_error));
-    println!("Next attempt (mono ms): {}", st.next_attempt_mono_ms);
-    println!("Current backoff (ms): {}", st.backoff_ms);
     println!(
         "NTP synchronized: {}",
         if st.ntp_synced { "yes" } else { "no" }
@@ -192,6 +196,7 @@ fn print_usage() {
     println!("  -sf            equivalent to --sync --force");
     println!("  -S, --status   print synchronization status");
     println!("tzutils does not set the clock itself; timed owns UTC sync.");
+    println!("Use 'tzctl get', 'tzctl list', or 'tzctl set <IANA-zone>' for timezones.");
     println!("Pool NTP is unauthenticated (NTS is future work).");
 }
 

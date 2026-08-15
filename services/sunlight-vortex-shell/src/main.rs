@@ -61,6 +61,7 @@ mod start_menu;
 mod workspace_switcher;
 
 use alloc::{string::String, vec::Vec};
+use core::sync::atomic::{AtomicBool, Ordering};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_audio::VolumeIconKind;
 use sunlight_audiod::{AudioClient, AudioClientError, AudioSnapshot};
@@ -1578,6 +1579,40 @@ enum DesktopSelectState {
 // Shell application state
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PanelCivilTime {
+    year: u16,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    weekday_iso: u8,
+}
+
+impl PanelCivilTime {
+    fn new(
+        year: u16,
+        month: u8,
+        day: u8,
+        hour: u8,
+        minute: u8,
+        second: u8,
+        weekday_iso: u8,
+    ) -> Option<Self> {
+        sunlight_tz::is_valid_civil_time(year, month, day, hour, minute, second, weekday_iso)
+            .then_some(Self {
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+                weekday_iso,
+            })
+    }
+}
+
 struct VortexShell {
     wallpaper: Option<RgbaImage>,
     wallpaper_config: DesktopConfig,
@@ -1610,15 +1645,9 @@ struct VortexShell {
     trash_hover: bool,
     /// True when Trash contains items (drives empty vs full monochrome glyph).
     trash_full: bool,
-    /// Cached local hour/min for the status clock.
-    status_hour: u8,
-    status_min: u8,
-    // Extended for center date/time + tooltip (populated from tz GET_LOCAL_TIME)
-    status_year: u16,
-    status_month: u8,
-    status_day: u8,
-    status_sec: u8,
-    status_weekday_iso: u8,
+    /// Last complete, validated local-civil snapshot from `timezone_service`.
+    /// `None` is the typed unavailable state used before the first valid reply.
+    status_time: Option<PanelCivilTime>,
     // TZ id bytes for tooltip (from /etc/localtime or GET_ZONE best effort)
     tz_id: [u8; 48],
     tz_id_len: usize,
@@ -1840,13 +1869,7 @@ impl VortexShell {
             search_pressed: false,
             trash_hover: false,
             trash_full: false,
-            status_hour: 0xff,
-            status_min: 0xff,
-            status_year: 1970,
-            status_month: 1,
-            status_day: 1,
-            status_sec: 0,
-            status_weekday_iso: 4,
+            status_time: None,
             tz_id: [
                 b'U', b'T', b'C', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -2013,41 +2036,38 @@ impl VortexShell {
     fn refresh_status(&mut self) -> bool {
         let mut dirty = false;
         let mut clock_changed = false;
+        let mut first_valid_snapshot = false;
 
         let mut tmp_tz = [0u8; 48];
         let mut tmp_tz_l = 0usize;
         if let Some((y, mon, d, h, mi, s, weekday_iso)) =
             query_local_full(&mut tmp_tz, &mut tmp_tz_l)
         {
-            if mi != self.status_min
-                || d != self.status_day
-                || mon != self.status_month
-                || y != self.status_year
-                || weekday_iso != self.status_weekday_iso
-                || self.status_min == 0xff
-            {
-                self.status_year = y;
-                self.status_month = mon;
-                self.status_day = d;
-                self.status_hour = h;
-                self.status_min = mi;
-                self.status_sec = s;
-                self.status_weekday_iso = weekday_iso;
-                clock_changed = true;
-                if self.show_calendar_popover && (1..=12).contains(&mon) && y >= 1970 {
-                    self.cal_view_month = mon;
-                    self.cal_view_year = y;
+            // The shared wire decoder validates first; keep this presentation
+            // boundary defensive so no invalid or partial civil state is cached.
+            if let Some(next) = PanelCivilTime::new(y, mon, d, h, mi, s, weekday_iso) {
+                if self.status_time != Some(next) {
+                    first_valid_snapshot = self.status_time.is_none();
+                    self.status_time = Some(next);
+                    clock_changed = true;
+                    if self.show_calendar_popover && (1..=12).contains(&mon) && y >= 1970 {
+                        self.cal_view_month = mon;
+                        self.cal_view_year = y;
+                    }
+                    if tmp_tz_l > 0 && tmp_tz_l <= 48 {
+                        self.tz_id[..tmp_tz_l].copy_from_slice(&tmp_tz[..tmp_tz_l]);
+                        self.tz_id_len = tmp_tz_l;
+                    }
+                    dirty = true;
                 }
-                if tmp_tz_l > 0 && tmp_tz_l <= 48 {
-                    self.tz_id[..tmp_tz_l].copy_from_slice(&tmp_tz[..tmp_tz_l]);
-                    self.tz_id_len = tmp_tz_l;
-                }
-                dirty = true;
             }
         }
 
         // Load initially and then only once per five-minute boundary.
-        if self.locale_needs_refresh || (clock_changed && self.status_min % 5 == 0) {
+        let five_minute_boundary = self
+            .status_time
+            .is_some_and(|time| clock_changed && time.minute % 5 == 0);
+        if self.locale_needs_refresh || five_minute_boundary {
             self.locale_needs_refresh = false;
             if let Some(loc) = read_locale_effective() {
                 let b = loc.as_bytes();
@@ -2056,6 +2076,33 @@ impl VortexShell {
                 self.locale[n] = 0;
                 self.locale_len = n;
                 dirty = true;
+            }
+        }
+
+        if first_valid_snapshot {
+            if let Some(time) = self.status_time {
+                let locale =
+                    core::str::from_utf8(&self.locale[..self.locale_len]).unwrap_or("C.UTF-8");
+                let formatted = format_center_datetime(
+                    time.year,
+                    time.month,
+                    time.day,
+                    time.hour,
+                    time.minute,
+                    time.weekday_iso,
+                    locale,
+                );
+                debug_log(&alloc::format!(
+                    "[VORTEX][time] source=timezone_service local={:04}-{:02}-{:02}T{:02}:{:02}:{:02} weekday_iso={} formatted=\"{}\"\n",
+                    time.year,
+                    time.month,
+                    time.day,
+                    time.hour,
+                    time.minute,
+                    time.second,
+                    time.weekday_iso,
+                    formatted
+                ));
             }
         }
 
@@ -2107,23 +2154,10 @@ impl VortexShell {
     }
 
     fn reset_calendar_view_to_today(&mut self) {
-        self.cal_view_month = if (1..=12).contains(&self.status_month) {
-            self.status_month
-        } else {
-            1
-        };
-        self.cal_view_year = if self.status_year >= 1970 {
-            self.status_year
-        } else {
-            1970
-        };
-        self.cal_selected_day = if self.status_day >= 1
-            && self.status_day <= cal_days_in_month(self.cal_view_year, self.cal_view_month)
-        {
-            self.status_day
-        } else {
-            1
-        };
+        let today = self.status_time;
+        self.cal_view_month = today.map_or(1, |time| time.month);
+        self.cal_view_year = today.map_or(1970, |time| time.year);
+        self.cal_selected_day = today.map_or(1, |time| time.day);
         self.cal_last_loaded_key_len = 0;
         self.refresh_calendar_popover_data();
     }
@@ -4414,7 +4448,15 @@ pub(crate) fn query_local_full(
     out_tz: &mut [u8; 48],
     out_tz_len: &mut usize,
 ) -> Option<(u16, u8, u8, u8, u8, u8, u8)> {
+    static LOOKUP_FAILURE_LOGGED: AtomicBool = AtomicBool::new(false);
+    static CALL_FAILURE_LOGGED: AtomicBool = AtomicBool::new(false);
+    static REPLY_FAILURE_LOGGED: AtomicBool = AtomicBool::new(false);
+    static DECODE_FAILURE_LOGGED: AtomicBool = AtomicBool::new(false);
+
     let Some(tz) = nameserver_lookup("tz") else {
+        if !LOOKUP_FAILURE_LOGGED.swap(true, Ordering::Relaxed) {
+            debug_log("[VORTEX][time] timezone_service lookup unavailable\n");
+        }
         return None;
     };
     let Ok(reply) = ipc_call_timeout(
@@ -4422,12 +4464,33 @@ pub(crate) fn query_local_full(
         IpcMsg::with_label(TzMsg::GET_LOCAL_TIME),
         TIME_IPC_TIMEOUT_MS,
     ) else {
+        if !CALL_FAILURE_LOGGED.swap(true, Ordering::Relaxed) {
+            debug_log("[VORTEX][time] timezone_service call failed\n");
+        }
         return None;
     };
     if reply.label != TzMsg::REPLY {
+        if !REPLY_FAILURE_LOGGED.swap(true, Ordering::Relaxed) {
+            debug_log(&alloc::format!(
+                "[VORTEX][time] timezone_service unexpected reply label={:#x}\n",
+                reply.label
+            ));
+        }
         return None;
     }
-    let local = sunlight_tz::decode_local_time(&reply.words)?;
+    let local = match sunlight_tz::decode_local_time(&reply.words) {
+        Some(local) => local,
+        None => {
+            if !DECODE_FAILURE_LOGGED.swap(true, Ordering::Relaxed) {
+                debug_log(&alloc::format!(
+                    "[VORTEX][time] rejected local civil wire word0={:#x} weekday={}\n",
+                    reply.words[0],
+                    reply.words[4]
+                ));
+            }
+            return None;
+        }
+    };
 
     // Try GET_ZONE for id (best effort, non fatal)
     *out_tz_len = 3;
@@ -4685,15 +4748,18 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
 
     // ── Center: localized date/time (clickable, hoverable) ───────────────────
     // Use cached full time + locale. Format per spec. Updates on minute change only.
-    let center_text = format_center_datetime(
-        shell.status_year,
-        shell.status_month,
-        shell.status_day,
-        shell.status_hour,
-        shell.status_min,
-        shell.status_weekday_iso,
-        core::str::from_utf8(&shell.locale[..shell.locale_len]).unwrap_or("C.UTF-8"),
-    );
+    let center_text = match shell.status_time {
+        Some(time) => format_center_datetime(
+            time.year,
+            time.month,
+            time.day,
+            time.hour,
+            time.minute,
+            time.weekday_iso,
+            core::str::from_utf8(&shell.locale[..shell.locale_len]).unwrap_or("C.UTF-8"),
+        ),
+        None => String::from("Date/time unavailable"),
+    };
     let tw = measure_text(&center_text, FontRole::UiMedium).w as i32;
     let cx = bar.x + (bar.w as i32 - tw) / 2;
     let cy = bar.y;
@@ -4912,6 +4978,9 @@ fn format_center_datetime(
     weekday_iso: u8,
     loc: &str,
 ) -> String {
+    if !sunlight_tz::is_valid_civil_time(y, mon, d, h, mi, 0, weekday_iso) {
+        return String::from("Date/time unavailable");
+    }
     let is_en = loc.to_ascii_lowercase().starts_with("en_us")
         || loc.to_ascii_lowercase().starts_with("en-us");
     if is_en {
@@ -6758,25 +6827,29 @@ impl VortexShell {
             tz_str
         };
 
-        // long form using locale helpers
-        let dt = sunlight_locale::SimpleDateTime {
-            year: self.status_year as i32,
-            month: self.status_month,
-            day: self.status_day,
-            hour: self.status_hour,
-            minute: self.status_min,
-            second: self.status_sec,
-            weekday_iso: self.status_weekday_iso,
+        let line1 = if let Some(time) = self.status_time {
+            // long form using locale helpers
+            let dt = sunlight_locale::SimpleDateTime {
+                year: time.year as i32,
+                month: time.month,
+                day: time.day,
+                hour: time.hour,
+                minute: time.minute,
+                second: time.second,
+                weekday_iso: time.weekday_iso,
+            };
+            let long_date = sunlight_locale::format_long_date(&dt, loc_str);
+            let long_time = alloc::format!(
+                "{:02}:{:02}:{:02} {}",
+                time.hour,
+                time.minute,
+                time.second,
+                if time.hour >= 12 { "PM" } else { "AM" }
+            );
+            alloc::format!("{} {}", long_date, long_time)
+        } else {
+            String::from("Date/time unavailable")
         };
-        let long_date = sunlight_locale::format_long_date(&dt, loc_str);
-        let long_time = alloc::format!(
-            "{:02}:{:02}:{:02} {}",
-            self.status_hour,
-            self.status_min,
-            self.status_sec,
-            if self.status_hour >= 12 { "PM" } else { "AM" }
-        );
-        let line1 = alloc::format!("{} {}", long_date, long_time);
 
         let l2 = alloc::format!("Timezone: {}", tz_disp);
         let l3 = alloc::format!("Locale: {}", loc_str);
@@ -6902,12 +6975,13 @@ impl VortexShell {
         let grid_y = y + 44;
         let offset = cal_weekday_sun0(self.cal_view_year, self.cal_view_month, 1);
         let dim = cal_days_in_month(self.cal_view_year, self.cal_view_month);
-        let today_d =
-            if self.cal_view_month == self.status_month && self.cal_view_year == self.status_year {
-                self.status_day
+        let today_d = self.status_time.map_or(0, |time| {
+            if self.cal_view_month == time.month && self.cal_view_year == time.year {
+                time.day
             } else {
                 0
-            };
+            }
+        });
         for idx in 0..CAL_POPUP_DAYS {
             let row = idx / 7;
             let col = idx % 7;
@@ -7937,6 +8011,12 @@ fn draw_shelf_tooltip(canvas: &mut Canvas, theme: &Theme, cell: Rect, label: &st
 mod shelf_control_tests {
     use super::*;
 
+    fn formatted_12h(hour: u8, minute: u8) -> String {
+        let mut out = [0u8; 8];
+        let len = format_time_12h(hour, minute, &mut out);
+        String::from(core::str::from_utf8(&out[..len]).unwrap())
+    }
+
     #[test]
     fn shelf_controls_have_independent_targets_at_supported_widths() {
         let overview_x = TOP_PAD + CLUSTER_PAD;
@@ -7967,6 +8047,35 @@ mod shelf_control_tests {
             "Sat, Aug 1   12:00 AM"
         );
     }
+
+    #[test]
+    fn clock_minutes_are_always_two_digits() {
+        assert_eq!(formatted_12h(3, 0), "3:00 AM");
+        assert_eq!(formatted_12h(3, 5), "3:05 AM");
+        assert_eq!(formatted_12h(3, 25), "3:25 AM");
+        assert_eq!(formatted_12h(3, 59), "3:59 AM");
+    }
+
+    #[test]
+    fn clock_preserves_twelve_hour_boundaries() {
+        assert_eq!(formatted_12h(0, 5), "12:05 AM");
+        assert_eq!(formatted_12h(3, 5), "3:05 AM");
+        assert_eq!(formatted_12h(12, 5), "12:05 PM");
+        assert_eq!(formatted_12h(15, 5), "3:05 PM");
+        assert_eq!(formatted_12h(23, 59), "11:59 PM");
+    }
+
+    #[test]
+    fn invalid_minutes_never_reach_normal_presentation() {
+        assert_eq!(formatted_12h(15, 60), "??:??");
+        assert_eq!(formatted_12h(15, 255), "??:??");
+        assert_eq!(
+            format_center_datetime(1970, 1, 1, 255, 255, 4, "en_US.UTF-8"),
+            "Date/time unavailable"
+        );
+        assert!(PanelCivilTime::new(2026, 8, 15, 15, 60, 0, 6).is_none());
+        assert!(PanelCivilTime::new(2026, 8, 15, 15, 255, 0, 6).is_none());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -7975,7 +8084,7 @@ mod shelf_control_tests {
 
 impl App for VortexShell {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        if self.status_min == 0xff {
+        if self.status_time.is_none() {
             let _ = self.refresh_status();
         }
         if self.network.summary.is_none() && self.network.last_error.is_none() {
