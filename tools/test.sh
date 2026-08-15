@@ -404,6 +404,13 @@ case "$PHASE" in
         NEED_DISK=true
         TIMEOUT=360
         ;;
+    audio)
+        EXPECTED_FILE="tools/tests/audio.expected"
+        FINAL_MARKER="[AUDIOD] test-tone done"
+        PASS_LABEL="Audio playback foundation"
+        NEED_DISK=false
+        TIMEOUT=90
+        ;;
     *)
         echo "[test] Unsupported gate '$PHASE'. See tools/tests for supported gates."
         exit 2
@@ -424,6 +431,11 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-networkd --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-resolved --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-powerd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thermald --release >>"$BUILD_LOG" 2>&1
+if [[ "$PHASE" == "audio" ]]; then
+    SUNLIGHT_INJECT_AUDIO_TEST=1 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-audiod --release >>"$BUILD_LOG" 2>&1
+else
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-audiod --release >>"$BUILD_LOG" 2>&1
+fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release >>"$BUILD_LOG" 2>&1
 if [[ "$PHASE" == "session-foundation" ]]; then
     SUNLIGHT_INJECT_PHASE=session_foundation RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release >>"$BUILD_LOG" 2>&1
@@ -651,6 +663,12 @@ if [[ "$PHASE" == phase5* || "$PHASE" == phase5x* ]]; then
     NET_FLAGS="-netdev user,id=net0 -device virtio-net-pci,netdev=net0,disable-modern=on"
 fi
 
+# Audio hardware is opt-in so existing gates do not depend on a host backend.
+AUDIO_FLAGS=""
+if [[ "$PHASE" == "audio" ]]; then
+    AUDIO_FLAGS="-audiodev none,id=snd0 -device intel-hda -device hda-output,audiodev=snd0"
+fi
+
 set +e
 QEMU_SMP="${SUNLIGHT_TEST_CPUS:-2}"
 if [[ "$PHASE" == "mm2b" ]]; then
@@ -673,6 +691,7 @@ qemu-system-x86_64 \
     -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 \
     $DISK_FLAGS \
     $NET_FLAGS \
+    $AUDIO_FLAGS \
     -no-reboot \
     -no-shutdown >>"$BUILD_LOG" 2>&1 &
 QEMU_PID=$!

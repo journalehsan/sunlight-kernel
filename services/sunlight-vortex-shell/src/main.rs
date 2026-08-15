@@ -76,6 +76,8 @@ use sunlight_ipc::{
     SAFE_FALLBACK_H, SAFE_FALLBACK_W, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
+use sunlight_audio::VolumeIconKind;
+use sunlight_audiod::{AudioClient, AudioClientError, AudioSnapshot};
 use sunlight_networkd::{
     DerivedConnectionState, NetworkClient, NetworkPanelSummary, SnapshotError,
 };
@@ -296,6 +298,14 @@ static ICON_SYM_DND_ON_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icon_do_not_disturb_on.tga"));
 static ICON_SYM_DND_OFF_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icon_do_not_disturb_off.tga"));
+static ICON_SYM_VOLUME_UP_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_volume_up.tga"));
+static ICON_SYM_VOLUME_DOWN_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_volume_down.tga"));
+static ICON_SYM_VOLUME_MUTE_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_volume_mute.tga"));
+static ICON_SYM_VOLUME_OFF_TGA: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/icon_volume_off.tga"));
 
 /// Theme icons for desktop shortcuts. All fields are `Copy` (TgaImage borrows `&'static [u8]`).
 #[derive(Clone, Copy)]
@@ -497,6 +507,10 @@ struct SymbolTheme {
     close: Option<TgaImage>,
     dnd_on: Option<TgaImage>,
     dnd_off: Option<TgaImage>,
+    volume_up: Option<TgaImage>,
+    volume_down: Option<TgaImage>,
+    volume_mute: Option<TgaImage>,
+    volume_off: Option<TgaImage>,
 }
 
 impl SymbolTheme {
@@ -522,6 +536,10 @@ impl SymbolTheme {
             close: TgaImage::parse(ICON_SYM_CLOSE_TGA).ok(),
             dnd_on: TgaImage::parse(ICON_SYM_DND_ON_TGA).ok(),
             dnd_off: TgaImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
+            volume_up: TgaImage::parse(ICON_SYM_VOLUME_UP_TGA).ok(),
+            volume_down: TgaImage::parse(ICON_SYM_VOLUME_DOWN_TGA).ok(),
+            volume_mute: TgaImage::parse(ICON_SYM_VOLUME_MUTE_TGA).ok(),
+            volume_off: TgaImage::parse(ICON_SYM_VOLUME_OFF_TGA).ok(),
         }
     }
 
@@ -547,6 +565,10 @@ impl SymbolTheme {
             "close" => self.close,
             "do_not_disturb_on" => self.dnd_on,
             "do_not_disturb_off" => self.dnd_off,
+            "volume_up" => self.volume_up,
+            "volume_down" => self.volume_down,
+            "volume_mute" => self.volume_mute,
+            "volume_off" => self.volume_off,
             _ => None,
         }
     }
@@ -789,6 +811,100 @@ impl NetworkShellState {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct AudioShellState {
+    snapshot: Option<AudioSnapshot>,
+    icon: VolumeIconKind,
+    service_missing: bool,
+}
+
+impl AudioShellState {
+    const fn new() -> Self {
+        Self {
+            snapshot: None,
+            icon: VolumeIconKind::Unavailable,
+            service_missing: true,
+        }
+    }
+
+    fn update(&mut self, result: Result<AudioSnapshot, AudioClientError>) {
+        match result {
+            Ok(snap) => {
+                self.icon = snap.icon();
+                self.service_missing = false;
+                self.snapshot = Some(snap);
+            }
+            Err(_) => {
+                self.snapshot = None;
+                self.icon = VolumeIconKind::Unavailable;
+                self.service_missing = true;
+            }
+        }
+    }
+
+    fn volume(self) -> u8 {
+        self.snapshot.map(|s| s.volume).unwrap_or(0)
+    }
+
+    fn muted(self) -> bool {
+        self.snapshot.map(|s| s.muted).unwrap_or(false)
+    }
+
+    fn available(self) -> bool {
+        self.snapshot.map(|s| s.available()).unwrap_or(false)
+    }
+
+    fn device_name(self) -> &'static str {
+        self.snapshot
+            .map(|s| s.device_name())
+            .unwrap_or("Audio service unavailable")
+    }
+}
+
+#[cfg(test)]
+mod audio_widget_tests {
+    use super::*;
+    use sunlight_audio::{AudioDeviceState, OutputDeviceKind};
+
+    #[test]
+    fn icon_selection_matches_volume_contract() {
+        let mut state = AudioShellState::new();
+        let mut snap = AudioSnapshot {
+            service_generation: 1,
+            state: AudioDeviceState::Ready,
+            volume: 80,
+            muted: false,
+            last_nonzero: 80,
+            kind: OutputDeviceKind::QemuHdAudio,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits: 16,
+            underruns: 0,
+            frames_played: 0,
+            vendor_id: 0x8086,
+            device_id: 0x2668,
+        };
+        state.update(Ok(snap));
+        assert_eq!(state.icon, VolumeIconKind::High);
+        snap.volume = 50;
+        state.update(Ok(snap));
+        assert_eq!(state.icon, VolumeIconKind::Medium);
+        snap.volume = 10;
+        state.update(Ok(snap));
+        assert_eq!(state.icon, VolumeIconKind::Low);
+        snap.muted = true;
+        state.update(Ok(snap));
+        assert_eq!(state.icon, VolumeIconKind::Off);
+        state.update(Err(AudioClientError::ServiceUnavailable));
+        assert_eq!(state.icon, VolumeIconKind::Unavailable);
+    }
+
+    #[test]
+    fn sound_settings_deep_link_is_sound() {
+        assert_eq!(sunlight_audiod::sound_settings_page_id(), b"sound");
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct WindowSnapshot {
     pub(crate) id: u64,
@@ -902,13 +1018,16 @@ const TOP_BRAND_ICON_SIZE: u32 = 18;
 const TOP_BRAND_PAD_X: i32 = 8;
 const TOP_BRAND_GAP: i32 = 6;
 const TOP_ITEM_RADIUS: u32 = 6;
-const TOP_PANEL_ITEM_COUNT: usize = 1 + WS_INDICATOR_COUNT + 4;
+const TOP_PANEL_ITEM_COUNT: usize = 1 + WS_INDICATOR_COUNT + 5;
 const TOP_ITEM_BRAND: usize = 0;
 const TOP_ITEM_WS_FIRST: usize = 1;
 const TOP_ITEM_DATETIME: usize = TOP_ITEM_WS_FIRST + WS_INDICATOR_COUNT;
 const TOP_ITEM_NETWORK: usize = TOP_ITEM_DATETIME + 1;
-const TOP_ITEM_NOTIFICATIONS: usize = TOP_ITEM_NETWORK + 1;
+const TOP_ITEM_SOUND: usize = TOP_ITEM_NETWORK + 1;
+const TOP_ITEM_NOTIFICATIONS: usize = TOP_ITEM_SOUND + 1;
 const TOP_ITEM_LOGOUT: usize = TOP_ITEM_NOTIFICATIONS + 1;
+const AUDIO_STATUS_POLL_MS: u64 = 2_000;
+const AUDIO_POPOVER_POLL_MS: u64 = 250;
 const SYSTEM_MENU_W: u32 = 268;
 const SYSTEM_MENU_HEADER_H: u32 = 34;
 const SYSTEM_MENU_ROW_H: u32 = 40;
@@ -1506,10 +1625,12 @@ struct VortexShell {
     locale_needs_refresh: bool,
     /// Cached bounded summary of the primary Ethernet state.
     network: NetworkShellState,
+    audio: AudioShellState,
     /// Next monotonic deadline for best-effort status polling.
     next_status_poll_ms: u64,
     /// Next monotonic deadline for network summary refresh.
     next_network_poll_ms: u64,
+    next_audio_poll_ms: u64,
     /// Bounds of the power button for future click handling.
     power_zone: Rect,
     /// Bounds of the brand cell on the top-left.
@@ -1594,6 +1715,13 @@ struct VortexShell {
     show_network_popover: bool,
     network_settings_btn: Rect,
     network_settings_focused: bool,
+    show_sound_popover: bool,
+    sound_settings_btn: Rect,
+    sound_settings_focused: bool,
+    sound_slider: sunlight_ui::widgets::Slider,
+    sound_zone: Rect,
+    last_sound_volume_sent: Option<u8>,
+    last_sound_drag_ms: u64,
     show_notif_panel: bool,
     notif_dnd_toggle_r: Rect,
     notif_mark_seen_r: Rect,
@@ -1728,8 +1856,10 @@ impl VortexShell {
             locale_len: 7,
             locale_needs_refresh: true,
             network: NetworkShellState::new(),
+            audio: AudioShellState::new(),
             next_status_poll_ms: 0,
             next_network_poll_ms: 0,
+            next_audio_poll_ms: 0,
             power_zone: Rect::new(0, 0, 0, 0),
             brand_zone: Rect::new(0, 0, 0, 0),
             settings_zone: Rect::new(0, 0, 0, 0),
@@ -1767,6 +1897,15 @@ impl VortexShell {
             show_network_popover: false,
             network_settings_btn: Rect::new(0, 0, 0, 0),
             network_settings_focused: false,
+            show_sound_popover: false,
+            sound_settings_btn: Rect::new(0, 0, 0, 0),
+            sound_settings_focused: false,
+            sound_slider: sunlight_ui::widgets::Slider::horizontal(Rect::default())
+                .with_range(0, 100)
+                .with_value(65),
+            sound_zone: Rect::new(0, 0, 0, 0),
+            last_sound_volume_sent: None,
+            last_sound_drag_ms: 0,
             show_notif_panel: false,
             notif_dnd_toggle_r: Rect::new(0, 0, 0, 0),
             notif_mark_seen_r: Rect::new(0, 0, 0, 0),
@@ -1939,6 +2078,29 @@ impl VortexShell {
             NETWORK_STATUS_POLL_MS
         });
         self.refresh_network_state()
+    }
+
+    fn refresh_audio_state(&mut self) -> bool {
+        let previous = self.audio;
+        self.audio.update(AudioClient::new().snapshot());
+        if !self.sound_slider.dragging {
+            if let Some(snap) = self.audio.snapshot {
+                self.sound_slider.set_value(snap.volume as u32);
+            }
+        }
+        self.audio != previous
+    }
+
+    fn refresh_audio_state_if_due(&mut self, now: u64) -> bool {
+        if now < self.next_audio_poll_ms {
+            return false;
+        }
+        self.next_audio_poll_ms = now.saturating_add(if self.show_sound_popover {
+            AUDIO_POPOVER_POLL_MS
+        } else {
+            AUDIO_STATUS_POLL_MS
+        });
+        self.refresh_audio_state()
     }
 
     fn reset_calendar_view_to_today(&mut self) {
@@ -2464,6 +2626,8 @@ impl VortexShell {
         self.show_calendar_popover = false;
         self.show_network_popover = false;
         self.network_settings_focused = false;
+        self.show_sound_popover = false;
+        self.sound_settings_focused = false;
         self.show_notif_panel = false;
         self.show_logout_confirm = false;
         self.show_datetime_tooltip = false;
@@ -2483,6 +2647,8 @@ impl VortexShell {
         self.show_notif_panel = false;
         self.show_logout_confirm = false;
         self.show_datetime_tooltip = false;
+        self.show_sound_popover = false;
+        self.sound_settings_focused = false;
         self.network_settings_focused = false;
         self.show_network_popover = !self.show_network_popover;
         if self.show_network_popover {
@@ -2512,11 +2678,78 @@ impl VortexShell {
         self.launch_control_panel_page(b"network", LaunchSource::Shell)
     }
 
+    fn toggle_sound_popover(&mut self) -> bool {
+        self.show_calendar_popover = false;
+        self.show_notif_panel = false;
+        self.show_logout_confirm = false;
+        self.show_datetime_tooltip = false;
+        self.show_network_popover = false;
+        self.network_settings_focused = false;
+        self.sound_settings_focused = false;
+        self.show_sound_popover = !self.show_sound_popover;
+        if self.show_sound_popover {
+            self.next_audio_poll_ms = 0;
+            let _ = self.refresh_audio_state();
+            self.next_audio_poll_ms = monotonic_millis().saturating_add(AUDIO_POPOVER_POLL_MS);
+        }
+        true
+    }
+
+    fn open_sound_settings(&mut self) -> bool {
+        self.show_sound_popover = false;
+        self.sound_settings_focused = false;
+        self.launch_control_panel_page(b"sound", LaunchSource::Shell)
+    }
+
+    fn handle_sound_slider(&mut self, event: Event) -> bool {
+        if !self.audio.available() {
+            return false;
+        }
+        let was_dragging = self.sound_slider.dragging;
+        if !self.sound_slider.update(event) {
+            return false;
+        }
+        let value = self.sound_slider.value as u8;
+        let now = monotonic_millis();
+        let changed = self.last_sound_volume_sent != Some(value);
+        let due = changed
+            && (!self.sound_slider.dragging || now.saturating_sub(self.last_sound_drag_ms) >= 30);
+        if due {
+            if AudioClient::new().set_volume(value).is_ok() {
+                self.last_sound_volume_sent = Some(value);
+                self.last_sound_drag_ms = now;
+                if let Some(snap) = self.audio.snapshot.as_mut() {
+                    snap.volume = value;
+                }
+                self.audio.icon = sunlight_audio::volume_icon(
+                    value,
+                    self.audio.muted(),
+                    self.audio.available(),
+                );
+            }
+        }
+        let drag_finished = was_dragging && !self.sound_slider.dragging;
+        if drag_finished || (changed && !self.sound_slider.dragging) {
+            if self.audio.available() && !self.audio.muted() && value > 0 {
+                let _ = AudioClient::new().play_volume_preview();
+            }
+        }
+        true
+    }
+
     fn network_popover_keyboard_toggle(&mut self) -> bool {
         if !self.show_network_popover || self.top_panel_focus != Some(TOP_ITEM_NETWORK) {
             return false;
         }
         self.network_settings_focused = !self.network_settings_focused;
+        true
+    }
+
+    fn sound_popover_keyboard_toggle(&mut self) -> bool {
+        if !self.show_sound_popover || self.top_panel_focus != Some(TOP_ITEM_SOUND) {
+            return false;
+        }
+        self.sound_settings_focused = !self.sound_settings_focused;
         true
     }
 
@@ -2532,6 +2765,8 @@ impl VortexShell {
                 self.show_calendar_popover = false;
                 self.show_network_popover = false;
                 self.network_settings_focused = false;
+                self.show_sound_popover = false;
+                self.sound_settings_focused = false;
                 self.show_notif_panel = false;
                 self.show_logout_confirm = false;
                 self.switch_workspace((idx - TOP_ITEM_WS_FIRST + 1) as u8)
@@ -2540,6 +2775,8 @@ impl VortexShell {
                 self.show_datetime_tooltip = false;
                 self.show_network_popover = false;
                 self.network_settings_focused = false;
+                self.show_sound_popover = false;
+                self.sound_settings_focused = false;
                 self.show_notif_panel = false;
                 self.show_logout_confirm = false;
                 self.show_calendar_popover = !self.show_calendar_popover;
@@ -2549,10 +2786,13 @@ impl VortexShell {
                 true
             }
             TOP_ITEM_NETWORK => self.toggle_network_popover(),
+            TOP_ITEM_SOUND => self.toggle_sound_popover(),
             TOP_ITEM_NOTIFICATIONS => {
                 self.show_calendar_popover = false;
                 self.show_network_popover = false;
                 self.network_settings_focused = false;
+                self.show_sound_popover = false;
+                self.sound_settings_focused = false;
                 self.show_logout_confirm = false;
                 if secondary {
                     let next = !notification_dnd_enabled();
@@ -4561,6 +4801,56 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
     }
     shell.notif_zone = notif_cell;
     shell.top_panel_item_zones[TOP_ITEM_NOTIFICATIONS] = notif_cell;
+    rx -= TOP_ICON_GAP;
+
+    // Sound (volume)
+    rx -= item_h as i32;
+    let sound_cell = Rect::new(rx, item_y, item_h, item_h);
+    let sound_hover = shell.top_panel_hover == Some(TOP_ITEM_SOUND);
+    let sound_focus = shell.top_panel_focus == Some(TOP_ITEM_SOUND);
+    draw_top_panel_item_bg(
+        canvas,
+        sound_cell,
+        theme,
+        sound_hover,
+        sound_focus,
+        shell.show_sound_popover,
+    );
+    let sound_icon = match shell.audio.icon {
+        VolumeIconKind::High => sym.volume_up.or(sym.volume_down),
+        VolumeIconKind::Medium => sym.volume_down.or(sym.volume_up),
+        VolumeIconKind::Low => sym.volume_down.or(sym.volume_mute),
+        VolumeIconKind::Off => sym.volume_off.or(sym.volume_mute),
+        VolumeIconKind::Unavailable => sym.volume_off.or(sym.volume_mute),
+    };
+    let sound_color = match shell.audio.icon {
+        VolumeIconKind::Unavailable => theme.text_dim,
+        VolumeIconKind::Off => {
+            if sound_hover || sound_focus || shell.show_sound_popover {
+                theme.warn
+            } else {
+                theme.text_dim
+            }
+        }
+        _ => {
+            if sound_hover || sound_focus || shell.show_sound_popover {
+                theme.text
+            } else {
+                theme.text_dim
+            }
+        }
+    };
+    if let Some(tga) = sound_icon {
+        let icon_rect = Rect::new(
+            sound_cell.x + (sound_cell.w as i32 - ic as i32) / 2,
+            sound_cell.y + (sound_cell.h as i32 - ic as i32) / 2,
+            ic,
+            ic,
+        );
+        canvas.draw_tga_icon_tinted(&tga, icon_rect, sound_color);
+    }
+    shell.sound_zone = sound_cell;
+    shell.top_panel_item_zones[TOP_ITEM_SOUND] = sound_cell;
     rx -= TOP_ICON_GAP;
 
     // Network (lan)
@@ -6920,6 +7210,103 @@ impl VortexShell {
         Rect::new(x, top.min(max_y), pw, ph)
     }
 
+    fn sound_popover_rect(&self, cw: u32, ch: u32) -> Rect {
+        let pw = 292u32.min(cw.saturating_sub(16));
+        let ph = 168u32.min(ch.saturating_sub(TOP_H + 20));
+        let preferred_x = self.sound_zone.right() - pw as i32;
+        let min_x = if self.top_panel_presentation.integrated() {
+            8
+        } else {
+            TOP_PAD
+        };
+        let max_x = (cw as i32 - pw as i32 - min_x).max(min_x);
+        let x = preferred_x.clamp(min_x, max_x);
+        let top = top_bar_rect(cw, self.top_panel_presentation).bottom() + 8;
+        let max_y = (ch as i32 - ph as i32 - 8).max(top);
+        Rect::new(x, top.min(max_y), pw, ph)
+    }
+
+    fn draw_sound_popover(&mut self, canvas: &mut Canvas, theme: &Theme, cw: u32, ch: u32) {
+        let panel = self.sound_popover_rect(cw, ch);
+        canvas.fill_material(
+            panel,
+            sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme)
+                .with_radius(8),
+        );
+        let icon = match self.audio.icon {
+            VolumeIconKind::High => self.symbols.volume_up.or(self.symbols.volume_down),
+            VolumeIconKind::Medium | VolumeIconKind::Low => self.symbols.volume_down,
+            VolumeIconKind::Off | VolumeIconKind::Unavailable => {
+                self.symbols.volume_off.or(self.symbols.volume_mute)
+            }
+        };
+        let icon_rect = Rect::new(panel.x + 14, panel.y + 12, 18, 18);
+        if let Some(tga) = icon {
+            canvas.draw_tga_icon_tinted(&tga, icon_rect, theme.text);
+        }
+        draw_text_vcenter(
+            canvas,
+            "Sound",
+            panel.x + 40,
+            panel.y + 8,
+            24,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+
+        self.sound_slider.rect = Rect::new(panel.x + 40, panel.y + 40, panel.w.saturating_sub(96), 24);
+        self.sound_slider.draw(canvas, theme);
+        let pct = alloc::format!("{}%", self.sound_slider.value);
+        draw_text_vcenter(
+            canvas,
+            &pct,
+            panel.right() - 48,
+            panel.y + 40,
+            24,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+
+        draw_text_vcenter(
+            canvas,
+            "Output",
+            panel.x + 14,
+            panel.y + 72,
+            18,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+        draw_text_vcenter(
+            canvas,
+            self.audio.device_name(),
+            panel.x + 14,
+            panel.y + 90,
+            20,
+            &TextStyle::new(FontRole::UiRegular, theme.text),
+        );
+
+        self.sound_settings_btn = Rect::new(
+            panel.x + 12,
+            panel.bottom() - 40,
+            panel.w.saturating_sub(24),
+            28,
+        );
+        canvas.fill_rounded_rect(
+            self.sound_settings_btn,
+            6,
+            if self.sound_settings_focused {
+                theme.accent.darken(40)
+            } else {
+                theme.panel_alt
+            },
+        );
+        draw_text_vcenter(
+            canvas,
+            "Sound Settings >",
+            self.sound_settings_btn.x + 10,
+            self.sound_settings_btn.y,
+            self.sound_settings_btn.h,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+    }
+
     fn draw_network_popover(&mut self, canvas: &mut Canvas, theme: &Theme, cw: u32, ch: u32) {
         let panel = self.network_popover_rect(cw, ch);
         canvas.fill_material(
@@ -7670,6 +8057,9 @@ impl App for VortexShell {
         if self.show_network_popover {
             self.draw_network_popover(canvas, theme, cw, ch);
         }
+        if self.show_sound_popover {
+            self.draw_sound_popover(canvas, theme, cw, ch);
+        }
 
         // Notif placeholder panel
         if self.show_notif_panel {
@@ -8194,6 +8584,29 @@ impl App for VortexShell {
                         return true;
                     }
                 }
+                if self.show_sound_popover {
+                    let mute_icon = Rect::new(
+                        self.sound_popover_rect(self.screen_w, self.screen_h).x + 14,
+                        self.sound_popover_rect(self.screen_w, self.screen_h).y + 12,
+                        18,
+                        18,
+                    );
+                    if mute_icon.contains(point) && self.audio.available() {
+                        let _ = AudioClient::new().set_mute(!self.audio.muted());
+                        let _ = self.refresh_audio_state();
+                        return true;
+                    }
+                    if self.sound_settings_btn.contains(point) {
+                        return self.open_sound_settings();
+                    }
+                    if self
+                        .sound_popover_rect(self.screen_w, self.screen_h)
+                        .contains(point)
+                    {
+                        let _ = self.handle_sound_slider(event);
+                        return true;
+                    }
+                }
                 if self.show_notif_panel {
                     if self.notif_dnd_toggle_r.contains(point) {
                         let next = !notification_dnd_enabled();
@@ -8260,6 +8673,15 @@ impl App for VortexShell {
                 if self.show_calendar_popover && !self.datetime_zone.contains(point) {
                     self.show_calendar_popover = false;
                     closed = true;
+                }
+                if self.show_sound_popover && !self.sound_zone.contains(point) {
+                    if !self
+                        .sound_popover_rect(self.screen_w, self.screen_h)
+                        .contains(point)
+                    {
+                        self.show_sound_popover = false;
+                        self.sound_settings_focused = false;
+                    }
                 }
                 if self.show_network_popover && !self.net_zone.contains(point) {
                     self.show_network_popover = false;
@@ -8374,6 +8796,13 @@ impl App for VortexShell {
             }
             Event::MouseDown { x, y, button } if button == 0 => {
                 let point = Point::new(x, y);
+                if self.show_sound_popover
+                    && self
+                        .sound_popover_rect(self.screen_w, self.screen_h)
+                        .contains(point)
+                {
+                    return self.handle_sound_slider(event);
+                }
                 if let Some(item) = self.top_panel_item_at_point(point) {
                     self.context_menu = None;
                     self.set_top_panel_focus(Some(item));
@@ -8511,6 +8940,11 @@ impl App for VortexShell {
                     self.network_settings_focused = false;
                     did = true;
                 }
+                if self.show_sound_popover {
+                    self.show_sound_popover = false;
+                    self.sound_settings_focused = false;
+                    did = true;
+                }
                 if self.show_notif_panel {
                     self.show_notif_panel = false;
                     did = true;
@@ -8573,6 +9007,8 @@ impl App for VortexShell {
             } => {
                 if self.network_popover_keyboard_toggle() {
                     true
+                } else if self.sound_popover_keyboard_toggle() {
+                    true
                 } else {
                     self.top_panel_focus_step(shift)
                 }
@@ -8584,6 +9020,8 @@ impl App for VortexShell {
             } => {
                 if self.show_network_popover && self.network_settings_focused {
                     self.open_network_settings()
+                } else if self.show_sound_popover && self.sound_settings_focused {
+                    self.open_sound_settings()
                 } else {
                     self.top_panel_focus
                         .map(|item| self.activate_top_panel_item(item, false))
@@ -8597,6 +9035,8 @@ impl App for VortexShell {
             } => {
                 if self.show_network_popover && self.network_settings_focused {
                     self.open_network_settings()
+                } else if self.show_sound_popover && self.sound_settings_focused {
+                    self.open_sound_settings()
                 } else {
                     self.top_panel_focus
                         .map(|item| self.activate_top_panel_item(item, true))
@@ -8604,6 +9044,9 @@ impl App for VortexShell {
                 }
             }
             Event::MouseMove { x, y } => {
+                if self.show_sound_popover && self.sound_slider.dragging {
+                    return self.handle_sound_slider(event);
+                }
                 if self.selection_state != DesktopSelectState::Idle {
                     self.update_desktop_marquee(Point::new(x, y));
                     return true;
@@ -8687,6 +9130,9 @@ impl App for VortexShell {
                     || self.show_datetime_tooltip != prev_tip
             }
             Event::MouseUp { x, y, button } if button == 0 => {
+                if self.show_sound_popover && self.sound_slider.dragging {
+                    return self.handle_sound_slider(event);
+                }
                 match self.selection_state {
                     DesktopSelectState::Dragging { .. } => {
                         self.update_desktop_marquee(Point::new(x, y));
@@ -8716,6 +9162,9 @@ impl App for VortexShell {
                     dirty = true;
                 }
                 if self.refresh_network_state_if_due(now) {
+                    dirty = true;
+                }
+                if self.refresh_audio_state_if_due(now) {
                     dirty = true;
                 }
                 self.log_diagnostics_if_due(now);

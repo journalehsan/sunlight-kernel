@@ -132,6 +132,10 @@ fn main() {
         ("close", 0xe5cd),
         ("do_not_disturb_on", 0xe644),
         ("do_not_disturb_off", 0xe643),
+        ("volume_up", 0xe050),
+        ("volume_down", 0xe04d),
+        ("volume_mute", 0xe04e),
+        ("volume_off", 0xe04f),
     ];
 
     for (name, cp) in icons {

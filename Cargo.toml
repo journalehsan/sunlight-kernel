@@ -75,6 +75,8 @@ members = [
     "services/sunlight-resolved",
     "services/sunlight-powerd",
     "services/sunlight-thermald",
+    "sunlight-audio",
+    "services/sunlight-audiod",
     "services/solar",
     "sun-font",
     "sunlight-bench",

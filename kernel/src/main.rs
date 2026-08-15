@@ -183,6 +183,9 @@ static THERMALD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/thermald");
 static THERMALCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/thermalctl");
+static AUDIOD_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/audiod");
+static AUDIOCTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/audioctl");
 static SUNLIGHT_NICED_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/niced");
 static NICECTL_ELF_BYTES: &[u8] =

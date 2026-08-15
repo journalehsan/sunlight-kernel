@@ -136,6 +136,12 @@ pub enum SunlightSyscall {
     WiseOwlConsumeSessionProof = 145,
     /// Braind-only authentication of a lifecycle endpoint's immediate caller.
     WiseOwlValidateLifecycleSource = 146,
+    /// Locate the first Intel HDA PCI function and return BAR0. Gated to `audiod`.
+    HdaInfo = 147,
+    /// Map a previously granted device BAR. Gated to the owning driver process.
+    MapMmio = 131,
+    /// Allocate physically contiguous DMA and map it. Gated to the owning driver.
+    DmaAlloc = 132,
     DebugLog = 99,
     /// Trusted PTY service credential lookup for an IPC caller PID.
     PtyGetCredentials = 103,
@@ -564,6 +570,8 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
 ///
 /// `networkd` is allowed for **read-only** desktop panel status (LIST_INTERFACES).
 /// Mutating network ops remain enforced inside networkd.
+/// `audiod` is the ordinary user-session playback broker; its protocol exposes
+/// bounded PCM submission and master-volume intent, not device registers.
 fn matches_user_session_service(name_key: u64) -> bool {
     name_key == name_to_u64("vfs")
         || name_key == name_to_u64("display_server")
@@ -583,6 +591,7 @@ fn matches_user_session_service(name_key: u64) -> bool {
         || name_key == name_to_u64("thumbd")
         || name_key == name_to_u64("sunlight-kv")
         || name_key == name_to_u64("sunlight-tls")
+        || name_key == name_to_u64("audiod")
         || name_key == name_to_u64("mezzo")
         || name_key == name_to_u64(SESSION_ENDPOINT)
         || name_key == name_to_u64("wiseowl-memoryd")
@@ -659,6 +668,7 @@ mod service_capability_tests {
             "resolved",
             "tz",
             "timed",
+            "audiod",
         ] {
             assert!(
                 service_capability_allows_hashed_name(session, name_to_u64(name)),
@@ -2570,6 +2580,91 @@ pub mod PowerdMsg {
     pub const ERR_UNSUPPORTED: u64 = 4;
     pub const ERR_STALE_GENERATION: u64 = 5;
     pub const ERR_DENIED: u64 = 6;
+}
+
+/// audiod: system playback policy (audio.v1).
+/// Registered as "audiod". Owns master volume/mute and the single output stream.
+/// The kernel never exposes PCI registers or DMA addresses through this protocol.
+#[allow(non_snake_case)]
+pub mod AudiodMsg {
+    pub const GET_STATUS: u64 = 0xE001;
+    pub const GET_DEVICE: u64 = 0xE002;
+    pub const GET_VOLUME: u64 = 0xE003;
+    pub const SET_VOLUME: u64 = 0xE010; // w0 = 0..100
+    pub const SET_MUTE: u64 = 0xE011; // w0 = 0/1
+    pub const PLAY_TONE: u64 = 0xE020; // w0 = Hz (0=440), w1 = ms (0=1000)
+    pub const SUBMIT_PCM: u64 = 0xE021; // w0 = byte length, cap0 = shm token
+    pub const STOP: u64 = 0xE022;
+
+    pub const REPLY: u64 = 0xE0FF;
+    pub const ERROR: u64 = 0xE0FE;
+
+    pub const ERR_NOT_FOUND: u64 = 1;
+    pub const ERR_BAD_REQUEST: u64 = 2;
+    pub const ERR_UNAVAILABLE: u64 = 3;
+    pub const ERR_UNSUPPORTED: u64 = 4;
+    pub const ERR_OVERFLOW: u64 = 5;
+    pub const ERR_INVALID_FORMAT: u64 = 6;
+    pub const ERR_DEVICE_FAILED: u64 = 7;
+}
+
+/// Intel HDA BAR grant returned by `hda_info`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HdaInfo {
+    pub bar_phys: u64,
+    pub bar_size: u64,
+    pub vendor_id: u16,
+    pub device_id: u16,
+}
+
+/// Compact GET_STATUS payload (four register words).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AudioStatus {
+    pub state: u8,
+    pub volume: u8,
+    pub muted: bool,
+    pub last_nonzero: u8,
+    pub sample_rate_hz: u32,
+    pub channels: u8,
+    pub bits: u8,
+    pub underruns: u32,
+    pub frames_played: u32,
+}
+
+pub fn pack_audio_status(status: AudioStatus) -> IpcMsg {
+    IpcMsg::with_label(AudiodMsg::REPLY)
+        .word(
+            0,
+            (status.state as u64)
+                | ((status.volume as u64) << 8)
+                | ((status.muted as u64) << 16)
+                | ((status.last_nonzero as u64) << 24),
+        )
+        .word(
+            1,
+            (status.sample_rate_hz as u64)
+                | ((status.channels as u64) << 32)
+                | ((status.bits as u64) << 40),
+        )
+        .word(2, status.underruns as u64)
+        .word(3, status.frames_played as u64)
+}
+
+pub fn unpack_audio_status(reply: &IpcMsg) -> Option<AudioStatus> {
+    if reply.label != AudiodMsg::REPLY {
+        return None;
+    }
+    Some(AudioStatus {
+        state: (reply.words[0] & 0xff) as u8,
+        volume: ((reply.words[0] >> 8) & 0xff) as u8,
+        muted: ((reply.words[0] >> 16) & 0xff) != 0,
+        last_nonzero: ((reply.words[0] >> 24) & 0xff) as u8,
+        sample_rate_hz: (reply.words[1] & 0xffff_ffff) as u32,
+        channels: ((reply.words[1] >> 32) & 0xff) as u8,
+        bits: ((reply.words[1] >> 40) & 0xff) as u8,
+        underruns: reply.words[2] as u32,
+        frames_played: reply.words[3] as u32,
+    })
 }
 
 /// thermald: thermal policy manager (sensors, fan policy, thermal constraints).
@@ -5017,6 +5112,55 @@ pub fn shm_free(token: CapabilityToken) -> Result<(), ShmError> {
     }
 }
 
+/// Locate the Intel HDA controller BAR. Only `audiod` is granted this call.
+pub fn hda_info() -> Option<HdaInfo> {
+    let (phys, size, ids) = unsafe { raw_syscall_triple(SunlightSyscall::HdaInfo, 0, 0, 0) };
+    if phys == 0 || phys == u64::MAX || size == 0 {
+        return None;
+    }
+    Some(HdaInfo {
+        bar_phys: phys,
+        bar_size: size,
+        vendor_id: ids as u16,
+        device_id: (ids >> 16) as u16,
+    })
+}
+
+/// Map a kernel-granted device BAR. The physical address must match the grant.
+pub fn map_mmio(physical: u64, size: u64) -> Option<*mut u8> {
+    let (addr, _, _) = unsafe { raw_syscall_triple(SunlightSyscall::MapMmio, physical, size, 0) };
+    (addr != 0 && addr != u64::MAX).then_some(addr as *mut u8)
+}
+
+/// Allocate physically contiguous DMA pages. Returns (user VA, bus address).
+pub fn dma_alloc(pages: usize) -> Option<(*mut u8, u64)> {
+    let (addr, phys, _) =
+        unsafe { raw_syscall_triple(SunlightSyscall::DmaAlloc, pages as u64, 0, 0) };
+    (addr != 0 && addr != u64::MAX && phys != 0).then_some((addr as *mut u8, phys))
+}
+
+/// Syscall helper that preserves rax/rdx/r8 so hardware grants can return a
+/// physical address, a length, and a packed identity word.
+unsafe fn raw_syscall_triple(num: SunlightSyscall, a1: u64, a2: u64, a3: u64) -> (u64, u64, u64) {
+    let ret: u64;
+    let out_rdx: u64;
+    let out_r8: u64;
+    unsafe {
+        core::arch::asm!(
+            "syscall",
+            inlateout("rax") num as u64 => ret,
+            in("rdi") a1,
+            in("rsi") a2,
+            inlateout("rdx") a3 => out_rdx,
+            lateout("r8") out_r8,
+            lateout("rcx") _,
+            lateout("r11") _,
+            options(nostack)
+        );
+    }
+    (ret, out_rdx, out_r8)
+}
+
 /// Map the kernel telemetry page into this process; returns null on failure.
 pub fn map_telemetry() -> *const u8 {
     // SAFETY: MapTelemetry takes no pointers and returns a virtual address in rax.
@@ -5545,5 +5689,33 @@ mod network_backend_tests {
         let first = crate::HardwareInventoryRecord::pci_key(0, 0, 3, 0);
         let second = crate::HardwareInventoryRecord::pci_key(0, 0, 4, 0);
         assert_ne!(first, second);
+    }
+}
+
+#[cfg(test)]
+mod audio_protocol_tests {
+    use super::{pack_audio_status, unpack_audio_status, AudioStatus, AudiodMsg};
+
+    #[test]
+    fn status_round_trip_and_error_codes() {
+        let packed = pack_audio_status(AudioStatus {
+            state: 2,
+            volume: 65,
+            muted: true,
+            last_nonzero: 70,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits: 16,
+            underruns: 3,
+            frames_played: 1234,
+        });
+        let unpacked = unpack_audio_status(&packed).unwrap();
+        assert_eq!(unpacked.volume, 65);
+        assert!(unpacked.muted);
+        assert_eq!(unpacked.last_nonzero, 70);
+        assert_eq!(unpacked.sample_rate_hz, 48_000);
+        assert_eq!(unpacked.underruns, 3);
+        assert_eq!(AudiodMsg::ERR_UNAVAILABLE, 3);
+        assert_ne!(AudiodMsg::PLAY_TONE, AudiodMsg::SUBMIT_PCM);
     }
 }

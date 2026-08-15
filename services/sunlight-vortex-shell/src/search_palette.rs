@@ -87,10 +87,21 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
             "timezone",
             "clock",
             "ntp",
+            "sound",
+            "audio",
+            "volume",
             "تنظیمات",
             "شبکه",
         ],
         action: SearchAction::Preferences("root"),
+        category: "System",
+    },
+    SearchEntry {
+        app_id: AppId::Settings,
+        title: "Sound",
+        aliases: &["sound", "audio", "volume", "speaker"],
+        keywords: &["mute", "playback", "output", "hda"],
+        action: SearchAction::Preferences("sound"),
         category: "System",
     },
     SearchEntry {
@@ -1000,6 +1011,8 @@ mod tests {
     fn alias_and_keyword_matching() {
         let t = titles_for("network");
         assert!(t.iter().any(|x| *x == "System Preferences"));
+        let t = titles_for("sound");
+        assert!(t.iter().any(|x| *x == "Sound"));
         let t = titles_for("web");
         assert!(t.iter().any(|x| *x == "Rappid Rabbit"));
         let t = titles_for("cpu");

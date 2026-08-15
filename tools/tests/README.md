@@ -13,6 +13,7 @@ Planned runner entry points:
 ./tools/test.sh phase3.0
 ./tools/test.sh phase3.5
 ./tools/test.sh phase3.6
+./tools/test.sh audio
 ```
 
 The default `./tools/test.sh` should run the latest stable gate. Keep expected

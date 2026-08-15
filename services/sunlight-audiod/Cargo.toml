@@ -1,0 +1,25 @@
+[package]
+name = "sunlight-audiod"
+version = "0.2.3989-alpha.1"
+
+
+edition = "2021"
+description = "SunlightOS audio policy service (audiod) and audioctl"
+
+[dependencies]
+sunlight-ipc = { path = "../../ipc" }
+sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-audio = { path = "../../sunlight-audio" }
+heapless = "0.8"
+
+[lib]
+name = "sunlight_audiod"
+path = "src/lib.rs"
+
+[[bin]]
+name = "audiod"
+path = "src/main.rs"
+
+[[bin]]
+name = "audioctl"
+path = "src/bin/audioctl.rs"

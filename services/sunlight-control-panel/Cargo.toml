@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-control-panel"
-version = "0.2.3937-alpha.1"
+version = "0.2.3989-alpha.1"
+
+
 
 
 
@@ -368,6 +370,8 @@ sunlight-ipc = { path = "../../ipc" }
 # (same peak as vortex-shell desktop wallpaper load).
 sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-16m"] }
 sunlight-networkd = { path = "../sunlight-networkd" }
+sunlight-audiod = { path = "../sunlight-audiod" }
+sunlight-audio = { path = "../../sunlight-audio" }
 sunlight-tz = { path = "../../sunlight-tz" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 sunlight-wallpaper = { path = "../../sunlight-wallpaper" }

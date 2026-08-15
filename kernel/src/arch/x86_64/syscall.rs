@@ -170,10 +170,11 @@ pub enum SunlightSyscall {
     /// rdi = host_w | (host_h << 32). Returns 1 changed, 2 unchanged, 0 fail.
     SvgaSetMode = 129,
 
-    // Ring-3 xHCI driver. These calls are restricted to sunlight-usb-mouse.
+    // Ring-3 device grants. These calls are restricted to the owning driver.
     XhciInfo = 130,
     MapMmio = 131,
     DmaAlloc = 132,
+    HdaInfo = 147,
 
     DebugLog = 99,
 }
@@ -661,6 +662,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         130 => sys_xhci_info(frame),
         131 => sys_map_mmio(frame),
         132 => sys_dma_alloc(frame),
+        147 => sys_hda_info(frame),
         // Hardware identity + thermal sensors (read-only; gated by process name).
         133 => sys_system_identity(frame),
         134 => sys_thermal_sensors(frame),
@@ -6729,12 +6731,34 @@ const USB_MOUSE_MMIO_VADDR: u64 = 0x0000_0005_0000_0000;
 const USB_MOUSE_DMA_VADDR: u64 = 0x0000_0005_1000_0000;
 const USB_MOUSE_MAX_BAR_SIZE: u64 = 1024 * 1024;
 const USB_MOUSE_MAX_DMA_PAGES: usize = 16;
+const AUDIOD_MMIO_VADDR: u64 = 0x0000_0005_2000_0000;
+const AUDIOD_DMA_VADDR: u64 = 0x0000_0005_3000_0000;
+const AUDIOD_MAX_BAR_SIZE: u64 = 1024 * 1024;
+const AUDIOD_MAX_DMA_PAGES: usize = 16;
 
 static XHCI_BAR_PHYS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static XHCI_BAR_SIZE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static HDA_BAR_PHYS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static HDA_BAR_SIZE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static HDA_PCI_IDS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static HDA_PCI_LOC: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+#[derive(Clone, Copy)]
+enum DeviceGrant {
+    UsbMouse,
+    Audiod,
+}
+
+fn current_device_grant() -> Option<DeviceGrant> {
+    match crate::sched::SCHEDULER.lock().current_process().name_str() {
+        "sunlight-usb-mouse" => Some(DeviceGrant::UsbMouse),
+        "audiod" => Some(DeviceGrant::Audiod),
+        _ => None,
+    }
+}
 
 fn current_process_is_usb_mouse_driver() -> bool {
-    crate::sched::SCHEDULER.lock().current_process().name_str() == "sunlight-usb-mouse"
+    matches!(current_device_grant(), Some(DeviceGrant::UsbMouse))
 }
 
 /// Locate one PCI xHCI controller and return its BAR0 physical range.
@@ -6821,32 +6845,51 @@ fn sys_xhci_info(frame: &mut SyscallFrame) -> u64 {
 /// Map the cached xHCI BAR into the USB driver's address space as uncached,
 /// writable, non-executable device memory.
 fn sys_map_mmio(frame: &mut SyscallFrame) -> u64 {
-    if !current_process_is_usb_mouse_driver() {
+    let Some(grant) = current_device_grant() else {
         return u64::MAX;
-    }
-    let physical = XHCI_BAR_PHYS.load(core::sync::atomic::Ordering::Acquire);
-    let size = XHCI_BAR_SIZE.load(core::sync::atomic::Ordering::Acquire);
+    };
+    let (physical, size, vaddr, backing) = match grant {
+        DeviceGrant::UsbMouse => (
+            XHCI_BAR_PHYS.load(core::sync::atomic::Ordering::Acquire),
+            XHCI_BAR_SIZE.load(core::sync::atomic::Ordering::Acquire),
+            USB_MOUSE_MMIO_VADDR,
+            0x5848_4349u64,
+        ),
+        DeviceGrant::Audiod => (
+            HDA_BAR_PHYS.load(core::sync::atomic::Ordering::Acquire),
+            HDA_BAR_SIZE.load(core::sync::atomic::Ordering::Acquire),
+            AUDIOD_MMIO_VADDR,
+            0x4844_4120u64,
+        ),
+    };
     if physical == 0 || frame.rdi != physical || frame.rsi != size || physical & 0xfff != 0 {
         return u64::MAX;
     }
+    if size == 0 || size & 0xfff != 0 {
+        return u64::MAX;
+    }
     map_usb_mouse_pages(
-        USB_MOUSE_MMIO_VADDR,
+        vaddr,
         physical,
         size as usize / 4096,
         crate::process::region::MappingKind::Framebuffer,
-        0x5848_4349,
+        backing,
         false,
     )
 }
 
 /// Allocate physically-contiguous, zeroable DMA memory and map it into the
-/// xHCI driver's address space. rax is the user VA; rdx is the bus address.
+/// owning driver's address space. rax is the user VA; rdx is the bus address.
 fn sys_dma_alloc(frame: &mut SyscallFrame) -> u64 {
-    if !current_process_is_usb_mouse_driver() {
+    let Some(grant) = current_device_grant() else {
         return u64::MAX;
-    }
+    };
+    let (page_limit, vaddr) = match grant {
+        DeviceGrant::UsbMouse => (USB_MOUSE_MAX_DMA_PAGES, USB_MOUSE_DMA_VADDR),
+        DeviceGrant::Audiod => (AUDIOD_MAX_DMA_PAGES, AUDIOD_DMA_VADDR),
+    };
     let page_count = frame.rdi as usize;
-    if page_count == 0 || page_count > USB_MOUSE_MAX_DMA_PAGES {
+    if page_count == 0 || page_count > page_limit {
         return u64::MAX;
     }
     let (pid, physical) = {
@@ -6859,7 +6902,7 @@ fn sys_dma_alloc(frame: &mut SyscallFrame) -> u64 {
         (pid, physical.as_u64())
     };
     let result = map_usb_mouse_pages(
-        USB_MOUSE_DMA_VADDR,
+        vaddr,
         physical,
         page_count,
         crate::process::region::MappingKind::InternalUserMapping,
@@ -6875,6 +6918,131 @@ fn sys_dma_alloc(frame: &mut SyscallFrame) -> u64 {
     }
     frame.rdx = physical;
     result
+}
+
+/// Locate one Intel HDA controller (PCI class 04:03) and return BAR0.
+///
+/// PCI configuration stays privileged. `audiod` receives only the assigned
+/// memory BAR so it can program the controller through map_mmio/dma_alloc.
+fn sys_hda_info(frame: &mut SyscallFrame) -> u64 {
+    if !matches!(current_device_grant(), Some(DeviceGrant::Audiod)) {
+        return u64::MAX;
+    }
+    use sunlight_virtio::pci::{pci_read32, pci_write32};
+
+    if let Some(cached) = cached_hda_grant() {
+        frame.rdx = cached.1;
+        frame.r8 = cached.2;
+        return cached.0;
+    }
+
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            let header = unsafe { pci_read32(bus, slot, 0, 0x0c) };
+            let functions = if (header >> 16) as u8 & 0x80 != 0 {
+                8
+            } else {
+                1
+            };
+            for function in 0..functions {
+                let ids = unsafe { pci_read32(bus, slot, function, 0x00) };
+                if ids == 0xffff_ffff {
+                    continue;
+                }
+                let class = unsafe { pci_read32(bus, slot, function, 0x08) };
+                // Multimedia / HD Audio (class 04, subclass 03).
+                if (class >> 16) & 0xffff != 0x0403 {
+                    continue;
+                }
+
+                let command = unsafe { pci_read32(bus, slot, function, 0x04) } as u16;
+                let bar_low = unsafe { pci_read32(bus, slot, function, 0x10) };
+                if bar_low & 1 != 0 || bar_low & !0xf == 0 {
+                    continue;
+                }
+                let is_64_bit = (bar_low >> 1) & 3 == 2;
+                let bar_high = if is_64_bit {
+                    unsafe { pci_read32(bus, slot, function, 0x14) }
+                } else {
+                    0
+                };
+
+                unsafe { pci_write32(bus, slot, function, 0x04, (command & !0x6) as u32) };
+                unsafe { pci_write32(bus, slot, function, 0x10, 0xffff_ffff) };
+                if is_64_bit {
+                    unsafe { pci_write32(bus, slot, function, 0x14, 0xffff_ffff) };
+                }
+                let mask_low = unsafe { pci_read32(bus, slot, function, 0x10) };
+                let mask_high = if is_64_bit {
+                    unsafe { pci_read32(bus, slot, function, 0x14) }
+                } else {
+                    0
+                };
+                unsafe { pci_write32(bus, slot, function, 0x10, bar_low) };
+                if is_64_bit {
+                    unsafe { pci_write32(bus, slot, function, 0x14, bar_high) };
+                }
+                unsafe { pci_write32(bus, slot, function, 0x04, (command | 0x6) as u32) };
+
+                let physical = ((bar_high as u64) << 32) | (bar_low as u64 & !0xf);
+                let mask = if is_64_bit {
+                    ((mask_high as u64) << 32) | (mask_low as u64 & !0xf)
+                } else {
+                    mask_low as u64 & !0xf
+                };
+                let size =
+                    (!mask).wrapping_add(1) & if is_64_bit { u64::MAX } else { u32::MAX as u64 };
+                if size < 0x100 || size > AUDIOD_MAX_BAR_SIZE || !size.is_power_of_two() {
+                    return u64::MAX;
+                }
+                let vendor = (ids & 0xffff) as u16;
+                let device = ((ids >> 16) & 0xffff) as u16;
+                let packed_ids = ids as u64;
+                HDA_BAR_PHYS.store(physical, core::sync::atomic::Ordering::Release);
+                HDA_BAR_SIZE.store(size, core::sync::atomic::Ordering::Release);
+                HDA_PCI_IDS.store(packed_ids, core::sync::atomic::Ordering::Release);
+                HDA_PCI_LOC.store(
+                    (bus as u64) | ((slot as u64) << 8) | ((function as u64) << 16),
+                    core::sync::atomic::Ordering::Release,
+                );
+                crate::hardware_inventory::update_pci(
+                    bus,
+                    slot,
+                    function,
+                    crate::hardware_inventory::pack_short_name("hda"),
+                    crate::hardware_inventory::pack_short_name("audiod"),
+                    ::sunlight_ipc::HardwareState::Loaded,
+                    ::sunlight_ipc::HardwareFailureStage::None,
+                    0,
+                );
+                crate::serial_println!(
+                    "[HDA] pci {:04x}:{:04x} @ {}:{}.{} bar0={:#x} size={:#x}",
+                    vendor,
+                    device,
+                    bus,
+                    slot,
+                    function,
+                    physical,
+                    size
+                );
+                frame.rdx = size;
+                frame.r8 = packed_ids;
+                return physical;
+            }
+        }
+    }
+    0
+}
+
+fn cached_hda_grant() -> Option<(u64, u64, u64)> {
+    let physical = HDA_BAR_PHYS.load(core::sync::atomic::Ordering::Acquire);
+    let size = HDA_BAR_SIZE.load(core::sync::atomic::Ordering::Acquire);
+    let ids = HDA_PCI_IDS.load(core::sync::atomic::Ordering::Acquire);
+    if physical == 0 || size == 0 {
+        None
+    } else {
+        Some((physical, size, ids))
+    }
 }
 
 fn map_usb_mouse_pages(

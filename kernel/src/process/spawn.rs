@@ -776,6 +776,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/resolvectl" | "/usr/bin/resolvectl" => Ok(crate::RESOLVECTL_ELF_BYTES),
         "/sbin/powerd" | "/usr/sbin/powerd" => Ok(crate::POWERD_ELF_BYTES),
         "/sbin/thermald" | "/usr/sbin/thermald" => Ok(crate::THERMALD_ELF_BYTES),
+        "/sbin/audiod" | "/usr/sbin/audiod" => Ok(crate::AUDIOD_ELF_BYTES),
+        "/bin/audioctl" | "/usr/bin/audioctl" => Ok(crate::AUDIOCTL_ELF_BYTES),
         "/sbin/pty_server" | "/usr/sbin/pty_server" => Ok(crate::PTY_SERVER_ELF_BYTES),
         "/sbin/net_server" | "/usr/sbin/net_server" => Ok(crate::NET_SERVER_ELF_BYTES),
         "/sbin/sunlightd" | "/usr/sbin/sunlightd" => Ok(crate::SUNLIGHTD_ELF_BYTES),

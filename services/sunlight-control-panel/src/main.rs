@@ -10,9 +10,10 @@
 //!   • Network — interface snapshot.
 //!   • Power & Thermal — powerd modes + thermald sensors/cooling.
 //!   • Date & Time — solar clock, NTP sync, timezone catalog/map.
+//!   • Sound — output device, master volume, test tone.
 //!
 //! Direct page launch: `control-panel --page <name>` where name is one of
-//! wallpaper, about-computer, about-os, network, power-thermal, date-time.
+//! wallpaper, about-computer, about-os, network, power-thermal, date-time, sound.
 //!
 //! Icons: SunlightOS icon theme (Breeze-inspired, TGA format).
 
@@ -27,6 +28,7 @@ mod date_time;
 mod network;
 mod power_thermal;
 mod session;
+mod sound;
 mod sysinfo;
 
 use alloc::vec::Vec;
@@ -62,6 +64,7 @@ use date_time::{DateTimeAction, DateTimePageState};
 use network::{NetworkAction, NetworkPageState};
 use power_thermal::{PowerThermalAction, PowerThermalPageState};
 use session::{SessionAction, SessionPageState};
+use sound::{SoundAction, SoundPageState};
 use sysinfo::{FixedStr, SystemInfoSnapshot};
 
 // ---------------------------------------------------------------------------
@@ -99,6 +102,8 @@ static ICON_DATETIME_TGA: &[u8] =
 static ICON_SESSION_TGA: &[u8] = include_bytes!(
     "../../../docs/icons/SunlightOS/apps/48/preferences-system-session-services.tga"
 );
+static ICON_SOUND_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/audio-card.tga");
 
 const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO_RAW);
 
@@ -134,6 +139,7 @@ enum Page {
     PowerThermal,
     DateTime,
     LoginSession,
+    Sound,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -364,6 +370,7 @@ struct ControlPanelApp {
     icon_power: Option<TgaImage>,
     icon_datetime: Option<TgaImage>,
     icon_session: Option<TgaImage>,
+    icon_sound: Option<TgaImage>,
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
@@ -381,6 +388,7 @@ struct ControlPanelApp {
     power_thermal: PowerThermalPageState,
     date_time: DateTimePageState,
     login_session: SessionPageState,
+    sound: SoundPageState,
     client_bounds: Rect,
     layout_invalidation: LayoutInvalidation,
     layout: ControlPanelLayout,
@@ -436,6 +444,7 @@ impl ControlPanelApp {
             icon_power: TgaImage::parse(ICON_POWER_TGA).ok(),
             icon_datetime: TgaImage::parse(ICON_DATETIME_TGA).ok(),
             icon_session: TgaImage::parse(ICON_SESSION_TGA).ok(),
+            icon_sound: TgaImage::parse(ICON_SOUND_TGA).ok(),
             wallpaper_items,
             wallpaper_config,
             wallpaper_selected,
@@ -453,6 +462,7 @@ impl ControlPanelApp {
             power_thermal: PowerThermalPageState::new(),
             date_time: DateTimePageState::new(),
             login_session: SessionPageState::new(),
+            sound: SoundPageState::new(),
             client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
             layout_invalidation: LayoutInvalidation::new(),
             layout: ControlPanelLayout::default(),
@@ -717,7 +727,7 @@ impl ControlPanelApp {
     // Grid page
     // -----------------------------------------------------------------------
 
-    fn card_rects(&self) -> [Rect; 10] {
+    fn card_rects(&self) -> [Rect; 11] {
         let card_w = 136u32;
         let card_h = 96u32;
         let gap = 14i32;
@@ -737,6 +747,7 @@ impl ControlPanelApp {
             Rect::new(start_x + card_w as i32 + gap, row3_y, card_w, card_h),
             Rect::new(start_x + (card_w as i32 + gap) * 2, row3_y, card_w, card_h),
             Rect::new(start_x, row4_y, card_w, card_h),
+            Rect::new(start_x + card_w as i32 + gap, row4_y, card_w, card_h),
         ]
     }
 
@@ -905,6 +916,15 @@ impl ControlPanelApp {
             "Startup Apps",
             self.icon_session,
         );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[10],
+            theme.accent,
+            "Sound",
+            "Output & Volume",
+            self.icon_sound,
+        );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
@@ -958,6 +978,10 @@ impl ControlPanelApp {
             if cards[9].contains(pt) {
                 self.page = Page::LoginSession;
                 return self.login_session.activate();
+            }
+            if cards[10].contains(pt) {
+                self.page = Page::Sound;
+                return self.sound.refresh();
             }
         }
         false
@@ -1059,6 +1083,20 @@ impl ControlPanelApp {
                 // Release the bounded snapshot immediately instead of retaining
                 // page-local state while the user works elsewhere.
                 self.network = NetworkPageState::new();
+                true
+            }
+        }
+    }
+
+    fn update_sound_page(&mut self, event: Event) -> bool {
+        if matches!(event, Event::Tick) {
+            return self.sound.refresh_due() && self.sound.refresh();
+        }
+        match self.sound.update(event, self.win_w(), self.win_h()) {
+            SoundAction::None => true,
+            SoundAction::Back => {
+                self.page = Page::Grid;
+                self.sound = SoundPageState::new();
                 true
             }
         }
@@ -1720,6 +1758,7 @@ impl App for ControlPanelApp {
             Page::PowerThermal => self.power_thermal.draw(canvas, theme, win_w, win_h),
             Page::DateTime => self.date_time.draw(canvas, theme, win_w, win_h),
             Page::LoginSession => self.login_session.draw(canvas, theme, win_w, win_h),
+            Page::Sound => self.sound.draw(canvas, theme, win_w, win_h),
         }
     }
 
@@ -1752,6 +1791,7 @@ impl App for ControlPanelApp {
                     true
                 }
             },
+            Page::Sound => self.update_sound_page(event),
         }
     }
 
@@ -1768,6 +1808,9 @@ impl App for ControlPanelApp {
         }
         if self.page == Page::DateTime {
             return self.date_time.activate();
+        }
+        if self.page == Page::Sound {
+            return self.sound.refresh();
         }
         false
     }
@@ -1786,6 +1829,8 @@ impl App for ControlPanelApp {
             // Arm Event::Tick so second-ray progress can update once per second
             // without a continuous full-repaint loop.
             250
+        } else if self.page == Page::Sound {
+            400
         } else {
             200
         }
@@ -2101,6 +2146,7 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
                 Some(ControlPanelPage::PowerThermal) => return Page::PowerThermal,
                 Some(ControlPanelPage::DateTime) => return Page::DateTime,
                 Some(ControlPanelPage::LoginSession) => return Page::LoginSession,
+                Some(ControlPanelPage::Sound) => return Page::Sound,
                 None => {}
             }
             i += 2;

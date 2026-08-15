@@ -1,0 +1,10 @@
+# Device initialization gate. Host speakers are not required.
+# This proves PCI bind + driver init + DMA start. Audible playback is
+# a separate manual test: audioctl test
+[HDA] pci
+[HDA] stream started
+[AUDIOD] registered as 'audiod'
+[AUDIOD] ready
+[AUDIOD] test-tone started
+[AUDIOD] dma-progress
+[AUDIOD] test-tone done

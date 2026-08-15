@@ -1,0 +1,14 @@
+[package]
+name = "sunlight-audio"
+version = "0.2.3989-alpha.1"
+
+
+edition = "2021"
+description = "Generic PCM output types, volume policy, and the Intel HDA playback driver"
+
+[lib]
+name = "sunlight_audio"
+path = "src/lib.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }

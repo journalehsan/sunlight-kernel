@@ -24,7 +24,7 @@ use sunlight_ipc::{
 /// already-running servers (tty, vfs, …) must be drained *between* spawns —
 /// init used to spawn the full list before entering the nameserver loop, which
 /// delayed `"tty"` registration until after networkd/powerd/etc.
-const INIT_SERVICES: [&str; 15] = [
+const INIT_SERVICES: [&str; 16] = [
     "/sbin/timer_server",
     "/sbin/sunlight-kbd",
     "/sbin/sunlight-mouse",
@@ -36,6 +36,7 @@ const INIT_SERVICES: [&str; 15] = [
     "/sbin/resolved",
     "/sbin/powerd",
     "/sbin/thermald",
+    "/sbin/audiod",
     "/sbin/sunlight-display",
     "/sbin/mezzo",
     // PTY broker used by sunlight-libc::openpty() for tty/session spawning.
