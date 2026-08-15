@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><style>
+body { margin: 0; background: #f0ede3; color: #33290a; font-family: sans-serif; }
+#banner {
+    text-align: center;
+    background: linear-gradient(to bottom, #ffffff, #f8f4ee);
+    margin: 0 auto;
+    padding: 1em;
+    width: 50em;
+    border: thin solid #ccc8b8;
+    border-bottom-left-radius: 0.5em;
+    border-bottom-right-radius: 0.5em;
+    box-shadow: 0 0.1em 0.3em #ccc8b8;
+}
+#banner h1 { text-shadow: 3px 3px 0 #f8f4ee; margin: 0; }
+#latest {
+    float: right;
+    background: linear-gradient(135deg, #ffd133, #b39223);
+    color: #4c3d00;
+    border-radius: 0.5em;
+    margin: 1em 2em 2em 0;
+    padding: 0.7em 1em;
+}
+#releases { clear: both; width: 100%; }
+#releases tr:nth-child(2n+1) { background-color: #f7f6f1; }
+@media screen and (max-width: 848px) {
+    #banner { display: none; }
+}
+</style></head><body>
+<div id="banner"><h1>The Linux Kernel Archives</h1></div>
+<div id="latest">7.1.8</div>
+<table id="releases">
+<tr><td>mainline</td><td>7.2-rc7</td></tr>
+<tr><td>stable</td><td>7.1.8</td></tr>
+<tr><td>longterm</td><td>6.18.44</td></tr>
+</table>
+</body></html>

@@ -133,6 +133,33 @@ impl Document {
         self.parents.get(id).and_then(|p| *p)
     }
 
+    /// 1-based index of an element among its element siblings, plus the sibling count.
+    ///
+    /// Non-element children (text, comments) are skipped so CSS `:nth-child`,
+    /// `:first-child`, and `:last-child` can walk the same tree Rappid Rabbit
+    /// already exposes. Returns `None` when `id` is not an element.
+    pub fn element_sibling_index(&self, id: NodeId) -> Option<(usize, usize)> {
+        if !self.get(id).is_some_and(Node::is_element) {
+            return None;
+        }
+        let siblings = match self.parent(id) {
+            Some(parent) => self.children(parent),
+            None => core::slice::from_ref(&self.root),
+        };
+        let mut index = 0usize;
+        let mut count = 0usize;
+        for &sibling in siblings {
+            if !self.get(sibling).is_some_and(Node::is_element) {
+                continue;
+            }
+            count = count.saturating_add(1);
+            if sibling == id {
+                index = count;
+            }
+        }
+        (index > 0).then_some((index, count))
+    }
+
     /// Tag name for an element node.
     pub fn tag_name(&self, id: NodeId) -> Option<&str> {
         self.get(id).and_then(|n| n.tag_name())

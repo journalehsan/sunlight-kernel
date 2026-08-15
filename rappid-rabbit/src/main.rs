@@ -559,10 +559,11 @@ impl RabbitApp {
                             embedded_stylesheets,
                             linked_stylesheets,
                         );
-                        let style_context = StyleContext::build(&document, &stylesheets);
+                        let viewport = self.render_viewport();
+                        let style_context =
+                            StyleContext::build_with_viewport(&document, &stylesheets, viewport.w);
                         let inspector_document = document.clone();
                         let inspector_styles = style_context.clone();
-                        let viewport = self.render_viewport();
                         self.render_scroll = 0;
                         self.render_state = Some(DocumentRenderState::new_with_images(
                             generation,

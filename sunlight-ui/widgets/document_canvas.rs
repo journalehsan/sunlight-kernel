@@ -392,6 +392,14 @@ pub enum RenderObjectKind {
         fill: Color,
         radii: CornerRadii,
     },
+    /// CSS `linear-gradient` / `radial-gradient`. `kind` is 0 for linear and 1
+    /// for radial; `stops` are `(color, position)` with position in 0..=10000.
+    Gradient {
+        kind: u8,
+        angle_deg: i32,
+        stops: Vec<(Color, u16)>,
+        radii: CornerRadii,
+    },
     Border {
         color: Color,
         width: u32,
@@ -1434,6 +1442,14 @@ impl<'a> DocumentCanvas<'a> {
                 RenderObjectKind::RoundedRectangle { fill, radii } => {
                     fill_corner_rounded(canvas, bounds, clipped, *radii, *fill, false);
                 }
+                RenderObjectKind::Gradient {
+                    kind,
+                    angle_deg,
+                    stops,
+                    radii,
+                } => {
+                    paint_gradient(canvas, bounds, clipped, *radii, *kind, *angle_deg, stops);
+                }
                 RenderObjectKind::Border { color, width } => {
                     let width = (*width).max(1).min(bounds.w.min(bounds.h).max(1));
                     for offset in 0..width {
@@ -1719,6 +1735,128 @@ fn corner_contains(rect: Rect, mut radii: CornerRadii, x: i32, y: i32) -> bool {
     true
 }
 
+fn paint_gradient(
+    canvas: &mut Canvas,
+    rect: Rect,
+    clip: Rect,
+    radii: CornerRadii,
+    kind: u8,
+    angle_deg: i32,
+    stops: &[(Color, u16)],
+) {
+    let Some(area) = rect.intersect(clip) else {
+        return;
+    };
+    if stops.len() < 2 || rect.w == 0 || rect.h == 0 {
+        return;
+    }
+    let (dir_x, dir_y) = gradient_direction(angle_deg);
+    let center_x = rect.x * 2 + rect.w as i32;
+    let center_y = rect.y * 2 + rect.h as i32;
+    let half_w = rect.w as i32;
+    let half_h = rect.h as i32;
+    let span = (half_w * dir_x.abs() + half_h * dir_y.abs()).max(1);
+    let radius = ((half_w * half_w + half_h * half_h) as i64).max(1);
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            if !corner_contains(rect, radii, x, y) {
+                continue;
+            }
+            let t = if kind == 1 {
+                let dx = (x * 2 + 1) - center_x;
+                let dy = (y * 2 + 1) - center_y;
+                let dist2 = dx as i64 * dx as i64 + dy as i64 * dy as i64;
+                ((dist2 * 10_000) / radius).clamp(0, 10_000) as u16
+            } else {
+                let dx = (x * 2 + 1) - center_x;
+                let dy = (y * 2 + 1) - center_y;
+                let proj = dx * dir_x + dy * dir_y;
+                let shifted = proj + span;
+                ((shifted as i64 * 10_000) / (span as i64 * 2)).clamp(0, 10_000) as u16
+            };
+            let color = sample_gradient_stops(stops, t);
+            if color.a() == 255 {
+                canvas.put_pixel(x, y, color);
+            } else if color.a() > 0 {
+                canvas.blend_pixel(x, y, color);
+            }
+        }
+    }
+}
+
+fn gradient_direction(angle_deg: i32) -> (i32, i32) {
+    let angle = ((angle_deg % 360) + 360) % 360;
+    // CSS 0deg is upward; scale is 256.
+    match angle {
+        0 => (0, -256),
+        45 => (181, -181),
+        90 => (256, 0),
+        135 => (181, 181),
+        180 => (0, 256),
+        225 => (-181, 181),
+        270 => (-256, 0),
+        315 => (-181, -181),
+        other => {
+            let table = [
+                (0, -256),
+                (67, -247),
+                (128, -222),
+                (181, -181),
+                (222, -128),
+                (247, -67),
+                (256, 0),
+                (247, 67),
+                (222, 128),
+                (181, 181),
+                (128, 222),
+                (67, 247),
+                (0, 256),
+                (-67, 247),
+                (-128, 222),
+                (-181, 181),
+                (-222, 128),
+                (-247, 67),
+                (-256, 0),
+                (-247, -67),
+                (-222, -128),
+                (-181, -181),
+                (-128, -222),
+                (-67, -247),
+            ];
+            table[((other + 7) / 15) as usize % table.len()]
+        }
+    }
+}
+
+fn sample_gradient_stops(stops: &[(Color, u16)], t: u16) -> Color {
+    if t <= stops[0].1 {
+        return stops[0].0;
+    }
+    if t >= stops[stops.len() - 1].1 {
+        return stops[stops.len() - 1].0;
+    }
+    for window in stops.windows(2) {
+        let (left, right) = (window[0], window[1]);
+        if t >= left.1 && t <= right.1 {
+            let span = right.1.saturating_sub(left.1).max(1);
+            let mix = ((t.saturating_sub(left.1) as u32) * 255) / span as u32;
+            return lerp_color(left.0, right.0, mix as u8);
+        }
+    }
+    stops[stops.len() - 1].0
+}
+
+fn lerp_color(left: Color, right: Color, mix: u8) -> Color {
+    let inv = 255 - mix as u32;
+    let mix = mix as u32;
+    Color::rgba(
+        ((left.r() as u32 * inv + right.r() as u32 * mix) / 255) as u8,
+        ((left.g() as u32 * inv + right.g() as u32 * mix) / 255) as u8,
+        ((left.b() as u32 * inv + right.b() as u32 * mix) / 255) as u8,
+        ((left.a() as u32 * inv + right.a() as u32 * mix) / 255) as u8,
+    )
+}
+
 fn fill_corner_rounded(
     canvas: &mut Canvas,
     rect: Rect,
@@ -1918,7 +2056,7 @@ mod tests {
     use super::{
         byte_at_x_on_line, byte_offset_at_x, caret_x_at_byte, caret_x_on_line,
         click_to_line_and_byte, diff_scenes, find_line_index, layout_text_lines, line_end_byte,
-        line_home_byte, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
+        line_home_byte, CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
         DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentScene,
         DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage, RenderObject,
         RenderObjectId, RenderObjectKind, ScenePatchOperation, TextEditState, TextLineLayout,
@@ -2030,6 +2168,63 @@ mod tests {
         let widget = DocumentCanvas::new(Rect::new(0, 0, 320, 240), &[])
             .with_mode(DocumentCanvasMode::ReadOnly);
         widget.draw(&mut canvas, &Theme::sunlight_dark());
+    }
+
+    #[test]
+    fn linear_and_radial_gradients_paint_without_panic() {
+        let mut scene = DocumentScene::new(7, Size::new(80, 40), Size::new(80, 40));
+        assert!(scene.push(RenderObject {
+            id: RenderObjectId(1),
+            owner_node_id: DocumentNodeId(3),
+            kind: RenderObjectKind::Gradient {
+                kind: 0,
+                angle_deg: 180,
+                stops: alloc::vec![
+                    (Color::rgb(255, 209, 51), 0),
+                    (Color::rgb(179, 146, 35), 10_000),
+                ],
+                radii: CornerRadii::default(),
+            },
+            bounds: Rect::new(0, 0, 80, 20),
+            clip_bounds: None,
+            paint_order: PaintOrder::default(),
+            interaction: None,
+        }));
+        assert!(scene.push(RenderObject {
+            id: RenderObjectId(2),
+            owner_node_id: DocumentNodeId(4),
+            kind: RenderObjectKind::Gradient {
+                kind: 1,
+                angle_deg: 0,
+                stops: alloc::vec![
+                    (Color::rgb(255, 255, 255), 0),
+                    (Color::rgba(0, 0, 0, 80), 10_000),
+                ],
+                radii: CornerRadii {
+                    top_left: 4,
+                    top_right: 4,
+                    bottom_right: 4,
+                    bottom_left: 4,
+                },
+            },
+            bounds: Rect::new(0, 20, 80, 20),
+            clip_bounds: None,
+            paint_order: PaintOrder {
+                phase: 1,
+                ..PaintOrder::default()
+            },
+            interaction: None,
+        }));
+        scene.finalize();
+        let mut pixels = [0u32; 80 * 40];
+        let mut canvas = Canvas::new(&mut pixels, 80, 80, 40);
+        let widget = DocumentCanvas::new(Rect::new(0, 0, 80, 40), &[])
+            .with_mode(DocumentCanvasMode::ReadOnly)
+            .with_presentation(DocumentCanvasPresentation::Browser)
+            .with_scene(&scene);
+        widget.draw(&mut canvas, &Theme::sunlight_dark());
+        assert_ne!(pixels[0], 0);
+        assert_ne!(pixels[0], pixels[19 * 80]);
     }
 
     #[test]

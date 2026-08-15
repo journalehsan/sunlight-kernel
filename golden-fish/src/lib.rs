@@ -93,6 +93,8 @@ mod tests {
         assert_eq!(lis.len(), 2);
         assert_eq!(doc.tag_name(lis[0]), Some("li"));
         assert_eq!(doc.tag_name(lis[1]), Some("li"));
+        assert_eq!(doc.element_sibling_index(lis[0]), Some((1, 2)));
+        assert_eq!(doc.element_sibling_index(lis[1]), Some((2, 2)));
     }
 
     #[test]

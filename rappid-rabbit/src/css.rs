@@ -16,6 +16,10 @@ pub const MAX_IMPORT_DEPTH: usize = 8;
 pub const MAX_IMPORTED_STYLESHEETS: usize = 32;
 pub const MAX_TOTAL_STYLESHEET_BYTES: usize = 512 * 1024;
 pub const MAX_TOTAL_CSS_RULES: usize = 8_192;
+/// Desktop-first default used when a caller does not supply a viewport.
+/// `@media (max-width: 848px)` rules from sites like kernel.org stay inactive.
+pub const DEFAULT_VIEWPORT_WIDTH: u32 = 1024;
+pub const MAX_GRADIENT_STOPS: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StylesheetImport {
@@ -53,6 +57,8 @@ pub struct Rule {
     pub declarations: Vec<Declaration>,
     /// Approximate location of the rule start in the stylesheet source (if tracked).
     pub location: Option<SourceLocation>,
+    /// Combined `@media` condition wrapping this rule, if any.
+    pub media: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,6 +89,10 @@ pub struct SimpleSelector {
     pub universal: bool,
     pub root: bool,
     pub hover: bool,
+    pub first_child: bool,
+    pub last_child: bool,
+    /// CSS `an+b` formula for `:nth-child`. `None` means the pseudo is absent.
+    pub nth_child: Option<(i32, i32)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,12 +122,14 @@ pub enum Property {
     BackgroundAttachment,
     BackgroundPositionX,
     BackgroundPositionY,
+    BackgroundSize,
     FontSize,
     FontFamily,
     FontWeight,
     FontStyle,
     TextAlign,
     TextDecoration,
+    TextShadow,
     WhiteSpace,
     ListStyleType,
     ListStyle,
@@ -160,6 +172,7 @@ pub enum Property {
     BorderBottomRightRadius,
     BorderBottomLeftRadius,
     BoxShadow,
+    Opacity,
     Float,
     Clear,
     BorderCollapse,
@@ -192,12 +205,14 @@ impl Property {
             "background-attachment" => Self::BackgroundAttachment,
             "background-position-x" => Self::BackgroundPositionX,
             "background-position-y" => Self::BackgroundPositionY,
+            "background-size" => Self::BackgroundSize,
             "font-size" => Self::FontSize,
             "font-family" => Self::FontFamily,
             "font-weight" => Self::FontWeight,
             "font-style" => Self::FontStyle,
             "text-align" => Self::TextAlign,
             "text-decoration" => Self::TextDecoration,
+            "text-shadow" => Self::TextShadow,
             "white-space" => Self::WhiteSpace,
             "list-style-type" => Self::ListStyleType,
             "list-style" => Self::ListStyle,
@@ -240,6 +255,7 @@ impl Property {
             "border-bottom-right-radius" => Self::BorderBottomRightRadius,
             "border-bottom-left-radius" => Self::BorderBottomLeftRadius,
             "box-shadow" => Self::BoxShadow,
+            "opacity" => Self::Opacity,
             "float" => Self::Float,
             "clear" => Self::Clear,
             "border-collapse" => Self::BorderCollapse,
@@ -267,12 +283,14 @@ impl Property {
             Self::BackgroundAttachment => "background-attachment",
             Self::BackgroundPositionX => "background-position-x",
             Self::BackgroundPositionY => "background-position-y",
+            Self::BackgroundSize => "background-size",
             Self::FontSize => "font-size",
             Self::FontFamily => "font-family",
             Self::FontWeight => "font-weight",
             Self::FontStyle => "font-style",
             Self::TextAlign => "text-align",
             Self::TextDecoration => "text-decoration",
+            Self::TextShadow => "text-shadow",
             Self::WhiteSpace => "white-space",
             Self::ListStyleType => "list-style-type",
             Self::ListStyle => "list-style",
@@ -315,6 +333,7 @@ impl Property {
             Self::BorderBottomRightRadius => "border-bottom-right-radius",
             Self::BorderBottomLeftRadius => "border-bottom-left-radius",
             Self::BoxShadow => "box-shadow",
+            Self::Opacity => "opacity",
             Self::Float => "float",
             Self::Clear => "clear",
             Self::BorderCollapse => "border-collapse",
@@ -335,6 +354,7 @@ impl Property {
                 | Self::FontStyle
                 | Self::TextAlign
                 | Self::TextDecoration
+                | Self::TextShadow
                 | Self::WhiteSpace
                 | Self::ListStyleType
                 | Self::ListStylePosition
@@ -381,16 +401,63 @@ impl PropertyValue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Color {
     Rgb(u8, u8, u8),
+    Rgba(u8, u8, u8, u8),
     Transparent,
 }
 
 impl Color {
+    pub fn rgb(red: u8, green: u8, blue: u8) -> Self {
+        Self::Rgb(red, green, blue)
+    }
+
+    pub fn rgba(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
+        if alpha == 0 {
+            Self::Transparent
+        } else if alpha == 255 {
+            Self::Rgb(red, green, blue)
+        } else {
+            Self::Rgba(red, green, blue, alpha)
+        }
+    }
+
+    pub fn channels(self) -> (u8, u8, u8, u8) {
+        match self {
+            Self::Rgb(red, green, blue) => (red, green, blue, 255),
+            Self::Rgba(red, green, blue, alpha) => (red, green, blue, alpha),
+            Self::Transparent => (0, 0, 0, 0),
+        }
+    }
+
     pub fn display(self) -> String {
         match self {
             Self::Rgb(red, green, blue) => format!("#{red:02x}{green:02x}{blue:02x}"),
+            Self::Rgba(red, green, blue, alpha) => {
+                format!("rgba({red}, {green}, {blue}, {})", alpha as f32 / 255.0)
+            }
             Self::Transparent => String::from("transparent"),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GradientKind {
+    Linear,
+    Radial,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GradientStop {
+    pub color: Color,
+    /// Fixed-point percentage in hundredths of one percent (`0..=10_000`).
+    pub position: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CssGradient {
+    pub kind: GradientKind,
+    /// CSS degrees, where `0` is upward and `180` is the default top-to-bottom.
+    pub angle_deg: i32,
+    pub stops: Vec<GradientStop>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -468,12 +535,14 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::BackgroundAttachment,
     Property::BackgroundPositionX,
     Property::BackgroundPositionY,
+    Property::BackgroundSize,
     Property::FontSize,
     Property::FontFamily,
     Property::FontWeight,
     Property::FontStyle,
     Property::TextAlign,
     Property::TextDecoration,
+    Property::TextShadow,
     Property::WhiteSpace,
     Property::ListStyleType,
     Property::ListStyle,
@@ -515,6 +584,7 @@ const PROPERTY_ORDER: &[Property] = &[
     Property::BorderBottomRightRadius,
     Property::BorderBottomLeftRadius,
     Property::BoxShadow,
+    Property::Opacity,
     Property::Float,
     Property::Clear,
     Property::BorderCollapse,
@@ -527,7 +597,7 @@ pub fn parse_stylesheet(css: &str, source: StylesheetSource) -> Stylesheet {
     let css = bounded_css(css);
     let clean = strip_comments(css);
     let mut rules = Vec::new();
-    parse_rule_block(&clean, None, &mut rules, &css);
+    parse_rule_block(&clean, None, &mut rules, &css, None);
     Stylesheet { source, rules }
 }
 
@@ -617,6 +687,16 @@ pub fn import_media_active(media: &str, viewport_width: u32) -> (bool, Option<St
             "unsupported media condition treated as active: {media}"
         )),
     )
+}
+
+fn merge_media(parent: Option<&str>, nested: &str) -> String {
+    match parent {
+        Some(parent) if !parent.is_empty() && !nested.is_empty() => {
+            format!("{parent} and {nested}")
+        }
+        Some(parent) if !parent.is_empty() => String::from(parent),
+        _ => String::from(nested),
+    }
 }
 
 fn skip_css_whitespace_and_comments(css: &str, mut cursor: usize) -> usize {
@@ -721,6 +801,7 @@ fn parse_rule_block(
     parent: Option<&str>,
     rules: &mut Vec<Rule>,
     original_for_lines: &str,
+    media: Option<&str>,
 ) {
     let mut cursor = 0usize;
     while cursor < input.len() && rules.len() < MAX_RULES {
@@ -761,11 +842,24 @@ fn parse_rule_block(
         let (declaration_text, nested) = split_nested_rules(body);
         if !selector_text.is_empty() && selector_text.starts_with('@') {
             // Preserve the useful qualified rules inside container at-rules.
-            // Media/supports/layer evaluation is intentionally outside this
-            // parser; callers currently provide the active document sheet.
-            // At-rules with declaration bodies (for example @font-face) have
-            // no nested opening brace and consequently produce no rules.
-            parse_rule_block(body, parent, rules, original_for_lines);
+            // `@media` conditions are attached to the nested rules so the
+            // cascade can drop inactive sheets (kernel.org mobile CSS).
+            // Other at-rules keep the inherited media query, if any.
+            let nested_media = if selector_text_raw
+                .get(..6)
+                .is_some_and(|head| head.eq_ignore_ascii_case("@media"))
+            {
+                Some(merge_media(media, selector_text_raw[6..].trim()))
+            } else {
+                media.map(String::from)
+            };
+            parse_rule_block(
+                body,
+                parent,
+                rules,
+                original_for_lines,
+                nested_media.as_deref(),
+            );
         } else if !selector_text.is_empty() {
             let selectors: Vec<Selector> = selector_text
                 .split(',')
@@ -786,6 +880,7 @@ fn parse_rule_block(
                     selectors,
                     declarations,
                     location: Some(loc),
+                    media: media.map(String::from),
                 });
             }
             for (nested_selector, nested_body) in nested {
@@ -809,6 +904,7 @@ fn parse_rule_block(
                                 selectors: inner_selectors,
                                 declarations: inner_decls,
                                 location: Some(loc), // approximate: location of parent rule
+                                media: media.map(String::from),
                             });
                         }
                     }
@@ -820,6 +916,7 @@ fn parse_rule_block(
                         None,
                         rules,
                         original_for_lines,
+                        media,
                     );
                 }
             }
@@ -1029,18 +1126,35 @@ fn parse_simple_selector(input: &str) -> Option<SimpleSelector> {
     while index < input.len() {
         let marker = *bytes.get(index)?;
         if marker == b':' {
-            let pseudo = &input[index + 1..];
-            if pseudo.eq_ignore_ascii_case("root") {
-                out.root = true;
-                index = input.len();
-                continue;
+            if bytes.get(index + 1) == Some(&b':') {
+                return None;
             }
-            if pseudo.eq_ignore_ascii_case("hover") {
-                out.hover = true;
-                index = input.len();
-                continue;
+            index += 1;
+            let name_start = index;
+            while bytes
+                .get(index)
+                .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'-')
+            {
+                index += 1;
             }
-            return None;
+            let name = input[name_start..index].to_ascii_lowercase();
+            let argument = if bytes.get(index) == Some(&b'(') {
+                let close = matching_paren(input, index)?;
+                let inner = input[index + 1..close].trim();
+                index = close + 1;
+                Some(inner)
+            } else {
+                None
+            };
+            match (name.as_str(), argument) {
+                ("root", None) => out.root = true,
+                ("hover", None) => out.hover = true,
+                ("first-child", None) => out.first_child = true,
+                ("last-child", None) => out.last_child = true,
+                ("nth-child", Some(formula)) => out.nth_child = Some(parse_nth_formula(formula)?),
+                _ => return None,
+            }
+            continue;
         }
         if marker != b'.' && marker != b'#' {
             return None;
@@ -1069,10 +1183,69 @@ fn parse_simple_selector(input: &str) -> Option<SimpleSelector> {
     (out.universal
         || out.root
         || out.hover
+        || out.first_child
+        || out.last_child
+        || out.nth_child.is_some()
         || out.tag_name.is_some()
         || out.id.is_some()
         || !out.classes.is_empty())
     .then_some(out)
+}
+
+fn matching_paren(input: &str, open: usize) -> Option<usize> {
+    let bytes = input.as_bytes();
+    if bytes.get(open) != Some(&b'(') {
+        return None;
+    }
+    let mut depth = 0usize;
+    for (offset, byte) in bytes.iter().enumerate().skip(open) {
+        match *byte {
+            b'(' => depth = depth.saturating_add(1),
+            b')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(offset);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn parse_nth_formula(input: &str) -> Option<(i32, i32)> {
+    let value = input.trim().to_ascii_lowercase();
+    match value.as_str() {
+        "odd" => return Some((2, 1)),
+        "even" => return Some((2, 0)),
+        _ => {}
+    }
+    if let Some(n) = value.find('n') {
+        let a = match value[..n].trim() {
+            "" | "+" => 1,
+            "-" => -1,
+            other => other.parse().ok()?,
+        };
+        let b = match value[n + 1..].trim() {
+            "" => 0,
+            other => other.parse().ok()?,
+        };
+        Some((a, b))
+    } else {
+        Some((0, value.parse().ok()?))
+    }
+}
+
+fn nth_matches(index: i32, a: i32, b: i32) -> bool {
+    if a == 0 {
+        return index == b;
+    }
+    let delta = index - b;
+    if delta % a != 0 {
+        return false;
+    }
+    let n = delta / a;
+    n >= 0
 }
 
 fn parse_declarations(body: &str) -> Vec<Declaration> {
@@ -1129,11 +1302,8 @@ fn parse_declarations(body: &str) -> Vec<Declaration> {
 
 fn expand_background(raw: &str, order: usize, important: bool) -> Vec<Declaration> {
     let mut out = Vec::new();
-    let tokens = raw.split_ascii_whitespace().collect::<Vec<_>>();
-    if !tokens
-        .iter()
-        .any(|token| token.eq_ignore_ascii_case("none") || token.starts_with("url("))
-    {
+    let tokens = css_value_tokens(raw);
+    if !tokens.iter().any(|token| is_background_image_token(token)) {
         out.push(Declaration {
             property: Property::BackgroundImage,
             value: PropertyValue::Raw(String::from("none")),
@@ -1143,17 +1313,25 @@ fn expand_background(raw: &str, order: usize, important: bool) -> Vec<Declaratio
         });
     }
     for token in tokens {
-        let property = if parse_color(token).is_some() || token.starts_with("var(") {
+        let property = if looks_like_color_token(token) {
             Property::BackgroundColor
-        } else if token.eq_ignore_ascii_case("none") || token.starts_with("url(") {
+        } else if is_background_image_token(token) {
             Property::BackgroundImage
         } else if matches!(
             token.to_ascii_lowercase().as_str(),
             "repeat" | "no-repeat" | "repeat-x" | "repeat-y"
         ) {
             Property::BackgroundRepeat
-        } else if token.eq_ignore_ascii_case("scroll") {
+        } else if matches!(
+            token.to_ascii_lowercase().as_str(),
+            "scroll" | "fixed" | "local"
+        ) {
             Property::BackgroundAttachment
+        } else if matches!(
+            token.to_ascii_lowercase().as_str(),
+            "contain" | "cover" | "auto"
+        ) {
+            Property::BackgroundSize
         } else {
             continue;
         };
@@ -1166,6 +1344,62 @@ fn expand_background(raw: &str, order: usize, important: bool) -> Vec<Declaratio
         });
     }
     out
+}
+
+fn looks_like_color_token(token: &str) -> bool {
+    parse_color(token).is_some()
+        || token.eq_ignore_ascii_case("currentcolor")
+        || token.starts_with("var(")
+}
+
+fn is_background_image_token(token: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    lower == "none"
+        || lower.starts_with("url(")
+        || lower.contains("gradient(")
+        || lower.starts_with("var(") && lower.contains("url(")
+}
+
+/// Split a CSS value on top-level whitespace, keeping `url(...)` and
+/// `linear-gradient(...)` as single tokens.
+fn css_value_tokens(input: &str) -> Vec<&str> {
+    let bytes = input.as_bytes();
+    let mut tokens = Vec::new();
+    let mut start = None;
+    let mut depth = 0usize;
+    let mut quote = None;
+    for (index, byte) in bytes.iter().copied().enumerate() {
+        if let Some(delimiter) = quote {
+            if byte == delimiter {
+                quote = None;
+            }
+            continue;
+        }
+        match byte {
+            b'\'' | b'"' if depth > 0 || start.is_some() => quote = Some(byte),
+            b'(' => {
+                depth = depth.saturating_add(1);
+                if start.is_none() {
+                    start = Some(index);
+                }
+            }
+            b')' => depth = depth.saturating_sub(1),
+            b if b.is_ascii_whitespace() && depth == 0 => {
+                if let Some(from) = start.take() {
+                    tokens.push(&input[from..index]);
+                }
+            }
+            _ => {
+                if start.is_none() {
+                    start = Some(index);
+                }
+            }
+        }
+    }
+    if let Some(from) = start {
+        tokens.push(&input[from..]);
+    }
+    tokens
 }
 
 fn strip_important(value: &str) -> (&str, bool) {
@@ -1385,6 +1619,9 @@ fn expand_declaration(
         | Property::BackgroundAttachment
         | Property::BackgroundPositionX
         | Property::BackgroundPositionY
+        | Property::BackgroundSize
+        | Property::TextShadow
+        | Property::Opacity
         | Property::BoxSizing
         | Property::LetterSpacing
         | Property::MinHeight
@@ -1395,8 +1632,14 @@ fn expand_declaration(
 
 fn parse_value(property: &Property, raw: &str) -> PropertyValue {
     let value = raw.trim();
-    if property == &Property::BackgroundImage {
+    if matches!(
+        property,
+        Property::BackgroundImage | Property::TextShadow | Property::BackgroundSize
+    ) {
         return PropertyValue::Raw(String::from(value));
+    }
+    if property == &Property::Opacity {
+        return parse_opacity(value).unwrap_or_else(|| PropertyValue::Raw(String::from(value)));
     }
     if matches!(
         property,
@@ -1470,7 +1713,12 @@ fn parse_length(value: &str) -> Option<PropertyValue> {
         return Some(PropertyValue::LengthPx(0));
     }
     let normalized = value.to_ascii_lowercase();
-    for (suffix, scale, ctor) in [("px", 1, 0u8), ("em", 1000, 1u8), ("%", 100, 2u8)] {
+    for (suffix, scale, ctor) in [
+        ("px", 1, 0u8),
+        ("rem", 16, 0u8),
+        ("em", 1000, 1u8),
+        ("%", 100, 2u8),
+    ] {
         if let Some(number) = normalized.strip_suffix(suffix).map(str::trim) {
             let scaled = parse_fixed(number, scale)?;
             return Some(match ctor {
@@ -1486,6 +1734,16 @@ fn parse_length(value: &str) -> Option<PropertyValue> {
         "thick" => Some(PropertyValue::LengthPx(5)),
         _ => None,
     }
+}
+
+fn parse_opacity(value: &str) -> Option<PropertyValue> {
+    let trimmed = value.trim();
+    if let Some(percent) = trimmed.strip_suffix('%') {
+        let scaled = parse_fixed(percent.trim(), 100)?;
+        return Some(PropertyValue::Percentage(scaled.clamp(0, 10_000)));
+    }
+    let scaled = parse_fixed(trimmed, 100)?;
+    Some(PropertyValue::Percentage((scaled * 100).clamp(0, 10_000)))
 }
 
 fn parse_fixed(value: &str, scale: i32) -> Option<i32> {
@@ -1511,7 +1769,7 @@ fn parse_fixed(value: &str, scale: i32) -> Option<i32> {
     Some(if negative { -result } else { result })
 }
 
-fn parse_color(value: &str) -> Option<Color> {
+pub fn parse_color(value: &str) -> Option<Color> {
     let lower = value.trim().to_ascii_lowercase();
     let named = match lower.as_str() {
         "transparent" => return Some(Color::Transparent),
@@ -1522,44 +1780,365 @@ fn parse_color(value: &str) -> Option<Color> {
         "blue" => Some((0, 0, 255)),
         "yellow" => Some((255, 255, 0)),
         "gray" | "grey" => Some((128, 128, 128)),
+        "silver" => Some((192, 192, 192)),
         "purple" => Some((128, 0, 128)),
         "orange" => Some((255, 165, 0)),
+        "navy" => Some((0, 0, 128)),
+        "teal" => Some((0, 128, 128)),
+        "maroon" => Some((128, 0, 0)),
+        "olive" => Some((128, 128, 0)),
+        "lime" => Some((0, 255, 0)),
+        "aqua" | "cyan" => Some((0, 255, 255)),
+        "fuchsia" | "magenta" => Some((255, 0, 255)),
+        "gold" => Some((255, 215, 0)),
+        "coral" => Some((255, 127, 80)),
+        "brown" => Some((165, 42, 42)),
+        "pink" => Some((255, 192, 203)),
+        "indigo" => Some((75, 0, 130)),
         _ => None,
     };
     if let Some((r, g, b)) = named {
         return Some(Color::Rgb(r, g, b));
     }
     if let Some(hex) = lower.strip_prefix('#') {
-        if hex.len() == 3 {
-            let bytes = hex.as_bytes();
-            return Some(Color::Rgb(
+        let bytes = hex.as_bytes();
+        return match hex.len() {
+            3 => Some(Color::Rgb(
                 hex_digit(bytes[0])? * 17,
                 hex_digit(bytes[1])? * 17,
                 hex_digit(bytes[2])? * 17,
-            ));
-        }
-        if hex.len() == 6 {
-            return Some(Color::Rgb(
+            )),
+            4 => Some(Color::rgba(
+                hex_digit(bytes[0])? * 17,
+                hex_digit(bytes[1])? * 17,
+                hex_digit(bytes[2])? * 17,
+                hex_digit(bytes[3])? * 17,
+            )),
+            6 => Some(Color::Rgb(
                 u8::from_str_radix(&hex[0..2], 16).ok()?,
                 u8::from_str_radix(&hex[2..4], 16).ok()?,
                 u8::from_str_radix(&hex[4..6], 16).ok()?,
-            ));
-        }
+            )),
+            8 => Some(Color::rgba(
+                u8::from_str_radix(&hex[0..2], 16).ok()?,
+                u8::from_str_radix(&hex[2..4], 16).ok()?,
+                u8::from_str_radix(&hex[4..6], 16).ok()?,
+                u8::from_str_radix(&hex[6..8], 16).ok()?,
+            )),
+            _ => None,
+        };
     }
-    let values = lower
-        .strip_prefix("rgb(")?
-        .strip_suffix(')')?
-        .split(',')
-        .map(str::trim)
-        .collect::<Vec<_>>();
-    if values.len() != 3 {
+    if let Some(inner) = function_args(&lower, "rgb").or_else(|| function_args(&lower, "rgba")) {
+        return parse_rgb_args(&inner);
+    }
+    if let Some(inner) = function_args(&lower, "hsl").or_else(|| function_args(&lower, "hsla")) {
+        return parse_hsl_args(&inner);
+    }
+    None
+}
+
+fn function_args<'a>(value: &'a str, name: &str) -> Option<&'a str> {
+    value
+        .strip_prefix(name)?
+        .strip_prefix('(')?
+        .strip_suffix(')')
+}
+
+fn parse_rgb_args(inner: &str) -> Option<Color> {
+    let parts = split_color_args(inner);
+    if parts.len() < 3 {
         return None;
     }
-    Some(Color::Rgb(
-        values[0].parse().ok()?,
-        values[1].parse().ok()?,
-        values[2].parse().ok()?,
-    ))
+    let red = parse_rgb_channel(&parts[0])?;
+    let green = parse_rgb_channel(&parts[1])?;
+    let blue = parse_rgb_channel(&parts[2])?;
+    let alpha = if let Some(alpha) = parts.get(3) {
+        parse_alpha_component(alpha)?
+    } else {
+        255
+    };
+    Some(Color::rgba(red, green, blue, alpha))
+}
+
+fn parse_hsl_args(inner: &str) -> Option<Color> {
+    let parts = split_color_args(inner);
+    if parts.len() < 3 {
+        return None;
+    }
+    let hue = parse_fixed(parts[0].trim_end_matches("deg"), 1)?;
+    let sat = parse_percent_component(&parts[1])?;
+    let light = parse_percent_component(&parts[2])?;
+    let alpha = if let Some(alpha) = parts.get(3) {
+        parse_alpha_component(alpha)?
+    } else {
+        255
+    };
+    let (red, green, blue) = hsl_to_rgb(hue.rem_euclid(360), sat, light);
+    Some(Color::rgba(red, green, blue, alpha))
+}
+
+fn split_color_args(inner: &str) -> Vec<String> {
+    let normalized = inner.replace('/', " ");
+    if normalized.contains(',') {
+        normalized
+            .split(',')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(String::from)
+            .collect()
+    } else {
+        normalized
+            .split_ascii_whitespace()
+            .filter(|part| !part.is_empty())
+            .map(String::from)
+            .collect()
+    }
+}
+
+fn parse_rgb_channel(value: &str) -> Option<u8> {
+    let value = value.trim();
+    if let Some(percent) = value.strip_suffix('%') {
+        let scaled = parse_fixed(percent.trim(), 100)?.clamp(0, 10_000);
+        return Some(((scaled * 255) / 10_000) as u8);
+    }
+    value.parse::<i32>().ok().map(|v| v.clamp(0, 255) as u8)
+}
+
+fn parse_percent_component(value: &str) -> Option<i32> {
+    let value = value.trim().strip_suffix('%').unwrap_or(value.trim());
+    Some(parse_fixed(value, 100)?.clamp(0, 10_000))
+}
+
+fn parse_alpha_component(value: &str) -> Option<u8> {
+    let value = value.trim();
+    if let Some(percent) = value.strip_suffix('%') {
+        let scaled = parse_fixed(percent.trim(), 100)?.clamp(0, 10_000);
+        return Some(((scaled * 255) / 10_000) as u8);
+    }
+    let scaled = parse_fixed(value, 1000)?.clamp(0, 1000);
+    Some(((scaled * 255) / 1000) as u8)
+}
+
+fn hsl_to_rgb(hue: i32, sat: i32, light: i32) -> (u8, u8, u8) {
+    let s = sat;
+    let l = light;
+    let c = (10_000 - (2 * l - 10_000).unsigned_abs() as i32) * s / 10_000;
+    let h_sector = (hue * 10) % 3600;
+    let x = c * (600 - ((h_sector % 1200) - 600).unsigned_abs() as i32) / 600;
+    let m = l - c / 2;
+    let (r1, g1, b1) = match hue / 60 {
+        0 => (c, x, 0),
+        1 => (x, c, 0),
+        2 => (0, c, x),
+        3 => (0, x, c),
+        4 => (x, 0, c),
+        _ => (c, 0, x),
+    };
+    let channel = |value: i32| ((value + m) * 255 / 10_000).clamp(0, 255) as u8;
+    (channel(r1), channel(g1), channel(b1))
+}
+
+/// Parses `linear-gradient(...)` / `radial-gradient(...)` from a background-image value.
+pub fn parse_gradient(value: &str) -> Option<CssGradient> {
+    let trimmed = value.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let (kind, rest) = if let Some(rest) = strip_gradient_prefix(&lower, "linear-gradient") {
+        (GradientKind::Linear, rest)
+    } else if let Some(rest) = strip_gradient_prefix(&lower, "repeating-linear-gradient") {
+        (GradientKind::Linear, rest)
+    } else if let Some(rest) = strip_gradient_prefix(&lower, "radial-gradient") {
+        (GradientKind::Radial, rest)
+    } else if let Some(rest) = strip_gradient_prefix(&lower, "repeating-radial-gradient") {
+        (GradientKind::Radial, rest)
+    } else {
+        return None;
+    };
+    let inner = rest.strip_prefix('(')?.strip_suffix(')')?.trim();
+    if inner.is_empty() {
+        return None;
+    }
+    let args = split_css_comma_list(inner);
+    if args.is_empty() {
+        return None;
+    }
+    let mut angle_deg = 180i32;
+    let mut start = 0usize;
+    if kind == GradientKind::Linear {
+        if let Some(angle) = parse_gradient_angle(args[0]) {
+            angle_deg = angle;
+            start = 1;
+        }
+    } else if looks_like_radial_size(args[0]) {
+        start = 1;
+    }
+    let mut stops = Vec::new();
+    for arg in args.iter().skip(start) {
+        if stops.len() >= MAX_GRADIENT_STOPS {
+            break;
+        }
+        if let Some(stop) = parse_gradient_stop(arg) {
+            stops.push(stop);
+        }
+    }
+    if stops.len() < 2 {
+        return None;
+    }
+    normalize_gradient_stops(&mut stops);
+    Some(CssGradient {
+        kind,
+        angle_deg,
+        stops,
+    })
+}
+
+fn strip_gradient_prefix<'a>(lower: &'a str, name: &str) -> Option<&'a str> {
+    let rest = if let Some(rest) = lower.strip_prefix("-webkit-") {
+        rest
+    } else if let Some(rest) = lower.strip_prefix("-moz-") {
+        rest
+    } else {
+        lower
+    };
+    rest.strip_prefix(name)
+}
+
+fn split_css_comma_list(input: &str) -> Vec<&str> {
+    let bytes = input.as_bytes();
+    let mut items = Vec::new();
+    let mut start = 0usize;
+    let mut depth = 0usize;
+    for (index, byte) in bytes.iter().copied().enumerate() {
+        match byte {
+            b'(' => depth = depth.saturating_add(1),
+            b')' => depth = depth.saturating_sub(1),
+            b',' if depth == 0 => {
+                let part = input[start..index].trim();
+                if !part.is_empty() {
+                    items.push(part);
+                }
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    let part = input[start..].trim();
+    if !part.is_empty() {
+        items.push(part);
+    }
+    items
+}
+
+fn parse_gradient_angle(token: &str) -> Option<i32> {
+    let token = token.trim().to_ascii_lowercase();
+    if let Some(number) = token.strip_suffix("deg") {
+        return parse_fixed(number.trim(), 1);
+    }
+    if let Some(number) = token.strip_suffix("turn") {
+        let thousandths = parse_fixed(number.trim(), 1000)?;
+        return Some(((thousandths * 360) / 1000) % 360);
+    }
+    if let Some(rest) = token.strip_prefix("to ") {
+        return Some(match rest.trim() {
+            "top" => 0,
+            "right" => 90,
+            "bottom" => 180,
+            "left" => 270,
+            "top right" | "right top" => 45,
+            "bottom right" | "right bottom" => 135,
+            "bottom left" | "left bottom" => 225,
+            "top left" | "left top" => 315,
+            _ => return None,
+        });
+    }
+    None
+}
+
+fn looks_like_radial_size(token: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    lower.contains("circle")
+        || lower.contains("ellipse")
+        || lower.contains("closest-")
+        || lower.contains("farthest-")
+        || lower.starts_with("at ")
+}
+
+fn parse_gradient_stop(token: &str) -> Option<GradientStop> {
+    let token = token.trim();
+    let (color_part, position) = if let Some((color, rest)) = split_color_and_position(token) {
+        (color, parse_stop_position(rest))
+    } else {
+        (token, None)
+    };
+    let color = if color_part.eq_ignore_ascii_case("currentcolor") {
+        Color::Rgb(0, 0, 0)
+    } else {
+        parse_color(color_part)?
+    };
+    Some(GradientStop {
+        color,
+        position: position.unwrap_or(-1),
+    })
+}
+
+fn split_color_and_position(token: &str) -> Option<(&str, &str)> {
+    if token.starts_with('#') {
+        let split = token.find(char::is_whitespace)?;
+        return Some((token[..split].trim(), token[split..].trim()));
+    }
+    if let Some(close) = token.find(')') {
+        let rest = token[close + 1..].trim();
+        if rest.is_empty() {
+            return None;
+        }
+        return Some((token[..=close].trim(), rest));
+    }
+    token.split_once(char::is_whitespace)
+}
+
+fn parse_stop_position(value: &str) -> Option<i32> {
+    let first = value.split_ascii_whitespace().next()?;
+    match parse_length(first)? {
+        PropertyValue::Percentage(value) => Some(value.clamp(0, 10_000)),
+        PropertyValue::LengthPx(value) => Some((value * 100).clamp(0, 10_000)),
+        _ => None,
+    }
+}
+
+fn normalize_gradient_stops(stops: &mut [GradientStop]) {
+    if stops.is_empty() {
+        return;
+    }
+    if stops[0].position < 0 {
+        stops[0].position = 0;
+    }
+    let last = stops.len() - 1;
+    if stops[last].position < 0 {
+        stops[last].position = 10_000;
+    }
+    let mut index = 0usize;
+    while index < stops.len() {
+        if stops[index].position >= 0 {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < stops.len() && stops[index].position < 0 {
+            index += 1;
+        }
+        let before = stops[start - 1].position;
+        let after = stops.get(index).map(|stop| stop.position).unwrap_or(10_000);
+        let span = (index - start + 1) as i32;
+        for (offset, stop) in stops[start..index].iter_mut().enumerate() {
+            stop.position = before + (after - before) * (offset as i32 + 1) / span;
+        }
+    }
+    let mut previous = 0;
+    for stop in stops.iter_mut() {
+        if stop.position < previous {
+            stop.position = previous;
+        }
+        previous = stop.position;
+    }
 }
 
 fn hex_digit(byte: u8) -> Option<u8> {
@@ -1637,6 +2216,14 @@ pub struct StyleContext {
 #[cfg(feature = "dom")]
 impl StyleContext {
     pub fn build(document: &Document, document_stylesheets: &[Stylesheet]) -> Self {
+        Self::build_with_viewport(document, document_stylesheets, DEFAULT_VIEWPORT_WIDTH)
+    }
+
+    pub fn build_with_viewport(
+        document: &Document,
+        document_stylesheets: &[Stylesheet],
+        viewport_width: u32,
+    ) -> Self {
         let mut stylesheets = vec![user_agent_stylesheet()];
         stylesheets.extend_from_slice(document_stylesheets);
         let mut context = Self {
@@ -1649,8 +2236,13 @@ impl StyleContext {
                     .parent(node_id)
                     .and_then(|parent| context.style_for(parent))
                     .cloned();
-                let computed =
-                    compute_element_style(document, node_id, parent_style.as_ref(), &stylesheets);
+                let computed = compute_element_style(
+                    document,
+                    node_id,
+                    parent_style.as_ref(),
+                    &stylesheets,
+                    viewport_width,
+                );
                 context.styles[node_id] = Some(computed);
                 for &child in children.iter().rev() {
                     stack.push(child);
@@ -1841,6 +2433,22 @@ fn simple_selector_matches(
     {
         return false;
     }
+    if selector.first_child || selector.last_child || selector.nth_child.is_some() {
+        let Some((index, count)) = document.element_sibling_index(node_id) else {
+            return false;
+        };
+        if selector.first_child && index != 1 {
+            return false;
+        }
+        if selector.last_child && index != count {
+            return false;
+        }
+        if let Some((a, b)) = selector.nth_child {
+            if !nth_matches(index as i32, a, b) {
+                return false;
+            }
+        }
+    }
     if let Some(expected) = &selector.tag_name {
         if !tag_name.eq_ignore_ascii_case(expected) {
             return false;
@@ -1865,6 +2473,7 @@ fn compute_element_style(
     node_id: NodeId,
     parent: Option<&ComputedStyle>,
     sheets: &[Stylesheet],
+    viewport_width: u32,
 ) -> ComputedStyle {
     let mut computed = initial_style(parent);
     let mut winners: Vec<Option<(CascadeKey, MatchedDeclaration)>> =
@@ -1874,6 +2483,11 @@ fn compute_element_style(
     let mut source_order = 0usize;
     for (sheet_index, sheet) in sheets.iter().enumerate() {
         for rule in &sheet.rules {
+            if let Some(media) = &rule.media {
+                if !import_media_active(media, viewport_width).0 {
+                    continue;
+                }
+            }
             for selector in &rule.selectors {
                 if !selector_matches(document, node_id, selector) {
                     continue;
@@ -2245,7 +2859,13 @@ fn selector_specificity(selector: &Selector) -> Specificity {
         specificity.classes = specificity
             .classes
             .saturating_add(part.classes.len() as u16)
-            .saturating_add((part.root || part.hover) as u16);
+            .saturating_add(
+                (part.root
+                    || part.hover
+                    || part.first_child
+                    || part.last_child
+                    || part.nth_child.is_some()) as u16,
+            );
         specificity.tags = specificity
             .tags
             .saturating_add(part.tag_name.is_some() as u16);
@@ -2353,6 +2973,9 @@ fn initial_value(property: &Property) -> PropertyValue {
         Property::BackgroundAttachment => PropertyValue::Keyword(String::from("scroll")),
         Property::BackgroundPositionX => PropertyValue::Keyword(String::from("0%")),
         Property::BackgroundPositionY => PropertyValue::Keyword(String::from("0%")),
+        Property::BackgroundSize => PropertyValue::Keyword(String::from("auto")),
+        Property::TextShadow => PropertyValue::Keyword(String::from("none")),
+        Property::Opacity => PropertyValue::Percentage(10_000),
         Property::BoxSizing => PropertyValue::Keyword(String::from("content-box")),
         Property::BoxShadow => PropertyValue::Keyword(String::from("none")),
         Property::Float | Property::Clear => PropertyValue::Keyword(String::from("none")),
@@ -2407,7 +3030,19 @@ mod tests {
     fn parses_css_values() {
         assert_eq!(parse_color("rgb(1, 2, 3)"), Some(Color::Rgb(1, 2, 3)));
         assert_eq!(parse_color("blue"), Some(Color::Rgb(0, 0, 255)));
+        assert_eq!(
+            parse_color("rgba(0, 0, 0, 0.2)"),
+            Some(Color::Rgba(0, 0, 0, 51))
+        );
+        assert_eq!(parse_color("#1234"), Some(Color::Rgba(17, 34, 51, 68)));
         assert_eq!(parse_length("12px"), Some(PropertyValue::LengthPx(12)));
+        assert_eq!(parse_length("2rem"), Some(PropertyValue::LengthPx(32)));
+        let gradient = parse_gradient("linear-gradient(to right, #333, #eee 75%)").unwrap();
+        assert_eq!(gradient.kind, GradientKind::Linear);
+        assert_eq!(gradient.angle_deg, 90);
+        assert_eq!(gradient.stops.len(), 2);
+        assert_eq!(gradient.stops[0].color, Color::Rgb(0x33, 0x33, 0x33));
+        assert_eq!(gradient.stops[1].position, 7500);
     }
 
     #[test]
@@ -3120,5 +3755,82 @@ mod tests {
         assert!(style.matched_declarations.iter().any(|matched| {
             matched.selector == "#banner" && matched.source.contains("card.css")
         }));
+    }
+
+    #[cfg(feature = "dom")]
+    #[test]
+    fn nth_child_and_media_queries_follow_viewport() {
+        let document = parse_html(
+            "<style>
+                #releases tr:nth-child(2n+1) { background-color: #f7f6f1; }
+                #releases tr:first-child { color: navy; }
+                @media screen and (max-width: 848px) {
+                    #banner { display: none; }
+                }
+                #hero { background: linear-gradient(to bottom, #ffd133, #b39223); }
+            </style>
+            <header id=banner>x</header>
+            <div id=hero>y</div>
+            <table id=releases><tr><td>a</td></tr><tr><td>b</td></tr><tr><td>c</td></tr></table>",
+        )
+        .unwrap();
+        let sheets = collect_embedded_stylesheets(&document);
+        assert!(sheets[0].rules.iter().any(|rule| rule
+            .media
+            .as_deref()
+            .is_some_and(|media| media.contains("max-width"))));
+        let wide = StyleContext::build_with_viewport(&document, &sheets, 1024);
+        let narrow = StyleContext::build_with_viewport(&document, &sheets, 640);
+        let banner = (0..document.node_count())
+            .find(|id| {
+                document.get(*id).and_then(|node| match node {
+                    Node::Element { attributes, .. } => attribute_value(attributes, "id"),
+                    _ => None,
+                }) == Some("banner")
+            })
+            .unwrap();
+        let hero = (0..document.node_count())
+            .find(|id| {
+                document.get(*id).and_then(|node| match node {
+                    Node::Element { attributes, .. } => attribute_value(attributes, "id"),
+                    _ => None,
+                }) == Some("hero")
+            })
+            .unwrap();
+        let rows = (0..document.node_count())
+            .filter(|id| document.tag_name(*id) == Some("tr"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            wide.style_for(banner).unwrap().value(&Property::Display),
+            Some(&PropertyValue::Keyword(String::from("block")))
+        );
+        assert_eq!(
+            narrow.style_for(banner).unwrap().value(&Property::Display),
+            Some(&PropertyValue::Keyword(String::from("none")))
+        );
+        assert_eq!(
+            wide.style_for(rows[0])
+                .unwrap()
+                .value(&Property::BackgroundColor),
+            Some(&PropertyValue::Color(Color::Rgb(0xf7, 0xf6, 0xf1)))
+        );
+        assert_eq!(
+            wide.style_for(rows[1])
+                .unwrap()
+                .value(&Property::BackgroundColor),
+            Some(&PropertyValue::Color(Color::Transparent))
+        );
+        assert_eq!(
+            wide.style_for(rows[0]).unwrap().value(&Property::Color),
+            Some(&PropertyValue::Color(Color::Rgb(0, 0, 128)))
+        );
+        let image = wide
+            .style_for(hero)
+            .unwrap()
+            .value(&Property::BackgroundImage)
+            .unwrap()
+            .display();
+        assert!(image.contains("linear-gradient"));
+        assert!(parse_gradient(&image).is_some());
     }
 }

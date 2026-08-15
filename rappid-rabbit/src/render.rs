@@ -19,7 +19,10 @@ use sunlight_ui::{
 };
 
 use crate::{
-    css::{Color as CssColor, ComputedStyle, Property, PropertyValue, StyleContext},
+    css::{
+        parse_gradient, Color as CssColor, ComputedStyle, CssGradient, GradientKind, Property,
+        PropertyValue, StyleContext,
+    },
     form::FormControlState,
     images::ImageCache,
     resources::discovery::resolve_url,
@@ -122,7 +125,25 @@ pub struct ResolvedPaintStyle {
     pub border_widths: [u32; 4],
     pub corner_radii: CornerRadii,
     pub box_shadow: Option<ResolvedBoxShadow>,
+    pub text_shadow: Option<ResolvedTextShadow>,
     pub background_image: Option<String>,
+    pub background_gradient: Option<ResolvedGradient>,
+    pub opacity: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResolvedGradient {
+    pub kind: GradientKind,
+    pub angle_deg: i32,
+    pub stops: Vec<(Color, u16)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResolvedTextShadow {
+    pub offset_x: i32,
+    pub offset_y: i32,
+    pub blur: u32,
+    pub color: Color,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -650,10 +671,11 @@ impl<'a> LayoutBuilder<'a> {
         });
         let mut row_y = content_y;
         let mut cell_count = 0usize;
-        for cells in row_cells {
+        for (row, cells) in rows.iter().zip(row_cells) {
             if cell_count >= MAX_TABLE_CELLS {
                 break;
             }
+            let row_paint = self.flow_style(*row).paint;
             let mut x = content_x;
             let mut row_h = 0u32;
             let mut column = 0usize;
@@ -668,6 +690,11 @@ impl<'a> LayoutBuilder<'a> {
                     self.layout_block(cell, x, cell_width, &mut cell_cursor, depth + 1)
                 {
                     row_h = row_h.max(cell_cursor.saturating_sub(row_y).max(0) as u32);
+                    if self.tree.nodes[cell_index].paint.background == Color::TRANSPARENT
+                        && row_paint.background != Color::TRANSPARENT
+                    {
+                        self.tree.nodes[cell_index].paint.background = row_paint.background;
+                    }
                     self.tree.nodes[index].children.push(cell_index);
                 }
                 x = x.saturating_add(cell_width as i32);
@@ -2163,9 +2190,16 @@ fn collect_text_content(document: &Document, node_id: NodeId) -> String {
 
 fn css_color(value: Option<&PropertyValue>, fallback: Color) -> Color {
     match value {
-        Some(PropertyValue::Color(CssColor::Rgb(r, g, b))) => Color::rgb(*r, *g, *b),
-        Some(PropertyValue::Color(CssColor::Transparent)) => Color::TRANSPARENT,
+        Some(PropertyValue::Color(color)) => map_css_color(*color),
         _ => fallback,
+    }
+}
+
+fn map_css_color(color: CssColor) -> Color {
+    match color {
+        CssColor::Rgb(r, g, b) => Color::rgb(r, g, b),
+        CssColor::Rgba(r, g, b, a) => Color::rgba(r, g, b, a),
+        CssColor::Transparent => Color::TRANSPARENT,
     }
 }
 
@@ -2249,6 +2283,34 @@ fn resolved_paint(
             }
             _ => None,
         });
+    let text_shadow = style
+        .and_then(|style| style.value(&Property::TextShadow))
+        .and_then(|value| match value {
+            PropertyValue::Keyword(raw) | PropertyValue::Raw(raw) => {
+                parse_text_shadow(raw, font_size, foreground)
+            }
+            _ => None,
+        });
+    let background_image_raw = style
+        .and_then(|style| style.value(&Property::BackgroundImage))
+        .and_then(|value| match value {
+            PropertyValue::Keyword(value) | PropertyValue::Raw(value) => Some(value.as_str()),
+            _ => None,
+        });
+    let background_gradient = background_image_raw
+        .and_then(parse_gradient)
+        .map(resolve_gradient);
+    let background_image = background_image_raw.and_then(|raw| {
+        let inner = raw.strip_prefix("url(")?.strip_suffix(')')?.trim();
+        let inner = inner.trim_matches(['\"', '\'']);
+        (!inner.is_empty() && !inner.eq_ignore_ascii_case("none")).then(|| String::from(inner))
+    });
+    let opacity = match style.and_then(|style| style.value(&Property::Opacity)) {
+        Some(PropertyValue::Percentage(value)) => {
+            ((*value).clamp(0, 10_000) as u32 * 255 / 10_000) as u8
+        }
+        _ => 255,
+    };
     ResolvedPaintStyle {
         color: foreground,
         background: css_color(
@@ -2289,19 +2351,60 @@ fn resolved_paint(
         border_widths,
         corner_radii,
         box_shadow,
-        background_image: style
-            .and_then(|style| style.value(&Property::BackgroundImage))
-            .and_then(|value| {
-                let raw = match value {
-                    PropertyValue::Keyword(value) | PropertyValue::Raw(value) => value,
-                    _ => return None,
-                };
-                let inner = raw.strip_prefix("url(")?.strip_suffix(')')?.trim();
-                let inner = inner.trim_matches(['\"', '\'']);
-                (!inner.is_empty() && !inner.eq_ignore_ascii_case("none"))
-                    .then(|| String::from(inner))
-            }),
+        text_shadow,
+        background_image,
+        background_gradient,
+        opacity,
     }
+}
+
+fn resolve_gradient(gradient: CssGradient) -> ResolvedGradient {
+    ResolvedGradient {
+        kind: gradient.kind,
+        angle_deg: gradient.angle_deg,
+        stops: gradient
+            .stops
+            .into_iter()
+            .map(|stop| {
+                (
+                    map_css_color(stop.color),
+                    stop.position.clamp(0, 10_000) as u16,
+                )
+            })
+            .collect(),
+    }
+}
+
+fn parse_text_shadow(
+    raw: &str,
+    font_size: u32,
+    current_color: Color,
+) -> Option<ResolvedTextShadow> {
+    if raw.contains(',') || raw.eq_ignore_ascii_case("none") {
+        return None;
+    }
+    let mut lengths = Vec::new();
+    let mut color = current_color;
+    for token in raw.split_ascii_whitespace() {
+        if token.eq_ignore_ascii_case("currentcolor") {
+            color = current_color;
+            continue;
+        }
+        if let Some(parsed) = parse_shadow_color(token) {
+            color = parsed;
+            continue;
+        }
+        lengths.push(parse_shadow_length(token, font_size)?);
+    }
+    if !(2..=3).contains(&lengths.len()) {
+        return None;
+    }
+    Some(ResolvedTextShadow {
+        offset_x: lengths[0],
+        offset_y: lengths[1],
+        blur: lengths.get(2).copied().unwrap_or(0).max(0).min(32) as u32,
+        color,
+    })
 }
 
 fn scaled_measure_for(
@@ -2389,34 +2492,7 @@ fn parse_shadow_length(token: &str, font_size: u32) -> Option<i32> {
 }
 
 fn parse_shadow_color(token: &str) -> Option<Color> {
-    let lower = token.to_ascii_lowercase();
-    let (r, g, b) = match lower.as_str() {
-        "black" => (0, 0, 0),
-        "white" => (255, 255, 255),
-        "red" => (255, 0, 0),
-        "yellow" => (255, 255, 0),
-        "gray" | "grey" => (128, 128, 128),
-        _ => {
-            let hex = lower.strip_prefix('#')?;
-            if hex.len() == 3 {
-                let d = |byte| char::from(byte).to_digit(16).map(|v| (v * 17) as u8);
-                (
-                    d(hex.as_bytes()[0])?,
-                    d(hex.as_bytes()[1])?,
-                    d(hex.as_bytes()[2])?,
-                )
-            } else if hex.len() == 6 {
-                (
-                    u8::from_str_radix(&hex[0..2], 16).ok()?,
-                    u8::from_str_radix(&hex[2..4], 16).ok()?,
-                    u8::from_str_radix(&hex[4..6], 16).ok()?,
-                )
-            } else {
-                return None;
-            }
-        }
-    };
-    Some(Color::rgb(r, g, b))
+    crate::css::parse_color(token).map(map_css_color)
 }
 
 fn format_marker(ordinal: u32, style_type: &str) -> String {
@@ -2569,18 +2645,17 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
             );
         }
         if node.paint.background != Color::TRANSPARENT {
+            let fill = apply_opacity(node.paint.background, node.paint.opacity);
             push(
                 &mut scene,
                 RenderObject {
                     id: object_id(node.owner_node_id, 2, 0),
                     owner_node_id: node.owner_node_id,
                     kind: if node.paint.corner_radii == CornerRadii::default() {
-                        RenderObjectKind::Rectangle {
-                            fill: node.paint.background,
-                        }
+                        RenderObjectKind::Rectangle { fill }
                     } else {
                         RenderObjectKind::RoundedRectangle {
-                            fill: node.paint.background,
+                            fill,
                             radii: node.paint.corner_radii,
                         }
                     },
@@ -2589,6 +2664,38 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                     paint_order: PaintOrder {
                         phase: 1,
                         document_order: node.paint_order,
+                        ..PaintOrder::default()
+                    },
+                    interaction: None,
+                },
+            );
+        }
+        if let Some(gradient) = node.paint.background_gradient.as_ref() {
+            push(
+                &mut scene,
+                RenderObject {
+                    id: object_id(node.owner_node_id, 6, 0),
+                    owner_node_id: node.owner_node_id,
+                    kind: RenderObjectKind::Gradient {
+                        kind: match gradient.kind {
+                            GradientKind::Linear => 0,
+                            GradientKind::Radial => 1,
+                        },
+                        angle_deg: gradient.angle_deg,
+                        stops: gradient
+                            .stops
+                            .iter()
+                            .map(|(color, position)| {
+                                (apply_opacity(*color, node.paint.opacity), *position)
+                            })
+                            .collect(),
+                        radii: node.paint.corner_radii,
+                    },
+                    bounds: node.border_box,
+                    clip_bounds: None,
+                    paint_order: PaintOrder {
+                        phase: 1,
+                        document_order: node.paint_order.saturating_add(1),
                         ..PaintOrder::default()
                     },
                     interaction: None,
@@ -2716,6 +2823,34 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                 href: link.href.clone(),
                 resolved_url: link.resolved_url.clone(),
             });
+            if let Some(shadow) = fragment.paint.text_shadow {
+                push(
+                    &mut scene,
+                    RenderObject {
+                        id: object_id(fragment.owner_node_id, 9, slot),
+                        owner_node_id: fragment.owner_node_id,
+                        kind: RenderObjectKind::Text {
+                            text: fragment.text.clone(),
+                            color: apply_opacity(shadow.color, fragment.paint.opacity),
+                            font_size: fragment.paint.font_size,
+                            bold: fragment.paint.bold,
+                            italic: fragment.paint.italic,
+                            underline: false,
+                            line_through: false,
+                            monospace: fragment.paint.monospace,
+                            font_family: fragment.paint.font_family,
+                        },
+                        bounds: fragment.bounds.translate(shadow.offset_x, shadow.offset_y),
+                        clip_bounds: None,
+                        paint_order: PaintOrder {
+                            phase: 4,
+                            document_order: fragment.owner_node_id.0.min(u32::MAX as u64) as u32,
+                            ..PaintOrder::default()
+                        },
+                        interaction: None,
+                    },
+                );
+            }
             push(
                 &mut scene,
                 RenderObject {
@@ -2723,7 +2858,7 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                     owner_node_id: fragment.owner_node_id,
                     kind: RenderObjectKind::Text {
                         text: fragment.text.clone(),
-                        color: fragment.paint.color,
+                        color: apply_opacity(fragment.paint.color, fragment.paint.opacity),
                         font_size: fragment.paint.font_size,
                         bold: fragment.paint.bold,
                         italic: fragment.paint.italic,
@@ -2848,13 +2983,45 @@ pub fn scene_from_layout(document_id: u64, viewport: Size, layout: &LayoutTree) 
                     id: object_id(inline_box.owner_node_id, 2, 1),
                     owner_node_id: inline_box.owner_node_id,
                     kind: RenderObjectKind::Rectangle {
-                        fill: inline_box.paint.background,
+                        fill: apply_opacity(inline_box.paint.background, inline_box.paint.opacity),
                     },
                     bounds: inline_box.bounds,
                     clip_bounds: None,
                     paint_order: PaintOrder {
                         phase: 1,
                         document_order: inline_box.paint_order,
+                        ..PaintOrder::default()
+                    },
+                    interaction: None,
+                },
+            );
+        }
+        if let Some(gradient) = inline_box.paint.background_gradient.as_ref() {
+            push(
+                &mut scene,
+                RenderObject {
+                    id: object_id(inline_box.owner_node_id, 6, 1),
+                    owner_node_id: inline_box.owner_node_id,
+                    kind: RenderObjectKind::Gradient {
+                        kind: match gradient.kind {
+                            GradientKind::Linear => 0,
+                            GradientKind::Radial => 1,
+                        },
+                        angle_deg: gradient.angle_deg,
+                        stops: gradient
+                            .stops
+                            .iter()
+                            .map(|(color, position)| {
+                                (apply_opacity(*color, inline_box.paint.opacity), *position)
+                            })
+                            .collect(),
+                        radii: inline_box.paint.corner_radii,
+                    },
+                    bounds: inline_box.bounds,
+                    clip_bounds: None,
+                    paint_order: PaintOrder {
+                        phase: 1,
+                        document_order: inline_box.paint_order.saturating_add(1),
                         ..PaintOrder::default()
                     },
                     interaction: None,
@@ -2990,6 +3157,14 @@ fn push(scene: &mut DocumentScene, object: RenderObject) {
     if scene.objects.len() < MAX_RENDER_OBJECTS {
         let _ = scene.push(object);
     }
+}
+
+fn apply_opacity(color: Color, opacity: u8) -> Color {
+    if opacity >= 255 {
+        return color;
+    }
+    let alpha = (color.a() as u16 * opacity as u16 / 255) as u8;
+    Color::rgba(color.r(), color.g(), color.b(), alpha)
 }
 
 fn union(left: Rect, right: Rect) -> Rect {
@@ -3990,6 +4165,87 @@ mod tests {
             object.owner_node_id == DocumentNodeId(latest_id as u64)
                 && matches!(object.kind, RenderObjectKind::BoxShadow { inset: true, .. })
         }));
+    }
+
+    #[test]
+    fn kernel_style_gradients_nth_child_and_text_shadow_reach_the_scene() {
+        let html = include_str!("../tests/fixtures/css-gradients.html");
+        let dom = parse_html(html).unwrap();
+        let styles =
+            StyleContext::build_with_viewport(&dom, &collect_embedded_stylesheets(&dom), 1000);
+        let state = DocumentRenderState::new(
+            11,
+            String::from("https://fixture.test/"),
+            dom,
+            styles,
+            Size::new(1000, 700),
+            &TestMeasure,
+        );
+        let by_id = |id: &str| {
+            (0..state.dom.node_count())
+                .find(|node_id| match state.dom.get(*node_id) {
+                    Some(Node::Element { attributes, .. }) => attr(attributes, "id") == Some(id),
+                    _ => false,
+                })
+                .unwrap()
+        };
+        let banner_id = by_id("banner");
+        let latest_id = by_id("latest");
+        let banner = state
+            .layout_tree
+            .nodes
+            .iter()
+            .find(|node| node.owner_node_id == DocumentNodeId(banner_id as u64))
+            .unwrap();
+        assert!(banner.paint.background_gradient.is_some());
+        assert_eq!(
+            banner.paint.background_gradient.as_ref().unwrap().angle_deg,
+            180
+        );
+        assert!(state.current_scene.objects.iter().any(|object| {
+            object.owner_node_id == DocumentNodeId(banner_id as u64)
+                && matches!(
+                    object.kind,
+                    RenderObjectKind::Gradient {
+                        kind: 0,
+                        angle_deg: 180,
+                        ..
+                    }
+                )
+        }));
+        assert!(state.current_scene.objects.iter().any(|object| {
+            object.owner_node_id == DocumentNodeId(latest_id as u64)
+                && matches!(
+                    object.kind,
+                    RenderObjectKind::Gradient {
+                        kind: 0,
+                        angle_deg: 135,
+                        ..
+                    }
+                )
+        }));
+        assert!(state.current_scene.objects.iter().any(|object| {
+            matches!(
+                &object.kind,
+                RenderObjectKind::Text {
+                    text,
+                    color,
+                    ..
+                } if (text.contains("Linux") || text.contains("Kernel"))
+                    && *color == Color::rgb(0xf8, 0xf4, 0xee)
+            )
+        }));
+        let cells = state
+            .layout_tree
+            .nodes
+            .iter()
+            .filter(|node| node.display == DisplayType::TableCell)
+            .collect::<Vec<_>>();
+        assert!(cells.len() >= 6);
+        assert_eq!(cells[0].paint.background, Color::rgb(0xf7, 0xf6, 0xf1));
+        assert_eq!(cells[2].paint.background, Color::TRANSPARENT);
+        assert_eq!(cells[4].paint.background, Color::rgb(0xf7, 0xf6, 0xf1));
+        assert!(banner.visible);
     }
 
     #[test]
