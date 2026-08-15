@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 
 use sun_font::{FontRole, VecFont};
 use sunlight_ipc::{
@@ -12,9 +12,10 @@ use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_CORES, MAX
 use sunlight_ui::{
     request_close,
     widgets::{Column, Label, StatusBar, Table},
-    App, Color, Event, Material, MaterialPalette, Point, Rect, Theme, VecText, Window,
-    WindowConfig, WindowMaterial,
+    App, AxisSizing, Color, Event, LayoutBox, LayoutInvalidation, Material, MaterialPalette, Point,
+    Rect, Row, Size, Sizing, Theme, VecText, Window, WindowConfig, WindowEvent, WindowMaterial,
 };
+use sunlight_ui::layout::Column as LayoutColumn;
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_MED: VecFont = VecFont(FontRole::UiMedium);
@@ -59,15 +60,42 @@ unsafe impl core::alloc::GlobalAlloc for NoAlloc {
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
+#[cfg(not(test))]
 #[global_allocator]
 static ALLOC: NoAlloc = NoAlloc;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[TASKS] panic\n");
     loop {
         process_yield();
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct TasksLayout {
+    root: Rect,
+    content: Rect,
+    title: Rect,
+    brand: Rect,
+    toolbar: Rect,
+    actions: [Rect; 4],
+    summary: Rect,
+    cpu_card: Rect,
+    ram_card: Rect,
+    mem_breakdown: Rect,
+    table: Rect,
+    status: Rect,
+}
+
+fn fill_sizing() -> Sizing {
+    Sizing::new(AxisSizing::Fill, AxisSizing::Fill)
+}
+
+fn fixed_height_box(height: u32) -> LayoutBox {
+    LayoutBox::new(Rect::new(0, 0, 0, height))
+        .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(height)))
 }
 
 const TABLE_COLUMNS: [Column<'static>; TABLE_COLS] = [
@@ -165,6 +193,9 @@ struct TasksApp {
     core_row_bufs: [[[u8; CELL_BUF]; CORE_TABLE_COLS]; MAX_CORES],
     core_row_lens: [[usize; CORE_TABLE_COLS]; MAX_CORES],
     core_row_count: usize,
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: TasksLayout,
 }
 
 impl TasksApp {
@@ -189,10 +220,153 @@ impl TasksApp {
             core_row_bufs: [[[0; CELL_BUF]; CORE_TABLE_COLS]; MAX_CORES],
             core_row_lens: [[0; CORE_TABLE_COLS]; MAX_CORES],
             core_row_count: 0,
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: TasksLayout::default(),
         };
         app.set_status("Telemetry ready");
+        app.ensure_layout();
         app.refresh(true);
         app
+    }
+
+    fn compute_layout(root: Rect) -> TasksLayout {
+        let content = Rect::new(
+            CONTENT_MARGIN,
+            CONTENT_MARGIN,
+            root.w.saturating_sub((CONTENT_MARGIN as u32).saturating_mul(2)),
+            root.h.saturating_sub((CONTENT_MARGIN as u32).saturating_mul(2)),
+        );
+        let mut root_children = [
+            fixed_height_box(TITLE_H + 6),
+            fixed_height_box(TOOLBAR_H),
+            fixed_height_box(SUMMARY_H),
+            LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill_sizing()),
+            fixed_height_box(STATUS_H),
+        ];
+        let _ = LayoutColumn::new(content)
+            .with_gap(8)
+            .arrange(&mut root_children);
+        let title_row = root_children[0].bounds();
+        let toolbar = root_children[1].bounds();
+        let summary = root_children[2].bounds();
+        let table = root_children[3].bounds();
+        let status = root_children[4].bounds();
+
+        let brand_w = 76u32;
+        let title_w = 220u32;
+        let mut title_children = [
+            LayoutBox::new(Rect::new(0, 0, title_w, TITLE_H)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(title_w),
+                AxisSizing::Fixed(TITLE_H),
+            )),
+            LayoutBox::new(Rect::new(0, 0, 0, TITLE_H)).with_sizing(Sizing::new(
+                AxisSizing::Fill,
+                AxisSizing::Fixed(TITLE_H),
+            )),
+            LayoutBox::new(Rect::new(0, 0, brand_w, TITLE_H)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(brand_w),
+                AxisSizing::Fixed(TITLE_H),
+            )),
+        ];
+        let title_inner = Rect::new(
+            title_row.x + 12,
+            title_row.y + 6,
+            title_row.w.saturating_sub(24),
+            TITLE_H,
+        );
+        let _ = Row::new(title_inner).arrange(&mut title_children);
+
+        let toolbar_inner = Rect::new(
+            toolbar.x + 10,
+            toolbar.y,
+            toolbar.w.saturating_sub(20),
+            toolbar.h,
+        );
+        let mut action_boxes = [
+            LayoutBox::new(Rect::new(0, 0, ACTION_WIDTHS[0], TOOLBAR_H)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(ACTION_WIDTHS[0]),
+                AxisSizing::Fixed(TOOLBAR_H),
+            )),
+            LayoutBox::new(Rect::new(0, 0, ACTION_WIDTHS[1], TOOLBAR_H)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(ACTION_WIDTHS[1]),
+                AxisSizing::Fixed(TOOLBAR_H),
+            )),
+            LayoutBox::new(Rect::new(0, 0, ACTION_WIDTHS[2], TOOLBAR_H)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(ACTION_WIDTHS[2]),
+                AxisSizing::Fixed(TOOLBAR_H),
+            )),
+            LayoutBox::new(Rect::new(0, 0, ACTION_WIDTHS[3], TOOLBAR_H)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(ACTION_WIDTHS[3]),
+                AxisSizing::Fixed(TOOLBAR_H),
+            )),
+        ];
+        let _ = Row::new(toolbar_inner)
+            .with_gap(ACTION_GAP as u32)
+            .arrange(&mut action_boxes);
+
+        let cards_h = 56u32;
+        let cards_row = Rect::new(
+            summary.x + 12,
+            summary.y + 32,
+            summary.w.saturating_sub(24),
+            cards_h,
+        );
+        let mut card_boxes = [
+            LayoutBox::new(Rect::new(0, 0, 0, cards_h)).with_sizing(fill_sizing()),
+            LayoutBox::new(Rect::new(0, 0, 0, cards_h)).with_sizing(fill_sizing()),
+        ];
+        let _ = Row::new(cards_row).with_gap(12).arrange(&mut card_boxes);
+        let cpu_card = card_boxes[0].bounds();
+        let ram_card = card_boxes[1].bounds();
+        let mem_breakdown = Rect::new(
+            summary.x + 12,
+            ram_card.bottom() + 6,
+            summary.w.saturating_sub(24),
+            summary
+                .bottom()
+                .saturating_sub(ram_card.bottom() + 10)
+                .max(0) as u32,
+        );
+
+        TasksLayout {
+            root,
+            content,
+            title: title_children[0].bounds(),
+            brand: title_children[2].bounds(),
+            toolbar,
+            actions: [
+                action_boxes[0].bounds(),
+                action_boxes[1].bounds(),
+                action_boxes[2].bounds(),
+                action_boxes[3].bounds(),
+            ],
+            summary,
+            cpu_card,
+            ram_card,
+            mem_breakdown,
+            table,
+            status,
+        }
+    }
+
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds);
+        self.clamp_scroll();
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        self.ensure_layout()
     }
 
     fn set_status(&mut self, text: &str) {
@@ -425,55 +599,23 @@ impl TasksApp {
     }
 
     fn clamp_scroll(&mut self) {
-        let visible = self.visible_rows();
-        let max_row = match self.view_mode {
+        let total = match self.view_mode {
             ViewMode::Processes => self.row_count,
             ViewMode::Cores => self.core_row_count,
         };
-        let max_scroll = max_row.saturating_sub(visible);
-        if self.scroll > max_scroll {
-            self.scroll = max_scroll;
-        }
+        self.scroll = Self::clamp_offset(self.scroll, total, self.visible_rows());
+    }
+
+    fn clamp_offset(scroll: usize, total: usize, visible: usize) -> usize {
+        scroll.min(total.saturating_sub(visible.max(1)))
     }
 
     fn visible_rows(&self) -> usize {
-        let content = self.content_rect();
-        let header_h = TITLE_H + 6 + TOOLBAR_H + 8 + SUMMARY_H + 8;
-        let usable = content.h.saturating_sub(header_h + STATUS_H + 4);
-        (usable / 16).max(1) as usize
-    }
-
-    fn content_rect(&self) -> Rect {
-        Rect::new(
-            CONTENT_MARGIN,
-            CONTENT_MARGIN,
-            WIN_W.saturating_sub((CONTENT_MARGIN as u32) * 2),
-            WIN_H.saturating_sub((CONTENT_MARGIN as u32) * 2),
-        )
-    }
-
-    fn toolbar_rect(&self) -> Rect {
-        let content = self.content_rect();
-        Rect::new(
-            content.x + 10,
-            content.y + TITLE_H as i32 + 4,
-            content.w.saturating_sub(20),
-            TOOLBAR_H,
-        )
+        visible_rows_in(self.layout.table)
     }
 
     fn action_rect(&self, index: usize) -> Rect {
-        let toolbar = self.toolbar_rect();
-        let x_offset = ACTION_WIDTHS
-            .iter()
-            .take(index)
-            .fold(0i32, |offset, width| offset + *width as i32 + ACTION_GAP);
-        Rect::new(
-            toolbar.x + x_offset,
-            toolbar.y,
-            ACTION_WIDTHS.get(index).copied().unwrap_or(0),
-            toolbar.h,
-        )
+        self.layout.actions.get(index).copied().unwrap_or_default()
     }
 
     fn action_at(&self, x: i32, y: i32) -> Option<usize> {
@@ -481,69 +623,31 @@ impl TasksApp {
     }
 
     fn summary_rect(&self) -> Rect {
-        let content = self.content_rect();
-        Rect::new(
-            content.x + 10,
-            self.toolbar_rect().bottom() + 8,
-            content.w.saturating_sub(20),
-            SUMMARY_H,
-        )
+        self.layout.summary
     }
 
     fn summary_card_rects(&self) -> (Rect, Rect) {
-        let summary = self.summary_rect();
-        // Top row: two metric cards; leave room for accounting breakdown below.
-        let cards_h = 56u32;
-        let inner = Rect::new(
-            summary.x + 12,
-            summary.y + 32,
-            summary.w.saturating_sub(24),
-            cards_h,
-        );
-        let gap = 12;
-        let card_w = inner.w.saturating_sub(gap) / 2;
-        (
-            Rect::new(inner.x, inner.y, card_w, inner.h),
-            Rect::new(
-                inner.x + card_w as i32 + gap as i32,
-                inner.y,
-                card_w,
-                inner.h,
-            ),
-        )
+        (self.layout.cpu_card, self.layout.ram_card)
     }
 
     fn mem_breakdown_rect(&self) -> Rect {
-        let summary = self.summary_rect();
-        let (_cpu, ram) = self.summary_card_rects();
-        Rect::new(
-            summary.x + 12,
-            ram.bottom() + 6,
-            summary.w.saturating_sub(24),
-            summary.bottom().saturating_sub(ram.bottom() + 10) as u32,
-        )
+        self.layout.mem_breakdown
     }
 
     fn table_rect(&self) -> Rect {
-        let content = self.content_rect();
-        let top = self.summary_rect().bottom() + 8;
-        let status_h = STATUS_H + 4;
-        Rect::new(
-            content.x,
-            top,
-            content.w,
-            content.bottom().saturating_sub(top + status_h as i32) as u32,
-        )
+        self.layout.table
     }
 
     fn status_bar_rect(&self) -> Rect {
-        let content = self.content_rect();
-        Rect::new(
-            content.x,
-            content.bottom() - STATUS_H as i32,
-            content.w,
-            STATUS_H,
-        )
+        self.layout.status
+    }
+
+    fn process_columns(&self) -> [Column<'static>; TABLE_COLS] {
+        columns_with_fill(TABLE_COLUMNS, 1, self.layout.table.w)
+    }
+
+    fn core_columns(&self) -> [Column<'static>; CORE_TABLE_COLS] {
+        columns_with_fill(CORE_COLUMNS, 2, self.layout.table.w)
     }
 
     fn overview_strings(&self, uptime: &mut [u8; 24], tasks: &mut [u8; 24]) {
@@ -730,23 +834,23 @@ impl TasksApp {
 
 impl App for TasksApp {
     fn view(&mut self, canvas: &mut sunlight_ui::Canvas, theme: &sunlight_ui::Theme) {
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
         // Root stays transparent so compositor WindowGlass is the base density.
-        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
+        canvas.clear_transparent(self.layout.root);
 
-        let content = self.content_rect();
         let materials = MaterialPalette::new(theme);
 
-        let title_rect = Rect::new(content.x + 12, content.y + 6, 220, TITLE_H);
-        Label::new(title_rect, "Tasks Monitor")
+        Label::new(self.layout.title, "Tasks Monitor")
             .with_font(&F_MED)
             .draw(canvas, theme);
-        Label::new(
-            Rect::new(content.right() - 88, content.y + 6, 76, TITLE_H),
-            "SunlightOS",
-        )
-        .dim()
-        .with_font(&F_SMALL)
-        .draw(canvas, theme);
+        Label::new(self.layout.brand, "SunlightOS")
+            .dim()
+            .with_font(&F_SMALL)
+            .draw(canvas, theme);
 
         self.draw_action_button(canvas, theme, 0, "End task", false, true);
         self.draw_action_button(
@@ -904,7 +1008,8 @@ impl App for TasksApp {
                     (self.scroll..end)
                         .position(|idx| self.snapshot.procs[self.order[idx]].pid == pid)
                 });
-                Table::new(table_rect, &TABLE_COLUMNS, &row_refs[self.scroll..end])
+                let columns = self.process_columns();
+                Table::new(table_rect, &columns, &row_refs[self.scroll..end])
                     .with_selected(selected)
                     .with_font(&F_UI)
                     .draw(canvas, theme);
@@ -927,7 +1032,8 @@ impl App for TasksApp {
                 for i in 0..count {
                     core_refs[i] = &core_cells[i];
                 }
-                Table::new(table_rect, &CORE_COLUMNS, &core_refs[start..end])
+                let columns = self.core_columns();
+                Table::new(table_rect, &columns, &core_refs[start..end])
                     .with_font(&F_UI)
                     .draw(canvas, theme);
             }
@@ -1011,7 +1117,8 @@ impl App for TasksApp {
                 }
 
                 if self.view_mode == ViewMode::Processes {
-                    let table = Table::new(self.table_rect(), &TABLE_COLUMNS, &[]).with_font(&F_UI);
+                    let columns = self.process_columns();
+                    let table = Table::new(self.table_rect(), &columns, &[]).with_font(&F_UI);
                     if let Some(row) = table.hit_test(x, y) {
                         let idx = self.scroll + row;
                         if idx < self.row_count {
@@ -1058,8 +1165,14 @@ impl App for TasksApp {
             _ => false,
         }
     }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
+    }
 }
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
@@ -1283,4 +1396,126 @@ fn copy_tail_mb(kb: u64, dst: &mut [u8]) -> usize {
 fn trim_zeros(bytes: &[u8]) -> &[u8] {
     let len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     &bytes[..len]
+}
+
+fn table_row_metrics() -> (u32, u32) {
+    let line_h = F_UI.line_height();
+    (line_h.saturating_add(8), line_h.saturating_add(5))
+}
+
+fn visible_rows_in(table: Rect) -> usize {
+    let (header_h, row_h) = table_row_metrics();
+    let usable = table.h.saturating_sub(header_h);
+    if row_h == 0 {
+        return 1;
+    }
+    (usable / row_h).max(1) as usize
+}
+
+fn columns_with_fill<const N: usize>(
+    base: [Column<'static>; N],
+    fill_idx: usize,
+    table_w: u32,
+) -> [Column<'static>; N] {
+    let mut cols = base;
+    let mut fixed = 0u32;
+    for (idx, col) in cols.iter().enumerate() {
+        if idx != fill_idx {
+            fixed = fixed.saturating_add(col.width);
+        }
+    }
+    if fill_idx < N {
+        cols[fill_idx].width = table_w.saturating_sub(fixed);
+    }
+    cols
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toolbar_follows_root_width_and_body_fills_remaining_height() {
+        let layout = TasksApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        assert_eq!(layout.root, Rect::new(0, 0, WIN_W, WIN_H));
+        assert_eq!(layout.toolbar.w, WIN_W.saturating_sub(24));
+        assert_eq!(layout.summary.w, layout.toolbar.w);
+        assert_eq!(layout.table.w, layout.content.w);
+        assert_eq!(layout.status.w, layout.content.w);
+        assert_eq!(layout.status.bottom(), layout.content.bottom());
+        assert!(layout.table.h > 0);
+        assert_eq!(layout.table.y, layout.summary.bottom() + 8);
+    }
+
+    #[test]
+    fn task_viewport_grows_on_resize() {
+        let initial = TasksApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        let wider = TasksApp::compute_layout(Rect::new(0, 0, WIN_W + 180, WIN_H));
+        let taller = TasksApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H + 120));
+        assert_eq!(wider.toolbar.w, initial.toolbar.w + 180);
+        assert_eq!(wider.table.w, initial.table.w + 180);
+        assert_eq!(taller.table.h, initial.table.h + 120);
+        assert_eq!(wider.actions[0].w, ACTION_WIDTHS[0]);
+        assert_eq!(taller.toolbar.h, TOOLBAR_H);
+        assert_eq!(taller.summary.h, SUMMARY_H);
+    }
+
+    #[test]
+    fn fixed_columns_stay_stable_and_name_consumes_extra_width() {
+        let narrow = columns_with_fill(TABLE_COLUMNS, 1, 660);
+        let wide = columns_with_fill(TABLE_COLUMNS, 1, 860);
+        assert_eq!(narrow[0].width, 70);
+        assert_eq!(narrow[2].width, 120);
+        assert_eq!(narrow[3].width, 90);
+        assert_eq!(narrow[4].width, 120);
+        assert_eq!(wide[0].width, 70);
+        assert_eq!(wide[2].width, 120);
+        assert_eq!(wide[1].width, narrow[1].width + 200);
+        let core = columns_with_fill(CORE_COLUMNS, 2, 800);
+        assert_eq!(core[0].width, 50);
+        assert_eq!(core[3].width, 48);
+        assert!(core[2].width > CORE_COLUMNS[2].width);
+    }
+
+    #[test]
+    fn visible_row_geometry_responds_to_height() {
+        let short = TasksApp::compute_layout(Rect::new(0, 0, WIN_W, 420));
+        let tall = TasksApp::compute_layout(Rect::new(0, 0, WIN_W, 820));
+        assert!(visible_rows_in(tall.table) > visible_rows_in(short.table));
+    }
+
+    #[test]
+    fn scroll_clamps_to_new_viewport_without_resetting_valid_offset() {
+        assert_eq!(TasksApp::clamp_offset(3, 20, 10), 3);
+        assert_eq!(TasksApp::clamp_offset(18, 20, 10), 10);
+        assert_eq!(TasksApp::clamp_offset(0, 20, 40), 0);
+        let tall = TasksApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H + 200));
+        let tiny = TasksApp::compute_layout(Rect::new(0, 0, 320, 180));
+        let tall_visible = visible_rows_in(tall.table);
+        let tiny_visible = visible_rows_in(tiny.table);
+        assert!(tiny_visible <= tall_visible);
+        assert_eq!(
+            TasksApp::clamp_offset(4, 20, tall_visible),
+            4.min(20usize.saturating_sub(tall_visible.max(1)))
+        );
+    }
+
+    #[test]
+    fn tiny_dimensions_are_safe_and_repeated_layout_is_deterministic() {
+        for bounds in [
+            Rect::new(0, 0, 0, 0),
+            Rect::new(0, 0, 1, 1),
+            Rect::new(0, 0, 80, 40),
+        ] {
+            let layout = TasksApp::compute_layout(bounds);
+            assert_eq!(layout.root, bounds);
+            let _ = visible_rows_in(layout.table);
+            let _ = columns_with_fill(TABLE_COLUMNS, 1, layout.table.w);
+        }
+        let bounds = Rect::new(0, 0, 900, 640);
+        assert_eq!(
+            TasksApp::compute_layout(bounds),
+            TasksApp::compute_layout(bounds)
+        );
+    }
 }

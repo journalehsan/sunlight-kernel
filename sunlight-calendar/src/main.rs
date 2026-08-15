@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
 
@@ -23,7 +23,8 @@ use sunlight_ui::widgets::{
     EmptyStateStyle, Panel, StatusTextKind,
 };
 use sunlight_ui::{
-    App, Canvas, Event, GridRow, Point, Rect, Theme, VBox, Window, WindowConfig, WindowDecoration,
+    App, AxisSizing, Canvas, Column, Event, GridRow, LayoutBox, LayoutInvalidation, Point, Rect,
+    Row, Size, Sizing, Theme, Window, WindowConfig, WindowDecoration, WindowEvent,
 };
 
 const WIN_W: u32 = 960;
@@ -35,10 +36,7 @@ const STATUS_H: u32 = 22;
 const PAD: i32 = 8;
 const CALENDAR_INNER_PAD: i32 = 12;
 const CALENDAR_SECTION_GAP: i32 = 12;
-const CALENDAR_CELL_W_MIN: i32 = 68;
-const CALENDAR_CELL_W_MAX: i32 = 90;
-const CALENDAR_CELL_H_MIN: i32 = 36;
-const CALENDAR_CELL_H_MAX: i32 = 52;
+
 const CALENDAR_HEADER_H: i32 = 24;
 const GRID_GAP: i32 = 2;
 const DIALOG_W: u32 = 500;
@@ -103,9 +101,11 @@ unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
 }
 
+#[cfg(not(test))]
 #[global_allocator]
 static ALLOC: BumpAllocator = BumpAllocator;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[CALENDAR] panic\n");
@@ -226,82 +226,137 @@ fn month_grid_days(year: i32, month: i32) -> [i32; 42] {
     days
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct MonthGridLayout {
     header_h: i32,
-    cell_w: i32,
-    cell_h: i32,
-    total_cell_w: i32,
-    total_cell_h: i32,
-    pad_x: i32,
     header_y: i32,
     grid_top: i32,
+    col_w: [u32; 7],
+    row_h: [u32; 6],
+    col_x: [i32; 7],
+    row_y: [i32; 6],
 }
 
 impl MonthGridLayout {
     fn new(rect: Rect) -> Self {
-        let width_budget = (rect.w as i32 - 6 * GRID_GAP).max(1);
-        let height_budget = (rect.h as i32 - CALENDAR_HEADER_H - 4 - 5 * GRID_GAP).max(1);
+        let header_h = CALENDAR_HEADER_H.max(0) as u32;
+        let header_gap = 4u32;
+        let usable_h = rect.h.saturating_sub(header_h).saturating_sub(header_gap);
+        let gap = GRID_GAP.max(0) as u32;
 
-        let mut cell_w = (width_budget / 7)
-            .max(CALENDAR_CELL_W_MIN)
-            .min(CALENDAR_CELL_W_MAX);
-        let mut cell_h = (height_budget / 6)
-            .max(CALENDAR_CELL_H_MIN)
-            .min(CALENDAR_CELL_H_MAX);
+        let mut col_w = [0u32; 7];
+        distribute_even_spans(rect.w, 7, gap, &mut col_w);
+        let mut row_h = [0u32; 6];
+        distribute_even_spans(usable_h, 6, gap, &mut row_h);
 
-        let mut grid_w = 7 * cell_w + 6 * GRID_GAP;
-        if grid_w > rect.w as i32 {
-            cell_w = ((rect.w as i32 - 6 * GRID_GAP) / 7).max(1);
-            grid_w = 7 * cell_w + 6 * GRID_GAP;
+        let header_y = rect.y;
+        let grid_top = header_y + header_h as i32 + header_gap as i32;
+        let mut col_x = [0i32; 7];
+        let mut x = rect.x;
+        for i in 0..7 {
+            col_x[i] = x;
+            x = x.saturating_add(col_w[i] as i32);
+            if i + 1 < 7 {
+                x = x.saturating_add(gap as i32);
+            }
         }
-
-        let mut grid_h = CALENDAR_HEADER_H + 4 + 6 * cell_h + 5 * GRID_GAP;
-        if grid_h > rect.h as i32 {
-            cell_h = ((rect.h as i32 - CALENDAR_HEADER_H - 4 - 5 * GRID_GAP) / 6).max(1);
-            grid_h = CALENDAR_HEADER_H + 4 + 6 * cell_h + 5 * GRID_GAP;
+        let mut row_y = [0i32; 6];
+        let mut y = grid_top;
+        for i in 0..6 {
+            row_y[i] = y;
+            y = y.saturating_add(row_h[i] as i32);
+            if i + 1 < 6 {
+                y = y.saturating_add(gap as i32);
+            }
         }
-
-        let pad_x = ((rect.w as i32 - grid_w) / 2).max(0);
-        let pad_y = ((rect.h as i32 - grid_h) / 2).max(0);
-        let header_y = rect.y + pad_y;
-        let grid_top = header_y + CALENDAR_HEADER_H + 4;
 
         Self {
-            header_h: CALENDAR_HEADER_H,
-            cell_w,
-            cell_h,
-            total_cell_w: cell_w + GRID_GAP,
-            total_cell_h: cell_h + GRID_GAP,
-            pad_x,
+            header_h: header_h as i32,
             header_y,
             grid_top,
+            col_w,
+            row_h,
+            col_x,
+            row_y,
         }
     }
 
-    fn cell_rect(&self, base: Rect, col: i32, row: i32) -> Rect {
-        let x = base.x + self.pad_x + col * self.total_cell_w;
-        let y = self.grid_top + row * self.total_cell_h;
-        Rect::new(x, y, self.cell_w as u32, self.cell_h as u32)
+    fn cell_rect(&self, _base: Rect, col: i32, row: i32) -> Rect {
+        if !(0..7).contains(&col) || !(0..6).contains(&row) {
+            return Rect::new(0, 0, 0, 0);
+        }
+        Rect::new(
+            self.col_x[col as usize],
+            self.row_y[row as usize],
+            self.col_w[col as usize],
+            self.row_h[row as usize],
+        )
     }
 
-    fn contains(&self, base: Rect, x: i32, y: i32) -> Option<i32> {
-        let rel_x = x - base.x - self.pad_x;
-        let rel_y = y - self.grid_top;
+    fn weekday_rect(&self, col: i32) -> Rect {
+        if !(0..7).contains(&col) {
+            return Rect::new(0, 0, 0, 0);
+        }
+        Rect::new(
+            self.col_x[col as usize],
+            self.header_y,
+            self.col_w[col as usize],
+            self.header_h.max(0) as u32,
+        )
+    }
 
-        if rel_x < 0 || rel_y < 0 {
+    fn contains(&self, _base: Rect, x: i32, y: i32) -> Option<i32> {
+        if y < self.grid_top {
             return None;
         }
-
-        let col = rel_x / self.total_cell_w;
-        let row = rel_y / self.total_cell_h;
-
-        if col >= 7 || row >= 6 {
-            return None;
+        let mut col = None;
+        for i in 0..7 {
+            let left = self.col_x[i];
+            let right = left.saturating_add(self.col_w[i] as i32);
+            if x >= left && x < right {
+                col = Some(i as i32);
+                break;
+            }
         }
-
-        Some(row * 7 + col)
+        let mut row = None;
+        for i in 0..6 {
+            let top = self.row_y[i];
+            let bottom = top.saturating_add(self.row_h[i] as i32);
+            if y >= top && y < bottom {
+                row = Some(i as i32);
+                break;
+            }
+        }
+        Some(row? * 7 + col?)
     }
+}
+
+fn distribute_even_spans(available: u32, count: usize, gap: u32, out: &mut [u32]) {
+    if count == 0 {
+        return;
+    }
+    let n = count.min(out.len());
+    let gaps = gap.saturating_mul(n.saturating_sub(1) as u32);
+    let inner = available.saturating_sub(gaps);
+    let base = inner / n as u32;
+    let rem = inner % n as u32;
+    for i in 0..n {
+        out[i] = base.saturating_add(if (i as u32) < rem { 1 } else { 0 });
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct CalendarLayout {
+    root: Rect,
+    header: Rect,
+    toolbar: Rect,
+    main: Rect,
+    grid: Rect,
+    sidebar: Rect,
+    status: Rect,
+    month: Rect,
+    preview: Rect,
+    toolbar_buttons: [Rect; 5],
 }
 
 #[derive(Clone, Copy)]
@@ -1324,12 +1379,15 @@ struct CalendarApp {
     reminders_loaded_for: SlotString<DATE_LEN>,
     reminder_lists_loaded: bool,
     last_preview_refresh_ms: u64,
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: CalendarLayout,
 }
 
 impl CalendarApp {
     fn new() -> Self {
         let local = decompose_utc(get_time_utc(), None);
-        Self {
+        let mut app = Self {
             events: Vec::new(),
             store: KvCalendarStore::new(),
             memory_events: Vec::new(),
@@ -1365,75 +1423,152 @@ impl CalendarApp {
             reminders_loaded_for: SlotString::empty(),
             reminder_lists_loaded: false,
             last_preview_refresh_ms: 0,
-        }
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: CalendarLayout::default(),
+        };
+        app.ensure_layout();
+        app
     }
 
-    fn header_rect(&self) -> Rect {
-        Rect::new(0, 0, WIN_W, HEADER_H)
-    }
+    fn compute_layout(root: Rect) -> CalendarLayout {
+        let fill = Sizing::new(AxisSizing::Fill, AxisSizing::Fill);
+        let fixed_h = |height| {
+            LayoutBox::new(Rect::new(0, 0, 0, height))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(height)))
+        };
+        let mut root_children = [
+            fixed_h(HEADER_H),
+            fixed_h(TOOLBAR_H),
+            LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill),
+            fixed_h(STATUS_H),
+        ];
+        let _ = Column::new(root).arrange(&mut root_children);
+        let header = root_children[0].bounds();
+        let toolbar = root_children[1].bounds();
+        let main = root_children[2].bounds();
+        let status = root_children[3].bounds();
 
-    fn toolbar_rect(&self) -> Rect {
-        Rect::new(0, HEADER_H as i32, WIN_W, TOOLBAR_H)
-    }
+        let mut main_children = [
+            LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill),
+            LayoutBox::new(Rect::new(0, 0, SIDEBAR_W, 0))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(SIDEBAR_W), AxisSizing::Fill)),
+        ];
+        let _ = Row::new(main).arrange(&mut main_children);
+        let grid = main_children[0].bounds();
+        let sidebar = main_children[1].bounds();
 
-    fn main_rect(&self) -> Rect {
-        Rect::new(
-            0,
-            (HEADER_H + TOOLBAR_H) as i32,
-            WIN_W,
-            WIN_H - HEADER_H - TOOLBAR_H - STATUS_H,
-        )
-    }
-
-    fn grid_rect(&self) -> Rect {
-        Rect::new(
-            0,
-            (HEADER_H + TOOLBAR_H) as i32,
-            WIN_W - SIDEBAR_W,
-            WIN_H - HEADER_H - TOOLBAR_H - STATUS_H,
-        )
-    }
-
-    fn sidebar_rect(&self) -> Rect {
-        Rect::new(
-            (WIN_W - SIDEBAR_W) as i32,
-            (HEADER_H + TOOLBAR_H) as i32,
-            SIDEBAR_W,
-            WIN_H - HEADER_H - TOOLBAR_H - STATUS_H,
-        )
-    }
-
-    fn calendar_body_rect(&self) -> Rect {
-        self.grid_rect().inset(CALENDAR_INNER_PAD)
-    }
-
-    fn calendar_sections(&self) -> (Rect, Rect) {
-        let body = self.calendar_body_rect();
-        let month_h = self.calendar_month_height(body.h as i32).max(0) as u32;
+        let body = grid.inset(CALENDAR_INNER_PAD);
+        let month_h = Self::calendar_month_height(body.h as i32).max(0) as u32;
         let preview_h = body
             .h
             .saturating_sub(month_h)
             .saturating_sub(CALENDAR_SECTION_GAP as u32);
-        let section_heights = [month_h, preview_h];
-        let mut sections = VBox::new(body)
-            .with_spacing(CALENDAR_SECTION_GAP as u32)
-            .layout(&section_heights);
-        let month = sections.next().unwrap_or(body);
-        let preview = sections
-            .next()
-            .unwrap_or(Rect::new(body.x, body.bottom(), body.w, 0));
-        (month, preview)
+        let mut sections = [
+            LayoutBox::new(Rect::new(0, 0, 0, month_h)).with_sizing(Sizing::new(
+                AxisSizing::Fill,
+                AxisSizing::Fixed(month_h),
+            )),
+            LayoutBox::new(Rect::new(0, 0, 0, preview_h)).with_sizing(Sizing::new(
+                AxisSizing::Fill,
+                AxisSizing::Fixed(preview_h),
+            )),
+        ];
+        let _ = Column::new(body)
+            .with_gap(CALENDAR_SECTION_GAP as u32)
+            .arrange(&mut sections);
+
+        let y = toolbar.y + (toolbar.h as i32 - TOOLBAR_BTN_W as i32) / 2;
+        let toolbar_inner = Rect::new(
+            toolbar.x + PAD,
+            y,
+            toolbar.w.saturating_sub((PAD.max(0) as u32).saturating_mul(2)),
+            TOOLBAR_BTN_W,
+        );
+        let fixed_btn = |width| {
+            LayoutBox::new(Rect::new(0, 0, width, TOOLBAR_BTN_W)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(width),
+                AxisSizing::Fixed(TOOLBAR_BTN_W),
+            ))
+        };
+        let mut toolbar_children = [
+            fixed_btn(TOOLBAR_BTN_W),
+            fixed_btn(56),
+            fixed_btn(TOOLBAR_BTN_W),
+            LayoutBox::new(Rect::new(0, 0, 0, TOOLBAR_BTN_W)).with_sizing(Sizing::new(
+                AxisSizing::Fill,
+                AxisSizing::Fixed(TOOLBAR_BTN_W),
+            )),
+            fixed_btn(36),
+            fixed_btn(TOOLBAR_BTN_W),
+        ];
+        let _ = Row::new(toolbar_inner)
+            .with_gap(4)
+            .arrange(&mut toolbar_children);
+
+        CalendarLayout {
+            root,
+            header,
+            toolbar,
+            main,
+            grid,
+            sidebar,
+            status,
+            month: sections[0].bounds(),
+            preview: sections[1].bounds(),
+            toolbar_buttons: [
+                toolbar_children[0].bounds(),
+                toolbar_children[1].bounds(),
+                toolbar_children[2].bounds(),
+                toolbar_children[4].bounds(),
+                toolbar_children[5].bounds(),
+            ],
+        }
+    }
+
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds);
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        self.ensure_layout()
+    }
+
+    fn header_rect(&self) -> Rect {
+        self.layout.header
+    }
+
+    fn toolbar_rect(&self) -> Rect {
+        self.layout.toolbar
+    }
+
+    fn sidebar_rect(&self) -> Rect {
+        self.layout.sidebar
+    }
+
+    fn calendar_body_rect(&self) -> Rect {
+        self.layout.grid.inset(CALENDAR_INNER_PAD)
     }
 
     fn calendar_month_rect(&self) -> Rect {
-        self.calendar_sections().0
+        self.layout.month
     }
 
     fn calendar_preview_rect(&self) -> Rect {
-        self.calendar_sections().1
+        self.layout.preview
     }
 
-    fn calendar_month_height(&self, body_h: i32) -> i32 {
+    fn calendar_month_height(body_h: i32) -> i32 {
         let desired = (body_h * 62) / 100;
         let max_month = body_h - 132;
         if max_month <= 0 {
@@ -1453,7 +1588,7 @@ impl CalendarApp {
     }
 
     fn status_rect(&self) -> Rect {
-        Rect::new(0, (WIN_H - STATUS_H) as i32, WIN_W, STATUS_H)
+        self.layout.status
     }
 
     fn day_at_point(&self, x: i32, y: i32) -> Option<i32> {
@@ -1494,33 +1629,7 @@ impl CalendarApp {
     }
 
     fn toolbar_buttons(&self) -> [Rect; 5] {
-        let rect = self.toolbar_rect();
-        let y = rect.y + (rect.h as i32 - TOOLBAR_BTN_W as i32) / 2;
-        let gap = 4i32;
-        let mut x = rect.x + PAD;
-
-        let mut btns = [Rect::new(0, 0, 0, 0); 5];
-
-        btns[0] = Rect::new(x, y, TOOLBAR_BTN_W, TOOLBAR_BTN_W);
-        x += TOOLBAR_BTN_W as i32 + gap;
-
-        let today_w = 56u32;
-        btns[1] = Rect::new(x, y, today_w, TOOLBAR_BTN_W);
-        x += today_w as i32 + gap;
-
-        btns[2] = Rect::new(x, y, TOOLBAR_BTN_W, TOOLBAR_BTN_W);
-
-        btns[4] = Rect::new(
-            rect.right() - PAD - TOOLBAR_BTN_W as i32,
-            y,
-            TOOLBAR_BTN_W,
-            TOOLBAR_BTN_W,
-        );
-
-        let add_btn_x = rect.right() - PAD - TOOLBAR_BTN_W as i32 - gap - 36;
-        btns[3] = Rect::new(add_btn_x, y, 36, TOOLBAR_BTN_W);
-
-        btns
+        self.layout.toolbar_buttons
     }
 
     fn toolbar_hit(&self, x: i32, y: i32) -> Option<usize> {
@@ -1545,8 +1654,8 @@ impl CalendarApp {
         let menu_item_h = 28u32;
         let menu_w = 172u32;
         let menu_h = menu_item_h * specs.len() as u32 + 8;
-        let max_x = WIN_W as i32 - menu_w as i32 - 6;
-        let max_y = WIN_H as i32 - menu_h as i32 - STATUS_H as i32 - 6;
+        let max_x = self.client_bounds.w as i32 - menu_w as i32 - 6;
+        let max_y = self.client_bounds.h as i32 - menu_h as i32 - STATUS_H as i32 - 6;
         let rect = Rect::new(
             x.clamp(6, max_x.max(6)),
             y.clamp(6, max_y.max(6)),
@@ -1584,8 +1693,11 @@ impl CalendarApp {
     fn dialog_rect(&self) -> Rect {
         let h = 360u32;
         Rect::new(
-            ((WIN_W - DIALOG_W) / 2) as i32,
-            ((WIN_H - h) / 2) as i32,
+            self.client_bounds
+                .w
+                .saturating_sub(DIALOG_W)
+                .saturating_div(2) as i32,
+            self.client_bounds.h.saturating_sub(h).saturating_div(2) as i32,
             DIALOG_W,
             h,
         )
@@ -2078,8 +2190,12 @@ fn read_locale_time() -> String {
 
 impl App for CalendarApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        let main = self.main_rect();
-        canvas.fill_rect(main, theme.bg);
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
+        canvas.fill_rect(self.layout.root, theme.bg);
 
         self.draw_header(canvas, theme);
         self.draw_toolbar(canvas, theme);
@@ -2122,6 +2238,11 @@ impl App for CalendarApp {
             } => self.handle_key(keycode, pressed, ctrl),
             _ => false,
         }
+    }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
     }
 }
 
@@ -2244,12 +2365,7 @@ impl CalendarApp {
         for col in 0..7 {
             let iso_wd = if col == 6 { 7u8 } else { (col + 1) as u8 };
             let wd_name = self.weekday_short(iso_wd);
-            let cell_rect = Rect::new(
-                month_inner.x + layout.pad_x + col * layout.total_cell_w,
-                layout.header_y,
-                layout.cell_w as u32,
-                layout.header_h as u32,
-            );
+            let cell_rect = layout.weekday_rect(col);
             draw_text_vcenter(
                 canvas,
                 wd_name,
@@ -2291,26 +2407,31 @@ impl CalendarApp {
                 CalendarCellState::Normal
             };
             let cell_style = CalendarCellStyle::from_theme(theme, state, has_events);
+            if cell_rect.w == 0 || cell_rect.h == 0 {
+                continue;
+            }
             if let Some(fill) = cell_style.fill {
-                canvas.fill_rounded_rect(cell_rect, 6, fill);
+                canvas.fill_rounded_rect(cell_rect, 6.min(cell_rect.w / 2), fill);
             }
             if state != CalendarCellState::Normal {
-                canvas.stroke_rounded_rect(cell_rect, 6, 1, cell_style.border);
+                canvas.stroke_rounded_rect(cell_rect, 6.min(cell_rect.w / 2), 1, cell_style.border);
             }
 
-            let mut day_str = String::new();
-            push_i32_into_string(&mut day_str, day);
-            draw_text(
-                canvas,
-                &day_str,
-                cell_rect.x + 6,
-                cell_rect.y + 6,
-                &TextStyle::new(FontRole::UiSmall, cell_style.text),
-            );
+            if cell_rect.w >= 12 && cell_rect.h >= 12 {
+                let mut day_str = String::new();
+                push_i32_into_string(&mut day_str, day);
+                draw_text(
+                    canvas,
+                    &day_str,
+                    cell_rect.x + 4,
+                    cell_rect.y + 4,
+                    &TextStyle::new(FontRole::UiSmall, cell_style.text),
+                );
+            }
 
-            if has_events {
-                let dot_x = cell_rect.x + cell_rect.w as i32 - 10;
-                let dot_y = cell_rect.y + cell_rect.h as i32 - 8;
+            if has_events && cell_rect.w >= 12 && cell_rect.h >= 12 {
+                let dot_x = cell_rect.right() - 8;
+                let dot_y = cell_rect.bottom() - 8;
                 canvas.fill_rounded_rect(Rect::new(dot_x, dot_y, 6, 6), 3, cell_style.marker);
             }
         }
@@ -2681,7 +2802,7 @@ impl CalendarApp {
         if !self.dialog.visible {
             return;
         }
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg.darken(70));
+        canvas.fill_rect(self.layout.root, theme.bg.darken(70));
         let panel = self.dialog_rect();
         canvas.fill_rounded_rect_with_border(panel, 8, theme.panel, theme.border, 1);
 
@@ -2878,10 +2999,15 @@ impl CalendarApp {
         if !self.confirm.visible {
             return;
         }
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg.darken(70));
+        canvas.fill_rect(self.layout.root, theme.bg.darken(70));
         let w = 320u32;
         let h = 100u32;
-        let panel = Rect::new(((WIN_W - w) / 2) as i32, ((WIN_H - h) / 2) as i32, w, h);
+        let panel = Rect::new(
+            self.client_bounds.w.saturating_sub(w).saturating_div(2) as i32,
+            self.client_bounds.h.saturating_sub(h).saturating_div(2) as i32,
+            w,
+            h,
+        );
         canvas.fill_rounded_rect_with_border(panel, 8, theme.panel, theme.border, 1);
         draw_text_vcenter(
             canvas,
@@ -2928,7 +3054,12 @@ impl CalendarApp {
         if self.confirm.visible {
             let w = 320u32;
             let h = 100u32;
-            let panel = Rect::new(((WIN_W - w) / 2) as i32, ((WIN_H - h) / 2) as i32, w, h);
+            let panel = Rect::new(
+            self.client_bounds.w.saturating_sub(w).saturating_div(2) as i32,
+            self.client_bounds.h.saturating_sub(h).saturating_div(2) as i32,
+            w,
+            h,
+        );
             let btn_y = panel.bottom() - DIALOG_PAD - DIALOG_BTN_H as i32;
             let ok_btn = Rect::new(
                 panel.x + (panel.w as i32 / 2) - DIALOG_BTN_W as i32 - 5,
@@ -3351,6 +3482,7 @@ impl CalendarApp {
     }
 }
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
@@ -3374,4 +3506,115 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 
     window.run(&mut app);
     ProcessExit::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toolbar_follows_width_and_month_viewport_fills_remaining_space() {
+        let layout = CalendarApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        assert_eq!(layout.root, Rect::new(0, 0, WIN_W, WIN_H));
+        assert_eq!(layout.header.w, WIN_W);
+        assert_eq!(layout.toolbar.w, WIN_W);
+        assert_eq!(layout.status.w, WIN_W);
+        assert_eq!(layout.status.bottom(), WIN_H as i32);
+        assert_eq!(layout.sidebar.w, SIDEBAR_W);
+        assert_eq!(layout.grid.w, WIN_W - SIDEBAR_W);
+        assert_eq!(layout.month.w, layout.grid.w.saturating_sub(CALENDAR_INNER_PAD as u32 * 2));
+        assert_eq!(layout.sidebar.h, layout.main.h);
+        assert_eq!(layout.grid.h, layout.main.h);
+    }
+
+    #[test]
+    fn seven_columns_and_six_rows_exactly_consume_the_month_viewport() {
+        let month_inner = Rect::new(10, 20, 703, 401);
+        let grid = MonthGridLayout::new(month_inner);
+        let col_sum: u32 = grid.col_w.iter().sum::<u32>() + 6 * GRID_GAP as u32;
+        let row_sum: u32 = grid.row_h.iter().sum::<u32>()
+            + 5 * GRID_GAP as u32
+            + grid.header_h as u32
+            + 4;
+        assert_eq!(col_sum, month_inner.w);
+        assert_eq!(row_sum, month_inner.h);
+        let last = grid.cell_rect(month_inner, 6, 5);
+        assert_eq!(last.right(), month_inner.right());
+        assert_eq!(last.bottom(), month_inner.bottom());
+    }
+
+    #[test]
+    fn remainder_pixels_are_distributed_deterministically_to_early_spans() {
+        let grid = MonthGridLayout::new(Rect::new(0, 0, 100, 80));
+        let first = grid.col_w;
+        let again = MonthGridLayout::new(Rect::new(0, 0, 100, 80)).col_w;
+        assert_eq!(first, again);
+        let max = *first.iter().max().unwrap();
+        let min = *first.iter().min().unwrap();
+        assert!(max <= min + 1);
+        assert!(first[0] >= first[6]);
+    }
+
+    #[test]
+    fn cells_recompute_on_horizontal_and_vertical_resize() {
+        let a = MonthGridLayout::new(Rect::new(0, 0, 400, 300));
+        let wide = MonthGridLayout::new(Rect::new(0, 0, 600, 300));
+        let tall = MonthGridLayout::new(Rect::new(0, 0, 400, 480));
+        assert!(wide.col_w[0] > a.col_w[0]);
+        assert!(tall.row_h[0] > a.row_h[0]);
+        assert_eq!(wide.row_h, a.row_h);
+        assert_eq!(tall.col_w, a.col_w);
+        let cell = a.cell_rect(Rect::new(0, 0, 400, 300), 0, 0);
+        let wide_cell = wide.cell_rect(Rect::new(0, 0, 600, 300), 0, 0);
+        let tall_cell = tall.cell_rect(Rect::new(0, 0, 400, 480), 0, 0);
+        assert!(wide_cell.w > cell.w);
+        assert!(tall_cell.h > cell.h);
+        assert!(cell.right() <= 400);
+        assert!(cell.bottom() <= 300);
+    }
+
+    #[test]
+    fn cells_remain_inside_viewport_and_tiny_sizes_are_safe() {
+        for bounds in [
+            Rect::new(0, 0, 0, 0),
+            Rect::new(3, 5, 1, 1),
+            Rect::new(0, 0, 20, 18),
+            Rect::new(8, 8, 77, 53),
+        ] {
+            let grid = MonthGridLayout::new(bounds);
+            for row in 0..6 {
+                for col in 0..7 {
+                    let cell = grid.cell_rect(bounds, col, row);
+                    if cell.w == 0 || cell.h == 0 {
+                        continue;
+                    }
+                    assert!(cell.x >= bounds.x);
+                    assert!(cell.y >= bounds.y);
+                    assert!(cell.right() <= bounds.right());
+                    assert!(cell.bottom() <= bounds.bottom());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeated_identical_layout_generates_identical_cell_rectangles() {
+        let bounds = Rect::new(12, 18, 511, 307);
+        let first = MonthGridLayout::new(bounds);
+        let second = MonthGridLayout::new(bounds);
+        assert_eq!(first, second);
+        for row in 0..6 {
+            for col in 0..7 {
+                assert_eq!(
+                    first.cell_rect(bounds, col, row),
+                    second.cell_rect(bounds, col, row)
+                );
+            }
+        }
+        let shell = Rect::new(0, 0, 1100, 800);
+        assert_eq!(
+            CalendarApp::compute_layout(shell),
+            CalendarApp::compute_layout(shell)
+        );
+    }
 }

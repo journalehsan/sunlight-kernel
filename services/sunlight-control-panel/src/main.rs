@@ -16,8 +16,8 @@
 //!
 //! Icons: SunlightOS icon theme (Breeze-inspired, TGA format).
 
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
 
@@ -48,8 +48,9 @@ use sunlight_ui::{
     image::{decode_simg, draw_mono_icon, MonoIcon, RgbaImage, TgaImage},
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, Slider},
-    App, Canvas, Color, Event, HBox, MaterialPalette, Point, Rect, Theme, VBox, Window,
-    WindowConfig, WindowDecoration, WindowMaterial,
+    App, AxisSizing, Canvas, Color, Column, Event, HBox, LayoutBox, LayoutInvalidation,
+    MaterialPalette, Point, Rect, Size, Sizing, Theme, VBox, Window, WindowConfig,
+    WindowDecoration, WindowEvent, WindowMaterial,
 };
 use sunlight_wallpaper::{
     is_supported_wallpaper, load_desktop_config, save_desktop_config, scan_wallpapers,
@@ -104,6 +105,7 @@ const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO
 // Tall enough to show the complete About SunlightOS details without scrolling.
 const WIN_W: u32 = 500;
 const WIN_H: u32 = 560;
+const PAGE_HEADER_H: u32 = 44;
 const DISPLAY_DIALOG_W: u32 = 420;
 const DISPLAY_DIALOG_H: u32 = 190;
 const KEY_ESC: u8 = 0x01;
@@ -379,6 +381,16 @@ struct ControlPanelApp {
     power_thermal: PowerThermalPageState,
     date_time: DateTimePageState,
     login_session: SessionPageState,
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: ControlPanelLayout,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ControlPanelLayout {
+    root: Rect,
+    header: Rect,
+    content: Rect,
 }
 
 impl ControlPanelApp {
@@ -400,7 +412,7 @@ impl ControlPanelApp {
             .iter()
             .position(|it| it.selected)
             .unwrap_or(0);
-        Self {
+        let mut app = Self {
             page: initial_page,
             display_ep,
             screen_w,
@@ -441,7 +453,64 @@ impl ControlPanelApp {
             power_thermal: PowerThermalPageState::new(),
             date_time: DateTimePageState::new(),
             login_session: SessionPageState::new(),
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: ControlPanelLayout::default(),
+        };
+        app.ensure_layout();
+        app
+    }
+
+    fn compute_layout(root: Rect) -> ControlPanelLayout {
+        let mut children = [
+            LayoutBox::new(Rect::new(0, 0, 0, PAGE_HEADER_H)).with_sizing(Sizing::new(
+                AxisSizing::Fill,
+                AxisSizing::Fixed(PAGE_HEADER_H),
+            )),
+            LayoutBox::new(Rect::new(0, 0, 0, 0))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fill)),
+        ];
+        let _ = Column::new(root).arrange(&mut children);
+        ControlPanelLayout {
+            root,
+            header: children[0].bounds(),
+            content: children[1].bounds(),
         }
+    }
+
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds);
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        self.ensure_layout()
+    }
+
+    fn win_w(&self) -> u32 {
+        self.client_bounds.w
+    }
+
+    fn win_h(&self) -> u32 {
+        self.client_bounds.h
+    }
+
+    fn page_content(&self) -> Rect {
+        Rect::new(
+            12,
+            12,
+            self.win_w().saturating_sub(24),
+            self.win_h().saturating_sub(24),
+        )
     }
 
     fn refresh_display_modes(&mut self) {
@@ -652,8 +721,8 @@ impl ControlPanelApp {
         let card_w = 136u32;
         let card_h = 96u32;
         let gap = 14i32;
-        let start_x = (WIN_W as i32 - (card_w * 3) as i32 - gap * 2) / 2;
-        let card_y = 52i32;
+        let start_x = (self.win_w() as i32 - (card_w * 3) as i32 - gap * 2) / 2;
+        let card_y = self.layout.content.y + 8;
         let row2_y = card_y + card_h as i32 + 10;
         let row3_y = row2_y + card_h as i32 + 10;
         let row4_y = row3_y + card_h as i32 + 10;
@@ -711,10 +780,10 @@ impl ControlPanelApp {
     }
 
     fn draw_grid(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
+        canvas.clear_transparent(self.layout.root);
 
         // Header bar — denser surface in the same charcoal family as WindowGlass.
-        let header = Rect::new(0, 0, WIN_W, 44);
+        let header = self.layout.header;
         canvas.fill_material(
             header,
             MaterialPalette::new(theme)
@@ -722,7 +791,10 @@ impl ControlPanelApp {
                 .with_radius(0)
                 .without_border(),
         );
-        canvas.draw_rect(Rect::new(0, 43, WIN_W, 1), theme.chrome.subtle_border);
+        canvas.draw_rect(
+            Rect::new(header.x, header.bottom() - 1, header.w, 1),
+            theme.chrome.subtle_border,
+        );
 
         // Header: settings icon + title
         if let Ok(tga) = TgaImage::parse(ICON_SETTINGS_TGA) {
@@ -736,7 +808,7 @@ impl ControlPanelApp {
         );
         Self::draw_label(
             canvas,
-            Rect::new(46, 12, WIN_W - 58, 20),
+            Rect::new(46, header.y + 12, header.w.saturating_sub(58), 20),
             "System Preferences",
             theme,
             FontRole::UiTitle,
@@ -954,7 +1026,7 @@ impl ControlPanelApp {
     }
 
     fn update_about_computer_page(&mut self, event: Event) -> bool {
-        let action = about::update_computer_page(event, WIN_W, WIN_H, &mut self.about);
+        let action = about::update_computer_page(event, self.win_w(), self.win_h(), &mut self.about);
         if action == AboutAction::None {
             // Still repaint on scroll keypresses.
             if let Event::KeyPress { pressed: true, .. } = event {
@@ -966,7 +1038,7 @@ impl ControlPanelApp {
     }
 
     fn update_about_os_page(&mut self, event: Event) -> bool {
-        let action = about::update_os_page(event, WIN_W, WIN_H, &mut self.about);
+        let action = about::update_os_page(event, self.win_w(), self.win_h(), &mut self.about);
         if action == AboutAction::None {
             if let Event::KeyPress { pressed: true, .. } = event {
                 return true;
@@ -980,7 +1052,7 @@ impl ControlPanelApp {
         if matches!(event, Event::Tick) {
             return self.network.refresh_due() && self.network.refresh();
         }
-        match self.network.update(event, WIN_W, WIN_H) {
+        match self.network.update(event, self.win_w(), self.win_h()) {
             NetworkAction::None => true,
             NetworkAction::Back => {
                 self.page = Page::Grid;
@@ -993,7 +1065,7 @@ impl ControlPanelApp {
     }
 
     fn update_power_thermal_page(&mut self, event: Event) -> bool {
-        let (redraw, action) = self.power_thermal.update(event, WIN_W, WIN_H);
+        let (redraw, action) = self.power_thermal.update(event, self.win_w(), self.win_h());
         match action {
             PowerThermalAction::None => redraw,
             PowerThermalAction::Back => {
@@ -1006,7 +1078,7 @@ impl ControlPanelApp {
     }
 
     fn update_date_time_page(&mut self, event: Event) -> bool {
-        let (redraw, action) = self.date_time.update(event, WIN_W, WIN_H);
+        let (redraw, action) = self.date_time.update(event, self.win_w(), self.win_h());
         match action {
             DateTimeAction::None => redraw,
             DateTimeAction::Back => {
@@ -1018,17 +1090,17 @@ impl ControlPanelApp {
         }
     }
 
-    fn notification_back_rect() -> Rect {
-        Rect::new(28, WIN_H as i32 - 44, 80, 28)
+    fn notification_back_rect(&self) -> Rect {
+        Rect::new(28, self.win_h() as i32 - 44, 80, 28)
     }
 
-    fn notification_dnd_rect() -> Rect {
-        Rect::new(WIN_W as i32 - 148, WIN_H as i32 - 44, 120, 28)
+    fn notification_dnd_rect(&self) -> Rect {
+        Rect::new(self.win_w() as i32 - 148, self.win_h() as i32 - 44, 120, 28)
     }
 
     fn draw_notifications_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
-        let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
+        canvas.clear_transparent(self.layout.root);
+        let content = self.page_content();
         Panel::new(content).draw(canvas, theme);
         let title_bar = Rect::new(content.x, content.y, content.w, 28);
         canvas.fill_rect(title_bar, theme.panel_alt);
@@ -1050,7 +1122,7 @@ impl ControlPanelApp {
         }
         Self::draw_label(
             canvas,
-            Rect::new(54, 58, WIN_W - 82, 18),
+            Rect::new(54, 58, self.win_w().saturating_sub(82), 18),
             "Open Notification Center from the top-right bell in Vortex Shell.",
             theme,
             FontRole::UiSmall,
@@ -1065,25 +1137,25 @@ impl ControlPanelApp {
         }
         Self::draw_label(
             canvas,
-            Rect::new(54, 88, WIN_W - 82, 18),
+            Rect::new(54, 88, self.win_w().saturating_sub(82), 18),
             if dnd { "DND is On." } else { "DND is Off." },
             theme,
             FontRole::UiMedium,
         );
         Self::draw_dim_label(
             canvas,
-            Rect::new(28, 116, WIN_W - 56, 18),
+            Rect::new(28, 116, self.win_w().saturating_sub(56), 18),
             "When DND is on, notifications are saved to history but popups are hidden.",
             theme,
             FontRole::UiSmall,
         );
 
-        let mut back = Button::secondary(Self::notification_back_rect(), "Back");
+        let mut back = Button::secondary(self.notification_back_rect(), "Back");
         back.state = ButtonState::Normal;
         Self::draw_button(canvas, theme, back);
 
         let mut dnd_btn = Button::new(
-            Self::notification_dnd_rect(),
+            self.notification_dnd_rect(),
             if dnd { "Turn DND Off" } else { "Turn DND On" },
         );
         dnd_btn.state = ButtonState::Normal;
@@ -1093,11 +1165,11 @@ impl ControlPanelApp {
     fn update_notifications_page(&mut self, event: Event) -> bool {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
-            if Self::notification_back_rect().contains(pt) {
+            if self.notification_back_rect().contains(pt) {
                 self.page = Page::Grid;
                 return true;
             }
-            if Self::notification_dnd_rect().contains(pt) {
+            if self.notification_dnd_rect().contains(pt) {
                 let _ = notification_set_dnd(!notification_dnd_enabled());
                 return true;
             }
@@ -1110,9 +1182,9 @@ impl ControlPanelApp {
     // -----------------------------------------------------------------------
 
     fn draw_mouse_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
+        canvas.clear_transparent(self.layout.root);
 
-        let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
+        let content = self.page_content();
         Panel::with_title(content, "Mouse")
             .with_font(&Typography::UI_MEDIUM)
             .draw(canvas, theme);
@@ -1185,7 +1257,7 @@ impl ControlPanelApp {
     }
 
     fn mouse_action_rects(&self) -> (Rect, Rect) {
-        let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
+        let content = self.page_content();
         let inner = Rect::new(
             content.x + 14,
             content.y + 32,
@@ -1230,13 +1302,13 @@ impl ControlPanelApp {
     // -----------------------------------------------------------------------
 
     fn draw_monitor_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
+        canvas.clear_transparent(self.layout.root);
 
-        let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
+        let content = self.page_content();
         Panel::with_title(content, "Monitor")
             .with_font(&Typography::UI_MEDIUM)
             .draw(canvas, theme);
-        let inner = Self::monitor_inner_rect();
+        let inner = self.monitor_inner_rect();
         let backend = self
             .display_capabilities
             .map(|capabilities| backend_label(capabilities.backend))
@@ -1281,7 +1353,7 @@ impl ControlPanelApp {
                 .with_font(&Typography::UI_MEDIUM)
                 .draw(canvas, theme);
             for (index, mode) in self.display_modes.iter().enumerate() {
-                let rect = Self::monitor_mode_rect(index);
+                let rect = self.monitor_mode_rect(index);
                 let selected = index == self.selected_mode;
                 canvas.fill_rounded_rect(
                     rect,
@@ -1317,7 +1389,7 @@ impl ControlPanelApp {
             .draw(canvas, theme);
         }
 
-        let (back_r, apply_r) = Self::monitor_action_rects();
+        let (back_r, apply_r) = self.monitor_action_rects();
         let mut back = Button::secondary(back_r, "Back");
         back.state = ButtonState::Normal;
         Self::draw_button(canvas, theme, back);
@@ -1335,18 +1407,18 @@ impl ControlPanelApp {
         Self::draw_button(canvas, theme, apply);
     }
 
-    fn monitor_inner_rect() -> Rect {
-        let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
+    fn monitor_inner_rect(&self) -> Rect {
+        let content = self.page_content();
         Rect::new(
             content.x + 14,
             content.y + 32,
-            content.w - 28,
-            content.h - 46,
+            content.w.saturating_sub(28),
+            content.h.saturating_sub(46),
         )
     }
 
-    fn monitor_mode_rect(index: usize) -> Rect {
-        let inner = Self::monitor_inner_rect();
+    fn monitor_mode_rect(&self, index: usize) -> Rect {
+        let inner = self.monitor_inner_rect();
         let column = index / 7;
         let row = index % 7;
         let gap = 8;
@@ -1359,8 +1431,8 @@ impl ControlPanelApp {
         )
     }
 
-    fn monitor_action_rects() -> (Rect, Rect) {
-        let inner = Self::monitor_inner_rect();
+    fn monitor_action_rects(&self) -> (Rect, Rect) {
+        let inner = self.monitor_inner_rect();
         (
             Rect::new(inner.x, inner.bottom() - 30, 80, 28),
             Rect::new(inner.right() - 80, inner.bottom() - 30, 80, 28),
@@ -1370,7 +1442,7 @@ impl ControlPanelApp {
     fn update_monitor_page(&mut self, event: Event) -> bool {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
-            let (back_rect, apply_rect) = Self::monitor_action_rects();
+            let (back_rect, apply_rect) = self.monitor_action_rects();
             if back_rect.contains(pt) {
                 self.page = Page::Grid;
                 return true;
@@ -1380,7 +1452,7 @@ impl ControlPanelApp {
                 return true;
             }
             for index in 0..self.display_modes.len() {
-                if Self::monitor_mode_rect(index).contains(pt) {
+                if self.monitor_mode_rect(index).contains(pt) {
                     self.selected_mode = index;
                     self.display_error.clear();
                     return true;
@@ -1390,9 +1462,9 @@ impl ControlPanelApp {
         false
     }
 
-    fn wallpaper_preview_rect() -> Rect {
+    fn wallpaper_preview_rect(&self) -> Rect {
         Rect::new(
-            ((WIN_W - WALLPAPER_PREVIEW_W) / 2) as i32,
+            ((self.win_w().saturating_sub(WALLPAPER_PREVIEW_W)) / 2) as i32,
             46,
             WALLPAPER_PREVIEW_W,
             WALLPAPER_PREVIEW_H,
@@ -1400,7 +1472,7 @@ impl ControlPanelApp {
     }
 
     /// 3-column wrapping grid tile for wallpaper `idx` (rows of 3,3,1 for 7 items).
-    fn wallpaper_item_rect(idx: usize) -> Rect {
+    fn wallpaper_item_rect(&self, idx: usize) -> Rect {
         const COLS: i32 = 3;
         const TILE_W: i32 = 102;
         const TILE_H: i32 = 34;
@@ -1408,7 +1480,7 @@ impl ControlPanelApp {
         const VGAP: i32 = 5;
         const GRID_Y: i32 = 166;
         let total_w = COLS * TILE_W + (COLS - 1) * HGAP;
-        let start_x = (WIN_W as i32 - total_w) / 2;
+        let start_x = (self.win_w() as i32 - total_w) / 2;
         let col = (idx as i32) % COLS;
         let row = (idx as i32) / COLS;
         Rect::new(
@@ -1419,26 +1491,26 @@ impl ControlPanelApp {
         )
     }
 
-    fn wallpaper_back_rect() -> Rect {
-        Rect::new(28, WIN_H as i32 - 44, 80, 28)
+    fn wallpaper_back_rect(&self) -> Rect {
+        Rect::new(28, self.win_h() as i32 - 44, 80, 28)
     }
 
-    fn wallpaper_refresh_rect() -> Rect {
-        Rect::new((WIN_W as i32 - 80) / 2, WIN_H as i32 - 44, 80, 28)
+    fn wallpaper_refresh_rect(&self) -> Rect {
+        Rect::new((self.win_w() as i32 - 80) / 2, self.win_h() as i32 - 44, 80, 28)
     }
 
-    fn wallpaper_apply_rect() -> Rect {
-        Rect::new(WIN_W as i32 - 108, WIN_H as i32 - 44, 80, 28)
+    fn wallpaper_apply_rect(&self) -> Rect {
+        Rect::new(self.win_w() as i32 - 108, self.win_h() as i32 - 44, 80, 28)
     }
 
     fn draw_wallpaper_page(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
-        let content = Rect::new(12, 12, WIN_W - 24, WIN_H - 24);
+        canvas.clear_transparent(self.layout.root);
+        let content = self.page_content();
         Panel::with_title(content, "Wallpaper")
             .with_font(&Typography::UI_MEDIUM)
             .draw(canvas, theme);
 
-        let preview = Self::wallpaper_preview_rect();
+        let preview = self.wallpaper_preview_rect();
         canvas.fill_rect(preview, theme.panel_alt);
         canvas.draw_rect(preview, theme.border);
         if let Some(ref img) = self.wallpaper_preview {
@@ -1456,7 +1528,7 @@ impl ControlPanelApp {
 
         for idx in 0..self.wallpaper_items.len() {
             let item = &self.wallpaper_items[idx];
-            let r = Self::wallpaper_item_rect(idx);
+            let r = self.wallpaper_item_rect(idx);
             let fill = if idx == self.wallpaper_selected {
                 theme.accent.darken(140)
             } else {
@@ -1476,22 +1548,22 @@ impl ControlPanelApp {
 
         if self.wallpaper_status_len > 0 {
             Label::new(
-                Rect::new(28, 270, WIN_W - 56, 14),
+                Rect::new(28, 270, self.win_w().saturating_sub(56), 14),
                 self.wallpaper_status_str(),
             )
             .with_font(&Typography::UI_SMALL)
             .draw(canvas, theme);
         }
 
-        let mut back = Button::secondary(Self::wallpaper_back_rect(), "Back");
+        let mut back = Button::secondary(self.wallpaper_back_rect(), "Back");
         back.state = ButtonState::Normal;
         Self::draw_button(canvas, theme, back);
 
-        let mut refresh = Button::secondary(Self::wallpaper_refresh_rect(), "Refresh");
+        let mut refresh = Button::secondary(self.wallpaper_refresh_rect(), "Refresh");
         refresh.state = ButtonState::Normal;
         Self::draw_button(canvas, theme, refresh);
 
-        let mut apply = Button::new(Self::wallpaper_apply_rect(), "Apply");
+        let mut apply = Button::new(self.wallpaper_apply_rect(), "Apply");
         apply.state = ButtonState::Normal;
         Self::draw_button(canvas, theme, apply);
     }
@@ -1549,8 +1621,8 @@ impl ControlPanelApp {
         }
     }
 
-    fn wallpaper_item_at(pt: Point, len: usize) -> Option<usize> {
-        (0..len).find(|&idx| Self::wallpaper_item_rect(idx).contains(pt))
+    fn wallpaper_item_at(&self, pt: Point, len: usize) -> Option<usize> {
+        (0..len).find(|&idx| self.wallpaper_item_rect(idx).contains(pt))
     }
 
     fn select_wallpaper(&mut self, idx: usize) {
@@ -1566,7 +1638,7 @@ impl ControlPanelApp {
             Event::MouseDown { x, y, button: 0 } => {
                 let pt = Point::new(x, y);
                 self.wallpaper_pending_item =
-                    Self::wallpaper_item_at(pt, self.wallpaper_items.len());
+                    self.wallpaper_item_at(pt, self.wallpaper_items.len());
                 if let Some(idx) = self.wallpaper_pending_item {
                     self.select_wallpaper(idx);
                     return true;
@@ -1574,22 +1646,22 @@ impl ControlPanelApp {
             }
             Event::MouseUp { x, y, button: 0 } | Event::Click { x, y } => {
                 let pt = Point::new(x, y);
-                if Self::wallpaper_back_rect().contains(pt) {
+                if self.wallpaper_back_rect().contains(pt) {
                     self.wallpaper_pending_item = None;
                     self.page = Page::Grid;
                     return true;
                 }
-                if Self::wallpaper_apply_rect().contains(pt) {
+                if self.wallpaper_apply_rect().contains(pt) {
                     self.wallpaper_pending_item = None;
                     self.apply_wallpaper();
                     return true;
                 }
-                if Self::wallpaper_refresh_rect().contains(pt) {
+                if self.wallpaper_refresh_rect().contains(pt) {
                     self.wallpaper_pending_item = None;
                     self.refresh_wallpaper_list();
                     return true;
                 }
-                if let Some(idx) = Self::wallpaper_item_at(pt, self.wallpaper_items.len()) {
+                if let Some(idx) = self.wallpaper_item_at(pt, self.wallpaper_items.len()) {
                     if self
                         .wallpaper_pending_item
                         .map(|pending| pending == idx)
@@ -1614,6 +1686,12 @@ impl ControlPanelApp {
 
 impl App for ControlPanelApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
+        let (win_w, win_h) = (self.win_w(), self.win_h());
         match self.page {
             Page::Grid => self.draw_grid(canvas, theme),
             Page::Mouse => self.draw_mouse_page(canvas, theme),
@@ -1623,8 +1701,8 @@ impl App for ControlPanelApp {
             Page::AboutComputer => about::draw_computer_page(
                 canvas,
                 theme,
-                WIN_W,
-                WIN_H,
+                win_w,
+                win_h,
                 &self.sysinfo,
                 &self.about,
                 self.icon_computer,
@@ -1632,16 +1710,16 @@ impl App for ControlPanelApp {
             Page::AboutOs => about::draw_os_page(
                 canvas,
                 theme,
-                WIN_W,
-                WIN_H,
+                win_w,
+                win_h,
                 &self.sysinfo,
                 &self.about,
                 self.icon_logo.or(self.icon_about_os),
             ),
-            Page::Network => self.network.draw(canvas, theme, WIN_W, WIN_H),
-            Page::PowerThermal => self.power_thermal.draw(canvas, theme, WIN_W, WIN_H),
-            Page::DateTime => self.date_time.draw(canvas, theme, WIN_W, WIN_H),
-            Page::LoginSession => self.login_session.draw(canvas, theme, WIN_W, WIN_H),
+            Page::Network => self.network.draw(canvas, theme, win_w, win_h),
+            Page::PowerThermal => self.power_thermal.draw(canvas, theme, win_w, win_h),
+            Page::DateTime => self.date_time.draw(canvas, theme, win_w, win_h),
+            Page::LoginSession => self.login_session.draw(canvas, theme, win_w, win_h),
         }
     }
 
@@ -1667,7 +1745,7 @@ impl App for ControlPanelApp {
             Page::Network => self.update_network_page(event),
             Page::PowerThermal => self.update_power_thermal_page(event),
             Page::DateTime => self.update_date_time_page(event),
-            Page::LoginSession => match self.login_session.update(event, WIN_W, WIN_H) {
+            Page::LoginSession => match self.login_session.update(event, self.win_w(), self.win_h()) {
                 SessionAction::None => false,
                 SessionAction::Back => {
                     self.page = Page::Grid;
@@ -1692,6 +1770,11 @@ impl App for ControlPanelApp {
             return self.date_time.activate();
         }
         false
+    }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
     }
 
     fn poll_timeout_ms(&self) -> u64 {
@@ -1923,6 +2006,7 @@ fn fit_image_rect(img_w: u32, img_h: u32, bounds: Rect) -> Rect {
     )
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[CONTROL-PANEL] panic\n");
@@ -1935,6 +2019,7 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 // Entry point
 // ---------------------------------------------------------------------------
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
@@ -2024,4 +2109,65 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
         i += 1;
     }
     Page::Grid
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn common_shell_tracks_root_dimensions() {
+        let layout = ControlPanelApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        assert_eq!(layout.root, Rect::new(0, 0, WIN_W, WIN_H));
+        assert_eq!(layout.header.w, WIN_W);
+        assert_eq!(layout.header.h, PAGE_HEADER_H);
+        assert_eq!(layout.content.w, WIN_W);
+        assert_eq!(layout.content.h, WIN_H - PAGE_HEADER_H);
+        assert_eq!(layout.content.y, PAGE_HEADER_H as i32);
+        assert_eq!(layout.header.bottom(), layout.content.y);
+    }
+
+    #[test]
+    fn navigation_cards_stay_centered_while_content_expands() {
+        let initial = ControlPanelApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        let wide = ControlPanelApp::compute_layout(Rect::new(0, 0, WIN_W + 200, WIN_H));
+        let tall = ControlPanelApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H + 180));
+        assert_eq!(wide.header.w, initial.header.w + 200);
+        assert_eq!(wide.content.w, initial.content.w + 200);
+        assert_eq!(tall.content.h, initial.content.h + 180);
+        assert_eq!(wide.header.h, PAGE_HEADER_H);
+        let card_row_w = 136 * 3 + 14 * 2;
+        let start_wide = (wide.root.w as i32 - card_row_w) / 2;
+        let start_initial = (initial.root.w as i32 - card_row_w) / 2;
+        assert!(start_wide > start_initial);
+    }
+
+    #[test]
+    fn settings_page_content_follows_available_width() {
+        let content = |w: u32, h: u32| {
+            Rect::new(12, 12, w.saturating_sub(24), h.saturating_sub(24))
+        };
+        assert_eq!(content(WIN_W, WIN_H).w, WIN_W - 24);
+        assert_eq!(content(WIN_W + 160, WIN_H).w, WIN_W + 136);
+        assert_eq!(content(WIN_W, WIN_H + 80).h, WIN_H + 56);
+        let back_y = |h: u32| h as i32 - 44;
+        assert_eq!(back_y(WIN_H + 80), back_y(WIN_H) + 80);
+    }
+
+    #[test]
+    fn tiny_windows_remain_safe_and_repeated_layout_is_identical() {
+        for bounds in [
+            Rect::new(0, 0, 0, 0),
+            Rect::new(0, 0, 1, 1),
+            Rect::new(0, 0, 40, 20),
+        ] {
+            let layout = ControlPanelApp::compute_layout(bounds);
+            assert_eq!(layout.root, bounds);
+        }
+        let bounds = Rect::new(0, 0, 720, 640);
+        assert_eq!(
+            ControlPanelApp::compute_layout(bounds),
+            ControlPanelApp::compute_layout(bounds)
+        );
+    }
 }

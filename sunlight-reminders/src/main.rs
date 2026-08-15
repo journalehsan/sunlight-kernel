@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
 
 extern crate alloc;
 
@@ -25,8 +25,8 @@ use sunlight_ui::widgets::{
     SidebarState, StatusBadge, TextInput,
 };
 use sunlight_ui::{
-    App, Canvas, Event, GridRow, HBox, Point, Rect, Theme, VBox, Window, WindowConfig,
-    WindowDecoration,
+    App, AxisSizing, Canvas, Column, Event, HBox, LayoutBox, LayoutInvalidation, Point, Rect, Row,
+    Size, Sizing, Theme, VBox, Window, WindowConfig, WindowDecoration, WindowEvent,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -69,15 +69,39 @@ unsafe impl GlobalAlloc for BumpAllocator {
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
 }
 
+#[cfg(not(test))]
 #[global_allocator]
 static ALLOC: BumpAllocator = BumpAllocator;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[REMINDERS] panic\n");
     loop {
         process_yield();
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ReminderLayout {
+    root: Rect,
+    header: Rect,
+    body: Rect,
+    footer: Rect,
+    sidebar: Rect,
+    task_list: Rect,
+    detail: Rect,
+    add_btn: Rect,
+    refresh_btn: Rect,
+}
+
+fn fill_sizing() -> Sizing {
+    Sizing::new(AxisSizing::Fill, AxisSizing::Fill)
+}
+
+fn fixed_height_box(height: u32) -> LayoutBox {
+    LayoutBox::new(Rect::new(0, 0, 0, height))
+        .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(height)))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -722,6 +746,9 @@ struct ReminderApp {
     next_task_id: u64,
     delete_confirm: bool,
     loaded: bool,
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: ReminderLayout,
 }
 
 impl ReminderApp {
@@ -729,7 +756,7 @@ impl ReminderApp {
         let today = current_local_date();
         let mut editor = TaskEditor::new();
         editor.hide();
-        Self {
+        let mut app = Self {
             store: KvReminderStore::new(),
             lists: [
                 TaskList::default_named("inbox", monotonic_millis()).unwrap(),
@@ -745,7 +772,74 @@ impl ReminderApp {
             next_task_id: 1,
             delete_confirm: false,
             loaded: false,
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: ReminderLayout::default(),
+        };
+        app.ensure_layout();
+        app
+    }
+
+    fn compute_layout(root: Rect) -> ReminderLayout {
+        let mut root_children = [
+            fixed_height_box(HEADER_H),
+            LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill_sizing()),
+            fixed_height_box(FOOTER_H),
+        ];
+        let _ = Column::new(root).arrange(&mut root_children);
+        let header = root_children[0].bounds();
+        let body = root_children[1].bounds();
+        let footer = root_children[2].bounds();
+
+        let body_inner = body.inset(8);
+        let mut panes = [
+            LayoutBox::new(Rect::new(0, 0, 0, 0))
+                .with_sizing(Sizing::new(AxisSizing::Flex(2), AxisSizing::Fill))
+                .with_min_size(Size::new(140, 0)),
+            LayoutBox::new(Rect::new(0, 0, 0, 0))
+                .with_sizing(Sizing::new(AxisSizing::Flex(4), AxisSizing::Fill))
+                .with_min_size(Size::new(180, 0)),
+            LayoutBox::new(Rect::new(0, 0, 0, 0))
+                .with_sizing(Sizing::new(AxisSizing::Flex(4), AxisSizing::Fill))
+                .with_min_size(Size::new(180, 0)),
+        ];
+        let _ = Row::new(body_inner)
+            .with_gap(BODY_GAP as u32)
+            .arrange(&mut panes);
+
+        let footer_y = footer.y + (footer.h as i32 - 28) / 2;
+        let add_btn = Rect::new(footer.x + PAD, footer_y, 96, 28);
+        let refresh_btn = Rect::new(footer.x + PAD + 104, footer_y, 84, 28);
+
+        ReminderLayout {
+            root,
+            header,
+            body,
+            footer,
+            sidebar: panes[0].bounds(),
+            task_list: panes[1].bounds(),
+            detail: panes[2].bounds(),
+            add_btn,
+            refresh_btn,
         }
+    }
+
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds);
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.layout_invalidation.invalidate();
+        self.ensure_layout()
     }
 
     fn current_list_index(&self) -> usize {
@@ -1061,34 +1155,19 @@ impl ReminderApp {
     }
 
     fn footer_buttons(&self) -> (Rect, Rect) {
-        let footer = self.footer_rect();
-        let y = footer.y + (footer.h as i32 - 28) / 2;
-        (
-            Rect::new(footer.x + PAD, y, 96, 28),
-            Rect::new(footer.x + PAD + 104, y, 84, 28),
-        )
+        (self.layout.add_btn, self.layout.refresh_btn)
     }
 
     fn header_rect(&self) -> Rect {
-        Rect::new(0, 0, WIN_W, HEADER_H)
-    }
-
-    fn body_rect(&self) -> Rect {
-        Rect::new(0, HEADER_H as i32, WIN_W, WIN_H - HEADER_H - FOOTER_H)
+        self.layout.header
     }
 
     fn footer_rect(&self) -> Rect {
-        Rect::new(0, (WIN_H - FOOTER_H) as i32, WIN_W, FOOTER_H)
+        self.layout.footer
     }
 
     fn panel_rects(&self) -> (Rect, Rect, Rect) {
-        let body = self.body_rect().inset(8);
-        let widths = [2, 4, 4];
-        let mut cols = GridRow::new(body).with_gap(BODY_GAP as u32).layout(&widths);
-        let left = cols.next().unwrap_or_default();
-        let center = cols.next().unwrap_or_default();
-        let right = cols.next().unwrap_or_default();
-        (left, center, right)
+        (self.layout.sidebar, self.layout.task_list, self.layout.detail)
     }
 
     fn sidebar_rects(&self) -> [Rect; 8] {
@@ -1602,7 +1681,7 @@ impl ReminderApp {
     }
 
     fn draw_delete_confirm(&self, canvas: &mut Canvas, theme: &Theme, content: Rect) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg.darken(70));
+        canvas.fill_rect(self.layout.root, theme.bg.darken(70));
         let panel = Rect::new(
             content.x + 20,
             content.y + 64,
@@ -1859,7 +1938,12 @@ impl ReminderApp {
     }
 
     fn draw(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
+        canvas.fill_rect(self.layout.root, theme.bg);
         self.draw_header(canvas, theme);
 
         let (left, center, right) = self.panel_rects();
@@ -1951,6 +2035,11 @@ impl App for ReminderApp {
     fn on_ready(&mut self) -> bool {
         self.reload_from_store();
         true
+    }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
     }
 }
 
@@ -2084,6 +2173,7 @@ fn push_count<const N: usize>(out: &mut TinyString<N>, mut value: u64) {
     out.set(str);
 }
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
@@ -2099,4 +2189,68 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     };
     window.run(&mut app);
     ProcessExit::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_tracks_client_bounds_and_navigation_follows_height() {
+        let layout = ReminderApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        assert_eq!(layout.root, Rect::new(0, 0, WIN_W, WIN_H));
+        assert_eq!(layout.header.w, WIN_W);
+        assert_eq!(layout.footer.w, WIN_W);
+        assert_eq!(layout.footer.bottom(), WIN_H as i32);
+        assert_eq!(layout.sidebar.h, layout.body.h.saturating_sub(16));
+        assert_eq!(layout.task_list.h, layout.sidebar.h);
+        assert_eq!(layout.detail.h, layout.sidebar.h);
+    }
+
+    #[test]
+    fn main_task_area_receives_remaining_width_and_height() {
+        let narrow = ReminderApp::compute_layout(Rect::new(0, 0, 800, 500));
+        let wide = ReminderApp::compute_layout(Rect::new(0, 0, 1280, 500));
+        let tall = ReminderApp::compute_layout(Rect::new(0, 0, 800, 800));
+        assert_eq!(wide.detail.w - narrow.detail.w, 192);
+        assert_eq!(wide.task_list.w - narrow.task_list.w, 192);
+        assert_eq!(tall.task_list.h - narrow.task_list.h, 300);
+        assert_eq!(wide.add_btn.w, 96);
+        assert_eq!(wide.refresh_btn.h, 28);
+    }
+
+    #[test]
+    fn form_fields_fill_detail_width_while_buttons_hug() {
+        let layout = ReminderApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        let content = Panel::with_title(layout.detail, "Details")
+            .content_rect()
+            .inset(8);
+        let rows = [14u32, 28, 14, 56];
+        let mut form = VBox::new(content).with_spacing(4).layout(&rows);
+        let _ = form.next();
+        let title = form.next().unwrap_or_default();
+        let _ = form.next();
+        let notes = form.next().unwrap_or_default();
+        assert_eq!(title.w, content.w);
+        assert_eq!(notes.w, content.w);
+        assert_eq!(layout.add_btn.w, 96);
+        assert_eq!(layout.refresh_btn.w, 84);
+    }
+
+    #[test]
+    fn tiny_windows_remain_safe_and_layout_is_deterministic() {
+        for bounds in [
+            Rect::new(0, 0, 0, 0),
+            Rect::new(0, 0, 1, 1),
+            Rect::new(0, 0, 200, 80),
+        ] {
+            let layout = ReminderApp::compute_layout(bounds);
+            assert_eq!(layout.root, bounds);
+        }
+        let bounds = Rect::new(0, 0, 1100, 720);
+        assert_eq!(
+            ReminderApp::compute_layout(bounds),
+            ReminderApp::compute_layout(bounds)
+        );
+    }
 }
