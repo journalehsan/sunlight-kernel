@@ -2343,6 +2343,8 @@ impl EditApp {
             common: DialogCommonOptions {
                 title: String::from("Discard Changes?"),
                 message: String::from("Opening another file will discard unsaved changes."),
+                severity: sunlight_dialogs::DialogSeverity::Question,
+                silent: false,
             },
             style: ConfirmStyle::OkCancel,
             default_button: DialogChoiceButton::Cancel,

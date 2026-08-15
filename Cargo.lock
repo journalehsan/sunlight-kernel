@@ -2206,6 +2206,7 @@ version = "0.2.3989-alpha.1"
 dependencies = [
  "heapless",
  "sun-font",
+ "sunlight-audiod",
  "sunlight-dialogs",
  "sunlight-ipc",
  "sunlight-libc",
@@ -2217,6 +2218,7 @@ name = "sunlight-dialogs"
 version = "0.2.3989-alpha.1"
 dependencies = [
  "heapless",
+ "sunlight-audio",
 ]
 
 [[package]]
@@ -2232,6 +2234,8 @@ version = "0.2.3989-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
+ "sunlight-audio",
+ "sunlight-audiod",
  "sunlight-ipc",
  "sunlight-libc",
  "sunlight-ui",

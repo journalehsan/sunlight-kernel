@@ -7,16 +7,23 @@
 #![no_main]
 
 use sunlight_audio::{
+    effective_system_gain,
     hda::{HdaPlayback, ENGINE_PERIOD_BYTES, PERIOD_FRAME_COUNT},
     pcm::{validate_pcm, AudioBuffer, AudioFormat, MAX_PCM_BYTES, NATIVE_RATE_HZ},
     render_persisted_buf, AudioDeviceState, AudioError, MasterVolume, OutputDeviceKind,
+    PersistedAudio, SystemSoundSettings,
 };
-use sunlight_audiod::{restore_volume, PcmQueue, DEFAULT_TONE_HZ, DEFAULT_TONE_MS};
+use sunlight_audiod::{
+    decode_system_sound_request, restore_audio_settings, PcmQueue, QueuedSystemSound,
+    SystemSoundEnqueue, SystemSoundMode, SystemSoundQueue, DEFAULT_TONE_HZ, DEFAULT_TONE_MS,
+};
 use sunlight_ipc::{
-    debug_log, endpoint_create, hda_info, ipc_recv_timeout, ipc_reply, nameserver_register,
-    pack_audio_status, shm_map, AudioStatus, AudiodMsg, IpcMsg,
+    debug_log, endpoint_create, hda_info, ipc_recv_timeout, ipc_reply, monotonic_millis,
+    nameserver_register, pack_audio_status, shm_map, AudioStatus, AudiodMsg, IpcMsg,
 };
 use sunlight_libc as libc;
+
+mod system_assets;
 
 const CONFIG_PATH: &str = "/root/.config/sunlight/audio.toml";
 const CONFIG_TMP_PATH: &str = "/root/.config/sunlight/audio.toml.tmp";
@@ -42,6 +49,10 @@ struct ServiceState {
     vendor_id: u16,
     device_id: u16,
     queue: PcmQueue,
+    system_settings: SystemSoundSettings,
+    system_queue: SystemSoundQueue,
+    active_system_sound: Option<ActiveSystemSound>,
+    bad_asset_mask: u16,
     tone_frames_left: u32,
     tone_phase: u32,
     tone_hz: u32,
@@ -50,9 +61,16 @@ struct ServiceState {
     persist_dirty: bool,
 }
 
+struct ActiveSystemSound {
+    request: QueuedSystemSound,
+    pcm: &'static [u8],
+    offset: usize,
+    submitted: bool,
+}
+
 impl ServiceState {
     fn new() -> Self {
-        let volume = restore_volume(load_config_text().as_deref());
+        let (volume, system_settings) = restore_audio_settings(load_config_text().as_deref());
         let mut device = None;
         let mut kind = OutputDeviceKind::None;
         let mut vendor_id = 0;
@@ -104,6 +122,10 @@ impl ServiceState {
             vendor_id,
             device_id,
             queue: PcmQueue::new(),
+            system_settings,
+            system_queue: SystemSoundQueue::new(),
+            active_system_sound: None,
+            bad_asset_mask: 0,
             tone_frames_left: 0,
             tone_phase: 0,
             tone_hz: DEFAULT_TONE_HZ,
@@ -123,7 +145,11 @@ impl ServiceState {
                 }
             }
             Some(dev) => {
-                if self.tone_frames_left > 0 || !self.queue.is_empty() {
+                if self.tone_frames_left > 0
+                    || self.active_system_sound.is_some()
+                    || !self.system_queue.is_empty()
+                    || !self.queue.is_empty()
+                {
                     AudioDeviceState::Playing
                 } else if dev.underruns() > 0 && !dev.state().is_usable() {
                     AudioDeviceState::Underrun
@@ -152,6 +178,9 @@ impl ServiceState {
             bits: if usable { 16 } else { 0 },
             underruns,
             frames_played: played,
+            system_sounds_enabled: self.system_settings.enabled,
+            system_sounds_volume: self.system_settings.volume,
+            system_sound_queue_len: self.system_queue.len().min(u8::MAX as usize) as u8,
         }
     }
 
@@ -170,6 +199,9 @@ impl ServiceState {
     }
 
     fn pump(&mut self) {
+        if self.tone_frames_left == 0 && self.active_system_sound.is_none() {
+            self.activate_next_system_sound();
+        }
         let Some(dev) = self.device.as_mut() else {
             return;
         };
@@ -189,6 +221,39 @@ impl ServiceState {
                 Err(_) => {
                     serial_println!("[AUDIOD] tone submit failed");
                     self.tone_frames_left = 0;
+                }
+            }
+        } else if let Some(active) = self.active_system_sound.as_mut() {
+            let end = active
+                .offset
+                .saturating_add(ENGINE_PERIOD_BYTES)
+                .min(active.pcm.len());
+            let gain = effective_system_gain(vol, self.system_settings.volume);
+            match dev.fill_pcm(&active.pcm[active.offset..end], gain) {
+                Ok(true) => {
+                    if !active.submitted {
+                        serial_println!(
+                            "[AUDIOD] system-sound pcm submitted id={} gain={}",
+                            active.request.sound as u16,
+                            gain
+                        );
+                        active.submitted = true;
+                    }
+                    active.offset = end;
+                    if active.offset >= active.pcm.len() {
+                        let sound = active.request.sound;
+                        serial_println!(
+                            "[AUDIOD] system-sound complete id={} name={}",
+                            sound as u16,
+                            sound.label()
+                        );
+                        self.active_system_sound = None;
+                    }
+                }
+                Ok(false) => {}
+                Err(_) => {
+                    serial_println!("[AUDIOD] system-sound submit failed");
+                    self.active_system_sound = None;
                 }
             }
         } else if !self.queue.is_empty() {
@@ -223,8 +288,58 @@ impl ServiceState {
         if !self.persist_dirty {
             return;
         }
-        if save_config(self.volume.snapshot()) {
+        let mut persisted = self.volume.snapshot();
+        persisted.system_sounds_enabled = self.system_settings.enabled;
+        persisted.system_sounds_volume = self.system_settings.volume;
+        if save_config(persisted) {
             self.persist_dirty = false;
+        }
+    }
+
+    fn activate_next_system_sound(&mut self) {
+        while let Some(request) = self.system_queue.pop() {
+            match system_assets::resolve(request.sound) {
+                Ok(wav) => {
+                    serial_println!(
+                        "[AUDIOD] system-sound started id={} name={} theme={} frames={}",
+                        request.sound as u16,
+                        request.sound.label(),
+                        system_assets::THEME_NAME,
+                        wav.pcm.len() / 4
+                    );
+                    self.active_system_sound = Some(ActiveSystemSound {
+                        request,
+                        pcm: wav.pcm,
+                        offset: 0,
+                        submitted: false,
+                    });
+                    return;
+                }
+                Err(_) => {
+                    let bit = 1u16 << request.sound.index();
+                    if self.bad_asset_mask & bit == 0 {
+                        let asset = system_assets::asset_for(request.sound);
+                        serial_println!(
+                            "[AUDIOD] system-sound asset invalid id={} name={}",
+                            request.sound as u16,
+                            asset.canonical_name
+                        );
+                        self.bad_asset_mask |= bit;
+                    }
+                }
+            }
+        }
+    }
+
+    fn stop_automatic_system_sounds(&mut self) {
+        self.system_queue.remove_automatic();
+        if self
+            .active_system_sound
+            .as_ref()
+            .map(|active| active.request.mode == SystemSoundMode::Automatic)
+            .unwrap_or(false)
+        {
+            self.active_system_sound = None;
         }
     }
 }
@@ -248,6 +363,13 @@ pub extern "C" fn _start() -> ! {
         state.volume.volume(),
         if state.volume.muted() { 1 } else { 0 },
         state.kind.as_str()
+    );
+    serial_println!(
+        "[AUDIOD] system-sounds theme={} enabled={} volume={} queue_cap={}",
+        system_assets::THEME_NAME,
+        state.system_settings.enabled as u8,
+        state.system_settings.volume,
+        sunlight_audiod::SYSTEM_SOUND_QUEUE_CAPACITY
     );
     state.last_state = state.state();
     if option_env!("SUNLIGHT_INJECT_AUDIO_TEST") == Some("1") {
@@ -275,6 +397,7 @@ pub extern "C" fn _start() -> ! {
 fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
     match msg.label {
         AudiodMsg::GET_STATUS | AudiodMsg::GET_VOLUME => pack_audio_status(state.status()),
+        AudiodMsg::GET_SYSTEM_SOUNDS => pack_audio_status(state.status()),
         AudiodMsg::GET_DEVICE => IpcMsg::with_label(AudiodMsg::REPLY)
             .word(0, state.kind as u64)
             .word(1, state.vendor_id as u64 | ((state.device_id as u64) << 16))
@@ -292,6 +415,25 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
                 return err(AudiodMsg::ERR_BAD_REQUEST);
             }
             state.volume.set_muted(msg.words[0] != 0);
+            state.persist_dirty = true;
+            pack_audio_status(state.status())
+        }
+        AudiodMsg::SET_SYSTEM_SOUNDS_ENABLED => {
+            if msg.word_count != 1 || msg.words[0] > 1 {
+                return err(AudiodMsg::ERR_BAD_REQUEST);
+            }
+            state.system_settings.enabled = msg.words[0] != 0;
+            if !state.system_settings.enabled {
+                state.stop_automatic_system_sounds();
+            }
+            state.persist_dirty = true;
+            pack_audio_status(state.status())
+        }
+        AudiodMsg::SET_SYSTEM_SOUNDS_VOLUME => {
+            if msg.word_count != 1 || msg.words[0] > 100 {
+                return err(AudiodMsg::ERR_BAD_REQUEST);
+            }
+            state.system_settings.volume = msg.words[0] as u8;
             state.persist_dirty = true;
             pack_audio_status(state.status())
         }
@@ -317,9 +459,35 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
             pack_audio_status(state.status())
         }
         AudiodMsg::SUBMIT_PCM => submit_pcm(state, msg),
+        AudiodMsg::PLAY_SYSTEM_SOUND => {
+            if state.device.is_none() {
+                return err(AudiodMsg::ERR_UNAVAILABLE);
+            }
+            let request = match decode_system_sound_request(msg) {
+                Ok(request) => request,
+                Err(_) => return err(AudiodMsg::ERR_BAD_REQUEST),
+            };
+            let outcome = state.system_queue.enqueue(
+                request,
+                state
+                    .active_system_sound
+                    .as_ref()
+                    .map(|active| active.request),
+                monotonic_millis(),
+                state.system_settings,
+                state.volume.effective(),
+            );
+            if outcome == SystemSoundEnqueue::QueueFull {
+                err(AudiodMsg::ERR_OVERFLOW)
+            } else {
+                pack_audio_status(state.status())
+            }
+        }
         AudiodMsg::STOP => {
             state.tone_frames_left = 0;
             state.queue.clear();
+            state.system_queue.clear();
+            state.active_system_sound = None;
             pack_audio_status(state.status())
         }
         _ => err(AudiodMsg::ERR_BAD_REQUEST),
@@ -378,7 +546,7 @@ fn load_config_text() -> Option<heapless::String<256>> {
     Some(out)
 }
 
-fn save_config(cfg: sunlight_audio::PersistedAudio) -> bool {
+fn save_config(cfg: PersistedAudio) -> bool {
     if libc::mkdir_recursive(b"/root/.config/sunlight").is_err() {
         return false;
     }

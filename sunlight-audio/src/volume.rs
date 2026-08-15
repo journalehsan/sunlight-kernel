@@ -132,6 +132,8 @@ impl MasterVolume {
             volume: self.volume,
             muted: self.muted,
             last_nonzero: self.last_nonzero,
+            system_sounds_enabled: crate::system::DEFAULT_SYSTEM_SOUNDS_ENABLED,
+            system_sounds_volume: crate::system::DEFAULT_SYSTEM_SOUNDS_VOLUME,
         }
     }
 }
@@ -150,6 +152,8 @@ pub struct PersistedAudio {
     pub volume: u8,
     pub muted: bool,
     pub last_nonzero: u8,
+    pub system_sounds_enabled: bool,
+    pub system_sounds_volume: u8,
 }
 
 impl PersistedAudio {
@@ -158,6 +162,8 @@ impl PersistedAudio {
             volume: DEFAULT_VOLUME,
             muted: false,
             last_nonzero: DEFAULT_VOLUME,
+            system_sounds_enabled: crate::system::DEFAULT_SYSTEM_SOUNDS_ENABLED,
+            system_sounds_volume: crate::system::DEFAULT_SYSTEM_SOUNDS_VOLUME,
         }
     }
 }
@@ -205,6 +211,14 @@ pub fn parse_persisted(text: &str) -> PersistedAudio {
             if let Some(n) = parse_u8_assignment(value) {
                 out.last_nonzero = n;
             }
+        } else if let Some(value) = line.strip_prefix("system_sounds_enabled") {
+            if let Some(flag) = parse_bool_assignment(value) {
+                out.system_sounds_enabled = flag;
+            }
+        } else if let Some(value) = line.strip_prefix("system_sounds_volume") {
+            if let Some(n) = parse_u8_assignment(value) {
+                out.system_sounds_volume = n.min(MAX_VOLUME);
+            }
         }
     }
     if !saw_volume {
@@ -223,6 +237,7 @@ pub fn parse_persisted(text: &str) -> PersistedAudio {
             out.volume
         };
     }
+    out.system_sounds_volume = clamp_volume(out.system_sounds_volume);
     out
 }
 
@@ -235,7 +250,7 @@ pub fn render_persisted(cfg: PersistedAudio) -> heapless_audio_toml {
 /// Tiny TOML renderer that avoids pulling `alloc` into kernel-adjacent crates.
 #[allow(non_camel_case_types)]
 pub struct heapless_audio_toml {
-    buf: [u8; 96],
+    buf: [u8; 160],
     len: usize,
 }
 
@@ -251,7 +266,7 @@ impl heapless_audio_toml {
 
 pub fn render_persisted_buf(cfg: PersistedAudio) -> heapless_audio_toml {
     let mut out = heapless_audio_toml {
-        buf: [0; 96],
+        buf: [0; 160],
         len: 0,
     };
     let _ = push_str(&mut out, "[audio]\nmaster_volume = ");
@@ -265,6 +280,17 @@ pub fn render_persisted_buf(cfg: PersistedAudio) -> heapless_audio_toml {
         clamp_volume(cfg.last_nonzero)
     };
     let _ = push_u8(&mut out, last);
+    let _ = push_str(&mut out, "\nsystem_sounds_enabled = ");
+    let _ = push_str(
+        &mut out,
+        if cfg.system_sounds_enabled {
+            "true"
+        } else {
+            "false"
+        },
+    );
+    let _ = push_str(&mut out, "\nsystem_sounds_volume = ");
+    let _ = push_u8(&mut out, clamp_volume(cfg.system_sounds_volume));
     let _ = push_str(&mut out, "\n");
     out
 }
@@ -396,11 +422,15 @@ mod tests {
             volume: 42,
             muted: true,
             last_nonzero: 70,
+            system_sounds_enabled: false,
+            system_sounds_volume: 44,
         });
         let parsed = parse_persisted(text.as_str());
         assert_eq!(parsed.volume, 42);
         assert!(parsed.muted);
         assert_eq!(parsed.last_nonzero, 70);
+        assert!(!parsed.system_sounds_enabled);
+        assert_eq!(parsed.system_sounds_volume, 44);
     }
 
     #[test]

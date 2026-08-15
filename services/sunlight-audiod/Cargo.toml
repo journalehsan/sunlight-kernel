@@ -19,7 +19,9 @@ path = "src/lib.rs"
 [[bin]]
 name = "audiod"
 path = "src/main.rs"
+test = false
 
 [[bin]]
 name = "audioctl"
 path = "src/bin/audioctl.rs"
+test = false

@@ -279,6 +279,7 @@ edition = "2021"
 
 [dependencies]
 heapless = "0.8"
+sunlight-audio = { path = "../sunlight-audio" }
 
 [lib]
 name = "sunlight_dialogs"

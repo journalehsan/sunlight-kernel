@@ -281,6 +281,7 @@ edition = "2021"
 heapless = "0.8"
 sun-font = { path = "../../sun-font" }
 sunlight-dialogs = { path = "../../sunlight-dialogs" }
+sunlight-audiod = { path = "../sunlight-audiod" }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }

@@ -10,11 +10,16 @@ extern crate alloc;
 
 use sunlight_audio::{
     parse_persisted, volume_icon, AudioDeviceState, AudioFormat, MasterVolume, OutputDeviceKind,
-    PersistedAudio, VolumeIconKind, DEFAULT_VOLUME, MAX_PCM_BYTES,
+    PersistedAudio, SystemSound, SystemSoundSettings, VolumeIconKind, DEFAULT_SYSTEM_SOUNDS_VOLUME,
+    DEFAULT_VOLUME, MAX_PCM_BYTES, SYSTEM_SOUND_COUNT, SYSTEM_SOUND_PROTOCOL_VERSION,
 };
 use sunlight_ipc::{
     ipc_call_timeout, nameserver_lookup_timeout, unpack_audio_status, AudiodMsg, IpcMsg,
 };
+
+#[cfg(test)]
+#[path = "system_assets.rs"]
+mod system_assets_test_source;
 
 pub const LOOKUP_TIMEOUT_MS: u64 = 50;
 pub const REQUEST_TIMEOUT_MS: u64 = 80;
@@ -24,6 +29,7 @@ pub const DEFAULT_TONE_MS: u32 = 1000;
 pub const VOLUME_PREVIEW_HZ: u32 = 880;
 pub const VOLUME_PREVIEW_MS: u32 = 180;
 pub const MAX_QUEUE_BYTES: usize = MAX_PCM_BYTES;
+pub const SYSTEM_SOUND_QUEUE_CAPACITY: usize = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AudioSnapshot {
@@ -40,6 +46,9 @@ pub struct AudioSnapshot {
     pub frames_played: u32,
     pub vendor_id: u16,
     pub device_id: u16,
+    pub system_sounds_enabled: bool,
+    pub system_sounds_volume: u8,
+    pub system_sound_queue_len: u8,
 }
 
 impl AudioSnapshot {
@@ -145,6 +154,9 @@ impl AudioClient {
             frames_played: status.frames_played,
             vendor_id,
             device_id,
+            system_sounds_enabled: status.system_sounds_enabled,
+            system_sounds_volume: status.system_sounds_volume.min(100),
+            system_sound_queue_len: status.system_sound_queue_len,
         })
     }
 
@@ -155,6 +167,21 @@ impl AudioClient {
 
     pub fn set_mute(&self, muted: bool) -> Result<AudioSnapshot, AudioClientError> {
         self.call(IpcMsg::with_label(AudiodMsg::SET_MUTE).word(0, muted as u64))?;
+        self.snapshot()
+    }
+
+    pub fn set_system_sounds_enabled(
+        &self,
+        enabled: bool,
+    ) -> Result<AudioSnapshot, AudioClientError> {
+        self.call(
+            IpcMsg::with_label(AudiodMsg::SET_SYSTEM_SOUNDS_ENABLED).word(0, enabled as u64),
+        )?;
+        self.snapshot()
+    }
+
+    pub fn set_system_sounds_volume(&self, volume: u8) -> Result<AudioSnapshot, AudioClientError> {
+        self.call(IpcMsg::with_label(AudiodMsg::SET_SYSTEM_SOUNDS_VOLUME).word(0, volume as u64))?;
         self.snapshot()
     }
 
@@ -175,7 +202,36 @@ impl AudioClient {
     /// Brief tick at the current master volume. Callers should skip this while
     /// a slider is mid-drag so IPC is not flooded.
     pub fn play_volume_preview(&self) -> Result<(), AudioClientError> {
-        self.play_tone(VOLUME_PREVIEW_HZ, VOLUME_PREVIEW_MS)
+        self.preview_system_sound(SystemSound::VolumeChanged)
+    }
+
+    pub fn play_system_sound(&self, sound: SystemSound) -> Result<(), AudioClientError> {
+        self.play_system_sound_mode(sound, SystemSoundMode::Automatic)
+    }
+
+    pub fn preview_system_sound(&self, sound: SystemSound) -> Result<(), AudioClientError> {
+        self.play_system_sound_mode(sound, SystemSoundMode::Preview)
+    }
+
+    fn play_system_sound_mode(
+        &self,
+        sound: SystemSound,
+        mode: SystemSoundMode,
+    ) -> Result<(), AudioClientError> {
+        self.call(
+            IpcMsg::with_label(AudiodMsg::PLAY_SYSTEM_SOUND)
+                .word(0, SYSTEM_SOUND_PROTOCOL_VERSION as u64)
+                .word(1, sound as u64)
+                .word(
+                    2,
+                    if mode == SystemSoundMode::Preview {
+                        AudiodMsg::SYSTEM_SOUND_FLAG_PREVIEW
+                    } else {
+                        0
+                    },
+                ),
+        )?;
+        Ok(())
     }
 
     fn call(&self, msg: IpcMsg) -> Result<IpcMsg, AudioClientError> {
@@ -265,6 +321,19 @@ pub fn restore_volume(text: Option<&str>) -> MasterVolume {
     }
 }
 
+pub fn restore_audio_settings(text: Option<&str>) -> (MasterVolume, SystemSoundSettings) {
+    let persisted = text
+        .map(parse_persisted)
+        .unwrap_or_else(PersistedAudio::safe_defaults);
+    (
+        MasterVolume::from_persisted(persisted),
+        SystemSoundSettings::validated(
+            persisted.system_sounds_enabled,
+            persisted.system_sounds_volume,
+        ),
+    )
+}
+
 pub fn map_page_state(snapshot: Result<AudioSnapshot, AudioClientError>) -> SoundPageView {
     match snapshot {
         Ok(snap) => SoundPageView {
@@ -276,6 +345,8 @@ pub fn map_page_state(snapshot: Result<AudioSnapshot, AudioClientError>) -> Soun
             icon: snap.icon(),
             format: snap.format(),
             service_missing: false,
+            system_sounds_enabled: snap.system_sounds_enabled,
+            system_sounds_volume: snap.system_sounds_volume,
         },
         Err(AudioClientError::ServiceUnavailable)
         | Err(AudioClientError::Timeout)
@@ -288,6 +359,8 @@ pub fn map_page_state(snapshot: Result<AudioSnapshot, AudioClientError>) -> Soun
             icon: VolumeIconKind::Unavailable,
             format: None,
             service_missing: true,
+            system_sounds_enabled: true,
+            system_sounds_volume: DEFAULT_SYSTEM_SOUNDS_VOLUME,
         },
         Err(_) => SoundPageView {
             available: false,
@@ -298,6 +371,8 @@ pub fn map_page_state(snapshot: Result<AudioSnapshot, AudioClientError>) -> Soun
             icon: VolumeIconKind::Unavailable,
             format: None,
             service_missing: false,
+            system_sounds_enabled: true,
+            system_sounds_volume: DEFAULT_SYSTEM_SOUNDS_VOLUME,
         },
     }
 }
@@ -312,6 +387,179 @@ pub struct SoundPageView {
     pub icon: VolumeIconKind,
     pub format: Option<AudioFormat>,
     pub service_missing: bool,
+    pub system_sounds_enabled: bool,
+    pub system_sounds_volume: u8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SystemSoundMode {
+    Automatic,
+    Preview,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct QueuedSystemSound {
+    pub sound: SystemSound,
+    pub mode: SystemSoundMode,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SystemSoundEnqueue {
+    Queued,
+    Coalesced,
+    Disabled,
+    Muted,
+    QueueFull,
+    ReplacedLowerPriority,
+}
+
+pub struct SystemSoundQueue {
+    entries: [Option<QueuedSystemSound>; SYSTEM_SOUND_QUEUE_CAPACITY],
+    head: usize,
+    len: usize,
+    last_accepted_ms: [u64; SYSTEM_SOUND_COUNT],
+    accepted_mask: u16,
+}
+
+impl SystemSoundQueue {
+    pub const fn new() -> Self {
+        Self {
+            entries: [None; SYSTEM_SOUND_QUEUE_CAPACITY],
+            head: 0,
+            len: 0,
+            last_accepted_ms: [0; SYSTEM_SOUND_COUNT],
+            accepted_mask: 0,
+        }
+    }
+
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn enqueue(
+        &mut self,
+        request: QueuedSystemSound,
+        active: Option<QueuedSystemSound>,
+        now_ms: u64,
+        settings: SystemSoundSettings,
+        master_effective: u8,
+    ) -> SystemSoundEnqueue {
+        if request.mode == SystemSoundMode::Automatic && !settings.enabled {
+            return SystemSoundEnqueue::Disabled;
+        }
+        if master_effective == 0 || settings.volume == 0 {
+            return SystemSoundEnqueue::Muted;
+        }
+        if active.map(|entry| entry.sound) == Some(request.sound) || self.contains(request.sound) {
+            return SystemSoundEnqueue::Coalesced;
+        }
+        let bit = 1u16 << request.sound.index();
+        if request.mode == SystemSoundMode::Automatic
+            && self.accepted_mask & bit != 0
+            && now_ms.saturating_sub(self.last_accepted_ms[request.sound.index()])
+                < request.sound.cooldown_ms()
+        {
+            return SystemSoundEnqueue::Coalesced;
+        }
+
+        let outcome = if self.len < SYSTEM_SOUND_QUEUE_CAPACITY {
+            let tail = (self.head + self.len) % SYSTEM_SOUND_QUEUE_CAPACITY;
+            self.entries[tail] = Some(request);
+            self.len += 1;
+            SystemSoundEnqueue::Queued
+        } else if let Some(index) = self.lowest_priority_index_below(request.sound.priority()) {
+            self.entries[index] = Some(request);
+            SystemSoundEnqueue::ReplacedLowerPriority
+        } else {
+            return SystemSoundEnqueue::QueueFull;
+        };
+        if request.mode == SystemSoundMode::Automatic {
+            self.last_accepted_ms[request.sound.index()] = now_ms;
+            self.accepted_mask |= bit;
+        }
+        outcome
+    }
+
+    pub fn pop(&mut self) -> Option<QueuedSystemSound> {
+        if self.len == 0 {
+            return None;
+        }
+        let entry = self.entries[self.head].take();
+        self.head = (self.head + 1) % SYSTEM_SOUND_QUEUE_CAPACITY;
+        self.len -= 1;
+        entry
+    }
+
+    pub fn clear(&mut self) {
+        self.entries = [None; SYSTEM_SOUND_QUEUE_CAPACITY];
+        self.head = 0;
+        self.len = 0;
+    }
+
+    pub fn remove_automatic(&mut self) {
+        let mut kept = [None; SYSTEM_SOUND_QUEUE_CAPACITY];
+        let mut kept_len = 0usize;
+        for offset in 0..self.len {
+            let index = (self.head + offset) % SYSTEM_SOUND_QUEUE_CAPACITY;
+            if let Some(entry) = self.entries[index] {
+                if entry.mode == SystemSoundMode::Preview {
+                    kept[kept_len] = Some(entry);
+                    kept_len += 1;
+                }
+            }
+        }
+        self.entries = kept;
+        self.head = 0;
+        self.len = kept_len;
+    }
+
+    fn contains(&self, sound: SystemSound) -> bool {
+        (0..self.len).any(|offset| {
+            self.entries[(self.head + offset) % SYSTEM_SOUND_QUEUE_CAPACITY]
+                .map(|entry| entry.sound == sound)
+                .unwrap_or(false)
+        })
+    }
+
+    fn lowest_priority_index_below(&self, priority: u8) -> Option<usize> {
+        let mut selected = None;
+        let mut selected_priority = u8::MAX;
+        for offset in 0..self.len {
+            let index = (self.head + offset) % SYSTEM_SOUND_QUEUE_CAPACITY;
+            if let Some(entry) = self.entries[index] {
+                let candidate = entry.sound.priority();
+                if candidate < priority && candidate < selected_priority {
+                    selected = Some(index);
+                    selected_priority = candidate;
+                }
+            }
+        }
+        selected
+    }
+}
+
+pub fn decode_system_sound_request(msg: &IpcMsg) -> Result<QueuedSystemSound, AudioClientError> {
+    if msg.label != AudiodMsg::PLAY_SYSTEM_SOUND
+        || msg.word_count != 3
+        || msg.cap_count != 0
+        || msg.words[0] != AudiodMsg::SYSTEM_SOUND_PROTOCOL_VERSION
+        || msg.words[2] & !AudiodMsg::SYSTEM_SOUND_FLAG_PREVIEW != 0
+    {
+        return Err(AudioClientError::BadRequest);
+    }
+    let sound = SystemSound::from_wire(msg.words[1]).ok_or(AudioClientError::BadRequest)?;
+    Ok(QueuedSystemSound {
+        sound,
+        mode: if msg.words[2] & AudiodMsg::SYSTEM_SOUND_FLAG_PREVIEW != 0 {
+            SystemSoundMode::Preview
+        } else {
+            SystemSoundMode::Automatic
+        },
+    })
 }
 
 pub fn sound_settings_page_id() -> &'static [u8] {
@@ -365,6 +613,9 @@ mod tests {
             frames_played: 0,
             vendor_id: 0x8086,
             device_id: 0x2668,
+            system_sounds_enabled: true,
+            system_sounds_volume: 60,
+            system_sound_queue_len: 0,
         };
         let view = map_page_state(Ok(live));
         assert_eq!(view.device_name, "QEMU HD Audio");
@@ -396,5 +647,135 @@ mod tests {
     fn preview_tone_is_shorter_than_test_tone() {
         assert!(VOLUME_PREVIEW_MS < DEFAULT_TONE_MS);
         assert_ne!(VOLUME_PREVIEW_HZ, DEFAULT_TONE_HZ);
+    }
+
+    #[test]
+    fn semantic_request_validation_rejects_unknown_and_malformed_values() {
+        let valid = IpcMsg::with_label(AudiodMsg::PLAY_SYSTEM_SOUND)
+            .word(0, SYSTEM_SOUND_PROTOCOL_VERSION as u64)
+            .word(1, SystemSound::Warning as u64)
+            .word(2, 0);
+        assert_eq!(
+            decode_system_sound_request(&valid).unwrap(),
+            QueuedSystemSound {
+                sound: SystemSound::Warning,
+                mode: SystemSoundMode::Automatic
+            }
+        );
+        let unknown = IpcMsg::with_label(AudiodMsg::PLAY_SYSTEM_SOUND)
+            .word(0, SYSTEM_SOUND_PROTOCOL_VERSION as u64)
+            .word(1, 99)
+            .word(2, 0);
+        assert_eq!(
+            decode_system_sound_request(&unknown),
+            Err(AudioClientError::BadRequest)
+        );
+        let malformed = IpcMsg::with_label(AudiodMsg::PLAY_SYSTEM_SOUND)
+            .word(0, SYSTEM_SOUND_PROTOCOL_VERSION as u64)
+            .word(1, SystemSound::Warning as u64);
+        assert_eq!(
+            decode_system_sound_request(&malformed),
+            Err(AudioClientError::BadRequest)
+        );
+    }
+
+    #[test]
+    fn semantic_queue_is_bounded_coalesced_and_deterministic() {
+        let settings = SystemSoundSettings::safe_defaults();
+        let mut queue = SystemSoundQueue::new();
+        let warning = QueuedSystemSound {
+            sound: SystemSound::Warning,
+            mode: SystemSoundMode::Automatic,
+        };
+        assert_eq!(
+            queue.enqueue(warning, None, 1_000, settings, 70),
+            SystemSoundEnqueue::Queued
+        );
+        assert_eq!(
+            queue.enqueue(warning, None, 1_100, settings, 70),
+            SystemSoundEnqueue::Coalesced
+        );
+        assert_eq!(queue.pop(), Some(warning));
+        assert_eq!(
+            queue.enqueue(warning, None, 1_499, settings, 70),
+            SystemSoundEnqueue::Coalesced
+        );
+        assert_eq!(
+            queue.enqueue(warning, None, 1_500, settings, 70),
+            SystemSoundEnqueue::Queued
+        );
+
+        let mut queue = SystemSoundQueue::new();
+        for sound in [
+            SystemSound::VolumeChanged,
+            SystemSound::Message,
+            SystemSound::Success,
+            SystemSound::Notification,
+        ] {
+            assert_eq!(
+                queue.enqueue(
+                    QueuedSystemSound {
+                        sound,
+                        mode: SystemSoundMode::Automatic
+                    },
+                    None,
+                    10_000,
+                    settings,
+                    70
+                ),
+                SystemSoundEnqueue::Queued
+            );
+        }
+        assert_eq!(queue.len(), SYSTEM_SOUND_QUEUE_CAPACITY);
+        assert_eq!(
+            queue.enqueue(
+                QueuedSystemSound {
+                    sound: SystemSound::Critical,
+                    mode: SystemSoundMode::Automatic
+                },
+                None,
+                10_000,
+                settings,
+                70
+            ),
+            SystemSoundEnqueue::ReplacedLowerPriority
+        );
+        assert_eq!(queue.len(), SYSTEM_SOUND_QUEUE_CAPACITY);
+    }
+
+    #[test]
+    fn semantic_policy_respects_disable_mute_and_preview() {
+        let mut queue = SystemSoundQueue::new();
+        let automatic = QueuedSystemSound {
+            sound: SystemSound::Notification,
+            mode: SystemSoundMode::Automatic,
+        };
+        let preview = QueuedSystemSound {
+            sound: SystemSound::Notification,
+            mode: SystemSoundMode::Preview,
+        };
+        let disabled = SystemSoundSettings::validated(false, 60);
+        assert_eq!(
+            queue.enqueue(automatic, None, 0, disabled, 65),
+            SystemSoundEnqueue::Disabled
+        );
+        assert_eq!(
+            queue.enqueue(preview, None, 0, disabled, 65),
+            SystemSoundEnqueue::Queued
+        );
+        assert_eq!(
+            SystemSoundQueue::new().enqueue(preview, None, 0, disabled, 0),
+            SystemSoundEnqueue::Muted
+        );
+        assert_eq!(
+            SystemSoundQueue::new().enqueue(
+                preview,
+                None,
+                0,
+                SystemSoundSettings::validated(true, 0),
+                65
+            ),
+            SystemSoundEnqueue::Muted
+        );
     }
 }

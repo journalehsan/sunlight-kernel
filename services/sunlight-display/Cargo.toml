@@ -412,6 +412,8 @@ edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
+sunlight-audio = { path = "../../sunlight-audio" }
+sunlight-audiod = { path = "../sunlight-audiod" }
 # Host unit tests link without global-alloc so they keep the standard
 # allocator. Freestanding SunlightOS builds enable the reclaiming heap below.
 sunlight-libc = { path = "../../sunlight-libc" }

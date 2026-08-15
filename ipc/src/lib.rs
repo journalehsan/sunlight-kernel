@@ -1131,12 +1131,29 @@ pub enum NotificationKind {
     Error = 2,
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotificationPriority {
-    Low,
-    Normal,
-    High,
-    Critical,
+    Low = 0,
+    Normal = 1,
+    High = 2,
+    Critical = 3,
+}
+
+impl NotificationPriority {
+    pub const fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Low),
+            1 => Some(Self::Normal),
+            2 => Some(Self::High),
+            3 => Some(Self::Critical),
+            _ => None,
+        }
+    }
+
+    pub const fn rank(self) -> u8 {
+        self as u8
+    }
 }
 
 const KV_REPLY: u64 = 0x4BFF;
@@ -1149,11 +1166,44 @@ pub const NOTIFICATION_DND_KEY: &str = "notifications/config/dnd";
 const NOTIFICATION_RECENT_LIMIT: usize = 64;
 const NOTIFICATION_FIELD_MAX: usize = 256;
 static mut NOTIFICATION_ID_COUNTER: u64 = 1;
+const NOTIFICATION_WIRE_VERSION: u8 = 1;
+const NOTIFICATION_FLAG_SILENT: u8 = 1;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NotificationOptions {
+    pub priority: NotificationPriority,
+    pub silent: bool,
+    /// Stable presentation identity. Zero asks the helper to derive one from
+    /// owner + title, allowing content updates to coalesce visually and audibly.
+    pub coalesce_key: u64,
+}
+
+impl NotificationOptions {
+    pub const fn automatic(kind: NotificationKind) -> Self {
+        Self {
+            priority: notification_priority_for_kind(kind),
+            silent: false,
+            coalesce_key: 0,
+        }
+    }
+
+    pub const fn silent(kind: NotificationKind) -> Self {
+        Self {
+            priority: notification_priority_for_kind(kind),
+            silent: true,
+            coalesce_key: 0,
+        }
+    }
+}
 
 #[repr(C)]
 struct NotificationWire {
+    version: u8,
     kind: u8,
-    _pad0: [u8; 7],
+    priority: u8,
+    flags: u8,
+    _pad0: [u8; 4],
+    identity: u64,
     timeout_ms: u64,
     title_len: u32,
     body_len: u32,
@@ -1162,10 +1212,25 @@ struct NotificationWire {
 }
 
 impl NotificationWire {
-    fn new(kind: NotificationKind, title: &str, body: &str, timeout_ms: u64) -> Self {
+    fn new(
+        kind: NotificationKind,
+        options: NotificationOptions,
+        identity: u64,
+        title: &str,
+        body: &str,
+        timeout_ms: u64,
+    ) -> Self {
         let mut wire = Self {
+            version: NOTIFICATION_WIRE_VERSION,
             kind: kind as u8,
-            _pad0: [0; 7],
+            priority: options.priority as u8,
+            flags: if options.silent {
+                NOTIFICATION_FLAG_SILENT
+            } else {
+                0
+            },
+            _pad0: [0; 4],
+            identity,
             timeout_ms,
             title_len: 0,
             body_len: 0,
@@ -1185,7 +1250,7 @@ impl NotificationWire {
     }
 }
 
-fn notification_priority_for_kind(kind: NotificationKind) -> NotificationPriority {
+const fn notification_priority_for_kind(kind: NotificationKind) -> NotificationPriority {
     match kind {
         NotificationKind::Info => NotificationPriority::Normal,
         NotificationKind::Warning => NotificationPriority::High,
@@ -1493,6 +1558,29 @@ pub fn show_notification_from(
     body: &str,
     timeout_ms: u64,
 ) -> bool {
+    show_notification_from_with_options(
+        kind,
+        sender_name,
+        owner,
+        sender_icon,
+        title,
+        body,
+        timeout_ms,
+        NotificationOptions::automatic(kind),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn show_notification_from_with_options(
+    kind: NotificationKind,
+    sender_name: &str,
+    owner: &str,
+    sender_icon: Option<&str>,
+    title: &str,
+    body: &str,
+    timeout_ms: u64,
+    options: NotificationOptions,
+) -> bool {
     let mut id = [0u8; 48];
     let id_len = notification_next_id_into(&mut id);
     // TODO(notifications): restrict sender permissions, validate process/app manifest identity,
@@ -1504,12 +1592,17 @@ pub fn show_notification_from(
         sender_icon,
         title,
         body,
-        notification_priority_for_kind(kind),
+        options.priority,
     );
     if notification_dnd_enabled() {
         return true;
     }
-    show_notification_popup(kind, title, body, timeout_ms)
+    let identity = if options.coalesce_key == 0 {
+        notification_identity(owner, title)
+    } else {
+        options.coalesce_key
+    };
+    show_notification_popup(kind, options, identity, title, body, timeout_ms)
 }
 
 #[allow(non_snake_case)]
@@ -2590,11 +2683,20 @@ pub mod AudiodMsg {
     pub const GET_STATUS: u64 = 0xE001;
     pub const GET_DEVICE: u64 = 0xE002;
     pub const GET_VOLUME: u64 = 0xE003;
+    pub const GET_SYSTEM_SOUNDS: u64 = 0xE004;
     pub const SET_VOLUME: u64 = 0xE010; // w0 = 0..100
     pub const SET_MUTE: u64 = 0xE011; // w0 = 0/1
+    pub const SET_SYSTEM_SOUNDS_ENABLED: u64 = 0xE012; // w0 = 0/1
+    pub const SET_SYSTEM_SOUNDS_VOLUME: u64 = 0xE013; // w0 = 0..100
     pub const PLAY_TONE: u64 = 0xE020; // w0 = Hz (0=440), w1 = ms (0=1000)
     pub const SUBMIT_PCM: u64 = 0xE021; // w0 = byte length, cap0 = shm token
     pub const STOP: u64 = 0xE022;
+    /// Semantic system sound: w0=protocol version, w1=stable sound ID,
+    /// w2 flags (bit 0 = explicit preview, all other bits reserved).
+    pub const PLAY_SYSTEM_SOUND: u64 = 0xE023;
+
+    pub const SYSTEM_SOUND_PROTOCOL_VERSION: u64 = 1;
+    pub const SYSTEM_SOUND_FLAG_PREVIEW: u64 = 1;
 
     pub const REPLY: u64 = 0xE0FF;
     pub const ERROR: u64 = 0xE0FE;
@@ -2629,6 +2731,9 @@ pub struct AudioStatus {
     pub bits: u8,
     pub underruns: u32,
     pub frames_played: u32,
+    pub system_sounds_enabled: bool,
+    pub system_sounds_volume: u8,
+    pub system_sound_queue_len: u8,
 }
 
 pub fn pack_audio_status(status: AudioStatus) -> IpcMsg {
@@ -2648,6 +2753,12 @@ pub fn pack_audio_status(status: AudioStatus) -> IpcMsg {
         )
         .word(2, status.underruns as u64)
         .word(3, status.frames_played as u64)
+        .word(
+            4,
+            (status.system_sounds_enabled as u64)
+                | ((status.system_sounds_volume as u64) << 8)
+                | ((status.system_sound_queue_len as u64) << 16),
+        )
 }
 
 pub fn unpack_audio_status(reply: &IpcMsg) -> Option<AudioStatus> {
@@ -2664,6 +2775,17 @@ pub fn unpack_audio_status(reply: &IpcMsg) -> Option<AudioStatus> {
         bits: ((reply.words[1] >> 40) & 0xff) as u8,
         underruns: reply.words[2] as u32,
         frames_played: reply.words[3] as u32,
+        system_sounds_enabled: reply.word_count < 5 || (reply.words[4] & 1) != 0,
+        system_sounds_volume: if reply.word_count < 5 {
+            60
+        } else {
+            ((reply.words[4] >> 8) & 0xff) as u8
+        },
+        system_sound_queue_len: if reply.word_count < 5 {
+            0
+        } else {
+            ((reply.words[4] >> 16) & 0xff) as u8
+        },
     })
 }
 
@@ -4343,6 +4465,8 @@ pub fn nameserver_lookup_timeout(name: &str, timeout_ms: u64) -> Option<Capabili
 
 fn show_notification_popup(
     kind: NotificationKind,
+    options: NotificationOptions,
+    identity: u64,
     title: &str,
     body: &str,
     timeout_ms: u64,
@@ -4354,7 +4478,7 @@ fn show_notification_popup(
         return false;
     };
 
-    let wire = NotificationWire::new(kind, title, body, timeout_ms);
+    let wire = NotificationWire::new(kind, options, identity, title, body, timeout_ms);
     unsafe {
         core::ptr::write(payload_ptr as *mut NotificationWire, wire);
     }
@@ -4385,6 +4509,41 @@ fn show_notification_popup(
 /// Best-effort desktop notification helper.
 pub fn show_notification(kind: NotificationKind, title: &str, body: &str, timeout_ms: u64) -> bool {
     show_notification_from(kind, title, title, None, title, body, timeout_ms)
+}
+
+pub fn show_notification_silent(
+    kind: NotificationKind,
+    title: &str,
+    body: &str,
+    timeout_ms: u64,
+) -> bool {
+    show_notification_from_with_options(
+        kind,
+        title,
+        title,
+        None,
+        title,
+        body,
+        timeout_ms,
+        NotificationOptions::silent(kind),
+    )
+}
+
+fn notification_identity(owner: &str, title: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for byte in owner
+        .bytes()
+        .chain(core::iter::once(0xff))
+        .chain(title.bytes())
+    {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x100_0000_01b3);
+    }
+    if hash == 0 {
+        1
+    } else {
+        hash
+    }
 }
 
 pub fn name_to_u64(name: &str) -> u64 {
@@ -5708,6 +5867,9 @@ mod audio_protocol_tests {
             bits: 16,
             underruns: 3,
             frames_played: 1234,
+            system_sounds_enabled: true,
+            system_sounds_volume: 60,
+            system_sound_queue_len: 2,
         });
         let unpacked = unpack_audio_status(&packed).unwrap();
         assert_eq!(unpacked.volume, 65);
@@ -5715,7 +5877,11 @@ mod audio_protocol_tests {
         assert_eq!(unpacked.last_nonzero, 70);
         assert_eq!(unpacked.sample_rate_hz, 48_000);
         assert_eq!(unpacked.underruns, 3);
+        assert!(unpacked.system_sounds_enabled);
+        assert_eq!(unpacked.system_sounds_volume, 60);
+        assert_eq!(unpacked.system_sound_queue_len, 2);
         assert_eq!(AudiodMsg::ERR_UNAVAILABLE, 3);
         assert_ne!(AudiodMsg::PLAY_TONE, AudiodMsg::SUBMIT_PCM);
+        assert_ne!(AudiodMsg::PLAY_SYSTEM_SOUND, AudiodMsg::SUBMIT_PCM);
     }
 }

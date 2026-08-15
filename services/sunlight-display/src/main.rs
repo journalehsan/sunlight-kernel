@@ -9,6 +9,8 @@ extern crate alloc;
 use alloc::collections::VecDeque;
 use alloc::string::String;
 use alloc::vec::Vec;
+use sunlight_audio::SystemSound;
+use sunlight_audiod::AudioClient;
 use sunlight_libc as libc;
 
 use sunlight_ipc::debug_log;
@@ -20,8 +22,9 @@ use sunlight_ipc::{
     sgp::SgpMsg,
     validate_size, CapabilityToken, DisplayMetrics, DisplayMode, DisplayModeManagement,
     DisplayModeReadOnlyReason, EndpointId, IpcMsg, MezzoMsg, MouseMsg, NotificationKind,
-    PixelFormat, ScreenBackend, WiseOwlLifecycleMsg, DEFAULT_MODE_PREVIEW_TIMEOUT_MS,
-    MAX_DISPLAY_MODES, SAFE_FALLBACK_H, SAFE_FALLBACK_W, WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT,
+    NotificationPriority, PixelFormat, ScreenBackend, WiseOwlLifecycleMsg,
+    DEFAULT_MODE_PREVIEW_TIMEOUT_MS, MAX_DISPLAY_MODES, SAFE_FALLBACK_H, SAFE_FALLBACK_W,
+    WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::{Canvas, Color, Point, Rect};
@@ -995,22 +998,47 @@ impl PointerButtonEventQueue {
 #[derive(Clone)]
 struct Notification {
     id: u64,
+    identity: u64,
     title: String,
     body: String,
     kind: NotificationKind,
+    priority: NotificationPriority,
     created_at: u64,
     timeout_ms: u64,
 }
 
 #[repr(C)]
 struct NotificationWire {
+    version: u8,
     kind: u8,
-    _pad0: [u8; 7],
+    priority: u8,
+    flags: u8,
+    _pad0: [u8; 4],
+    identity: u64,
     timeout_ms: u64,
     title_len: u32,
     body_len: u32,
     title: [u8; 96],
     body: [u8; 256],
+}
+
+const NOTIFICATION_WIRE_VERSION: u8 = 1;
+const NOTIFICATION_FLAG_SILENT: u8 = 1;
+
+struct IncomingNotification {
+    identity: u64,
+    title: String,
+    body: String,
+    kind: NotificationKind,
+    priority: NotificationPriority,
+    silent: bool,
+    timeout_ms: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NotificationAcceptance {
+    changed: bool,
+    sound: Option<SystemSound>,
 }
 
 #[derive(Clone, Copy)]
@@ -2016,6 +2044,86 @@ fn window_title_str(title: &[u8; 64]) -> &str {
     core::str::from_utf8(&title[..len]).unwrap_or("window")
 }
 
+fn notification_system_sound(
+    kind: NotificationKind,
+    priority: NotificationPriority,
+    silent: bool,
+) -> Option<SystemSound> {
+    if silent || priority == NotificationPriority::Low {
+        return None;
+    }
+    Some(match priority {
+        NotificationPriority::Low => return None,
+        NotificationPriority::Normal => match kind {
+            NotificationKind::Info => SystemSound::Notification,
+            NotificationKind::Warning => SystemSound::Warning,
+            NotificationKind::Error => SystemSound::Error,
+        },
+        NotificationPriority::High => SystemSound::Warning,
+        NotificationPriority::Critical => SystemSound::Critical,
+    })
+}
+
+fn accept_notification(
+    notifications: &mut Vec<Notification>,
+    next_id: &mut u64,
+    incoming: IncomingNotification,
+    now_ms: u64,
+) -> NotificationAcceptance {
+    if let Some(existing) = notifications
+        .iter_mut()
+        .find(|notification| notification.identity == incoming.identity)
+    {
+        let escalated = incoming.priority.rank() > existing.priority.rank();
+        existing.title = incoming.title;
+        existing.body = incoming.body;
+        existing.kind = incoming.kind;
+        existing.priority = incoming.priority;
+        existing.created_at = now_ms;
+        existing.timeout_ms = incoming.timeout_ms;
+        return NotificationAcceptance {
+            changed: true,
+            sound: if escalated {
+                notification_system_sound(incoming.kind, incoming.priority, incoming.silent)
+            } else {
+                None
+            },
+        };
+    }
+    if notifications.len() >= NOTIFICATION_MAX_COUNT {
+        notifications.remove(0);
+    }
+    let sound = notification_system_sound(incoming.kind, incoming.priority, incoming.silent);
+    notifications.push(Notification {
+        id: *next_id,
+        identity: incoming.identity,
+        title: incoming.title,
+        body: incoming.body,
+        kind: incoming.kind,
+        priority: incoming.priority,
+        created_at: now_ms,
+        timeout_ms: incoming.timeout_ms,
+    });
+    *next_id = next_id.saturating_add(1);
+    NotificationAcceptance {
+        changed: true,
+        sound,
+    }
+}
+
+fn local_notification_identity(title: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for byte in title.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x100_0000_01b3);
+    }
+    if hash == 0 {
+        1
+    } else {
+        hash
+    }
+}
+
 fn push_notification(
     state: &mut CompositorState,
     kind: NotificationKind,
@@ -2023,18 +2131,29 @@ fn push_notification(
     body: String,
     timeout_ms: u64,
 ) {
-    if state.notifications.len() >= NOTIFICATION_MAX_COUNT {
-        state.notifications.remove(0);
+    let priority = match kind {
+        NotificationKind::Info => NotificationPriority::Normal,
+        NotificationKind::Warning => NotificationPriority::High,
+        NotificationKind::Error => NotificationPriority::Critical,
+    };
+    let identity = local_notification_identity(&title);
+    let accepted = accept_notification(
+        &mut state.notifications,
+        &mut state.next_notification_id,
+        IncomingNotification {
+            identity,
+            title,
+            body,
+            kind,
+            priority,
+            silent: false,
+            timeout_ms,
+        },
+        monotonic_millis(),
+    );
+    if let Some(sound) = accepted.sound {
+        let _ = AudioClient::new().play_system_sound(sound);
     }
-    state.notifications.push(Notification {
-        id: state.next_notification_id,
-        title,
-        body,
-        kind,
-        created_at: monotonic_millis(),
-        timeout_ms,
-    });
-    state.next_notification_id = state.next_notification_id.saturating_add(1);
 }
 
 fn prune_notifications(state: &mut CompositorState, now: u64) -> bool {
@@ -2045,23 +2164,50 @@ fn prune_notifications(state: &mut CompositorState, now: u64) -> bool {
     before != state.notifications.len()
 }
 
-fn ingest_notification(state: &mut CompositorState, msg: &IpcMsg) {
+fn ingest_notification(state: &mut CompositorState, msg: &IpcMsg) -> NotificationAcceptance {
     if msg.cap_count == 0 || msg.caps[0] == CapabilityToken::INVALID {
-        return;
+        return NotificationAcceptance {
+            changed: false,
+            sound: None,
+        };
     }
     let Ok(ptr) = sunlight_ipc::shm_map(msg.caps[0]) else {
-        return;
+        return NotificationAcceptance {
+            changed: false,
+            sound: None,
+        };
     };
 
     let wire = unsafe { &*(ptr as *const NotificationWire) };
+    if wire.version != NOTIFICATION_WIRE_VERSION
+        || wire.flags & !NOTIFICATION_FLAG_SILENT != 0
+        || wire.identity == 0
+    {
+        return NotificationAcceptance {
+            changed: false,
+            sound: None,
+        };
+    }
     let title_len = (wire.title_len as usize).min(wire.title.len());
     let body_len = (wire.body_len as usize).min(wire.body.len());
     let title = notification_text(&wire.title, title_len);
     let body = notification_text(&wire.body, body_len);
     let kind = match wire.kind {
+        0 => NotificationKind::Info,
         1 => NotificationKind::Warning,
         2 => NotificationKind::Error,
-        _ => NotificationKind::Info,
+        _ => {
+            return NotificationAcceptance {
+                changed: false,
+                sound: None,
+            }
+        }
+    };
+    let Some(priority) = NotificationPriority::from_u8(wire.priority) else {
+        return NotificationAcceptance {
+            changed: false,
+            sound: None,
+        };
     };
     let timeout_ms = if wire.timeout_ms == 0 {
         NOTIFICATION_TIMEOUT_MS
@@ -2069,7 +2215,176 @@ fn ingest_notification(state: &mut CompositorState, msg: &IpcMsg) {
         wire.timeout_ms
             .clamp(NOTIFICATION_MIN_TIMEOUT_MS, NOTIFICATION_TIMEOUT_MS)
     };
-    push_notification(state, kind, title, body, timeout_ms);
+    accept_notification(
+        &mut state.notifications,
+        &mut state.next_notification_id,
+        IncomingNotification {
+            identity: wire.identity,
+            title,
+            body,
+            kind,
+            priority,
+            silent: wire.flags & NOTIFICATION_FLAG_SILENT != 0,
+            timeout_ms,
+        },
+        monotonic_millis(),
+    )
+}
+
+#[cfg(test)]
+mod notification_policy_tests {
+    use super::*;
+
+    fn incoming(
+        identity: u64,
+        kind: NotificationKind,
+        priority: NotificationPriority,
+        silent: bool,
+        body: &str,
+    ) -> IncomingNotification {
+        IncomingNotification {
+            identity,
+            title: String::from("Build"),
+            body: String::from(body),
+            kind,
+            priority,
+            silent,
+            timeout_ms: 5_000,
+        }
+    }
+
+    #[test]
+    fn normal_warning_critical_and_silent_mapping() {
+        assert_eq!(
+            notification_system_sound(NotificationKind::Info, NotificationPriority::Normal, false),
+            Some(SystemSound::Notification)
+        );
+        assert_eq!(
+            notification_system_sound(NotificationKind::Warning, NotificationPriority::High, false),
+            Some(SystemSound::Warning)
+        );
+        assert_eq!(
+            notification_system_sound(
+                NotificationKind::Error,
+                NotificationPriority::Critical,
+                false
+            ),
+            Some(SystemSound::Critical)
+        );
+        assert_eq!(
+            notification_system_sound(NotificationKind::Info, NotificationPriority::Low, false),
+            None
+        );
+        assert_eq!(
+            notification_system_sound(
+                NotificationKind::Error,
+                NotificationPriority::Critical,
+                true
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn duplicate_and_content_update_coalesce_audio() {
+        let mut notes = Vec::new();
+        let mut next_id = 1;
+        let first = accept_notification(
+            &mut notes,
+            &mut next_id,
+            incoming(
+                7,
+                NotificationKind::Info,
+                NotificationPriority::Normal,
+                false,
+                "one",
+            ),
+            100,
+        );
+        assert_eq!(first.sound, Some(SystemSound::Notification));
+        let updated = accept_notification(
+            &mut notes,
+            &mut next_id,
+            incoming(
+                7,
+                NotificationKind::Info,
+                NotificationPriority::Normal,
+                false,
+                "two",
+            ),
+            200,
+        );
+        assert_eq!(updated.sound, None);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].body, "two");
+    }
+
+    #[test]
+    fn urgency_escalation_can_emit_one_new_sound() {
+        let mut notes = Vec::new();
+        let mut next_id = 1;
+        let _ = accept_notification(
+            &mut notes,
+            &mut next_id,
+            incoming(
+                9,
+                NotificationKind::Info,
+                NotificationPriority::Normal,
+                false,
+                "running",
+            ),
+            100,
+        );
+        let escalated = accept_notification(
+            &mut notes,
+            &mut next_id,
+            incoming(
+                9,
+                NotificationKind::Error,
+                NotificationPriority::Critical,
+                false,
+                "failed",
+            ),
+            200,
+        );
+        assert_eq!(escalated.sound, Some(SystemSound::Critical));
+        let repeat = accept_notification(
+            &mut notes,
+            &mut next_id,
+            incoming(
+                9,
+                NotificationKind::Error,
+                NotificationPriority::Critical,
+                false,
+                "still failed",
+            ),
+            300,
+        );
+        assert_eq!(repeat.sound, None);
+    }
+
+    #[test]
+    fn visual_and_audio_queue_share_the_same_bound() {
+        let mut notes = Vec::new();
+        let mut next_id = 1;
+        for identity in 1..=NOTIFICATION_MAX_COUNT as u64 + 2 {
+            let accepted = accept_notification(
+                &mut notes,
+                &mut next_id,
+                incoming(
+                    identity,
+                    NotificationKind::Info,
+                    NotificationPriority::Normal,
+                    false,
+                    "new",
+                ),
+                identity * 10,
+            );
+            assert_eq!(accepted.sound, Some(SystemSound::Notification));
+        }
+        assert_eq!(notes.len(), NOTIFICATION_MAX_COUNT);
+        assert_eq!(notes[0].identity, 3);
+    }
 }
 
 fn draw_notifications(canvas: &mut Canvas<'_>, state: &CompositorState) {
@@ -7705,10 +8020,15 @@ pub extern "C" fn _start() -> ! {
             // caps[0]  = SHM page containing the notification payload
             // -------------------------------------------------------------------
             SgpMsg::SHOW_NOTIFICATION => {
-                ingest_notification(&mut state, &msg);
-                mark_dirty_full(&mut state);
-                redraw_scene(&mut state);
+                let accepted = ingest_notification(&mut state, &msg);
+                if accepted.changed {
+                    mark_dirty_full(&mut state);
+                    redraw_scene(&mut state);
+                }
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                if let Some(sound) = accepted.sound {
+                    let _ = AudioClient::new().play_system_sound(sound);
+                }
             }
 
             // SET_CURSOR — client declares preferred cursor for its client area.

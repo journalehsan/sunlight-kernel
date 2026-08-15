@@ -12,16 +12,23 @@ extern crate std;
 
 pub mod hda;
 pub mod pcm;
+pub mod system;
 pub mod volume;
+pub mod wav;
 
 pub use pcm::{
     apply_gain, generate_sine_s16le_stereo, validate_pcm, AudioBuffer, AudioError, AudioFormat,
     PcmValidation, MAX_PCM_BYTES, NATIVE_CHANNELS, NATIVE_RATE_HZ, NATIVE_SAMPLE_BITS,
 };
+pub use system::{
+    effective_system_gain, SystemSound, SystemSoundSettings, DEFAULT_SYSTEM_SOUNDS_ENABLED,
+    DEFAULT_SYSTEM_SOUNDS_VOLUME, SYSTEM_SOUND_COUNT, SYSTEM_SOUND_PROTOCOL_VERSION,
+};
 pub use volume::{
     parse_persisted, render_persisted, render_persisted_buf, volume_icon, MasterVolume,
     PersistedAudio, VolumeIconKind, DEFAULT_VOLUME, MAX_VOLUME,
 };
+pub use wav::{parse_pcm_wav, WavError, WavPcm};
 
 /// Playback device readiness as published by audiod.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

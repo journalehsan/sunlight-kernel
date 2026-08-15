@@ -9,8 +9,8 @@ use alloc::vec::Vec;
 
 use sunlight_dialogs::{
     decode_result, encode_request, AlertRequest, ConfirmRequest, ConfirmStyle, DialogButton,
-    DialogCommonOptions, DialogError, DialogMsg, DialogRequest, DialogResult, OpenFileRequest,
-    OpenFolderRequest, SaveFileRequest, TextInputRequest,
+    DialogCommonOptions, DialogError, DialogMsg, DialogRequest, DialogResult, DialogSeverity,
+    OpenFileRequest, OpenFolderRequest, SaveFileRequest, TextInputRequest,
 };
 use sunlight_ipc::{
     ipc_call, nameserver_lookup, nameserver_lookup_timeout, process_yield, shm_alloc, shm_free,
@@ -85,10 +85,7 @@ fn parse_request(args: &[&str]) -> Result<DialogRequest, &'static str> {
             let title = read_flag(args, "--title").unwrap_or("");
             let message = read_flag(args, "--message").unwrap_or("");
             Ok(DialogRequest::Alert(AlertRequest {
-                common: DialogCommonOptions {
-                    title: title.to_string(),
-                    message: message.to_string(),
-                },
+                common: dialog_common(args, title, message, DialogSeverity::Information),
             }))
         }
         "confirm" => {
@@ -99,10 +96,7 @@ fn parse_request(args: &[&str]) -> Result<DialogRequest, &'static str> {
                 _ => ConfirmStyle::YesNo,
             };
             Ok(DialogRequest::Confirm(ConfirmRequest {
-                common: DialogCommonOptions {
-                    title: title.to_string(),
-                    message: message.to_string(),
-                },
+                common: dialog_common(args, title, message, DialogSeverity::Question),
                 style,
                 default_button: match style {
                     ConfirmStyle::OkCancel => DialogButton::Ok,
@@ -116,10 +110,7 @@ fn parse_request(args: &[&str]) -> Result<DialogRequest, &'static str> {
             let default_value = read_flag(args, "--default").unwrap_or("");
             let allow_empty = !has_flag(args, "--no-empty");
             Ok(DialogRequest::TextInput(TextInputRequest {
-                common: DialogCommonOptions {
-                    title: title.to_string(),
-                    message: message.to_string(),
-                },
+                common: dialog_common(args, title, message, DialogSeverity::Information),
                 default_value: default_value.to_string(),
                 allow_empty,
             }))
@@ -156,6 +147,27 @@ fn parse_request(args: &[&str]) -> Result<DialogRequest, &'static str> {
         })),
         _ => Err("unknown subcommand"),
     }
+}
+
+fn dialog_common(
+    args: &[&str],
+    title: &str,
+    message: &str,
+    fallback: DialogSeverity,
+) -> DialogCommonOptions {
+    let severity = match read_flag(args, "--severity") {
+        Some("success") => DialogSeverity::Success,
+        Some("warning") => DialogSeverity::Warning,
+        Some("error") => DialogSeverity::Error,
+        Some("critical") => DialogSeverity::Critical,
+        Some("question") => DialogSeverity::Question,
+        Some("information" | "info") => DialogSeverity::Information,
+        _ => fallback,
+    };
+    let mut common =
+        DialogCommonOptions::new(title.to_string(), message.to_string()).with_severity(severity);
+    common.silent = has_flag(args, "--silent");
+    common
 }
 
 fn run_request(cap: CapabilityToken, request: DialogRequest) -> i32 {

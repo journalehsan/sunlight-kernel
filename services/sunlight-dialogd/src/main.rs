@@ -11,9 +11,10 @@ use core::cmp::Ordering;
 use sun_font::{
     draw_text as sf_draw, line_height as sf_lh, measure_text as sf_measure, FontRole, TextStyle,
 };
+use sunlight_audiod::AudioClient;
 use sunlight_dialogs::{
     confirm_labels, decode_request, encode_result, validate_request, ConfirmStyle, DialogButton,
-    DialogError, DialogMsg, DialogRequest, DialogResult, TextInputRequest,
+    DialogError, DialogMsg, DialogRequest, DialogResult, DialogSeverity, TextInputRequest,
 };
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv_timeout, ipc_reply, nameserver_register, process_yield,
@@ -755,6 +756,8 @@ impl DialogApp {
                     common: sunlight_dialogs::DialogCommonOptions {
                         title: String::from("Unsupported"),
                         message: String::from("Dialog type not implemented"),
+                        severity: sunlight_dialogs::DialogSeverity::Information,
+                        silent: true,
                     },
                 },
             ))),
@@ -853,6 +856,7 @@ impl App for DialogApp {
 }
 
 fn present_dialog(request: DialogRequest) -> Result<DialogResult, DialogError> {
+    let semantic_sound = request.system_sound();
     let (title, width, height) = match &request {
         DialogRequest::OpenFile(_) | DialogRequest::OpenFolder(_) | DialogRequest::SaveFile(_) => {
             ("Sunlight Dialog", FILE_W, FILE_H)
@@ -867,6 +871,10 @@ fn present_dialog(request: DialogRequest) -> Result<DialogResult, DialogError> {
         decoration: WindowDecoration::HiddenOverlay,
     })
     .ok_or(DialogError::HostUnavailable)?;
+    if let Some(sound) = semantic_sound {
+        // Best effort: audio is supplemental and must never prevent rendering.
+        let _ = AudioClient::new().play_system_sound(sound);
+    }
     let flags = 1 | (1 << 5) | (90 << 6);
     window.configure_flags(flags);
     let mut app = DialogApp::new(request, height);
@@ -882,7 +890,19 @@ fn draw_simple_dialog(
     primary_rect: Rect,
     secondary_rect: Rect,
 ) {
-    canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel, theme.accent, 2);
+    let severity = match &state.request {
+        DialogRequest::Alert(req) => req.common.severity,
+        DialogRequest::Confirm(req) => req.common.severity,
+        DialogRequest::TextInput(req) => req.common.severity,
+        _ => DialogSeverity::Information,
+    };
+    let semantic_color = match severity {
+        DialogSeverity::Information | DialogSeverity::Question => theme.accent,
+        DialogSeverity::Success => theme.ok,
+        DialogSeverity::Warning => theme.warn,
+        DialogSeverity::Error | DialogSeverity::Critical => theme.danger,
+    };
+    canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel, semantic_color, 2);
     let (title, message) = match &state.request {
         DialogRequest::Alert(req) => (req.common.title.as_str(), req.common.message.as_str()),
         DialogRequest::Confirm(req) => (req.common.title.as_str(), req.common.message.as_str()),
@@ -894,7 +914,7 @@ fn draw_simple_dialog(
         if title.is_empty() { " " } else { title },
         card.x + PAD,
         card.y + PAD,
-        &TextStyle::new(FontRole::UiTitle, theme.accent),
+        &TextStyle::new(FontRole::UiTitle, semantic_color),
     );
     let line_h = sf_lh(FontRole::UiRegular) as i32 + 2;
     let mut line_y = card.y + PAD + 30;

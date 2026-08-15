@@ -62,6 +62,8 @@ mod workspace_switcher;
 
 use alloc::{string::String, vec::Vec};
 use sun_font::{self, draw_text_vcenter, measure_text, FontRole, TextStyle};
+use sunlight_audio::VolumeIconKind;
+use sunlight_audiod::{AudioClient, AudioClientError, AudioSnapshot};
 use sunlight_calendar::{
     build_selected_day_previews, SelectedDayReminderPreview, SelectedDayTaskPreview,
 };
@@ -76,8 +78,6 @@ use sunlight_ipc::{
     SAFE_FALLBACK_H, SAFE_FALLBACK_W, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, sun_exec, sun_open, DirEntry, FT_DIR};
-use sunlight_audio::VolumeIconKind;
-use sunlight_audiod::{AudioClient, AudioClientError, AudioSnapshot};
 use sunlight_networkd::{
     DerivedConnectionState, NetworkClient, NetworkPanelSummary, SnapshotError,
 };
@@ -883,6 +883,9 @@ mod audio_widget_tests {
             frames_played: 0,
             vendor_id: 0x8086,
             device_id: 0x2668,
+            system_sounds_enabled: true,
+            system_sounds_volume: 60,
+            system_sound_queue_len: 0,
         };
         state.update(Ok(snap));
         assert_eq!(state.icon, VolumeIconKind::High);
@@ -2721,11 +2724,8 @@ impl VortexShell {
                 if let Some(snap) = self.audio.snapshot.as_mut() {
                     snap.volume = value;
                 }
-                self.audio.icon = sunlight_audio::volume_icon(
-                    value,
-                    self.audio.muted(),
-                    self.audio.available(),
-                );
+                self.audio.icon =
+                    sunlight_audio::volume_icon(value, self.audio.muted(), self.audio.available());
             }
         }
         let drag_finished = was_dragging && !self.sound_slider.dragging;
@@ -7253,7 +7253,8 @@ impl VortexShell {
             &TextStyle::new(FontRole::UiMedium, theme.text),
         );
 
-        self.sound_slider.rect = Rect::new(panel.x + 40, panel.y + 40, panel.w.saturating_sub(96), 24);
+        self.sound_slider.rect =
+            Rect::new(panel.x + 40, panel.y + 40, panel.w.saturating_sub(96), 24);
         self.sound_slider.draw(canvas, theme);
         let pct = alloc::format!("{}%", self.sound_slider.value);
         draw_text_vcenter(
