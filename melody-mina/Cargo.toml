@@ -1,0 +1,22 @@
+[package]
+name = "melody-mina"
+version = "0.2.4047-alpha.1"
+
+
+edition = "2021"
+description = "Native responsive SunlightOS music-player frontend"
+license = "MIT"
+
+[lib]
+name = "melody_mina"
+path = "src/lib.rs"
+
+[[bin]]
+name = "melody-mina"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-ipc = { path = "../ipc" }
+sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
+sun-font = { path = "../sun-font" }
+sunlight-libc = { path = "../sunlight-libc" }

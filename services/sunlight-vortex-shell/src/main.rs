@@ -88,6 +88,7 @@ use sunlight_reminders::{
 };
 use sunlight_shell_appstate::{
     AppId as AppStateAppId, AppRunState, RunningAppRegistry, WindowSnapshot as AppStateWindow,
+    APP_COUNT,
 };
 use sunlight_telemetry::{SystemSnapshot, Telemetry};
 use sunlight_ui::{
@@ -259,6 +260,8 @@ static ICON_RABBIT_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
 static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
+static ICON_MELODY_MINA_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
 static MENU_NEW_FOLDER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.tga");
 static MENU_NEW_TEXT_TGA: &[u8] =
@@ -478,7 +481,8 @@ impl DockTheme {
             | AppId::Mines
             | AppId::SiliconEchoes
             | AppId::Welcome
-            | AppId::WiseOwl => None,
+            | AppId::WiseOwl
+            | AppId::MelodyMina => None,
         }
     }
 }
@@ -599,6 +603,7 @@ pub(crate) enum AppId {
     SiliconEchoes,
     Welcome,
     WiseOwl,
+    MelodyMina,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -1052,7 +1057,7 @@ const MAX_WINDOW_SNAPSHOTS: usize = 256;
 /// Number of apps tracked in `apps[]` / `RunningAppRegistry::apps[]`. Mirrors
 /// `sunlight_shell_appstate::APP_COUNT`. Kept here as a tuple-array width.
 /// Must stay equal to `apps: [DockAppState; N]` and `AppId` variant count.
-const APP_REGISTRY_LEN: usize = 17;
+const APP_REGISTRY_LEN: usize = APP_COUNT;
 const ENABLE_RUNNING_TASKBAR: bool = true;
 
 /// Search is an icon button that opens the centered palette; typing belongs
@@ -1964,6 +1969,7 @@ impl VortexShell {
                 ),
                 DockAppState::new(AppId::Welcome, "Welcome to SunlightOS", AppId::Welcome),
                 DockAppState::new(AppId::WiseOwl, "Wise Owl", AppId::WiseOwl),
+                DockAppState::new(AppId::MelodyMina, "Melody Mina", AppId::MelodyMina),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
@@ -2261,6 +2267,7 @@ impl VortexShell {
             AppId::SiliconEchoes => AppStateAppId::SiliconEchoes,
             AppId::Welcome => AppStateAppId::Welcome,
             AppId::WiseOwl => AppStateAppId::WiseOwl,
+            AppId::MelodyMina => AppStateAppId::MelodyMina,
         }
     }
 
@@ -2298,6 +2305,7 @@ impl VortexShell {
             AppId::SiliconEchoes => "/bin/silicon-echoes",
             AppId::Welcome => "/bin/welcome",
             AppId::WiseOwl => "/bin/wiseowl",
+            AppId::MelodyMina => "/bin/melody-mina",
         }
     }
 
@@ -2320,6 +2328,11 @@ impl VortexShell {
             AppId::SiliconEchoes => b"silicon-echoes",
             AppId::Welcome => b"welcome",
             AppId::WiseOwl => b"wiseowl",
+            // Use the stable native path for dock launches. This remains
+            // compatible with images whose linked sun_exec registry predates
+            // Melody Mina while the canonical ID and aliases continue to be
+            // available to search, runners, and command-line launches.
+            AppId::MelodyMina => b"/bin/melody-mina",
         }
     }
 
@@ -2342,6 +2355,7 @@ impl VortexShell {
             AppId::SiliconEchoes => "app=silicon-echoes",
             AppId::Welcome => "app=welcome",
             AppId::WiseOwl => "app=wiseowl",
+            AppId::MelodyMina => "app=melody-mina",
         }
     }
 
@@ -3837,6 +3851,7 @@ impl VortexShell {
             AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_TGA),
             AppId::Welcome => Some(ICON_GENERIC_APP_TGA),
             AppId::WiseOwl => Some(ICON_GENERIC_APP_TGA),
+            AppId::MelodyMina => Some(ICON_MELODY_MINA_TGA),
         };
         bytes.and_then(|b| TgaImage::parse(b).ok())
     }
@@ -6449,6 +6464,7 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "sunlight-text"
         | "kate" => Some(ICON_TEXT_EDITOR_TGA),
         "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_TGA),
+        "melody-mina" | "melody" | "music-player" => Some(ICON_MELODY_MINA_TGA),
         "silicon-echoes" | "silicon" => Some(ICON_SILICON_ECHOES_TGA),
         "rappid-rabbit" | "rabbit" | "internet-web-browser" | "web-browser" => {
             Some(ICON_GENERIC_APP_TGA)
@@ -8034,6 +8050,18 @@ mod shelf_control_tests {
             // Trash sits left of Search inside the right shelf cluster.
             assert!(bot_right_cluster_width() > SEARCH_BTN + CLUSTER_PAD as u32 * 2);
         }
+    }
+
+    #[test]
+    fn melody_mina_dock_launch_uses_the_native_executable_path() {
+        assert_eq!(
+            VortexShell::app_launch_command(AppId::MelodyMina),
+            b"/bin/melody-mina"
+        );
+        assert_eq!(
+            VortexShell::app_launch_path(AppId::MelodyMina),
+            "/bin/melody-mina"
+        );
     }
 
     #[test]

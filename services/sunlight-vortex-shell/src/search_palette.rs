@@ -6,6 +6,7 @@
 //! central `open_app_from_ui` path.
 
 use sun_font::Typography;
+use sunlight_shell_appstate::APP_COUNT;
 use sunlight_ui::{
     image::TgaImage,
     widgets::{
@@ -208,6 +209,14 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
         action: SearchAction::LaunchApp(AppId::Welcome),
         category: "System",
     },
+    SearchEntry {
+        app_id: AppId::MelodyMina,
+        title: "Melody Mina",
+        aliases: &["music", "player", "melody"],
+        keywords: &["audio", "playlist", "media"],
+        action: SearchAction::LaunchApp(AppId::MelodyMina),
+        category: "Multimedia",
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -355,6 +364,7 @@ fn app_id_token(id: AppId) -> &'static str {
         AppId::SiliconEchoes => "siliconechoes",
         AppId::Welcome => "welcome",
         AppId::WiseOwl => "wiseowl",
+        AppId::MelodyMina => "melodymina",
     }
 }
 
@@ -397,7 +407,7 @@ pub(crate) fn rank_applications(query: &str, out: &mut [RankedHit]) -> usize {
 
     // Deduplicate by app_id (keep best rank already first).
     let mut written = 0usize;
-    let mut seen = [false; 16]; // APP_COUNT / AppId variant count
+    let mut seen = [false; APP_COUNT];
     for i in 0..n {
         let hit = hits[i].unwrap();
         let app_id = SEARCH_REGISTRY[hit.entry_index].app_id as usize;
@@ -987,7 +997,7 @@ mod tests {
         }; 32];
         let n = rank_applications("", &mut hits);
         assert!(n >= 8);
-        let mut seen = [false; 16];
+        let mut seen = [false; APP_COUNT];
         for i in 0..n {
             let id = SEARCH_REGISTRY[hits[i].entry_index].app_id as usize;
             assert!(!seen[id], "duplicate app id");
@@ -1017,6 +1027,12 @@ mod tests {
         assert!(t.iter().any(|x| *x == "Rappid Rabbit"));
         let t = titles_for("cpu");
         assert!(t.iter().any(|x| *x == "Task Manager"));
+    }
+
+    #[test]
+    fn melody_mina_is_searchable_by_music_alias() {
+        let titles = titles_for("music");
+        assert!(titles.contains(&"Melody Mina"));
     }
 
     #[test]

@@ -283,6 +283,9 @@ static SUNLIGHT_FILES_ELF_BYTES: &[u8] =
 // Light Lens: lightweight graphical image viewer.
 static LIGHT_LENS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/light-lens");
+// Melody Mina: native responsive music-player frontend (UI-only Phase 1).
+static MELODY_MINA_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/melody-mina");
 // Sunlight Edit: native graphical text editor.
 static SUNLIGHT_EDIT_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-edit");

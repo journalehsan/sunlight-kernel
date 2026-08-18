@@ -263,6 +263,12 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
         aliases: aliases![("en", "sunlight-mines")],
         executable: b"/Applications/SunlightMines.sunapp",
     },
+    ApplicationRegistryEntry {
+        canonical_id: "melody-mina",
+        display_name: "Melody Mina",
+        aliases: aliases![("en", "music"), ("en", "music-player"), ("en", "melody")],
+        executable: b"/bin/melody-mina",
+    },
 ];
 
 static SETTINGS_PAGE_REGISTRY: &[SettingsPageRegistryEntry] = &[
@@ -1198,6 +1204,18 @@ mod tests {
             map_app_id(b"sunlight-chronos"),
             Some(b"/Applications/ChronosDosShell.sunapp".as_slice())
         );
+    }
+
+    #[test]
+    fn melody_mina_id_and_aliases_resolve_to_the_native_binary() {
+        for command in [
+            b"melody-mina".as_slice(),
+            b"melody".as_slice(),
+            b"music".as_slice(),
+            b"music-player".as_slice(),
+        ] {
+            assert_eq!(map_app_id(command), Some(b"/bin/melody-mina".as_slice()));
+        }
     }
 
     #[test]

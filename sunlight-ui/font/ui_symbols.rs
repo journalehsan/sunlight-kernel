@@ -29,6 +29,13 @@ pub enum UiSymbol {
     MissingFolder,
     File,
     FilesApp,
+    Shuffle,
+    PreviousTrack,
+    Play,
+    Pause,
+    NextTrack,
+    Repeat,
+    MoreHorizontal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -408,6 +415,90 @@ const FILES_APP: [u16; 9] = [
     0b000111000,
 ];
 
+const SHUFFLE: [u16; 9] = [
+    0b000000000,
+    0b110000011,
+    0b011000110,
+    0b001101100,
+    0b000111000,
+    0b001101100,
+    0b011000110,
+    0b110000011,
+    0b000000000,
+];
+
+const PREVIOUS_TRACK: [u16; 9] = [
+    0b000000000,
+    0b010000100,
+    0b010001100,
+    0b010011100,
+    0b010111100,
+    0b010011100,
+    0b010001100,
+    0b010000100,
+    0b000000000,
+];
+
+const PLAY: [u16; 9] = [
+    0b000000000,
+    0b001000000,
+    0b001100000,
+    0b001110000,
+    0b001111000,
+    0b001110000,
+    0b001100000,
+    0b001000000,
+    0b000000000,
+];
+
+const PAUSE: [u16; 9] = [
+    0b000000000,
+    0b001101100,
+    0b001101100,
+    0b001101100,
+    0b001101100,
+    0b001101100,
+    0b001101100,
+    0b001101100,
+    0b000000000,
+];
+
+const NEXT_TRACK: [u16; 9] = [
+    0b000000000,
+    0b001000010,
+    0b001100010,
+    0b001110010,
+    0b001111010,
+    0b001110010,
+    0b001100010,
+    0b001000010,
+    0b000000000,
+];
+
+const REPEAT: [u16; 9] = [
+    0b000000000,
+    0b001111110,
+    0b010000011,
+    0b100000110,
+    0b100000000,
+    0b110000001,
+    0b011000010,
+    0b001111100,
+    0b000000000,
+];
+
+const MORE_HORIZONTAL: [u16; 9] = [
+    0b000000000,
+    0b000000000,
+    0b000000000,
+    0b000000000,
+    0b010101010,
+    0b000000000,
+    0b000000000,
+    0b000000000,
+    0b000000000,
+];
+
 pub const fn glyph(symbol: UiSymbol) -> UiGlyph {
     match symbol {
         UiSymbol::Minimize => UiGlyph::new(9, 9, 10, &MINIMIZE),
@@ -439,5 +530,12 @@ pub const fn glyph(symbol: UiSymbol) -> UiGlyph {
         UiSymbol::MissingFolder => UiGlyph::new(9, 9, 10, &MISSING_FOLDER),
         UiSymbol::File => UiGlyph::new(9, 9, 10, &FILE),
         UiSymbol::FilesApp => UiGlyph::new(9, 9, 10, &FILES_APP),
+        UiSymbol::Shuffle => UiGlyph::new(9, 9, 10, &SHUFFLE),
+        UiSymbol::PreviousTrack => UiGlyph::new(9, 9, 10, &PREVIOUS_TRACK),
+        UiSymbol::Play => UiGlyph::new(9, 9, 10, &PLAY),
+        UiSymbol::Pause => UiGlyph::new(9, 9, 10, &PAUSE),
+        UiSymbol::NextTrack => UiGlyph::new(9, 9, 10, &NEXT_TRACK),
+        UiSymbol::Repeat => UiGlyph::new(9, 9, 10, &REPEAT),
+        UiSymbol::MoreHorizontal => UiGlyph::new(9, 9, 10, &MORE_HORIZONTAL),
     }
 }

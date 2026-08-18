@@ -643,6 +643,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "melody-mina",
+            output: "melody-mina",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-vortex-shell",
             output: "sunlight-vortex-shell",
             rustflags: service_rustflags,

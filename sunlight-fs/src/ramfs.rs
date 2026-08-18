@@ -1781,6 +1781,14 @@ login_timeout_seconds = 30
         mode::FILE_755,
         b"#!/sunlight/light-lens\n",
     ),
+    // Melody Mina: native responsive music-player frontend.
+    RamEntry::file(
+        "/bin/melody-mina",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/melody-mina\n",
+    ),
     RamEntry::file(
         "/bin/sunlight-edit",
         0,
@@ -2510,6 +2518,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         b"#!/sunlight/light-lens\n",
     ),
     RamEntry::file(
+        "/usr/bin/melody-mina",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/melody-mina\n",
+    ),
+    RamEntry::file(
         "/usr/bin/sunlight-edit",
         0,
         0,
@@ -3225,6 +3240,19 @@ mod tests {
             assert!(!entry.is_dir);
             assert_eq!(entry.mode, mode::FILE_755);
             assert_eq!(entry.data, b"#!/sunlight/sunlight-chronos\n");
+        }
+    }
+
+    #[test]
+    fn melody_mina_command_stubs_are_present_in_initramfs() {
+        for path in ["/bin/melody-mina", "/usr/bin/melody-mina"] {
+            let entry = INITRAMFS
+                .iter()
+                .find(|entry| entry.path == path)
+                .unwrap_or_else(|| panic!("missing {path}"));
+            assert!(!entry.is_dir);
+            assert_eq!(entry.mode, mode::FILE_755);
+            assert_eq!(entry.data, b"#!/sunlight/melody-mina\n");
         }
     }
 

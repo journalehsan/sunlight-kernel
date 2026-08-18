@@ -6,6 +6,7 @@ pub mod digital_number;
 pub mod disclosure;
 pub mod document_canvas;
 pub mod drive_card;
+pub mod icon_button;
 pub mod label;
 pub mod owl_avatar;
 pub mod panel;
@@ -53,6 +54,7 @@ pub use document_canvas::{
     ScenePatchOperation, TextEditState, TextLineLayout,
 };
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
+pub use icon_button::IconButton;
 pub use label::Label;
 pub use owl_avatar::{OwlAvatar, OwlAvatarState};
 pub use panel::{BadgeKind, Histogram, Panel, ProgressBar, StatusBadge};

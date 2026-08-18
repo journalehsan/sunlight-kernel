@@ -50,6 +50,8 @@ static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
 static ICON_WELCOME_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
 static ICON_WISEOWL_TGA: &[u8] = include_bytes!("../../../WiseOwl.sunapp/Resources/icon.tga");
+static ICON_MELODY_MINA_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
 
 static ICON_SEARCH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
@@ -66,7 +68,7 @@ fn icon(bytes: &'static [u8]) -> Option<TgaImage> {
     TgaImage::parse(bytes).ok()
 }
 
-const APP_CATALOG_LEN: usize = 17;
+const APP_CATALOG_LEN: usize = 18;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
@@ -253,6 +255,13 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         name: "Wise Owl",
         category: "System",
         icon_bytes: Some(ICON_WISEOWL_TGA),
+        available: true,
+    },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::MelodyMina),
+        name: "Melody Mina",
+        category: "Multimedia",
+        icon_bytes: Some(ICON_MELODY_MINA_TGA),
         available: true,
     },
 ];
