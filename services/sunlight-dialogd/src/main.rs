@@ -363,7 +363,9 @@ impl FileDialogState {
                     req.title.clone()
                 };
                 if let Some(dir) = req.initial_dir.as_ref().and_then(|d| PathBuf::from_str(d)) {
-                    current_dir = dir;
+                    if directory_is_readable(dir) {
+                        current_dir = dir;
+                    }
                 }
                 confirm_label = req
                     .confirm_button_label
@@ -382,7 +384,9 @@ impl FileDialogState {
                     req.title.clone()
                 };
                 if let Some(dir) = req.initial_dir.as_ref().and_then(|d| PathBuf::from_str(d)) {
-                    current_dir = dir;
+                    if directory_is_readable(dir) {
+                        current_dir = dir;
+                    }
                 }
                 confirm_label = req
                     .confirm_button_label
@@ -397,7 +401,9 @@ impl FileDialogState {
                     req.title.clone()
                 };
                 if let Some(dir) = req.initial_dir.as_ref().and_then(|d| PathBuf::from_str(d)) {
-                    current_dir = dir;
+                    if directory_is_readable(dir) {
+                        current_dir = dir;
+                    }
                 }
                 confirm_label = req
                     .confirm_button_label
@@ -1543,6 +1549,12 @@ fn detect_home_path() -> PathBuf {
     PathBuf::from_str("/root").unwrap_or_else(PathBuf::root)
 }
 
+fn directory_is_readable(path: PathBuf) -> bool {
+    libc::stat(path.as_str().as_bytes())
+        .map(|stat| stat.file_type == FT_DIR)
+        .unwrap_or(false)
+}
+
 fn compare_entries(a: &DirEntry, b: &DirEntry) -> Ordering {
     let a_dir = a.file_type == FT_DIR;
     let b_dir = b.file_type == FT_DIR;
@@ -1707,7 +1719,8 @@ fn matches_extension(name: &str, allowed: &[String]) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
+    env::init(envp);
     debug_log("[DIALOGD] starting\n");
     let mut server = DialogServer::new();
     debug_log("[DIALOGD] registered\n");

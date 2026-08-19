@@ -974,6 +974,17 @@ mod tests {
     }
 
     #[test]
+    fn open_folder_request_roundtrip() {
+        let request = DialogRequest::OpenFolder(OpenFolderRequest {
+            title: String::from("Add Music Folder"),
+            initial_dir: Some(String::from("/root/Music")),
+            confirm_button_label: Some(String::from("Add Folder")),
+        });
+        let encoded = encode_request(&request);
+        assert_eq!(decode_request(&encoded).unwrap(), request);
+    }
+
+    #[test]
     fn save_file_request_roundtrip() {
         let request = DialogRequest::SaveFile(SaveFileRequest {
             title: String::from("Save File"),

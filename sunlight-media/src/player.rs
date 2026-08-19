@@ -10,7 +10,7 @@ use core::{
 
 #[cfg(target_os = "none")]
 use crate::{
-    decoder::{AudioDecoder, VorbisDecoder, MAX_COMPRESSED_BYTES},
+    decoder::{AudioDecoder, ProbeDecoder, MAX_COMPRESSED_BYTES},
     output::{AudioSink, SunlightAudioSink},
     state::{transition, PlaybackAction},
 };
@@ -380,7 +380,7 @@ impl Drop for MediaPlayer {
 /// `decoder` is declared first so it is dropped before `source`.
 #[cfg(target_os = "none")]
 struct LoadedMedia {
-    decoder: VorbisDecoder<'static>,
+    decoder: ProbeDecoder<'static>,
     source: Box<[u8]>,
     info: AudioStreamInfo,
 }
@@ -389,7 +389,7 @@ struct LoadedMedia {
 impl LoadedMedia {
     fn new(source: Box<[u8]>) -> Result<Self, MediaError> {
         let slice = unsafe { core::slice::from_raw_parts(source.as_ptr(), source.len()) };
-        let decoder = VorbisDecoder::open(slice)?;
+        let decoder = ProbeDecoder::open(slice)?;
         let info = decoder.stream_info();
         Ok(Self {
             decoder,

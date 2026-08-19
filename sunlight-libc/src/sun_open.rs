@@ -199,6 +199,8 @@ fn mime_from_extension(ext: &[u8]) -> &'static [u8] {
         b"json" => b"application/json",
         b"simg" => b"image/x-sunlight-simg",
         b"tga" => b"image/x-tga",
+        b"ogg" | b"oga" => b"audio/ogg",
+        b"wav" => b"audio/wav",
         _ => b"application/octet-stream",
     }
 }
@@ -229,4 +231,16 @@ fn extension_bytes(path: &[u8], out: &mut [u8; MAX_EXT]) -> Option<usize> {
         out[i] = b.to_ascii_lowercase();
     }
     Some(ext.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mime_from_path;
+
+    #[test]
+    fn audio_extensions_have_selectable_audio_mimes() {
+        assert_eq!(mime_from_path(b"/root/Music/song.ogg"), b"audio/ogg");
+        assert_eq!(mime_from_path(b"/root/Music/song.oga"), b"audio/ogg");
+        assert_eq!(mime_from_path(b"/root/Music/song.WAV"), b"audio/wav");
+    }
 }

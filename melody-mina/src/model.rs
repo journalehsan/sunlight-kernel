@@ -137,6 +137,19 @@ pub fn seek_target_ms(model: &NowPlayingViewModel, percent: u32) -> Option<u64> 
     }
 }
 
+pub fn next_playlist_index(current: usize, len: usize, delta: isize) -> Option<usize> {
+    if len == 0 || delta == 0 {
+        return (len != 0).then_some(current.min(len.saturating_sub(1)));
+    }
+    let current = current.min(len - 1) as isize;
+    Some(if delta.is_negative() {
+        let amount = delta.unsigned_abs() % len;
+        (current - amount as isize).rem_euclid(len as isize) as usize
+    } else {
+        (current + (delta as usize % len) as isize).rem_euclid(len as isize) as usize
+    })
+}
+
 /// Formats whole seconds as `m:ss` or `h:mm:ss` without allocation.
 pub fn format_time(seconds: u64, output: &mut [u8; 24]) -> &str {
     let hours = seconds / 3_600;
@@ -256,5 +269,14 @@ mod tests {
         let mut view = NowPlayingViewModel::default();
         view.apply_backend(event, false);
         assert_eq!(view.volume, 100);
+    }
+
+    #[test]
+    fn playlist_navigation_wraps_and_handles_empty_lists() {
+        assert_eq!(next_playlist_index(0, 3, -1), Some(2));
+        assert_eq!(next_playlist_index(2, 3, 1), Some(0));
+        assert_eq!(next_playlist_index(1, 3, 4), Some(2));
+        assert_eq!(next_playlist_index(99, 3, 0), Some(2));
+        assert_eq!(next_playlist_index(0, 0, 1), None);
     }
 }

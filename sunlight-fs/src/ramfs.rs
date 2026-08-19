@@ -712,21 +712,30 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/home/user/Videos", 1000, 1000, mode::DIR_755),
     // -- End standard home directory layout ---------------------------------
 
-    // Deterministic Melody Mina Phase 2 fixture: Ogg container, Vorbis codec,
-    // 48 kHz, stereo, exactly 2 seconds (440 Hz left / 660 Hz right).
+    // Deterministic built-in Melody Mina fixture: 48 kHz, stereo, signed
+    // 16-bit PCM, six seconds. It is a normal RAMFS file so applications use
+    // the same media API as user-selected sources.
+    RamEntry::dir("/usr/share/sunlightos/media", 0, 0, mode::DIR_755),
     RamEntry::file(
-        "/root/Music/Melody Mina Test.ogg",
+        "/usr/share/sunlightos/media/melody-mina-sample.wav",
         0,
         0,
         mode::FILE_644,
-        include_bytes!("../../assets/sounds/melody-mina-test-48k-stereo.ogg"),
+        include_bytes!("../../assets/sounds/melody-mina-sample-48k-stereo.wav"),
     ),
     RamEntry::file(
-        "/home/user/Music/Melody Mina Test.ogg",
+        "/home/user/Music/Catch the Sunlight.ogg",
         1000,
         1000,
         mode::FILE_644,
-        include_bytes!("../../assets/sounds/melody-mina-test-48k-stereo.ogg"),
+        include_bytes!("../../assets/sounds/catch-the-sunlight-48k.ogg"),
+    ),
+    RamEntry::file(
+        "/root/Music/Catch the Sunlight.ogg",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/catch-the-sunlight-48k.ogg"),
     ),
 
     RamEntry::file("/tests/cat-empty", 0, 0, mode::FILE_644, b""),
@@ -3248,15 +3257,26 @@ mod tests {
     }
 
     #[test]
-    fn melody_mina_vorbis_fixture_is_present_in_default_homes() {
+    fn melody_mina_wav_fixture_is_present_in_system_media() {
+        let entry = INITRAMFS
+            .iter()
+            .find(|entry| entry.path == "/usr/share/sunlightos/media/melody-mina-sample.wav")
+            .expect("missing built-in Melody Mina WAV");
+        assert!(!entry.is_dir);
+        assert_eq!(&entry.data[..4], b"RIFF");
+        assert_eq!(&entry.data[8..12], b"WAVE");
+    }
+
+    #[test]
+    fn melody_mina_user_music_track_is_present() {
         for path in [
-            "/root/Music/Melody Mina Test.ogg",
-            "/home/user/Music/Melody Mina Test.ogg",
+            "/home/user/Music/Catch the Sunlight.ogg",
+            "/root/Music/Catch the Sunlight.ogg",
         ] {
             let entry = INITRAMFS
                 .iter()
                 .find(|entry| entry.path == path)
-                .unwrap_or_else(|| panic!("missing {path}"));
+                .expect("missing seeded user Music track");
             assert!(!entry.is_dir);
             assert_eq!(&entry.data[..4], b"OggS");
         }

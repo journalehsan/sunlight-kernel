@@ -12,7 +12,7 @@ decoder and `AudioSink` traits preserve replaceable codec and output boundaries.
 
 ## Phase 2 format contract
 
-- Container/codec: Ogg Vorbis only. Other Ogg codecs are rejected.
+- Container/codec: Ogg Vorbis and RIFF/WAVE PCM.
 - Output: signed 16-bit little-endian interleaved PCM at 48 kHz.
 - Channels: mono (upmixed to stereo) or stereo. Other layouts are rejected.
 - Resampling: not implemented; non-48-kHz streams are rejected rather than
@@ -21,6 +21,9 @@ decoder and `AudioSink` traits preserve replaceable codec and output boundaries.
   currently loaded once because the selected no-std Ogg reader is slice-based.
 - Seek: exact decoder restart plus bounded decode/discard to the requested
   frame; targets past known duration are clamped.
+- WAV parsing validates RIFF/WAVE signatures, PCM integer encoding, 16-bit
+  mono/stereo layout, checked chunk sizes, and RIFF padding. Unknown chunks are
+  skipped safely.
 - Volume: per-stream software gain, 0 through 100, with saturating S16 scaling.
   It never changes audiod's system master volume.
 

@@ -8,14 +8,17 @@ use alloc::{string::String, vec};
 use melody_mina::{
     controller::MelodyMediaController,
     layout::{LayoutMode, MelodyLayout},
-    model::{format_time, seek_target_ms, timeline_percent, PlaybackState},
+    library::{builtin_entry, scan_music_directory, MediaEntry, BUILTIN_SAMPLE_PATH},
+    model::{format_time, next_playlist_index, seek_target_ms, timeline_percent, PlaybackState},
     visualizer::VisualizationFrame,
 };
 use sun_font::{
     draw_text, draw_text_centered, draw_text_right, draw_text_vcenter, measure_text, FontRole,
     TextStyle,
 };
-use sunlight_dialogs::{DialogClient, DialogRequest, DialogResult, OpenFileRequest};
+use sunlight_dialogs::{
+    DialogClient, DialogRequest, DialogResult, OpenFileRequest, OpenFolderRequest,
+};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -318,7 +321,11 @@ impl VisualizerView {
 }
 
 struct MelodyMinaApp {
+    playlist: alloc::vec::Vec<MediaEntry>,
     playlist_scroll: ScrollState,
+    selected_playlist: usize,
+    hovered_playlist: Option<usize>,
+    pressed_playlist: Option<usize>,
     timeline: Slider,
     volume: Slider,
     layout: MelodyLayout,
@@ -346,8 +353,19 @@ impl MelodyMinaApp {
         let artwork = TgaImage::parse(PLACEHOLDER_ART_BYTES).ok();
         let media = MelodyMediaController::new();
         let now_playing = media.view();
-        let app = Self {
+        let mut playlist = vec![builtin_entry()];
+        let music = music_directory();
+        for entry in scan_music_directory(&music) {
+            if !playlist.iter().any(|existing| existing.path == entry.path) {
+                playlist.push(entry);
+            }
+        }
+        let mut app = Self {
+            playlist,
             playlist_scroll: ScrollState::new(),
+            selected_playlist: 0,
+            hovered_playlist: None,
+            pressed_playlist: None,
             timeline: Slider::horizontal(Rect::default())
                 .with_range(0, 100)
                 .with_value(timeline_percent(&now_playing)),
@@ -366,13 +384,14 @@ impl MelodyMinaApp {
             playback_seen: false,
             visualization_frame: VisualizationFrame::empty(),
             last_visualization_ms: 0,
-            status: "Open an Ogg Vorbis file to begin",
+            status: "Built-in sample ready",
             artwork,
             track_title: [0; 128],
             track_title_len: 0,
             has_active_source: false,
             seek_committed_on_release: false,
         };
+        app.load_media_path(BUILTIN_SAMPLE_PATH);
         log_media_heap("before");
         app
     }
@@ -407,10 +426,14 @@ impl MelodyMinaApp {
 
     fn open_media(&mut self) {
         let request = DialogRequest::OpenFile(OpenFileRequest {
-            title: String::from("Open Ogg Vorbis Audio"),
-            initial_dir: Some(String::from("/home/user/Music")),
-            allowed_mime_types: vec![String::from("audio/ogg")],
-            allowed_extensions: vec![String::from("ogg")],
+            title: String::from("Open Audio"),
+            initial_dir: Some(music_directory()),
+            allowed_mime_types: vec![String::from("audio/ogg"), String::from("audio/wav")],
+            allowed_extensions: vec![
+                String::from("ogg"),
+                String::from("oga"),
+                String::from("wav"),
+            ],
             allow_multiple: false,
             show_preview: false,
             confirm_button_label: Some(String::from("Open")),
@@ -425,15 +448,109 @@ impl MelodyMinaApp {
         }
     }
 
+    fn open_music_folder(&mut self) {
+        let request = DialogRequest::OpenFolder(OpenFolderRequest {
+            title: String::from("Add Music Folder"),
+            initial_dir: Some(music_directory()),
+            confirm_button_label: Some(String::from("Add Folder")),
+        });
+        match DialogClient::new().show(&request) {
+            Ok(DialogResult::FolderSelected(path)) => {
+                let added = self.add_music_directory(&path);
+                self.status = if added == 0 {
+                    "No supported audio files found"
+                } else {
+                    "Music folder added"
+                };
+            }
+            Ok(DialogResult::Cancelled | DialogResult::Cancel | DialogResult::Dismissed) => {
+                self.status = "Folder selection cancelled";
+            }
+            Ok(_) => self.status = "No folder was selected",
+            Err(_) => self.status = "Folder picker unavailable",
+        }
+    }
+
+    fn add_music_directory(&mut self, root: &str) -> usize {
+        let mut added = 0;
+        for entry in scan_music_directory(root) {
+            if self
+                .playlist
+                .iter()
+                .any(|existing| existing.path == entry.path)
+            {
+                continue;
+            }
+            self.playlist.push(entry);
+            added += 1;
+        }
+        added
+    }
+
     fn load_media_path(&mut self, path: &str) {
+        if let Some(index) = self.playlist.iter().position(|entry| entry.path == path) {
+            self.selected_playlist = index;
+            self.playlist_scroll.ensure_visible(
+                (index as i32).saturating_mul(PLAYLIST_ROW_H as i32),
+                PLAYLIST_ROW_H,
+            );
+        }
         match self.media.open(path) {
             Ok(()) => {
                 self.set_track_title(path);
                 self.has_active_source = true;
-                self.status = "Loading Ogg Vorbis audio...";
+                self.status = "Loading audio...";
             }
             Err(error) => self.status = error.kind.user_message(),
         }
+    }
+
+    fn playlist_index_at(&self, point: Point) -> Option<usize> {
+        let viewport = self.layout.playlist.inset(2);
+        if !viewport.contains(point) {
+            return None;
+        }
+        let local_y = point
+            .y
+            .saturating_sub(viewport.y)
+            .saturating_add(self.playlist_scroll.offset_y);
+        let index = (local_y as u32 / PLAYLIST_ROW_H) as usize;
+        (index < self.playlist.len()).then_some(index)
+    }
+
+    fn activate_playlist(&mut self, index: usize) -> bool {
+        let Some(entry) = self.playlist.get(index) else {
+            return false;
+        };
+        let path = entry.path.clone();
+        self.selected_playlist = index;
+        self.playlist_scroll.ensure_visible(
+            (index as i32).saturating_mul(PLAYLIST_ROW_H as i32),
+            PLAYLIST_ROW_H,
+        );
+        self.load_media_path(&path);
+        true
+    }
+
+    fn navigate_playlist(&mut self, delta: isize) -> bool {
+        let Some(next) = next_playlist_index(self.selected_playlist, self.playlist.len(), delta)
+        else {
+            return false;
+        };
+        self.activate_playlist(next)
+    }
+
+    fn move_playlist_selection(&mut self, delta: isize) -> bool {
+        let Some(next) = next_playlist_index(self.selected_playlist, self.playlist.len(), delta)
+        else {
+            return false;
+        };
+        self.selected_playlist = next;
+        self.playlist_scroll.ensure_visible(
+            (next as i32).saturating_mul(PLAYLIST_ROW_H as i32),
+            PLAYLIST_ROW_H,
+        );
+        true
     }
 
     fn sync_media(&mut self) -> bool {
@@ -482,8 +599,8 @@ impl MelodyMinaApp {
             error.kind.user_message()
         } else {
             match now_playing.playback_state {
-                PlaybackState::Idle => "Open an Ogg Vorbis file to begin",
-                PlaybackState::Loading => "Loading Ogg Vorbis audio...",
+                PlaybackState::Idle => "Select an audio file",
+                PlaybackState::Loading => "Loading audio...",
                 PlaybackState::Ready => "Ready",
                 PlaybackState::Playing => "Playing through Sunlight Media",
                 PlaybackState::Paused => "Paused",
@@ -500,13 +617,13 @@ impl MelodyMinaApp {
             self.layout = MelodyLayout::arrange(root);
             self.timeline.rect = self.layout.timeline_slider;
             self.volume.rect = self.layout.volume_slider;
-            self.playlist_scroll.set_geometry(
-                self.layout.playlist.w,
-                self.layout.playlist.h,
-                self.layout.playlist.w,
-                PLAYLIST_ROW_H,
-            );
         }
+        self.playlist_scroll.set_geometry(
+            self.layout.playlist.w,
+            self.layout.playlist.h,
+            self.layout.playlist.w,
+            (self.playlist.len() as u32).saturating_mul(PLAYLIST_ROW_H),
+        );
     }
 
     fn button_state(&self, index: usize) -> ButtonState {
@@ -525,12 +642,12 @@ impl MelodyMinaApp {
         let controls = self.media.view().controls();
         match index {
             0 => controls.open,
+            1 => true,
             2 => controls.stop,
             4 => controls.play_pause,
-            // Options, Previous, Next, and Repeat remain visible to preserve
-            // the accepted layout but this single-file phase does not own a
-            // playlist/sequencing engine.
-            1 | 3 | 5 | 6 => false,
+            3 | 5 => controls.open && self.playlist.len() > 1,
+            // Repeat remains visible, but this phase does not own repeat state.
+            6 => false,
             _ => false,
         }
     }
@@ -741,6 +858,10 @@ impl MelodyMinaApp {
         }
         match index {
             0 => self.open_media(),
+            1 => self.open_music_folder(),
+            3 => {
+                self.navigate_playlist(-1);
+            }
             2 => match self.media.stop() {
                 Ok(()) => self.status = "Stopping playback...",
                 Err(error) => self.status = error.kind.user_message(),
@@ -749,6 +870,9 @@ impl MelodyMinaApp {
                 if let Err(error) = self.media.play_pause() {
                     self.status = error.kind.user_message();
                 }
+            }
+            5 => {
+                self.navigate_playlist(1);
             }
             _ => return false,
         }
@@ -759,8 +883,7 @@ impl MelodyMinaApp {
         if self.focus_index <= 6 {
             self.activate_control(self.focus_index)
         } else if self.focus_index == 7 {
-            self.playlist_scroll.focused = true;
-            true
+            self.activate_playlist(self.selected_playlist)
         } else {
             false
         }
@@ -801,16 +924,29 @@ impl App for MelodyMinaApp {
         AlbumArtView::new(self.layout.album_art, self.artwork).draw(canvas, theme);
         self.draw_metadata(canvas, theme);
         let now_playing = self.media.view();
-        let active_item = [PlaylistItemViewModel {
-            title: self.track_title(),
-            artist: self.has_active_source.then_some("Unknown Artist"),
-            duration_seconds: now_playing.duration_ms.map(|value| value / 1_000),
-        }];
+        let playlist_items: alloc::vec::Vec<_> = self
+            .playlist
+            .iter()
+            .map(|entry| PlaylistItemViewModel {
+                title: entry.display_title.as_str(),
+                artist: entry.artist.as_deref(),
+                duration_seconds: entry.duration_ms.map(|value| value / 1_000),
+            })
+            .collect();
+        let active_item = if playlist_items.is_empty() {
+            vec![PlaylistItemViewModel {
+                title: self.track_title(),
+                artist: self.has_active_source.then_some("Unknown Artist"),
+                duration_seconds: now_playing.duration_ms.map(|value| value / 1_000),
+            }]
+        } else {
+            playlist_items
+        };
         PlaylistView {
             rect: self.layout.playlist,
             items: &active_item,
-            selected: 0,
-            hovered: None,
+            selected: self.selected_playlist,
+            hovered: self.hovered_playlist,
             focused: self.focus_index == 7 && self.window_focused,
             scroll: &self.playlist_scroll,
         }
@@ -853,6 +989,8 @@ impl App for MelodyMinaApp {
             } => {
                 let changed = self.hovered_control.take().is_some();
                 self.playlist_scroll.hovered = false;
+                self.hovered_playlist = None;
+                self.pressed_playlist = None;
                 self.media.cancel_seek();
                 self.timeline.dragging = false;
                 self.timeline.active = false;
@@ -868,6 +1006,8 @@ impl App for MelodyMinaApp {
                     .track_rect(self.layout.playlist.inset(2));
                 let old_scroll_hover = self.playlist_scroll.hovered;
                 self.playlist_scroll.hovered = track.contains(point);
+                let old_playlist_hover = self.hovered_playlist;
+                self.hovered_playlist = self.playlist_index_at(point);
                 let dragged = self.playlist_scroll.update_drag(track, y);
                 let timeline_changed =
                     if self.media.seek_enabled() || self.media.interaction().seek_drag_active {
@@ -886,6 +1026,7 @@ impl App for MelodyMinaApp {
                 }
                 old_control != self.hovered_control
                     || old_scroll_hover != self.playlist_scroll.hovered
+                    || old_playlist_hover != self.hovered_playlist
                     || dragged
                     || timeline_changed
                     || volume_changed
@@ -910,6 +1051,12 @@ impl App for MelodyMinaApp {
                         self.playlist_scroll.handle_track_click(track, y);
                     }
                     self.focus_index = 7;
+                    return true;
+                }
+                if let Some(index) = self.playlist_index_at(point) {
+                    self.pressed_playlist = Some(index);
+                    self.focus_index = 7;
+                    self.playlist_scroll.focused = true;
                     return true;
                 }
                 let timeline_changed = if self.media.seek_enabled() {
@@ -961,6 +1108,12 @@ impl App for MelodyMinaApp {
                     .filter(|index| self.hit_control(point) == Some(*index))
                     .map(|index| self.activate_control(index))
                     .unwrap_or(false);
+                let playlist_activated = self
+                    .pressed_playlist
+                    .take()
+                    .filter(|index| self.playlist_index_at(point) == Some(*index))
+                    .map(|index| self.activate_playlist(index))
+                    .unwrap_or(false);
                 self.playlist_scroll.end_drag();
                 let suppress_seek = core::mem::replace(&mut self.seek_committed_on_release, false);
                 let timeline_changed = if self.media.seek_enabled() && !suppress_seek {
@@ -982,7 +1135,11 @@ impl App for MelodyMinaApp {
                         Err(error) => self.status = error.kind.user_message(),
                     }
                 }
-                activated || timeline_changed || volume_changed || self.hovered_control.is_some()
+                activated
+                    || playlist_activated
+                    || timeline_changed
+                    || volume_changed
+                    || self.hovered_control.is_some()
             }
             Event::MouseWheel { x, y, delta } => {
                 if self.layout.playlist.contains(Point::new(x, y)) {
@@ -1020,12 +1177,12 @@ impl App for MelodyMinaApp {
                 keycode: 0x48,
                 pressed: true,
                 ..
-            } if self.focus_index == 7 => self.playlist_scroll.scroll_by(-(PLAYLIST_ROW_H as i32)),
+            } if self.focus_index == 7 => self.move_playlist_selection(-1),
             Event::KeyPress {
                 keycode: 0x50,
                 pressed: true,
                 ..
-            } if self.focus_index == 7 => self.playlist_scroll.scroll_by(PLAYLIST_ROW_H as i32),
+            } if self.focus_index == 7 => self.move_playlist_selection(1),
             _ => false,
         }
     }
@@ -1081,8 +1238,22 @@ fn media_path_arg(argc: u64, argv: *const *const u8) -> Option<String> {
     core::str::from_utf8(bytes).ok().map(String::from)
 }
 
+fn music_directory() -> String {
+    sunlight_libc::env::getenv(b"HOME")
+        .map(|home| {
+            let mut path = String::from(home);
+            if !path.ends_with('/') {
+                path.push('/');
+            }
+            path.push_str("Music");
+            path
+        })
+        .unwrap_or_else(|| String::from("/root/Music"))
+}
+
 #[no_mangle]
-pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
+pub extern "C" fn _start(argc: u64, argv: *const *const u8, envp: *const *const u8) -> ! {
+    sunlight_libc::env::init(envp);
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
     let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
     launch_trace::log_phase_now(
