@@ -712,6 +712,23 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/home/user/Videos", 1000, 1000, mode::DIR_755),
     // -- End standard home directory layout ---------------------------------
 
+    // Deterministic Melody Mina Phase 2 fixture: Ogg container, Vorbis codec,
+    // 48 kHz, stereo, exactly 2 seconds (440 Hz left / 660 Hz right).
+    RamEntry::file(
+        "/root/Music/Melody Mina Test.ogg",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/melody-mina-test-48k-stereo.ogg"),
+    ),
+    RamEntry::file(
+        "/home/user/Music/Melody Mina Test.ogg",
+        1000,
+        1000,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/melody-mina-test-48k-stereo.ogg"),
+    ),
+
     RamEntry::file("/tests/cat-empty", 0, 0, mode::FILE_644, b""),
     RamEntry::file("/tests/cat-hello", 0, 0, mode::FILE_644, b"hello from cat\n"),
     RamEntry::file("/tests/cat-nonewline", 0, 0, mode::FILE_644, b"nonewline"),
@@ -3228,6 +3245,21 @@ mod tests {
         // asset bytes; we just sanity-check a few early distinctive words).
         let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(text.contains("Welcome to SunlightOS") || text.contains("A bright"));
+    }
+
+    #[test]
+    fn melody_mina_vorbis_fixture_is_present_in_default_homes() {
+        for path in [
+            "/root/Music/Melody Mina Test.ogg",
+            "/home/user/Music/Melody Mina Test.ogg",
+        ] {
+            let entry = INITRAMFS
+                .iter()
+                .find(|entry| entry.path == path)
+                .unwrap_or_else(|| panic!("missing {path}"));
+            assert!(!entry.is_dir);
+            assert_eq!(&entry.data[..4], b"OggS");
+        }
     }
 
     #[test]

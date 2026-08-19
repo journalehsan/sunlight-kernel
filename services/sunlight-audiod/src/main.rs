@@ -257,12 +257,20 @@ impl ServiceState {
                 }
             }
         } else if !self.queue.is_empty() {
-            let n = self.queue.pop_into(&mut tmp);
+            // Do not remove producer data until a hardware period is free.
+            // `fill_pcm` can legitimately return false while the ring is full;
+            // popping first used to discard that entire PCM period.
+            if !dev.can_submit_period() {
+                let _ = dev.poll_dma_progress();
+                return;
+            }
+            let n = self.queue.peek_into(&mut tmp);
             if n == 0 {
                 return;
             }
             match dev.fill_pcm(&tmp[..n], vol) {
-                Ok(_) => {}
+                Ok(true) => self.queue.consume(n),
+                Ok(false) => {}
                 Err(_) => self.queue.clear(),
             }
         } else {
@@ -488,6 +496,11 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
             state.queue.clear();
             state.system_queue.clear();
             state.active_system_sound = None;
+            if let Some(device) = state.device.as_mut() {
+                if device.flush().is_err() {
+                    return err(AudiodMsg::ERR_DEVICE_FAILED);
+                }
+            }
             pack_audio_status(state.status())
         }
         _ => err(AudiodMsg::ERR_BAD_REQUEST),

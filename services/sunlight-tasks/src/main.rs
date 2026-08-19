@@ -9,13 +9,13 @@ use sunlight_ipc::{
 };
 use sunlight_libc::kill as libc_kill;
 use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_CORES, MAX_PROCESSES};
+use sunlight_ui::layout::Column as LayoutColumn;
 use sunlight_ui::{
     request_close,
     widgets::{Column, Label, StatusBar, Table},
     App, AxisSizing, Color, Event, LayoutBox, LayoutInvalidation, Material, MaterialPalette, Point,
     Rect, Row, Size, Sizing, Theme, VecText, Window, WindowConfig, WindowEvent, WindowMaterial,
 };
-use sunlight_ui::layout::Column as LayoutColumn;
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_MED: VecFont = VecFont(FontRole::UiMedium);
@@ -234,8 +234,10 @@ impl TasksApp {
         let content = Rect::new(
             CONTENT_MARGIN,
             CONTENT_MARGIN,
-            root.w.saturating_sub((CONTENT_MARGIN as u32).saturating_mul(2)),
-            root.h.saturating_sub((CONTENT_MARGIN as u32).saturating_mul(2)),
+            root.w
+                .saturating_sub((CONTENT_MARGIN as u32).saturating_mul(2)),
+            root.h
+                .saturating_sub((CONTENT_MARGIN as u32).saturating_mul(2)),
         );
         let mut root_children = [
             fixed_height_box(TITLE_H + 6),
@@ -260,10 +262,8 @@ impl TasksApp {
                 AxisSizing::Fixed(title_w),
                 AxisSizing::Fixed(TITLE_H),
             )),
-            LayoutBox::new(Rect::new(0, 0, 0, TITLE_H)).with_sizing(Sizing::new(
-                AxisSizing::Fill,
-                AxisSizing::Fixed(TITLE_H),
-            )),
+            LayoutBox::new(Rect::new(0, 0, 0, TITLE_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(TITLE_H))),
             LayoutBox::new(Rect::new(0, 0, brand_w, TITLE_H)).with_sizing(Sizing::new(
                 AxisSizing::Fixed(brand_w),
                 AxisSizing::Fixed(TITLE_H),

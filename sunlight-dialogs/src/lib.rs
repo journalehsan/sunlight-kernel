@@ -12,6 +12,82 @@ pub const WIRE_MAGIC_REQUEST: u32 = 0x5344_5251;
 pub const WIRE_MAGIC_RESULT: u32 = 0x5344_5253;
 pub const MAX_TEXT_BYTES: usize = 1024;
 
+/// Reusable native dialog client. Applications submit typed requests and
+/// receive typed results; SHM wire details stay inside this crate.
+pub struct DialogClient;
+
+impl DialogClient {
+    pub const fn new() -> Self {
+        Self
+    }
+
+    #[cfg(target_os = "none")]
+    pub fn show(&self, request: &DialogRequest) -> Result<DialogResult, DialogError> {
+        use sunlight_ipc::{
+            ipc_call, nameserver_lookup, nameserver_lookup_timeout, process_yield, shm_alloc,
+            shm_free, shm_map, CapabilityToken, IpcMsg, SHM_PAGE,
+        };
+
+        validate_request(request)?;
+        let cap = if let Some(cap) = nameserver_lookup("dialogd") {
+            cap
+        } else {
+            let _ = sunlight_libc::spawn(b"/sbin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
+                .or_else(|_| {
+                    sunlight_libc::spawn(b"/bin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
+                });
+            let mut found = None;
+            for _ in 0..8 {
+                if let Some(cap) = nameserver_lookup_timeout("dialogd", 75) {
+                    found = Some(cap);
+                    break;
+                }
+                process_yield();
+            }
+            found.ok_or(DialogError::HostUnavailable)?
+        };
+        let body = encode_request(request);
+        if body.len() > SHM_PAGE {
+            return Err(DialogError::TooLarge);
+        }
+        let (ptr, token) = shm_alloc().map_err(|_| DialogError::Internal)?;
+        unsafe {
+            core::ptr::copy_nonoverlapping(body.as_ptr(), ptr, body.len());
+        }
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(DialogMsg::SHOW_DIALOG)
+                .word(0, body.len() as u64)
+                .with_cap(0, token),
+        );
+        let _ = shm_free(token);
+        if reply.label == DialogMsg::ERROR {
+            return Err(DialogError::from_code(reply.words[0]));
+        }
+        let len = reply.words[1] as usize;
+        let result_token = reply.caps[0];
+        if len == 0 || len > SHM_PAGE || result_token == CapabilityToken::INVALID {
+            return Err(DialogError::Corrupt);
+        }
+        let result_ptr = shm_map(result_token).map_err(|_| DialogError::Corrupt)?;
+        let bytes = unsafe { core::slice::from_raw_parts(result_ptr, len) };
+        let decoded = decode_result(bytes);
+        let _ = shm_free(result_token);
+        decoded
+    }
+
+    #[cfg(not(target_os = "none"))]
+    pub fn show(&self, _request: &DialogRequest) -> Result<DialogResult, DialogError> {
+        Err(DialogError::HostUnavailable)
+    }
+}
+
+impl Default for DialogClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DialogKind {

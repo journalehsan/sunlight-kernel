@@ -1050,7 +1050,8 @@ impl ControlPanelApp {
     }
 
     fn update_about_computer_page(&mut self, event: Event) -> bool {
-        let action = about::update_computer_page(event, self.win_w(), self.win_h(), &mut self.about);
+        let action =
+            about::update_computer_page(event, self.win_w(), self.win_h(), &mut self.about);
         if action == AboutAction::None {
             // Still repaint on scroll keypresses.
             if let Event::KeyPress { pressed: true, .. } = event {
@@ -1534,7 +1535,12 @@ impl ControlPanelApp {
     }
 
     fn wallpaper_refresh_rect(&self) -> Rect {
-        Rect::new((self.win_w() as i32 - 80) / 2, self.win_h() as i32 - 44, 80, 28)
+        Rect::new(
+            (self.win_w() as i32 - 80) / 2,
+            self.win_h() as i32 - 44,
+            80,
+            28,
+        )
     }
 
     fn wallpaper_apply_rect(&self) -> Rect {
@@ -1784,13 +1790,15 @@ impl App for ControlPanelApp {
             Page::Network => self.update_network_page(event),
             Page::PowerThermal => self.update_power_thermal_page(event),
             Page::DateTime => self.update_date_time_page(event),
-            Page::LoginSession => match self.login_session.update(event, self.win_w(), self.win_h()) {
-                SessionAction::None => false,
-                SessionAction::Back => {
-                    self.page = Page::Grid;
-                    true
+            Page::LoginSession => {
+                match self.login_session.update(event, self.win_w(), self.win_h()) {
+                    SessionAction::None => false,
+                    SessionAction::Back => {
+                        self.page = Page::Grid;
+                        true
+                    }
                 }
-            },
+            }
             Page::Sound => self.update_sound_page(event),
         }
     }
@@ -2190,9 +2198,8 @@ mod tests {
 
     #[test]
     fn settings_page_content_follows_available_width() {
-        let content = |w: u32, h: u32| {
-            Rect::new(12, 12, w.saturating_sub(24), h.saturating_sub(24))
-        };
+        let content =
+            |w: u32, h: u32| Rect::new(12, 12, w.saturating_sub(24), h.saturating_sub(24));
         assert_eq!(content(WIN_W, WIN_H).w, WIN_W - 24);
         assert_eq!(content(WIN_W + 160, WIN_H).w, WIN_W + 136);
         assert_eq!(content(WIN_W, WIN_H + 80).h, WIN_H + 56);

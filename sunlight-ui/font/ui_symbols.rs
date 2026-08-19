@@ -33,6 +33,7 @@ pub enum UiSymbol {
     PreviousTrack,
     Play,
     Pause,
+    Stop,
     NextTrack,
     Repeat,
     MoreHorizontal,
@@ -463,6 +464,18 @@ const PAUSE: [u16; 9] = [
     0b000000000,
 ];
 
+const STOP: [u16; 9] = [
+    0b000000000,
+    0b001111100,
+    0b001111100,
+    0b001111100,
+    0b001111100,
+    0b001111100,
+    0b001111100,
+    0b001111100,
+    0b000000000,
+];
+
 const NEXT_TRACK: [u16; 9] = [
     0b000000000,
     0b001000010,
@@ -534,6 +547,7 @@ pub const fn glyph(symbol: UiSymbol) -> UiGlyph {
         UiSymbol::PreviousTrack => UiGlyph::new(9, 9, 10, &PREVIOUS_TRACK),
         UiSymbol::Play => UiGlyph::new(9, 9, 10, &PLAY),
         UiSymbol::Pause => UiGlyph::new(9, 9, 10, &PAUSE),
+        UiSymbol::Stop => UiGlyph::new(9, 9, 10, &STOP),
         UiSymbol::NextTrack => UiGlyph::new(9, 9, 10, &NEXT_TRACK),
         UiSymbol::Repeat => UiGlyph::new(9, 9, 10, &REPEAT),
         UiSymbol::MoreHorizontal => UiGlyph::new(9, 9, 10, &MORE_HORIZONTAL),

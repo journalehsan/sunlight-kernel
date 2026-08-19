@@ -1465,14 +1465,10 @@ impl CalendarApp {
             .saturating_sub(month_h)
             .saturating_sub(CALENDAR_SECTION_GAP as u32);
         let mut sections = [
-            LayoutBox::new(Rect::new(0, 0, 0, month_h)).with_sizing(Sizing::new(
-                AxisSizing::Fill,
-                AxisSizing::Fixed(month_h),
-            )),
-            LayoutBox::new(Rect::new(0, 0, 0, preview_h)).with_sizing(Sizing::new(
-                AxisSizing::Fill,
-                AxisSizing::Fixed(preview_h),
-            )),
+            LayoutBox::new(Rect::new(0, 0, 0, month_h))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(month_h))),
+            LayoutBox::new(Rect::new(0, 0, 0, preview_h))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(preview_h))),
         ];
         let _ = Column::new(body)
             .with_gap(CALENDAR_SECTION_GAP as u32)
@@ -1482,7 +1478,9 @@ impl CalendarApp {
         let toolbar_inner = Rect::new(
             toolbar.x + PAD,
             y,
-            toolbar.w.saturating_sub((PAD.max(0) as u32).saturating_mul(2)),
+            toolbar
+                .w
+                .saturating_sub((PAD.max(0) as u32).saturating_mul(2)),
             TOOLBAR_BTN_W,
         );
         let fixed_btn = |width| {
@@ -3055,11 +3053,11 @@ impl CalendarApp {
             let w = 320u32;
             let h = 100u32;
             let panel = Rect::new(
-            self.client_bounds.w.saturating_sub(w).saturating_div(2) as i32,
-            self.client_bounds.h.saturating_sub(h).saturating_div(2) as i32,
-            w,
-            h,
-        );
+                self.client_bounds.w.saturating_sub(w).saturating_div(2) as i32,
+                self.client_bounds.h.saturating_sub(h).saturating_div(2) as i32,
+                w,
+                h,
+            );
             let btn_y = panel.bottom() - DIALOG_PAD - DIALOG_BTN_H as i32;
             let ok_btn = Rect::new(
                 panel.x + (panel.w as i32 / 2) - DIALOG_BTN_W as i32 - 5,
@@ -3522,7 +3520,10 @@ mod tests {
         assert_eq!(layout.status.bottom(), WIN_H as i32);
         assert_eq!(layout.sidebar.w, SIDEBAR_W);
         assert_eq!(layout.grid.w, WIN_W - SIDEBAR_W);
-        assert_eq!(layout.month.w, layout.grid.w.saturating_sub(CALENDAR_INNER_PAD as u32 * 2));
+        assert_eq!(
+            layout.month.w,
+            layout.grid.w.saturating_sub(CALENDAR_INNER_PAD as u32 * 2)
+        );
         assert_eq!(layout.sidebar.h, layout.main.h);
         assert_eq!(layout.grid.h, layout.main.h);
     }
@@ -3532,10 +3533,8 @@ mod tests {
         let month_inner = Rect::new(10, 20, 703, 401);
         let grid = MonthGridLayout::new(month_inner);
         let col_sum: u32 = grid.col_w.iter().sum::<u32>() + 6 * GRID_GAP as u32;
-        let row_sum: u32 = grid.row_h.iter().sum::<u32>()
-            + 5 * GRID_GAP as u32
-            + grid.header_h as u32
-            + 4;
+        let row_sum: u32 =
+            grid.row_h.iter().sum::<u32>() + 5 * GRID_GAP as u32 + grid.header_h as u32 + 4;
         assert_eq!(col_sum, month_inner.w);
         assert_eq!(row_sum, month_inner.h);
         let last = grid.cell_rect(month_inner, 6, 5);

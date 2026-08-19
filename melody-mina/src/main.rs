@@ -1,22 +1,21 @@
 #![no_std]
 #![no_main]
 
-use core::alloc::{GlobalAlloc, Layout};
+extern crate alloc;
+
+use alloc::{string::String, vec};
 
 use melody_mina::{
+    controller::MelodyMediaController,
     layout::{LayoutMode, MelodyLayout},
-    model::{
-        timeline_percent, NowPlayingViewModel, PlaybackState, PlaylistItemViewModel,
-        DEMO_NOW_PLAYING, DEMO_PLAYLIST,
-    },
-    visualizer::{
-        DemoVisualizationSource, VisualizationFrame, VisualizationSource, MAX_VISUALIZATION_BINS,
-    },
+    model::{format_time, seek_target_ms, timeline_percent, PlaybackState},
+    visualizer::VisualizationFrame,
 };
 use sun_font::{
     draw_text, draw_text_centered, draw_text_right, draw_text_vcenter, measure_text, FontRole,
     TextStyle,
 };
+use sunlight_dialogs::{DialogClient, DialogRequest, DialogResult, OpenFileRequest};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -27,8 +26,8 @@ use sunlight_ui::{
     image::TgaImage,
     request_close, set_client_cursor,
     widgets::{ButtonState, IconButton, Slider},
-    App, Canvas, CursorShape, Event, LayoutInvalidation, Point, Rect, ScrollPolicy,
-    ScrollState, Size, Theme, UiSymbol, Window, WindowConfig, WindowDecoration, WindowEvent,
+    App, Canvas, CursorShape, Event, LayoutInvalidation, Point, Rect, ScrollPolicy, ScrollState,
+    Size, Theme, UiSymbol, Window, WindowConfig, WindowDecoration, WindowEvent,
 };
 
 const WIN_W: u32 = 1040;
@@ -45,18 +44,41 @@ const FRAME_MS_UNFOCUSED: u64 = 100;
 static PLACEHOLDER_ART_BYTES: &[u8] =
     include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
 
-struct NoAlloc;
-
-unsafe impl GlobalAlloc for NoAlloc {
-    unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
-        core::ptr::null_mut()
+fn debug_log_u64(mut value: u64) {
+    let mut reversed = [0u8; 20];
+    let mut len = 0usize;
+    if value == 0 {
+        debug_log("0");
+        return;
     }
-
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+    while value != 0 {
+        reversed[len] = b'0' + (value % 10) as u8;
+        value /= 10;
+        len += 1;
+    }
+    let mut output = [0u8; 20];
+    for index in 0..len {
+        output[index] = reversed[len - index - 1];
+    }
+    if let Ok(text) = core::str::from_utf8(&output[..len]) {
+        debug_log(text);
+    }
 }
 
-#[global_allocator]
-static ALLOC: NoAlloc = NoAlloc;
+fn log_media_heap(stage: &str) {
+    let heap = sunlight_libc::alloc::heap_stats();
+    debug_log("[MELODY-MINA][media-heap] stage=");
+    debug_log(stage);
+    debug_log(" requested=");
+    debug_log_u64(heap.requested_user_bytes as u64);
+    debug_log(" live=");
+    debug_log_u64(heap.live_allocation_count);
+    debug_log(" high_water=");
+    debug_log_u64(heap.high_water_allocated_bytes as u64);
+    debug_log(" failed=");
+    debug_log_u64(heap.failed_allocation_count);
+    debug_log("\n");
+}
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -135,11 +157,18 @@ impl AlbumArtView {
 
 struct PlaylistView<'a> {
     rect: Rect,
-    items: &'a [PlaylistItemViewModel],
+    items: &'a [PlaylistItemViewModel<'a>],
     selected: usize,
     hovered: Option<usize>,
     focused: bool,
     scroll: &'a ScrollState,
+}
+
+#[derive(Clone, Copy)]
+struct PlaylistItemViewModel<'a> {
+    title: &'a str,
+    artist: Option<&'a str>,
+    duration_seconds: Option<u64>,
 }
 
 impl<'a> PlaylistView<'a> {
@@ -214,11 +243,11 @@ impl<'a> PlaylistView<'a> {
                 );
             }
             if let Some(seconds) = item.duration_seconds {
-                let mut time_buf = [0u8; 8];
+                let mut time_buf = [0u8; 24];
                 draw_text_right(
                     &mut clip,
                     Rect::new(0, y, local_w.saturating_sub(24), PLAYLIST_ROW_H),
-                    time_text(seconds, &mut time_buf),
+                    format_time(seconds, &mut time_buf),
                     &TextStyle::new(FontRole::UiSmall, theme.text_dim),
                     4,
                 );
@@ -249,10 +278,6 @@ struct VisualizerView {
 }
 
 impl VisualizerView {
-    fn desired_bins(width: u32) -> usize {
-        (width / 14).clamp(24, MAX_VISUALIZATION_BINS as u32) as usize
-    }
-
     fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
         canvas.fill_rounded_rect(self.rect, 9, theme.panel);
         let inner = self.rect.inset(8);
@@ -293,9 +318,6 @@ impl VisualizerView {
 }
 
 struct MelodyMinaApp {
-    now_playing: NowPlayingViewModel,
-    selected: usize,
-    hovered_item: Option<usize>,
     playlist_scroll: ScrollState,
     timeline: Slider,
     volume: Slider,
@@ -306,27 +328,32 @@ struct MelodyMinaApp {
     pressed_control: Option<usize>,
     focus_index: usize,
     window_focused: bool,
-    visualizer_source: DemoVisualizationSource,
+    media: MelodyMediaController,
+    last_media_state: PlaybackState,
+    playback_seen: bool,
     visualization_frame: VisualizationFrame,
     last_visualization_ms: u64,
     status: &'static str,
     artwork: Option<TgaImage>,
+    track_title: [u8; 128],
+    track_title_len: usize,
+    has_active_source: bool,
+    seek_committed_on_release: bool,
 }
 
 impl MelodyMinaApp {
     fn new() -> Self {
         let artwork = TgaImage::parse(PLACEHOLDER_ART_BYTES).ok();
-        Self {
-            now_playing: DEMO_NOW_PLAYING,
-            selected: 0,
-            hovered_item: None,
+        let media = MelodyMediaController::new();
+        let now_playing = media.view();
+        let app = Self {
             playlist_scroll: ScrollState::new(),
             timeline: Slider::horizontal(Rect::default())
                 .with_range(0, 100)
-                .with_value(timeline_percent(&DEMO_NOW_PLAYING)),
+                .with_value(timeline_percent(&now_playing)),
             volume: Slider::horizontal(Rect::default())
                 .with_range(0, 100)
-                .with_value(68),
+                .with_value(now_playing.volume as u32),
             layout: MelodyLayout::empty(),
             layout_invalidation: LayoutInvalidation::new(),
             client: Size::new(WIN_W, WIN_H),
@@ -334,12 +361,137 @@ impl MelodyMinaApp {
             pressed_control: None,
             focus_index: 4,
             window_focused: true,
-            visualizer_source: DemoVisualizationSource::new(),
+            media,
+            last_media_state: PlaybackState::Idle,
+            playback_seen: false,
             visualization_frame: VisualizationFrame::empty(),
             last_visualization_ms: 0,
-            status: "Phase 1 UI demo / no audio backend",
+            status: "Open an Ogg Vorbis file to begin",
             artwork,
+            track_title: [0; 128],
+            track_title_len: 0,
+            has_active_source: false,
+            seek_committed_on_release: false,
+        };
+        log_media_heap("before");
+        app
+    }
+
+    fn track_title(&self) -> &str {
+        if self.track_title_len == 0 {
+            "No media loaded"
+        } else {
+            core::str::from_utf8(&self.track_title[..self.track_title_len])
+                .unwrap_or("Selected audio")
         }
+    }
+
+    fn set_track_title(&mut self, path: &str) {
+        let filename = path
+            .rsplit('/')
+            .next()
+            .filter(|name| !name.is_empty())
+            .unwrap_or(path);
+        let name = filename
+            .rsplit_once('.')
+            .map(|(stem, _)| stem)
+            .filter(|stem| !stem.is_empty())
+            .unwrap_or(filename);
+        self.track_title_len = name.len().min(self.track_title.len());
+        while !name.is_char_boundary(self.track_title_len) {
+            self.track_title_len -= 1;
+        }
+        self.track_title[..self.track_title_len]
+            .copy_from_slice(&name.as_bytes()[..self.track_title_len]);
+    }
+
+    fn open_media(&mut self) {
+        let request = DialogRequest::OpenFile(OpenFileRequest {
+            title: String::from("Open Ogg Vorbis Audio"),
+            initial_dir: Some(String::from("/home/user/Music")),
+            allowed_mime_types: vec![String::from("audio/ogg")],
+            allowed_extensions: vec![String::from("ogg")],
+            allow_multiple: false,
+            show_preview: false,
+            confirm_button_label: Some(String::from("Open")),
+        });
+        match DialogClient::new().show(&request) {
+            Ok(DialogResult::FileSelected(path)) => self.load_media_path(&path),
+            Ok(DialogResult::Cancelled | DialogResult::Cancel | DialogResult::Dismissed) => {
+                self.status = "Open cancelled";
+            }
+            Ok(_) => self.status = "No audio file was selected",
+            Err(_) => self.status = "File picker unavailable",
+        }
+    }
+
+    fn load_media_path(&mut self, path: &str) {
+        match self.media.open(path) {
+            Ok(()) => {
+                self.set_track_title(path);
+                self.has_active_source = true;
+                self.status = "Loading Ogg Vorbis audio...";
+            }
+            Err(error) => self.status = error.kind.user_message(),
+        }
+    }
+
+    fn sync_media(&mut self) -> bool {
+        let changed = self.media.refresh();
+        let now_playing = self.media.view();
+        let previous_state = self.last_media_state;
+        let state_changed = now_playing.playback_state != self.last_media_state;
+        self.last_media_state = now_playing.playback_state;
+        if state_changed && now_playing.playback_state == PlaybackState::Playing {
+            self.playback_seen = true;
+            log_media_heap("during");
+        } else if state_changed
+            && now_playing.playback_state == PlaybackState::Ready
+            && self.playback_seen
+            && previous_state != PlaybackState::Loading
+        {
+            log_media_heap("after-stop");
+        }
+        if !self.media.interaction().seek_drag_active {
+            self.timeline.value = timeline_percent(&now_playing);
+        }
+        if !self.volume.dragging {
+            self.volume.value = now_playing.volume as u32;
+        }
+        let visualization_changed = if now_playing.playback_state == PlaybackState::Playing {
+            let frame = self.media.visualization();
+            let old = self.visualization_frame;
+            self.visualization_frame.set_len(frame.bins().len());
+            for (index, value) in frame.bins().iter().enumerate() {
+                self.visualization_frame.set_bin(index, *value);
+            }
+            old != self.visualization_frame
+        } else {
+            self.visualization_frame.decay(8)
+        };
+        if state_changed && now_playing.playback_state == PlaybackState::Error {
+            if let Some(error) = now_playing.error {
+                debug_log("[MELODY-MINA][media-error] kind=");
+                debug_log_u64(error.kind as u64);
+                debug_log(" detail=");
+                debug_log_u64(error.detail as u64);
+                debug_log("\n");
+            }
+        }
+        self.status = if let Some(error) = now_playing.error {
+            error.kind.user_message()
+        } else {
+            match now_playing.playback_state {
+                PlaybackState::Idle => "Open an Ogg Vorbis file to begin",
+                PlaybackState::Loading => "Loading Ogg Vorbis audio...",
+                PlaybackState::Ready => "Ready",
+                PlaybackState::Playing => "Playing through Sunlight Media",
+                PlaybackState::Paused => "Paused",
+                PlaybackState::Ended => "Playback ended",
+                PlaybackState::Error => "Playback failed",
+            }
+        };
+        changed || state_changed || visualization_changed
     }
 
     fn ensure_layout(&mut self) {
@@ -352,18 +504,34 @@ impl MelodyMinaApp {
                 self.layout.playlist.w,
                 self.layout.playlist.h,
                 self.layout.playlist.w,
-                PLAYLIST_ROW_H.saturating_mul(DEMO_PLAYLIST.len() as u32),
+                PLAYLIST_ROW_H,
             );
         }
     }
 
     fn button_state(&self, index: usize) -> ButtonState {
-        if self.pressed_control == Some(index) {
+        if !self.control_enabled(index) {
+            ButtonState::Disabled
+        } else if self.pressed_control == Some(index) {
             ButtonState::Pressed
         } else if self.hovered_control == Some(index) {
             ButtonState::Hovered
         } else {
             ButtonState::Normal
+        }
+    }
+
+    fn control_enabled(&self, index: usize) -> bool {
+        let controls = self.media.view().controls();
+        match index {
+            0 => controls.open,
+            2 => controls.stop,
+            4 => controls.play_pause,
+            // Options, Previous, Next, and Repeat remain visible to preserve
+            // the accepted layout but this single-file phase does not own a
+            // playlist/sequencing engine.
+            1 | 3 | 5 | 6 => false,
+            _ => false,
         }
     }
 
@@ -425,7 +593,7 @@ impl MelodyMinaApp {
         }
         let mut title_buf = [0u8; 96];
         let title = elide(
-            self.now_playing.title,
+            self.track_title(),
             FontRole::UiTitle,
             rect.w,
             &mut title_buf,
@@ -439,7 +607,11 @@ impl MelodyMinaApp {
         );
         let mut artist_buf = [0u8; 96];
         let artist = elide(
-            self.now_playing.artist,
+            if self.has_active_source {
+                "Unknown Artist"
+            } else {
+                "Choose a local audio file"
+            },
             FontRole::UiMedium,
             rect.w,
             &mut artist_buf,
@@ -454,7 +626,11 @@ impl MelodyMinaApp {
         if rect.h >= 58 {
             let mut album_buf = [0u8; 96];
             let album = elide(
-                self.now_playing.album,
+                if self.has_active_source {
+                    "Local media"
+                } else {
+                    ""
+                },
                 FontRole::UiSmall,
                 rect.w,
                 &mut album_buf,
@@ -470,7 +646,7 @@ impl MelodyMinaApp {
         if rect.h >= 82 {
             draw_text(
                 canvas,
-                "Demo presentation state",
+                "Decoded and timed by the reusable media backend",
                 rect.x,
                 rect.y + 68,
                 &TextStyle::new(FontRole::UiSmall, theme.text_muted),
@@ -479,11 +655,18 @@ impl MelodyMinaApp {
     }
 
     fn draw_timeline(&self, canvas: &mut Canvas, theme: &Theme) {
-        let mut elapsed = [0u8; 8];
-        let mut duration = [0u8; 8];
+        let view = self.media.view();
+        let interaction = self.media.interaction();
+        let displayed_ms = if interaction.seek_drag_active {
+            seek_target_ms(&view, interaction.seek_preview_percent).unwrap_or(view.position_ms)
+        } else {
+            view.position_ms
+        };
+        let mut elapsed = [0u8; 24];
+        let mut duration = [0u8; 24];
         draw_text_vcenter(
             canvas,
-            time_text(self.now_playing.elapsed_seconds, &mut elapsed),
+            format_time(displayed_ms / 1_000, &mut elapsed),
             self.layout.timeline.x,
             self.layout.timeline.y,
             self.layout.timeline.h,
@@ -492,12 +675,15 @@ impl MelodyMinaApp {
         draw_text_right(
             canvas,
             Rect::new(
-                self.layout.timeline.right() - 44,
+                self.layout.timeline_slider.right() + 6,
                 self.layout.timeline.y,
-                44,
+                (self.layout.timeline.right() - self.layout.timeline_slider.right() - 6).max(0)
+                    as u32,
                 self.layout.timeline.h,
             ),
-            time_text(self.now_playing.duration_seconds, &mut duration),
+            view.duration_ms
+                .map(|value| format_time(value / 1_000, &mut duration))
+                .unwrap_or("--:--"),
             &TextStyle::new(FontRole::UiSmall, theme.text_dim),
             0,
         );
@@ -508,10 +694,11 @@ impl MelodyMinaApp {
     }
 
     fn draw_transport(&self, canvas: &mut Canvas, theme: &Theme) {
+        let now_playing = self.media.view();
         let symbols = [
-            UiSymbol::Shuffle,
+            UiSymbol::Stop,
             UiSymbol::PreviousTrack,
-            if self.now_playing.playback_state == PlaybackState::PlayingPresentation {
+            if now_playing.shows_pause() {
                 UiSymbol::Pause
             } else {
                 UiSymbol::Play
@@ -534,57 +721,35 @@ impl MelodyMinaApp {
     }
 
     fn hit_control(&self, point: Point) -> Option<usize> {
-        if self.layout.header_open.contains(point) {
+        if self.control_enabled(0) && self.layout.header_open.contains(point) {
             return Some(0);
         }
-        if self.layout.header_more.contains(point) {
+        if self.control_enabled(1) && self.layout.header_more.contains(point) {
             return Some(1);
         }
         for (index, rect) in self.layout.transport_buttons.iter().enumerate() {
-            if rect.contains(point) {
+            if self.control_enabled(index + 2) && rect.contains(point) {
                 return Some(index + 2);
             }
         }
         None
     }
 
-    fn playlist_item_at(&self, point: Point) -> Option<usize> {
-        if !self.layout.playlist.contains(point) {
-            return None;
-        }
-        if hit_test_scrollbar(
-            self.layout.playlist.inset(2),
-            &self.playlist_scroll,
-            point.x,
-            point.y,
-        )
-        .is_some()
-        {
-            return None;
-        }
-        let local = point.y - self.layout.playlist.y - 2 + self.playlist_scroll.offset_y;
-        if local < 0 {
-            return None;
-        }
-        let index = local as usize / PLAYLIST_ROW_H as usize;
-        (index < DEMO_PLAYLIST.len()).then_some(index)
-    }
-
     fn activate_control(&mut self, index: usize) -> bool {
+        if !self.control_enabled(index) {
+            return false;
+        }
         match index {
-            0 => self.status = "Open media arrives with the future media backend",
-            1 => self.status = "Options placeholder / Phase 1",
-            2 => self.status = "Shuffle is a presentation-only control",
-            3 => self.status = "Previous is unavailable without a media backend",
+            0 => self.open_media(),
+            2 => match self.media.stop() {
+                Ok(()) => self.status = "Stopping playback...",
+                Err(error) => self.status = error.kind.user_message(),
+            },
             4 => {
-                self.now_playing.playback_state = match self.now_playing.playback_state {
-                    PlaybackState::Paused => PlaybackState::PlayingPresentation,
-                    PlaybackState::PlayingPresentation => PlaybackState::Paused,
-                };
-                self.status = "Visual state only / no audio is playing";
+                if let Err(error) = self.media.play_pause() {
+                    self.status = error.kind.user_message();
+                }
             }
-            5 => self.status = "Next is unavailable without a media backend",
-            6 => self.status = "Repeat is a presentation-only control",
             _ => return false,
         }
         true
@@ -621,9 +786,7 @@ impl MelodyMinaApp {
             return false;
         }
         self.last_visualization_ms = now;
-        let bins = VisualizerView::desired_bins(self.layout.visualizer.w.saturating_sub(16));
-        self.visualization_frame = self.visualizer_source.next_frame(bins);
-        true
+        self.sync_media()
     }
 }
 
@@ -637,11 +800,17 @@ impl App for MelodyMinaApp {
         self.draw_header(canvas, theme);
         AlbumArtView::new(self.layout.album_art, self.artwork).draw(canvas, theme);
         self.draw_metadata(canvas, theme);
+        let now_playing = self.media.view();
+        let active_item = [PlaylistItemViewModel {
+            title: self.track_title(),
+            artist: self.has_active_source.then_some("Unknown Artist"),
+            duration_seconds: now_playing.duration_ms.map(|value| value / 1_000),
+        }];
         PlaylistView {
             rect: self.layout.playlist,
-            items: &DEMO_PLAYLIST,
-            selected: self.selected,
-            hovered: self.hovered_item,
+            items: &active_item,
+            selected: 0,
+            hovered: None,
             focused: self.focus_index == 7 && self.window_focused,
             scroll: &self.playlist_scroll,
         }
@@ -682,42 +851,47 @@ impl App for MelodyMinaApp {
                 owned: false,
                 captured: false,
             } => {
-                let changed =
-                    self.hovered_control.take().is_some() || self.hovered_item.take().is_some();
+                let changed = self.hovered_control.take().is_some();
                 self.playlist_scroll.hovered = false;
+                self.media.cancel_seek();
+                self.timeline.dragging = false;
+                self.timeline.active = false;
+                self.volume.dragging = false;
                 changed
             }
             Event::MouseMove { x, y } => {
                 let point = Point::new(x, y);
                 let old_control = self.hovered_control;
-                let old_item = self.hovered_item;
                 self.hovered_control = self.hit_control(point);
-                self.hovered_item = self.playlist_item_at(point);
                 let track = self
                     .playlist_scroll
                     .track_rect(self.layout.playlist.inset(2));
                 let old_scroll_hover = self.playlist_scroll.hovered;
                 self.playlist_scroll.hovered = track.contains(point);
                 let dragged = self.playlist_scroll.update_drag(track, y);
-                let timeline_changed = self.timeline.update(event);
+                let timeline_changed =
+                    if self.media.seek_enabled() || self.media.interaction().seek_drag_active {
+                        self.timeline.update(event)
+                    } else {
+                        false
+                    };
+                if timeline_changed {
+                    self.media.preview_seek(self.timeline.value);
+                }
                 let volume_changed = self.volume.update(event);
-                if self.hovered_control.is_some()
-                    || self.hovered_item.is_some()
-                    || self.timeline.active
-                    || self.volume.active
-                {
+                if self.hovered_control.is_some() || self.timeline.active || self.volume.active {
                     set_client_cursor(CursorShape::Hand);
                 } else {
                     set_client_cursor(CursorShape::Pointer);
                 }
                 old_control != self.hovered_control
-                    || old_item != self.hovered_item
                     || old_scroll_hover != self.playlist_scroll.hovered
                     || dragged
                     || timeline_changed
                     || volume_changed
             }
             Event::MouseDown { x, y, button: 0 } => {
+                self.seek_committed_on_release = false;
                 let point = Point::new(x, y);
                 if let Some(index) = self.hit_control(point) {
                     self.pressed_control = Some(index);
@@ -738,13 +912,15 @@ impl App for MelodyMinaApp {
                     self.focus_index = 7;
                     return true;
                 }
-                if let Some(index) = self.playlist_item_at(point) {
-                    self.selected = index;
-                    self.focus_index = 7;
-                    self.status = "Queue selection is demo presentation state";
-                    return true;
-                }
-                let timeline_changed = self.timeline.update(event);
+                let timeline_changed = if self.media.seek_enabled() {
+                    let changed = self.timeline.update(event);
+                    if self.layout.timeline_slider.contains(point) {
+                        let _ = self.media.begin_seek(self.timeline.value);
+                    }
+                    changed
+                } else {
+                    false
+                };
                 let volume_changed = self.volume.update(event);
                 if self.layout.timeline_slider.contains(point) {
                     self.focus_index = 8;
@@ -753,6 +929,29 @@ impl App for MelodyMinaApp {
                     self.focus_index = 9;
                 }
                 timeline_changed || volume_changed
+            }
+            Event::MouseUp { .. } => {
+                let timeline_changed = if self.media.interaction().seek_drag_active {
+                    let changed = self.timeline.update(event);
+                    match self.media.commit_seek(self.timeline.value) {
+                        Ok(()) => self.status = "Seeking...",
+                        Err(error) => self.status = error.kind.user_message(),
+                    }
+                    self.seek_committed_on_release = true;
+                    let _ = changed;
+                    true
+                } else {
+                    false
+                };
+                let was_volume_dragging = self.volume.dragging;
+                let volume_changed = self.volume.update(event);
+                if was_volume_dragging {
+                    match self.media.set_volume(self.volume.value) {
+                        Ok(()) => self.status = "Stream volume changed",
+                        Err(error) => self.status = error.kind.user_message(),
+                    }
+                }
+                timeline_changed || volume_changed || was_volume_dragging
             }
             Event::Click { x, y } => {
                 let point = Point::new(x, y);
@@ -763,18 +962,25 @@ impl App for MelodyMinaApp {
                     .map(|index| self.activate_control(index))
                     .unwrap_or(false);
                 self.playlist_scroll.end_drag();
-                let timeline_changed = self.timeline.update(event);
-                if timeline_changed {
-                    self.now_playing.elapsed_seconds = self
-                        .now_playing
-                        .duration_seconds
-                        .saturating_mul(self.timeline.value)
-                        / 100;
-                    self.status = "Timeline preview only / media was not seeked";
+                let suppress_seek = core::mem::replace(&mut self.seek_committed_on_release, false);
+                let timeline_changed = if self.media.seek_enabled() && !suppress_seek {
+                    self.timeline.update(event)
+                } else {
+                    false
+                };
+                if timeline_changed && !self.media.interaction().seek_drag_active {
+                    let _ = self.media.begin_seek(self.timeline.value);
+                    match self.media.commit_seek(self.timeline.value) {
+                        Ok(()) => self.status = "Seeking...",
+                        Err(error) => self.status = error.kind.user_message(),
+                    }
                 }
                 let volume_changed = self.volume.update(event);
                 if volume_changed {
-                    self.status = "Volume preview only / system audio unchanged";
+                    match self.media.set_volume(self.volume.value) {
+                        Ok(()) => self.status = "Stream volume changed",
+                        Err(error) => self.status = error.kind.user_message(),
+                    }
                 }
                 activated || timeline_changed || volume_changed || self.hovered_control.is_some()
             }
@@ -835,10 +1041,10 @@ impl App for MelodyMinaApp {
     }
 
     fn poll_timeout_ms(&self) -> u64 {
-        if self.window_focused {
-            FRAME_MS_FOCUSED
-        } else {
-            FRAME_MS_UNFOCUSED
+        match self.media.view().playback_state {
+            PlaybackState::Playing if self.window_focused => FRAME_MS_FOCUSED,
+            PlaybackState::Playing | PlaybackState::Loading => FRAME_MS_UNFOCUSED,
+            _ => 250,
         }
     }
 }
@@ -864,27 +1070,15 @@ fn elide<'a>(text: &str, role: FontRole, max_w: u32, output: &'a mut [u8]) -> &'
     core::str::from_utf8(&output[..end + dots.len()]).unwrap_or("...")
 }
 
-fn time_text(seconds: u32, output: &mut [u8; 8]) -> &str {
-    let minutes = (seconds / 60).min(999);
-    let secs = seconds % 60;
-    let mut index = 0usize;
-    if minutes >= 100 {
-        output[index] = b'0' + (minutes / 100) as u8;
-        index += 1;
+fn media_path_arg(argc: u64, argv: *const *const u8) -> Option<String> {
+    let mut raw = [core::ptr::null(); 8];
+    let count = unsafe { sunlight_libc::crt0::collect_raw_args(argc, argv, &mut raw) };
+    if count < 2 || raw[1].is_null() {
+        return None;
     }
-    if minutes >= 10 {
-        output[index] = b'0' + ((minutes / 10) % 10) as u8;
-        index += 1;
-    }
-    output[index] = b'0' + (minutes % 10) as u8;
-    index += 1;
-    output[index] = b':';
-    index += 1;
-    output[index] = b'0' + (secs / 10) as u8;
-    index += 1;
-    output[index] = b'0' + (secs % 10) as u8;
-    index += 1;
-    core::str::from_utf8(&output[..index]).unwrap_or("0:00")
+    let len = unsafe { sunlight_libc::crt0::cstr_len(raw[1], 4096) };
+    let bytes = unsafe { core::slice::from_raw_parts(raw[1], len) };
+    core::str::from_utf8(bytes).ok().map(String::from)
 }
 
 #[no_mangle]
@@ -899,6 +1093,9 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     );
 
     let mut app = MelodyMinaApp::new();
+    if let Some(path) = media_path_arg(argc, argv) {
+        app.load_media_path(&path);
+    }
     let Some(mut window) = Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
@@ -909,6 +1106,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         ProcessExit::exit(1)
     };
     window.run(&mut app);
+    drop(app);
     ProcessExit::exit(0);
 }
 
@@ -923,12 +1121,5 @@ mod tests {
         assert_eq!((cover.w, cover.h), (400, 200));
         assert_eq!(cover.x, -90);
         assert_eq!(cover.y, 20);
-    }
-
-    #[test]
-    fn time_formatting_is_allocation_free_and_stable() {
-        let mut buf = [0u8; 8];
-        assert_eq!(time_text(42, &mut buf), "0:42");
-        assert_eq!(time_text(207, &mut buf), "3:27");
     }
 }

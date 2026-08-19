@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-dialogs"
-version = "0.2.4047-alpha.1"
+version = "0.2.4056-alpha.1"
+
+
 
 
 
@@ -283,6 +285,8 @@ edition = "2021"
 [dependencies]
 heapless = "0.8"
 sunlight-audio = { path = "../sunlight-audio" }
+sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc" }
 
 [lib]
 name = "sunlight_dialogs"

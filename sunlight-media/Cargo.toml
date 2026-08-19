@@ -1,0 +1,17 @@
+[package]
+name = "sunlight-media"
+version = "0.2.4056-alpha.1"
+
+
+edition = "2021"
+description = "Reusable bounded media playback core for SunlightOS"
+license = "MIT"
+
+[dependencies]
+lewton = { git = "https://github.com/petamoriken/pxtone-rs.git", rev = "2e088b0df1ce05c28a4458ac514217ef06a80c6b" }
+sunlight-audio = { path = "../sunlight-audio" }
+sunlight-audiod = { path = "../services/sunlight-audiod" }
+sunlight-ipc = { path = "../ipc" }
+sunlight-libc = { path = "../sunlight-libc" }
+
+[dev-dependencies]

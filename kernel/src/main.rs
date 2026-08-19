@@ -284,6 +284,8 @@ static SUNLIGHT_FILES_ELF_BYTES: &[u8] =
 static LIGHT_LENS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/light-lens");
 // Melody Mina: native responsive music-player frontend (UI-only Phase 1).
+// Melody Mina is a UI client; its reusable playback engine remains linked in
+// the userspace application rather than leaking codec/audio logic here.
 static MELODY_MINA_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/melody-mina");
 // Sunlight Edit: native graphical text editor.

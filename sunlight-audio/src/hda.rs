@@ -252,6 +252,25 @@ impl HdaPlayback {
         self.running = false;
     }
 
+    /// Drop every hardware-resident period and restart with silence. This is
+    /// the output-side flush required by pause, stop, and media seek; clearing
+    /// audiod's producer queue alone cannot retract DMA already submitted.
+    pub fn flush(&mut self) -> Result<(), HdaError> {
+        // Preserve progress up to the point at which the stream is stopped.
+        // `frames_played` is a hardware-consumed clock, never a submit clock.
+        let _ = self.poll_dma_progress();
+        self.stop();
+        self.start()?;
+        let _ = self.fill_silence_ready()?;
+        Ok(())
+    }
+
+    /// Whether one full engine period can be submitted without overwriting a
+    /// period the controller has not consumed yet.
+    pub fn can_submit_period(&self) -> bool {
+        self.completed_periods() != 0
+    }
+
     /// Copy `src` (already gain-applied S16LE stereo) into the next free period.
     /// Returns the number of periods filled.
     pub fn submit_period(&mut self, src: &[u8]) -> Result<bool, HdaError> {
@@ -270,7 +289,6 @@ impl HdaPlayback {
                 core::ptr::copy_nonoverlapping(src.as_ptr(), dst, n);
             }
         }
-        self.frames_played = self.frames_played.saturating_add((n / FRAME_BYTES) as u64);
         self.write_period = (self.write_period + 1) % PERIODS;
         self.ack_stream();
         Ok(true)

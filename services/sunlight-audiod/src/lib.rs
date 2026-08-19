@@ -14,7 +14,8 @@ use sunlight_audio::{
     DEFAULT_VOLUME, MAX_PCM_BYTES, SYSTEM_SOUND_COUNT, SYSTEM_SOUND_PROTOCOL_VERSION,
 };
 use sunlight_ipc::{
-    ipc_call_timeout, nameserver_lookup_timeout, unpack_audio_status, AudiodMsg, IpcMsg,
+    ipc_call_timeout, nameserver_lookup_timeout, shm_alloc, shm_free, unpack_audio_status,
+    AudiodMsg, IpcMsg, SHM_PAGE,
 };
 
 #[cfg(test)]
@@ -199,6 +200,33 @@ impl AudioClient {
         self.play_tone(DEFAULT_TONE_HZ, DEFAULT_TONE_MS)
     }
 
+    /// Submit one native-format PCM chunk through the existing `audio.v1`
+    /// shared-memory path. The service currently accepts one 4 KiB grant per
+    /// call; larger media buffers must remain in the producer's bounded queue.
+    pub fn submit_pcm(&self, bytes: &[u8]) -> Result<AudioSnapshot, AudioClientError> {
+        if bytes.is_empty() || bytes.len() > SHM_PAGE || bytes.len() % 4 != 0 {
+            return Err(AudioClientError::InvalidFormat);
+        }
+        let (ptr, token) = shm_alloc().map_err(|_| AudioClientError::Transport)?;
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
+        }
+        let result = self.call(
+            IpcMsg::with_label(AudiodMsg::SUBMIT_PCM)
+                .word(0, bytes.len() as u64)
+                .with_cap(0, token),
+        );
+        let _ = shm_free(token);
+        result?;
+        self.snapshot()
+    }
+
+    /// Flush queued and hardware-resident application PCM immediately.
+    pub fn stop(&self) -> Result<AudioSnapshot, AudioClientError> {
+        self.call(IpcMsg::with_label(AudiodMsg::STOP))?;
+        self.snapshot()
+    }
+
     /// Brief tick at the current master volume. Callers should skip this while
     /// a slider is mid-drag so IPC is not flooded.
     pub fn play_volume_preview(&self) -> Result<(), AudioClientError> {
@@ -304,13 +332,23 @@ impl PcmQueue {
     }
 
     pub fn pop_into(&mut self, dest: &mut [u8]) -> usize {
+        let n = self.peek_into(dest);
+        self.consume(n);
+        n
+    }
+
+    pub fn peek_into(&self, dest: &mut [u8]) -> usize {
         let n = dest.len().min(self.len);
-        for slot in dest.iter_mut().take(n) {
-            *slot = self.buf[self.head];
-            self.head = (self.head + 1) % MAX_QUEUE_BYTES;
-            self.len -= 1;
+        for (offset, slot) in dest.iter_mut().take(n).enumerate() {
+            *slot = self.buf[(self.head + offset) % MAX_QUEUE_BYTES];
         }
         n
+    }
+
+    pub fn consume(&mut self, count: usize) {
+        let n = count.min(self.len);
+        self.head = (self.head + n) % MAX_QUEUE_BYTES;
+        self.len -= n;
     }
 }
 
@@ -581,10 +619,16 @@ mod tests {
         let mut out = [0u8; 2];
         assert_eq!(q.pop_into(&mut out), 2);
         assert_eq!(&out, &[1, 2]);
+        assert!(q.push(&[5, 6]).is_ok());
+        let mut peeked = [0u8; 4];
+        assert_eq!(q.peek_into(&mut peeked), 4);
+        assert_eq!(&peeked, &[3, 4, 5, 6]);
+        assert_eq!(q.len(), 4, "peeking must not lose producer PCM");
+        q.consume(2);
+        assert_eq!(q.len(), 2);
         q.clear();
         assert!(q.is_empty());
     }
-
     #[test]
     fn persisted_volume_restoration() {
         let v = restore_volume(Some("[audio]\nmaster_volume = 22\nmuted = true\n"));

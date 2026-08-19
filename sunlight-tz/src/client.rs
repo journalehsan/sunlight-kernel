@@ -414,7 +414,10 @@ mod tests {
     fn compact_sync_status_ignores_untransported_extended_words() {
         let flags = 1u64;
         let reply = IpcMsg::with_label(TimeMsg::REPLY)
-            .word(0, NtpSyncState::SYNCHRONIZED | (3 << 8) | (2 << 16) | (4 << 24) | (flags << 32))
+            .word(
+                0,
+                NtpSyncState::SYNCHRONIZED | (3 << 8) | (2 << 16) | (4 << 24) | (flags << 32),
+            )
             .word(1, 1_337)
             .word(2, 250)
             .word(3, 1_786_804_757)

@@ -219,9 +219,9 @@ impl MelodyLayout {
 
     fn arrange_timeline(&mut self) {
         let label_w = if self.mode == LayoutMode::Narrow {
-            38
+            54
         } else {
-            48
+            64
         };
         let mut row = [fixed_width(label_w), fill(), fixed_width(label_w)];
         let _ = Row::new(self.timeline).with_gap(6).arrange(&mut row);

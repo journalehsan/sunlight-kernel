@@ -1,6 +1,8 @@
 [package]
 name = "melody-mina"
-version = "0.2.4047-alpha.1"
+version = "0.2.4056-alpha.1"
+
+
 
 
 edition = "2021"
@@ -19,4 +21,6 @@ path = "src/main.rs"
 sunlight-ipc = { path = "../ipc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
-sunlight-libc = { path = "../sunlight-libc" }
+sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-16m"] }
+sunlight-media = { path = "../sunlight-media" }
+sunlight-dialogs = { path = "../sunlight-dialogs" }

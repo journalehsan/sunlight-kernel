@@ -1167,7 +1167,11 @@ impl ReminderApp {
     }
 
     fn panel_rects(&self) -> (Rect, Rect, Rect) {
-        (self.layout.sidebar, self.layout.task_list, self.layout.detail)
+        (
+            self.layout.sidebar,
+            self.layout.task_list,
+            self.layout.detail,
+        )
     }
 
     fn sidebar_rects(&self) -> [Rect; 8] {
