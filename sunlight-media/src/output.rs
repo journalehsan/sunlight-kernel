@@ -49,13 +49,24 @@ impl SunlightAudioSink {
     }
 
     fn consumed_session_frames(&self) -> Result<u64, MediaError> {
-        self.client
-            .snapshot()
-            .map(|snapshot| {
-                self.consumed_from(snapshot.frames_played)
-                    .min(self.submitted_frames)
-            })
-            .map_err(|_| MediaError::new(MediaErrorKind::AudioOutput, 3))
+        for _ in 0..8 {
+            match self.client.frames_played() {
+                Ok(frames_played) => {
+                    return Ok(self.consumed_from(frames_played).min(self.submitted_frames));
+                }
+                Err(sunlight_audiod::AudioClientError::Overflow)
+                | Err(sunlight_audiod::AudioClientError::Timeout) => {
+                    sunlight_ipc::process_yield();
+                }
+                Err(error) => {
+                    return Err(MediaError::new(
+                        MediaErrorKind::AudioOutput,
+                        status_error_detail(error),
+                    ));
+                }
+            }
+        }
+        Err(MediaError::new(MediaErrorKind::AudioOutput, 3))
     }
 
     fn snapshot_position(&self) -> Result<u64, MediaError> {
@@ -72,17 +83,26 @@ impl AudioSink for SunlightAudioSink {
         let mut gained = [0u8; sunlight_ipc::SHM_PAGE];
         gained[..pcm.len()].copy_from_slice(pcm);
         sunlight_audio::pcm::apply_gain_s16le(&mut gained[..pcm.len()], self.volume);
-        loop {
-            match self.client.submit_pcm(&gained[..pcm.len()]) {
-                Ok(_) => break,
+        let frames_played = loop {
+            match self.client.submit_pcm_chunk(&gained[..pcm.len()]) {
+                Ok(frames_played) => break frames_played,
                 Err(sunlight_audiod::AudioClientError::Overflow) => sunlight_ipc::process_yield(),
-                Err(_) => return Err(MediaError::new(MediaErrorKind::AudioOutput, 5)),
+                Err(error) => {
+                    return Err(MediaError::new(
+                        MediaErrorKind::AudioOutput,
+                        submit_error_detail(error),
+                    ))
+                }
             }
-        }
+        };
         self.submitted_frames = self.submitted_frames.saturating_add((pcm.len() / 4) as u64);
 
         // Keep at most the HDA ring plus one producer period outstanding.
         // This bounds latency without starving the four-period hardware ring.
+        let consumed = self.consumed_from(frames_played).min(self.submitted_frames);
+        if self.submitted_frames.saturating_sub(consumed) <= 5 * 1024 {
+            return Ok(self.timeline_frames.saturating_add(consumed));
+        }
         loop {
             let consumed = self.consumed_session_frames()?;
             if self.submitted_frames.saturating_sub(consumed) <= 5 * 1024 {
@@ -107,15 +127,12 @@ impl AudioSink for SunlightAudioSink {
     }
 
     fn flush(&mut self) -> Result<(), MediaError> {
-        let snapshot = self
-            .client
-            .stop()
-            .map_err(|_| MediaError::new(MediaErrorKind::AudioOutput, 6))?;
-        let consumed = self
-            .consumed_from(snapshot.frames_played)
-            .min(self.submitted_frames);
+        let frames_played = self.client.stop_stream().map_err(|error| {
+            MediaError::new(MediaErrorKind::AudioOutput, stop_error_detail(error))
+        })?;
+        let consumed = self.consumed_from(frames_played).min(self.submitted_frames);
         self.timeline_frames = self.timeline_frames.saturating_add(consumed);
-        self.origin_frames = snapshot.frames_played;
+        self.origin_frames = frames_played;
         self.submitted_frames = 0;
         Ok(())
     }
@@ -127,6 +144,45 @@ impl AudioSink for SunlightAudioSink {
 
     fn set_volume(&mut self, volume: u8) {
         self.volume = volume.min(100);
+    }
+}
+
+fn status_error_detail(error: sunlight_audiod::AudioClientError) -> u32 {
+    match error {
+        sunlight_audiod::AudioClientError::ServiceUnavailable
+        | sunlight_audiod::AudioClientError::Unavailable => 1,
+        sunlight_audiod::AudioClientError::InvalidFormat => 4,
+        sunlight_audiod::AudioClientError::DeviceFailed => 6,
+        sunlight_audiod::AudioClientError::Timeout
+        | sunlight_audiod::AudioClientError::Transport => 3,
+        sunlight_audiod::AudioClientError::BadRequest
+        | sunlight_audiod::AudioClientError::Overflow => 5,
+    }
+}
+
+fn submit_error_detail(error: sunlight_audiod::AudioClientError) -> u32 {
+    match error {
+        sunlight_audiod::AudioClientError::ServiceUnavailable
+        | sunlight_audiod::AudioClientError::Unavailable => 1,
+        sunlight_audiod::AudioClientError::InvalidFormat => 4,
+        sunlight_audiod::AudioClientError::DeviceFailed => 6,
+        sunlight_audiod::AudioClientError::Timeout
+        | sunlight_audiod::AudioClientError::Transport => 5,
+        sunlight_audiod::AudioClientError::BadRequest
+        | sunlight_audiod::AudioClientError::Overflow => 5,
+    }
+}
+
+fn stop_error_detail(error: sunlight_audiod::AudioClientError) -> u32 {
+    match error {
+        sunlight_audiod::AudioClientError::ServiceUnavailable
+        | sunlight_audiod::AudioClientError::Unavailable => 1,
+        sunlight_audiod::AudioClientError::DeviceFailed => 6,
+        sunlight_audiod::AudioClientError::Timeout
+        | sunlight_audiod::AudioClientError::Transport => 6,
+        sunlight_audiod::AudioClientError::InvalidFormat
+        | sunlight_audiod::AudioClientError::BadRequest
+        | sunlight_audiod::AudioClientError::Overflow => 6,
     }
 }
 

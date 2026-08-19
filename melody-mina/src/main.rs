@@ -495,13 +495,24 @@ impl MelodyMinaApp {
                 PLAYLIST_ROW_H,
             );
         }
+        self.set_track_title(path);
         match self.media.open(path) {
             Ok(()) => {
-                self.set_track_title(path);
                 self.has_active_source = true;
                 self.status = "Loading audio...";
             }
-            Err(error) => self.status = error.kind.user_message(),
+            Err(error) => {
+                self.status = error.user_message();
+                debug_log("[MELODY-MINA][media-open-error] source=");
+                debug_log(path);
+                debug_log(" kind=");
+                debug_log_u64(error.kind as u64);
+                debug_log(" detail=");
+                debug_log_u64(error.detail as u64);
+                debug_log(" message=");
+                debug_log(error.user_message());
+                debug_log("\n");
+            }
         }
     }
 
@@ -592,11 +603,13 @@ impl MelodyMinaApp {
                 debug_log_u64(error.kind as u64);
                 debug_log(" detail=");
                 debug_log_u64(error.detail as u64);
+                debug_log(" message=");
+                debug_log(error.user_message());
                 debug_log("\n");
             }
         }
         self.status = if let Some(error) = now_playing.error {
-            error.kind.user_message()
+            error.user_message()
         } else {
             match now_playing.playback_state {
                 PlaybackState::Idle => "Select an audio file",
@@ -864,11 +877,11 @@ impl MelodyMinaApp {
             }
             2 => match self.media.stop() {
                 Ok(()) => self.status = "Stopping playback...",
-                Err(error) => self.status = error.kind.user_message(),
+                Err(error) => self.status = error.user_message(),
             },
             4 => {
                 if let Err(error) = self.media.play_pause() {
-                    self.status = error.kind.user_message();
+                    self.status = error.user_message();
                 }
             }
             5 => {
@@ -1082,7 +1095,7 @@ impl App for MelodyMinaApp {
                     let changed = self.timeline.update(event);
                     match self.media.commit_seek(self.timeline.value) {
                         Ok(()) => self.status = "Seeking...",
-                        Err(error) => self.status = error.kind.user_message(),
+                        Err(error) => self.status = error.user_message(),
                     }
                     self.seek_committed_on_release = true;
                     let _ = changed;
@@ -1095,7 +1108,7 @@ impl App for MelodyMinaApp {
                 if was_volume_dragging {
                     match self.media.set_volume(self.volume.value) {
                         Ok(()) => self.status = "Stream volume changed",
-                        Err(error) => self.status = error.kind.user_message(),
+                        Err(error) => self.status = error.user_message(),
                     }
                 }
                 timeline_changed || volume_changed || was_volume_dragging
@@ -1125,14 +1138,14 @@ impl App for MelodyMinaApp {
                     let _ = self.media.begin_seek(self.timeline.value);
                     match self.media.commit_seek(self.timeline.value) {
                         Ok(()) => self.status = "Seeking...",
-                        Err(error) => self.status = error.kind.user_message(),
+                        Err(error) => self.status = error.user_message(),
                     }
                 }
                 let volume_changed = self.volume.update(event);
                 if volume_changed {
                     match self.media.set_volume(self.volume.value) {
                         Ok(()) => self.status = "Stream volume changed",
-                        Err(error) => self.status = error.kind.user_message(),
+                        Err(error) => self.status = error.user_message(),
                     }
                 }
                 activated
@@ -1230,12 +1243,25 @@ fn elide<'a>(text: &str, role: FontRole, max_w: u32, output: &'a mut [u8]) -> &'
 fn media_path_arg(argc: u64, argv: *const *const u8) -> Option<String> {
     let mut raw = [core::ptr::null(); 8];
     let count = unsafe { sunlight_libc::crt0::collect_raw_args(argc, argv, &mut raw) };
-    if count < 2 || raw[1].is_null() {
-        return None;
+    for pointer in raw.iter().take(count).skip(1) {
+        if pointer.is_null() {
+            continue;
+        }
+        let len = unsafe { sunlight_libc::crt0::cstr_len(*pointer, 4096) };
+        let bytes = unsafe { core::slice::from_raw_parts(*pointer, len) };
+        let Ok(argument) = core::str::from_utf8(bytes) else {
+            continue;
+        };
+        // The launcher prepends this bookkeeping argument to GUI processes.
+        // It is not a media path and must never be handed to MediaPlayer.
+        if argument.starts_with("--sunlight-launch=") {
+            continue;
+        }
+        if argument.starts_with('/') {
+            return Some(String::from(argument));
+        }
     }
-    let len = unsafe { sunlight_libc::crt0::cstr_len(raw[1], 4096) };
-    let bytes = unsafe { core::slice::from_raw_parts(raw[1], len) };
-    core::str::from_utf8(bytes).ok().map(String::from)
+    None
 }
 
 fn music_directory() -> String {

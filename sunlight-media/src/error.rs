@@ -42,12 +42,12 @@ impl MediaErrorKind {
             Self::None => "",
             Self::FileOpen => "Could not open the media file",
             Self::FileRead => "Could not read the media file",
-            Self::SourceTooLarge => "This media file is too large for the current player",
+            Self::SourceTooLarge => "This media file exceeds the 4 MiB player limit",
             Self::UnsupportedContainer => "The selected file is not a supported audio stream",
             Self::UnsupportedCodec => "This audio stream uses an unsupported codec",
             Self::MalformedMedia => "The media file is damaged or malformed",
             Self::Decode => "The audio stream could not be decoded",
-            Self::UnsupportedSampleFormat => "This audio format is not supported by Sunlight audio",
+            Self::UnsupportedSampleFormat => "Sunlight audio requires 48 kHz PCM audio",
             Self::AudioOutput => "Sunlight audio output is unavailable",
             Self::Seek => "Could not seek in this media file",
             Self::InvalidState => "That playback action is not available",
@@ -66,5 +66,40 @@ pub struct MediaError {
 impl MediaError {
     pub const fn new(kind: MediaErrorKind, detail: u32) -> Self {
         Self { kind, detail }
+    }
+
+    /// Returns a stable UI message with the low-level detail preserved at the
+    /// media boundary. The detail is intentionally mapped here so clients do
+    /// not need to duplicate audio-service error knowledge.
+    pub const fn user_message(self) -> &'static str {
+        match self.kind {
+            MediaErrorKind::AudioOutput => match self.detail {
+                1 => "Audio service is unavailable",
+                2 => "Audio output format is not supported",
+                3 => "Audio output status could not be read",
+                4 => "Audio output received an invalid PCM buffer",
+                5 => "Audio output submission failed",
+                6 => "Audio output could not stop playback",
+                _ => self.kind.user_message(),
+            },
+            _ => self.kind.user_message(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn audio_output_details_are_actionable() {
+        assert_eq!(
+            MediaError::new(MediaErrorKind::AudioOutput, 5).user_message(),
+            "Audio output submission failed"
+        );
+        assert_eq!(
+            MediaError::new(MediaErrorKind::UnsupportedSampleFormat, 443).user_message(),
+            "Sunlight audio requires 48 kHz PCM audio"
+        );
     }
 }

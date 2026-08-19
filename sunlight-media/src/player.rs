@@ -352,7 +352,7 @@ impl Drop for MediaPlayer {
             // Stop the shared application stream immediately; worker command
             // delivery is still required for decoder/source teardown, but
             // window close must not leave queued or DMA-resident sound behind.
-            let _ = sunlight_audiod::AudioClient::new().stop();
+            let _ = sunlight_audiod::AudioClient::new().stop_stream();
             self.shared()
                 .state
                 .store(PlaybackState::Idle as u8, Ordering::Release);

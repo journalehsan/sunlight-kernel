@@ -127,6 +127,8 @@ pub struct HdaPlayback {
     pin: u8,
     stream_base: usize,
     write_period: usize,
+    filled_periods: usize,
+    last_hw_period: usize,
     frames_played: u64,
     last_lpib: u32,
     underruns: u32,
@@ -164,6 +166,8 @@ impl HdaPlayback {
             pin: 0,
             stream_base: 0,
             write_period: 0,
+            filled_periods: 0,
+            last_hw_period: 0,
             frames_played: 0,
             last_lpib: 0,
             underruns: 0,
@@ -219,6 +223,7 @@ impl HdaPlayback {
             return Ok(());
         }
         self.write_period = 0;
+        self.filled_periods = 0;
         unsafe {
             core::ptr::write_bytes(self.dma.add(PAGE), 0, RING_BYTES);
         }
@@ -236,6 +241,7 @@ impl HdaPlayback {
             self.w32(self.stream_base, ctl | stream | 0x2);
         }
         self.last_lpib = self.dma_position_bytes();
+        self.last_hw_period = (self.last_lpib as usize / PERIOD_BYTES) % PERIODS;
         self.running = true;
         Ok(())
     }
@@ -268,7 +274,7 @@ impl HdaPlayback {
     /// Whether one full engine period can be submitted without overwriting a
     /// period the controller has not consumed yet.
     pub fn can_submit_period(&self) -> bool {
-        self.completed_periods() != 0
+        self.filled_periods < PERIODS
     }
 
     /// Copy `src` (already gain-applied S16LE stereo) into the next free period.
@@ -277,8 +283,7 @@ impl HdaPlayback {
         if !self.running {
             self.start()?;
         }
-        let completed = self.completed_periods();
-        if completed == 0 {
+        if self.filled_periods >= PERIODS {
             return Ok(false);
         }
         let n = src.len().min(PERIOD_BYTES);
@@ -290,6 +295,7 @@ impl HdaPlayback {
             }
         }
         self.write_period = (self.write_period + 1) % PERIODS;
+        self.filled_periods += 1;
         self.ack_stream();
         Ok(true)
     }
@@ -347,22 +353,16 @@ impl HdaPlayback {
         self.frames_played = self
             .frames_played
             .saturating_add((advanced / FRAME_BYTES as u32) as u64);
+        let current_period = (current as usize / PERIOD_BYTES) % PERIODS;
+        let periods_advanced = ring_advance_periods(self.last_hw_period, current_period, PERIODS);
+        if periods_advanced != 0 {
+            self.filled_periods = self
+                .filled_periods
+                .saturating_sub(periods_advanced.min(PERIODS));
+            self.last_hw_period = current_period;
+        }
         self.last_lpib = current;
         self.frames_played
-    }
-
-    fn completed_periods(&self) -> usize {
-        if !self.running {
-            return PERIODS;
-        }
-        let lpib = unsafe { self.r32(self.stream_base + 0x04) } as usize;
-        let hw_period = (lpib / PERIOD_BYTES) % PERIODS;
-        let delta = (hw_period + PERIODS - self.write_period) % PERIODS;
-        if delta == 0 {
-            0
-        } else {
-            delta
-        }
     }
 
     fn dma_position_bytes(&self) -> u32 {
@@ -699,13 +699,20 @@ const fn ring_advance_bytes(previous: u32, current: u32, ring_bytes: u32) -> u32
     }
 }
 
+const fn ring_advance_periods(previous: usize, current: usize, periods: usize) -> usize {
+    (current + periods - previous) % periods
+}
+
 const fn amp_zero_db_gain(amp_caps: u32) -> u32 {
     amp_caps & 0x7f
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{amp_zero_db_gain, first_codec_in_status, ring_advance_bytes, RING_BYTES};
+    use super::{
+        amp_zero_db_gain, first_codec_in_status, ring_advance_bytes, ring_advance_periods,
+        RING_BYTES,
+    };
 
     #[test]
     fn codec_presence_selects_lowest_codec_address() {
@@ -722,6 +729,13 @@ mod tests {
             ring_advance_bytes(RING_BYTES as u32 - 64, 128, RING_BYTES as u32),
             192
         );
+    }
+
+    #[test]
+    fn period_progress_distinguishes_full_ring_from_empty_ring() {
+        assert_eq!(ring_advance_periods(0, 0, 4), 0);
+        assert_eq!(ring_advance_periods(0, 1, 4), 1);
+        assert_eq!(ring_advance_periods(3, 0, 4), 1);
     }
 
     #[test]

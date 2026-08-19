@@ -15,7 +15,7 @@ use sunlight_audio::{
 };
 use sunlight_ipc::{
     ipc_call_timeout, nameserver_lookup_timeout, shm_alloc, shm_free, unpack_audio_status,
-    AudiodMsg, IpcMsg, SHM_PAGE,
+    AudioStatus, AudiodMsg, IpcMsg, SHM_PAGE,
 };
 
 #[cfg(test)]
@@ -103,24 +103,7 @@ impl AudioClient {
     }
 
     pub fn snapshot(&self) -> Result<AudioSnapshot, AudioClientError> {
-        let cap = nameserver_lookup_timeout("audiod", LOOKUP_TIMEOUT_MS)
-            .ok_or(AudioClientError::ServiceUnavailable)?;
-        let reply = ipc_call_timeout(
-            cap,
-            IpcMsg::with_label(AudiodMsg::GET_STATUS),
-            REQUEST_TIMEOUT_MS,
-        )
-        .map_err(|err| match err {
-            sunlight_ipc::IpcCallError::Timeout => AudioClientError::Timeout,
-            _ => AudioClientError::Transport,
-        })?;
-        if reply.label == AudiodMsg::ERROR {
-            return Err(decode_error(&reply));
-        }
-        if reply.label != AudiodMsg::REPLY {
-            return Err(AudioClientError::Transport);
-        }
-        let status = unpack_audio_status(&reply).ok_or(AudioClientError::Transport)?;
+        let (cap, status) = self.status()?;
         let state = AudioDeviceState::from_u64(status.state as u64);
         let device = ipc_call_timeout(
             cap,
@@ -159,6 +142,31 @@ impl AudioClient {
             system_sounds_volume: status.system_sounds_volume.min(100),
             system_sound_queue_len: status.system_sound_queue_len,
         })
+    }
+
+    /// Read only the compact playback status. Media playback uses this hot
+    /// path to track the hardware clock without querying device metadata.
+    pub fn frames_played(&self) -> Result<u32, AudioClientError> {
+        self.status().map(|(_, status)| status.frames_played)
+    }
+
+    fn status(&self) -> Result<(sunlight_ipc::CapabilityToken, AudioStatus), AudioClientError> {
+        let cap = nameserver_lookup_timeout("audiod", LOOKUP_TIMEOUT_MS)
+            .ok_or(AudioClientError::ServiceUnavailable)?;
+        let reply = ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(AudiodMsg::GET_STATUS),
+            REQUEST_TIMEOUT_MS,
+        )
+        .map_err(map_ipc_error)?;
+        if reply.label == AudiodMsg::ERROR {
+            return Err(decode_error(&reply));
+        }
+        if reply.label != AudiodMsg::REPLY {
+            return Err(AudioClientError::Transport);
+        }
+        let status = unpack_audio_status(&reply).ok_or(AudioClientError::Transport)?;
+        Ok((cap, status))
     }
 
     pub fn set_volume(&self, volume: u8) -> Result<AudioSnapshot, AudioClientError> {
@@ -204,6 +212,14 @@ impl AudioClient {
     /// shared-memory path. The service currently accepts one 4 KiB grant per
     /// call; larger media buffers must remain in the producer's bounded queue.
     pub fn submit_pcm(&self, bytes: &[u8]) -> Result<AudioSnapshot, AudioClientError> {
+        self.submit_pcm_chunk(bytes)?;
+        self.snapshot()
+    }
+
+    /// Submit one chunk and return the status captured by audiod while it
+    /// accepted the chunk. This avoids a second status/device query in the
+    /// media producer's hot path.
+    pub fn submit_pcm_chunk(&self, bytes: &[u8]) -> Result<u32, AudioClientError> {
         if bytes.is_empty() || bytes.len() > SHM_PAGE || bytes.len() % 4 != 0 {
             return Err(AudioClientError::InvalidFormat);
         }
@@ -217,8 +233,26 @@ impl AudioClient {
                 .with_cap(0, token),
         );
         let _ = shm_free(token);
-        result?;
-        self.snapshot()
+        let reply = result?;
+        unpack_audio_status(&reply)
+            .map(|status| status.frames_played)
+            .ok_or(AudioClientError::Transport)
+    }
+
+    /// Stop and flush the shared output stream, returning the hardware frame
+    /// counter from the same audiod reply.
+    pub fn stop_stream(&self) -> Result<u32, AudioClientError> {
+        loop {
+            match self.call(IpcMsg::with_label(AudiodMsg::STOP)) {
+                Ok(reply) => {
+                    return unpack_audio_status(&reply)
+                        .map(|status| status.frames_played)
+                        .ok_or(AudioClientError::Transport);
+                }
+                Err(AudioClientError::Overflow) => sunlight_ipc::process_yield(),
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     /// Flush queued and hardware-resident application PCM immediately.
@@ -265,10 +299,7 @@ impl AudioClient {
     fn call(&self, msg: IpcMsg) -> Result<IpcMsg, AudioClientError> {
         let cap = nameserver_lookup_timeout("audiod", LOOKUP_TIMEOUT_MS)
             .ok_or(AudioClientError::ServiceUnavailable)?;
-        let reply = ipc_call_timeout(cap, msg, REQUEST_TIMEOUT_MS).map_err(|err| match err {
-            sunlight_ipc::IpcCallError::Timeout => AudioClientError::Timeout,
-            _ => AudioClientError::Transport,
-        })?;
+        let reply = ipc_call_timeout(cap, msg, REQUEST_TIMEOUT_MS).map_err(map_ipc_error)?;
         if reply.label == AudiodMsg::ERROR {
             return Err(decode_error(&reply));
         }
@@ -286,6 +317,17 @@ fn decode_error(reply: &IpcMsg) -> AudioClientError {
         AudiodMsg::ERR_INVALID_FORMAT => AudioClientError::InvalidFormat,
         AudiodMsg::ERR_OVERFLOW => AudioClientError::Overflow,
         AudiodMsg::ERR_DEVICE_FAILED => AudioClientError::DeviceFailed,
+        _ => AudioClientError::Transport,
+    }
+}
+
+fn map_ipc_error(error: sunlight_ipc::IpcCallError) -> AudioClientError {
+    match error {
+        sunlight_ipc::IpcCallError::Timeout => AudioClientError::Timeout,
+        sunlight_ipc::IpcCallError::QueueFull => AudioClientError::Overflow,
+        sunlight_ipc::IpcCallError::EndpointNotFound | sunlight_ipc::IpcCallError::PeerClosed => {
+            AudioClientError::ServiceUnavailable
+        }
         _ => AudioClientError::Transport,
     }
 }
@@ -608,6 +650,22 @@ pub fn sound_settings_page_id() -> &'static [u8] {
 mod tests {
     use super::*;
     use sunlight_audio::MasterVolume;
+
+    #[test]
+    fn ipc_backpressure_preserves_retryable_audio_error() {
+        assert_eq!(
+            map_ipc_error(sunlight_ipc::IpcCallError::QueueFull),
+            AudioClientError::Overflow
+        );
+        assert_eq!(
+            map_ipc_error(sunlight_ipc::IpcCallError::Timeout),
+            AudioClientError::Timeout
+        );
+        assert_eq!(
+            map_ipc_error(sunlight_ipc::IpcCallError::PeerClosed),
+            AudioClientError::ServiceUnavailable
+        );
+    }
 
     #[test]
     fn queue_bounds_and_disconnect_cleanup() {
