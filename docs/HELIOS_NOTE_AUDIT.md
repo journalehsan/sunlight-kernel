@@ -2,11 +2,38 @@
 
 ## Overview
 
+## Current source correction (August 23, 2026)
+
+The original audit below is historical and its line numbers/statuses are no
+longer authoritative. The current implementation has since:
+
+- replaced OSABI-only detection with explicit `sunlight-elf::Personality`
+  selection (`HLNX01` marker plus backward-compatible OSABI 3);
+- moved Linux-only brk, poll wake, termios, signal-mask/disposition support,
+  and altstack metadata into `ProcessPersonality::Linux`;
+- implemented timer-backed nanosleep with checked Linux timespec validation;
+- made `openat`/`*at` dirfd handling fail closed for unsupported relative
+  directory handles;
+- rejected unknown getrandom flags;
+- added executable QEMU gates:
+  `tools/test.sh helios-proven-tier1` and
+  `tools/test.sh helios-note-regression`.
+
+The current Note regression gate proves process start, Linux personality,
+terminal initialization, and the first interactive-ready poll. Signal handler
+delivery and live resize/SIGWINCH remain intentionally unsupported. The
+current terminal geometry contract is stable synthetic 80x25.
+
 This audit analyzes the existing Helios Note TUI, SunlightOS Linux ABI compatibility layer (Helios), kernel syscall dispatch, PTY/TTY architecture, and VFS file operations to support transforming Helios Note into a modern Ratatui text editor compiled as a static Linux musl executable (`x86_64-unknown-linux-musl`).
 
 ---
 
 ## 1. Repository & Subsystem Survey
+
+The detailed survey and syscall trace in sections 1–4 are retained as
+historical evidence from the original audit. Where they conflict with the
+current-source correction above, the correction and executable QEMU gates are
+authoritative.
 
 ### 1.1 Current Helios Note Source & Build Target
 - **Location**: `helios-note/`
@@ -14,13 +41,17 @@ This audit analyzes the existing Helios Note TUI, SunlightOS Linux ABI compatibi
 - **Crate configuration**: `helios-note/Cargo.toml`
 - **Build Target**: `x86_64-unknown-linux-musl`
 - **Linker Flags**: `-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie` (ensures `e_type` is `ET_EXEC` for SunlightOS `elf_loader`)
-- **OSABI Stamp**: `printf '\x03' | dd of=target/x86_64-unknown-linux-musl/release/helios-note bs=1 seek=7 conv=notrunc` (stamps `EI_OSABI` byte to `ELFOSABI_LINUX` = 3)
+- **Personality marker**: `tools/stamp_helios_elf.sh` retains OSABI 3 for
+  backward compatibility and writes the explicit `HLNX01` marker.
 - **Kernel Embedding**: `static HELIOS_NOTE_ELF_BYTES: &[u8]` in `kernel/src/main.rs:180` and `kernel/src/process/spawn.rs:810` (serves `/bin/note` and `/usr/bin/note`).
 - **Dependencies**: `libc = "0.2"`, `ratatui = "0.26"`, `crossterm = "0.27"`.
 
 ### 1.2 Helios Syscall Dispatch & Translation
-- **ELF Identification**: `kernel/src/process/elf_loader.rs:175` checks `EI_OSABI == ELFOSABI_LINUX` (3). `spawn.rs` sets `process.is_linux_compat = true`.
-- **Syscall Trap**: `kernel/src/arch/x86_64/syscall.rs:362` intercepts `syscall` assembly instruction. If `is_linux_compat` is true:
+- **ELF Identification**: `sunlight-elf::classify_personality` selects Native,
+  Linux, or Unknown before execution. `spawn.rs` stores
+  `ProcessPersonality::Linux(LinuxProcessState)`.
+- **Syscall Trap**: `kernel/src/arch/x86_64/syscall.rs` intercepts `syscall`.
+  If the current `ProcessPersonality` is Linux:
   1. Calls `sunlight_compat_linux::translate_syscall(linux_nr)`.
   2. Positive return value -> maps directly to SunlightOS native syscall number.
   3. Negative return value (-2..-18) -> maps to internal kernel codes (1000..1016) in `syscall.rs` for specialized ABI shims.
@@ -43,7 +74,8 @@ This audit analyzes the existing Helios Note TUI, SunlightOS Linux ABI compatibi
 
 ### 1.5 Terminal Control & Raw Mode
 - **Terminal Detection & Control**: `sys_linux_ioctl` (internal code 1012) intercepts `TCGETS` (0x5401), `TCSETS` (0x5402), `TCSETSW` (0x5403), `TCSETSF` (0x5404).
-- **Raw Mode**: Crossterm toggles `ICANON` in `c_lflag`. `sys_linux_ioctl` records the mode in `process.linux_termios` and logs mode transitions.
+- **Raw Mode**: Crossterm toggles `ICANON` in `LinuxProcessState.termios`;
+  `sys_linux_ioctl` records the mode and logs transitions.
 - **Terminal Dimensions**: `TIOCGWINSZ` (0x5413) returns `ws_row = 25`, `ws_col = 80`. `TIOCSWINSZ` (0x5414) returns 0. `SIGWINCH` resize signal propagation is currently unhandled for Linux tasks.
 
 ---
@@ -106,10 +138,10 @@ Each missing or updated Linux syscall is bound by explicit ABI constraints:
 | **Terminal Detection (isatty)** | `ioctl(fd, TCGETS)` | Supported for fds 0, 1, 2 | `reusable` | `sys_linux_ioctl` returns `LinuxTermios` struct for stdio fds and `ENOTTY` (errno 25) for other fds. |
 | **Raw Mode Enable/Disable** | `ioctl(fd, TCSETS/TCSETSW/TCSETSF)` | Supported | `reusable` | Correctly toggles `ICANON` and updates `process.linux_termios`. Exiting app restores original flags. |
 | **Terminal Dimensions** | `ioctl(fd, TIOCGWINSZ)` | Fixed 80x25 geometry | `partially supported` | Returns `ws_row=25, ws_col=80`. Live resize propagation (`SIGWINCH`) is missing. |
-| **Input Readiness / Polling** | `poll(7)`, `read(0)` when empty | Stubbed (non-blocking returning 0 immediately) | `partially supported` | `sys_linux_poll` must inspect `tty_io` stdin availability and yield/sleep on empty input with timeout. |
-| **Timing & Clock** | `clock_gettime(228)` | Unmapped (-38 ENOSYS) | `missing` | Needs explicit wrapper converting `CLOCK_MONOTONIC`/`CLOCK_REALTIME` to `struct timespec`. |
+| **Input Readiness / Polling** | `poll(7)`, `read(0)` when empty | Bounded readiness + scheduler-backed timeout | `supported for tier 1` | `sys_linux_poll` inspects TTY/pipe readiness, writes `revents`, and blocks through the Linux timer bookkeeping when no descriptor is ready. |
+| **Timing & Clock** | `clock_gettime(228)`, `nanosleep(35)` | Supported bounded shims | `supported for tier 1` | Timespec pointers and ranges are validated; nanosleep uses a scheduler timer wait. Signal interruption remains outside this tier. |
 | **File Open & Read** | `open(2)`, `openat(257)`, `read(0)` | Fully supported via `KERNEL_VFS` | `reusable` | Relative and absolute paths work. `openat` frame-shift handles `dirfd` safely. |
 | **File Create / Truncate / Write** | `open` with `O_CREAT`/`O_TRUNC`, `write(1)` | Fully supported | `reusable` | Creating missing files and overwriting existing files via `sys_open` + `sys_write` works cleanly. |
 | **Seek & Stat** | `lseek(8)`, `fstat(5)`, `stat(4)`, `lstat(6)` | Fully supported | `reusable` | `SEEK_SET/CUR/END` work; `fstat` populates Linux stat layout. |
-| **Rename / Atomic Save** | `rename(82)`, `renameat(264)` | Native `sys_rename(66)` exists; Linux NR unmapped | `partially supported` | `renameat` wrapper verifying `AT_FDCWD` needs to be mapped to native `sys_rename(66)`. |
+| **Rename / Atomic Save** | `rename(82)`, `renameat(264)` | Native `sys_rename(66)` plus bounded `AT_FDCWD`/absolute-path shim | `supported for tier 1` | Unsupported relative directory-fd resolution returns `-ENOSYS` instead of silently using cwd. |
 | **Process Exit & Cleanup** | `exit(60)`, `exit_group(231)` | Fully supported | `reusable` | `process_exit` reclaims process slot, closes file descriptors, and returns exit code to parent. |

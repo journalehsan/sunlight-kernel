@@ -68,6 +68,7 @@ pub enum SpawnError {
     NoMemory,
     EntropyUnavailable,
     InvalidPath,
+    UnsupportedPersonality,
 }
 
 /// Execute an ELF binary into the current process (re-exec semantics).
@@ -82,6 +83,13 @@ pub fn exec_into_process(
     envp: &[&[u8]],
     activate_on_success: bool,
 ) -> Result<u64, SpawnError> {
+    let personality = match super::elf_loader::personality(bytes) {
+        sunlight_elf::Personality::Native => super::ProcessPersonality::Native,
+        sunlight_elf::Personality::Linux => {
+            super::ProcessPersonality::Linux(super::LinuxProcessState::new())
+        }
+        sunlight_elf::Personality::Unknown => return Err(SpawnError::UnsupportedPersonality),
+    };
     let new_address_space = unsafe {
         crate::process::address_space::AddressSpace::try_new(pmm, hhdm_offset)
             .map_err(|_| SpawnError::NoMemory)?
@@ -95,9 +103,7 @@ pub fn exec_into_process(
     let old_trusted_wiseowl_braind = process.trusted_wiseowl_braind;
     let old_trusted_wiseowl_console = process.trusted_wiseowl_console;
     let old_trusted_control_panel = process.trusted_control_panel;
-    let old_linux_compat = process.is_linux_compat;
-    let old_brk_base = process.brk_base;
-    let old_brk_current = process.brk_current;
+    let old_personality = process.personality;
     process.trusted_display_service = false;
     process.trusted_swap_admin_service = false;
     process.trusted_zram_diagnostic = false;
@@ -107,11 +113,8 @@ pub fn exec_into_process(
     process.trusted_wiseowl_console = false;
     process.trusted_control_panel = false;
 
-    // Phase 4.5: Detect if this is a Linux-compatible ELF binary
-    process.is_linux_compat = super::elf_loader::is_linux_elf(bytes);
-    process.brk_base = 0;
-    process.brk_current = 0;
-    if process.is_linux_compat {
+    process.personality = personality;
+    if process.is_linux_compat() {
         crate::serial_println!("[EXEC] Linux ELF detected");
     }
 
@@ -132,9 +135,7 @@ pub fn exec_into_process(
             process.trusted_wiseowl_braind = old_trusted_wiseowl_braind;
             process.trusted_wiseowl_console = old_trusted_wiseowl_console;
             process.trusted_control_panel = old_trusted_control_panel;
-            process.is_linux_compat = old_linux_compat;
-            process.brk_base = old_brk_base;
-            process.brk_current = old_brk_current;
+            process.personality = old_personality;
             if !activate_on_success {
                 unsafe {
                     process
@@ -189,16 +190,21 @@ fn build_exec_image(
     // the walk never advances, TLS stays zeroed, and Rust `OnceLock` treats the
     // all-zero Once state as COMPLETE — e.g. ratatui's layout cache then
     // null-derefs on first `Layout::split` (helios-note page fault at 0x48).
-    let auxv: alloc::vec::Vec<(u64, u64)> = if process.is_linux_compat {
+    let auxv: alloc::vec::Vec<(u64, u64)> = if process.is_linux_compat() {
         match sunlight_elf::parse_elf_header(bytes) {
             Ok(hdr) => {
                 let at_phdr = compute_at_phdr(bytes, &hdr);
                 alloc::vec![
-                    (3, at_phdr),              // AT_PHDR
-                    (4, hdr.phentsize as u64), // AT_PHENT (ELF64 = 56)
-                    (5, hdr.phnum as u64),     // AT_PHNUM
-                    (6, 4096u64),              // AT_PAGESZ
-                    (9, hdr.entry),            // AT_ENTRY
+                    (sunlight_compat_linux::abi::AT_PHDR, at_phdr),
+                    (sunlight_compat_linux::abi::AT_PHENT, hdr.phentsize as u64),
+                    (sunlight_compat_linux::abi::AT_PHNUM, hdr.phnum as u64),
+                    (sunlight_compat_linux::abi::AT_PAGESZ, 4096u64),
+                    (sunlight_compat_linux::abi::AT_ENTRY, hdr.entry),
+                    (sunlight_compat_linux::abi::AT_UID, process.uid as u64),
+                    (sunlight_compat_linux::abi::AT_EUID, process.uid as u64),
+                    (sunlight_compat_linux::abi::AT_GID, process.gid as u64),
+                    (sunlight_compat_linux::abi::AT_EGID, process.gid as u64),
+                    (sunlight_compat_linux::abi::AT_SECURE, 0u64),
                 ]
             }
             Err(_) => alloc::vec![],
@@ -426,8 +432,11 @@ fn setup_exec_stack(
     }
 
     // Pointer table: argc + argv ptrs + NULL + envp ptrs + NULL
-    //                + caller auxv pairs + AT_RANDOM pair + AT_NULL pair.
-    let auxv_words = (auxv.len() + 2) * 2; // +1 AT_RANDOM, +1 AT_NULL
+    //                + caller auxv pairs + AT_EXECFN + AT_RANDOM + AT_NULL.
+    // AT_EXECFN is emitted only when the caller already supplied a Linux auxv.
+    let emit_execfn = !auxv.is_empty();
+    let extra_auxv = 2 + usize::from(emit_execfn); // RANDOM, NULL, optional EXECFN
+    let auxv_words = (auxv.len() + extra_auxv) * 2;
     let table_words = 1 + argv.len() + 1 + envp.len() + 1 + auxv_words;
     let mut rsp = (cursor & !0x7)
         .checked_sub(table_words as u64 * 8)
@@ -452,11 +461,16 @@ fn setup_exec_stack(
         table.extend_from_slice(&atype.to_le_bytes());
         table.extend_from_slice(&aval.to_le_bytes());
     }
+    if emit_execfn {
+        let execfn_ptr = argv_addrs.first().copied().unwrap_or(0);
+        table.extend_from_slice(&sunlight_compat_linux::abi::AT_EXECFN.to_le_bytes());
+        table.extend_from_slice(&execfn_ptr.to_le_bytes());
+    }
     // AT_RANDOM (25)
-    table.extend_from_slice(&25u64.to_le_bytes());
+    table.extend_from_slice(&sunlight_compat_linux::abi::AT_RANDOM.to_le_bytes());
     table.extend_from_slice(&at_random_ptr.to_le_bytes());
     // AT_NULL (0) — musl stops scanning auxv here
-    table.extend_from_slice(&0u64.to_le_bytes());
+    table.extend_from_slice(&sunlight_compat_linux::abi::AT_NULL.to_le_bytes());
     table.extend_from_slice(&0u64.to_le_bytes());
     copy_to_user(process, hhdm_offset, rsp, &table)?;
 
@@ -464,7 +478,7 @@ fn setup_exec_stack(
         "[EXEC] Stack: argc={} envc={} auxv={} rsp={:#x}",
         argv.len(),
         envp.len(),
-        auxv.len() + 2,
+        auxv.len() + extra_auxv,
         rsp
     );
 
@@ -945,6 +959,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/cpufeat" | "/usr/bin/cpufeat" => Ok(crate::CPUFEAT_ELF_BYTES),
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.
         "/bin/hello-linux" | "/usr/bin/hello-linux" => Ok(crate::HELLO_LINUX_ELF_BYTES),
+        "/bin/helios-probe" | "/usr/bin/helios-probe" => Ok(crate::HELIOS_PROBE_ELF_BYTES),
         // helios-note: std+libc terminal note editor (Helios Linux compat).
         "/bin/note" | "/usr/bin/note" => Ok(crate::HELIOS_NOTE_ELF_BYTES),
         // Phase 6.5 Step 3: PATH entries under these directories are applets

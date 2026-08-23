@@ -375,10 +375,12 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     let mut num = frame.rax;
+    let mut linux_compat = false;
 
     // Phase 4.5: Check if this is a Linux-compat process and translate syscall
     crate::sched::with_scheduler(|sched| {
-        if sched.current_process().is_linux_compat {
+        linux_compat = sched.current_process().is_linux_compat();
+        if linux_compat {
             // Translate Linux syscall number to SunlightOS number
             let linux_num = num as u64;
             match sunlight_compat_linux::translate_syscall(linux_num) {
@@ -452,13 +454,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 }
                 -15 => {
                     if linux_num == 257 {
-                        // openat(dirfd, path, flags, mode) → sys_open(path, flags)
-                        // Rust std (and musl) prefer openat over open. Dirfd is
-                        // almost always AT_FDCWD (-100); we ignore it and treat
-                        // all paths as CWD-relative / absolute, matching our VFS.
-                        frame.rdi = frame.rsi; // path pointer
-                        frame.rsi = frame.rdx; // flags
-                        num = 40; // sys_open
+                        // openat(dirfd, path, flags, mode). The 4th syscall
+                        // argument is r10, not rdx; sys_open reads mode from rdx.
+                        num = 1028;
                     }
                 }
                 -16 => {
@@ -526,6 +524,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1025; // Linux unlinkat
                     }
                 }
+                -29 => {
+                    if linux_num == 61 {
+                        num = 1027; // Linux wait4: ABI mismatch with native waitpid
+                    }
+                }
                 -28 => {
                     if linux_num == 4 || linux_num == 6 {
                         // stat(path, buf) / lstat(path, buf) → the normalized
@@ -544,13 +547,13 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                     num = 1005; // Linux ENOSYS
                 }
                 _ => {
-                    // Unknown or unsupported syscall
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
-                    num = u64::MAX;
+                    num = 1005;
                 }
             }
         }
     });
+    let linux_special = linux_compat && num >= 1000;
 
     let result = match num {
         1 => ipc_call(frame),
@@ -705,11 +708,23 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1024 => sys_linux_socketpair(frame),
         1025 => sys_linux_unlinkat(frame),
         1026 => sys_linux_newfstatat(frame),
+        1027 => reject_linux_wait4(),
+        1028 => sys_linux_openat(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
-            u64::MAX
+            if linux_compat {
+                linux_errno(sunlight_compat_linux::abi::ENOSYS as u64)
+            } else {
+                u64::MAX
+            }
         }
+    };
+
+    let result = if linux_compat && !linux_special {
+        sunlight_compat_linux::abi::from_native_result(result)
+    } else {
+        result
     };
 
     // Deliver pending signals before returning to user space
@@ -797,7 +812,7 @@ fn read_user_ptr_array(
 
 fn user_memory_failure(error: crate::memory::user::UserMemoryError) -> u64 {
     let is_linux =
-        crate::sched::with_scheduler(|scheduler| scheduler.current_process().is_linux_compat);
+        crate::sched::with_scheduler(|scheduler| scheduler.current_process().is_linux_compat());
     user_memory_failure_for(is_linux, error)
 }
 
@@ -1679,7 +1694,7 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 /// Returns: child_pid (parent), 0 (child)
 fn sys_fork(_frame: &mut SyscallFrame) -> u64 {
     crate::memory::security::note_unsafe_fork_rejected();
-    if crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat) {
+    if crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat()) {
         linux_errno(38)
     } else {
         u64::MAX
@@ -1827,7 +1842,7 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     if sched.current_address_space_has_borrowers() {
         crate::serial_println!("[MM-0] exec rejected while address-space borrowers are live");
-        return if sched.current_process().is_linux_compat {
+        return if sched.current_process().is_linux_compat() {
             linux_errno(38)
         } else {
             u64::MAX
@@ -1860,16 +1875,7 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         Ok(entry) => {
             let cloexec_handles = process.fd_table.take_cloexec_handles();
             for handle in cloexec_handles.into_iter().flatten() {
-                if handle.is_vfs() {
-                    if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
-                        let _ = vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle()));
-                    }
-                } else if handle.is_pipe() {
-                    crate::process::pipe::pipe_close_end(
-                        handle.pipe_index(),
-                        handle.pipe_is_write(),
-                    );
-                }
+                close_file_handle(handle);
             }
             process.trusted_display_service =
                 crate::process::spawn::is_trusted_display_path(path_str)
@@ -3059,9 +3065,13 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
         };
         match vfs.stat(abs_path) {
             Ok(stat) if stat.file_type == sunlight_fs::vfs::FileType::Directory => {}
-            _ => {
+            Ok(_) => {
+                crate::serial_println!("[HELIOS] chdir({}) -> not a directory", abs_path);
+                return ERR_ENOTDIR;
+            }
+            Err(_) => {
                 crate::serial_println!("[HELIOS] chdir({}) -> not found", abs_path);
-                return u64::MAX;
+                return ERR_NOENT;
             }
         }
     }
@@ -3206,29 +3216,36 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let pid = sched.current_process().pid;
 
-    // Lazy heap initialization: the first brk call establishes the process-local
-    // Linux heap range.
-    {
-        let process = sched.current_process_mut();
-        if process.brk_base == 0 {
-            process.brk_base = heap_base;
-            process.brk_current = heap_base;
+    let (brk_base, current_brk, mmap_next) = {
+        let Some(state) = sched.current_process_mut().linux_state_mut() else {
+            return linux_errno(sunlight_compat_linux::abi::ENOSYS as u64);
+        };
+        if state.brk_base == 0 {
+            state.brk_base = heap_base;
+            state.brk_current = heap_base;
         }
+        (
+            state.brk_base,
+            state.brk_current,
+            sched.current_process().mmap_next,
+        )
+    };
 
-        if requested_brk == 0 {
-            return process.brk_current;
-        }
-
-        if requested_brk < process.brk_base {
-            return process.brk_current;
-        }
+    if requested_brk == 0 || requested_brk < brk_base {
+        return current_brk;
     }
 
-    let current_brk = sched.current_process().brk_current;
-    let current_page_end = (current_brk + 0xFFF) & !0xFFF;
-    let target_page_end = (requested_brk + 0xFFF) & !0xFFF;
+    let Some(current_page_end) = current_brk.checked_add(0xFFF).map(|v| v & !0xFFF) else {
+        return current_brk;
+    };
+    let Some(target_page_end) = requested_brk.checked_add(0xFFF).map(|v| v & !0xFFF) else {
+        return current_brk;
+    };
 
     if target_page_end > current_page_end {
+        if mmap_next != 0 && target_page_end > mmap_next {
+            return current_brk;
+        }
         let size_to_map = target_page_end - current_page_end;
         let mut pmm = crate::PMM.lock();
         let result =
@@ -3236,26 +3253,42 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
 
         match result {
             Ok(_) => {
-                sched.current_process_mut().brk_current = requested_brk;
+                if let Some(state) = sched.current_process_mut().linux_state_mut() {
+                    state.brk_current = requested_brk;
+                }
             }
             Err(_) => {
                 let previous = sched
                     .processes
                     .iter()
                     .find(|p| p.pid == pid)
-                    .map(|p| p.brk_current)
+                    .and_then(|p| p.linux_state().map(|state| state.brk_current))
                     .unwrap_or(current_brk);
                 return previous;
             }
         }
     } else if target_page_end < current_page_end {
-        // Real unmapping is deferred; do not claim a shrink that did nothing.
-        return current_brk;
+        let size_to_unmap = current_page_end - target_page_end;
+        let mut pmm = crate::PMM.lock();
+        if crate::process::mmap::sys_munmap(target_page_end, size_to_unmap, &mut pmm, &mut sched)
+            .is_err()
+        {
+            return current_brk;
+        }
+        if let Some(state) = sched.current_process_mut().linux_state_mut() {
+            state.brk_current = requested_brk;
+        }
     } else {
-        sched.current_process_mut().brk_current = requested_brk;
+        if let Some(state) = sched.current_process_mut().linux_state_mut() {
+            state.brk_current = requested_brk;
+        }
     }
 
-    sched.current_process().brk_current
+    sched
+        .current_process()
+        .linux_state()
+        .map(|state| state.brk_current)
+        .unwrap_or(current_brk)
 }
 
 const ARCH_SET_FS: u64 = 0x1002;
@@ -3266,14 +3299,67 @@ fn sys_arch_prctl(frame: &mut SyscallFrame) -> u64 {
 
     if code == ARCH_SET_FS {
         frame.rdi = addr;
-        return sys_set_fs_base(frame);
+        let result = sys_set_fs_base(frame);
+        return if result == u64::MAX {
+            linux_errno(sunlight_compat_linux::abi::EFAULT as u64)
+        } else {
+            result
+        };
     }
 
-    u64::MAX
+    linux_errno(sunlight_compat_linux::abi::EINVAL as u64)
 }
 
 fn linux_errno(errno: u64) -> u64 {
-    0u64.wrapping_sub(errno)
+    sunlight_compat_linux::abi::errno_result(errno as u32)
+}
+
+fn reject_linux_wait4() -> u64 {
+    // Native waitpid returns an exit code in rax and does not write *status.
+    // musl wait4 expects the child pid and a Linux wait status word. Returning
+    // the native result would look like a successful wait of the wrong pid.
+    crate::serial_println!("[HELIOS] wait4 unsupported until blocking wait is Linux-shaped");
+    linux_errno(sunlight_compat_linux::abi::ENOSYS as u64)
+}
+
+fn close_file_handle(handle: crate::process::fd_table::FileHandle) {
+    if handle.is_pipe() {
+        crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
+    } else if handle.is_epoll() {
+        crate::process::epoll::free_instance(handle.epoll_index());
+    } else if handle.is_vfs() {
+        if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+            let _ = vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle()));
+        }
+    }
+}
+
+fn sys_linux_openat(frame: &mut SyscallFrame) -> u64 {
+    let dirfd = frame.rdi as i32;
+    let path_ptr = frame.rsi;
+    let path = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+        Ok(path) => path,
+        Err(error) => return user_memory_failure(error),
+    };
+    let absolute = path.first().copied() == Some(b'/');
+    if dirfd != sunlight_compat_linux::abi::AT_FDCWD && !absolute {
+        // Directory-handle relative resolution is intentionally outside the
+        // bounded VFS surface; never silently reinterpret it as cwd-relative.
+        return linux_errno(sunlight_compat_linux::abi::ENOSYS as u64);
+    }
+
+    frame.rdi = path_ptr;
+    frame.rsi = frame.rdx;
+    frame.rdx = frame.r10;
+    sunlight_compat_linux::abi::from_native_result(sys_open(frame))
+}
+
+fn abandon_process_fds(sched: &mut crate::sched::Scheduler, fds: [i32; 2]) {
+    for fd in fds {
+        if let Ok(entry) = sched.current_process_mut().fd_table.take(fd) {
+            close_file_handle(entry.handle);
+        }
+    }
 }
 
 fn sys_linux_set_tid_address(frame: &mut SyscallFrame) -> u64 {
@@ -3282,16 +3368,34 @@ fn sys_linux_set_tid_address(frame: &mut SyscallFrame) -> u64 {
         return linux_errno(14); // EFAULT
     }
 
-    sched::with_scheduler(|s| s.current_process().pid as u64)
+    sched::with_scheduler(|s| {
+        let process = s.current_process_mut();
+        if let Some(state) = process.linux_state_mut() {
+            state.tid_address = tidptr;
+        }
+        process.pid as u64
+    })
 }
 
 fn sys_linux_set_robust_list(frame: &mut SyscallFrame) -> u64 {
     let head = frame.rdi;
-    if head != 0 && crate::memory::user::UserAddress::new(head).is_err() {
+    let len = frame.rsi;
+    if head != 0 && crate::memory::user::UserRange::new(head, 24).is_err() {
         return linux_errno(14); // EFAULT
     }
-
-    0
+    if len != 24 {
+        return linux_errno(22); // EINVAL
+    }
+    sched::with_scheduler(|s| {
+        let process = s.current_process_mut();
+        if let Some(state) = process.linux_state_mut() {
+            state.robust_list_head = head;
+            state.robust_list_len = len;
+            0
+        } else {
+            linux_errno(38)
+        }
+    })
 }
 
 fn sys_linux_rseq(_frame: &mut SyscallFrame) -> u64 {
@@ -3300,7 +3404,10 @@ fn sys_linux_rseq(_frame: &mut SyscallFrame) -> u64 {
 
 fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
     let len = frame.rsi as usize;
-    let _flags = frame.rdx;
+    let flags = frame.rdx;
+    if flags & !sunlight_compat_linux::abi::GRND_NONBLOCK != 0 {
+        return linux_errno(22); // EINVAL: GRND_RANDOM/INSECURE not implemented
+    }
 
     if len == 0 {
         return 0;
@@ -3318,7 +3425,10 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
         if !crate::entropy::fill(&mut chunk[..n]) {
             return linux_errno(11); // EAGAIN: secure entropy not ready
         }
-        if crate::memory::user::copy_to_current(frame.rdi + written as u64, &chunk[..n]).is_err() {
+        let Some(dst) = frame.rdi.checked_add(written as u64) else {
+            return linux_errno(14);
+        };
+        if crate::memory::user::copy_to_current(dst, &chunk[..n]).is_err() {
             return linux_errno(14);
         }
         written += n;
@@ -3343,7 +3453,9 @@ fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
         return linux_errno(22); // EINVAL
     }
 
-    let bytes = nfds * 8;
+    let Some(bytes) = nfds.checked_mul(8) else {
+        return linux_errno(22); // EINVAL
+    };
     if crate::memory::user::UserRange::new(fds_ptr, bytes).is_err() {
         return linux_errno(14); // EFAULT
     }
@@ -3355,7 +3467,20 @@ fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
 
     let mut ready_count = 0u64;
     let tab = {
-        let sched = crate::sched::SCHEDULER.lock();
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let process = sched.current_process_mut();
+        if process.is_linux_compat()
+            && process.name[..4].eq_ignore_ascii_case(b"note")
+            && process
+                .linux_state()
+                .map(|state| !state.note_ready_logged)
+                .unwrap_or(false)
+        {
+            if let Some(state) = process.linux_state_mut() {
+                state.note_ready_logged = true;
+            }
+            crate::serial_println!("[HELIOS-NOTE] interactive-ready");
+        }
         sched
             .current_process()
             .fd_table
@@ -3635,6 +3760,7 @@ fn sys_linux_pipe2(frame: &mut SyscallFrame) -> u64 {
             if crate::memory::user::copy_to_process_bytes(process, hhdm, frame.rdi, &output)
                 .is_err()
             {
+                abandon_process_fds(&mut sched, [read_fd, write_fd]);
                 return linux_errno(14);
             }
             0
@@ -3693,6 +3819,7 @@ fn sys_linux_socketpair(frame: &mut SyscallFrame) -> u64 {
             let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
             if crate::memory::user::copy_to_process_bytes(process, hhdm, pair_ptr, &output).is_err()
             {
+                abandon_process_fds(&mut sched, [read_fd, write_fd]);
                 return linux_errno(14);
             }
             0
@@ -3708,11 +3835,16 @@ fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
     let newpath_ptr = frame.r10;
 
     const AT_FDCWD: i32 = -100;
-    if olddirfd != AT_FDCWD && olddirfd != 0 {
-        return linux_errno(38); // ENOSYS
-    }
-    if newdirfd != AT_FDCWD && newdirfd != 0 {
-        return linux_errno(38); // ENOSYS
+    for (dirfd, path_ptr) in [(olddirfd, oldpath_ptr), (newdirfd, newpath_ptr)] {
+        if dirfd != AT_FDCWD {
+            let path = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+                Ok(path) => path,
+                Err(error) => return user_memory_failure(error),
+            };
+            if path.first().copied() != Some(b'/') {
+                return linux_errno(38);
+            }
+        }
     }
 
     let mut rename_frame = SyscallFrame {
@@ -3720,7 +3852,7 @@ fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
         rsi: newpath_ptr,
         ..*frame
     };
-    sys_rename(&mut rename_frame)
+    sunlight_compat_linux::abi::from_native_result(sys_rename(&mut rename_frame))
 }
 
 fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
@@ -3731,15 +3863,24 @@ fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
     const AT_FDCWD: i32 = -100;
     // Removing directories via AT_REMOVEDIR is deliberately outside this
     // small compatibility surface. Relative paths are resolved by sys_unlink.
-    if (dirfd != AT_FDCWD && dirfd != 0) || flags != 0 {
+    if flags != 0 {
         return linux_errno(38); // ENOSYS
+    }
+    if dirfd != AT_FDCWD {
+        let path = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+            Ok(path) => path,
+            Err(error) => return user_memory_failure(error),
+        };
+        if path.first().copied() != Some(b'/') {
+            return linux_errno(38);
+        }
     }
 
     let mut unlink_frame = SyscallFrame {
         rdi: path_ptr,
         ..*frame
     };
-    sys_unlink(&mut unlink_frame)
+    sunlight_compat_linux::abi::from_native_result(sys_unlink(&mut unlink_frame))
 }
 
 /// Linux newfstatat(2): the Rust standard library uses this for
@@ -3755,9 +3896,6 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
 
     const AT_FDCWD: i32 = -100;
     const AT_SYMLINK_NOFOLLOW: u64 = 0x100;
-    if dirfd != AT_FDCWD && dirfd != 0 {
-        return linux_errno(9); // EBADF
-    }
     // SunlightFS has no symlinks, so NOFOLLOW has the same result as a normal
     // lookup. Reject other flags until their semantics are implemented.
     if flags & !AT_SYMLINK_NOFOLLOW != 0 {
@@ -3772,6 +3910,9 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
         Ok(path) => path,
         Err(_) => return linux_errno(22),
     };
+    if dirfd != AT_FDCWD && !raw_path.starts_with('/') {
+        return linux_errno(38);
+    }
     let path_buf = resolve_current_path(raw_path);
     let stat = {
         let mut guard = crate::KERNEL_VFS.lock();
@@ -3823,22 +3964,41 @@ fn sys_linux_nanosleep(frame: &mut SyscallFrame) -> u64 {
         return linux_errno(22); // EINVAL
     }
 
-    // Syscalls run with IF=0, so we cannot busy-wait out a real sleep against
-    // the BSP timekeeper. Yield a few times so other cores can run, then return
-    // success. Coarse but safe; real timed sleep needs a blocking wait path.
-    let _ms = (sec as u64)
-        .saturating_mul(1000)
-        .saturating_add((nsec as u64) / 1_000_000);
-    for _ in 0..4 {
-        process_yield();
+    if rem_ptr != 0 && crate::memory::user::UserRange::new(rem_ptr, 16).is_err() {
+        return linux_errno(14);
     }
 
-    // Report no remaining time if the caller passed rem.
+    if sec == 0 && nsec == 0 {
+        if rem_ptr != 0 {
+            let _ = crate::memory::user::copy_to_current(rem_ptr, &[0u8; 16]);
+        }
+        return 0;
+    }
+
+    let hz = crate::timekeeping::TICK_HZ as u128;
+    let ticks = (sec as u128)
+        .checked_mul(hz)
+        .and_then(|whole| {
+            let fractional =
+                (nsec as u128).checked_mul(hz)?.checked_add(999_999_999)? / 1_000_000_000;
+            whole.checked_add(fractional)
+        })
+        .and_then(|ticks| u64::try_from(ticks).ok())
+        .filter(|&ticks| ticks > 0)
+        .ok_or(());
+    let Ok(ticks) = ticks else {
+        return linux_errno(22);
+    };
+
     if rem_ptr != 0 {
-        let zeros = [0u8; 16];
-        let _ = crate::memory::user::copy_to_current(rem_ptr, &zeros);
+        // Signal interruption is not implemented in this tier; a completed
+        // sleep therefore has a coherent zero remainder.
+        if crate::memory::user::copy_to_current(rem_ptr, &[0u8; 16]).is_err() {
+            return linux_errno(14);
+        }
     }
-
+    crate::sched::with_scheduler(|sched| sched.block_current_linux_poll(ticks));
+    crate::sched::request_reschedule();
     0
 }
 
@@ -3848,21 +4008,64 @@ fn sys_linux_rt_sigaction(frame: &mut SyscallFrame) -> u64 {
     let oldact = frame.rdx;
     let sigset_size = frame.r10;
 
-    if sig == 0 || sig > 64 {
+    if sig == 0 || sig > 32 {
         return linux_errno(22); // EINVAL
     }
-    if sigset_size != 8 && sigset_size != 16 {
+    if sigset_size != 8 {
         return linux_errno(22); // EINVAL
     }
-    if act != 0 && crate::memory::user::UserRange::new(act, 32).is_err() {
-        return linux_errno(14); // EFAULT
-    }
+    let Some(signal) = crate::process::signal::Signal::try_from_u32(sig) else {
+        return linux_errno(22);
+    };
     if oldact != 0 {
-        if crate::memory::user::copy_to_current(oldact, &[0u8; 32]).is_err() {
+        let action = crate::sched::with_scheduler(|sched| {
+            sched.current_process().signal_state.get_handler(signal)
+        });
+        let handler = match action.handler {
+            crate::process::signal::SigHandler::Default => 0,
+            crate::process::signal::SigHandler::Ignore => 1,
+            crate::process::signal::SigHandler::UserHandler(ptr) => ptr,
+        };
+        let mut wire = [0u8; 32];
+        wire[0..8].copy_from_slice(&handler.to_ne_bytes());
+        wire[8..16].copy_from_slice(&(action.flags as u64).to_ne_bytes());
+        wire[24..32].copy_from_slice(&action.mask.to_ne_bytes());
+        if crate::memory::user::copy_to_current(oldact, &wire).is_err() {
             return linux_errno(14);
         }
     }
 
+    if act != 0 {
+        if crate::memory::user::UserRange::new(act, 32).is_err() {
+            return linux_errno(14);
+        }
+        let mut wire = [0u8; 32];
+        if crate::memory::user::copy_from_current(act, &mut wire).is_err() {
+            return linux_errno(14);
+        }
+        let handler = u64::from_ne_bytes(wire[0..8].try_into().unwrap());
+        let flags = u64::from_ne_bytes(wire[8..16].try_into().unwrap());
+        let mask = u64::from_ne_bytes(wire[24..32].try_into().unwrap());
+        let handler = match handler {
+            0 => crate::process::signal::SigHandler::Default,
+            1 => crate::process::signal::SigHandler::Ignore,
+            ptr => crate::process::signal::SigHandler::UserHandler(ptr),
+        };
+        let action = crate::process::signal::SigAction {
+            handler,
+            mask,
+            flags: flags as u32,
+        };
+        let result = crate::sched::with_scheduler(|sched| {
+            sched
+                .current_process_mut()
+                .signal_state
+                .set_handler(signal, action)
+        });
+        if result.is_err() {
+            return linux_errno(22);
+        }
+    }
     0
 }
 
@@ -3875,19 +4078,37 @@ fn sys_linux_rt_sigprocmask(frame: &mut SyscallFrame) -> u64 {
     if how > 2 {
         return linux_errno(22); // EINVAL
     }
-    if sigset_size != 8 && sigset_size != 16 {
+    if sigset_size != 8 {
         return linux_errno(22); // EINVAL
     }
-    if set != 0 && crate::memory::user::UserRange::new(set, sigset_size as usize).is_err() {
+    if set != 0 && crate::memory::user::UserRange::new(set, 8).is_err() {
         return linux_errno(14); // EFAULT
     }
     if oldset != 0 {
-        let zeros = [0u8; 16];
-        if crate::memory::user::copy_to_current(oldset, &zeros[..sigset_size as usize]).is_err() {
+        let mask = crate::sched::with_scheduler(|sched| {
+            sched.current_process().signal_state.get_blocked_mask()
+        });
+        if crate::memory::user::copy_to_current(oldset, &mask.to_ne_bytes()).is_err() {
             return linux_errno(14);
         }
     }
 
+    if set != 0 {
+        let mut wire = [0u8; 8];
+        if crate::memory::user::copy_from_current(set, &mut wire).is_err() {
+            return linux_errno(14);
+        }
+        let incoming = u64::from_ne_bytes(wire);
+        crate::sched::with_scheduler(|sched| {
+            let state = &mut sched.current_process_mut().signal_state;
+            match how {
+                0 => state.set_blocked_mask(state.get_blocked_mask() | incoming),
+                1 => state.set_blocked_mask(state.get_blocked_mask() & !incoming),
+                2 => state.set_blocked_mask(incoming),
+                _ => {}
+            }
+        });
+    }
     0
 }
 
@@ -3922,6 +4143,20 @@ fn sys_linux_mmap(frame: &mut SyscallFrame) -> u64 {
         );
         return linux_errno(22);
     };
+    if frame.rdi == 0 {
+        crate::sched::with_scheduler(|sched| {
+            let process = sched.current_process_mut();
+            if process.is_linux_compat() && process.mmap_next == 0 {
+                let brk_end = process
+                    .linux_state()
+                    .map(|state| state.brk_current)
+                    .unwrap_or(crate::process::layout::USER_HEAP_START);
+                process.mmap_next = brk_end
+                    .saturating_add(0x1000)
+                    .max(crate::process::layout::USER_HEAP_START + 0x10_0000);
+            }
+        });
+    }
     frame.r10 = native_flags as u64;
     sys_mmap(frame)
 }
@@ -3930,18 +4165,51 @@ fn sys_linux_sigaltstack(frame: &mut SyscallFrame) -> u64 {
     let new_ss = frame.rdi;
     let old_ss = frame.rsi;
 
-    if new_ss != 0 && crate::memory::user::UserRange::new(new_ss, 24).is_err() {
-        return linux_errno(14); // EFAULT
-    }
-
     if old_ss != 0 {
         let mut old = [0u8; 24];
-        old[8..16].copy_from_slice(&2u64.to_ne_bytes());
+        let Some(stack) = crate::sched::with_scheduler(|sched| {
+            sched
+                .current_process()
+                .linux_state()
+                .map(|state| state.altstack)
+        }) else {
+            return linux_errno(38);
+        };
+        old[0..8].copy_from_slice(&stack[0].to_ne_bytes());
+        old[8..16].copy_from_slice(&stack[1].to_ne_bytes());
+        old[16..24].copy_from_slice(&stack[2].to_ne_bytes());
         if crate::memory::user::copy_to_current(old_ss, &old).is_err() {
             return linux_errno(14); // EFAULT
         }
     }
 
+    if new_ss != 0 {
+        if crate::memory::user::UserRange::new(new_ss, 24).is_err() {
+            return linux_errno(14);
+        }
+        let mut wire = [0u8; 24];
+        if crate::memory::user::copy_from_current(new_ss, &mut wire).is_err() {
+            return linux_errno(14);
+        }
+        let sp = u64::from_ne_bytes(wire[0..8].try_into().unwrap());
+        let flags = u64::from_ne_bytes(wire[8..16].try_into().unwrap());
+        let size = u64::from_ne_bytes(wire[16..24].try_into().unwrap());
+        const SS_DISABLE: u64 = 2;
+        if flags & !SS_DISABLE != 0 || (flags == 0 && (sp == 0 || size < 2048)) {
+            return linux_errno(22);
+        }
+        let updated = crate::sched::with_scheduler(|sched| {
+            if let Some(state) = sched.current_process_mut().linux_state_mut() {
+                state.altstack = [sp, flags, size];
+                true
+            } else {
+                false
+            }
+        });
+        if !updated {
+            return linux_errno(38);
+        }
+    }
     0
 }
 
@@ -3958,7 +4226,7 @@ pub const ECHO: u32 = 0x00000008;
 
 /// Linux `struct termios` (x86-64 ABI).
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct LinuxTermios {
     pub c_iflag: u32,
     pub c_oflag: u32,
@@ -3969,6 +4237,9 @@ pub struct LinuxTermios {
     pub c_ispeed: u32,
     pub c_ospeed: u32,
 }
+
+const _: () =
+    assert!(core::mem::size_of::<LinuxTermios>() == sunlight_compat_linux::abi::TERMIOS_SIZE);
 
 impl LinuxTermios {
     /// Sensible cooked-mode defaults (canonical + echo, 38400 baud).
@@ -4001,6 +4272,9 @@ pub struct LinuxWinsize {
     pub ws_ypixel: u16,
 }
 
+const _: () =
+    assert!(core::mem::size_of::<LinuxWinsize>() == sunlight_compat_linux::abi::WINSIZE_SIZE);
+
 fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
     let request = frame.rsi;
@@ -4014,7 +4288,9 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
             }
             if request == TCGETS {
                 let sched = crate::sched::SCHEDULER.lock();
-                let termios = sched.current_process().linux_termios;
+                let Some(termios) = sched.current_process().linux_state().map(|s| s.termios) else {
+                    return linux_errno(38);
+                };
                 drop(sched);
                 let mut wire = [0u8; 60];
                 wire[0..4].copy_from_slice(&termios.c_iflag.to_ne_bytes());
@@ -4044,9 +4320,12 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
                 new_termios.c_ospeed = u32::from_ne_bytes(wire[56..60].try_into().unwrap());
                 let mut sched = crate::sched::SCHEDULER.lock();
                 let process = sched.current_process_mut();
-                let was_raw = (process.linux_termios.c_lflag & ICANON) == 0;
+                let Some(state) = process.linux_state_mut() else {
+                    return linux_errno(38);
+                };
+                let was_raw = (state.termios.c_lflag & ICANON) == 0;
                 let is_raw = (new_termios.c_lflag & ICANON) == 0;
-                process.linux_termios = new_termios;
+                state.termios = new_termios;
                 if was_raw != is_raw {
                     crate::serial_println!(
                         "[HELIOS] TTY mode → {} (pid={})",
@@ -4063,6 +4342,11 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
             wire[2..4].copy_from_slice(&80u16.to_ne_bytes());
             if crate::memory::user::copy_to_current(argp, &wire).is_err() {
                 return linux_errno(14);
+            }
+            let mut sched = crate::sched::SCHEDULER.lock();
+            let process = sched.current_process_mut();
+            if process.is_linux_compat() && process.name[..4].eq_ignore_ascii_case(b"note") {
+                crate::serial_println!("[HELIOS-NOTE] terminal initialized");
             }
             0
         }
@@ -4083,6 +4367,8 @@ struct LinuxIovec {
     iov_base: u64,
     iov_len: u64,
 }
+
+const _: () = assert!(core::mem::size_of::<LinuxIovec>() == sunlight_compat_linux::abi::IOVEC_SIZE);
 
 fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
     const EAGAIN: u64 = u64::MAX - 1;
@@ -4126,7 +4412,7 @@ fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
                 Some(addr) => addr,
                 None => {
                     return if total_written == 0 {
-                        u64::MAX
+                        linux_errno(14)
                     } else {
                         total_written
                     }
@@ -4159,16 +4445,9 @@ fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
             };
 
             let res = sys_write(&mut temp_frame);
-            if res == u64::MAX {
+            if res == u64::MAX || res == EAGAIN {
                 return if total_written == 0 {
-                    u64::MAX
-                } else {
-                    total_written
-                };
-            }
-            if res == EAGAIN {
-                return if total_written == 0 {
-                    EAGAIN
+                    sunlight_compat_linux::abi::from_native_result(res)
                 } else {
                     total_written
                 };
@@ -4518,10 +4797,10 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
     };
 
     if handle.is_pipe() {
-        crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
+        close_file_handle(handle);
         0
     } else if handle.is_epoll() {
-        crate::process::epoll::free_instance(handle.epoll_index());
+        close_file_handle(handle);
         0
     } else if handle.is_vfs() {
         match crate::KERNEL_VFS.lock().as_mut() {
@@ -4573,7 +4852,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
 
                     match crate::process::pipe::pipe_read(pipe_idx, &mut kernel_buf[..read_size]) {
                         crate::process::pipe::PipeResult::Ok(n) => {
-                            let is_linux = sched.current_process().is_linux_compat;
+                            let is_linux = sched.current_process().is_linux_compat();
                             if let Err(error) = crate::memory::user::copy_to_process_bytes(
                                 sched.current_process(),
                                 hhdm,
@@ -4585,7 +4864,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                             n as u64
                         }
                         crate::process::pipe::PipeResult::WouldBlock => {
-                            let is_linux = sched.current_process().is_linux_compat;
+                            let is_linux = sched.current_process().is_linux_compat();
                             if is_linux {
                                 linux_errno(11)
                             } else {
@@ -4613,7 +4892,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     };
                     match read {
                         Ok(n) => {
-                            let is_linux = sched.current_process().is_linux_compat;
+                            let is_linux = sched.current_process().is_linux_compat();
                             if let Err(error) = crate::memory::user::copy_to_process_bytes(
                                 sched.current_process(),
                                 hhdm,
@@ -4643,10 +4922,10 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     if n == 0 {
                         // Return Linux-compatible EAGAIN (errno 11) for compat processes
                         // so musl retries rather than treating it as ENOENT (errno 2).
-                        let is_linux = sched.current_process().is_linux_compat;
+                        let is_linux = sched.current_process().is_linux_compat();
                         return if is_linux { linux_errno(11) } else { EAGAIN };
                     }
-                    let is_linux = sched.current_process().is_linux_compat;
+                    let is_linux = sched.current_process().is_linux_compat();
                     if let Err(error) = crate::memory::user::copy_to_process_bytes(
                         sched.current_process(),
                         hhdm,
@@ -4658,7 +4937,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                     n as u64
                 } else {
                     // Placeholder stdio fds (0/1/2): return EAGAIN for stdin, error for stdout/stderr
-                    let is_linux = sched.current_process().is_linux_compat;
+                    let is_linux = sched.current_process().is_linux_compat();
                     match fd {
                         0 => {
                             if is_linux {
@@ -4711,7 +4990,7 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                     let pipe_idx = fd_entry.handle.pipe_index();
                     let write_size = core::cmp::min(count, 4096);
                     let mut kernel_buf = [0u8; 4096];
-                    let is_linux = sched.current_process().is_linux_compat;
+                    let is_linux = sched.current_process().is_linux_compat();
                     if let Err(error) = crate::memory::user::copy_from_process_bytes(
                         sched.current_process(),
                         hhdm,
@@ -4731,7 +5010,7 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                     let vfs_handle = sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
                     let write_size = count.min(4096);
                     let mut kernel_buf = [0u8; 4096];
-                    let is_linux = sched.current_process().is_linux_compat;
+                    let is_linux = sched.current_process().is_linux_compat();
                     if let Err(error) = crate::memory::user::copy_from_process_bytes(
                         sched.current_process(),
                         hhdm,
@@ -4779,7 +5058,7 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                     let tab = fd_entry.handle.tty_tab() as usize;
                     let write_size = count.min(4096);
                     let mut kernel_buf = [0u8; 4096];
-                    let is_linux = sched.current_process().is_linux_compat;
+                    let is_linux = sched.current_process().is_linux_compat();
                     if let Err(error) = crate::memory::user::copy_from_process_bytes(
                         sched.current_process(),
                         hhdm,
@@ -4787,6 +5066,15 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                         &mut kernel_buf[..write_size],
                     ) {
                         return user_memory_failure_for(is_linux, error);
+                    }
+                    if is_linux
+                        && core::str::from_utf8(&kernel_buf[..write_size])
+                            .map(|text| text.contains("LINUX-PROBE"))
+                            .unwrap_or(false)
+                    {
+                        if let Ok(text) = core::str::from_utf8(&kernel_buf[..write_size]) {
+                            crate::serial_println!("[HELIOS-PROBE] {}", text.trim_end());
+                        }
                     }
                     crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]) as u64
                 } else {
@@ -4799,7 +5087,7 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                             }
                             let mut bytes = [0u8; 256];
                             let copy_len = count.min(bytes.len());
-                            let is_linux = sched.current_process().is_linux_compat;
+                            let is_linux = sched.current_process().is_linux_compat();
                             if let Err(error) = crate::memory::user::copy_from_process_bytes(
                                 sched.current_process(),
                                 hhdm,
@@ -4902,14 +5190,29 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
-fn sys_dup(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] dup requested");
-    u64::MAX
+fn sys_dup(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let mut sched = crate::sched::SCHEDULER.lock();
+    match sched.current_process_mut().fd_table.dup(fd) {
+        Ok(new_fd) => new_fd as u64,
+        Err(_) => ERR_EBADF,
+    }
 }
 
-fn sys_dup2(_frame: &mut SyscallFrame) -> u64 {
-    crate::serial_println!("[SYSCALL] dup2 requested");
-    u64::MAX
+fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
+    let old_fd = frame.rdi as i32;
+    let new_fd = frame.rsi as i32;
+    let mut sched = crate::sched::SCHEDULER.lock();
+    match sched.current_process_mut().fd_table.dup2(old_fd, new_fd) {
+        Ok((fd, displaced)) => {
+            drop(sched);
+            if let Some(handle) = displaced {
+                close_file_handle(handle);
+            }
+            fd as u64
+        }
+        Err(_) => ERR_EBADF,
+    }
 }
 
 /// Syscall: pipe (47)
@@ -4932,6 +5235,7 @@ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
             if crate::memory::user::copy_to_process_bytes(process, hhdm, frame.rdi, &output)
                 .is_err()
             {
+                abandon_process_fds(&mut sched, [read_fd, write_fd]);
                 return u64::MAX;
             }
             0 // Success
@@ -4958,14 +5262,20 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
     let buf_ptr = frame.rsi;
 
-    let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat);
+    let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat());
     // Read vfs_handle from fd table; release scheduler before taking VFS lock.
     let vfs_handle = {
         let sched = crate::sched::SCHEDULER.lock();
         match sched.current_process().fd_table.get(fd) {
             Some(e) if e.handle.is_vfs() => e.handle.vfs_handle(),
-            Some(_) => return u64::MAX, // ESPIPE
-            None => return u64::MAX,    // EBADF
+            Some(_) => {
+                return if is_linux {
+                    linux_errno(sunlight_compat_linux::abi::ESPIPE as u64)
+                } else {
+                    u64::MAX
+                };
+            }
+            None => return if is_linux { linux_errno(9) } else { ERR_EBADF },
         }
     };
 
@@ -5036,43 +5346,71 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
 /// did) made `read_to_string` and friends believe the descriptor was
 /// broken, so files appeared empty.
 fn sys_fcntl(frame: &mut SyscallFrame) -> u64 {
-    // Linux fcntl command numbers.
-    const F_DUPFD: u64 = 0;
-    const F_GETFD: u64 = 1;
-    const F_SETFD: u64 = 2;
-    const F_GETFL: u64 = 3;
-    const F_SETFL: u64 = 4;
-    const F_DUPFD_CLOEXEC: u64 = 1030;
+    use sunlight_compat_linux::abi::{
+        FD_CLOEXEC, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD, F_SETFL, O_CLOEXEC,
+    };
 
     let fd = frame.rdi as i32;
     let cmd = frame.rsi;
+    let arg = frame.rdx;
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let proc = sched.current_process_mut();
 
-    // Validate the descriptor exists; read its open flags for F_GETFL.
     let open_flags = match proc.fd_table.get(fd) {
         Some(desc) => desc.flags,
-        None => return u64::MAX, // EBADF
+        None => return ERR_EBADF,
     };
 
     match cmd {
-        // No CLOEXEC tracking yet: report cleared and accept sets as no-ops.
-        F_GETFD => 0,
-        F_SETFD => 0,
-        // Access mode lives in the low bits of `flags` (O_RDONLY=0,
-        // O_WRONLY=1, O_RDWR=2), matching Linux's O_ACCMODE encoding.
-        F_GETFL => open_flags as u64,
-        // We don't honour O_NONBLOCK/O_APPEND changes; accept silently.
-        F_SETFL => 0,
-        // Duplication of descriptors isn't supported yet.
+        F_GETFD => {
+            if open_flags as u64 & O_CLOEXEC != 0 {
+                FD_CLOEXEC
+            } else {
+                0
+            }
+        }
+        F_SETFD => {
+            let Some(entry) = proc.fd_table.get_mut(fd) else {
+                return ERR_EBADF;
+            };
+            if arg & FD_CLOEXEC != 0 {
+                entry.flags |= O_CLOEXEC as u32;
+            } else {
+                entry.flags &= !(O_CLOEXEC as u32);
+            }
+            0
+        }
+        F_GETFL => (open_flags as u64) & !O_CLOEXEC,
+        F_SETFL => {
+            // Honour O_APPEND; O_NONBLOCK is already the pipe/tty behaviour.
+            const STATUS_MASK: u32 = (sunlight_compat_linux::abi::O_APPEND
+                | sunlight_compat_linux::abi::O_NONBLOCK)
+                as u32;
+            let Some(entry) = proc.fd_table.get_mut(fd) else {
+                return ERR_EBADF;
+            };
+            entry.flags = (entry.flags & !STATUS_MASK) | (arg as u32 & STATUS_MASK);
+            0
+        }
         F_DUPFD | F_DUPFD_CLOEXEC => {
-            crate::serial_println!("[SYSCALL] fcntl: F_DUPFD unsupported (fd={})", fd);
-            u64::MAX
+            let min_fd = arg as i32;
+            let cloexec = cmd == F_DUPFD_CLOEXEC;
+            match proc.fd_table.dup_from(fd, min_fd, cloexec) {
+                Ok(new_fd) => new_fd as u64,
+                Err(crate::process::fd_table::FdError::NoSlots) => {
+                    if proc.is_linux_compat() {
+                        linux_errno(sunlight_compat_linux::abi::EMFILE as u64)
+                    } else {
+                        u64::MAX
+                    }
+                }
+                Err(_) => ERR_EBADF,
+            }
         }
         other => {
             crate::serial_println!("[SYSCALL] fcntl: unsupported cmd={} (fd={})", other, fd);
-            u64::MAX
+            ERR_EINVAL
         }
     }
 }
@@ -5129,7 +5467,7 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
                 offset,
                 error
             );
-            if crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat) {
+            if crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat()) {
                 match error {
                     crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),
                     crate::process::mmap::MmapError::NoMemory => linux_errno(12),
@@ -5152,7 +5490,7 @@ fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
     let length = frame.rsi;
 
     let mut sched = crate::sched::SCHEDULER.lock();
-    let linux_compat = sched.current_process().is_linux_compat;
+    let linux_compat = sched.current_process().is_linux_compat();
     let mut pmm = crate::PMM.lock();
     let result = crate::process::mmap::sys_munmap(addr, length, &mut pmm, &mut sched);
     drop(pmm);
@@ -5177,7 +5515,7 @@ fn sys_mprotect(frame: &mut SyscallFrame) -> u64 {
     let prot = frame.rdx as u32;
 
     let mut sched = crate::sched::SCHEDULER.lock();
-    let linux_compat = sched.current_process().is_linux_compat;
+    let linux_compat = sched.current_process().is_linux_compat();
     let pmm = crate::PMM.lock();
     let result = crate::process::mmap::sys_mprotect(addr, length, prot, &pmm, &mut sched);
     drop(pmm);

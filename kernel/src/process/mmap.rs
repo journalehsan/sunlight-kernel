@@ -362,7 +362,9 @@ fn map_anonymous_kind(
             .union(RegionPolicy::MAY_REPLACE)
             .union(RegionPolicy::MAY_CHANGE_PROTECTION)
             .union(RegionPolicy::OWNER_MANAGED),
-        MappingKind::Brk => RegionPolicy::MAY_REPLACE.union(RegionPolicy::OWNER_MANAGED),
+        MappingKind::Brk => RegionPolicy::MAY_UNMAP
+            .union(RegionPolicy::MAY_REPLACE)
+            .union(RegionPolicy::OWNER_MANAGED),
         _ => return Err(MmapError::InternalInvariant),
     };
     let region = MappingRegion::new(
@@ -895,11 +897,11 @@ fn expected_anonymous_leaf(
     hhdm_offset: VirtAddr,
 ) -> Result<ExpectedMapping, MmapError> {
     let owner = match (region.kind, region.policy, region.backing) {
-        (MappingKind::Anonymous, policy, RegionBacking::AnonymousOwner(owner))
-            if policy.contains(RegionPolicy::MAY_UNMAP) =>
-        {
-            owner
-        }
+        (
+            MappingKind::Anonymous | MappingKind::Brk,
+            policy,
+            RegionBacking::AnonymousOwner(owner),
+        ) if policy.contains(RegionPolicy::MAY_UNMAP) => owner,
         _ => return invariant_rejection(),
     };
     let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address))

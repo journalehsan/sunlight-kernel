@@ -1634,7 +1634,9 @@ impl Scheduler {
             None => return,
         };
         if self.processes[idx].state == ProcessState::BlockedOnTimer {
-            self.processes[idx].linux_poll_wake_tick = None;
+            if let Some(state) = self.processes[idx].linux_state_mut() {
+                state.poll_wake_tick = None;
+            }
             let ticks_blocked = self
                 .global_tick
                 .saturating_sub(self.processes[idx].block_start_tick);
@@ -1660,7 +1662,10 @@ impl Scheduler {
             return;
         };
         let ticks = timeout_ticks.max(1);
-        self.processes[idx].linux_poll_wake_tick = Some(self.global_tick.saturating_add(ticks));
+        let Some(state) = self.processes[idx].linux_state_mut() else {
+            return;
+        };
+        state.poll_wake_tick = Some(self.global_tick.saturating_add(ticks));
         self.processes[idx].block_start_tick = self.global_tick;
         self.set_state(idx, ProcessState::BlockedOnTimer);
     }
@@ -1669,7 +1674,9 @@ impl Scheduler {
     pub fn wake_linux_poll_tty(&mut self, tab: usize) {
         for idx in 0..self.processes.len() {
             let waiting_on_tab = self.processes[idx].state == ProcessState::BlockedOnTimer
-                && self.processes[idx].linux_poll_wake_tick.is_some()
+                && self.processes[idx]
+                    .linux_state()
+                    .is_some_and(|state| state.poll_wake_tick.is_some())
                 && self.processes[idx].fd_table.get(0).is_some_and(|entry| {
                     entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab
                 });
@@ -1684,7 +1691,8 @@ impl Scheduler {
         for idx in 0..self.processes.len() {
             let expired = self.processes[idx].state == ProcessState::BlockedOnTimer
                 && self.processes[idx]
-                    .linux_poll_wake_tick
+                    .linux_state()
+                    .and_then(|state| state.poll_wake_tick)
                     .is_some_and(|deadline| deadline <= now);
             if expired {
                 self.wake_linux_poll_index(idx);
@@ -1693,7 +1701,9 @@ impl Scheduler {
     }
 
     fn wake_linux_poll_index(&mut self, idx: usize) {
-        self.processes[idx].linux_poll_wake_tick = None;
+        if let Some(state) = self.processes[idx].linux_state_mut() {
+            state.poll_wake_tick = None;
+        }
         self.processes[idx].state = ProcessState::Ready;
         self.remove_from_ready_queues(idx);
         if let Some(cpu_id) = self.live_owner_core(idx) {
@@ -1742,7 +1752,9 @@ impl Scheduler {
             | ProcessState::BlockedOnTimer
             | ProcessState::BlockedOnIo
             | ProcessState::Suspended => {
-                self.processes[idx].linux_poll_wake_tick = None;
+                if let Some(state) = self.processes[idx].linux_state_mut() {
+                    state.poll_wake_tick = None;
+                }
                 self.processes[idx].state = ProcessState::Ready;
                 self.processes[idx].block_start_tick = self.global_tick;
                 self.remove_from_ready_queues(idx);
@@ -1908,6 +1920,19 @@ impl Scheduler {
                     active_mask
                 );
                 return;
+            }
+        }
+
+        let leaked_fds = self.processes[idx].fd_table.take_all_handles();
+        for handle in leaked_fds.into_iter().flatten() {
+            if handle.is_pipe() {
+                crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
+            } else if handle.is_epoll() {
+                crate::process::epoll::free_instance(handle.epoll_index());
+            } else if handle.is_vfs() {
+                if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                    let _ = vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle()));
+                }
             }
         }
 

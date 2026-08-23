@@ -4,10 +4,10 @@ use super::pmm::PhysicalMemoryManager;
 pub use super::swap_slot::SlotId;
 use super::swap_slot::{MAX_SLOT_GENERATION, SLOT_INDEX_MASK};
 use super::zram_codec::{self, CodecError, MAX_COMPRESSED_SIZE, PAGE_SIZE};
-use ::sunlight_ipc::swap_policy::{SwapPolicy, MAX_POOLS, POLICY_VERSION};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use spin::Mutex;
+use sunlight_ipc::swap_policy::{SwapPolicy, MAX_POOLS, POLICY_VERSION};
 use x86_64::{PhysAddr, VirtAddr};
 
 pub const ZRAM_BLOCK_SIZE: usize = PAGE_SIZE;

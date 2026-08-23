@@ -2,8 +2,14 @@
 //!
 //! Translates x86_64 Linux syscall numbers to SunlightOS native syscalls and
 //! implements a mock POSIX access-control shim for intercepted file opens.
+//!
+//! The ABI module is the authoritative Linux x86_64 contract (errno, flags,
+//! syscall numbers, struct sizes). Kernel Linux shims must use it rather than
+//! scattering numeric Linux constants.
 
 #![no_std]
+
+pub mod abi;
 
 use heapless::{LinearMap, String, Vec};
 
@@ -357,91 +363,82 @@ pub fn init_phase3_demo_rules() {
 /// Translate Linux x86_64 syscall number to SunlightOS native syscall.
 ///
 /// Returns the native syscall number if translation succeeds,
-/// or an error code (negative) if unsupported.
+/// or a negative shim/ENOSYS code if the kernel must handle Linux ABI
+/// itself. Unknown numbers return [`abi::SHIM_ENOSYS`].
 pub fn translate_syscall(linux_nr: u64) -> i64 {
+    use abi::*;
     match linux_nr {
-        // Tier 1: minimal I/O (needed for all musl programs)
-        0 => 42,   // read → SunlightOS Read(42)
-        1 => 43,   // write → SunlightOS Write(43)
-        20 => -14, // writev → special Linux ABI shim
-        2 => 40,   // open → SunlightOS Open(40)
-        3 => 41,   // close → SunlightOS Close(41)
-        24 => 21,  // sched_yield → SunlightOS ProcessYield(21)
-        7 => -7,   // poll → special bounded readiness stub
-        16 => -13, // ioctl → stub as ENOTTY for tty probing
-        60 => 20,  // exit(code) → SunlightOS ProcessExit(20)
-        231 => 20, // exit_group(code) → SunlightOS ProcessExit(20)
+        SYS_READ => SUN_READ,
+        SYS_WRITE => SUN_WRITE,
+        SYS_WRITEV => SHIM_WRITEV,
+        SYS_OPEN => SUN_OPEN,
+        SYS_CLOSE => SUN_CLOSE,
+        SYS_SCHED_YIELD => SUN_PROCESS_YIELD,
+        SYS_POLL => SHIM_POLL,
+        SYS_IOCTL => SHIM_IOCTL,
+        SYS_EXIT | SYS_EXIT_GROUP => SUN_PROCESS_EXIT,
 
-        // Tier 2: file descriptor operations
-        5 => 48,  // fstat → SunlightOS Fstat(48)
-        8 => 44,  // lseek → SunlightOS Lseek(44)
-        32 => 46, // dup2 → SunlightOS Dup2(46)
+        SYS_FSTAT => SUN_FSTAT,
+        SYS_LSEEK => SUN_LSEEK,
+        // Linux 32 is dup(2), not dup2(2). Mapping it to Dup2 treated rsi as
+        // the destination fd (uninitialized) and skipped the native Dup path.
+        SYS_DUP => SUN_DUP,
+        SYS_DUP2 => SUN_DUP2,
 
-        // Tier 3: process management
-        39 => 33,  // getpid → SunlightOS Getpid(33)
-        186 => 33, // gettid → current pid as single-thread tid
-        57 => 30,  // fork → SunlightOS Fork(30)
-        58 => -17, // vfork → explicit unsupported process duplication
-        56 => -18, // clone → explicit flag-aware unsupported handling
-        59 => 31,  // execve → SunlightOS Exec(31)
-        61 => 32,  // wait4 → SunlightOS Waitpid(32)
-        218 => -4, // set_tid_address → special single-thread emulation
-        273 => -5, // set_robust_list → accepted no-op for musl startup
-        334 => -6, // rseq → Linux ENOSYS so libc disables rseq
+        SYS_GETPID | SYS_GETTID => SUN_GETPID,
+        SYS_FORK => SUN_FORK,
+        SYS_VFORK => SHIM_VFORK,
+        SYS_CLONE => SHIM_CLONE,
+        SYS_EXECVE => SUN_EXEC,
+        // wait4's argument layout and return value are not native waitpid.
+        // Prefer a clean ENOSYS over writing the wrong object into *status.
+        SYS_WAIT4 => SHIM_WAIT4,
+        SYS_SET_TID_ADDRESS => SHIM_SET_TID_ADDRESS,
+        SYS_SET_ROBUST_LIST => SHIM_SET_ROBUST_LIST,
+        SYS_RSEQ => SHIM_RSEQ,
 
-        // Tier 4: memory management
-        9 => -11,  // mmap → special Linux ABI flag scrubber
-        11 => 51,  // munmap → SunlightOS Munmap(51)
-        12 => -2,  // brk → special handling
-        10 => 52,  // mprotect → SunlightOS Mprotect(52)
-        158 => -3, // arch_prctl → special handling for TLS setup
+        SYS_MMAP => SHIM_MMAP,
+        SYS_MUNMAP => SUN_MUNMAP,
+        SYS_BRK => SHIM_BRK,
+        SYS_MPROTECT => SUN_MPROTECT,
+        SYS_ARCH_PRCTL => SHIM_ARCH_PRCTL,
 
-        // Tier 5: signals
-        13 => -8,   // rt_sigaction → special Linux ABI shim
-        14 => -9,   // rt_sigprocmask → special Linux ABI shim
-        62 => 72,   // kill → SunlightOS Kill(72)
-        131 => -12, // sigaltstack → special Linux ABI shim
-        200 => -10, // tkill → special Linux ABI shim
+        SYS_RT_SIGACTION => SHIM_RT_SIGACTION,
+        SYS_RT_SIGPROCMASK => SHIM_RT_SIGPROCMASK,
+        SYS_KILL => SUN_KILL,
+        SYS_SIGALTSTACK => SHIM_SIGALTSTACK,
+        SYS_TKILL => SHIM_TKILL,
 
-        // Process information
-        4 => -28, // stat → special Linux stat-by-path shim
-        6 => -28, // lstat → special Linux stat-by-path shim
+        SYS_STAT | SYS_LSTAT | SYS_NEWFSTATAT => SHIM_NEWFSTATAT,
 
-        // Tier 6: modern Linux fs variants (preferred by Rust std)
-        72 => 49,   // fcntl → SunlightOS Fcntl(49) — same arg layout
-        257 => -15, // openat → sys_open(40) via frame shift in kernel
-        79 => 64,   // getcwd → SunlightOS Getcwd(64)
-        80 => 63,   // chdir → SunlightOS Chdir(63)
-        318 => -16, // getrandom → Linux ABI shim backed by kernel entropy
-        228 => -19, // clock_gettime → special Linux clock_gettime shim
-        82 => 66,   // rename → SunlightOS Rename(66) (same argument layout)
-        264 => -20, // renameat → special Linux rename/renameat shim
-        87 => 65,   // unlink → SunlightOS Unlink(65) (same argument layout)
-        263 => -27, // unlinkat → special Linux unlinkat shim
-        262 => -28, // newfstatat → special Linux stat-by-path shim
-        35 => -21,  // nanosleep → special Linux nanosleep shim
+        SYS_FCNTL => SUN_FCNTL,
+        SYS_OPENAT => SHIM_OPENAT,
+        SYS_GETCWD => SUN_GETCWD,
+        SYS_CHDIR => SUN_CHDIR,
+        SYS_GETRANDOM => SHIM_GETRANDOM,
+        SYS_CLOCK_GETTIME => SHIM_CLOCK_GETTIME,
+        SYS_RENAME => SUN_RENAME,
+        SYS_RENAMEAT => SHIM_RENAMEAT,
+        SYS_UNLINK => SUN_UNLINK,
+        SYS_UNLINKAT => SHIM_UNLINKAT,
+        SYS_NANOSLEEP => SHIM_NANOSLEEP,
 
-        // Tier 7: epoll + pipe for crossterm/mio TUI input (helios-note)
-        // x86_64 numbers from asm/unistd_64.h
-        213 => -22, // epoll_create
-        291 => -22, // epoll_create1
-        233 => -23, // epoll_ctl
-        232 => -24, // epoll_wait
-        281 => -24, // epoll_pwait (mask ignored)
-        22 => 47,   // pipe → SunlightOS Pipe(47)
-        293 => -25, // pipe2 → Pipe with flags
-        53 => -26,  // socketpair → AF_UNIX self-pipe compatibility
+        SYS_EPOLL_CREATE | SYS_EPOLL_CREATE1 => SHIM_EPOLL_CREATE,
+        SYS_EPOLL_CTL => SHIM_EPOLL_CTL,
+        SYS_EPOLL_WAIT | SYS_EPOLL_PWAIT => SHIM_EPOLL_WAIT,
+        SYS_PIPE => SUN_PIPE,
+        SYS_PIPE2 => SHIM_PIPE2,
+        SYS_SOCKETPAIR => SHIM_SOCKETPAIR,
 
-        // Default: unsupported
-        _ => -38, // ENOSYS
+        _ => SHIM_ENOSYS,
     }
 }
 
-pub const LINUX_MAP_PRIVATE: u64 = 0x02;
-pub const LINUX_MAP_FIXED: u64 = 0x10;
-pub const LINUX_MAP_ANONYMOUS: u64 = 0x20;
-pub const LINUX_MAP_FIXED_NOREPLACE: u64 = 0x10_0000;
-pub const LINUX_MAP_STACK: u64 = 0x20_000;
+pub const LINUX_MAP_PRIVATE: u64 = abi::MAP_PRIVATE;
+pub const LINUX_MAP_FIXED: u64 = abi::MAP_FIXED;
+pub const LINUX_MAP_ANONYMOUS: u64 = abi::MAP_ANONYMOUS;
+pub const LINUX_MAP_FIXED_NOREPLACE: u64 = abi::MAP_FIXED_NOREPLACE;
+pub const LINUX_MAP_STACK: u64 = abi::MAP_STACK;
 
 /// Translate the Linux anonymous-mapping flags supported by Helios into the
 /// strict native mmap surface. MAP_STACK is advisory on Linux, so it is
@@ -494,6 +491,7 @@ pub fn needs_special_handling(linux_nr: u64) -> bool {
             | 281
             | 293
             | 53
+            | 61
     )
 }
 
@@ -511,9 +509,12 @@ mod tests {
         assert_eq!(translate_syscall(12), -2); // brk
         assert_eq!(translate_syscall(158), -3); // arch_prctl
         assert_eq!(translate_syscall(186), 33); // gettid
+        assert_eq!(translate_syscall(32), 45); // dup → SunlightOS Dup
+        assert_eq!(translate_syscall(33), 46); // dup2 → SunlightOS Dup2
         assert_eq!(translate_syscall(57), 30); // fork → native fail-closed gate
         assert_eq!(translate_syscall(58), -17); // vfork → Linux ENOSYS
         assert_eq!(translate_syscall(56), -18); // clone → flag-aware Linux ENOSYS
+        assert_eq!(translate_syscall(61), -29); // wait4 → explicit unsupported
         assert_eq!(translate_syscall(218), -4); // set_tid_address
         assert_eq!(translate_syscall(273), -5); // set_robust_list
         assert_eq!(translate_syscall(334), -6); // rseq
@@ -546,6 +547,12 @@ mod tests {
         assert_eq!(translate_syscall(22), 47); // pipe
         assert_eq!(translate_syscall(293), -25); // pipe2
         assert_eq!(translate_syscall(53), -26); // socketpair
+        assert_eq!(translate_syscall(999), -38);
+        assert_eq!(translate_syscall(abi::SYS_FUTEX), -38);
+        assert_eq!(translate_syscall(abi::SYS_UNAME), -38);
+        assert_eq!(translate_syscall(abi::SYS_MKDIR), -38);
+        assert_eq!(translate_syscall(abi::SYS_GETPPID), -38);
+        assert_eq!(translate_syscall(abi::SYS_DUP3), -38);
     }
 
     #[test]
@@ -597,7 +604,9 @@ mod tests {
         assert!(needs_special_handling(9));
         assert!(needs_special_handling(131));
         assert!(needs_special_handling(318));
+        assert!(needs_special_handling(61));
         assert!(!needs_special_handling(1));
+        assert!(!needs_special_handling(32));
     }
 
     #[test]

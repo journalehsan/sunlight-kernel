@@ -121,12 +121,9 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --rel
 # loader (sunlight-elf parse_elf_header) only accepts ET_EXEC; -no-pie + crt-static
 # is required because musl otherwise emits a static-PIE that loads as DYN.
 RUSTFLAGS="-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
-# Patch EI_OSABI (byte 7) to ELFOSABI_LINUX (3) so the kernel's is_linux_elf()
-# recognizes this musl binary as a Linux-compat process. Rust/musl outputs
-# ELFOSABI_NONE (0) by default; we stamp it to 3 post-link, matching the
-# treatment applied to hello-linux.elf.
-printf '\x03' | dd of="$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note" \
-    bs=1 seek=7 conv=notrunc 2>/dev/null
+"$SCRIPT_DIR/stamp_helios_elf.sh" \
+    "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note"
+"$SCRIPT_DIR/stamp_helios_elf.sh" "$PROJECT_ROOT/hello-linux/hello-linux.elf"
 
 # --- Step 2: Build the kernel ELF ---
 echo "[build] Building kernel..."

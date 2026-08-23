@@ -350,7 +350,7 @@ impl RegionLedger {
             if overlap_start >= overlap_end {
                 continue;
             }
-            if region.kind != MappingKind::Anonymous
+            if !matches!(region.kind, MappingKind::Anonymous | MappingKind::Brk)
                 || !region.policy.contains(RegionPolicy::MAY_UNMAP)
             {
                 return Err(LedgerError::PolicyRejected);

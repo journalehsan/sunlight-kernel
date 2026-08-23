@@ -12,6 +12,10 @@ extern crate std;
 
 pub const EM_X86_64: u16 = 0x3E;
 pub const ELFOSABI_LINUX: u8 = 3;
+/// Explicit Helios/Linux packaging marker stored in the ELF identification
+/// padding bytes (EI_PAD, offsets 9..15).  OSABI=3 remains accepted for
+/// backwards compatibility, but OSABI=0 Linux images must carry this marker.
+pub const HELIOS_LINUX_MARKER: [u8; 6] = *b"HLNX01";
 
 const PT_LOAD: u32 = 1;
 const PT_DYNAMIC: u32 = 2;
@@ -96,6 +100,32 @@ pub enum ElfError {
     EntryNotExecutable,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Personality {
+    Native,
+    Linux,
+    Unknown,
+}
+
+/// Select the ABI personality before any userspace instruction executes.
+///
+/// Sunlight-native images use the normal ELFOSABI_NONE value (0).  Existing
+/// Helios images stamped ELFOSABI_LINUX (3) remain valid.  New Linux images
+/// may keep OSABI=0 when the explicit Helios marker is present.  Any other
+/// OSABI is rejected as ambiguous rather than guessed.
+pub fn classify_personality(elf_bytes: &[u8]) -> Personality {
+    if elf_bytes.len() < 16 || elf_bytes[0..4] != [0x7f, b'E', b'L', b'F'] {
+        return Personality::Unknown;
+    }
+    if elf_bytes[0x07] == ELFOSABI_LINUX || elf_bytes[9..15] == HELIOS_LINUX_MARKER {
+        Personality::Linux
+    } else if elf_bytes[0x07] == 0 {
+        Personality::Native
+    } else {
+        Personality::Unknown
+    }
+}
+
 /// Parse ELF64 header and verify it is a static ET_EXEC for x86-64.
 pub fn parse_elf_header(elf_bytes: &[u8]) -> Result<ElfHeader, ElfError> {
     if elf_bytes.len() < 64 {
@@ -123,6 +153,18 @@ pub fn parse_elf_header(elf_bytes: &[u8]) -> Result<ElfHeader, ElfError> {
     let phoff = u64::from_le_bytes(elf_bytes[0x20..0x28].try_into().unwrap());
     let phentsize = u16::from_le_bytes(elf_bytes[0x36..0x38].try_into().unwrap());
     let phnum = u16::from_le_bytes(elf_bytes[0x38..0x3A].try_into().unwrap());
+    // ELF64 program headers are 56 bytes. A smaller e_phentsize used to panic
+    // later when the walker sliced p_offset at [0x08..0x10].
+    if phentsize != 56 {
+        return Err(ElfError::Truncated);
+    }
+    let table_len = (phnum as u64)
+        .checked_mul(phentsize as u64)
+        .ok_or(ElfError::Truncated)?;
+    let table_end = phoff.checked_add(table_len).ok_or(ElfError::Truncated)?;
+    if table_end > elf_bytes.len() as u64 {
+        return Err(ElfError::Truncated);
+    }
     if entry == 0 {
         return Err(ElfError::InvalidEntry);
     }
@@ -147,9 +189,21 @@ pub fn for_each_load_segment<F>(
 where
     F: FnMut(&ElfSegment) -> Result<(), ElfError>,
 {
+    if header.phentsize < 56 {
+        return Err(ElfError::Truncated);
+    }
     for i in 0..header.phnum {
-        let ph_start = header.phoff as usize + (i as usize * header.phentsize as usize);
-        let ph_end = ph_start + header.phentsize as usize;
+        let Some(ph_start) = header.phoff.checked_add(
+            (i as u64)
+                .checked_mul(header.phentsize as u64)
+                .ok_or(ElfError::Truncated)?,
+        ) else {
+            return Err(ElfError::Truncated);
+        };
+        let ph_start = usize::try_from(ph_start).map_err(|_| ElfError::Truncated)?;
+        let ph_end = ph_start
+            .checked_add(header.phentsize as usize)
+            .ok_or(ElfError::Truncated)?;
         if ph_end > elf_bytes.len() {
             return Err(ElfError::Truncated);
         }
@@ -519,5 +573,42 @@ mod tests {
         let mut elf = build_elf(0x40_0100, &[], 0x100);
         elf[0x07] = ELFOSABI_LINUX;
         assert_eq!(parse_elf_header(&elf).unwrap().osabi, ELFOSABI_LINUX);
+    }
+
+    #[test]
+    fn rejects_undersized_program_headers_without_panicking() {
+        let mut elf = build_elf(
+            0x40_0100,
+            &[Phdr {
+                p_type: PT_LOAD,
+                flags: PF_X | 0x4,
+                offset: 0x200,
+                vaddr: 0x40_0000,
+                filesz: 0x100,
+                memsz: 0x100,
+            }],
+            0x1000,
+        );
+        elf[0x36..0x38].copy_from_slice(&4u16.to_le_bytes());
+        assert_eq!(parse_elf_header(&elf).unwrap_err(), ElfError::Truncated);
+    }
+
+    #[test]
+    fn personality_selection_is_explicit_and_fail_closed() {
+        let mut native = [0u8; 64];
+        native[0..4].copy_from_slice(b"\x7fELF");
+        native[0x07] = 0;
+        assert_eq!(classify_personality(&native), Personality::Native);
+
+        native[0x07] = ELFOSABI_LINUX;
+        assert_eq!(classify_personality(&native), Personality::Linux);
+
+        native[0x07] = 0;
+        native[9..15].copy_from_slice(&HELIOS_LINUX_MARKER);
+        assert_eq!(classify_personality(&native), Personality::Linux);
+
+        native[9..15].fill(0);
+        native[0x07] = 1;
+        assert_eq!(classify_personality(&native), Personality::Unknown);
     }
 }

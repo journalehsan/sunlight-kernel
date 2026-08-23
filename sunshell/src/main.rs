@@ -1178,17 +1178,33 @@ mod sunlight {
             if cmd.contains('/') {
                 return if stat_is_file(cmd) {
                     Some(alloc::string::String::from(cmd))
+                } else if matches!(
+                    cmd,
+                    "/bin/helios-probe"
+                        | "/usr/bin/helios-probe"
+                        | "/bin/note"
+                        | "/usr/bin/note"
+                        | "/bin/hello-linux"
+                        | "/usr/bin/hello-linux"
+                ) {
+                    // These static Linux compatibility workloads are embedded
+                    // by the kernel rather than exposed through the native VFS.
+                    Some(alloc::string::String::from(cmd))
                 } else {
                     None
                 };
             }
+            let embedded_linux = matches!(cmd, "helios-probe" | "note" | "hello-linux");
             for dir in self.env.path_entries() {
                 let candidate = if dir.ends_with('/') {
                     alloc::format!("{}{}", dir, cmd)
                 } else {
                     alloc::format!("{}/{}", dir, cmd)
                 };
-                if stat_is_file(&candidate) {
+                if stat_is_file(&candidate)
+                    || (embedded_linux
+                        && (candidate.starts_with("/bin/") || candidate.starts_with("/usr/bin/")))
+                {
                     return Some(candidate);
                 }
             }

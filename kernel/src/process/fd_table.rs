@@ -232,18 +232,33 @@ impl FdTable {
         }
     }
 
-    /// Open a new file descriptor
+    /// Open a new file descriptor in the lowest unused slot, including 0–2.
     pub fn open(
         &mut self,
         handle: FileHandle,
         rights: CapRights,
         flags: u32,
     ) -> Result<i32, FdError> {
+        self.open_from(0, handle, rights, flags, 0)
+    }
+
+    fn open_from(
+        &mut self,
+        min_fd: i32,
+        handle: FileHandle,
+        rights: CapRights,
+        flags: u32,
+        offset: usize,
+    ) -> Result<i32, FdError> {
+        if min_fd < 0 {
+            return Err(FdError::InvalidFd);
+        }
+        let start = min_fd as usize;
         let slot = self
             .entries
             .iter()
             .enumerate()
-            .skip(3)
+            .skip(start)
             .find_map(|(idx, entry)| entry.is_none().then_some(idx))
             .ok_or(FdError::NoSlots)?;
         let fd = slot as i32;
@@ -252,7 +267,7 @@ impl FdTable {
             handle,
             rights,
             flags,
-            offset: 0,
+            offset,
         });
 
         Ok(fd)
@@ -278,11 +293,12 @@ impl FdTable {
     }
 
     /// Remove descriptors marked close-on-exec and return their backing
-    /// handles so the caller can release VFS resources.
+    /// handles so the caller can release VFS resources. Standard streams are
+    /// included: Linux CLOEXEC applies to fds 0–2 as well.
     pub fn take_cloexec_handles(&mut self) -> [Option<FileHandle>; 256] {
         const O_CLOEXEC: u32 = 0x0008_0000;
         let mut handles = [None; 256];
-        for (idx, entry) in self.entries.iter_mut().enumerate().skip(3) {
+        for (idx, entry) in self.entries.iter_mut().enumerate() {
             if entry
                 .as_ref()
                 .map(|descriptor| descriptor.flags & O_CLOEXEC != 0)
@@ -290,6 +306,16 @@ impl FdTable {
             {
                 handles[idx] = entry.take().map(|descriptor| descriptor.handle);
             }
+        }
+        handles
+    }
+
+    /// Consume every live descriptor. Used on process exit so backend objects
+    /// (VFS handles, pipes, epoll instances) are released exactly once.
+    pub fn take_all_handles(&mut self) -> [Option<FileHandle>; 256] {
+        let mut handles = [None; 256];
+        for (idx, entry) in self.entries.iter_mut().enumerate() {
+            handles[idx] = entry.take().map(|descriptor| descriptor.handle);
         }
         handles
     }
@@ -343,29 +369,51 @@ impl FdTable {
         Ok(())
     }
 
-    /// Duplicate a file descriptor
+    /// Duplicate a file descriptor into the lowest unused slot.
+    /// The new descriptor does not inherit close-on-exec (Linux/POSIX dup).
     pub fn dup(&mut self, fd: i32) -> Result<i32, FdError> {
-        let orig = *self.get(fd).ok_or(FdError::InvalidFd)?;
-        self.open(orig.handle, orig.rights, orig.flags)
+        self.dup_from(fd, 0, false)
     }
 
-    /// Duplicate fd to specific fd number (dup2)
-    pub fn dup2(&mut self, old_fd: i32, new_fd: i32) -> Result<i32, FdError> {
+    /// Duplicate `fd` into the lowest slot `>= min_fd`.
+    /// `cloexec` sets the new descriptor's close-on-exec bit (F_DUPFD_CLOEXEC).
+    pub fn dup_from(&mut self, fd: i32, min_fd: i32, cloexec: bool) -> Result<i32, FdError> {
+        const O_CLOEXEC: u32 = 0x0008_0000;
+        let orig = *self.get(fd).ok_or(FdError::InvalidFd)?;
+        let mut flags = orig.flags & !O_CLOEXEC;
+        if cloexec {
+            flags |= O_CLOEXEC;
+        }
+        self.open_from(min_fd, orig.handle, orig.rights, flags, orig.offset)
+    }
+
+    /// Duplicate `old_fd` onto `new_fd`.
+    ///
+    /// Returns the displaced backing handle when `new_fd` already referred to
+    /// a different object. The caller must close that handle exactly once.
+    /// `old_fd == new_fd` is a no-op that returns `(new_fd, None)` if valid.
+    /// The new descriptor does not inherit close-on-exec.
+    pub fn dup2(&mut self, old_fd: i32, new_fd: i32) -> Result<(i32, Option<FileHandle>), FdError> {
         if new_fd < 0 || new_fd >= 256 {
             return Err(FdError::InvalidFd);
         }
+        let orig = *self.get(old_fd).ok_or(FdError::InvalidFd)?;
+        if old_fd == new_fd {
+            return Ok((new_fd, None));
+        }
 
-        let orig = self.get(old_fd).ok_or(FdError::InvalidFd)?;
-        let desc = FileDescriptor {
+        const O_CLOEXEC: u32 = 0x0008_0000;
+        let displaced = self.entries[new_fd as usize]
+            .take()
+            .map(|descriptor| descriptor.handle);
+        self.entries[new_fd as usize] = Some(FileDescriptor {
             fd: new_fd,
             handle: orig.handle,
             rights: orig.rights,
-            flags: orig.flags,
+            flags: orig.flags & !O_CLOEXEC,
             offset: orig.offset,
-        };
-
-        self.entries[new_fd as usize] = Some(desc);
-        Ok(new_fd)
+        });
+        Ok((new_fd, displaced))
     }
 
     /// Deep-copy this table into a new heap allocation.
@@ -443,6 +491,60 @@ mod tests {
         assert!(table.get(cloexec).is_none());
         assert!(table.get(normal).is_some());
         assert!(table.get(0).is_some());
+    }
+
+    #[test]
+    fn cloexec_on_standard_streams_is_honoured() {
+        let mut table = FdTable::new();
+        table.get_mut(1).unwrap().flags |= 0x0008_0000;
+        let taken = table.take_cloexec_handles();
+        assert_eq!(taken[1], Some(FileHandle(1)));
+        assert!(table.get(1).is_none());
+        assert!(table.get(0).is_some());
+        assert!(table.get(2).is_some());
+    }
+
+    #[test]
+    fn closed_standard_stream_is_reused() {
+        let mut table = FdTable::new();
+        table.close(0).unwrap();
+        assert_eq!(table.open(FileHandle(99), READ, 0).unwrap(), 0);
+    }
+
+    #[test]
+    fn dup_clears_cloexec_on_the_new_descriptor() {
+        let mut table = FdTable::new();
+        let src = table.open(FileHandle::vfs(7), READ, 0x0008_0000).unwrap();
+        let dst = table.dup(src).unwrap();
+        assert_eq!(table.get(src).unwrap().flags & 0x0008_0000, 0x0008_0000);
+        assert_eq!(table.get(dst).unwrap().flags & 0x0008_0000, 0);
+        assert_eq!(table.get(dst).unwrap().handle, FileHandle::vfs(7));
+    }
+
+    #[test]
+    fn dup2_returns_displaced_handle_and_clears_cloexec() {
+        let mut table = FdTable::new();
+        let old = table.open(FileHandle::vfs(7), READ, 0x0008_0000).unwrap();
+        let occupied = table.open(FileHandle::vfs(8), READ, 0).unwrap();
+        let (new_fd, displaced) = table.dup2(old, occupied).unwrap();
+        assert_eq!(new_fd, occupied);
+        assert_eq!(displaced, Some(FileHandle::vfs(8)));
+        assert_eq!(table.get(new_fd).unwrap().handle, FileHandle::vfs(7));
+        assert_eq!(table.get(new_fd).unwrap().flags & 0x0008_0000, 0);
+        let (same, none) = table.dup2(old, old).unwrap();
+        assert_eq!(same, old);
+        assert_eq!(none, None);
+    }
+
+    #[test]
+    fn take_all_handles_empties_the_table() {
+        let mut table = FdTable::new();
+        let _ = table.open(FileHandle::vfs(7), READ, 0).unwrap();
+        let taken = table.take_all_handles();
+        assert_eq!(taken[0], Some(FileHandle(0)));
+        assert_eq!(taken[3], Some(FileHandle::vfs(7)));
+        assert!(table.get(0).is_none());
+        assert!(table.get(3).is_none());
     }
 
     #[test]

@@ -1,0 +1,13 @@
+[HELIOS] Linux ELF compatibility layer loaded
+[KBD]  Key injection enabled (phase=helios-proven-tier1
+[EXEC] Linux ELF detected
+LINUX-PROBE argv-env PASS
+LINUX-PROBE auxv PASS
+LINUX-PROBE dup-cloexec PASS
+LINUX-PROBE brk PASS
+LINUX-PROBE mmap PASS
+LINUX-PROBE nanosleep PASS
+LINUX-PROBE invalid-syscall PASS
+LINUX-PROBE invalid-pointer PASS
+LINUX-PROBE getrandom PASS
+LINUX-PROBE TIER1 PASS

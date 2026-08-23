@@ -80,6 +80,43 @@ pub struct DeferredIpcReply {
     pub target: IpcReplyTarget,
 }
 
+/// Linux-only process state. Keeping these fields together prevents the
+/// compatibility ABI from leaking into native process semantics.
+#[derive(Debug, Clone, Copy)]
+pub struct LinuxProcessState {
+    pub brk_base: u64,
+    pub brk_current: u64,
+    pub poll_wake_tick: Option<u64>,
+    pub termios: crate::arch::x86_64::syscall::LinuxTermios,
+    pub altstack: [u64; 3],
+    pub tid_address: u64,
+    pub robust_list_head: u64,
+    pub robust_list_len: u64,
+    pub note_ready_logged: bool,
+}
+
+impl LinuxProcessState {
+    pub const fn new() -> Self {
+        Self {
+            brk_base: 0,
+            brk_current: 0,
+            poll_wake_tick: None,
+            termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
+            altstack: [0, 2, 0],
+            tid_address: 0,
+            robust_list_head: 0,
+            robust_list_len: 0,
+            note_ready_logged: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ProcessPersonality {
+    Native,
+    Linux(LinuxProcessState),
+}
+
 pub struct Process {
     pub pid: usize,
     pub ppid: usize, // parent pid
@@ -123,9 +160,7 @@ pub struct Process {
     /// Completed receive deadline retained until that receive syscall retries.
     pub ipc_recv_timeout: Option<(u64, u32)>,
     pub ipc_recv_generation: u64,
-    /// Absolute scheduler tick for a Linux poll/epoll timeout. The process
-    /// remains blocked until this tick or until TTY input wakes it early.
-    pub linux_poll_wake_tick: Option<u64>,
+    pub personality: ProcessPersonality,
     pub pending_reply_wait: Option<(u32, IpcMsg)>,
     pub ipc_reply_target: Option<IpcReplyTarget>,
     pub deferred_reply_targets: VecDeque<DeferredIpcReply>,
@@ -133,7 +168,6 @@ pub struct Process {
     pub fd_table: alloc::boxed::Box<fd_table::FdTable>,
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
-    pub is_linux_compat: bool, // Phase 4.5: true if running Linux ELF binary
     pub trusted_display_service: bool,
     /// Set only by the kernel's embedded-path resolver for sunlight-swapd.
     pub trusted_swap_admin_service: bool,
@@ -159,10 +193,6 @@ pub struct Process {
     /// When set, this process may only resolve nameserver entries that map to
     /// the declared service capability profile.
     pub service_lookup_restrictions: Option<u64>,
-    /// Linux compatibility heap base for `brk(2)`.
-    pub brk_base: u64,
-    /// Current Linux compatibility heap break.
-    pub brk_current: u64,
     /// Next free virtual address for anonymous `mmap(addr=0)` allocations.
     /// 0 means "uninitialized"; the mmap handler lazily seeds it to the
     /// mmap region base on first use and bumps it per mapping so successive
@@ -205,9 +235,6 @@ pub struct Process {
     /// spawned for a tab and inherited by children, so a spawned app's fd0/fd1
     /// route to that tab's kernel stdin/stdout rings (see process::tty_io).
     pub tty_tab: Option<u8>,
-
-    /// Saved Linux terminal settings for ioctl(TCGETS/TCSETS) emulation.
-    pub linux_termios: crate::arch::x86_64::syscall::LinuxTermios,
 
     /// Shared memory regions this process owns (via shm_alloc / shm_create).
     pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedRegion>,
@@ -273,6 +300,24 @@ pub struct Capability {
 }
 
 impl Process {
+    pub fn is_linux_compat(&self) -> bool {
+        matches!(self.personality, ProcessPersonality::Linux(_))
+    }
+
+    pub fn linux_state(&self) -> Option<&LinuxProcessState> {
+        match &self.personality {
+            ProcessPersonality::Linux(state) => Some(state),
+            ProcessPersonality::Native => None,
+        }
+    }
+
+    pub fn linux_state_mut(&mut self) -> Option<&mut LinuxProcessState> {
+        match &mut self.personality {
+            ProcessPersonality::Linux(state) => Some(state),
+            ProcessPersonality::Native => None,
+        }
+    }
+
     /// Returns the process name as a `&str`, interpreting the fixed byte array
     /// up to the first NUL byte.
     pub fn name_str(&self) -> &str {
@@ -344,7 +389,7 @@ impl Process {
             ipc_recv_deadline: None,
             ipc_recv_timeout: None,
             ipc_recv_generation: 0,
-            linux_poll_wake_tick: None,
+            personality: ProcessPersonality::Native,
             pending_reply_wait: None,
             ipc_reply_target: None,
             deferred_reply_targets: VecDeque::new(),
@@ -352,7 +397,6 @@ impl Process {
             fd_table: fd_table::FdTable::new_boxed(),
             capability_mode: false,
             signal_state: signal::SignalState::new(),
-            is_linux_compat: false, // default to native SunlightOS
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
@@ -366,8 +410,6 @@ impl Process {
             trusted_service_manager: false,
             trusted_auth_broker: false,
             service_lookup_restrictions: None,
-            brk_base: 0,
-            brk_current: 0,
             mmap_next: 0,
             sched_type: 0,           // SCHED_NORMAL
             weight: 1024,            // default CFS weight
@@ -383,7 +425,6 @@ impl Process {
             aging_counter: 0,        // No aging yet
             wait_child: None,        // Not waiting on a child
             tty_tab: None,           // Attached to a TTY tab only when spawned for one
-            linux_termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
             wd_period_ticks: None,
@@ -508,7 +549,7 @@ impl Process {
             ipc_recv_deadline: None,
             ipc_recv_timeout: None,
             ipc_recv_generation: 0,
-            linux_poll_wake_tick: None,
+            personality: ProcessPersonality::Native,
             pending_reply_wait: None,
             ipc_reply_target: None,
             deferred_reply_targets: VecDeque::new(),
@@ -516,7 +557,6 @@ impl Process {
             fd_table,
             capability_mode: false,
             signal_state: signal::SignalState::new(),
-            is_linux_compat: false,
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
@@ -530,8 +570,6 @@ impl Process {
             trusted_service_manager: false,
             trusted_auth_broker: false,
             service_lookup_restrictions: None,
-            brk_base: 0,
-            brk_current: 0,
             mmap_next: 0,
             sched_type: 0,
             weight: 1024,
@@ -547,7 +585,6 @@ impl Process {
             aging_counter: 0,
             wait_child: None,
             tty_tab,
-            linux_termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
             owned_shared: Vec::new(),
             mapped_shared: Vec::new(),
             wd_period_ticks: None,

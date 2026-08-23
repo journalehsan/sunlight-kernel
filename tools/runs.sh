@@ -383,8 +383,9 @@ if [ "$BUILD_FIRST" = true ]; then
     # sunshell (includes localectl builtin + pulls in support libs e.g. sunlight-locale, sunlight-tz)
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --release --features sunlight --no-default-features --target x86_64-unknown-none
     RUSTFLAGS="-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
-    printf '\x03' | dd of="$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note" \
-        bs=1 seek=7 conv=notrunc 2>/dev/null
+    "$SCRIPT_DIR/stamp_helios_elf.sh" \
+        "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note"
+    "$SCRIPT_DIR/stamp_helios_elf.sh" "$PROJECT_ROOT/hello-linux/hello-linux.elf"
     # The kernel embeds the freshly built service ELFs with include_bytes!.
     # Force rustc to refresh those bytes even when Cargo misses artifact mtimes.
     # Also force sunlightd rebuild so new service units are baked in.

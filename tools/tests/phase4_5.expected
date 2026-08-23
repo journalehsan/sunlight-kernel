@@ -1,5 +1,6 @@
 # Phase 4.5 test: Linux ELF syscall translation (Helios compat layer)
 [HELIOS] Linux ELF compatibility layer loaded
+[HELIOS-ABI] write=43 dup=45 wait4=-29 enosys=-38 enoent=-2 eagain=-11 stat=144 timespec=16 ok
 [SCHED] CFS-style scheduler (round-robin baseline)
 ✓ Stabilization and Hardening scheduler verification PASSED
 [SunlightOS] Ring 3 Expansion OK

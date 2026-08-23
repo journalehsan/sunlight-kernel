@@ -325,21 +325,12 @@ fn map_segment(
     Some(())
 }
 
-/// Detect if an ELF binary is a Linux-compatible ELF (Phase 4.5).
-/// Returns true if e_ident[EI_OSABI] == ELFOSABI_LINUX (3).
+/// Return the deterministic ABI personality selected by the ELF metadata.
+pub fn personality(elf_bytes: &[u8]) -> sunlight_elf::Personality {
+    sunlight_elf::classify_personality(elf_bytes)
+}
+
+/// Detect if an ELF binary is a Linux-compatible ELF.
 pub fn is_linux_elf(elf_bytes: &[u8]) -> bool {
-    // ELF64 e_ident[EI_OSABI] at offset 0x07
-    const EI_OSABI: usize = 0x07;
-
-    if elf_bytes.len() < 8 {
-        return false;
-    }
-
-    // Check ELF magic first
-    if elf_bytes[0..4] != [0x7f, b'E', b'L', b'F'] {
-        return false;
-    }
-
-    // Check OSABI field
-    elf_bytes[EI_OSABI] == sunlight_elf::ELFOSABI_LINUX
+    matches!(personality(elf_bytes), sunlight_elf::Personality::Linux)
 }

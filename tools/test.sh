@@ -98,6 +98,20 @@ case "$PHASE" in
         PASS_LABEL="Ring 3 Expansion"
         NEED_DISK=false
         ;;
+    helios-proven-tier1)
+        EXPECTED_FILE="tools/tests/helios_proven_tier1.expected"
+        FINAL_MARKER="LINUX-PROBE TIER1 PASS"
+        PASS_LABEL="Helios Proven Tier 1"
+        NEED_DISK=false
+        TIMEOUT=150
+        ;;
+    helios-note-regression)
+        EXPECTED_FILE="tools/tests/helios_note_regression.expected"
+        FINAL_MARKER="[HELIOS-NOTE] interactive-ready"
+        PASS_LABEL="Helios Note regression"
+        NEED_DISK=false
+        TIMEOUT=120
+        ;;
     phase5.0)
         EXPECTED_FILE="tools/tests/phase5_0.expected"
         FINAL_MARKER="[NET]  virtio-net OK"
@@ -575,8 +589,15 @@ if [[ "$NEED_DISK" == "true" ]]; then
 fi
 
 # --- Step 2: Build kernel ---
+if [[ "$PHASE" == "helios-proven-tier1" ]]; then
+    "$SCRIPT_DIR/build_helios_probes.sh" >>"$BUILD_LOG" 2>&1
+fi
+if [[ "$PHASE" == "helios-note-regression" ]]; then
+    RUSTFLAGS="-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie" \
+        cargo build --package helios-note --release --target x86_64-unknown-linux-musl >>"$BUILD_LOG" 2>&1
+fi
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-gui-live-action-activation-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
+if [[ "$PHASE" == "helios-proven-tier1" || "$PHASE" == "helios-note-regression" || "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-gui-live-action-activation-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -631,6 +652,10 @@ elif [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHAS
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=welcome_wizard)
 elif [[ "$PHASE" == "phase4.5" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase4.5)
+elif [[ "$PHASE" == "helios-proven-tier1" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=helios-proven-tier1)
+elif [[ "$PHASE" == "helios-note-regression" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=helios-note-regression)
 elif [[ "$PHASE" == phase5* || "$PHASE" == phase5x* || "$PHASE" == "dns_hosts" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE="$PHASE")
 fi
