@@ -2750,6 +2750,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
             0,
             alloc::vec::Vec::new(),
             None,
+            0,
         )
     }
 

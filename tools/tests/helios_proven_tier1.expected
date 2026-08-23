@@ -9,5 +9,7 @@ LINUX-PROBE mmap PASS
 LINUX-PROBE nanosleep PASS
 LINUX-PROBE invalid-syscall PASS
 LINUX-PROBE invalid-pointer PASS
+LINUX-PROBE winsize rows=38 cols=138 PASS
+LINUX-PROBE winsize-invalid-pointer PASS
 LINUX-PROBE getrandom PASS
 LINUX-PROBE TIER1 PASS

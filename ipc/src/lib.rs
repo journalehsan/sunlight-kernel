@@ -19,6 +19,11 @@ pub const IPC_MAX_CAPS: usize = 2;
 pub const INIT_NAMESERVER_ENDPOINT: u64 = 0;
 pub const WISEOWL_DISPLAY_LIFECYCLE_ENDPOINT: &str = "wiseowl.display-lifecycle.v1";
 pub const WISEOWL_CONTROL_PANEL_LIFECYCLE_ENDPOINT: &str = "wiseowl.control-lifecycle.v1";
+/// Kernel TTY-ring namespace reserved for brokered graphical PTYs. Legacy
+/// framebuffer shell tabs occupy the low range; PTY session ids are added to
+/// this base so the two frontends cannot overwrite each other's geometry or
+/// byte rings.
+pub const PTY_TTY_TAB_BASE: u16 = 128;
 
 #[allow(non_snake_case)]
 pub mod WiseOwlLifecycleMsg {
@@ -62,6 +67,12 @@ pub enum SunlightSyscall {
     TtyStdinPush = 23,
     TtyStdoutPull = 24,
     ProcessIsAlive = 25,
+    /// PTY-broker-only publication of a generation-qualified terminal size.
+    TtyPublishWinsize = 104,
+    /// PTY-broker-only attachment of a process to a PTY session.
+    TtyAttachProcess = 105,
+    /// Return the current process's controlling-terminal size, if attached.
+    TtyGetWinsize = 106,
     WaitPid = 32,
     GetPid = 33,
     Getuid = 35,
@@ -879,6 +890,83 @@ pub mod PtyMsg {
     pub const STATE_SLAVE_OPEN: u64 = 1 << 1;
     pub const STATE_CONTROL_OPEN: u64 = 1 << 2;
     pub const STATE_CLOSING: u64 = 1 << 3;
+}
+
+/// Native terminal geometry contract and PTY wire representation.
+///
+/// Columns/rows describe fully drawable cells. Pixel dimensions describe the
+/// exact terminal grid viewport (not compositor chrome) when known; zero means
+/// unspecified. The packed form matches the PTY protocol word and Linux's four
+/// `u16` winsize fields without exposing either ABI's structure directly.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TerminalWinsize {
+    pub columns: u16,
+    pub rows: u16,
+    pub pixel_width: u16,
+    pub pixel_height: u16,
+}
+
+impl TerminalWinsize {
+    pub const MAX_COLUMNS: u16 = 512;
+    pub const MAX_ROWS: u16 = 256;
+    pub const MAX_PIXELS: u16 = 16_384;
+
+    pub const fn new(columns: u16, rows: u16, pixel_width: u16, pixel_height: u16) -> Self {
+        Self {
+            columns,
+            rows,
+            pixel_width,
+            pixel_height,
+        }
+    }
+
+    pub const fn is_valid(self) -> bool {
+        self.columns != 0
+            && self.rows != 0
+            && self.columns <= Self::MAX_COLUMNS
+            && self.rows <= Self::MAX_ROWS
+            && self.pixel_width <= Self::MAX_PIXELS
+            && self.pixel_height <= Self::MAX_PIXELS
+    }
+
+    pub const fn to_wire(self) -> u64 {
+        self.columns as u64
+            | ((self.rows as u64) << 16)
+            | ((self.pixel_width as u64) << 32)
+            | ((self.pixel_height as u64) << 48)
+    }
+
+    pub const fn from_wire(word: u64) -> Option<Self> {
+        let size = Self {
+            columns: word as u16,
+            rows: (word >> 16) as u16,
+            pixel_width: (word >> 32) as u16,
+            pixel_height: (word >> 48) as u16,
+        };
+        if size.is_valid() {
+            Some(size)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod terminal_winsize_tests {
+    use super::TerminalWinsize;
+
+    #[test]
+    fn native_geometry_probe_round_trips_exact_values() {
+        let size = TerminalWinsize::new(173, 61, 1384, 976);
+        assert_eq!(TerminalWinsize::from_wire(size.to_wire()), Some(size));
+    }
+
+    #[test]
+    fn invalid_and_truncating_geometry_is_rejected() {
+        assert_eq!(TerminalWinsize::from_wire(0), None);
+        assert!(!TerminalWinsize::new(513, 25, 0, 0).is_valid());
+        assert!(!TerminalWinsize::new(80, 257, 0, 0).is_valid());
+    }
 }
 
 #[allow(non_snake_case)]
@@ -4680,6 +4768,58 @@ pub fn process_is_alive(pid: u64) -> bool {
     // SAFETY: ProcessIsAlive takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ProcessIsAlive, pid, 0, 0, 0, 0, 0, 0) };
     ret == 1
+}
+
+/// Publish or clear a PTY's authoritative winsize in the kernel TTY cache.
+/// Only the trusted PTY broker is authorized by the kernel. `None` clears the
+/// exact generation during session teardown.
+pub fn tty_publish_winsize(
+    session_id: u64,
+    generation: u64,
+    size: Option<TerminalWinsize>,
+) -> bool {
+    let wire = size.map_or(0, TerminalWinsize::to_wire);
+    // SAFETY: all arguments are scalar values validated again by the kernel.
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::TtyPublishWinsize,
+            session_id,
+            generation,
+            wire,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 0
+}
+
+/// Attach `pid` to a generation-qualified PTY. Children inherit this identity.
+/// Only the trusted PTY broker is authorized by the kernel.
+pub fn tty_attach_process(pid: u64, session_id: u64, generation: u64) -> bool {
+    // SAFETY: all arguments are scalar values; authorization and liveness are
+    // checked by the kernel.
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::TtyAttachProcess,
+            pid,
+            session_id,
+            generation,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 0
+}
+
+/// Query the calling process's controlling-terminal geometry.
+pub fn tty_winsize() -> Option<TerminalWinsize> {
+    // SAFETY: this syscall takes no pointers and only reads caller metadata.
+    let (wire, _) = unsafe { raw_syscall(SunlightSyscall::TtyGetWinsize, 0, 0, 0, 0, 0, 0, 0) };
+    TerminalWinsize::from_wire(wire)
 }
 
 /// Non-blocking child wait. Returns the exit code once `pid` exits, or `None`

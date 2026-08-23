@@ -9,9 +9,10 @@ use sunlight_ipc::{
     ipc_reply_and_try_recv, kill,
     launch_trace::{LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
-    sysinfo, tty_stdin_push, tty_stdout_pull, unpack_key_event, CapabilityToken, IpcMsg, KbdMsg,
-    MouseMsg, PointerReport, SessionAction, SessionComponentState, SessionKind, SessionMsg,
-    SessionState, SgpMsg, ShellMsg, SpawnMsg, TzMsg, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
+    sysinfo, tty_publish_winsize, tty_stdin_push, tty_stdout_pull, unpack_key_event,
+    CapabilityToken, IpcMsg, KbdMsg, MouseMsg, PointerReport, SessionAction, SessionComponentState,
+    SessionKind, SessionMsg, SessionState, SgpMsg, ShellMsg, SpawnMsg, TerminalWinsize, TzMsg,
+    SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
 };
 use sunlight_libc::sun_exec;
 use sunlight_telemetry::Telemetry;
@@ -1073,6 +1074,7 @@ pub struct TerminalGeometry {
     pub rows: u32,
     pub viewport_offset: usize,
     pub max_scrollback: usize,
+    authoritative: bool,
 }
 
 impl TerminalGeometry {
@@ -1082,13 +1084,17 @@ impl TerminalGeometry {
             rows: 24,
             viewport_offset: 0,
             max_scrollback: 256,
+            authoritative: false,
         }
     }
 
-    fn update(&mut self, cols: u32, rows: u32, viewport_offset: usize) {
+    fn update(&mut self, cols: u32, rows: u32, viewport_offset: usize) -> bool {
+        let changed = !self.authoritative || self.cols != cols || self.rows != rows;
         self.cols = cols;
         self.rows = rows;
         self.viewport_offset = viewport_offset;
+        self.authoritative = true;
+        changed
     }
 
     fn set_viewport(&mut self, offset: usize) {
@@ -1102,6 +1108,7 @@ static mut TERMINAL_GEOMETRY: [TerminalGeometry; MAX_TABS] = [TerminalGeometry {
     rows: 24,
     viewport_offset: 0,
     max_scrollback: 256,
+    authoritative: false,
 }; MAX_TABS];
 
 #[derive(Clone, Copy)]
@@ -2498,9 +2505,36 @@ fn render_active_shell_fb(
     let (cols, rows) = sunlight_tui::terminal_dims(fb_w, fb_h);
 
     // Update terminal geometry state
-    unsafe {
+    let geometry_changed = unsafe {
         let viewport_offset = SCROLLBACK_STATE[active_tab].viewport_offset;
-        TERMINAL_GEOMETRY[active_tab].update(cols as u32, rows as u32, viewport_offset);
+        TERMINAL_GEOMETRY[active_tab].update(cols as u32, rows as u32, viewport_offset)
+    };
+    if geometry_changed {
+        if let Some(tab) = active_shell_tab(tabs, active_tab) {
+            let (cell_width, cell_height) = sunlight_tui::terminal_cell_metrics();
+            let packed = u16::try_from(cols)
+                .ok()
+                .zip(u16::try_from(rows).ok())
+                .and_then(|(columns, rows)| {
+                    let pixel_width = u32::from(columns).checked_mul(cell_width)?;
+                    let pixel_height = u32::from(rows).checked_mul(cell_height)?;
+                    Some(TerminalWinsize::new(
+                        columns,
+                        rows,
+                        u16::try_from(pixel_width).ok()?,
+                        u16::try_from(pixel_height).ok()?,
+                    ))
+                });
+            if let Some(size) = packed.filter(|size| size.is_valid()) {
+                if tty_publish_winsize(tab.shell_id, 0, Some(size)) {
+                    debug_log(&alloc::format!(
+                        "[TTY-GEOMETRY] rows={} cols={}\n",
+                        size.rows,
+                        size.columns
+                    ));
+                }
+            }
+        }
     }
 
     // A foreground app owns the screen, so suppress the shell prompt/input line.
@@ -2616,8 +2650,14 @@ fn reset_login(login: &mut LoginScreen) {
 }
 
 fn reset_tabs(tabs: &mut [ShellTab; MAX_TABS], tab_count: &mut usize, active_tab: &mut usize) {
-    for tab in tabs.iter_mut() {
+    for (index, tab) in tabs.iter_mut().enumerate() {
+        if tab.pid != 0 {
+            let _ = tty_publish_winsize(tab.shell_id, 0, None);
+        }
         *tab = ShellTab::empty();
+        unsafe {
+            TERMINAL_GEOMETRY[index] = TerminalGeometry::new();
+        }
     }
     *tab_count = 0;
     *active_tab = 0;
@@ -2692,6 +2732,9 @@ fn spawn_tab(
 
     let index = *tab_count;
     tabs[index] = ShellTab::empty();
+    unsafe {
+        TERMINAL_GEOMETRY[index] = TerminalGeometry::new();
+    }
     tabs[index].shell_id = shell_id;
     tabs[index].pid = spawn_reply.words[0];
     tabs[index].session_pid = spawn_reply.words[0];
@@ -2735,6 +2778,9 @@ fn spawn_tab_from_active_shell(
 
     let index = *tab_count;
     tabs[index] = ShellTab::empty();
+    unsafe {
+        TERMINAL_GEOMETRY[index] = TerminalGeometry::new();
+    }
     tabs[index].shell_id = shell_id;
     tabs[index].pid = reply.words[0];
     tabs[index].session_pid = reply.words[0];
@@ -2805,6 +2851,10 @@ fn close_active_tab(
     }
 
     let session_pid = tabs[*active_tab].session_pid;
+    let closing_shell_id = tabs[*active_tab].shell_id;
+    if tabs[*active_tab].pid != 0 {
+        let _ = tty_publish_winsize(closing_shell_id, 0, None);
+    }
     if session_pid != 0 {
         if let Some(proc_cap) = nameserver_lookup("proc") {
             let kill_msg = IpcMsg::with_label(ProcOp::TERMINATE_SESSION)
@@ -2816,8 +2866,14 @@ fn close_active_tab(
 
     for i in *active_tab..(*tab_count - 1) {
         tabs[i] = tabs[i + 1];
+        unsafe {
+            TERMINAL_GEOMETRY[i] = TERMINAL_GEOMETRY[i + 1];
+        }
     }
     tabs[*tab_count - 1] = ShellTab::empty();
+    unsafe {
+        TERMINAL_GEOMETRY[*tab_count - 1] = TerminalGeometry::new();
+    }
     *tab_count -= 1;
     if *active_tab >= *tab_count {
         *active_tab = *tab_count - 1;

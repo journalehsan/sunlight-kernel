@@ -115,7 +115,9 @@
 //!
 //! ## Deferred / non-goals
 //!
-//! - Resize correctness (rows/cols are still fixed).
+//! - Linux `SIGWINCH` delivery remains deferred until Helios can construct and
+//!   return from real userspace signal frames. Winsize state itself updates
+//!   immediately and is re-queryable after existing input/poll wakes.
 //! - OSC window-title escape support — tab titles are `Tab N` today.
 //! - Drag-to-reorder tabs, split panes, session restore.
 //! - PTY reads/writes use short bounded IPC calls so a delayed PTY server
@@ -126,13 +128,13 @@ use sunlight_ipc::{
     debug_log, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
     monotonic_millis, nameserver_lookup, process_yield, CapabilityToken, IpcCallError, IpcMsg,
-    ProcessExit, PtyMsg,
+    ProcessExit, PtyMsg, TerminalWinsize,
 };
 use sunlight_libc as libc;
 use sunlight_tty::TerminalGrid as ModelGrid;
 use sunlight_ui::{
     widgets::{Label, StatusBar},
-    App, Canvas, Event, HBox, Point, Rect, VecText, Window, WindowConfig,
+    App, Canvas, Event, HBox, Point, Rect, VecText, Window, WindowConfig, WindowEvent,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -146,8 +148,72 @@ const PAD_X: u32 = 8;
 const PAD_Y: u32 = 4;
 const CELL_W: u32 = 8;
 const CELL_H: u32 = 16;
-const CONTENT_COLS: usize = ((WIN_W - PAD_X * 2) / CELL_W) as usize;
-const CONTENT_ROWS: usize = ((WIN_H - TAB_H - FOOTER_H - PAD_Y * 2) / CELL_H) as usize;
+/// Allocation bounds for six independent grids in the terminal's reclaiming
+/// 16 MiB heap. This covers a complete 4K client at the current cell metrics.
+const MAX_RENDER_COLUMNS: u32 = 512;
+const MAX_RENDER_ROWS: u32 = 128;
+
+/// Client-area layout shared by sizing, rendering, and PTY publication.
+/// `content` includes a one-pixel terminal border; only `content.inset(1)` is
+/// drawable text space. Right/bottom remainders smaller than a complete cell
+/// are intentionally ignored and remain painted with the terminal background.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TerminalLayout {
+    client_width: u32,
+    client_height: u32,
+    content: Rect,
+    footer: Rect,
+    winsize: TerminalWinsize,
+}
+
+impl TerminalLayout {
+    fn new(client_width: u32, client_height: u32) -> Self {
+        let content_width = client_width.saturating_sub(PAD_X.saturating_mul(2));
+        let content_height = client_height
+            .saturating_sub(TAB_H)
+            .saturating_sub(FOOTER_H)
+            .saturating_sub(PAD_Y.saturating_mul(2));
+        let grid_width = content_width.saturating_sub(2);
+        let grid_height = content_height.saturating_sub(2);
+        let columns = (grid_width / CELL_W)
+            .max(1)
+            .min(MAX_RENDER_COLUMNS)
+            .min(TerminalWinsize::MAX_COLUMNS as u32) as u16;
+        let rows = (grid_height / CELL_H)
+            .max(1)
+            .min(MAX_RENDER_ROWS)
+            .min(TerminalWinsize::MAX_ROWS as u32) as u16;
+        let pixel_width = u16::try_from(u32::from(columns).saturating_mul(CELL_W))
+            .unwrap_or(TerminalWinsize::MAX_PIXELS);
+        let pixel_height = u16::try_from(u32::from(rows).saturating_mul(CELL_H))
+            .unwrap_or(TerminalWinsize::MAX_PIXELS);
+        Self {
+            client_width,
+            client_height,
+            content: Rect::new(
+                PAD_X as i32,
+                TAB_H.saturating_add(PAD_Y) as i32,
+                content_width,
+                content_height,
+            ),
+            footer: Rect::new(
+                0,
+                client_height.saturating_sub(FOOTER_H) as i32,
+                client_width,
+                FOOTER_H.min(client_height),
+            ),
+            winsize: TerminalWinsize::new(columns, rows, pixel_width, pixel_height),
+        }
+    }
+
+    const fn cols(self) -> usize {
+        self.winsize.columns as usize
+    }
+
+    const fn rows(self) -> usize {
+        self.winsize.rows as usize
+    }
+}
 
 const KEY_BACKSPACE: u8 = 0x0E;
 const KEY_ENTER: u8 = 0x1C;
@@ -210,25 +276,6 @@ const PTY_IO_TIMEOUT_MS: u64 = 100;
 /// the rest of the buffer is abandoned.
 const PTY_WRITE_RETRIES: usize = 4;
 
-struct BumpAllocator;
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 3 * 1024 * 1024] = [0; 3 * 1024 * 1024];
-        static mut NEXT: usize = 0;
-        let aligned = (NEXT + layout.align() - 1) & !(layout.align() - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
-}
-#[cfg(not(test))]
-#[global_allocator]
-static ALLOC: BumpAllocator = BumpAllocator;
-
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -276,13 +323,16 @@ impl PtySession {
     /// Uses [`ipc_call_timeout`] rather than the unbounded `ipc_call` — see
     /// the module-level doc comment for why an unbounded call here is what
     /// causes the whole-terminal hang this file fixes.
-    fn create_timeout(cap: CapabilityToken, timeout_ms: u64) -> Result<Self, PtyIoError> {
-        let initial_size = CONTENT_COLS as u64 | ((CONTENT_ROWS as u64) << 16);
+    fn create_timeout(
+        cap: CapabilityToken,
+        size: TerminalWinsize,
+        timeout_ms: u64,
+    ) -> Result<Self, PtyIoError> {
         let reply = ipc_call_timeout(
             cap,
             IpcMsg::with_label(PtyMsg::CREATE)
                 .word(0, PtyMsg::FLAG_CANONICAL | PtyMsg::FLAG_ECHO)
-                .word(1, initial_size),
+                .word(1, size.to_wire()),
             timeout_ms,
         )?;
         if reply.label != PtyMsg::REPLY || reply.cap_count < 2 {
@@ -304,6 +354,42 @@ impl PtySession {
                 .word(0, self.id)
                 .word(1, self.generation)
                 .word(2, mode_flags)
+                .with_cap(0, self.control),
+            timeout_ms,
+        )?;
+        if reply.label != PtyMsg::REPLY {
+            return Err(PtyIoError::Rejected);
+        }
+        Ok(())
+    }
+
+    fn set_window_size_timeout(
+        &self,
+        size: TerminalWinsize,
+        timeout_ms: u64,
+    ) -> Result<bool, PtyIoError> {
+        let reply = ipc_call_timeout(
+            self.service_cap,
+            IpcMsg::with_label(PtyMsg::SET_WINDOW_SIZE)
+                .word(0, self.id)
+                .word(1, self.generation)
+                .word(2, size.to_wire())
+                .with_cap(0, self.control),
+            timeout_ms,
+        )?;
+        if reply.label != PtyMsg::REPLY {
+            return Err(PtyIoError::Rejected);
+        }
+        Ok(reply.words[2] != 0)
+    }
+
+    fn set_foreground_process_timeout(&self, pid: u64, timeout_ms: u64) -> Result<(), PtyIoError> {
+        let reply = ipc_call_timeout(
+            self.service_cap,
+            IpcMsg::with_label(PtyMsg::SET_FOREGROUND_PROCESS)
+                .word(0, self.id)
+                .word(1, self.generation)
+                .word(2, pid)
                 .with_cap(0, self.control),
             timeout_ms,
         )?;
@@ -408,6 +494,11 @@ impl PtySession {
     /// [`CLOSE_TIMEOUT_MS`] so a stuck server can't wedge tab close/teardown
     /// either.
     fn close(&self) {
+        #[cfg(test)]
+        {
+            return;
+        }
+        #[cfg(not(test))]
         let _ = ipc_call_timeout(
             self.service_cap,
             IpcMsg::with_label(PtyMsg::CLOSE_SESSION)
@@ -844,6 +935,7 @@ enum SpawnStep {
     RequestPty,
     SetMode(PtySession),
     SpawnShell(PtySession),
+    RegisterForeground(PtySession, u64),
 }
 
 /// The single in-flight tab creation, if any. Only one is allowed at a time
@@ -878,26 +970,30 @@ struct TerminalTab {
     /// Scrollback viewport offset: 0 = live output, 1..N = history lines
     /// above the visible screen.
     scrollback_offset: usize,
+    /// The renderer grid has changed and this exact size still needs to be
+    /// acknowledged by the authoritative PTY broker.
+    geometry_dirty: bool,
 }
 
 impl TerminalTab {
     /// A brand-new placeholder tab with no PTY/shell yet — the immediate,
     /// zero-IPC result of clicking "+"/pressing `Ctrl+T` (see
     /// [`TerminalApp::spawn_tab`]).
-    fn connecting(id: TabId, title: &[u8]) -> Self {
+    fn connecting(id: TabId, title: &[u8], layout: TerminalLayout) -> Self {
         let mut tab = Self {
             id,
             title: [0; TAB_TITLE_MAX],
             title_len: 0,
             pty: None,
             shell_pid: None,
-            grid: ModelGrid::new(CONTENT_COLS, CONTENT_ROWS),
+            grid: ModelGrid::new(layout.cols(), layout.rows()),
             footer: Footer::new(),
             osc: OscParser::new(),
             status: TabStatus::Connecting,
             dirty: false,
             first_frame_logged: false,
             scrollback_offset: 0,
+            geometry_dirty: false,
         };
         tab.set_title(title);
         tab
@@ -942,6 +1038,22 @@ impl TerminalTab {
         self.ingest(&read_buf[..n], console_buf, debug);
         self.scrollback_offset = 0;
         true
+    }
+
+    fn publish_geometry(&mut self, size: TerminalWinsize) -> bool {
+        if !self.geometry_dirty {
+            return false;
+        }
+        let Some(pty) = self.pty.as_ref() else {
+            return false;
+        };
+        if pty
+            .set_window_size_timeout(size, SPAWN_STEP_TIMEOUT_MS)
+            .is_ok()
+        {
+            self.geometry_dirty = false;
+        }
+        false
     }
 
     /// Feed already-read PTY bytes through this tab's OSC parser and into
@@ -1094,6 +1206,7 @@ impl TerminalTab {
     /// release the PTY session (if either was ever actually created — a
     /// `Connecting`/`Failed` tab may have neither).
     fn close(&self) {
+        #[cfg(not(test))]
         if self.status == TabStatus::Running {
             if let Some(pid) = self.shell_pid {
                 let _ = libc::kill(pid, SIGTERM);
@@ -1124,6 +1237,7 @@ struct TerminalApp {
     /// so a lagging FocusChanged edge cannot inject into a background terminal.
     window_focused: bool,
     pending_spawn: Option<PendingSpawn>,
+    layout: TerminalLayout,
 }
 
 impl TerminalApp {
@@ -1134,6 +1248,7 @@ impl TerminalApp {
     const CLOSE_BTN_SIZE: u32 = 14;
 
     fn new(pty_cap: CapabilityToken, debug: DebugFlags) -> Self {
+        let layout = TerminalLayout::new(WIN_W, WIN_H);
         Self {
             tabs: core::array::from_fn(|_| None),
             tab_count: 0,
@@ -1149,6 +1264,7 @@ impl TerminalApp {
             // compositor. FocusChanged will correct this if we were wrong.
             window_focused: true,
             pending_spawn: None,
+            layout,
         }
     }
 
@@ -1158,6 +1274,30 @@ impl TerminalApp {
 
     fn clear_tracked_mods(&mut self) {
         self.mods.clear();
+    }
+
+    fn set_client_size(&mut self, width: u32, height: u32) -> bool {
+        let next = TerminalLayout::new(width, height);
+        if next == self.layout {
+            return false;
+        }
+        let dimensions_changed =
+            (next.cols(), next.rows()) != (self.layout.cols(), self.layout.rows());
+        if dimensions_changed {
+            for tab in self.tabs.iter_mut().flatten() {
+                if !tab.grid.resize(next.cols(), next.rows()) {
+                    debug_log("[TERM] resize rejected: grid allocation failed\n");
+                    return false;
+                }
+                tab.scrollback_offset = 0;
+                tab.geometry_dirty = tab.pty.is_some();
+            }
+        }
+        self.layout = next;
+        for tab in self.tabs.iter_mut().flatten() {
+            let _ = tab.publish_geometry(next.winsize);
+        }
+        true
     }
 
     fn tab_index_by_id(&self, id: TabId) -> Option<usize> {
@@ -1190,7 +1330,7 @@ impl TerminalApp {
         let mut len = copy_ascii(b"Tab ", &mut title);
         len += fmt_u64(&mut title[len..], id as u64);
 
-        if !self.insert_tab(TerminalTab::connecting(id, &title[..len])) {
+        if !self.insert_tab(TerminalTab::connecting(id, &title[..len], self.layout)) {
             return false;
         }
         self.clear_tracked_mods();
@@ -1202,7 +1342,7 @@ impl TerminalApp {
         self.pending_spawn = Some(PendingSpawn {
             tab_id: id,
             step: SpawnStep::RequestPty,
-            started_ms: monotonic_millis(),
+            started_ms: terminal_now_ms(),
         });
         true
     }
@@ -1239,14 +1379,18 @@ impl TerminalApp {
             return false;
         };
 
-        if monotonic_millis().saturating_sub(pending.started_ms) > SPAWN_DEADLINE_MS {
+        if terminal_now_ms().saturating_sub(pending.started_ms) > SPAWN_DEADLINE_MS {
             self.mark_pending_failed(pending.tab_id, pending.step);
             return true;
         }
 
         let outcome: Result<Option<SpawnStep>, ()> = match pending.step {
             SpawnStep::RequestPty => {
-                match PtySession::create_timeout(self.pty_cap, SPAWN_STEP_TIMEOUT_MS) {
+                match PtySession::create_timeout(
+                    self.pty_cap,
+                    self.layout.winsize,
+                    SPAWN_STEP_TIMEOUT_MS,
+                ) {
                     Ok(pty) => {
                         log_tab_phase(pending.tab_id, "pty_created");
                         Ok(Some(SpawnStep::SetMode(pty)))
@@ -1265,7 +1409,7 @@ impl TerminalApp {
             },
             SpawnStep::SpawnShell(pty) => {
                 log_tab_phase(pending.tab_id, "shell_spawn_requested");
-                let shell_id = (pty.id as u8).max(1) as u64;
+                let shell_id = u64::from(sunlight_ipc::PTY_TTY_TAB_BASE).saturating_add(pty.id);
                 let slave = match pty.attach_slave_timeout(SPAWN_STEP_TIMEOUT_MS) {
                     Ok(slave) => slave,
                     Err(PtyIoError::Timeout) => {
@@ -1287,10 +1431,25 @@ impl TerminalApp {
                 match spawn_shell(&pty, slave, shell_id) {
                     Ok(shell_pid) => {
                         log_tab_phase(pending.tab_id, "shell_spawned");
+                        Ok(Some(SpawnStep::RegisterForeground(pty, shell_pid)))
+                    }
+                    Err(_) => {
+                        pty.close();
+                        Err(())
+                    }
+                }
+            }
+            SpawnStep::RegisterForeground(pty, shell_pid) => {
+                match pty.set_foreground_process_timeout(shell_pid, SPAWN_STEP_TIMEOUT_MS) {
+                    Ok(()) => {
                         self.attach_tab(pending.tab_id, pty, shell_pid);
                         Ok(None)
                     }
-                    Err(_) => {
+                    Err(PtyIoError::Timeout) => {
+                        Ok(Some(SpawnStep::RegisterForeground(pty, shell_pid)))
+                    }
+                    Err(PtyIoError::Rejected) => {
+                        let _ = libc::kill(shell_pid, SIGTERM);
                         pty.close();
                         Err(())
                     }
@@ -1320,6 +1479,10 @@ impl TerminalApp {
                 tab.pty = Some(pty);
                 tab.shell_pid = Some(shell_pid);
                 tab.status = TabStatus::Running;
+                // Covers a client resize that occurred while the PTY/shell was
+                // still held by the pending-spawn state machine.
+                tab.geometry_dirty = true;
+                let _ = tab.publish_geometry(self.layout.winsize);
                 log_tab_phase(tab_id, "tab_attached_to_pty");
                 return;
             }
@@ -1341,7 +1504,9 @@ impl TerminalApp {
     /// `SpawnShell`) so it isn't leaked in `pty_server`.
     fn mark_pending_failed(&mut self, tab_id: TabId, step: SpawnStep) {
         match step {
-            SpawnStep::SetMode(pty) | SpawnStep::SpawnShell(pty) => pty.close(),
+            SpawnStep::SetMode(pty)
+            | SpawnStep::SpawnShell(pty)
+            | SpawnStep::RegisterForeground(pty, _) => pty.close(),
             SpawnStep::RequestPty => {}
         }
         self.mark_pending_failed_id(tab_id);
@@ -1370,7 +1535,9 @@ impl TerminalApp {
         if let Some(pending) = self.pending_spawn.take() {
             if pending.tab_id == tab_id {
                 match pending.step {
-                    SpawnStep::SetMode(pty) | SpawnStep::SpawnShell(pty) => pty.close(),
+                    SpawnStep::SetMode(pty)
+                    | SpawnStep::SpawnShell(pty)
+                    | SpawnStep::RegisterForeground(pty, _) => pty.close(),
                     SpawnStep::RequestPty => {}
                 }
             } else {
@@ -1443,6 +1610,10 @@ impl TerminalApp {
     fn poll_all_tabs(&mut self) -> bool {
         let mut redraw = self.advance_pending_spawn();
 
+        for tab in self.tabs.iter_mut().flatten() {
+            let _ = tab.publish_geometry(self.layout.winsize);
+        }
+
         if let Some(tab) = self.tabs.get_mut(self.active).and_then(|t| t.as_mut()) {
             tab.refresh_status();
             if tab.poll_pty(&mut self.read_buf, &mut self.console_buf, self.debug) {
@@ -1489,7 +1660,9 @@ impl TerminalApp {
         self.tab_count = 0;
         if let Some(pending) = self.pending_spawn.take() {
             match pending.step {
-                SpawnStep::SetMode(pty) | SpawnStep::SpawnShell(pty) => pty.close(),
+                SpawnStep::SetMode(pty)
+                | SpawnStep::SpawnShell(pty)
+                | SpawnStep::RegisterForeground(pty, _) => pty.close(),
                 SpawnStep::RequestPty => {}
             }
         }
@@ -1547,8 +1720,17 @@ impl TerminalApp {
     }
 
     fn draw_tab_bar(&self, canvas: &mut Canvas, theme: &sunlight_ui::Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, TAB_H), theme.panel);
-        canvas.hbar(0, TAB_H as i32 - 1, WIN_W, 1, theme.border);
+        canvas.fill_rect(
+            Rect::new(0, 0, self.layout.client_width, TAB_H),
+            theme.panel,
+        );
+        canvas.hbar(
+            0,
+            TAB_H as i32 - 1,
+            self.layout.client_width,
+            1,
+            theme.border,
+        );
 
         for i in 0..self.tab_count {
             let Some(tab) = self.tabs[i].as_ref() else {
@@ -1652,7 +1834,10 @@ mod tests {
     fn test_pty(id: u64) -> PtySession {
         PtySession {
             id,
-            cap: CapabilityToken::INVALID,
+            generation: 1,
+            service_cap: CapabilityToken::INVALID,
+            master: CapabilityToken::INVALID,
+            control: CapabilityToken::INVALID,
         }
     }
 
@@ -1660,7 +1845,7 @@ mod tests {
     /// only exercise array bookkeeping / byte routing, not the connecting
     /// state machine.
     fn test_tab(id: TabId, title: &[u8]) -> TerminalTab {
-        let mut tab = TerminalTab::connecting(id, title);
+        let mut tab = TerminalTab::connecting(id, title, TerminalLayout::new(WIN_W, WIN_H));
         tab.pty = Some(test_pty(id as u64));
         tab.shell_pid = Some(0);
         tab.status = TabStatus::Running;
@@ -1805,6 +1990,56 @@ mod tests {
         assert_eq!(buf[0], b'\r');
     }
 
+    #[test]
+    fn client_area_geometry_matches_renderer_grid_exactly() {
+        let layout = TerminalLayout::new(WIN_W, WIN_H);
+        let drawable = layout.content.inset(1);
+        assert_eq!(layout.cols(), (drawable.w / CELL_W) as usize);
+        assert_eq!(layout.rows(), (drawable.h / CELL_H) as usize);
+        assert_eq!(
+            layout.winsize.pixel_width as u32,
+            layout.cols() as u32 * CELL_W
+        );
+        assert_eq!(
+            layout.winsize.pixel_height as u32,
+            layout.rows() as u32 * CELL_H
+        );
+        assert!(drawable.w.saturating_sub(layout.winsize.pixel_width as u32) < CELL_W);
+        assert!(
+            drawable
+                .h
+                .saturating_sub(layout.winsize.pixel_height as u32)
+                < CELL_H
+        );
+    }
+
+    #[test]
+    fn independent_terminal_windows_keep_independent_geometry() {
+        let a = TerminalLayout::new(1380, 870);
+        let b = TerminalLayout::new(656, 468);
+        assert_ne!(a.winsize, b.winsize);
+        let resized_a = TerminalLayout::new(1540, 910);
+        assert_ne!(resized_a.winsize, a.winsize);
+        assert_eq!(b, TerminalLayout::new(656, 468));
+    }
+
+    #[test]
+    fn resize_updates_every_tab_grid_to_reported_geometry() {
+        let mut app = test_app();
+        assert!(app.spawn_tab());
+        app.pending_spawn = None;
+        app.next_tab_id = 2;
+        assert!(app.spawn_tab());
+        app.pending_spawn = None;
+        assert!(app.set_client_size(1380, 870));
+        for tab in app.tabs.iter().flatten() {
+            assert_eq!(
+                (tab.grid.cols, tab.grid.rows),
+                (app.layout.cols(), app.layout.rows())
+            );
+        }
+    }
+
     // ---- Regression coverage for the new-tab hang fix -------------------
     //
     // These are the key regression tests for this bug: `spawn_tab` (the
@@ -1878,6 +2113,7 @@ mod tests {
         let mut app = test_app();
         app.insert_tab(test_tab(1, b"Tab 1"));
         app.insert_tab(test_tab(2, b"Tab 2"));
+        app.next_tab_id = 3;
         assert!(app.spawn_tab()); // tab 3, connecting
         assert_eq!(app.tab_count, 3);
 
@@ -1900,11 +2136,14 @@ mod tests {
 
 impl App for TerminalApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &sunlight_ui::Theme) {
-        canvas.fill_rect(Rect::new(0, 0, WIN_W, WIN_H), theme.bg);
+        canvas.fill_rect(
+            Rect::new(0, 0, self.layout.client_width, self.layout.client_height),
+            theme.bg,
+        );
         self.draw_tab_bar(canvas, theme);
 
-        let content = content_rect();
-        let footer = footer_rect();
+        let content = self.layout.content;
+        let footer = self.layout.footer;
 
         let Some(tab) = self.tabs[self.active].as_mut() else {
             StatusBar::new(footer, "", "no active tab", "").draw(canvas, theme);
@@ -1964,7 +2203,7 @@ impl App for TerminalApp {
             let prompt_area = Rect::new(
                 8,
                 footer.y + 4,
-                WIN_W.saturating_sub(16 + status_reserve),
+                self.layout.client_width.saturating_sub(16 + status_reserve),
                 FOOTER_H - 8,
             );
             // Visible input trough so caret/text always contrast with chrome.
@@ -2111,7 +2350,7 @@ impl App for TerminalApp {
             }
             Event::MouseUp { .. } | Event::MouseMove { .. } | Event::PointerOwnership { .. } => {}
             Event::MouseWheel { x, y, delta } => {
-                let content = content_rect();
+                let content = self.layout.content;
                 if content.contains(sunlight_ui::Point::new(x, y)) {
                     if let Some(tab) = self.active_tab_mut() {
                         if delta > 0 {
@@ -2132,19 +2371,11 @@ impl App for TerminalApp {
         }
         dirty
     }
-}
 
-fn content_rect() -> Rect {
-    Rect::new(
-        PAD_X as i32,
-        TAB_H as i32 + PAD_Y as i32,
-        WIN_W - PAD_X * 2,
-        WIN_H - TAB_H - FOOTER_H - PAD_Y * 2,
-    )
-}
-
-fn footer_rect() -> Rect {
-    Rect::new(0, WIN_H as i32 - FOOTER_H as i32, WIN_W, FOOTER_H)
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_size(width, height)
+    }
 }
 
 /// Log one lifecycle phase for tab `tab_id` with a monotonic timestamp.
@@ -2156,6 +2387,11 @@ fn footer_rect() -> Rect {
 /// failure) occurred, without needing a debugger attached to a `no_std`
 /// process.
 fn log_tab_phase(tab_id: TabId, phase: &str) {
+    #[cfg(test)]
+    {
+        let _ = (tab_id, phase);
+        return;
+    }
     let mut buf = [0u8; 96];
     let mut len = 0usize;
     len += copy_ascii(b"[TERM][TAB] tab=", &mut buf[len..]);
@@ -2163,11 +2399,21 @@ fn log_tab_phase(tab_id: TabId, phase: &str) {
     len += copy_ascii(b" phase=", &mut buf[len..]);
     len += copy_ascii(phase.as_bytes(), &mut buf[len..]);
     len += copy_ascii(b" t=", &mut buf[len..]);
-    len += fmt_u64(&mut buf[len..], monotonic_millis());
+    len += fmt_u64(&mut buf[len..], terminal_now_ms());
     len += copy_ascii(b"ms\n", &mut buf[len..]);
     if let Ok(text) = core::str::from_utf8(&buf[..len]) {
         debug_log(text);
     }
+}
+
+#[cfg(not(test))]
+fn terminal_now_ms() -> u64 {
+    monotonic_millis()
+}
+
+#[cfg(test)]
+fn terminal_now_ms() -> u64 {
+    0
 }
 
 #[cfg(not(test))]

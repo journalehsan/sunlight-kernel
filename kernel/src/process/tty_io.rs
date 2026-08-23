@@ -11,6 +11,7 @@
 //! `sys_read`/`sys_write`.
 
 use spin::Mutex;
+use sunlight_ipc::TerminalWinsize;
 
 /// Maximum number of TTY tabs the kernel will route for. Must cover the full
 /// u8 range since tty_tab is stored as u8 (shell_id cast via `as u8`).
@@ -66,6 +67,53 @@ static STDIN: Mutex<[Ring<STDIN_CAP>; MAX_TTY_TABS]> =
     Mutex::new([const { Ring::<STDIN_CAP>::new() }; MAX_TTY_TABS]);
 static STDOUT: Mutex<[Ring<STDOUT_CAP>; MAX_TTY_TABS]> =
     Mutex::new([const { Ring::<STDOUT_CAP>::new() }; MAX_TTY_TABS]);
+
+#[derive(Clone, Copy)]
+struct WinsizeSlot {
+    generation: u64,
+    size: Option<TerminalWinsize>,
+}
+
+impl WinsizeSlot {
+    const fn empty() -> Self {
+        Self {
+            generation: 0,
+            size: None,
+        }
+    }
+}
+
+/// Generation-qualified kernel cache of the authoritative PTY broker state.
+/// The broker remains the owner; this cache lets native fd operations and the
+/// Helios ioctl translator read geometry without attempting user IPC while in
+/// a syscall. Generation matching prevents a closed/reused session slot from
+/// leaking a later terminal's geometry to an old process.
+static WINSIZES: Mutex<[WinsizeSlot; MAX_TTY_TABS]> =
+    Mutex::new([WinsizeSlot::empty(); MAX_TTY_TABS]);
+
+pub fn publish_winsize(tab: usize, generation: u64, size: Option<TerminalWinsize>) -> bool {
+    if tab >= MAX_TTY_TABS || size.is_some_and(|value| !value.is_valid()) {
+        return false;
+    }
+    let mut slots = WINSIZES.lock();
+    let slot = &mut slots[tab];
+    if size.is_none() && slot.generation != generation {
+        return false;
+    }
+    slot.generation = generation;
+    slot.size = size;
+    true
+}
+
+pub fn winsize(tab: usize, generation: u64) -> Option<TerminalWinsize> {
+    if tab >= MAX_TTY_TABS {
+        return None;
+    }
+    let slot = WINSIZES.lock()[tab];
+    (slot.generation == generation)
+        .then_some(slot.size)
+        .flatten()
+}
 
 /// Push keyboard bytes into a tab's stdin ring (called via `TtyStdinPush`).
 /// Returns the number of bytes accepted (drops the tail on overflow).
@@ -161,4 +209,35 @@ pub fn clear_tab(tab: usize) {
     }
     STDIN.lock()[tab].clear();
     STDOUT.lock()[tab].clear();
+}
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+
+    #[test]
+    fn winsizes_are_per_terminal_and_generation_qualified() {
+        let a = TerminalWinsize::new(120, 40, 960, 640);
+        let b = TerminalWinsize::new(80, 25, 640, 400);
+        assert!(publish_winsize(10, 7, Some(a)));
+        assert!(publish_winsize(11, 3, Some(b)));
+        assert_eq!(winsize(10, 7), Some(a));
+        assert_eq!(winsize(11, 3), Some(b));
+
+        let resized = TerminalWinsize::new(170, 50, 1360, 800);
+        assert!(publish_winsize(10, 7, Some(resized)));
+        assert_eq!(winsize(10, 7), Some(resized));
+        assert_eq!(winsize(11, 3), Some(b));
+        assert_eq!(winsize(10, 6), None);
+    }
+
+    #[test]
+    fn stale_teardown_cannot_clear_reused_slot() {
+        let current = TerminalWinsize::new(132, 44, 1056, 704);
+        assert!(publish_winsize(12, 9, Some(current)));
+        assert!(!publish_winsize(12, 8, None));
+        assert_eq!(winsize(12, 9), Some(current));
+        assert!(publish_winsize(12, 9, None));
+        assert_eq!(winsize(12, 9), None);
+    }
 }

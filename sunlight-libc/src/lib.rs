@@ -543,6 +543,13 @@ pub fn openpty() -> Result<(sunlight_ipc::CapabilityToken, sunlight_ipc::Capabil
     Ok((reply.caps[0], reply.caps[1]))
 }
 
+/// Return the calling process's authoritative controlling-terminal geometry.
+/// Native TUI applications and Helios `TIOCGWINSZ` consume the same
+/// generation-qualified kernel cache published by `pty_server`.
+pub fn terminal_winsize() -> Option<sunlight_ipc::TerminalWinsize> {
+    sunlight_ipc::tty_winsize()
+}
+
 /// Spawn a new process running `path` (posix_spawn-style). `stdout` becomes
 /// the child's fd 1 when given (e.g. a pipe write end). Returns the child pid.
 pub fn spawn(path: &[u8], argv: &[&[u8]], stdout: Option<Fd>) -> Result<u64, Errno> {

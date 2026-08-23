@@ -120,19 +120,19 @@ better than leaving `TERM` unset.
 
 ### 8. Are rows/cols/winsize communicated correctly?
 
-Not fully.
+Initial and stored geometry are dynamic; Linux signal-driven redraw is not yet complete.
 
 Current state:
 
-- kernel `TIOCGWINSZ` still returns a fixed `80x25`
-- kernel `TIOCSWINSZ` is accepted but ignored
-- `sunlight-terminal` window content was resized in this patch to match `80x25`
-  so the graphical terminal is at least internally consistent with the current
-  ioctl result
-- live resize / `SIGWINCH` is still future work
+- kernel `TIOCGWINSZ` translates the attached, generation-qualified PTY size
+- kernel `TIOCSWINSZ` is explicitly rejected because the graphical frontend owns geometry
+- `sunlight-terminal` derives complete cells from the current drawable client area
+  and publishes the same dimensions used by its renderer
+- live Linux `SIGWINCH` delivery is still future work
 
-This means the graphical terminal is now much closer to correct behavior for the
-current fixed-size world, but dynamic winsize negotiation is still incomplete.
+Applications that query at startup receive the real client geometry. Stored
+geometry also changes on live resize; automatic Linux redraw awaits real signal
+frame delivery.
 
 ## Implemented Changes
 

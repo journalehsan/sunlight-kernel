@@ -310,6 +310,37 @@ pub const POLLFD_SIZE: usize = 8;
 pub const IOVEC_SIZE: usize = 16;
 pub const TERMIOS_SIZE: usize = 60;
 pub const WINSIZE_SIZE: usize = 8;
+
+/// Linux x86_64 `struct winsize`. This is an ABI-only value; native terminal
+/// geometry is translated field-by-field at the syscall boundary.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LinuxWinsize {
+    pub ws_row: u16,
+    pub ws_col: u16,
+    pub ws_xpixel: u16,
+    pub ws_ypixel: u16,
+}
+
+impl LinuxWinsize {
+    pub const fn new(ws_row: u16, ws_col: u16, ws_xpixel: u16, ws_ypixel: u16) -> Self {
+        Self {
+            ws_row,
+            ws_col,
+            ws_xpixel,
+            ws_ypixel,
+        }
+    }
+
+    pub fn to_ne_bytes(self) -> [u8; WINSIZE_SIZE] {
+        let mut wire = [0u8; WINSIZE_SIZE];
+        wire[0..2].copy_from_slice(&self.ws_row.to_ne_bytes());
+        wire[2..4].copy_from_slice(&self.ws_col.to_ne_bytes());
+        wire[4..6].copy_from_slice(&self.ws_xpixel.to_ne_bytes());
+        wire[6..8].copy_from_slice(&self.ws_ypixel.to_ne_bytes());
+        wire
+    }
+}
 pub const EPOLL_EVENT_SIZE: usize = 12;
 pub const SIGACTION_SIZE: usize = 32;
 pub const STACK_T_SIZE: usize = 24;
@@ -322,6 +353,21 @@ const _: () = assert!(POLLFD_SIZE == 8);
 const _: () = assert!(IOVEC_SIZE == 16);
 const _: () = assert!(TERMIOS_SIZE == 60);
 const _: () = assert!(WINSIZE_SIZE == 8);
+const _: () = assert!(core::mem::size_of::<LinuxWinsize>() == WINSIZE_SIZE);
+
+#[cfg(test)]
+mod winsize_tests {
+    use super::*;
+
+    #[test]
+    fn linux_geometry_probe_has_exact_x86_64_layout() {
+        let wire = LinuxWinsize::new(61, 173, 1384, 976).to_ne_bytes();
+        assert_eq!(u16::from_ne_bytes([wire[0], wire[1]]), 61);
+        assert_eq!(u16::from_ne_bytes([wire[2], wire[3]]), 173);
+        assert_eq!(u16::from_ne_bytes([wire[4], wire[5]]), 1384);
+        assert_eq!(u16::from_ne_bytes([wire[6], wire[7]]), 976);
+    }
+}
 const _: () = assert!(EPOLL_EVENT_SIZE == 12);
 
 /// Packed linux_dirent64 record size: 8+8+2+1+name+NUL, rounded up to 8.

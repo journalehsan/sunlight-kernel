@@ -13,10 +13,10 @@ pub struct ViewState {
 }
 
 impl ViewState {
-    pub fn new() -> Self {
+    pub fn new(term_cols: u16, term_rows: u16) -> Self {
         Self {
-            term_rows: 24,
-            term_cols: 80,
+            term_rows,
+            term_cols,
             sort: SortKey {
                 column: SortColumn::Cpu,
                 descending: true,

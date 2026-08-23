@@ -74,9 +74,7 @@ pub extern "C" fn _start() -> ! {
     canvas.hide_cursor();
     canvas.flush();
 
-    let mut view = ViewState::new();
-    view.term_cols = cols;
-    view.term_rows = rows;
+    let mut view = ViewState::new(cols, rows);
 
     sunlight_ipc::debug_log("[TOP] rendering");
 
@@ -156,7 +154,8 @@ fn read_key_nonblocking() -> Option<u8> {
 }
 
 fn get_terminal_size() -> Option<(u16, u16)> {
-    None
+    let size = sunlight_ipc::tty_winsize()?;
+    Some((size.columns, size.rows))
 }
 
 fn sleep_ms(ms: u64) {

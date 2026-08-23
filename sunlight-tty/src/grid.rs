@@ -112,6 +112,77 @@ impl TerminalGrid {
         }
     }
 
+    /// Resize the renderer/model grid while preserving the overlapping visible
+    /// cells. Partial old rows are never reinterpreted with the new stride.
+    /// Scrollback is cleared because its row width is part of its storage
+    /// contract; retaining differently-strided history would corrupt the
+    /// viewport. Returns `false` for zero/overflowing geometry or allocation
+    /// failure, leaving the existing grid untouched.
+    pub fn resize(&mut self, cols: usize, rows: usize) -> bool {
+        if cols == 0 || rows == 0 || (cols == self.cols && rows == self.rows) {
+            return cols == self.cols && rows == self.rows;
+        }
+        let Some(cell_count) = cols.checked_mul(rows) else {
+            return false;
+        };
+        let Some(scrollback_count) = SCROLLBACK_LINES.checked_mul(cols) else {
+            return false;
+        };
+
+        let mut main_cells = Vec::new();
+        let mut alt_cells = Vec::new();
+        let mut scrollback = Vec::new();
+        let mut term_cells = Vec::new();
+        if main_cells.try_reserve_exact(cell_count).is_err()
+            || alt_cells.try_reserve_exact(cell_count).is_err()
+            || scrollback.try_reserve_exact(scrollback_count).is_err()
+            || term_cells.try_reserve_exact(cell_count).is_err()
+        {
+            return false;
+        }
+        main_cells.resize(cell_count, Cell::blank());
+        alt_cells.resize(cell_count, Cell::blank());
+        scrollback.resize(scrollback_count, Cell::blank());
+        term_cells.resize(
+            cell_count,
+            TermCell {
+                ch: b' ',
+                fg: 0,
+                bg: 0,
+            },
+        );
+
+        let copy_rows = rows.min(self.rows);
+        let copy_cols = cols.min(self.cols);
+        for row in 0..copy_rows {
+            let old_start = row * self.cols;
+            let new_start = row * cols;
+            main_cells[new_start..new_start + copy_cols]
+                .copy_from_slice(&self.main_cells[old_start..old_start + copy_cols]);
+            alt_cells[new_start..new_start + copy_cols]
+                .copy_from_slice(&self.alt_cells[old_start..old_start + copy_cols]);
+        }
+
+        self.cols = cols;
+        self.rows = rows;
+        self.main_cells = main_cells;
+        self.alt_cells = alt_cells;
+        self.scrollback = scrollback;
+        self.scrollback_head = 0;
+        self.scrollback_count = 0;
+        self.term_cells = term_cells;
+        self.main_cursor_row = self.main_cursor_row.min(rows - 1);
+        self.main_cursor_col = self.main_cursor_col.min(cols - 1);
+        self.alt_cursor_row = self.alt_cursor_row.min(rows - 1);
+        self.alt_cursor_col = self.alt_cursor_col.min(cols - 1);
+        self.saved_main_cursor.0 = self.saved_main_cursor.0.min(rows - 1);
+        self.saved_main_cursor.1 = self.saved_main_cursor.1.min(cols - 1);
+        if let Some((row, col)) = self.saved_cursor {
+            self.saved_cursor = Some((row.min(rows - 1), col.min(cols - 1)));
+        }
+        true
+    }
+
     fn handle_output(&mut self, output: VtOutput) {
         match output {
             VtOutput::Char(ch) => self.write_char(ch),
@@ -692,6 +763,38 @@ mod tests {
         grid.feed(b"\x1b[31mX");
         assert_eq!(grid.cell(0, 0).ch, b'X');
         assert_eq!(grid.cell(0, 0).fg, 1);
+    }
+
+    #[test]
+    fn resize_preserves_overlap_and_clamps_cursor() {
+        let mut grid = TerminalGrid::new(4, 2);
+        grid.feed(b"ab");
+        assert!(grid.resize(8, 4));
+        assert_eq!(grid.cell(0, 0).ch, b'a');
+        assert_eq!(grid.cell(0, 1).ch, b'b');
+        assert!(grid.resize(2, 1));
+        assert_eq!(grid.cell(0, 0).ch, b'a');
+        let (row, col) = grid.cursor();
+        assert!(row < grid.rows && col < grid.cols);
+    }
+
+    #[test]
+    fn repeated_resize_transitions_remain_bounded_and_consistent() {
+        let mut grid = TerminalGrid::new(80, 25);
+        for (cols, rows) in [(170, 50), (40, 25), (80, 80), (12, 6), (170, 50)] {
+            assert!(grid.resize(cols, rows));
+            assert_eq!((grid.cols, grid.rows), (cols, rows));
+            assert_eq!(grid.to_term_cells(&ANSI_COLORS).len(), cols * rows);
+            let (cursor_row, cursor_col) = grid.cursor();
+            assert!(cursor_row < rows && cursor_col < cols);
+        }
+    }
+
+    #[test]
+    fn resize_rejects_zero_without_mutating_grid() {
+        let mut grid = TerminalGrid::new(4, 2);
+        assert!(!grid.resize(0, 2));
+        assert_eq!((grid.cols, grid.rows), (4, 2));
     }
 
     #[test]

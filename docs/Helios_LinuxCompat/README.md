@@ -154,7 +154,9 @@ Outside this tier: `fork`, `vfork`, `clone`, pthreads, futexes, dynamic ELF,
 glibc, `/proc`, sockets/network expansion, namespaces, containers, and GUI
 Linux applications.
 
-TTY geometry remains a stable synthetic 80x25 contract.
+TTY geometry is read from the process's generation-qualified controlling TTY.
+`TIOCGWINSZ` translates that state into the Linux x86_64 ABI; live Linux
+`SIGWINCH` handler delivery remains outside this compatibility tier.
 
 ## Embedded workloads
 

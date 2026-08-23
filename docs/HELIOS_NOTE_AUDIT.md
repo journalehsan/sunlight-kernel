@@ -22,7 +22,8 @@ longer authoritative. The current implementation has since:
 The current Note regression gate proves process start, Linux personality,
 terminal initialization, and the first interactive-ready poll. Signal handler
 delivery and live resize/SIGWINCH remain intentionally unsupported. The
-current terminal geometry contract is stable synthetic 80x25.
+current terminal geometry contract is per-instance and frontend-published;
+the Note regression gate verifies the controlled 138-column by 38-row grid.
 
 This audit analyzes the existing Helios Note TUI, SunlightOS Linux ABI compatibility layer (Helios), kernel syscall dispatch, PTY/TTY architecture, and VFS file operations to support transforming Helios Note into a modern Ratatui text editor compiled as a static Linux musl executable (`x86_64-unknown-linux-musl`).
 
@@ -76,7 +77,7 @@ authoritative.
 - **Terminal Detection & Control**: `sys_linux_ioctl` (internal code 1012) intercepts `TCGETS` (0x5401), `TCSETS` (0x5402), `TCSETSW` (0x5403), `TCSETSF` (0x5404).
 - **Raw Mode**: Crossterm toggles `ICANON` in `LinuxProcessState.termios`;
   `sys_linux_ioctl` records the mode and logs transitions.
-- **Terminal Dimensions**: `TIOCGWINSZ` (0x5413) returns `ws_row = 25`, `ws_col = 80`. `TIOCSWINSZ` (0x5414) returns 0. `SIGWINCH` resize signal propagation is currently unhandled for Linux tasks.
+- **Terminal Dimensions**: `TIOCGWINSZ` (0x5413) translates the current generation-qualified PTY winsize. `TIOCSWINSZ` (0x5414) is rejected with `EPERM` because the graphical frontend owns geometry. `SIGWINCH` userspace-frame delivery is still unavailable for Linux tasks.
 
 ---
 
@@ -137,7 +138,7 @@ Each missing or updated Linux syscall is bound by explicit ABI constraints:
 | **Stdin / Stdout / Stderr** | `read(0)`, `write(1)`, `write(2)`, `writev` | Fully supported via PTY rings | `reusable` | `sys_read` drains `tty_io::read_stdin`, `sys_write` and `sys_linux_writev` populate `tty_io::write_stdout`. |
 | **Terminal Detection (isatty)** | `ioctl(fd, TCGETS)` | Supported for fds 0, 1, 2 | `reusable` | `sys_linux_ioctl` returns `LinuxTermios` struct for stdio fds and `ENOTTY` (errno 25) for other fds. |
 | **Raw Mode Enable/Disable** | `ioctl(fd, TCSETS/TCSETSW/TCSETSF)` | Supported | `reusable` | Correctly toggles `ICANON` and updates `process.linux_termios`. Exiting app restores original flags. |
-| **Terminal Dimensions** | `ioctl(fd, TIOCGWINSZ)` | Fixed 80x25 geometry | `partially supported` | Returns `ws_row=25, ws_col=80`. Live resize propagation (`SIGWINCH`) is missing. |
+| **Terminal Dimensions** | `ioctl(fd, TIOCGWINSZ)` | Per-PTY dynamic geometry | `supported` | Returns current rows/columns and grid pixels. Live signal-driven redraw (`SIGWINCH`) is still missing. |
 | **Input Readiness / Polling** | `poll(7)`, `read(0)` when empty | Bounded readiness + scheduler-backed timeout | `supported for tier 1` | `sys_linux_poll` inspects TTY/pipe readiness, writes `revents`, and blocks through the Linux timer bookkeeping when no descriptor is ready. |
 | **Timing & Clock** | `clock_gettime(228)`, `nanosleep(35)` | Supported bounded shims | `supported for tier 1` | Timespec pointers and ranges are validated; nanosleep uses a scheduler timer wait. Signal interruption remains outside this tier. |
 | **File Open & Read** | `open(2)`, `openat(257)`, `read(0)` | Fully supported via `KERNEL_VFS` | `reusable` | Relative and absolute paths work. `openat` frame-shift handles `dirfd` safely. |

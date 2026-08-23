@@ -572,8 +572,8 @@ service, e.g. by not starting `pty_server` or killing it mid-session):**
 - Extend the bounded-timeout treatment from tab creation/close to
   `PtySession::read`/`write` for full protection against a stuck `pty`
   service mid-session, not just during tab lifecycle events.
-- Full resize correctness (`TIOCGWINSZ`/`TIOCSWINSZ`/`SIGWINCH`), tracked
-  separately per `graphical-terminal-audit.md`'s recommended next work.
+- Real Linux signal-frame delivery for `SIGWINCH`; renderer/PTTY geometry and
+  `TIOCGWINSZ` are now dynamic, while `TIOCSWINSZ` is explicitly frontend-owned.
 - Either fix host `cargo test` for bin-only crates, or extract the pure tab
   logic (`TerminalTab`/`TerminalApp` bookkeeping) into a small `[lib]`
   target so its tests can run the same way `sunlight-fs`/`sun-font`'s do.

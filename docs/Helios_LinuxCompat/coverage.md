@@ -23,7 +23,7 @@ Legend: I = IMPLEMENTED, P = PARTIAL, S = STUB, U = UNSUPPORTED, M = MISSING.
 | 12 | brk | I | `sys_brk` | process brk region | | tier1 | Y | |
 | 13 | rt_sigaction | P | records disposition | LinuxProcessState | no handler delivery | | Y | |
 | 14 | rt_sigprocmask | P | records mask | LinuxProcessState | no async delivery | | Y | |
-| 16 | ioctl | P | termios / winsize | LinuxProcessState + TTY | 80x25 synthetic winsize | | Y | |
+| 16 | ioctl | P | termios / winsize | generation-qualified TTY/PTTY cache | dynamic `TIOCGWINSZ`; `TIOCSWINSZ` is frontend-owned/EPERM | | Y | |
 | 17 | pread64 | I | `sys_linux_pread64` | VFS read(offset) | does not move fd offset; ESPIPE | runtime | | |
 | 18 | pwrite64 | I | `sys_linux_pwrite64` | VFS write(offset) | O_APPEND writes at EOF; ESPIPE | runtime | | |
 | 20 | writev | I | `sys_linux_writev` | sys_write loop | | | Y | |

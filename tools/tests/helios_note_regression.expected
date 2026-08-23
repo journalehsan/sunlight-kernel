@@ -1,3 +1,5 @@
 [HELIOS] Linux ELF compatibility layer loaded
+[TTY-GEOMETRY] rows=38 cols=138
+[HELIOS-NOTE] geometry rows=38 cols=138
 [HELIOS-NOTE] terminal initialized
 [HELIOS-NOTE] interactive-ready

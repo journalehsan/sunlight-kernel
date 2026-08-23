@@ -9,7 +9,8 @@
 //! authorizes an operation.
 
 use sunlight_ipc::{
-    debug_log, pty_caller_credentials, CapabilityToken, IpcMsg, PtyCallerCredentials, PtyMsg,
+    debug_log, pty_caller_credentials, tty_attach_process, tty_publish_winsize, CapabilityToken,
+    IpcMsg, PtyCallerCredentials, PtyMsg, TerminalWinsize,
 };
 
 #[cfg(not(test))]
@@ -30,11 +31,10 @@ pub const BUFFER_CAP: usize = 8192;
 /// Register IPC leaves one payload word after a generation-qualified identity
 /// and request length, so each transport operation carries at most eight bytes.
 const CHUNK_BYTES: usize = 8;
-const DEFAULT_COLUMNS: u16 = 100;
-const DEFAULT_ROWS: u16 = 30;
-const MAX_COLUMNS: u16 = 512;
-const MAX_ROWS: u16 = 256;
-const MAX_PIXELS: u16 = 16_384;
+/// Startup fallback used only until a terminal frontend publishes its real
+/// drawable grid. A frontend-supplied size is passed in `CREATE` and therefore
+/// becomes authoritative before the shell is attached.
+const DEFAULT_WINDOW_SIZE: TerminalWinsize = TerminalWinsize::new(100, 30, 0, 0);
 
 #[derive(Clone, Copy)]
 struct ByteRing<const N: usize> {
@@ -108,51 +108,6 @@ impl PtyOwner {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct WindowSize {
-    columns: u16,
-    rows: u16,
-    pixel_width: u16,
-    pixel_height: u16,
-}
-
-impl WindowSize {
-    const fn default() -> Self {
-        Self {
-            columns: DEFAULT_COLUMNS,
-            rows: DEFAULT_ROWS,
-            pixel_width: 0,
-            pixel_height: 0,
-        }
-    }
-
-    fn from_wire(word: u64) -> Option<Self> {
-        let size = Self {
-            columns: word as u16,
-            rows: (word >> 16) as u16,
-            pixel_width: (word >> 32) as u16,
-            pixel_height: (word >> 48) as u16,
-        };
-        size.is_valid().then_some(size)
-    }
-
-    const fn to_wire(self) -> u64 {
-        self.columns as u64
-            | ((self.rows as u64) << 16)
-            | ((self.pixel_width as u64) << 32)
-            | ((self.pixel_height as u64) << 48)
-    }
-
-    const fn is_valid(self) -> bool {
-        self.columns != 0
-            && self.rows != 0
-            && self.columns <= MAX_COLUMNS
-            && self.rows <= MAX_ROWS
-            && self.pixel_width <= MAX_PIXELS
-            && self.pixel_height <= MAX_PIXELS
-    }
-}
-
 #[derive(Clone, Copy)]
 struct Authority {
     token: CapabilityToken,
@@ -186,7 +141,7 @@ struct PtySession {
     generation: u64,
     owner: PtyOwner,
     mode_flags: u64,
-    size: WindowSize,
+    size: TerminalWinsize,
     foreground_pid: Option<u64>,
     master: Authority,
     slave: Authority,
@@ -207,7 +162,7 @@ impl PtySession {
             generation: 0,
             owner: PtyOwner::empty(),
             mode_flags: 0,
-            size: WindowSize::default(),
+            size: DEFAULT_WINDOW_SIZE,
             foreground_pid: None,
             master: Authority::empty(),
             slave: Authority::empty(),
@@ -225,7 +180,7 @@ impl PtySession {
         self.live = false;
         self.owner = PtyOwner::empty();
         self.mode_flags = 0;
-        self.size = WindowSize::default();
+        self.size = DEFAULT_WINDOW_SIZE;
         self.foreground_pid = None;
         self.master.clear();
         self.slave.clear();
@@ -353,7 +308,7 @@ impl PtyServer {
         &mut self,
         caller: PtyCallerCredentials,
         mode_flags: u64,
-        size: WindowSize,
+        size: TerminalWinsize,
     ) -> Result<(u64, u64, CapabilityToken, CapabilityToken), u64> {
         let index = self
             .sessions
@@ -419,9 +374,9 @@ mod tests {
 
     #[test]
     fn geometry_rejects_invalid_values() {
-        assert!(WindowSize::from_wire(0).is_none());
-        assert!(WindowSize::from_wire((1u64 << 16) | 513).is_none());
-        assert!(WindowSize::from_wire(80 | (25 << 16)).is_some());
+        assert!(TerminalWinsize::from_wire(0).is_none());
+        assert!(TerminalWinsize::from_wire((1u64 << 16) | 513).is_none());
+        assert!(TerminalWinsize::from_wire(80 | (25 << 16)).is_some());
     }
 
     #[test]
@@ -429,11 +384,11 @@ mod tests {
         let mut server = PtyServer::new();
         for _ in 0..MAX_SESSIONS {
             assert!(server
-                .create(CALLER, PtyMsg::FLAG_CANONICAL, WindowSize::default())
+                .create(CALLER, PtyMsg::FLAG_CANONICAL, DEFAULT_WINDOW_SIZE)
                 .is_ok());
         }
         assert_eq!(
-            server.create(CALLER, 0, WindowSize::default()),
+            server.create(CALLER, 0, DEFAULT_WINDOW_SIZE),
             Err(PtyMsg::ERR_NO_SLOTS)
         );
     }
@@ -441,17 +396,35 @@ mod tests {
     #[test]
     fn reused_slot_receives_a_new_generation() {
         let mut server = PtyServer::new();
-        let (id, first_generation, _, _) = server.create(CALLER, 0, WindowSize::default()).unwrap();
+        let (id, first_generation, _, _) = server.create(CALLER, 0, DEFAULT_WINDOW_SIZE).unwrap();
         let index = server.locate(id, first_generation).unwrap();
         server.sessions[index].destroy();
         let (next_id, next_generation, _, _) =
-            server.create(CALLER, 0, WindowSize::default()).unwrap();
+            server.create(CALLER, 0, DEFAULT_WINDOW_SIZE).unwrap();
         assert_eq!(id, next_id);
         assert_ne!(first_generation, next_generation);
         assert_eq!(
             server.locate(id, first_generation),
             Err(PtyMsg::ERR_STALE_HANDLE)
         );
+    }
+
+    #[test]
+    fn sessions_keep_independent_authoritative_sizes() {
+        let mut server = PtyServer::new();
+        let a = TerminalWinsize::new(120, 40, 960, 640);
+        let b = TerminalWinsize::new(80, 25, 640, 400);
+        let (a_id, a_generation, _, _) = server.create(CALLER, 0, a).unwrap();
+        let (b_id, b_generation, _, _) = server.create(CALLER, 0, b).unwrap();
+        let a_index = server.locate(a_id, a_generation).unwrap();
+        let b_index = server.locate(b_id, b_generation).unwrap();
+        assert_eq!(server.sessions[a_index].size, a);
+        assert_eq!(server.sessions[b_index].size, b);
+
+        let resized_a = TerminalWinsize::new(170, 50, 1360, 800);
+        server.sessions[a_index].size = resized_a;
+        assert_eq!(server.sessions[a_index].size, resized_a);
+        assert_eq!(server.sessions[b_index].size, b);
     }
 
     #[test]
@@ -492,15 +465,21 @@ fn handle_message(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
     match msg.label {
         PtyMsg::CREATE => {
             let size = if msg.words[1] == 0 {
-                WindowSize::default()
+                DEFAULT_WINDOW_SIZE
             } else {
-                match WindowSize::from_wire(msg.words[1]) {
+                match TerminalWinsize::from_wire(msg.words[1]) {
                     Some(size) => size,
                     None => return error(PtyMsg::ERR_INVALID_WINDOW_SIZE),
                 }
             };
             match server.create(caller, msg.words[0], size) {
                 Ok((id, generation, master, control)) => {
+                    if !tty_publish_winsize(id, generation, Some(size)) {
+                        if let Ok(index) = server.locate(id, generation) {
+                            server.sessions[index].destroy();
+                        }
+                        return error(PtyMsg::ERR_INTERNAL);
+                    }
                     debug_log("[PTY] create\n");
                     let mut reply = IpcMsg::with_label(PtyMsg::REPLY)
                         .word(0, id)
@@ -594,7 +573,7 @@ fn set_window_size(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCreden
         Ok(index) => index,
         Err(code) => return error(code),
     };
-    let Some(size) = WindowSize::from_wire(msg.words[2]) else {
+    let Some(size) = TerminalWinsize::from_wire(msg.words[2]) else {
         return error(PtyMsg::ERR_INVALID_WINDOW_SIZE);
     };
     let session = &mut server.sessions[index];
@@ -602,11 +581,11 @@ fn set_window_size(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCreden
         return error(PtyMsg::ERR_SESSION_CLOSING);
     }
     let changed = session.size != size;
-    session.size = size;
     if changed {
-        if let Some(pid) = session.foreground_pid {
-            let _ = sunlight_ipc::kill(pid, 28);
+        if !tty_publish_winsize(session.id, session.generation, Some(size)) {
+            return error(PtyMsg::ERR_INTERNAL);
         }
+        session.size = size;
         debug_log("[PTY] resize\n");
     }
     ok_identity(session.id, session.generation).word(2, changed as u64)
@@ -645,6 +624,9 @@ fn set_foreground_process(
     let session = &mut server.sessions[index];
     if target.uid != session.owner.uid || target.gid != session.owner.gid {
         return error(PtyMsg::ERR_PERMISSION_DENIED);
+    }
+    if !tty_attach_process(target.pid, session.id, session.generation) {
+        return error(PtyMsg::ERR_INTERNAL);
     }
     session.foreground_pid = Some(target.pid);
     ok_identity(session.id, session.generation)
@@ -777,6 +759,7 @@ fn close_endpoint(
     if !session.master_open && !session.slave_open && !session.control_open {
         let id = session.id;
         let generation = session.generation;
+        let _ = tty_publish_winsize(id, generation, None);
         session.destroy();
         debug_log("[PTY] destroy\n");
         return ok_identity(id, generation);
@@ -792,6 +775,7 @@ fn close_session(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredenti
     let session = &mut server.sessions[index];
     let id = session.id;
     let generation = session.generation;
+    let _ = tty_publish_winsize(id, generation, None);
     session.destroy();
     debug_log("[PTY] destroy\n");
     ok_identity(id, generation)

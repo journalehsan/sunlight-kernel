@@ -235,6 +235,9 @@ pub struct Process {
     /// spawned for a tab and inherited by children, so a spawned app's fd0/fd1
     /// route to that tab's kernel stdin/stdout rings (see process::tty_io).
     pub tty_tab: Option<u8>,
+    /// Generation of the controlling PTY session. Zero denotes the legacy
+    /// framebuffer TTY attachment, which has no PTY-broker identity.
+    pub tty_generation: u64,
 
     /// Shared memory regions this process owns (via shm_alloc / shm_create).
     pub owned_shared: alloc::vec::Vec<crate::memory::shared::SharedRegion>,
@@ -425,6 +428,7 @@ impl Process {
             aging_counter: 0,        // No aging yet
             wait_child: None,        // Not waiting on a child
             tty_tab: None,           // Attached to a TTY tab only when spawned for one
+            tty_generation: 0,
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
             wd_period_ticks: None,
@@ -508,6 +512,7 @@ impl Process {
         nice: i8,
         capabilities: Vec<Capability>,
         tty_tab: Option<u8>,
+        tty_generation: u64,
     ) -> Self {
         let address_space = address_space::AddressSpace::from_shared(shared_address_space);
         let kernel_stack = new_kernel_stack();
@@ -585,6 +590,7 @@ impl Process {
             aging_counter: 0,
             wait_child: None,
             tty_tab,
+            tty_generation,
             owned_shared: Vec::new(),
             mapped_shared: Vec::new(),
             wd_period_ticks: None,

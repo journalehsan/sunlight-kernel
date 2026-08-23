@@ -365,6 +365,13 @@ pub const TERM_CHAR_W: u32 = 8;
 pub const TERM_CHAR_H: u32 = 18;
 pub const TERM_TAB_BAR_H: u32 = 26;
 
+/// Authoritative terminal renderer cell metrics. Grid sizing and any frontend
+/// winsize publication must use this function rather than duplicating atlas
+/// fallback constants.
+pub fn terminal_cell_metrics() -> (u32, u32) {
+    fontatlas::cell_metrics(fontatlas::FontSize::MonoRegular)
+}
+
 /// Compute the (cols, rows) of the terminal content area for a framebuffer.
 /// Callers must size the grid with exactly these dimensions so the renderer
 /// shows every row from the top with no clipping.
@@ -373,7 +380,7 @@ pub const TERM_TAB_BAR_H: u32 = 26;
 /// `TERM_CHAR_W`/`TERM_CHAR_H` (bitmap dimensions) if the atlas is missing.
 pub fn terminal_dims(fb_width: u32, fb_height: u32) -> (usize, usize) {
     let layout = layout::Layout::new(fb_width, fb_height);
-    let (cell_w, cell_h) = fontatlas::cell_metrics(fontatlas::FontSize::MonoRegular);
+    let (cell_w, cell_h) = terminal_cell_metrics();
     let content_y = layout.main.y + TERM_TAB_BAR_H + 4;
     let avail_h = layout.footer.y.saturating_sub(content_y + 4);
     let rows = (avail_h / cell_h) as usize;
@@ -408,7 +415,7 @@ pub unsafe fn render_terminal_grid_interactive(
 
     // Mono cell metrics — Fira Code atlas or bitmap fallback (8, 18).
     // Must match terminal_dims() exactly so rows aren't clipped.
-    let (cell_w, cell_h) = fontatlas::cell_metrics(fontatlas::FontSize::MonoRegular);
+    let (cell_w, cell_h) = terminal_cell_metrics();
 
     // Vertically center UI text in header (48px)
     let ui_lh = fontatlas::line_height(fontatlas::FontSize::Regular);
@@ -1643,6 +1650,8 @@ pub unsafe fn render_login_screen(
 
 #[cfg(test)]
 mod login_interaction_tests {
+    extern crate std;
+
     use super::*;
     use crate::interaction::{hit_test, Point};
 
@@ -1730,5 +1739,13 @@ mod login_interaction_tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn controlled_native_geometry_probe() {
+        let (cols, rows) = terminal_dims(1280, 800);
+        std::println!("rows={rows} cols={cols}");
+        assert!(cols > 80);
+        assert!(rows > 25);
     }
 }

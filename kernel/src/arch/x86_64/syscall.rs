@@ -31,6 +31,9 @@ pub enum SunlightSyscall {
     /// Non-reaping liveness probe used by tty_server to detect when the
     /// foreground app exits. rdi=pid. Returns 1 if alive, 0 otherwise.
     ProcessIsAlive = 25,
+    TtyPublishWinsize = 104,
+    TtyAttachProcess = 105,
+    TtyGetWinsize = 106,
 
     // Process management (Phase 4)
     Fork = 30,
@@ -708,6 +711,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         101 => sys_set_fs_base(frame),
         102 => sys_mint_auth_session_grant(frame),
         103 => sys_pty_get_credentials(frame),
+        104 => sys_tty_publish_winsize(frame),
+        105 => sys_tty_attach_process(frame),
+        106 => sys_tty_get_winsize(),
         110 => sys_kbd_register(frame),
         111 => sys_kbd_unregister(),
         112 => sys_kbd_pop_scancode(),
@@ -1680,6 +1686,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
         env,
         caps,
         tty_tab,
+        tty_generation,
         parent_name,
         parent_cwd,
     ) = {
@@ -1693,6 +1700,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
             crate::process::env::EnvMap::inherit(&p.env),
             p.capabilities.clone(),
             p.tty_tab,
+            p.tty_generation,
             p.name,
             p.cwd.clone(),
         )
@@ -1716,6 +1724,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
         nice,
         caps,
         tty_tab,
+        tty_generation,
     );
 
     thread.native_thread = true;
@@ -2196,6 +2205,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         }
     }
     let parent_tty_tab = parent.tty_tab;
+    let parent_tty_generation = parent.tty_generation;
     let parent_cwd = parent.cwd.clone();
     let stdout_entry = if stdout_fd != u64::MAX {
         parent.fd_table.get(stdout_fd as i32).copied()
@@ -2227,6 +2237,11 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.tty_tab = crate::process::spawn::shell_id_from_path(path_str)
         .map(|id| id as u8)
         .or(parent_tty_tab);
+    child.tty_generation = if child.tty_tab == parent_tty_tab {
+        parent_tty_generation
+    } else {
+        0
+    };
 
     let argv_refs: alloc::vec::Vec<&[u8]> = argv_bytes.iter().map(|v| v.as_slice()).collect();
     let envp_strings = child.env.to_envp();
@@ -2630,6 +2645,99 @@ fn sys_pty_get_credentials(frame: &mut SyscallFrame) -> u64 {
     };
     frame.r8 = target.pid as u64;
     target.uid as u64 | ((target.gid as u64) << 32)
+}
+
+/// Trusted terminal-frontend publication of authoritative per-instance
+/// geometry. For the PTY broker rdi=session id; for the legacy TTY service it
+/// is the low-range tab id. rsi=generation, rdx=packed size (zero clears).
+fn sys_tty_publish_winsize(frame: &mut SyscallFrame) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    let publisher_is_pty = sched.current_process().trusted_pty_service;
+    let publisher_is_legacy_tty = sched.current_process().trusted_tty_session_service;
+    if !publisher_is_pty && !publisher_is_legacy_tty {
+        return u64::MAX;
+    }
+    drop(sched);
+
+    let routing_id = if publisher_is_pty {
+        frame
+            .rdi
+            .checked_add(u64::from(::sunlight_ipc::PTY_TTY_TAB_BASE))
+    } else {
+        Some(frame.rdi)
+    };
+    let tab = match routing_id.and_then(|id| usize::try_from(id).ok()) {
+        Some(tab) if tab < crate::process::tty_io::MAX_TTY_TABS => tab,
+        _ => return u64::MAX,
+    };
+    let size = if frame.rdx == 0 {
+        None
+    } else {
+        let Some(size) = ::sunlight_ipc::TerminalWinsize::from_wire(frame.rdx) else {
+            return u64::MAX;
+        };
+        Some(size)
+    };
+    if crate::process::tty_io::publish_winsize(tab, frame.rsi, size) {
+        0
+    } else {
+        u64::MAX
+    }
+}
+
+/// PTY-broker-only controlling-terminal attachment. The generation-qualified
+/// identity is inherited by children and prevents reused PTY slots leaking
+/// geometry across sessions.
+fn sys_tty_attach_process(frame: &mut SyscallFrame) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_pty_service {
+        return u64::MAX;
+    }
+    drop(sched);
+
+    let pid = frame.rdi as usize;
+    let Some(routing_id) = frame
+        .rsi
+        .checked_add(u64::from(::sunlight_ipc::PTY_TTY_TAB_BASE))
+    else {
+        return u64::MAX;
+    };
+    let Ok(tab) = u8::try_from(routing_id) else {
+        return u64::MAX;
+    };
+    if frame.rdx == 0 || crate::process::tty_io::winsize(tab as usize, frame.rdx).is_none() {
+        return u64::MAX;
+    }
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let Some(index) = sched.process_index_by_pid(pid) else {
+        return u64::MAX;
+    };
+    if matches!(
+        sched.processes[index].state,
+        ProcessState::Finished | ProcessState::Reaped
+    ) {
+        return u64::MAX;
+    }
+    sched.processes[index].tty_tab = Some(tab);
+    sched.processes[index].tty_generation = frame.rdx;
+    0
+}
+
+fn process_winsize(process: &crate::process::Process) -> Option<::sunlight_ipc::TerminalWinsize> {
+    let tab = process.tty_tab? as usize;
+    if process.tty_generation == 0 {
+        // Legacy framebuffer TTY fallback. It has no PTY broker attachment;
+        // dynamic graphical terminals always carry a non-zero generation.
+        return crate::process::tty_io::winsize(tab, 0)
+            .or(Some(::sunlight_ipc::TerminalWinsize::new(80, 25, 0, 0)));
+    }
+    crate::process::tty_io::winsize(tab, process.tty_generation)
+}
+
+fn sys_tty_get_winsize() -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    process_winsize(sched.current_process()).map_or(u64::MAX, |size| size.to_wire())
 }
 
 /// Syscall: Setuid (37)
@@ -4861,19 +4969,6 @@ impl LinuxTermios {
     }
 }
 
-/// Linux `struct winsize`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct LinuxWinsize {
-    pub ws_row: u16,
-    pub ws_col: u16,
-    pub ws_xpixel: u16,
-    pub ws_ypixel: u16,
-}
-
-const _: () =
-    assert!(core::mem::size_of::<LinuxWinsize>() == sunlight_compat_linux::abi::WINSIZE_SIZE);
-
 fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
     let request = frame.rsi;
@@ -4936,22 +5031,55 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
             0
         }
         TIOCGWINSZ => {
-            let mut wire = [0u8; 8];
-            wire[0..2].copy_from_slice(&25u16.to_ne_bytes());
-            wire[2..4].copy_from_slice(&80u16.to_ne_bytes());
+            let size = {
+                let sched = crate::sched::SCHEDULER.lock();
+                let process = sched.current_process();
+                let Some(entry) = process.fd_table.get(fd).copied() else {
+                    return linux_errno(9); // EBADF
+                };
+                if !entry.handle.is_tty_stdin() && !entry.handle.is_tty_stdout() {
+                    return linux_errno(25); // ENOTTY
+                }
+                let Some(size) = process_winsize(process) else {
+                    return linux_errno(25); // detached/stale terminal identity
+                };
+                size
+            };
+            let wire = sunlight_compat_linux::abi::LinuxWinsize::new(
+                size.rows,
+                size.columns,
+                size.pixel_width,
+                size.pixel_height,
+            )
+            .to_ne_bytes();
             if crate::memory::user::copy_to_current(argp, &wire).is_err() {
                 return linux_errno(14);
             }
             let mut sched = crate::sched::SCHEDULER.lock();
             let process = sched.current_process_mut();
             if process.is_linux_compat() && process.name[..4].eq_ignore_ascii_case(b"note") {
+                crate::serial_println!(
+                    "[HELIOS-NOTE] geometry rows={} cols={}",
+                    size.rows,
+                    size.columns
+                );
                 crate::serial_println!("[HELIOS-NOTE] terminal initialized");
             }
             0
         }
         TIOCSWINSZ => {
-            // Accept but ignore; we have a fixed 80×25 terminal for now.
-            0
+            let sched = crate::sched::SCHEDULER.lock();
+            let Some(entry) = sched.current_process().fd_table.get(fd) else {
+                return linux_errno(9); // EBADF
+            };
+            if !entry.handle.is_tty_stdin() && !entry.handle.is_tty_stdout() {
+                return linux_errno(25); // ENOTTY
+            }
+            // The graphical frontend owns physical and logical geometry.
+            // Arbitrary slave applications cannot resize that frontend, and
+            // SunlightOS does not yet expose an independent nested-PTY logical
+            // resize operation. Fail explicitly instead of pretending success.
+            linux_errno(1) // EPERM
         }
         _ => {
             crate::serial_println!("[HELIOS] Unhandled ioctl fd={} req={:#x}", fd, request);

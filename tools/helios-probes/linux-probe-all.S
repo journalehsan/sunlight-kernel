@@ -8,12 +8,14 @@
 .equ SYS_MMAP, 9
 .equ SYS_MUNMAP, 11
 .equ SYS_BRK, 12
+.equ SYS_IOCTL, 16
 .equ SYS_NANOSLEEP, 35
 .equ SYS_DUP, 32
 .equ SYS_FCNTL, 72
 .equ SYS_EXIT, 60
 .equ SYS_GETRANDOM, 318
 .equ AT_NULL, 0
+.equ TIOCGWINSZ, 0x5413
 
 _start:
     mov %rsp, %r12
@@ -138,6 +140,34 @@ _start:
     mov $msg_efault_len, %edx
     call emit
 
+    # Linux struct winsize is four native u16s: rows, columns, xpixel, ypixel.
+    # The controlled framebuffer geometry must match the native 138x38 probe.
+    mov $SYS_IOCTL, %eax
+    xor %edi, %edi
+    mov $TIOCGWINSZ, %esi
+    lea winsize(%rip), %rdx
+    syscall
+    test %rax, %rax
+    jne fail
+    cmpw $38, winsize(%rip)
+    jne fail
+    cmpw $138, winsize+2(%rip)
+    jne fail
+    lea msg_winsize(%rip), %rsi
+    mov $msg_winsize_len, %edx
+    call emit
+
+    mov $SYS_IOCTL, %eax
+    xor %edi, %edi
+    mov $TIOCGWINSZ, %esi
+    xor %edx, %edx
+    syscall
+    cmp $-14, %rax
+    jne fail
+    lea msg_winsize_efault(%rip), %rsi
+    mov $msg_winsize_efault_len, %edx
+    call emit
+
     # flags=0 getrandom (zero length is deterministic and pointer-free).
     mov $SYS_GETRANDOM, %eax
     xor %edi, %edi
@@ -190,6 +220,10 @@ msg_enosys: .ascii "LINUX-PROBE invalid-syscall PASS\n"
 .set msg_enosys_len, .-msg_enosys
 msg_efault: .ascii "LINUX-PROBE invalid-pointer PASS\n"
 .set msg_efault_len, .-msg_efault
+msg_winsize: .ascii "LINUX-PROBE winsize rows=38 cols=138 PASS\n"
+.set msg_winsize_len, .-msg_winsize
+msg_winsize_efault: .ascii "LINUX-PROBE winsize-invalid-pointer PASS\n"
+.set msg_winsize_efault_len, .-msg_winsize_efault
 msg_random: .ascii "LINUX-PROBE getrandom PASS\n"
 .set msg_random_len, .-msg_random
 msg_pass: .ascii "LINUX-PROBE TIER1 PASS\n"
@@ -202,3 +236,8 @@ msg_fail: .ascii "LINUX-PROBE TIER1 FAIL\n"
 sleep_ts:
     .quad 0
     .quad 1000000
+
+.section .bss
+.align 2
+winsize:
+    .zero 8
