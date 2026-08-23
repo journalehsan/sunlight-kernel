@@ -699,6 +699,25 @@ fn main() {
         }
     }
 
+    let probes_script = workspace_root.join("tools/build_helios_probes.sh");
+    println!("cargo:rerun-if-changed={}", probes_script.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root.join("tools/helios-probes").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root.join("third_party/sbase").display()
+    );
+    let probe_status = Command::new("bash")
+        .arg(&probes_script)
+        .current_dir(workspace_root)
+        .status()
+        .unwrap_or_else(|err| panic!("failed to invoke helios probe builder: {err}"));
+    if !probe_status.success() {
+        panic!("failed to build Helios Linux probes");
+    }
+
     println!("cargo:rerun-if-changed=build.rs");
 }
 

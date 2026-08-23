@@ -960,6 +960,29 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.
         "/bin/hello-linux" | "/usr/bin/hello-linux" => Ok(crate::HELLO_LINUX_ELF_BYTES),
         "/bin/helios-probe" | "/usr/bin/helios-probe" => Ok(crate::HELIOS_PROBE_ELF_BYTES),
+        "/bin/helios-probe-runtime"
+        | "/usr/bin/helios-probe-runtime"
+        | "/bin/linux-uname"
+        | "/usr/bin/linux-uname"
+        | "/bin/linux-ids"
+        | "/usr/bin/linux-ids"
+        | "/bin/linux-gettimeofday"
+        | "/usr/bin/linux-gettimeofday"
+        | "/bin/linux-mkdir"
+        | "/usr/bin/linux-mkdir"
+        | "/bin/linux-getdents64"
+        | "/usr/bin/linux-getdents64"
+        | "/bin/linux-pread-pwrite"
+        | "/usr/bin/linux-pread-pwrite"
+        | "/bin/linux-access"
+        | "/usr/bin/linux-access"
+        | "/bin/linux-open-flags"
+        | "/usr/bin/linux-open-flags"
+        | "/bin/linux-dup3"
+        | "/usr/bin/linux-dup3"
+        | "/bin/linux-stat-metadata"
+        | "/usr/bin/linux-stat-metadata" => Ok(crate::HELIOS_PROBE_RUNTIME_ELF_BYTES),
+        "/bin/linux-echo" | "/usr/bin/linux-echo" => Ok(crate::SBASE_ECHO_ELF_BYTES),
         // helios-note: std+libc terminal note editor (Helios Linux compat).
         "/bin/note" | "/usr/bin/note" => Ok(crate::HELIOS_NOTE_ELF_BYTES),
         // Phase 6.5 Step 3: PATH entries under these directories are applets

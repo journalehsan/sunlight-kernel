@@ -1182,6 +1182,30 @@ mod sunlight {
                     cmd,
                     "/bin/helios-probe"
                         | "/usr/bin/helios-probe"
+                        | "/bin/helios-probe-runtime"
+                        | "/usr/bin/helios-probe-runtime"
+                        | "/bin/linux-echo"
+                        | "/usr/bin/linux-echo"
+                        | "/bin/linux-uname"
+                        | "/usr/bin/linux-uname"
+                        | "/bin/linux-ids"
+                        | "/usr/bin/linux-ids"
+                        | "/bin/linux-gettimeofday"
+                        | "/usr/bin/linux-gettimeofday"
+                        | "/bin/linux-mkdir"
+                        | "/usr/bin/linux-mkdir"
+                        | "/bin/linux-getdents64"
+                        | "/usr/bin/linux-getdents64"
+                        | "/bin/linux-pread-pwrite"
+                        | "/usr/bin/linux-pread-pwrite"
+                        | "/bin/linux-access"
+                        | "/usr/bin/linux-access"
+                        | "/bin/linux-open-flags"
+                        | "/usr/bin/linux-open-flags"
+                        | "/bin/linux-dup3"
+                        | "/usr/bin/linux-dup3"
+                        | "/bin/linux-stat-metadata"
+                        | "/usr/bin/linux-stat-metadata"
                         | "/bin/note"
                         | "/usr/bin/note"
                         | "/bin/hello-linux"
@@ -1194,7 +1218,24 @@ mod sunlight {
                     None
                 };
             }
-            let embedded_linux = matches!(cmd, "helios-probe" | "note" | "hello-linux");
+            let embedded_linux = matches!(
+                cmd,
+                "helios-probe"
+                    | "helios-probe-runtime"
+                    | "linux-echo"
+                    | "linux-uname"
+                    | "linux-ids"
+                    | "linux-gettimeofday"
+                    | "linux-mkdir"
+                    | "linux-getdents64"
+                    | "linux-pread-pwrite"
+                    | "linux-access"
+                    | "linux-open-flags"
+                    | "linux-dup3"
+                    | "linux-stat-metadata"
+                    | "note"
+                    | "hello-linux"
+            );
             for dir in self.env.path_entries() {
                 let candidate = if dir.ends_with('/') {
                     alloc::format!("{}{}", dir, cmd)

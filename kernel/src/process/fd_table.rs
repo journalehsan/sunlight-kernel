@@ -394,23 +394,52 @@ impl FdTable {
     /// `old_fd == new_fd` is a no-op that returns `(new_fd, None)` if valid.
     /// The new descriptor does not inherit close-on-exec.
     pub fn dup2(&mut self, old_fd: i32, new_fd: i32) -> Result<(i32, Option<FileHandle>), FdError> {
+        self.dup2_with_cloexec(old_fd, new_fd, false, true)
+    }
+
+    /// Linux `dup3`: like `dup2`, but `old_fd == new_fd` is an error and the
+    /// new descriptor's close-on-exec bit is set from `cloexec`.
+    pub fn dup3(
+        &mut self,
+        old_fd: i32,
+        new_fd: i32,
+        cloexec: bool,
+    ) -> Result<(i32, Option<FileHandle>), FdError> {
+        self.dup2_with_cloexec(old_fd, new_fd, cloexec, false)
+    }
+
+    fn dup2_with_cloexec(
+        &mut self,
+        old_fd: i32,
+        new_fd: i32,
+        cloexec: bool,
+        allow_same: bool,
+    ) -> Result<(i32, Option<FileHandle>), FdError> {
         if new_fd < 0 || new_fd >= 256 {
             return Err(FdError::InvalidFd);
         }
-        let orig = *self.get(old_fd).ok_or(FdError::InvalidFd)?;
         if old_fd == new_fd {
-            return Ok((new_fd, None));
+            if allow_same {
+                let _ = self.get(old_fd).ok_or(FdError::InvalidFd)?;
+                return Ok((new_fd, None));
+            }
+            return Err(FdError::InvalidFd);
         }
+        let orig = *self.get(old_fd).ok_or(FdError::InvalidFd)?;
 
         const O_CLOEXEC: u32 = 0x0008_0000;
         let displaced = self.entries[new_fd as usize]
             .take()
             .map(|descriptor| descriptor.handle);
+        let mut flags = orig.flags & !O_CLOEXEC;
+        if cloexec {
+            flags |= O_CLOEXEC;
+        }
         self.entries[new_fd as usize] = Some(FileDescriptor {
             fd: new_fd,
             handle: orig.handle,
             rights: orig.rights,
-            flags: orig.flags & !O_CLOEXEC,
+            flags,
             offset: orig.offset,
         });
         Ok((new_fd, displaced))
@@ -558,5 +587,20 @@ mod tests {
         assert_eq!(table.dup(fd4).unwrap(), 3);
         table.close(fd4).unwrap();
         assert_eq!(table.open(FileHandle(12), READ, 0).unwrap(), 4);
+    }
+
+    #[test]
+    fn dup3_rejects_same_fd_and_honours_cloexec() {
+        let mut table = FdTable::new();
+        let old = table.open(FileHandle::vfs(7), READ, 0).unwrap();
+        assert_eq!(table.dup3(old, old, true), Err(FdError::InvalidFd));
+
+        let occupied = table.open(FileHandle::vfs(8), READ, 0).unwrap();
+        let (new_fd, displaced) = table.dup3(old, occupied, true).unwrap();
+        assert_eq!(new_fd, occupied);
+        assert_eq!(displaced, Some(FileHandle::vfs(8)));
+        assert_eq!(table.get(new_fd).unwrap().handle, FileHandle::vfs(7));
+        assert_eq!(table.get(new_fd).unwrap().flags & 0x0008_0000, 0x0008_0000);
+        assert_eq!(table.get(old).unwrap().flags & 0x0008_0000, 0);
     }
 }

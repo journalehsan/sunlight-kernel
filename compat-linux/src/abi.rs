@@ -87,7 +87,10 @@ pub const SYS_BRK: u64 = 12;
 pub const SYS_RT_SIGACTION: u64 = 13;
 pub const SYS_RT_SIGPROCMASK: u64 = 14;
 pub const SYS_IOCTL: u64 = 16;
+pub const SYS_PREAD64: u64 = 17;
+pub const SYS_PWRITE64: u64 = 18;
 pub const SYS_WRITEV: u64 = 20;
+pub const SYS_ACCESS: u64 = 21;
 pub const SYS_PIPE: u64 = 22;
 pub const SYS_SCHED_YIELD: u64 = 24;
 pub const SYS_DUP: u64 = 32;
@@ -110,10 +113,17 @@ pub const SYS_CHDIR: u64 = 80;
 pub const SYS_RENAME: u64 = 82;
 pub const SYS_MKDIR: u64 = 83;
 pub const SYS_UNLINK: u64 = 87;
+pub const SYS_READLINK: u64 = 89;
+pub const SYS_GETTIMEOFDAY: u64 = 96;
+pub const SYS_GETUID: u64 = 102;
+pub const SYS_GETGID: u64 = 104;
+pub const SYS_GETEUID: u64 = 107;
+pub const SYS_GETEGID: u64 = 108;
 pub const SYS_GETPPID: u64 = 110;
 pub const SYS_SIGALTSTACK: u64 = 131;
 pub const SYS_ARCH_PRCTL: u64 = 158;
 pub const SYS_GETTID: u64 = 186;
+pub const SYS_GETDENTS64: u64 = 217;
 pub const SYS_TKILL: u64 = 200;
 pub const SYS_FUTEX: u64 = 202;
 pub const SYS_SET_TID_ADDRESS: u64 = 218;
@@ -123,9 +133,12 @@ pub const SYS_EPOLL_WAIT: u64 = 232;
 pub const SYS_EPOLL_CTL: u64 = 233;
 pub const SYS_EPOLL_CREATE: u64 = 213;
 pub const SYS_OPENAT: u64 = 257;
+pub const SYS_MKDIRAT: u64 = 258;
 pub const SYS_NEWFSTATAT: u64 = 262;
 pub const SYS_UNLINKAT: u64 = 263;
 pub const SYS_RENAMEAT: u64 = 264;
+pub const SYS_READLINKAT: u64 = 267;
+pub const SYS_FACCESSAT: u64 = 269;
 pub const SYS_EPOLL_PWAIT: u64 = 281;
 pub const SYS_EPOLL_CREATE1: u64 = 291;
 pub const SYS_DUP3: u64 = 292;
@@ -141,6 +154,9 @@ pub const SUN_FORK: i64 = 30;
 pub const SUN_EXEC: i64 = 31;
 pub const SUN_WAITPID: i64 = 32;
 pub const SUN_GETPID: i64 = 33;
+pub const SUN_GETPPID: i64 = 34;
+pub const SUN_GETUID: i64 = 35;
+pub const SUN_GETGID: i64 = 36;
 pub const SUN_OPEN: i64 = 40;
 pub const SUN_CLOSE: i64 = 41;
 pub const SUN_READ: i64 = 42;
@@ -188,7 +204,16 @@ pub const SHIM_SOCKETPAIR: i64 = -26;
 pub const SHIM_UNLINKAT: i64 = -27;
 pub const SHIM_NEWFSTATAT: i64 = -28;
 pub const SHIM_WAIT4: i64 = -29;
+pub const SHIM_UNAME: i64 = -30;
+pub const SHIM_GETTIMEOFDAY: i64 = -31;
+pub const SHIM_DUP3: i64 = -32;
+pub const SHIM_PREAD64: i64 = -33;
+pub const SHIM_PWRITE64: i64 = -34;
+pub const SHIM_GETDENTS64: i64 = -35;
+pub const SHIM_FACCESSAT: i64 = -36;
+pub const SHIM_MKDIRAT: i64 = -37;
 pub const SHIM_ENOSYS: i64 = -38;
+pub const SHIM_READLINKAT: i64 = -39;
 
 pub const MAP_PRIVATE: u64 = 0x02;
 pub const MAP_FIXED: u64 = 0x10;
@@ -203,13 +228,44 @@ pub const PROT_EXEC: u32 = 0x4;
 pub const O_RDONLY: u64 = 0;
 pub const O_WRONLY: u64 = 1;
 pub const O_RDWR: u64 = 2;
+pub const O_ACCMODE: u64 = 3;
 pub const O_CREAT: u64 = 0x40;
 pub const O_EXCL: u64 = 0x80;
+pub const O_NOCTTY: u64 = 0x100;
 pub const O_TRUNC: u64 = 0x200;
 pub const O_APPEND: u64 = 0x400;
 pub const O_NONBLOCK: u64 = 0x800;
+pub const O_DIRECTORY: u64 = 0x1_0000;
+pub const O_NOFOLLOW: u64 = 0x2_0000;
 pub const O_CLOEXEC: u64 = 0x0008_0000;
 pub const GRND_NONBLOCK: u64 = 0x1;
+
+/// Linux open(2) flags Helios accepts. Unknown bits are rejected rather than
+/// silently ignored. O_NOCTTY and O_NOFOLLOW are accepted as no-ops: Sunlight
+/// does not assign a controlling TTY on open, and the VFS has no symlinks.
+pub const OPEN_SUPPORTED_FLAGS: u64 = O_ACCMODE
+    | O_CREAT
+    | O_EXCL
+    | O_NOCTTY
+    | O_TRUNC
+    | O_APPEND
+    | O_NONBLOCK
+    | O_DIRECTORY
+    | O_NOFOLLOW
+    | O_CLOEXEC;
+
+pub const F_OK: u64 = 0;
+pub const X_OK: u64 = 1;
+pub const W_OK: u64 = 2;
+pub const R_OK: u64 = 4;
+pub const ACCESS_OK_MASK: u64 = R_OK | W_OK | X_OK;
+
+pub const CLOCK_REALTIME: i32 = 0;
+pub const CLOCK_MONOTONIC: i32 = 1;
+
+pub const DT_UNKNOWN: u8 = 0;
+pub const DT_DIR: u8 = 4;
+pub const DT_REG: u8 = 8;
 
 pub const F_DUPFD: u64 = 0;
 pub const F_GETFD: u64 = 1;
@@ -222,6 +278,12 @@ pub const FD_CLOEXEC: u64 = 1;
 pub const AT_FDCWD: i32 = -100;
 pub const AT_SYMLINK_NOFOLLOW: u64 = 0x100;
 pub const AT_REMOVEDIR: u64 = 0x200;
+pub const AT_EACCESS: u64 = 0x200;
+pub const AT_EMPTY_PATH: u64 = 0x1000;
+
+/// faccessat flags with a native-grounded meaning. AT_EACCESS is accepted as a
+/// no-op because Sunlight stores a single uid/gid with no saved/effective split.
+pub const FACCESSAT_SUPPORTED_FLAGS: u64 = AT_SYMLINK_NOFOLLOW | AT_EACCESS;
 
 pub const AT_NULL: u64 = 0;
 pub const AT_PHDR: u64 = 3;
@@ -240,6 +302,10 @@ pub const AT_EXECFN: u64 = 31;
 pub const STAT_SIZE: usize = 144;
 pub const TIMESPEC_SIZE: usize = 16;
 pub const TIMEVAL_SIZE: usize = 16;
+pub const TIMEZONE_SIZE: usize = 8;
+pub const UTSNAME_FIELD: usize = 65;
+pub const UTSNAME_SIZE: usize = UTSNAME_FIELD * 6;
+pub const DIRENT64_HEADER: usize = 19;
 pub const POLLFD_SIZE: usize = 8;
 pub const IOVEC_SIZE: usize = 16;
 pub const TERMIOS_SIZE: usize = 60;
@@ -250,11 +316,19 @@ pub const STACK_T_SIZE: usize = 24;
 
 const _: () = assert!(STAT_SIZE == 144);
 const _: () = assert!(TIMESPEC_SIZE == 16);
+const _: () = assert!(TIMEVAL_SIZE == 16);
+const _: () = assert!(UTSNAME_SIZE == 390);
 const _: () = assert!(POLLFD_SIZE == 8);
 const _: () = assert!(IOVEC_SIZE == 16);
 const _: () = assert!(TERMIOS_SIZE == 60);
 const _: () = assert!(WINSIZE_SIZE == 8);
 const _: () = assert!(EPOLL_EVENT_SIZE == 12);
+
+/// Packed linux_dirent64 record size: 8+8+2+1+name+NUL, rounded up to 8.
+pub const fn dirent64_reclen(name_len: usize) -> usize {
+    let unaligned = DIRENT64_HEADER + name_len + 1;
+    (unaligned + 7) & !7
+}
 
 #[cfg(test)]
 mod tests {
@@ -321,5 +395,22 @@ mod tests {
         assert_eq!(SYS_UNAME, 63);
         assert_eq!(SYS_MKDIR, 83);
         assert_eq!(SYS_DUP3, 292);
+        assert_eq!(SYS_PREAD64, 17);
+        assert_eq!(SYS_PWRITE64, 18);
+        assert_eq!(SYS_ACCESS, 21);
+        assert_eq!(SYS_GETTIMEOFDAY, 96);
+        assert_eq!(SYS_GETUID, 102);
+        assert_eq!(SYS_GETGID, 104);
+        assert_eq!(SYS_GETEUID, 107);
+        assert_eq!(SYS_GETEGID, 108);
+        assert_eq!(SYS_GETDENTS64, 217);
+        assert_eq!(SYS_MKDIRAT, 258);
+        assert_eq!(SYS_READLINKAT, 267);
+        assert_eq!(SYS_FACCESSAT, 269);
+        assert_eq!(SYS_READLINK, 89);
+        assert_eq!(UTSNAME_SIZE, 390);
+        assert_eq!(dirent64_reclen(1), 24);
+        assert_eq!(dirent64_reclen(4), 24);
+        assert_eq!(dirent64_reclen(5), 32);
     }
 }

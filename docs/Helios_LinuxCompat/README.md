@@ -4,11 +4,37 @@ Helios is the bounded in-kernel Linux personality for static x86_64 Linux
 ELF executables. It is a compatibility tier, not a Linux userspace or POSIX
 rewrite of SunlightOS.
 
-The current executable evidence is `PROVEN TIER 1`: the QEMU gate
-`tools/test.sh helios-proven-tier1` launches `/bin/helios-probe` and verifies
-startup metadata, file descriptors, brk, mmap, nanosleep, errno, pointer
-validation, and getrandom. `tools/test.sh helios-note-regression` separately
-proves that Helios Note reaches its terminal interactive-ready state.
+## Static Linux baseline (this phase)
+
+After the static-runtime expansion, Helios claims the following subset and
+nothing beyond it:
+
+- architecture: x86_64
+- image: static ELF `ET_EXEC`
+- one process / one task
+- single-threaded Linux userspace
+- no dynamic linker, `PT_INTERP`, glibc, or `ld-linux`
+- no `fork`, `vfork`, `clone`, `clone3`, pthreads, or futexes
+- no asynchronous Linux signal-handler delivery
+- native Sunlight VFS, scheduler, memory, and TTY underneath
+- Linux syscall ABI validated and translated at the Helios boundary
+
+Unsupported Linux programs fail closed (`-ENOSYS` or a specific Linux errno).
+Do not infer generic Linux binary support from this list.
+
+Architecture:
+
+```text
+Linux static ELF
+  -> explicit Helios personality
+  -> Linux ABI validation
+  -> compatibility translation
+  -> native Sunlight primitive
+  -> Sunlight VFS / scheduler / memory / TTY / kernel
+```
+
+Linux-only state stays in `LinuxProcessState`. Native file handles, VFS
+objects, and `Process` identity remain Sunlight-shaped.
 
 ## Personality selection
 
@@ -20,83 +46,128 @@ Personality is selected before userspace execution in
   stamping/build scripts.
 
 `EI_OSABI == 0` is native Sunlight. Other or malformed inputs are
-`Unknown` and fail closed; they are never tried under the native ABI after
-Linux execution begins. Native images therefore cannot enter Linux syscall
-translation through a heuristic.
+`Unknown` and fail closed.
 
-## Architecture
+## Proven executable gates
 
-```text
-ELF bytes
-  -> explicit Personality selection
-  -> ProcessPersonality::Linux(LinuxProcessState)
-  -> validated Linux ABI structures
-  -> bounded syscall shim/translation
-  -> native VFS, scheduler, TTY, and memory primitives
-```
+- `tools/test.sh helios-proven-tier1` — startup, fd, brk, mmap, nanosleep,
+  errno, pointer validation, getrandom.
+- `tools/test.sh helios-note-regression` — Helios Note reaches interactive-ready.
+- `tools/test.sh helios-static-runtime` — tier-1 probe, filesystem/identity
+  runtime probe, unmodified sbase `echo(1)`, and Helios Note.
 
-Linux-only state is held in `LinuxProcessState`: brk metadata, termios,
-poll/timer wake bookkeeping, alternate-stack metadata, and the bounded
-Helios Note readiness marker. Native processes use `ProcessPersonality::Native`.
+## Identity, time, and uname
 
-## Proven static subset
+`getuid` / `geteuid` / `getgid` / `getegid` read the process uid/gid.
+Sunlight has no saved/effective split, so effective IDs equal real IDs.
+`getppid` returns the recorded parent pid.
 
-The probe currently covers:
+`uname(2)` returns Helios/Sunlight identity, not a fake Linux distribution:
 
-`read`, `write`, `close`, `dup`, `fcntl(F_GETFD)`, `brk`, `mmap`,
-`munmap`, `nanosleep`, invalid syscall (`-ENOSYS`), invalid pointer
-(`-EFAULT`), and `getrandom(flags=0)`.
+| Field | Value |
+| --- | --- |
+| `sysname` | `SunlightOS` |
+| `nodename` | `sunlight` |
+| `release` | kernel `CARGO_PKG_VERSION` |
+| `version` | `Helios static Linux ABI` |
+| `machine` | `x86_64` |
+| `domainname` | `(none)` |
 
-The static startup surface also includes validated `arch_prctl`,
-`set_tid_address`, `set_robust_list`, `rseq` (intentional `-ENOSYS`),
-`clock_gettime`, `poll`, `ioctl`/termios, Linux stat translation, and the
-bounded `openat`/`newfstatat`/`unlinkat`/`renameat` family.
+`clock_gettime` accepts `CLOCK_REALTIME` (0) and `CLOCK_MONOTONIC` (1) only.
+`gettimeofday` uses the same realtime source; a non-NULL timezone pointer is
+filled with zeros. `nanosleep` remains timer-backed with timespec validation.
 
-`AT_FDCWD` and absolute paths are supported. Relative paths with an
-unsupported directory fd return `-ENOSYS`; the fd is never silently ignored.
-Unknown `getrandom` flag bits return `-EINVAL`.
+## Filesystem and directory entries
 
-`brk(0)` reports the process break. Growth maps owned pages, shrink removes
-only the owned brk region, and failed growth returns the previous break.
-Anonymous Linux mmap allocations use a cursor separated from the brk arena.
+Native VFS now allows opening directories. `read`/`write`/`truncate` on a
+directory still return `EISDIR`. `mkdir` reports `EEXIST` for an existing
+path.
+
+`getdents64` synthesizes Linux `linux_dirent64` records (never a native
+`VfsDirEntry`). It emits `.` and `..` first, then VFS children. `d_ino` is a
+stable FNV-1a hash of the absolute path — synthetic, not a disk inode.
+`d_off` is the next entry index and is stored in the descriptor offset.
+Partial records are never written; a buffer smaller than one record returns
+`-EINVAL`. End of directory returns 0.
+
+Sunlight VFS has no symbolic links. `readlink` / `readlinkat` return
+`-EINVAL` for an existing object and `-ENOENT` when the path is missing.
+
+`access` / `faccessat` use native mode bits via `check_permission`.
+`AT_SYMLINK_NOFOLLOW` and `AT_EACCESS` are accepted as no-ops. Other flags
+are rejected.
+
+### open(2) flags
+
+| Flag | Status |
+| --- | --- |
+| `O_RDONLY` / `O_WRONLY` / `O_RDWR` | SUPPORTED |
+| `O_CREAT` / `O_EXCL` / `O_TRUNC` | SUPPORTED |
+| `O_APPEND` | SUPPORTED |
+| `O_CLOEXEC` | SUPPORTED (descriptor flag) |
+| `O_NONBLOCK` | PARTIAL (pipes/TTY already non-blocking; regular files ignore it as Linux does) |
+| `O_DIRECTORY` | SUPPORTED |
+| `O_NOFOLLOW` | PARTIAL no-op (no symlinks) |
+| `O_NOCTTY` | PARTIAL no-op (no controlling TTY assignment) |
+| other bits | REJECTED (`-EINVAL`) |
+
+Descriptor flags (`FD_CLOEXEC`) remain distinct from file status flags
+(`O_APPEND`, `O_NONBLOCK`).
+
+### dirfd
+
+`openat`, `mkdirat`, `newfstatat`, `unlinkat`, `renameat`, `faccessat`, and
+`readlinkat` resolve:
+
+- `AT_FDCWD` + relative path against the process cwd
+- absolute paths, ignoring dirfd
+- a directory fd + relative path using the path captured at open
+- bad fd → `-EBADF`
+- non-directory fd → `-ENOTDIR`
+- `.` / `..` segments → `-EINVAL` (native VFS path policy)
+
+Directory-fd resolution is path-based, not a live inode walk. A directory
+renamed after it is opened may fail. This is documented, not hidden.
+
+`pread64` / `pwrite64` use the native positional VFS `read`/`write` and do
+not move the shared descriptor offset. Non-seekable handles return `-ESPIPE`.
+Linux `pwrite` on `O_APPEND` writes at the end of the file.
+
+### stat
+
+Linux `struct stat` is 144 bytes with compile-time size assertions. Fields
+with a native source (`st_mode` type+perm, `st_nlink`, `st_uid`, `st_gid`,
+`st_size`) are copied. `st_dev` is the synthetic device id `1`. `st_ino` is
+the path hash described above. `st_rdev` is 0. `st_blksize` is 4096.
+`st_blocks` is derived from size. atime/mtime/ctime stay 0 because the VFS
+does not track timestamps.
 
 ## Signals and intentional limits
 
 Single-threaded compatibility state records supported signal dispositions,
 the signal mask, and `sigaltstack` metadata. Handler delivery, signal frames,
 `rt_sigreturn`, process groups, and thread-directed asynchronous semantics are
-not implemented and are not claimed. Unsupported signal operations fail with
-Linux errors. `set_tid_address` and `set_robust_list` validate pointers but do
-not create thread/futex semantics.
+not implemented. `set_tid_address` and `set_robust_list` validate pointers but
+do not create thread/futex semantics.
 
-The following remain outside this tier: `fork`, `vfork`, `clone`, pthreads,
-futexes, dynamic ELF interpreters/PT_INTERP, glibc, `/proc`, sockets and
-network expansion, namespaces, containers, and GUI Linux applications.
-Unsupported calls return `-ENOSYS`.
+Outside this tier: `fork`, `vfork`, `clone`, pthreads, futexes, dynamic ELF,
+glibc, `/proc`, sockets/network expansion, namespaces, containers, and GUI
+Linux applications.
 
-TTY geometry is currently a stable synthetic 80x25 contract because no live
-window-size source is exposed by the native TTY path. Termios raw/cooked state
-is preserved per Linux process. Stat fields without native inode/timestamp
-sources remain documented synthetic values rather than being presented as
-authoritative filesystem identity.
+TTY geometry remains a stable synthetic 80x25 contract.
 
-## Embedded workloads and gates
+## Embedded workloads
 
-- `/bin/helios-probe`: source `tools/helios-probes/linux-probe-all.S`,
-  built by `tools/build_helios_probes.sh`.
-- `/bin/hello-linux`: static musl smoke test.
-- `/bin/note`: static musl Helios Note (`helios-note/`).
-
-The build scripts stamp the explicit marker and retain OSABI 3 for existing
-images. Do not commit generated `target/` outputs or opaque binaries other
-than the existing checked-in hello-linux fixture.
+- `/bin/helios-probe`: `tools/helios-probes/linux-probe-all.S`
+- `/bin/helios-probe-runtime` and `/bin/linux-*` names: runtime semantic probe
+- `/bin/linux-echo`: unmodified sbase `echo.c` (MIT) with a tiny syscall libc
+- `/bin/hello-linux`: static musl smoke test
+- `/bin/note`: Helios Note
 
 Run:
 
 ```text
 tools/test.sh helios-proven-tier1
 tools/test.sh helios-note-regression
+tools/test.sh helios-static-runtime
 ```
-
-These gates require actual process execution and PASS markers; loading an ELF
-or surviving a boot is not sufficient evidence.

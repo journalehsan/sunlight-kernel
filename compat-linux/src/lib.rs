@@ -384,8 +384,12 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         // the destination fd (uninitialized) and skipped the native Dup path.
         SYS_DUP => SUN_DUP,
         SYS_DUP2 => SUN_DUP2,
+        SYS_DUP3 => SHIM_DUP3,
 
         SYS_GETPID | SYS_GETTID => SUN_GETPID,
+        SYS_GETPPID => SUN_GETPPID,
+        SYS_GETUID | SYS_GETEUID => SUN_GETUID,
+        SYS_GETGID | SYS_GETEGID => SUN_GETGID,
         SYS_FORK => SUN_FORK,
         SYS_VFORK => SHIM_VFORK,
         SYS_CLONE => SHIM_CLONE,
@@ -417,11 +421,19 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_CHDIR => SUN_CHDIR,
         SYS_GETRANDOM => SHIM_GETRANDOM,
         SYS_CLOCK_GETTIME => SHIM_CLOCK_GETTIME,
+        SYS_GETTIMEOFDAY => SHIM_GETTIMEOFDAY,
+        SYS_UNAME => SHIM_UNAME,
         SYS_RENAME => SUN_RENAME,
         SYS_RENAMEAT => SHIM_RENAMEAT,
         SYS_UNLINK => SUN_UNLINK,
         SYS_UNLINKAT => SHIM_UNLINKAT,
         SYS_NANOSLEEP => SHIM_NANOSLEEP,
+        SYS_MKDIR | SYS_MKDIRAT => SHIM_MKDIRAT,
+        SYS_ACCESS | SYS_FACCESSAT => SHIM_FACCESSAT,
+        SYS_PREAD64 => SHIM_PREAD64,
+        SYS_PWRITE64 => SHIM_PWRITE64,
+        SYS_GETDENTS64 => SHIM_GETDENTS64,
+        SYS_READLINK | SYS_READLINKAT => SHIM_READLINKAT,
 
         SYS_EPOLL_CREATE | SYS_EPOLL_CREATE1 => SHIM_EPOLL_CREATE,
         SYS_EPOLL_CTL => SHIM_EPOLL_CTL,
@@ -492,6 +504,18 @@ pub fn needs_special_handling(linux_nr: u64) -> bool {
             | 293
             | 53
             | 61
+            | 17
+            | 18
+            | 21
+            | 63
+            | 83
+            | 89
+            | 96
+            | 217
+            | 258
+            | 267
+            | 269
+            | 292
     )
 }
 
@@ -549,10 +573,26 @@ mod tests {
         assert_eq!(translate_syscall(53), -26); // socketpair
         assert_eq!(translate_syscall(999), -38);
         assert_eq!(translate_syscall(abi::SYS_FUTEX), -38);
-        assert_eq!(translate_syscall(abi::SYS_UNAME), -38);
-        assert_eq!(translate_syscall(abi::SYS_MKDIR), -38);
-        assert_eq!(translate_syscall(abi::SYS_GETPPID), -38);
-        assert_eq!(translate_syscall(abi::SYS_DUP3), -38);
+        assert_eq!(translate_syscall(abi::SYS_UNAME), abi::SHIM_UNAME);
+        assert_eq!(translate_syscall(abi::SYS_MKDIR), abi::SHIM_MKDIRAT);
+        assert_eq!(translate_syscall(abi::SYS_MKDIRAT), abi::SHIM_MKDIRAT);
+        assert_eq!(translate_syscall(abi::SYS_GETPPID), abi::SUN_GETPPID);
+        assert_eq!(translate_syscall(abi::SYS_GETUID), abi::SUN_GETUID);
+        assert_eq!(translate_syscall(abi::SYS_GETEUID), abi::SUN_GETUID);
+        assert_eq!(translate_syscall(abi::SYS_GETGID), abi::SUN_GETGID);
+        assert_eq!(translate_syscall(abi::SYS_GETEGID), abi::SUN_GETGID);
+        assert_eq!(translate_syscall(abi::SYS_DUP3), abi::SHIM_DUP3);
+        assert_eq!(translate_syscall(abi::SYS_PREAD64), abi::SHIM_PREAD64);
+        assert_eq!(translate_syscall(abi::SYS_PWRITE64), abi::SHIM_PWRITE64);
+        assert_eq!(translate_syscall(abi::SYS_GETDENTS64), abi::SHIM_GETDENTS64);
+        assert_eq!(translate_syscall(abi::SYS_ACCESS), abi::SHIM_FACCESSAT);
+        assert_eq!(translate_syscall(abi::SYS_FACCESSAT), abi::SHIM_FACCESSAT);
+        assert_eq!(
+            translate_syscall(abi::SYS_GETTIMEOFDAY),
+            abi::SHIM_GETTIMEOFDAY
+        );
+        assert_eq!(translate_syscall(abi::SYS_READLINK), abi::SHIM_READLINKAT);
+        assert_eq!(translate_syscall(abi::SYS_READLINKAT), abi::SHIM_READLINKAT);
     }
 
     #[test]
@@ -605,6 +645,9 @@ mod tests {
         assert!(needs_special_handling(131));
         assert!(needs_special_handling(318));
         assert!(needs_special_handling(61));
+        assert!(needs_special_handling(63));
+        assert!(needs_special_handling(17));
+        assert!(needs_special_handling(292));
         assert!(!needs_special_handling(1));
         assert!(!needs_special_handling(32));
     }

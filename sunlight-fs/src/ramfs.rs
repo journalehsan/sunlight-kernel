@@ -243,9 +243,6 @@ impl RamFs {
 impl FileSystem for RamFs {
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
         let entry_idx = self.entry_idx(path)?;
-        if self.is_dir(entry_idx) {
-            return Err(FsError::IsDir);
-        }
         self.alloc_handle(entry_idx)
     }
 
@@ -306,6 +303,9 @@ impl FileSystem for RamFs {
         buf: &mut [u8],
     ) -> Result<usize, FsError> {
         let entry_idx = self.handle_entry_idx(handle)?;
+        if self.is_dir(entry_idx) {
+            return Err(FsError::IsDir);
+        }
         let data = self.entry_data(entry_idx);
         if offset >= data.len() {
             return Ok(0);
@@ -318,6 +318,9 @@ impl FileSystem for RamFs {
 
     fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError> {
         let entry_idx = self.handle_entry_idx(handle)?;
+        if self.is_dir(entry_idx) {
+            return Err(FsError::IsDir);
+        }
         let current = self.entry_data(entry_idx);
         let mut new_data = Vec::new();
         if offset <= current.len() {
@@ -337,6 +340,9 @@ impl FileSystem for RamFs {
 
     fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
         let entry_idx = self.handle_entry_idx(handle)?;
+        if self.is_dir(entry_idx) {
+            return Err(FsError::IsDir);
+        }
         self.set_entry_data(entry_idx, Vec::new());
         Ok(())
     }
@@ -402,7 +408,7 @@ impl FileSystem for RamFs {
     fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError> {
         path::validate_absolute(path)?;
         if self.entry_idx(path).is_ok() {
-            return Err(FsError::InvalidPath);
+            return Err(FsError::AlreadyExists);
         }
         if !self.parent_is_dir(path)? {
             return Err(FsError::NotDir);
@@ -534,6 +540,17 @@ impl FileSystem for RamFs {
             }
         }
         Ok(())
+    }
+
+    fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError> {
+        let idx = self.handle_entry_idx(handle)?;
+        let path = self.entry_path(idx).ok_or(FsError::BadHandle)?;
+        let bytes = path.as_bytes();
+        if buf.len() < bytes.len() {
+            return Err(FsError::InvalidPath);
+        }
+        buf[..bytes.len()].copy_from_slice(bytes);
+        Ok(bytes.len())
     }
 }
 
@@ -3085,9 +3102,22 @@ mod tests {
     ];
 
     #[test]
-    fn open_dir_returns_isdir() {
+    fn open_dir_succeeds_and_read_returns_isdir() {
         let mut fs = RamFs::new(DIR_ENTRIES);
-        assert_eq!(fs.open("/etc"), Err(FsError::IsDir));
+        let handle = fs.open("/etc").unwrap();
+        let stat = fs.fstat_handle(handle).unwrap();
+        assert_eq!(stat.file_type, FileType::Directory);
+        let mut buf = [0u8; 8];
+        assert_eq!(fs.read(handle, 0, &mut buf), Err(FsError::IsDir));
+        let mut path = [0u8; 16];
+        let n = fs.handle_path(handle, &mut path).unwrap();
+        assert_eq!(&path[..n], b"/etc");
+    }
+
+    #[test]
+    fn mkdir_existing_returns_already_exists() {
+        let mut fs = RamFs::new(DIR_ENTRIES);
+        assert_eq!(fs.mkdir("/etc", 0, 0, 0o755), Err(FsError::AlreadyExists));
     }
 
     #[test]

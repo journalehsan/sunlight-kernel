@@ -542,6 +542,72 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1026; // Linux newfstatat
                     }
                 }
+                -30 => {
+                    if linux_num == 63 {
+                        num = 1029; // Linux uname
+                    }
+                }
+                -31 => {
+                    if linux_num == 96 {
+                        num = 1030; // Linux gettimeofday
+                    }
+                }
+                -32 => {
+                    if linux_num == 292 {
+                        num = 1031; // Linux dup3
+                    }
+                }
+                -33 => {
+                    if linux_num == 17 {
+                        num = 1032; // Linux pread64
+                    }
+                }
+                -34 => {
+                    if linux_num == 18 {
+                        num = 1033; // Linux pwrite64
+                    }
+                }
+                -35 => {
+                    if linux_num == 217 {
+                        num = 1034; // Linux getdents64
+                    }
+                }
+                -36 => {
+                    if linux_num == 21 {
+                        // access(path, mode) → faccessat(AT_FDCWD, path, mode, 0)
+                        frame.r10 = 0;
+                        frame.rdx = frame.rsi;
+                        frame.rsi = frame.rdi;
+                        frame.rdi = (-100i64) as u64;
+                    }
+                    if linux_num == 21 || linux_num == 269 {
+                        num = 1035;
+                    }
+                }
+                -37 => {
+                    if linux_num == 83 {
+                        // mkdir(path, mode) → mkdirat(AT_FDCWD, path, mode)
+                        frame.rdx = frame.rsi;
+                        frame.rsi = frame.rdi;
+                        frame.rdi = (-100i64) as u64;
+                    }
+                    if linux_num == 83 || linux_num == 258 {
+                        num = 1036;
+                    }
+                }
+                -39 => {
+                    if linux_num == 89 {
+                        // readlink(path, buf, bufsiz) →
+                        // readlinkat(AT_FDCWD, path, buf, bufsiz)
+                        frame.r10 = frame.rdx;
+                        frame.rdx = frame.rsi;
+                        frame.rsi = frame.rdi;
+                        frame.rdi = (-100i64) as u64;
+                    }
+                    if linux_num == 89 || linux_num == 267 {
+                        num = 1037;
+                    }
+                }
                 -38 => {
                     crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
                     num = 1005; // Linux ENOSYS
@@ -710,6 +776,15 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1026 => sys_linux_newfstatat(frame),
         1027 => reject_linux_wait4(),
         1028 => sys_linux_openat(frame),
+        1029 => sys_linux_uname(frame),
+        1030 => sys_linux_gettimeofday(frame),
+        1031 => sys_linux_dup3(frame),
+        1032 => sys_linux_pread64(frame),
+        1033 => sys_linux_pwrite64(frame),
+        1034 => sys_linux_getdents64(frame),
+        1035 => sys_linux_faccessat(frame),
+        1036 => sys_linux_mkdirat(frame),
+        1037 => sys_linux_readlinkat(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -2522,9 +2597,7 @@ fn sys_wiseowl_validate_lifecycle_source(frame: &mut SyscallFrame) -> u64 {
 
 /// Syscall: Getppid (34)
 fn sys_getppid(_frame: &mut SyscallFrame) -> u64 {
-    // TODO: implement when ppid is tracked
-    crate::serial_println!("[SYSCALL] getppid requested");
-    1
+    sched::with_scheduler(|s| s.current_process().ppid as u64)
 }
 
 /// Syscall: Getuid (35)
@@ -2721,6 +2794,8 @@ const O_TRUNC: u64 = 0x200;
 const O_APPEND: u64 = 0x400;
 const O_CLOEXEC: u64 = 0x0008_0000;
 const O_NOFOLLOW: u64 = 0x0002_0000;
+const O_DIRECTORY: u64 = 0x1_0000;
+const O_ACCMODE: u64 = 0x3;
 const PRIVATE_SECRET_DIR: &str = "/etc/sunlight";
 const PRIVATE_SECRET_MODE: u16 = 0o600;
 
@@ -2772,28 +2847,22 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         Ok(s) => s,
         Err(_) => return ERR_EINVAL,
     };
+    let path = resolve_current_path(raw);
+    open_resolved_path(&path, frame.rsi, frame.rdx)
+}
 
-    // Resolve relative paths against the process CWD.
-    let resolved_buf;
-    let path: &str = if raw.starts_with('/') {
-        raw
-    } else {
-        let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
-        resolved_buf = if cwd == "/" {
-            alloc::format!("/{}", raw)
-        } else {
-            alloc::format!("{}/{}", cwd, raw)
-        };
-        resolved_buf.as_str()
-    };
-
-    let flags = frame.rsi;
-    let wants_write = flags & 0b11 != 0;
+fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
+    let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat());
+    if is_linux && flags & !sunlight_compat_linux::abi::OPEN_SUPPORTED_FLAGS != 0 {
+        return ERR_EINVAL;
+    }
+    let accmode = flags & O_ACCMODE;
+    let wants_read = accmode == 0 || accmode == 2;
+    let wants_write = accmode == 1 || accmode == 2;
     let wants_create = flags & O_CREAT != 0;
     let wants_exclusive = flags & O_EXCL != 0;
-    if flags & 0b11 == 0b11
-        || (wants_exclusive && !wants_create)
-        || (flags & O_TRUNC != 0 && !wants_write)
+    let wants_directory = flags & O_DIRECTORY != 0;
+    if accmode == 3 || (wants_exclusive && !wants_create) || (flags & O_TRUNC != 0 && !wants_write)
     {
         return ERR_EINVAL;
     }
@@ -2844,8 +2913,27 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
         let Some(vfs) = guard.as_mut() else {
             return ERR_EIO;
         };
+        let existing = vfs.stat(path).ok();
+        if let Some(stat) = existing {
+            if stat.file_type == sunlight_fs::vfs::FileType::Directory {
+                if wants_write || (wants_create && wants_exclusive) {
+                    return ERR_EISDIR;
+                }
+            } else if wants_directory {
+                return ERR_ENOTDIR;
+            }
+        } else if wants_directory {
+            return ERR_NOENT;
+        }
         let opened = if wants_create {
-            let mode = (frame.rdx as u16) & 0o777;
+            if existing
+                .as_ref()
+                .map(|stat| stat.file_type == sunlight_fs::vfs::FileType::Directory)
+                .unwrap_or(false)
+            {
+                return ERR_EISDIR;
+            }
+            let mode = (mode as u16) & 0o777;
             let mode = if mode == 0 { 0o644 } else { mode };
             let result = if wants_exclusive {
                 vfs.create_file_exclusive(path, uid, gid, mode)
@@ -2854,12 +2942,18 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
             };
             match result {
                 Ok(h) => h,
-                Err(error) => return fs_error_raw(error),
+                Err(error) => {
+                    return if is_linux {
+                        linux_from_fs(error)
+                    } else {
+                        fs_error_raw(error)
+                    };
+                }
             }
         } else {
-            let stat = match vfs.stat(path) {
-                Ok(stat) => stat,
-                Err(error) => return fs_error_raw(error),
+            let stat = match existing {
+                Some(stat) => stat,
+                None => return ERR_NOENT,
             };
             let want = if wants_write {
                 sunlight_fs::permission::PermCheck::Write
@@ -2877,7 +2971,11 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
                 Ok(h) => h,
                 Err(e) => {
                     crate::serial_println!("[HELIOS] open({}) -> err {:?}", path, e);
-                    return fs_error_raw(e);
+                    return if is_linux {
+                        linux_from_fs(e)
+                    } else {
+                        fs_error_raw(e)
+                    };
                 }
             }
         };
@@ -2890,9 +2988,11 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
 
     let mut sched = crate::sched::SCHEDULER.lock();
     let handle = crate::process::fd_table::FileHandle::vfs(vfs_handle.0);
-    let mut rights_bits =
-        crate::process::fd_table::CapRights::READ | crate::process::fd_table::CapRights::FSTAT;
-    if wants_write || wants_create {
+    let mut rights_bits = crate::process::fd_table::CapRights::FSTAT;
+    if wants_read {
+        rights_bits |= crate::process::fd_table::CapRights::READ;
+    }
+    if wants_write {
         rights_bits |= crate::process::fd_table::CapRights::WRITE;
     }
     let rights = crate::process::fd_table::CapRights::new(rights_bits);
@@ -3336,22 +3436,552 @@ fn close_file_handle(handle: crate::process::fd_table::FileHandle) {
 
 fn sys_linux_openat(frame: &mut SyscallFrame) -> u64 {
     let dirfd = frame.rdi as i32;
-    let path_ptr = frame.rsi;
-    let path = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+    let path = match linux_resolve_at(dirfd, frame.rsi) {
         Ok(path) => path,
-        Err(error) => return user_memory_failure(error),
+        Err(error) => return error,
     };
-    let absolute = path.first().copied() == Some(b'/');
-    if dirfd != sunlight_compat_linux::abi::AT_FDCWD && !absolute {
-        // Directory-handle relative resolution is intentionally outside the
-        // bounded VFS surface; never silently reinterpret it as cwd-relative.
-        return linux_errno(sunlight_compat_linux::abi::ENOSYS as u64);
+    sunlight_compat_linux::abi::from_native_result(open_resolved_path(
+        path.as_str(),
+        frame.rdx,
+        frame.r10,
+    ))
+}
+
+fn linux_from_fs(error: sunlight_fs::FsError) -> u64 {
+    use sunlight_fs::FsError;
+    match error {
+        FsError::NotFound => linux_errno(sunlight_compat_linux::abi::ENOENT as u64),
+        FsError::AlreadyExists => linux_errno(sunlight_compat_linux::abi::EEXIST as u64),
+        FsError::NotDir => linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64),
+        FsError::IsDir => linux_errno(sunlight_compat_linux::abi::EISDIR as u64),
+        FsError::BadHandle => linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+        FsError::PermissionDenied | FsError::OperationNotPermitted => {
+            linux_errno(sunlight_compat_linux::abi::EACCES as u64)
+        }
+        FsError::InvalidPath => linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
+        FsError::TooManyOpenFiles => linux_errno(sunlight_compat_linux::abi::EMFILE as u64),
+        FsError::Unsupported => linux_errno(sunlight_compat_linux::abi::ENOSYS as u64),
+        _ => linux_errno(sunlight_compat_linux::abi::EIO as u64),
+    }
+}
+
+fn synthetic_ino(path: &str) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in path.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    if hash == 0 {
+        1
+    } else {
+        hash
+    }
+}
+
+fn fill_linux_stat(stat: &sunlight_fs::vfs::FileStat, ino: u64) -> [u8; 144] {
+    use sunlight_fs::vfs::FileType;
+    let mut record = [0u8; 144];
+    record[0..8].copy_from_slice(&1u64.to_le_bytes());
+    let ino = if ino == 0 { 1 } else { ino };
+    record[8..16].copy_from_slice(&ino.to_le_bytes());
+    record[16..24].copy_from_slice(&(stat.nlinks as u64).to_le_bytes());
+    let mode: u32 = match stat.file_type {
+        FileType::File => 0o100000 | (stat.mode as u32 & 0o7777),
+        FileType::Directory => 0o040000 | (stat.mode as u32 & 0o7777),
+    };
+    record[24..28].copy_from_slice(&mode.to_le_bytes());
+    record[28..32].copy_from_slice(&stat.uid.to_le_bytes());
+    record[32..36].copy_from_slice(&stat.gid.to_le_bytes());
+    record[48..56].copy_from_slice(&(stat.size as u64).to_le_bytes());
+    record[56..64].copy_from_slice(&4096u64.to_le_bytes());
+    record[64..72].copy_from_slice(&((stat.size as u64 + 511) / 512).to_le_bytes());
+    record
+}
+
+fn vfs_handle_path(handle: sunlight_fs::vfs::FileHandle) -> Result<alloc::string::String, u64> {
+    let mut buf = [0u8; USER_PATH_MAX];
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return Err(linux_errno(sunlight_compat_linux::abi::EIO as u64));
+    };
+    match vfs.handle_path(handle, &mut buf) {
+        Ok(len) => core::str::from_utf8(&buf[..len])
+            .map(alloc::string::String::from)
+            .map_err(|_| linux_errno(sunlight_compat_linux::abi::EINVAL as u64)),
+        Err(error) => Err(linux_from_fs(error)),
+    }
+}
+
+/// Resolve Linux *at() path arguments against AT_FDCWD, an absolute path, or a
+/// directory file descriptor. Relative `dirfd` lookup uses the path captured
+/// when the directory was opened; it is not a live inode walk, so a renamed
+/// directory may fail. `.` and `..` segments are rejected to match native VFS
+/// path policy.
+fn linux_resolve_at(dirfd: i32, path_ptr: u64) -> Result<alloc::string::String, u64> {
+    let path_bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return Err(user_memory_failure(error)),
+    };
+    let raw = match core::str::from_utf8(&path_bytes) {
+        Ok(path) => path,
+        Err(_) => return Err(linux_errno(sunlight_compat_linux::abi::EINVAL as u64)),
+    };
+    if raw.is_empty() {
+        return Err(linux_errno(sunlight_compat_linux::abi::ENOENT as u64));
+    }
+    let joined = if raw.starts_with('/') {
+        alloc::string::String::from(raw)
+    } else if dirfd == sunlight_compat_linux::abi::AT_FDCWD {
+        resolve_current_path(raw)
+    } else {
+        let vfs_handle = {
+            let sched = crate::sched::SCHEDULER.lock();
+            match sched.current_process().fd_table.get(dirfd) {
+                None => return Err(linux_errno(sunlight_compat_linux::abi::EBADF as u64)),
+                Some(entry) if entry.handle.is_vfs() => entry.handle.vfs_handle(),
+                Some(_) => return Err(linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64)),
+            }
+        };
+        let handle = sunlight_fs::vfs::FileHandle(vfs_handle);
+        {
+            let mut guard = crate::KERNEL_VFS.lock();
+            let Some(vfs) = guard.as_mut() else {
+                return Err(linux_errno(sunlight_compat_linux::abi::EIO as u64));
+            };
+            match vfs.fstat_handle(handle) {
+                Ok(stat) if stat.file_type == sunlight_fs::vfs::FileType::Directory => {}
+                Ok(_) => return Err(linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64)),
+                Err(error) => return Err(linux_from_fs(error)),
+            }
+        }
+        let dir_path = vfs_handle_path(handle)?;
+        if dir_path == "/" {
+            alloc::format!("/{}", raw)
+        } else {
+            alloc::format!("{}/{}", dir_path, raw)
+        }
+    };
+    if joined.len() > USER_PATH_MAX {
+        return Err(linux_errno(sunlight_compat_linux::abi::ENAMETOOLONG as u64));
+    }
+    if sunlight_fs::path::validate_absolute(&joined).is_err() {
+        return Err(linux_errno(sunlight_compat_linux::abi::EINVAL as u64));
+    }
+    Ok(joined)
+}
+
+fn write_uts_field(dst: &mut [u8], value: &[u8]) {
+    let copy = value.len().min(dst.len().saturating_sub(1));
+    dst[..copy].copy_from_slice(&value[..copy]);
+    dst[copy] = 0;
+}
+
+fn sys_linux_uname(frame: &mut SyscallFrame) -> u64 {
+    let ptr = frame.rdi;
+    if ptr == 0
+        || crate::memory::user::UserRange::new(ptr, sunlight_compat_linux::abi::UTSNAME_SIZE)
+            .is_err()
+    {
+        return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+    }
+    let mut record = [0u8; sunlight_compat_linux::abi::UTSNAME_SIZE];
+    let field = sunlight_compat_linux::abi::UTSNAME_FIELD;
+    write_uts_field(&mut record[0..field], b"SunlightOS");
+    write_uts_field(&mut record[field..field * 2], b"sunlight");
+    write_uts_field(
+        &mut record[field * 2..field * 3],
+        env!("CARGO_PKG_VERSION").as_bytes(),
+    );
+    write_uts_field(
+        &mut record[field * 3..field * 4],
+        b"Helios static Linux ABI",
+    );
+    write_uts_field(&mut record[field * 4..field * 5], b"x86_64");
+    write_uts_field(&mut record[field * 5..field * 6], b"(none)");
+    match copy_to_user(ptr, &record) {
+        Ok(()) => 0,
+        Err(error) => error,
+    }
+}
+
+fn sys_linux_gettimeofday(frame: &mut SyscallFrame) -> u64 {
+    let tv_ptr = frame.rdi;
+    let tz_ptr = frame.rsi;
+    if tv_ptr != 0 {
+        if crate::memory::user::UserRange::new(tv_ptr, sunlight_compat_linux::abi::TIMEVAL_SIZE)
+            .is_err()
+        {
+            return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+        }
+        let sec = crate::arch::x86_64::rtc::unix_time();
+        if sec > i64::MAX as u64 {
+            return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+        }
+        let mut buf = [0u8; 16];
+        buf[0..8].copy_from_slice(&(sec as i64).to_ne_bytes());
+        buf[8..16].copy_from_slice(&0i64.to_ne_bytes());
+        if crate::memory::user::copy_to_current(tv_ptr, &buf).is_err() {
+            return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+        }
+    }
+    if tz_ptr != 0 {
+        if crate::memory::user::UserRange::new(tz_ptr, sunlight_compat_linux::abi::TIMEZONE_SIZE)
+            .is_err()
+        {
+            return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+        }
+        if crate::memory::user::copy_to_current(tz_ptr, &[0u8; 8]).is_err() {
+            return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+        }
+    }
+    0
+}
+
+fn sys_linux_dup3(frame: &mut SyscallFrame) -> u64 {
+    let old_fd = frame.rdi as i32;
+    let new_fd = frame.rsi as i32;
+    let flags = frame.rdx;
+    if flags & !sunlight_compat_linux::abi::O_CLOEXEC != 0 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    if old_fd == new_fd {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let cloexec = flags & sunlight_compat_linux::abi::O_CLOEXEC != 0;
+    let mut sched = crate::sched::SCHEDULER.lock();
+    match sched
+        .current_process_mut()
+        .fd_table
+        .dup3(old_fd, new_fd, cloexec)
+    {
+        Ok((fd, displaced)) => {
+            drop(sched);
+            if let Some(handle) = displaced {
+                close_file_handle(handle);
+            }
+            fd as u64
+        }
+        Err(crate::process::fd_table::FdError::NoSlots) => {
+            linux_errno(sunlight_compat_linux::abi::EMFILE as u64)
+        }
+        Err(_) => linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+    }
+}
+
+fn sys_linux_pread64(frame: &mut SyscallFrame) -> u64 {
+    linux_positional_vfs_io(frame, false)
+}
+
+fn sys_linux_pwrite64(frame: &mut SyscallFrame) -> u64 {
+    linux_positional_vfs_io(frame, true)
+}
+
+fn linux_positional_vfs_io(frame: &mut SyscallFrame, write: bool) -> u64 {
+    let fd = frame.rdi as i32;
+    let buf_ptr = frame.rsi;
+    let count = frame.rdx;
+    let offset = frame.r10 as i64;
+    if count > isize::MAX as u64 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    if offset < 0 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let count = count as usize;
+    if count == 0 {
+        return 0;
+    }
+    if offset as u64 > usize::MAX as u64 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let offset = offset as usize;
+    if offset.checked_add(count).is_none() {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
     }
 
-    frame.rdi = path_ptr;
-    frame.rsi = frame.rdx;
-    frame.rdx = frame.r10;
-    sunlight_compat_linux::abi::from_native_result(sys_open(frame))
+    let sched = crate::sched::SCHEDULER.lock();
+    let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
+    let required = if write {
+        crate::process::fd_table::CapRights::WRITE
+    } else {
+        crate::process::fd_table::CapRights::READ
+    };
+    if sched
+        .current_process()
+        .fd_table
+        .check_rights(fd, crate::process::fd_table::CapRights::new(required))
+        .is_err()
+    {
+        return linux_errno(sunlight_compat_linux::abi::EBADF as u64);
+    }
+    let Some(entry) = sched.current_process().fd_table.get(fd).copied() else {
+        return linux_errno(sunlight_compat_linux::abi::EBADF as u64);
+    };
+    if !entry.handle.is_vfs() {
+        return linux_errno(sunlight_compat_linux::abi::ESPIPE as u64);
+    }
+    let vfs_handle = sunlight_fs::vfs::FileHandle(entry.handle.vfs_handle());
+    let io_size = count.min(4096);
+    let mut kernel_buf = [0u8; 4096];
+    if write {
+        if crate::memory::user::copy_from_process_bytes(
+            sched.current_process(),
+            hhdm,
+            buf_ptr,
+            &mut kernel_buf[..io_size],
+        )
+        .is_err()
+        {
+            return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+        }
+    }
+    drop(sched);
+
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+    };
+    let result = if write {
+        let write_offset = if entry.flags as u64 & O_APPEND != 0 {
+            match vfs.fstat_handle(vfs_handle) {
+                Ok(stat) => stat.size,
+                Err(error) => return linux_from_fs(error),
+            }
+        } else {
+            offset
+        };
+        vfs.write(vfs_handle, write_offset, &kernel_buf[..io_size])
+    } else {
+        vfs.read(vfs_handle, offset, &mut kernel_buf[..io_size])
+    };
+    let n = match result {
+        Ok(n) => n,
+        Err(error) => return linux_from_fs(error),
+    };
+    drop(guard);
+
+    if !write && n > 0 {
+        if crate::memory::user::copy_to_current(buf_ptr, &kernel_buf[..n]).is_err() {
+            return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+        }
+    }
+    n as u64
+}
+
+fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
+    use sunlight_compat_linux::abi::{dirent64_reclen, DT_DIR, DT_REG};
+    use sunlight_fs::vfs::FileType;
+
+    let fd = frame.rdi as i32;
+    let dirp = frame.rsi;
+    let count = frame.rdx as usize;
+    if count == 0 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    if dirp == 0 || crate::memory::user::UserRange::new(dirp, count).is_err() {
+        return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+    }
+
+    let (vfs_handle, skip) = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_process().fd_table.get(fd) {
+            Some(entry) if entry.handle.is_vfs() => (entry.handle.vfs_handle(), entry.offset),
+            Some(_) => return linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64),
+            None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+        }
+    };
+    let handle = sunlight_fs::vfs::FileHandle(vfs_handle);
+    let dir_path = match vfs_handle_path(handle) {
+        Ok(path) => path,
+        Err(error) => return error,
+    };
+    {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+        };
+        match vfs.fstat_handle(handle) {
+            Ok(stat) if stat.file_type == FileType::Directory => {}
+            Ok(_) => return linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64),
+            Err(error) => return linux_from_fs(error),
+        }
+    }
+
+    let mut names: alloc::vec::Vec<(alloc::vec::Vec<u8>, u8, u64)> = alloc::vec::Vec::new();
+    let parent = if dir_path == "/" {
+        dir_path.clone()
+    } else {
+        match dir_path.rfind('/') {
+            Some(0) | None => alloc::string::String::from("/"),
+            Some(idx) => alloc::string::String::from(&dir_path[..idx]),
+        }
+    };
+    names.push((b".".to_vec(), DT_DIR, synthetic_ino(&dir_path)));
+    names.push((b"..".to_vec(), DT_DIR, synthetic_ino(&parent)));
+    {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+        };
+        if let Err(error) = vfs.read_dir(&dir_path, &mut |entry| {
+            let dtype = match entry.file_type {
+                FileType::Directory => DT_DIR,
+                FileType::File => DT_REG,
+            };
+            let child = if dir_path == "/" {
+                alloc::format!("/{}", entry.name())
+            } else {
+                alloc::format!("{}/{}", dir_path, entry.name())
+            };
+            names.push((entry.name_bytes().to_vec(), dtype, synthetic_ino(&child)));
+            names.len() < 256
+        }) {
+            return linux_from_fs(error);
+        }
+    }
+
+    if skip >= names.len() {
+        return 0;
+    }
+
+    let mut packed = alloc::vec::Vec::new();
+    let mut consumed = 0usize;
+    for (index, (name, dtype, ino)) in names.iter().enumerate().skip(skip) {
+        let reclen = dirent64_reclen(name.len());
+        if packed.len() + reclen > count {
+            if packed.is_empty() {
+                return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+            }
+            break;
+        }
+        let start = packed.len();
+        packed.resize(start + reclen, 0);
+        packed[start..start + 8].copy_from_slice(&ino.to_le_bytes());
+        let next_off = (index + 1) as i64;
+        packed[start + 8..start + 16].copy_from_slice(&next_off.to_le_bytes());
+        packed[start + 16..start + 18].copy_from_slice(&(reclen as u16).to_le_bytes());
+        packed[start + 18] = *dtype;
+        packed[start + 19..start + 19 + name.len()].copy_from_slice(name);
+        packed[start + 19 + name.len()] = 0;
+        consumed += 1;
+    }
+
+    if crate::memory::user::copy_to_current(dirp, &packed).is_err() {
+        return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+    }
+    let mut sched = crate::sched::SCHEDULER.lock();
+    if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
+        entry.offset = skip + consumed;
+    }
+    packed.len() as u64
+}
+
+fn sys_linux_faccessat(frame: &mut SyscallFrame) -> u64 {
+    let dirfd = frame.rdi as i32;
+    let mode = frame.rdx;
+    let flags = frame.r10;
+    if flags & !sunlight_compat_linux::abi::FACCESSAT_SUPPORTED_FLAGS != 0 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    if mode & !sunlight_compat_linux::abi::ACCESS_OK_MASK != 0 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let path = match linux_resolve_at(dirfd, frame.rsi) {
+        Ok(path) => path,
+        Err(error) => return error,
+    };
+    let (uid, gid, _) = current_fs_actor();
+    let stat = {
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+        };
+        match vfs.stat(&path) {
+            Ok(stat) => stat,
+            Err(error) => return linux_from_fs(error),
+        }
+    };
+    if mode == sunlight_compat_linux::abi::F_OK {
+        return 0;
+    }
+    let cred = sunlight_fs::permission::Credential { uid, gid };
+    if mode & sunlight_compat_linux::abi::R_OK != 0
+        && !sunlight_fs::permission::check_permission(
+            &stat,
+            &cred,
+            sunlight_fs::permission::PermCheck::Read,
+        )
+    {
+        return linux_errno(sunlight_compat_linux::abi::EACCES as u64);
+    }
+    if mode & sunlight_compat_linux::abi::W_OK != 0
+        && !sunlight_fs::permission::check_permission(
+            &stat,
+            &cred,
+            sunlight_fs::permission::PermCheck::Write,
+        )
+    {
+        return linux_errno(sunlight_compat_linux::abi::EACCES as u64);
+    }
+    if mode & sunlight_compat_linux::abi::X_OK != 0
+        && !sunlight_fs::permission::check_permission(
+            &stat,
+            &cred,
+            sunlight_fs::permission::PermCheck::Execute,
+        )
+    {
+        return linux_errno(sunlight_compat_linux::abi::EACCES as u64);
+    }
+    0
+}
+
+fn sys_linux_mkdirat(frame: &mut SyscallFrame) -> u64 {
+    let dirfd = frame.rdi as i32;
+    let path = match linux_resolve_at(dirfd, frame.rsi) {
+        Ok(path) => path,
+        Err(error) => return error,
+    };
+    let mode = (frame.rdx as u16) & 0o777;
+    let (uid, gid, actor) = current_fs_actor();
+    let decision =
+        sunlight_fs::can_write(actor, &path, sunlight_fs::FsOperation::Mkdir, None, false);
+    if !decision.allowed {
+        return linux_errno(sunlight_compat_linux::abi::EACCES as u64);
+    }
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+    };
+    match vfs.mkdir(&path, uid, gid, sunlight_fs::vfs::mode::S_IFDIR | mode) {
+        Ok(()) => 0,
+        Err(error) => linux_from_fs(error),
+    }
+}
+
+fn sys_linux_readlinkat(frame: &mut SyscallFrame) -> u64 {
+    let dirfd = frame.rdi as i32;
+    let buf_ptr = frame.rdx;
+    let bufsiz = frame.r10;
+    if bufsiz > isize::MAX as u64 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    if bufsiz != 0
+        && (buf_ptr == 0 || crate::memory::user::UserRange::new(buf_ptr, bufsiz as usize).is_err())
+    {
+        return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
+    }
+    let path = match linux_resolve_at(dirfd, frame.rsi) {
+        Ok(path) => path,
+        Err(error) => return error,
+    };
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+    };
+    match vfs.stat(&path) {
+        Ok(_) => linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
+        Err(error) => linux_from_fs(error),
+    }
 }
 
 fn abandon_process_fds(sched: &mut crate::sched::Scheduler, fds: [i32; 2]) {
@@ -3562,20 +4192,20 @@ fn sys_linux_clock_gettime(frame: &mut SyscallFrame) -> u64 {
         return linux_errno(14); // EFAULT
     }
 
-    if clock_id < 0 || clock_id > 11 {
-        return linux_errno(22); // EINVAL
-    }
-
-    let now_ns = if clock_id == 0 || clock_id == 5 {
-        // Realtime / UTC
-        sys_get_time_utc() * 1_000_000_000
-    } else {
-        // Monotonic
-        sys_monotonic_ms() * 1_000_000
+    let (sec, nsec) = match clock_id {
+        sunlight_compat_linux::abi::CLOCK_REALTIME => {
+            let sec = crate::arch::x86_64::rtc::unix_time();
+            if sec > i64::MAX as u64 {
+                return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+            }
+            (sec as i64, 0i64)
+        }
+        sunlight_compat_linux::abi::CLOCK_MONOTONIC => {
+            let ns = crate::timekeeping::monotonic_ns();
+            ((ns / 1_000_000_000) as i64, (ns % 1_000_000_000) as i64)
+        }
+        _ => return linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
     };
-
-    let sec = (now_ns / 1_000_000_000) as i64;
-    let nsec = (now_ns % 1_000_000_000) as i64;
 
     let mut buf = [0u8; 16];
     buf[0..8].copy_from_slice(&sec.to_ne_bytes());
@@ -3829,116 +4459,85 @@ fn sys_linux_socketpair(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_renameat(frame: &mut SyscallFrame) -> u64 {
-    let olddirfd = frame.rdi as i32;
-    let oldpath_ptr = frame.rsi;
-    let newdirfd = frame.rdx as i32;
-    let newpath_ptr = frame.r10;
-
-    const AT_FDCWD: i32 = -100;
-    for (dirfd, path_ptr) in [(olddirfd, oldpath_ptr), (newdirfd, newpath_ptr)] {
-        if dirfd != AT_FDCWD {
-            let path = match read_user_cstr(path_ptr, USER_PATH_MAX) {
-                Ok(path) => path,
-                Err(error) => return user_memory_failure(error),
-            };
-            if path.first().copied() != Some(b'/') {
-                return linux_errno(38);
-            }
-        }
-    }
-
-    let mut rename_frame = SyscallFrame {
-        rdi: oldpath_ptr,
-        rsi: newpath_ptr,
-        ..*frame
+    let old = match linux_resolve_at(frame.rdi as i32, frame.rsi) {
+        Ok(path) => path,
+        Err(error) => return error,
     };
-    sunlight_compat_linux::abi::from_native_result(sys_rename(&mut rename_frame))
+    let new = match linux_resolve_at(frame.rdx as i32, frame.r10) {
+        Ok(path) => path,
+        Err(error) => return error,
+    };
+    let (_, _, actor) = current_fs_actor();
+    let old_decision =
+        sunlight_fs::can_write(actor, &old, sunlight_fs::FsOperation::Delete, None, false);
+    let new_decision =
+        sunlight_fs::can_write(actor, &new, sunlight_fs::FsOperation::Create, None, false);
+    if !old_decision.allowed || !new_decision.allowed {
+        return linux_errno(sunlight_compat_linux::abi::EACCES as u64);
+    }
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+    };
+    match vfs.rename(&old, &new) {
+        Ok(()) => 0,
+        Err(error) => linux_from_fs(error),
+    }
 }
 
 fn sys_linux_unlinkat(frame: &mut SyscallFrame) -> u64 {
-    let dirfd = frame.rdi as i32;
-    let path_ptr = frame.rsi;
     let flags = frame.rdx;
-
-    const AT_FDCWD: i32 = -100;
-    // Removing directories via AT_REMOVEDIR is deliberately outside this
-    // small compatibility surface. Relative paths are resolved by sys_unlink.
     if flags != 0 {
-        return linux_errno(38); // ENOSYS
+        return linux_errno(sunlight_compat_linux::abi::ENOSYS as u64);
     }
-    if dirfd != AT_FDCWD {
-        let path = match read_user_cstr(path_ptr, USER_PATH_MAX) {
-            Ok(path) => path,
-            Err(error) => return user_memory_failure(error),
-        };
-        if path.first().copied() != Some(b'/') {
-            return linux_errno(38);
-        }
-    }
-
-    let mut unlink_frame = SyscallFrame {
-        rdi: path_ptr,
-        ..*frame
+    let path = match linux_resolve_at(frame.rdi as i32, frame.rsi) {
+        Ok(path) => path,
+        Err(error) => return error,
     };
-    sunlight_compat_linux::abi::from_native_result(sys_unlink(&mut unlink_frame))
+    let (_, _, actor) = current_fs_actor();
+    let decision =
+        sunlight_fs::can_write(actor, &path, sunlight_fs::FsOperation::Delete, None, false);
+    if !decision.allowed {
+        return linux_errno(sunlight_compat_linux::abi::EACCES as u64);
+    }
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+    };
+    match vfs.unlink(&path) {
+        Ok(()) => 0,
+        Err(error) => linux_from_fs(error),
+    }
 }
 
 /// Linux newfstatat(2): the Rust standard library uses this for
 /// `Path::exists`, so returning the native 24-byte StatPath layout is not
 /// sufficient. Populate the Linux x86_64 144-byte `struct stat` directly.
 fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
-    use sunlight_fs::vfs::FileType;
-
     let dirfd = frame.rdi as i32;
-    let path_ptr = frame.rsi;
     let stat_ptr = frame.rdx;
     let flags = frame.r10;
 
-    const AT_FDCWD: i32 = -100;
-    const AT_SYMLINK_NOFOLLOW: u64 = 0x100;
-    // SunlightFS has no symlinks, so NOFOLLOW has the same result as a normal
-    // lookup. Reject other flags until their semantics are implemented.
-    if flags & !AT_SYMLINK_NOFOLLOW != 0 {
-        return linux_errno(22); // EINVAL
+    if flags & !sunlight_compat_linux::abi::AT_SYMLINK_NOFOLLOW != 0 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
     }
 
-    let path_bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
-        Ok(bytes) => bytes,
-        Err(error) => return user_memory_failure(error),
-    };
-    let raw_path = match core::str::from_utf8(&path_bytes) {
+    let path = match linux_resolve_at(dirfd, frame.rsi) {
         Ok(path) => path,
-        Err(_) => return linux_errno(22),
+        Err(error) => return error,
     };
-    if dirfd != AT_FDCWD && !raw_path.starts_with('/') {
-        return linux_errno(38);
-    }
-    let path_buf = resolve_current_path(raw_path);
     let stat = {
         let mut guard = crate::KERNEL_VFS.lock();
         let Some(vfs) = guard.as_mut() else {
-            return linux_errno(5); // EIO
+            return linux_errno(sunlight_compat_linux::abi::EIO as u64);
         };
-        match vfs.stat(path_buf.as_str()) {
+        match vfs.stat(path.as_str()) {
             Ok(stat) => stat,
-            Err(_) => return linux_errno(2), // ENOENT
+            Err(error) => return linux_from_fs(error),
         }
     };
 
-    let mut record = [0u8; 144];
-    record[0..8].copy_from_slice(&1u64.to_le_bytes()); // st_dev
-    record[8..16].copy_from_slice(&1u64.to_le_bytes()); // synthetic st_ino
-    record[16..24].copy_from_slice(&(stat.nlinks as u64).to_le_bytes());
-    let mode: u32 = match stat.file_type {
-        FileType::File => 0o100000 | (stat.mode as u32 & 0o7777),
-        FileType::Directory => 0o040000 | (stat.mode as u32 & 0o7777),
-    };
-    record[24..28].copy_from_slice(&mode.to_le_bytes());
-    record[28..32].copy_from_slice(&stat.uid.to_le_bytes());
-    record[32..36].copy_from_slice(&stat.gid.to_le_bytes());
-    record[48..56].copy_from_slice(&(stat.size as u64).to_le_bytes());
-    record[56..64].copy_from_slice(&4096u64.to_le_bytes());
-    record[64..72].copy_from_slice(&((stat.size as u64 + 511) / 512).to_le_bytes());
+    let record = fill_linux_stat(&stat, synthetic_ino(&path));
     match copy_to_user(stat_ptr, &record) {
         Ok(()) => 0,
         Err(error) => error,
@@ -5127,17 +5726,33 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
 
     // Copy the two values we need before releasing the borrow.
+    let is_linux = sched.current_process().is_linux_compat();
     let (current_offset, vfs_handle) = match sched.current_process().fd_table.get(fd) {
         Some(e) if e.handle.is_vfs() => (e.offset, e.handle.vfs_handle()),
-        Some(_) => return u64::MAX, // ESPIPE: pipes and TTY fds are not seekable
-        None => return u64::MAX,    // EBADF
+        Some(_) => {
+            return if is_linux {
+                linux_errno(sunlight_compat_linux::abi::ESPIPE as u64)
+            } else {
+                u64::MAX
+            };
+        }
+        None => {
+            return if is_linux {
+                linux_errno(sunlight_compat_linux::abi::EBADF as u64)
+            } else {
+                ERR_EBADF
+            };
+        }
     };
-
     match whence {
         // SEEK_SET ─────────────────────────────────────────────────────────
         0 => {
             if offset < 0 {
-                return u64::MAX;
+                return if is_linux {
+                    linux_errno(sunlight_compat_linux::abi::EINVAL as u64)
+                } else {
+                    u64::MAX
+                };
             } // EINVAL
             let new_off = offset as usize;
             if let Some(e) = sched.current_process_mut().fd_table.get_mut(fd) {
@@ -5146,18 +5761,22 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
             new_off as u64
         }
         // SEEK_CUR ─────────────────────────────────────────────────────────
-        1 => {
-            match (current_offset as i64).checked_add(offset) {
-                Some(v) if v >= 0 => {
-                    let new_off = v as usize;
-                    if let Some(e) = sched.current_process_mut().fd_table.get_mut(fd) {
-                        e.offset = new_off;
-                    }
-                    new_off as u64
+        1 => match (current_offset as i64).checked_add(offset) {
+            Some(v) if v >= 0 => {
+                let new_off = v as usize;
+                if let Some(e) = sched.current_process_mut().fd_table.get_mut(fd) {
+                    e.offset = new_off;
                 }
-                _ => u64::MAX, // EINVAL: would underflow
+                new_off as u64
             }
-        }
+            _ => {
+                if is_linux {
+                    linux_errno(sunlight_compat_linux::abi::EINVAL as u64)
+                } else {
+                    u64::MAX
+                }
+            }
+        },
         // SEEK_END ─────────────────────────────────────────────────────────
         // Must release SCHEDULER before taking KERNEL_VFS (lock-order rule).
         2 => {
@@ -5186,7 +5805,13 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
                 _ => u64::MAX, // EINVAL: negative resulting offset
             }
         }
-        _ => u64::MAX, // EINVAL: unknown whence
+        _ => {
+            if is_linux {
+                linux_errno(sunlight_compat_linux::abi::EINVAL as u64)
+            } else {
+                u64::MAX
+            }
+        }
     }
 }
 
@@ -5291,32 +5916,18 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     };
 
     if is_linux {
-        // Linux x86_64 struct stat (144 bytes) — field offsets per ABI.
-        let mut record = [0u8; 144];
-        // st_dev at 0 (fake device 1)
-        record[0..8].copy_from_slice(&1u64.to_le_bytes());
-        // st_ino at 8 (use vfs handle as proxy inode)
-        record[8..16].copy_from_slice(&(vfs_handle as u64).to_le_bytes());
-        // st_nlink at 16
-        record[16..24].copy_from_slice(&(stat.nlinks as u64).to_le_bytes());
-        // st_mode at 24: set file-type bits S_IFREG/S_IFDIR and permission bits
-        let linux_mode: u32 = match stat.file_type {
-            FileType::File => 0o100000 | (stat.mode as u32 & 0o7777),
-            FileType::Directory => 0o040000 | (stat.mode as u32 & 0o7777),
+        let ino = match vfs_handle_path(VfsHandle(vfs_handle)) {
+            Ok(path) => synthetic_ino(&path),
+            Err(_) => {
+                let hashed = vfs_handle as u64;
+                if hashed == 0 {
+                    1
+                } else {
+                    hashed
+                }
+            }
         };
-        record[24..28].copy_from_slice(&linux_mode.to_le_bytes());
-        // st_uid at 28, st_gid at 32
-        record[28..32].copy_from_slice(&stat.uid.to_le_bytes());
-        record[32..36].copy_from_slice(&stat.gid.to_le_bytes());
-        // st_rdev at 40: 0 (not a device)
-        // st_size at 48
-        record[48..56].copy_from_slice(&(stat.size as u64).to_le_bytes());
-        // st_blksize at 56: 4096
-        record[56..64].copy_from_slice(&4096u64.to_le_bytes());
-        // st_blocks at 64: in 512-byte units
-        let blocks = (stat.size as u64 + 511) / 512;
-        record[64..72].copy_from_slice(&blocks.to_le_bytes());
-        // timestamps (atim/mtim/ctim) at 72/88/104: zero (no time tracking yet)
+        let record = fill_linux_stat(&stat, ino);
         if let Err(error) = copy_to_user(buf_ptr, &record) {
             return error;
         }

@@ -240,6 +240,9 @@ static CPUFEAT_ELF_BYTES: &[u8] =
 // hello-linux: static musl Rust binary for Helios Linux-compat smoke test.
 static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-linux.elf");
 static HELIOS_PROBE_ELF_BYTES: &[u8] = include_bytes!("../../target/helios-probes/linux-probe-all");
+static HELIOS_PROBE_RUNTIME_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/helios-probes/linux-probe-runtime");
+static SBASE_ECHO_ELF_BYTES: &[u8] = include_bytes!("../../target/helios-probes/sbase-echo");
 // helios-note: std+libc Rust terminal note editor, runs via Helios Linux compat.
 static HELIOS_NOTE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-linux-musl/release/helios-note");
@@ -3850,6 +3853,7 @@ fn setup_key_injection() {
         "phase2b5" => build_phase2b5_sequence(),
         "helios-proven-tier1" => build_helios_proven_tier1_sequence(),
         "helios-note-regression" => build_helios_note_regression_sequence(),
+        "helios-static-runtime" => build_helios_static_runtime_sequence(),
         "top" => build_top_sequence(),
         "tzctl" => build_tzctl_sequence(),
         "dns_test" => build_dns_test_sequence(),
@@ -3934,6 +3938,31 @@ fn build_helios_note_regression_sequence() -> [u8; 12288] {
     append_injected_delay(&mut s, &mut len, 256);
     append_injected_command(&mut s, &mut len, b"/bin/note");
     append_injected_delay(&mut s, &mut len, 1024);
+    append_injected_command(&mut s, &mut len, b"/bin/note");
+    s
+}
+
+#[cfg(feature = "key_inject")]
+fn build_helios_static_runtime_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
+    let mut len = 0usize;
+    append_injected_delay(&mut s, &mut len, 1536);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    append_injected_delay(&mut s, &mut len, 128);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 256);
+    append_injected_command(&mut s, &mut len, b"/bin/helios-probe");
+    append_injected_delay(&mut s, &mut len, 768);
+    append_injected_command(&mut s, &mut len, b"/bin/helios-probe-runtime");
+    append_injected_delay(&mut s, &mut len, 768);
+    append_injected_command(
+        &mut s,
+        &mut len,
+        b"/bin/linux-echo LINUX-PROBE sbase-echo PASS",
+    );
+    append_injected_delay(&mut s, &mut len, 768);
     append_injected_command(&mut s, &mut len, b"/bin/note");
     s
 }

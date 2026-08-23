@@ -160,6 +160,9 @@ pub trait FileSystem {
         path: &str,
         f: &mut dyn FnMut(&VfsDirEntry) -> bool,
     ) -> Result<(), FsError>;
+    /// Copy the filesystem-local path of an open handle into `buf`.
+    /// Returns the number of bytes written (not NUL-terminated).
+    fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +174,9 @@ struct FatOpen {
     first_cluster: u32,
     size: u32,
     generation: u32,
+    is_dir: bool,
+    path_len: u8,
+    path: [u8; 128],
 }
 
 /// Read-only `FileSystem` adapter over a [`Fat32`] volume: adds the open-file
@@ -207,17 +213,23 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
             .fat
             .stat_path(path.as_bytes())
             .ok_or(FsError::NotFound)?;
-        if stat.is_dir {
-            return Err(FsError::IsDir);
+        let path_bytes = path.as_bytes();
+        if path_bytes.len() > 128 {
+            return Err(FsError::InvalidPath);
         }
         for (idx, slot) in self.handles.iter_mut().enumerate() {
             if slot.is_none() {
                 let generation = next_handle_generation(self.generations[idx]);
                 self.generations[idx] = generation;
+                let mut stored = [0u8; 128];
+                stored[..path_bytes.len()].copy_from_slice(path_bytes);
                 *slot = Some(FatOpen {
                     first_cluster: stat.first_cluster,
                     size: stat.size,
                     generation,
+                    is_dir: stat.is_dir,
+                    path_len: path_bytes.len() as u8,
+                    path: stored,
                 });
                 return Ok(make_local_handle(idx, generation));
             }
@@ -252,17 +264,19 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         buf: &mut [u8],
     ) -> Result<usize, FsError> {
         let open = self.handle_slot(handle)?;
+        if open.is_dir {
+            return Err(FsError::IsDir);
+        }
         self.fat
             .read_at(open.first_cluster, open.size, offset, buf)
             .ok_or(FsError::Io)
     }
 
-    fn write(
-        &mut self,
-        _handle: FileHandle,
-        _offset: usize,
-        _buf: &[u8],
-    ) -> Result<usize, FsError> {
+    fn write(&mut self, handle: FileHandle, _offset: usize, _buf: &[u8]) -> Result<usize, FsError> {
+        let open = self.handle_slot(handle)?;
+        if open.is_dir {
+            return Err(FsError::IsDir);
+        }
         Err(FsError::Unsupported)
     }
 
@@ -286,13 +300,24 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
 
     fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
         let open = self.handle_slot(handle)?;
-        Ok(FileStat {
-            file_type: FileType::File,
-            size: open.size as usize,
-            uid: 0,
-            gid: 0,
-            mode: mode::FILE_755,
-            nlinks: 1,
+        Ok(if open.is_dir {
+            FileStat {
+                file_type: FileType::Directory,
+                size: 0,
+                uid: 0,
+                gid: 0,
+                mode: mode::DIR_755,
+                nlinks: 2,
+            }
+        } else {
+            FileStat {
+                file_type: FileType::File,
+                size: open.size as usize,
+                uid: 0,
+                gid: 0,
+                mode: mode::FILE_755,
+                nlinks: 1,
+            }
         })
     }
 
@@ -368,6 +393,16 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
             })
             .ok_or(FsError::Io)?;
         Ok(())
+    }
+
+    fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError> {
+        let open = self.handle_slot(handle)?;
+        let len = open.path_len as usize;
+        if buf.len() < len {
+            return Err(FsError::InvalidPath);
+        }
+        buf[..len].copy_from_slice(&open.path[..len]);
+        Ok(len)
     }
 }
 
@@ -506,6 +541,13 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         match self {
             Self::Ram(fs) => fs.read_dir(path, f),
             Self::Fat(fs) => fs.read_dir(path, f),
+        }
+    }
+
+    fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError> {
+        match self {
+            Self::Ram(fs) => fs.handle_path(handle, buf),
+            Self::Fat(fs) => fs.handle_path(handle, buf),
         }
     }
 }
@@ -779,6 +821,33 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::NotFound)?
             .fs
             .read_dir(local_path, f)
+    }
+
+    /// Absolute VFS path of an open handle. Used by directory-fd resolution
+    /// and getdents64. The result is the path captured at open time.
+    pub fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError> {
+        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        let mount = self
+            .mounts
+            .get(mount_idx)
+            .and_then(Option::as_ref)
+            .ok_or(FsError::BadHandle)?;
+        let mut local = [0u8; 256];
+        let local_len = mount.fs.handle_path(local_handle, &mut local)?;
+        let local_path =
+            core::str::from_utf8(&local[..local_len]).map_err(|_| FsError::InvalidPath)?;
+        let absolute = if mount.path == "/" || local_path.starts_with('/') {
+            alloc::string::String::from(local_path)
+        } else if local_path == "/" {
+            alloc::string::String::from(mount.path)
+        } else {
+            alloc::format!("{}{}", mount.path, local_path)
+        };
+        if buf.len() < absolute.len() {
+            return Err(FsError::InvalidPath);
+        }
+        buf[..absolute.len()].copy_from_slice(absolute.as_bytes());
+        Ok(absolute.len())
     }
 
     fn resolve_mount<'a>(&self, path: &'a str) -> Result<(usize, &'a str), FsError> {
