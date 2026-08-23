@@ -1,6 +1,8 @@
 //! Ratatui UI components and layout rendering.
 
+use crate::app::SaveAsPrompt;
 use crate::core::{buffer::TextBuffer, cursor::Cursor};
+use crate::document::Document;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -10,7 +12,8 @@ use ratatui::{
 };
 
 pub struct UiState<'a> {
-    pub filename: &'a str,
+    pub document: &'a Document,
+    pub save_as: Option<&'a SaveAsPrompt>,
     pub buffer: &'a TextBuffer,
     pub cursor: &'a Cursor,
     pub show_help: bool,
@@ -33,17 +36,21 @@ pub fn draw_ui(f: &mut Frame, state: UiState) {
         ])
         .split(size);
 
-    draw_header(f, state.filename, state.buffer, chunks[0]);
+    draw_header(f, state.document.display_name(), state.buffer, chunks[0]);
     draw_viewport(f, state.buffer, state.cursor, chunks[1]);
-    draw_status_bar(
-        f,
-        state.buffer,
-        state.cursor,
-        state.status_message,
-        state.show_search_prompt,
-        state.search_input,
-        chunks[2],
-    );
+    if let Some(prompt) = state.save_as {
+        draw_save_as_bar(f, prompt, chunks[2]);
+    } else {
+        draw_status_bar(
+            f,
+            state.buffer,
+            state.cursor,
+            state.status_message,
+            state.show_search_prompt,
+            state.search_input,
+            chunks[2],
+        );
+    }
     draw_shortcuts(f, chunks[3]);
 
     if state.show_help {
@@ -184,6 +191,52 @@ fn draw_status_bar(
     f.render_widget(paragraph, area);
 }
 
+fn draw_save_as_bar(f: &mut Frame, prompt: &SaveAsPrompt, area: Rect) {
+    let line = if let Some(target) = prompt.pending_overwrite() {
+        Line::from(vec![
+            Span::styled(
+                " File exists ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Red)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {} ", target.display()),
+                Style::default().fg(Color::White).bg(Color::Black),
+            ),
+            Span::styled(" Overwrite? [y/N]", Style::default().fg(Color::Yellow)),
+        ])
+    } else {
+        let (before, after) = prompt.split_at_cursor();
+        Line::from(vec![
+            Span::styled(
+                " Save as: ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" {}", before),
+                Style::default().fg(Color::White).bg(Color::Black),
+            ),
+            Span::styled("_", Style::default().fg(Color::Black).bg(Color::White)),
+            Span::styled(
+                format!("{} ", after),
+                Style::default().fg(Color::White).bg(Color::Black),
+            ),
+            Span::styled(
+                " (Enter to confirm, Esc to cancel)",
+                Style::default().fg(Color::DarkGray),
+            ),
+        ])
+    };
+
+    let paragraph = Paragraph::new(line).style(Style::default().bg(Color::DarkGray));
+    f.render_widget(paragraph, area);
+}
+
 fn draw_shortcuts(f: &mut Frame, area: Rect) {
     let shortcuts = Line::from(vec![
         Span::styled(
@@ -194,6 +247,14 @@ fn draw_shortcuts(f: &mut Frame, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" Save "),
+        Span::styled(
+            " F2",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" Save As "),
         Span::styled(
             " ^F",
             Style::default()
@@ -267,6 +328,7 @@ fn draw_help_modal(f: &mut Frame, area: Rect) {
         Line::from("  Home / End : Line start / end"),
         Line::from("  PgUp / PgDn: Page up / down"),
         Line::from("  Ctrl+S     : Save file"),
+        Line::from("  F2         : Save As (choose path)"),
         Line::from("  Ctrl+F     : Search text"),
         Line::from("  F3         : Find next match"),
         Line::from("  Ctrl+Z     : Undo edit"),

@@ -1,5 +1,6 @@
 mod app;
 mod core;
+mod document;
 mod file_ops;
 mod ui;
 
@@ -34,13 +35,17 @@ impl Drop for TerminalGuard {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
-    let filename = args.get(1).map(|s| s.as_str()).unwrap_or("untitled.txt");
+    // No path argument means an untitled document, which has no backing path.
+    let requested_path = args.get(1).map(|s| s.as_str());
 
     let _guard = TerminalGuard::new()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
     terminal.clear()?;
 
-    let mut app = App::new(filename);
+    let mut app = match requested_path {
+        Some(path) => App::open(path),
+        None => App::untitled(),
+    };
     let mut needs_redraw = true;
 
     loop {
@@ -56,7 +61,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 draw_ui(
                     f,
                     UiState {
-                        filename: &app.filename,
+                        document: &app.document,
+                        save_as: app.save_as.as_ref(),
                         buffer: &app.buffer,
                         cursor: &app.cursor,
                         show_help: app.show_help,
