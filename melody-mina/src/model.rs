@@ -206,7 +206,7 @@ mod tests {
                 sample_rate_hz: 48_000,
                 channels: 2,
                 sample_format: PcmFormat::Signed16LeInterleaved,
-                duration: Some(MediaTime::from_millis(207_000)),
+                duration: Some(MediaTime::from_millis(6_000)),
                 seekable: true,
             }),
             volume: 72,
@@ -229,8 +229,8 @@ mod tests {
             view.error.map(|error| error.kind),
             Some(MediaErrorKind::Decode)
         );
-        view.apply_backend(snapshot(BackendState::Ended, 206_000), false);
-        assert_eq!(view.position_ms, 207_000);
+        view.apply_backend(snapshot(BackendState::Ended, 5_999), false);
+        assert_eq!(view.position_ms, 6_000);
         assert!(!view.shows_pause());
     }
 
@@ -239,8 +239,7 @@ mod tests {
         let cases = [
             (0, "0:00"),
             (3, "0:03"),
-            (42, "0:42"),
-            (207, "3:27"),
+            (6, "0:06"),
             (3_599, "59:59"),
             (3_600, "1:00:00"),
             (45_296, "12:34:56"),
@@ -254,12 +253,25 @@ mod tests {
     #[test]
     fn seeking_clamps_and_drag_blocks_backend_position() {
         let mut view = NowPlayingViewModel::default();
-        view.apply_backend(snapshot(BackendState::Playing, 42_000), false);
-        assert_eq!(seek_target_ms(&view, 250), Some(207_000));
-        view.apply_backend(snapshot(BackendState::Playing, 99_000), true);
-        assert_eq!(view.position_ms, 42_000);
+        view.apply_backend(snapshot(BackendState::Playing, 3_000), false);
+        assert_eq!(timeline_percent(&view), 50);
+        assert_eq!(seek_target_ms(&view, 250), Some(6_000));
+        view.apply_backend(snapshot(BackendState::Playing, 5_000), true);
+        assert_eq!(view.position_ms, 3_000);
         view.seekable = false;
         assert_eq!(seek_target_ms(&view, 50), None);
+    }
+
+    #[test]
+    fn six_second_timeline_normalizes_to_endpoints_and_halfway() {
+        let mut view = NowPlayingViewModel::default();
+        view.apply_backend(snapshot(BackendState::Ready, 0), false);
+        assert_eq!(timeline_percent(&view), 0);
+        view.apply_backend(snapshot(BackendState::Playing, 3_000), false);
+        assert_eq!(timeline_percent(&view), 50);
+        view.apply_backend(snapshot(BackendState::Ended, 6_000), false);
+        assert_eq!(timeline_percent(&view), 100);
+        assert_eq!(seek_target_ms(&view, 50), Some(3_000));
     }
 
     #[test]

@@ -8,14 +8,18 @@ extern crate std;
 #[cfg(test)]
 extern crate alloc;
 
+use core::cell::Cell;
+
 use sunlight_audio::{
+    hda::ENGINE_PERIOD_COUNT,
     parse_persisted, volume_icon, AudioDeviceState, AudioFormat, MasterVolume, OutputDeviceKind,
     PersistedAudio, SystemSound, SystemSoundSettings, VolumeIconKind, DEFAULT_SYSTEM_SOUNDS_VOLUME,
     DEFAULT_VOLUME, MAX_PCM_BYTES, SYSTEM_SOUND_COUNT, SYSTEM_SOUND_PROTOCOL_VERSION,
 };
 use sunlight_ipc::{
-    ipc_call_timeout, nameserver_lookup_timeout, shm_alloc, shm_free, unpack_audio_status,
-    AudioStatus, AudiodMsg, IpcMsg, SHM_PAGE,
+    debug_log, ipc_call_timeout, nameserver_lookup_timeout, shm_alloc, shm_free,
+    unpack_audio_status, unpack_audio_stream_status, AudioStatus, AudioStreamStatus, AudiodMsg,
+    IpcMsg, SHM_PAGE,
 };
 
 #[cfg(test)]
@@ -95,11 +99,151 @@ pub enum AudioClientError {
     DeviceFailed,
 }
 
-pub struct AudioClient;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PeriodOwner {
+    stream_id: u64,
+    frames: u16,
+    occupied: bool,
+}
+
+/// Audiod-owned accounting that attributes completed HDA periods to the
+/// sender which submitted them. Hardware silence and system sounds remain
+/// deliberately unowned.
+pub struct StreamProgressTracker {
+    stream_id: Option<u64>,
+    submitted_frames: u64,
+    completed_frames: u64,
+    periods: [PeriodOwner; ENGINE_PERIOD_COUNT],
+    current_period: usize,
+    current_period_frames: u16,
+}
+
+impl StreamProgressTracker {
+    pub const fn new() -> Self {
+        Self {
+            stream_id: None,
+            submitted_frames: 0,
+            completed_frames: 0,
+            periods: [PeriodOwner {
+                stream_id: 0,
+                frames: 0,
+                occupied: false,
+            }; ENGINE_PERIOD_COUNT],
+            current_period: 0,
+            current_period_frames: 0,
+        }
+    }
+
+    pub fn begin_submission(&mut self, stream_id: u64, frames: u64) -> bool {
+        if self.stream_id != Some(stream_id) {
+            if self.has_outstanding_audio() {
+                return false;
+            }
+            self.reset();
+            self.stream_id = Some(stream_id);
+        }
+        self.submitted_frames = self.submitted_frames.saturating_add(frames);
+        true
+    }
+
+    pub fn tag_period(&mut self, period: usize, stream_id: u64, frames: usize) {
+        if period < ENGINE_PERIOD_COUNT && self.stream_id == Some(stream_id) {
+            self.periods[period] = PeriodOwner {
+                stream_id,
+                frames: frames.min(u16::MAX as usize) as u16,
+                occupied: true,
+            };
+        }
+    }
+
+    pub fn clear_period(&mut self, period: usize) {
+        if period < ENGINE_PERIOD_COUNT {
+            self.periods[period] = PeriodOwner::default();
+        }
+    }
+
+    pub fn observe_dma(
+        &mut self,
+        first_completed_period: usize,
+        completed_periods: usize,
+        current_period: usize,
+        current_period_frames: u16,
+    ) {
+        for offset in 0..completed_periods.min(ENGINE_PERIOD_COUNT) {
+            let period = (first_completed_period + offset) % ENGINE_PERIOD_COUNT;
+            let owner = self.periods[period];
+            if owner.occupied && self.stream_id == Some(owner.stream_id) {
+                self.completed_frames = self.completed_frames.saturating_add(owner.frames as u64);
+            }
+            self.periods[period] = PeriodOwner::default();
+        }
+        self.current_period = current_period.min(ENGINE_PERIOD_COUNT - 1);
+        self.current_period_frames = current_period_frames;
+    }
+
+    pub fn status(&self, requester: u64, underruns: u32) -> AudioStreamStatus {
+        if self.stream_id != Some(requester) {
+            return AudioStreamStatus {
+                stream_id: requester,
+                submitted_frames: 0,
+                consumed_frames: 0,
+                buffered_frames: 0,
+                underruns,
+            };
+        }
+        let current = self.periods[self.current_period];
+        let partial = if current.occupied && current.stream_id == requester {
+            self.current_period_frames.min(current.frames) as u64
+        } else {
+            0
+        };
+        let consumed = self
+            .completed_frames
+            .saturating_add(partial)
+            .min(self.submitted_frames);
+        AudioStreamStatus {
+            stream_id: requester,
+            submitted_frames: self.submitted_frames,
+            consumed_frames: consumed,
+            buffered_frames: self
+                .submitted_frames
+                .saturating_sub(consumed)
+                .min(u32::MAX as u64) as u32,
+            underruns,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.stream_id = None;
+        self.submitted_frames = 0;
+        self.completed_frames = 0;
+        self.periods = [PeriodOwner::default(); ENGINE_PERIOD_COUNT];
+        self.current_period = 0;
+        self.current_period_frames = 0;
+    }
+
+    fn has_outstanding_audio(&self) -> bool {
+        self.submitted_frames > self.completed_frames
+            || self.periods.iter().any(|period| period.occupied)
+    }
+}
+
+pub struct AudioClient {
+    /// Cache the registered service capability for hot PCM/status calls. A
+    /// fresh nameserver lookup per 1024-frame submission can transiently time
+    /// out under playback load even while audiod is healthy.
+    capability: Cell<Option<sunlight_ipc::CapabilityToken>>,
+    stream_id: Cell<Option<u64>>,
+    status_diag_count: Cell<u8>,
+}
 
 impl AudioClient {
     pub const fn new() -> Self {
-        Self
+        Self {
+            capability: Cell::new(None),
+            stream_id: Cell::new(None),
+            status_diag_count: Cell::new(0),
+        }
     }
 
     pub fn snapshot(&self) -> Result<AudioSnapshot, AudioClientError> {
@@ -150,15 +294,18 @@ impl AudioClient {
         self.status().map(|(_, status)| status.frames_played)
     }
 
+    /// Hardware-consumed progress for this caller's application stream.
+    pub fn stream_status(&self) -> Result<AudioStreamStatus, AudioClientError> {
+        let reply = self.call(IpcMsg::with_label(AudiodMsg::GET_STREAM_STATUS))?;
+        let status = self.decode_stream_reply(&reply);
+        if status.is_err() {
+            self.note_status_diag("[AUDIOD-CLIENT][status] decode=malformed-reply\n");
+        }
+        status
+    }
+
     fn status(&self) -> Result<(sunlight_ipc::CapabilityToken, AudioStatus), AudioClientError> {
-        let cap = nameserver_lookup_timeout("audiod", LOOKUP_TIMEOUT_MS)
-            .ok_or(AudioClientError::ServiceUnavailable)?;
-        let reply = ipc_call_timeout(
-            cap,
-            IpcMsg::with_label(AudiodMsg::GET_STATUS),
-            REQUEST_TIMEOUT_MS,
-        )
-        .map_err(map_ipc_error)?;
+        let (cap, reply) = self.call_with_cap(IpcMsg::with_label(AudiodMsg::GET_STATUS))?;
         if reply.label == AudiodMsg::ERROR {
             return Err(decode_error(&reply));
         }
@@ -219,7 +366,7 @@ impl AudioClient {
     /// Submit one chunk and return the status captured by audiod while it
     /// accepted the chunk. This avoids a second status/device query in the
     /// media producer's hot path.
-    pub fn submit_pcm_chunk(&self, bytes: &[u8]) -> Result<u32, AudioClientError> {
+    pub fn submit_pcm_chunk(&self, bytes: &[u8]) -> Result<AudioStreamStatus, AudioClientError> {
         if bytes.is_empty() || bytes.len() > SHM_PAGE || bytes.len() % 4 != 0 {
             return Err(AudioClientError::InvalidFormat);
         }
@@ -234,20 +381,18 @@ impl AudioClient {
         );
         let _ = shm_free(token);
         let reply = result?;
-        unpack_audio_status(&reply)
-            .map(|status| status.frames_played)
-            .ok_or(AudioClientError::Transport)
+        self.decode_stream_reply(&reply)
     }
 
     /// Stop and flush the shared output stream, returning the hardware frame
     /// counter from the same audiod reply.
-    pub fn stop_stream(&self) -> Result<u32, AudioClientError> {
+    pub fn stop_stream(&self) -> Result<AudioStreamStatus, AudioClientError> {
         loop {
             match self.call(IpcMsg::with_label(AudiodMsg::STOP)) {
                 Ok(reply) => {
-                    return unpack_audio_status(&reply)
-                        .map(|status| status.frames_played)
-                        .ok_or(AudioClientError::Transport);
+                    let status = self.decode_stream_reply(&reply)?;
+                    self.stream_id.set(None);
+                    return Ok(status);
                 }
                 Err(AudioClientError::Overflow) => sunlight_ipc::process_yield(),
                 Err(error) => return Err(error),
@@ -297,16 +442,100 @@ impl AudioClient {
     }
 
     fn call(&self, msg: IpcMsg) -> Result<IpcMsg, AudioClientError> {
-        let cap = nameserver_lookup_timeout("audiod", LOOKUP_TIMEOUT_MS)
+        self.call_with_cap(msg).map(|(_, reply)| reply)
+    }
+
+    fn capability(&self) -> Result<sunlight_ipc::CapabilityToken, AudioClientError> {
+        if let Some(capability) = self.capability.get() {
+            return Ok(capability);
+        }
+        let capability = nameserver_lookup_timeout("audiod", LOOKUP_TIMEOUT_MS)
             .ok_or(AudioClientError::ServiceUnavailable)?;
-        let reply = ipc_call_timeout(cap, msg, REQUEST_TIMEOUT_MS).map_err(map_ipc_error)?;
+        self.capability.set(Some(capability));
+        Ok(capability)
+    }
+
+    fn call_with_cap(
+        &self,
+        msg: IpcMsg,
+    ) -> Result<(sunlight_ipc::CapabilityToken, IpcMsg), AudioClientError> {
+        let mut retried_stale_capability = false;
+        let (cap, reply) = loop {
+            let cap = self.capability()?;
+            match ipc_call_timeout(cap, msg, REQUEST_TIMEOUT_MS) {
+                Ok(reply) => break (cap, reply),
+                Err(
+                    sunlight_ipc::IpcCallError::InvalidCapability
+                    | sunlight_ipc::IpcCallError::EndpointNotFound
+                    | sunlight_ipc::IpcCallError::PeerClosed,
+                ) if !retried_stale_capability => {
+                    self.capability.set(None);
+                    retried_stale_capability = true;
+                }
+                Err(error) => {
+                    if msg.label == AudiodMsg::GET_STREAM_STATUS {
+                        self.note_status_diag(ipc_status_error_diagnostic(error));
+                    }
+                    return Err(map_ipc_error(error));
+                }
+            }
+        };
         if reply.label == AudiodMsg::ERROR {
             return Err(decode_error(&reply));
         }
         if reply.label != AudiodMsg::REPLY {
             return Err(AudioClientError::Transport);
         }
-        Ok(reply)
+        Ok((cap, reply))
+    }
+
+    fn decode_stream_reply(&self, reply: &IpcMsg) -> Result<AudioStreamStatus, AudioClientError> {
+        let status = unpack_audio_stream_status(reply).ok_or(AudioClientError::Transport)?;
+        if let Some(expected) = self.stream_id.get() {
+            if status.stream_id != expected {
+                return Err(AudioClientError::Transport);
+            }
+        } else {
+            self.stream_id.set(Some(status.stream_id));
+        }
+        Ok(status)
+    }
+
+    fn note_status_diag(&self, message: &str) {
+        let count = self.status_diag_count.get();
+        if count < 16 {
+            debug_log(message);
+            self.status_diag_count.set(count + 1);
+        }
+    }
+}
+
+fn ipc_status_error_diagnostic(error: sunlight_ipc::IpcCallError) -> &'static str {
+    match error {
+        sunlight_ipc::IpcCallError::Timeout => {
+            "[AUDIOD-CLIENT][status] transport=timeout\n"
+        }
+        sunlight_ipc::IpcCallError::InvalidCapability => {
+            "[AUDIOD-CLIENT][status] transport=invalid-capability\n"
+        }
+        sunlight_ipc::IpcCallError::EndpointNotFound => {
+            "[AUDIOD-CLIENT][status] transport=endpoint-not-found\n"
+        }
+        sunlight_ipc::IpcCallError::InvalidArgument => {
+            "[AUDIOD-CLIENT][status] transport=invalid-argument\n"
+        }
+        sunlight_ipc::IpcCallError::QueueFull => {
+            "[AUDIOD-CLIENT][status] transport=queue-full\n"
+        }
+        sunlight_ipc::IpcCallError::Cancelled => {
+            "[AUDIOD-CLIENT][status] transport=cancelled\n"
+        }
+        sunlight_ipc::IpcCallError::PeerClosed => {
+            "[AUDIOD-CLIENT][status] transport=peer-closed\n"
+        }
+        sunlight_ipc::IpcCallError::Unknown(_) => {
+            "[AUDIOD-CLIENT][status] transport=unknown\n"
+        }
     }
 }
 
@@ -665,6 +894,36 @@ mod tests {
             map_ipc_error(sunlight_ipc::IpcCallError::PeerClosed),
             AudioClientError::ServiceUnavailable
         );
+    }
+
+    #[test]
+    fn stream_progress_is_sender_scoped_and_hardware_consumed() {
+        let mut tracker = StreamProgressTracker::new();
+        assert!(tracker.begin_submission(39, 1024));
+        tracker.tag_period(2, 39, 1024);
+        tracker.observe_dma(1, 1, 2, 256);
+        let partial = tracker.status(39, 0);
+        assert_eq!(partial.submitted_frames, 1024);
+        assert_eq!(partial.consumed_frames, 256);
+        assert_eq!(partial.buffered_frames, 768);
+        assert_eq!(tracker.status(40, 0).consumed_frames, 0);
+
+        tracker.observe_dma(2, 1, 3, 0);
+        let completed = tracker.status(39, 0);
+        assert_eq!(completed.consumed_frames, 1024);
+        assert_eq!(completed.buffered_frames, 0);
+    }
+
+    #[test]
+    fn stream_progress_rejects_competing_owner_until_drained_or_reset() {
+        let mut tracker = StreamProgressTracker::new();
+        assert!(tracker.begin_submission(39, 1024));
+        tracker.tag_period(0, 39, 1024);
+        assert!(!tracker.begin_submission(40, 1024));
+        tracker.observe_dma(0, 1, 1, 0);
+        assert!(tracker.begin_submission(40, 1024));
+        tracker.reset();
+        assert_eq!(tracker.status(40, 0).submitted_frames, 0);
     }
 
     #[test]

@@ -6,6 +6,10 @@ use sunlight_media::{
 
 use crate::model::{seek_target_ms, InteractionState, NowPlayingViewModel, PlaybackState};
 
+// One decoder chunk is about 21 ms at 48 kHz and the focused UI polls every
+// 33 ms. Leave enough room for both cadences without accepting a stale clock.
+const SEEK_ACK_TOLERANCE_MS: u64 = 100;
+
 pub struct MelodyMediaController {
     player: MediaPlayer,
     view: NowPlayingViewModel,
@@ -121,7 +125,10 @@ impl MelodyMediaController {
                 .position
                 .as_millis()
                 .abs_diff(self.interaction.seek_target_ms);
-            if distance <= 25 || snapshot.error.is_some() {
+            if distance <= SEEK_ACK_TOLERANCE_MS
+                || snapshot.state == sunlight_media::PlaybackState::Ended
+                || snapshot.error.is_some()
+            {
                 self.interaction.seek_commit_pending = false;
             }
         }
@@ -211,5 +218,25 @@ mod tests {
         let _ = controller.apply_snapshot(seek_snapshot(4, 7_500));
         assert_eq!(controller.view.position_ms, 7_500);
         assert!(!controller.interaction.seek_commit_pending);
+    }
+
+    #[test]
+    fn seek_ack_allows_backend_cadence_and_eof_is_definitive() {
+        let mut controller = MelodyMediaController::new();
+        controller.source_generation = 4;
+        controller.view.position_ms = 7_500;
+        controller.interaction.seek_commit_pending = true;
+        controller.interaction.seek_target_ms = 7_500;
+        let _ = controller.apply_snapshot(seek_snapshot(4, 7_575));
+        assert!(!controller.interaction.seek_commit_pending);
+        assert_eq!(controller.view.position_ms, 7_575);
+
+        controller.interaction.seek_commit_pending = true;
+        controller.interaction.seek_target_ms = 2_500;
+        let mut ended = seek_snapshot(4, 10_000);
+        ended.state = BackendState::Ended;
+        let _ = controller.apply_snapshot(ended);
+        assert!(!controller.interaction.seek_commit_pending);
+        assert_eq!(controller.view.position_ms, 10_000);
     }
 }

@@ -27,6 +27,14 @@ struct WavLayout {
     info: AudioStreamInfo,
 }
 
+#[cfg(target_os = "none")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WavDiagnostics {
+    pub data_offset: usize,
+    pub data_bytes: usize,
+    pub total_frames: u64,
+}
+
 pub struct WavPcmDecoder<'a> {
     source: &'a [u8],
     layout: WavLayout,
@@ -116,6 +124,21 @@ impl<'a> ProbeDecoder<'a> {
         }
         Ok(Self::Vorbis(VorbisDecoder::open(source)?))
     }
+
+    #[cfg(target_os = "none")]
+    pub(crate) fn wav_diagnostics(&self) -> Option<WavDiagnostics> {
+        match self {
+            Self::Wav(decoder) => {
+                let frame_bytes = decoder.layout.info.channels as usize * 2;
+                Some(WavDiagnostics {
+                    data_offset: decoder.layout.data_offset,
+                    data_bytes: decoder.layout.data_len,
+                    total_frames: (decoder.layout.data_len / frame_bytes) as u64,
+                })
+            }
+            Self::Vorbis(_) => None,
+        }
+    }
 }
 
 impl AudioDecoder for ProbeDecoder<'_> {
@@ -184,12 +207,33 @@ fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
                 let encoding = u16::from_le_bytes(payload[0..2].try_into().unwrap());
                 let channels = u16::from_le_bytes(payload[2..4].try_into().unwrap());
                 let rate = u32::from_le_bytes(payload[4..8].try_into().unwrap());
+                let byte_rate = u32::from_le_bytes(payload[8..12].try_into().unwrap());
                 let block_align = u16::from_le_bytes(payload[12..14].try_into().unwrap());
                 let bits = u16::from_le_bytes(payload[14..16].try_into().unwrap());
-                if encoding != 1 || !matches!(channels, 1 | 2) || rate == 0 || bits != 16 {
+                let extensible_pcm = if encoding == 0xfffe {
+                    const PCM_SUBFORMAT_GUID: &[u8; 16] =
+                        b"\x01\x00\x00\x00\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71";
+                    payload.len() >= 40
+                        && u16::from_le_bytes(payload[16..18].try_into().unwrap()) >= 22
+                        && u16::from_le_bytes(payload[18..20].try_into().unwrap()) == bits
+                        && payload.get(24..40) == Some(PCM_SUBFORMAT_GUID)
+                } else {
+                    false
+                };
+                if (encoding != 1 && !extensible_pcm)
+                    || !matches!(channels, 1 | 2)
+                    || rate == 0
+                    || bits != 16
+                {
                     return Err(MediaError::new(MediaErrorKind::UnsupportedSampleFormat, 20));
                 }
-                if block_align != channels.saturating_mul(2) {
+                let expected_block_align = channels
+                    .checked_mul(bits / 8)
+                    .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 21))?;
+                let expected_byte_rate = rate
+                    .checked_mul(expected_block_align as u32)
+                    .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 21))?;
+                if block_align != expected_block_align || byte_rate != expected_byte_rate {
                     return Err(MediaError::new(MediaErrorKind::MalformedMedia, 21));
                 }
                 format = Some((channels as u8, rate, block_align as usize));
@@ -402,6 +446,35 @@ mod tests {
     static TEST_WAV: &[u8] =
         include_bytes!("../../assets/sounds/melody-mina-sample-48k-stereo.wav");
 
+    fn wav_with_format(format: &[u8], pcm: &[u8]) -> Vec<u8> {
+        let mut wav = b"RIFF\0\0\0\0WAVEfmt ".to_vec();
+        wav.extend_from_slice(&(format.len() as u32).to_le_bytes());
+        wav.extend_from_slice(format);
+        if format.len() & 1 != 0 {
+            wav.push(0);
+        }
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(pcm.len() as u32).to_le_bytes());
+        wav.extend_from_slice(pcm);
+        if pcm.len() & 1 != 0 {
+            wav.push(0);
+        }
+        let riff_size = (wav.len() - 8) as u32;
+        wav[4..8].copy_from_slice(&riff_size.to_le_bytes());
+        wav
+    }
+
+    fn pcm_format(rate: u32) -> [u8; 16] {
+        let mut format = [0u8; 16];
+        format[0..2].copy_from_slice(&1u16.to_le_bytes());
+        format[2..4].copy_from_slice(&2u16.to_le_bytes());
+        format[4..8].copy_from_slice(&rate.to_le_bytes());
+        format[8..12].copy_from_slice(&rate.saturating_mul(4).to_le_bytes());
+        format[12..14].copy_from_slice(&4u16.to_le_bytes());
+        format[14..16].copy_from_slice(&16u16.to_le_bytes());
+        format
+    }
+
     #[test]
     fn rejects_non_ogg_and_non_vorbis_without_panicking() {
         let error = match VorbisDecoder::open(b"not ogg") {
@@ -469,6 +542,40 @@ mod tests {
     }
 
     #[test]
+    fn stereo_pcm_is_little_endian_and_remains_frame_interleaved() {
+        let pcm = [
+            0x34, 0x12, 0xcc, 0xed, // L0=0x1234, R0=-0x1234
+            0xff, 0x7f, 0x00, 0x80, // L1=i16::MAX, R1=i16::MIN
+        ];
+        let wav = wav_with_format(&pcm_format(48_000), &pcm);
+        let mut decoder = WavPcmDecoder::open(&wav).unwrap();
+        let mut samples = [0i16; 4];
+        let decoded = decoder.decode(&mut samples).unwrap();
+        assert_eq!(decoded.frames, 2);
+        assert!(decoded.end_of_stream);
+        assert_eq!(samples, [0x1234, -0x1234, i16::MAX, i16::MIN]);
+    }
+
+    #[test]
+    fn three_second_seek_uses_frame_aligned_byte_offset() {
+        let layout = probe_wav(TEST_WAV).unwrap();
+        let mut decoder = WavPcmDecoder::open(TEST_WAV).unwrap();
+        let actual = decoder.seek(MediaTime::from_millis(3_000)).unwrap();
+        assert_eq!(actual.frames_at(48_000), 144_000);
+        let byte_offset = layout.data_offset + 144_000 * 4;
+        let expected_left =
+            i16::from_le_bytes(TEST_WAV[byte_offset..byte_offset + 2].try_into().unwrap());
+        let expected_right = i16::from_le_bytes(
+            TEST_WAV[byte_offset + 2..byte_offset + 4]
+                .try_into()
+                .unwrap(),
+        );
+        let mut samples = [0i16; 2];
+        assert_eq!(decoder.decode(&mut samples).unwrap().frames, 1);
+        assert_eq!(samples, [expected_left, expected_right]);
+    }
+
+    #[test]
     fn wav_parser_skips_unknown_odd_padded_chunks() {
         let mut wav = TEST_WAV.to_vec();
         let insert = 12;
@@ -493,5 +600,52 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(error.kind, MediaErrorKind::UnsupportedSampleFormat);
+    }
+
+    #[test]
+    fn accepts_extensible_wav_only_when_subformat_is_pcm() {
+        let mut format = [0u8; 40];
+        format[..16].copy_from_slice(&pcm_format(48_000));
+        format[0..2].copy_from_slice(&0xfffeu16.to_le_bytes());
+        format[16..18].copy_from_slice(&22u16.to_le_bytes());
+        format[18..20].copy_from_slice(&16u16.to_le_bytes());
+        format[20..24].copy_from_slice(&3u32.to_le_bytes());
+        format[24..40]
+            .copy_from_slice(b"\x01\x00\x00\x00\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71");
+        let pcm = [1, 0, 2, 0];
+        assert!(WavPcmDecoder::open(&wav_with_format(&format, &pcm)).is_ok());
+
+        format[24] = 3;
+        let error = match WavPcmDecoder::open(&wav_with_format(&format, &pcm)) {
+            Ok(_) => panic!("non-PCM extensible WAV was accepted"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind, MediaErrorKind::UnsupportedSampleFormat);
+    }
+
+    #[test]
+    fn rejects_inconsistent_pcm_byte_rate() {
+        let mut format = pcm_format(48_000);
+        format[8..12].copy_from_slice(&176_400u32.to_le_bytes());
+        let error = match WavPcmDecoder::open(&wav_with_format(&format, &[0; 4])) {
+            Ok(_) => panic!("inconsistent byte rate was accepted"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind, MediaErrorKind::MalformedMedia);
+    }
+
+    #[test]
+    fn mp3_converted_repository_wav_is_valid_but_exceeds_loader_limit() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../docs/songs/onaldin_music-catch-the-sunlight-333176.wav"
+        );
+        let bytes = std::fs::read(path).unwrap();
+        let info = probe(&bytes).unwrap();
+        assert_eq!(info.sample_rate_hz, 44_100);
+        assert_eq!(info.channels, 2);
+        assert_eq!(info.sample_format, PcmFormat::Signed16LeInterleaved);
+        assert_eq!(info.duration.unwrap().as_millis(), 194_704);
+        assert!(bytes.len() > MAX_COMPRESSED_BYTES);
     }
 }

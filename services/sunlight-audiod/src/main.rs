@@ -15,11 +15,13 @@ use sunlight_audio::{
 };
 use sunlight_audiod::{
     decode_system_sound_request, restore_audio_settings, PcmQueue, QueuedSystemSound,
-    SystemSoundEnqueue, SystemSoundMode, SystemSoundQueue, DEFAULT_TONE_HZ, DEFAULT_TONE_MS,
+    StreamProgressTracker, SystemSoundEnqueue, SystemSoundMode, SystemSoundQueue, DEFAULT_TONE_HZ,
+    DEFAULT_TONE_MS,
 };
 use sunlight_ipc::{
-    debug_log, endpoint_create, hda_info, ipc_recv_timeout, ipc_reply, monotonic_millis,
-    nameserver_register, pack_audio_status, shm_map, AudioStatus, AudiodMsg, IpcMsg,
+    debug_log, endpoint_create, hda_info, ipc_recv_timeout, ipc_reply_result, monotonic_millis,
+    nameserver_register, pack_audio_status, pack_audio_stream_status, shm_free, shm_map,
+    AudioStatus, AudiodMsg, IpcMsg,
 };
 use sunlight_libc as libc;
 
@@ -49,6 +51,8 @@ struct ServiceState {
     vendor_id: u16,
     device_id: u16,
     queue: PcmQueue,
+    queue_owner: Option<u64>,
+    stream_progress: StreamProgressTracker,
     system_settings: SystemSoundSettings,
     system_queue: SystemSoundQueue,
     active_system_sound: Option<ActiveSystemSound>,
@@ -59,6 +63,8 @@ struct ServiceState {
     last_state: AudioDeviceState,
     last_dma_log_frames: u64,
     persist_dirty: bool,
+    status_diag_count: u8,
+    pcm_diag_count: u8,
 }
 
 struct ActiveSystemSound {
@@ -122,6 +128,8 @@ impl ServiceState {
             vendor_id,
             device_id,
             queue: PcmQueue::new(),
+            queue_owner: None,
+            stream_progress: StreamProgressTracker::new(),
             system_settings,
             system_queue: SystemSoundQueue::new(),
             active_system_sound: None,
@@ -132,6 +140,8 @@ impl ServiceState {
             last_state: AudioDeviceState::Unavailable,
             last_dma_log_frames: 0,
             persist_dirty: false,
+            status_diag_count: 0,
+            pcm_diag_count: 0,
         }
     }
 
@@ -210,6 +220,7 @@ impl ServiceState {
         if self.tone_frames_left > 0 {
             match dev.fill_sine(&mut self.tone_phase, self.tone_hz, vol) {
                 Ok(true) => {
+                    self.stream_progress.clear_period(dev.last_submitted_period());
                     self.tone_frames_left = self
                         .tone_frames_left
                         .saturating_sub(PERIOD_FRAME_COUNT as u32);
@@ -231,6 +242,7 @@ impl ServiceState {
             let gain = effective_system_gain(vol, self.system_settings.volume);
             match dev.fill_pcm(&active.pcm[active.offset..end], gain) {
                 Ok(true) => {
+                    self.stream_progress.clear_period(dev.last_submitted_period());
                     if !active.submitted {
                         serial_println!(
                             "[AUDIOD] system-sound pcm submitted id={} gain={}",
@@ -261,7 +273,13 @@ impl ServiceState {
             // `fill_pcm` can legitimately return false while the ring is full;
             // popping first used to discard that entire PCM period.
             if !dev.can_submit_period() {
-                let _ = dev.poll_dma_progress();
+                let progress = dev.poll_dma_progress_report();
+                self.stream_progress.observe_dma(
+                    progress.first_completed_period as usize,
+                    progress.completed_periods as usize,
+                    progress.current_period as usize,
+                    progress.current_period_frames,
+                );
                 return;
             }
             let n = self.queue.peek_into(&mut tmp);
@@ -269,14 +287,31 @@ impl ServiceState {
                 return;
             }
             match dev.fill_pcm(&tmp[..n], vol) {
-                Ok(true) => self.queue.consume(n),
+                Ok(true) => {
+                    let period = dev.last_submitted_period();
+                    if let Some(owner) = self.queue_owner {
+                        self.stream_progress.tag_period(period, owner, n / 4);
+                    }
+                    self.queue.consume(n);
+                }
                 Ok(false) => {}
                 Err(_) => self.queue.clear(),
             }
         } else {
-            let _ = dev.fill_silence_ready();
+            let filled = dev.fill_silence_ready().unwrap_or(0);
+            for offset in 0..filled as usize {
+                let period = (dev.last_submitted_period() + 4 - offset) % 4;
+                self.stream_progress.clear_period(period);
+            }
         }
-        let played = dev.poll_dma_progress();
+        let progress = dev.poll_dma_progress_report();
+        self.stream_progress.observe_dma(
+            progress.first_completed_period as usize,
+            progress.completed_periods as usize,
+            progress.current_period as usize,
+            progress.current_period_frames,
+        );
+        let played = progress.total_frames;
         let log_interval = if self.last_dma_log_frames == 0 {
             DMA_FIRST_LOG_FRAMES
         } else {
@@ -388,8 +423,53 @@ pub extern "C" fn _start() -> ! {
         state.pump();
         match ipc_recv_timeout(ep, ENGINE_WAIT_MS) {
             Some(msg) => {
+                let status_diag = msg.label == AudiodMsg::GET_STREAM_STATUS
+                    && state.status_diag_count < 16;
+                let pcm_diag = msg.label == AudiodMsg::SUBMIT_PCM && state.pcm_diag_count < 4;
+                if status_diag {
+                    serial_println!(
+                        "[AUDIOD][status-request] sender_pid={} endpoint={} opcode={:#x} request_words={} status_request_bytes={}",
+                        msg.badge,
+                        ep.0,
+                        msg.label,
+                        msg.word_count,
+                        msg.word_count.saturating_mul(8)
+                    );
+                    state.status_diag_count += 1;
+                }
+                if pcm_diag {
+                    serial_println!(
+                        "[AUDIOD][pcm-request] sender_pid={} endpoint={} opcode={:#x} request_words={} request_caps={} pcm_bytes={}",
+                        msg.badge,
+                        ep.0,
+                        msg.label,
+                        msg.word_count,
+                        msg.cap_count,
+                        msg.words[0]
+                    );
+                    state.pcm_diag_count += 1;
+                }
                 let reply = handle_msg(&mut state, &msg);
-                ipc_reply(reply);
+                let reply_result = ipc_reply_result(reply);
+                if status_diag {
+                    serial_println!(
+                        "[AUDIOD][status-reply] sender_pid={} result={:?} reply_tag={:#x} status_reply_bytes={} expected_status_reply_bytes=32 decode_shape={}",
+                        msg.badge,
+                        reply_result,
+                        reply.label,
+                        reply.word_count.saturating_mul(8),
+                        if reply.label == AudiodMsg::REPLY && reply.word_count == 4 { "ok" } else { "invalid" }
+                    );
+                }
+                if pcm_diag {
+                    serial_println!(
+                        "[AUDIOD][pcm-reply] sender_pid={} result={:?} reply_tag={:#x} reply_bytes={} expected_reply_bytes=32",
+                        msg.badge,
+                        reply_result,
+                        reply.label,
+                        reply.word_count.saturating_mul(8)
+                    );
+                }
                 state.persist_if_dirty();
             }
             None => {}
@@ -406,6 +486,10 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
     match msg.label {
         AudiodMsg::GET_STATUS | AudiodMsg::GET_VOLUME => pack_audio_status(state.status()),
         AudiodMsg::GET_SYSTEM_SOUNDS => pack_audio_status(state.status()),
+        AudiodMsg::GET_STREAM_STATUS => {
+            let underruns = state.device.as_ref().map(|dev| dev.underruns()).unwrap_or(0);
+            pack_audio_stream_status(state.stream_progress.status(msg.badge, underruns))
+        }
         AudiodMsg::GET_DEVICE => IpcMsg::with_label(AudiodMsg::REPLY)
             .word(0, state.kind as u64)
             .word(1, state.vendor_id as u64 | ((state.device_id as u64) << 16))
@@ -492,16 +576,27 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
             }
         }
         AudiodMsg::STOP => {
+            if let Some(device) = state.device.as_mut() {
+                let progress = match device.flush_with_progress() {
+                    Ok(progress) => progress,
+                    Err(_) => return err(AudiodMsg::ERR_DEVICE_FAILED),
+                };
+                state.stream_progress.observe_dma(
+                    progress.first_completed_period as usize,
+                    progress.completed_periods as usize,
+                    progress.current_period as usize,
+                    progress.current_period_frames,
+                );
+            }
+            let underruns = state.device.as_ref().map(|dev| dev.underruns()).unwrap_or(0);
+            let stopped = state.stream_progress.status(msg.badge, underruns);
             state.tone_frames_left = 0;
             state.queue.clear();
+            state.queue_owner = None;
             state.system_queue.clear();
             state.active_system_sound = None;
-            if let Some(device) = state.device.as_mut() {
-                if device.flush().is_err() {
-                    return err(AudiodMsg::ERR_DEVICE_FAILED);
-                }
-            }
-            pack_audio_status(state.status())
+            state.stream_progress.reset();
+            pack_audio_stream_status(stopped)
         }
         _ => err(AudiodMsg::ERR_BAD_REQUEST),
     }
@@ -518,22 +613,43 @@ fn submit_pcm(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
     if msg.cap_count == 0 {
         return err(AudiodMsg::ERR_BAD_REQUEST);
     }
+    if state.queue_owner.is_some() && state.queue_owner != Some(msg.badge) {
+        return err(AudiodMsg::ERR_OVERFLOW);
+    }
     let Ok(ptr) = shm_map(msg.caps[0]) else {
         return err(AudiodMsg::ERR_BAD_REQUEST);
     };
     let bytes = unsafe { core::slice::from_raw_parts(ptr, len.min(4096)) };
-    match validate_pcm(AudioBuffer {
+    let validation = validate_pcm(AudioBuffer {
         bytes,
         format: AudioFormat::NATIVE,
-    }) {
+    });
+    match validation {
         sunlight_audio::PcmValidation::Err(AudioError::UnsupportedFormat) => {
+            let _ = shm_free(msg.caps[0]);
             return err(AudiodMsg::ERR_INVALID_FORMAT);
         }
-        sunlight_audio::PcmValidation::Err(_) => return err(AudiodMsg::ERR_OVERFLOW),
+        sunlight_audio::PcmValidation::Err(_) => {
+            let _ = shm_free(msg.caps[0]);
+            return err(AudiodMsg::ERR_OVERFLOW);
+        }
         sunlight_audio::PcmValidation::Ok { .. } => {}
     }
-    match state.queue.push(bytes) {
-        Ok(()) => pack_audio_status(state.status()),
+    // PcmQueue owns a copy. Drop audiod's received mapping now so every
+    // submission does not permanently consume a shared-memory mapping.
+    let queued = state.queue.push(bytes);
+    let _ = shm_free(msg.caps[0]);
+    match queued {
+        Ok(()) => {
+            state.queue_owner = Some(msg.badge);
+            if !state.stream_progress.begin_submission(msg.badge, len as u64 / 4) {
+                state.queue.clear();
+                state.queue_owner = None;
+                return err(AudiodMsg::ERR_OVERFLOW);
+            }
+            let underruns = state.device.as_ref().map(|dev| dev.underruns()).unwrap_or(0);
+            pack_audio_stream_status(state.stream_progress.status(msg.badge, underruns))
+        }
         Err(_) => err(AudiodMsg::ERR_OVERFLOW),
     }
 }

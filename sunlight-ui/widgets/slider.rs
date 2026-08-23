@@ -356,6 +356,17 @@ mod tests {
     }
 
     #[test]
+    fn horizontal_pointer_geometry_maps_start_half_and_end() {
+        let slider = Slider::horizontal(Rect::new(10, 20, 201, 20));
+        // For this geometry the padded thumb-center track is x=20..200.
+        assert_eq!(slider.pointer_value(20, 30), 0);
+        assert_eq!(slider.pointer_value(110, 30), 50);
+        assert_eq!(slider.pointer_value(200, 30), 100);
+        assert_eq!(slider.pointer_value(-1_000, 30), 0);
+        assert_eq!(slider.pointer_value(1_000, 30), 100);
+    }
+
+    #[test]
     fn vertical_click_updates_value() {
         let mut slider = Slider::vertical(Rect::new(0, 0, 20, 120)).with_range(0, 100);
 

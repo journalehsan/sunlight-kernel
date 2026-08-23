@@ -2686,6 +2686,9 @@ pub mod AudiodMsg {
     pub const GET_DEVICE: u64 = 0xE002;
     pub const GET_VOLUME: u64 = 0xE003;
     pub const GET_SYSTEM_SOUNDS: u64 = 0xE004;
+    /// Sender-scoped application stream progress. No payload; the kernel
+    /// supplied sender badge identifies the stream.
+    pub const GET_STREAM_STATUS: u64 = 0xE005;
     pub const SET_VOLUME: u64 = 0xE010; // w0 = 0..100
     pub const SET_MUTE: u64 = 0xE011; // w0 = 0/1
     pub const SET_SYSTEM_SOUNDS_ENABLED: u64 = 0xE012; // w0 = 0/1
@@ -2738,6 +2741,40 @@ pub struct AudioStatus {
     pub system_sound_queue_len: u8,
 }
 
+/// Sender-scoped application playback progress (four register words).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AudioStreamStatus {
+    pub stream_id: u64,
+    pub submitted_frames: u64,
+    pub consumed_frames: u64,
+    pub buffered_frames: u32,
+    pub underruns: u32,
+}
+
+pub fn pack_audio_stream_status(status: AudioStreamStatus) -> IpcMsg {
+    IpcMsg::with_label(AudiodMsg::REPLY)
+        .word(0, status.stream_id)
+        .word(1, status.submitted_frames)
+        .word(2, status.consumed_frames)
+        .word(
+            3,
+            status.buffered_frames as u64 | ((status.underruns as u64) << 32),
+        )
+}
+
+pub fn unpack_audio_stream_status(reply: &IpcMsg) -> Option<AudioStreamStatus> {
+    if reply.label != AudiodMsg::REPLY || reply.word_count != 4 {
+        return None;
+    }
+    Some(AudioStreamStatus {
+        stream_id: reply.words[0],
+        submitted_frames: reply.words[1],
+        consumed_frames: reply.words[2],
+        buffered_frames: reply.words[3] as u32,
+        underruns: (reply.words[3] >> 32) as u32,
+    })
+}
+
 pub fn pack_audio_status(status: AudioStatus) -> IpcMsg {
     IpcMsg::with_label(AudiodMsg::REPLY)
         .word(
@@ -2745,7 +2782,10 @@ pub fn pack_audio_status(status: AudioStatus) -> IpcMsg {
             (status.state as u64)
                 | ((status.volume as u64) << 8)
                 | ((status.muted as u64) << 16)
-                | ((status.last_nonzero as u64) << 24),
+                | ((status.last_nonzero as u64) << 24)
+                | ((status.system_sounds_enabled as u64) << 32)
+                | ((status.system_sounds_volume as u64) << 40)
+                | ((status.system_sound_queue_len as u64) << 48),
         )
         .word(
             1,
@@ -2755,16 +2795,10 @@ pub fn pack_audio_status(status: AudioStatus) -> IpcMsg {
         )
         .word(2, status.underruns as u64)
         .word(3, status.frames_played as u64)
-        .word(
-            4,
-            (status.system_sounds_enabled as u64)
-                | ((status.system_sounds_volume as u64) << 8)
-                | ((status.system_sound_queue_len as u64) << 16),
-        )
 }
 
 pub fn unpack_audio_status(reply: &IpcMsg) -> Option<AudioStatus> {
-    if reply.label != AudiodMsg::REPLY {
+    if reply.label != AudiodMsg::REPLY || reply.word_count != 4 {
         return None;
     }
     Some(AudioStatus {
@@ -2777,17 +2811,9 @@ pub fn unpack_audio_status(reply: &IpcMsg) -> Option<AudioStatus> {
         bits: ((reply.words[1] >> 40) & 0xff) as u8,
         underruns: reply.words[2] as u32,
         frames_played: reply.words[3] as u32,
-        system_sounds_enabled: reply.word_count < 5 || (reply.words[4] & 1) != 0,
-        system_sounds_volume: if reply.word_count < 5 {
-            60
-        } else {
-            ((reply.words[4] >> 8) & 0xff) as u8
-        },
-        system_sound_queue_len: if reply.word_count < 5 {
-            0
-        } else {
-            ((reply.words[4] >> 16) & 0xff) as u8
-        },
+        system_sounds_enabled: ((reply.words[0] >> 32) & 1) != 0,
+        system_sounds_volume: ((reply.words[0] >> 40) & 0xff) as u8,
+        system_sound_queue_len: ((reply.words[0] >> 48) & 0xff) as u8,
     })
 }
 
@@ -4308,11 +4334,27 @@ pub fn ipc_recv_timeout(ep: EndpointId, timeout_ms: u64) -> Option<IpcMsg> {
     }
 }
 
-pub fn ipc_reply(reply: IpcMsg) {
+pub fn ipc_reply_result(reply: IpcMsg) -> Result<(), IpcError> {
     // SAFETY: ipc_reply sends a fixed register IPC message to the current reply waiter.
-    unsafe {
-        raw_syscall_ipc(SunlightSyscall::IpcReply, 0, reply);
+    let (ret, _) = unsafe { raw_syscall_ipc(SunlightSyscall::IpcReply, 0, reply) };
+    match ret {
+        0 => Ok(()),
+        value if value == IpcError::InvalidCapability as u64 => Err(IpcError::InvalidCapability),
+        value if value == IpcError::EndpointNotFound as u64 => Err(IpcError::EndpointNotFound),
+        value if value == IpcError::WouldBlock as u64 => Err(IpcError::WouldBlock),
+        value if value == IpcError::InvalidArgument as u64 => Err(IpcError::InvalidArgument),
+        value if value == IpcError::InvalidWordCount as u64 => Err(IpcError::InvalidWordCount),
+        value if value == IpcError::InvalidCapCount as u64 => Err(IpcError::InvalidCapCount),
+        value if value == IpcError::QueueFull as u64 => Err(IpcError::QueueFull),
+        value if value == IpcError::DeadlineExpired as u64 => Err(IpcError::DeadlineExpired),
+        value if value == IpcError::Cancelled as u64 => Err(IpcError::Cancelled),
+        value if value == IpcError::PeerClosed as u64 => Err(IpcError::PeerClosed),
+        _ => Err(IpcError::InvalidArgument),
     }
+}
+
+pub fn ipc_reply(reply: IpcMsg) {
+    let _ = ipc_reply_result(reply);
 }
 
 /// Retain the current server call and return a generation-scoped completion
@@ -5855,7 +5897,10 @@ mod network_backend_tests {
 
 #[cfg(test)]
 mod audio_protocol_tests {
-    use super::{pack_audio_status, unpack_audio_status, AudioStatus, AudiodMsg};
+    use super::{
+        pack_audio_status, pack_audio_stream_status, unpack_audio_status,
+        unpack_audio_stream_status, AudioStatus, AudioStreamStatus, AudiodMsg,
+    };
 
     #[test]
     fn status_round_trip_and_error_codes() {
@@ -5874,6 +5919,7 @@ mod audio_protocol_tests {
             system_sound_queue_len: 2,
         });
         let unpacked = unpack_audio_status(&packed).unwrap();
+        assert_eq!(packed.word_count, 4, "audio status must fit register IPC");
         assert_eq!(unpacked.volume, 65);
         assert!(unpacked.muted);
         assert_eq!(unpacked.last_nonzero, 70);
@@ -5885,5 +5931,47 @@ mod audio_protocol_tests {
         assert_eq!(AudiodMsg::ERR_UNAVAILABLE, 3);
         assert_ne!(AudiodMsg::PLAY_TONE, AudiodMsg::SUBMIT_PCM);
         assert_ne!(AudiodMsg::PLAY_SYSTEM_SOUND, AudiodMsg::SUBMIT_PCM);
+    }
+
+    #[test]
+    fn status_rejects_short_and_noncanonical_replies() {
+        let status = AudioStatus {
+            state: 1,
+            volume: 65,
+            muted: false,
+            last_nonzero: 65,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits: 16,
+            underruns: 0,
+            frames_played: 42,
+            system_sounds_enabled: true,
+            system_sounds_volume: 60,
+            system_sound_queue_len: 0,
+        };
+        let packed = pack_audio_status(status);
+        let mut short = packed;
+        short.word_count = 3;
+        assert!(unpack_audio_status(&short).is_none());
+        let mut oversized = packed;
+        oversized.word_count = 5;
+        assert!(unpack_audio_status(&oversized).is_none());
+    }
+
+    #[test]
+    fn stream_status_round_trip_fits_register_ipc() {
+        let expected = AudioStreamStatus {
+            stream_id: 39,
+            submitted_frames: 288_000,
+            consumed_frames: 287_232,
+            buffered_frames: 768,
+            underruns: 2,
+        };
+        let packed = pack_audio_stream_status(expected);
+        assert_eq!(packed.word_count, 4);
+        assert_eq!(unpack_audio_stream_status(&packed), Some(expected));
+        let mut malformed = packed;
+        malformed.word_count = 3;
+        assert!(unpack_audio_stream_status(&malformed).is_none());
     }
 }

@@ -12,6 +12,7 @@ use sunlight_ipc::{dma_alloc, hda_info, map_mmio, monotonic_millis, process_yiel
 
 const PAGE: usize = 4096;
 const PERIODS: usize = 4;
+pub const ENGINE_PERIOD_COUNT: usize = PERIODS;
 const PERIOD_BYTES: usize = PAGE;
 const RING_BYTES: usize = PERIODS * PERIOD_BYTES;
 const DMA_PAGES: usize = 1 + PERIODS; // page 0 = CORB/RIRB/BDL, pages 1.. = PCM
@@ -133,6 +134,15 @@ pub struct HdaPlayback {
     last_lpib: u32,
     underruns: u32,
     running: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DmaProgress {
+    pub total_frames: u64,
+    pub first_completed_period: u8,
+    pub completed_periods: u8,
+    pub current_period: u8,
+    pub current_period_frames: u16,
 }
 
 // SAFETY: audiod is a single-threaded service. The MMIO/DMA pointers are
@@ -262,19 +272,30 @@ impl HdaPlayback {
     /// the output-side flush required by pause, stop, and media seek; clearing
     /// audiod's producer queue alone cannot retract DMA already submitted.
     pub fn flush(&mut self) -> Result<(), HdaError> {
+        self.flush_with_progress().map(|_| ())
+    }
+
+    /// Flush and return the final pre-stop DMA cursor so audiod can preserve
+    /// sender-scoped consumption through pause, seek, stop, and EOF.
+    pub fn flush_with_progress(&mut self) -> Result<DmaProgress, HdaError> {
         // Preserve progress up to the point at which the stream is stopped.
         // `frames_played` is a hardware-consumed clock, never a submit clock.
-        let _ = self.poll_dma_progress();
+        let progress = self.poll_dma_progress_report();
         self.stop();
         self.start()?;
         let _ = self.fill_silence_ready()?;
-        Ok(())
+        Ok(progress)
     }
 
     /// Whether one full engine period can be submitted without overwriting a
     /// period the controller has not consumed yet.
     pub fn can_submit_period(&self) -> bool {
         self.filled_periods < PERIODS
+    }
+
+    /// Descriptor index written by the most recent successful period submit.
+    pub fn last_submitted_period(&self) -> usize {
+        (self.write_period + PERIODS - 1) % PERIODS
     }
 
     /// Copy `src` (already gain-applied S16LE stereo) into the next free period.
@@ -344,8 +365,20 @@ impl HdaPlayback {
     /// This intentionally measures controller progress, including silence,
     /// rather than bytes most recently submitted by a client.
     pub fn poll_dma_progress(&mut self) -> u64 {
+        self.poll_dma_progress_report().total_frames
+    }
+
+    /// Sample DMA progress and include the bounded descriptor transition data
+    /// needed by audiod to attribute hardware consumption to one stream.
+    pub fn poll_dma_progress_report(&mut self) -> DmaProgress {
         if !self.running {
-            return self.frames_played;
+            return DmaProgress {
+                total_frames: self.frames_played,
+                first_completed_period: self.last_hw_period as u8,
+                completed_periods: 0,
+                current_period: self.last_hw_period as u8,
+                current_period_frames: 0,
+            };
         }
         let current = self.dma_position_bytes() % RING_BYTES as u32;
         let previous = self.last_lpib % RING_BYTES as u32;
@@ -354,6 +387,7 @@ impl HdaPlayback {
             .frames_played
             .saturating_add((advanced / FRAME_BYTES as u32) as u64);
         let current_period = (current as usize / PERIOD_BYTES) % PERIODS;
+        let first_completed_period = self.last_hw_period;
         let periods_advanced = ring_advance_periods(self.last_hw_period, current_period, PERIODS);
         if periods_advanced != 0 {
             self.filled_periods = self
@@ -362,7 +396,13 @@ impl HdaPlayback {
             self.last_hw_period = current_period;
         }
         self.last_lpib = current;
-        self.frames_played
+        DmaProgress {
+            total_frames: self.frames_played,
+            first_completed_period: first_completed_period as u8,
+            completed_periods: periods_advanced.min(PERIODS) as u8,
+            current_period: current_period as u8,
+            current_period_frames: ((current as usize % PERIOD_BYTES) / FRAME_BYTES) as u16,
+        }
     }
 
     fn dma_position_bytes(&self) -> u32 {
