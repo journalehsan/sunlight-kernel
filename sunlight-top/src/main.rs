@@ -79,6 +79,15 @@ pub extern "C" fn _start() -> ! {
     sunlight_ipc::debug_log("[TOP] rendering");
 
     loop {
+        let mut redraw = false;
+
+        // SIGWINCH delivery is not available yet, but the PTY winsize cache is
+        // updated immediately. Re-query it on our existing refresh loop so a
+        // running top follows terminal maximize/restore and manual resizes.
+        if let Some((next_cols, next_rows)) = get_terminal_size() {
+            redraw |= view.set_terminal_size(next_cols, next_rows);
+        }
+
         if let Some(key) = read_key_nonblocking() {
             match key {
                 b'q' | b'Q' | 0x1b => {
@@ -91,31 +100,55 @@ pub extern "C" fn _start() -> ! {
                     view.sort = SortKey {
                         column: SortColumn::Cpu,
                         descending: true,
-                    }
+                    };
+                    view.scroll_to_top();
+                    redraw = true;
                 }
                 b'm' | b'M' => {
                     view.sort = SortKey {
                         column: SortColumn::Mem,
                         descending: true,
-                    }
+                    };
+                    view.scroll_to_top();
+                    redraw = true;
                 }
                 b'p' | b'P' => {
                     view.sort = SortKey {
                         column: SortColumn::Pid,
                         descending: false,
-                    }
+                    };
+                    view.scroll_to_top();
+                    redraw = true;
                 }
                 b'n' | b'N' => {
                     view.sort = SortKey {
                         column: SortColumn::Name,
                         descending: false,
-                    }
+                    };
+                    view.scroll_to_top();
+                    redraw = true;
+                }
+                b'j' | b'J' => {
+                    view.scroll_down(telem.snapshot().proc_count);
+                    redraw = true;
+                }
+                b'k' | b'K' => {
+                    view.scroll_up();
+                    redraw = true;
+                }
+                b'g' => {
+                    view.scroll_to_top();
+                    redraw = true;
+                }
+                b'G' => {
+                    view.scroll_to_bottom(telem.snapshot().proc_count);
+                    redraw = true;
                 }
                 _ => {}
             }
         }
 
-        if telem.poll() {
+        if telem.poll() || redraw {
             view.render(
                 &mut canvas,
                 telem.snapshot(),

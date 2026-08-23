@@ -1,4 +1,4 @@
-use crate::telemetry::{ProcessSnapshot, ProcessState, SystemSnapshot};
+use crate::telemetry::{ProcessSnapshot, ProcessState, SystemSnapshot, MAX_PROCESSES};
 use crate::terminal::Canvas;
 
 #[derive(Clone, Copy)]
@@ -32,9 +32,10 @@ pub fn render_table(
     max_rows: u16,
     term_width: u16,
     sort: &SortKey,
+    scroll: usize,
     my_pid: u32,
 ) {
-    let mut order = [0usize; 64];
+    let mut order = [0usize; MAX_PROCESSES];
     for i in 0..snap.proc_count {
         order[i] = i;
     }
@@ -43,9 +44,10 @@ pub fn render_table(
     let used_cols = 6 + 6 + 9 + 6 + 8 + 4;
     let name_col_width = (term_width as usize).saturating_sub(used_cols);
 
-    let visible = core::cmp::min(snap.proc_count, max_rows as usize);
+    let remaining = snap.proc_count.saturating_sub(scroll);
+    let visible = core::cmp::min(remaining, max_rows as usize);
     for row_idx in 0..visible {
-        let pi = order[row_idx];
+        let pi = order[scroll + row_idx];
         let proc = &snap.procs[pi];
 
         c.move_to(start_row + row_idx as u16, 1);
