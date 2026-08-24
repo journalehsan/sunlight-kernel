@@ -173,7 +173,9 @@ impl TextBuffer {
     /// Direct save to file path via truncate + write.
     pub fn save_to_file(&mut self, path_str: &str) -> io::Result<()> {
         let content = self.to_string_content();
-        fs::write(Path::new(path_str), content.as_bytes())?;
+        let path = Path::new(path_str);
+        fs::write(path, content.as_bytes())?;
+        verify_saved_file(path, content.as_bytes())?;
         self.modified = false;
         Ok(())
     }
@@ -199,8 +201,19 @@ impl TextBuffer {
 
         match fs::rename(tmp_path, path) {
             Ok(()) => {
-                self.modified = false;
-                Ok(true) // true = atomic replace succeeded
+                // Helios' compatibility filesystem has historically had
+                // rename implementations that could report success without
+                // publishing the destination path.  Do not tell the user the
+                // document was saved until the final pathname can be opened
+                // and contains the bytes we wrote.  A direct write repairs
+                // that false-success case.
+                if verify_saved_file(path, content.as_bytes()).is_ok() {
+                    self.modified = false;
+                    Ok(true) // true = atomic replace succeeded
+                } else {
+                    self.save_to_file(path_str)?;
+                    Ok(false)
+                }
             }
             Err(_) => {
                 let _ = fs::remove_file(tmp_path);
@@ -208,6 +221,17 @@ impl TextBuffer {
                 Ok(false)
             }
         }
+    }
+}
+
+fn verify_saved_file(path: &Path, expected: &[u8]) -> io::Result<()> {
+    let actual = fs::read(path)?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            "saved file contents did not match the document",
+        ))
     }
 }
 

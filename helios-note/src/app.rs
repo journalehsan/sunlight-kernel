@@ -212,9 +212,17 @@ impl App {
 
         match key.code {
             KeyCode::Enter => self.confirm_save_as(),
+            // Some terminals send \r or \n instead of Enter.
+            KeyCode::Char('\r') | KeyCode::Char('\n') => self.confirm_save_as(),
             KeyCode::Esc => {
                 self.save_as = None;
                 self.status_message = Some("Save As cancelled".to_string());
+            }
+            // Some terminals send ^H (Ctrl+H) for Backspace.
+            KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(prompt) = self.save_as.as_mut() {
+                    prompt.handle_edit(KeyCode::Backspace);
+                }
             }
             code => {
                 if let Some(prompt) = self.save_as.as_mut() {
@@ -262,8 +270,8 @@ impl App {
         // Search prompt input mode
         if self.show_search_prompt {
             match key.code {
-                KeyCode::Char(c) => {
-                    self.search_input.push(c);
+                KeyCode::Backspace => {
+                    self.search_input.pop();
                     self.search
                         .update_query(self.search_input.clone(), &self.buffer);
                     if let Some(m) = self.search.current_match() {
@@ -271,8 +279,18 @@ impl App {
                         self.cursor.col = m.col;
                     }
                 }
-                KeyCode::Backspace => {
+                // Some terminals send ^H (Ctrl+H) for Backspace.
+                KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     self.search_input.pop();
+                    self.search
+                        .update_query(self.search_input.clone(), &self.buffer);
+                    if let Some(m) = self.search.current_match() {
+                        self.cursor.line = m.line;
+                        self.cursor.col = m.col;
+                    }
+                }
+                KeyCode::Char(c) => {
+                    self.search_input.push(c);
                     self.search
                         .update_query(self.search_input.clone(), &self.buffer);
                     if let Some(m) = self.search.current_match() {
@@ -391,6 +409,19 @@ impl App {
         }
 
         // Editing Operations
+        // Some terminals send ^H (Ctrl+H) rather than ^? for Backspace.
+        if key.code == KeyCode::Char('h') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.push_undo_step();
+            let (nl, nc) = self
+                .buffer
+                .delete_backspace(self.cursor.line, self.cursor.col);
+            self.cursor.line = nl;
+            self.cursor.col = nc;
+            self.cursor
+                .adjust_viewport(view_width, view_height, &self.buffer, 4);
+            return;
+        }
+
         if key.modifiers.is_empty() || key.modifiers == KeyModifiers::SHIFT {
             match key.code {
                 KeyCode::Enter | KeyCode::Char('\n') | KeyCode::Char('\r') => {
@@ -549,6 +580,30 @@ mod tests {
         assert!(app.save_as.is_none());
         assert!(!app.buffer.is_modified());
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "first-second\n");
+        let _ = std::fs::remove_file(&target);
+    }
+
+    #[test]
+    fn raw_carriage_return_confirms_untitled_save_as() {
+        let target = unique_path("raw_enter");
+        let _ = std::fs::remove_file(&target);
+
+        let mut app = App::untitled();
+        type_text(&mut app, "saved with enter");
+        ctrl_s(&mut app);
+        let prompt = app.save_as.as_mut().expect("Save As prompt is open");
+        prompt.input = target.clone();
+        prompt.cursor = prompt.input.chars().count();
+
+        press(&mut app, KeyCode::Char('\r'));
+
+        assert!(app.save_as.is_none());
+        assert_eq!(app.document.backing_path(), Some(Path::new(&target)));
+        assert_eq!(
+            std::fs::read_to_string(&target).unwrap(),
+            "saved with enter\n"
+        );
+        assert!(!app.buffer.is_modified());
         let _ = std::fs::remove_file(&target);
     }
 
