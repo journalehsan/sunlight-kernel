@@ -1,5 +1,6 @@
 use alloc::{collections::BTreeMap, string::String, sync::Arc, vec, vec::Vec};
 
+use super::document_editor::DocumentEditor;
 use crate::font::VecText;
 use crate::geom::{Point, Rect, Size};
 use crate::paint::Canvas;
@@ -164,7 +165,12 @@ pub fn layout_text_lines(
             line_end = byte_start + first.len_utf8();
         }
 
-        let px_width = measure_text_width(font, &text[byte_start..line_end]);
+        let visible_end = if ends_with_newline {
+            line_end.saturating_sub(1)
+        } else {
+            line_end
+        };
+        let px_width = measure_text_width(font, &text[byte_start..visible_end]);
         lines.push(TextLineLayout {
             byte_start,
             byte_end: line_end,
@@ -175,6 +181,18 @@ pub fn layout_text_lines(
 
         byte_start = line_end;
         y_offset = y_offset.wrapping_add(line_height as i32);
+    }
+
+    // An empty logical document and the logical line after a trailing newline
+    // are both real editable visual rows.
+    if lines.is_empty() || text.ends_with('\n') {
+        lines.push(TextLineLayout {
+            byte_start: text.len(),
+            byte_end: text.len(),
+            y_offset,
+            pixel_width: 0,
+            ends_with_newline: false,
+        });
     }
 
     lines
@@ -188,6 +206,12 @@ pub fn find_line_index(lines: &[TextLineLayout], byte_offset: usize) -> Option<u
         return None;
     }
     for (idx, line) in lines.iter().enumerate() {
+        if idx + 1 < lines.len()
+            && byte_offset == line.byte_end
+            && lines[idx + 1].byte_start == byte_offset
+        {
+            return Some(idx + 1);
+        }
         if byte_offset >= line.byte_start && byte_offset < line.byte_end {
             return Some(idx);
         }
@@ -1041,6 +1065,10 @@ pub struct DocumentCanvas<'a> {
     pub scene_serif_font: Option<&'a dyn VecText>,
     pub scene_mono_font: Option<&'a dyn VecText>,
     pub edit_state: Option<&'a TextEditState>,
+    /// Optional full-page plain-text editor. This is deliberately absent for
+    /// retained/read-only consumers such as Rappid Rabbit.
+    pub document_editor: Option<(usize, &'a DocumentEditor)>,
+    pub caret_visible: bool,
 }
 
 impl<'a> DocumentCanvas<'a> {
@@ -1059,11 +1087,24 @@ impl<'a> DocumentCanvas<'a> {
             scene_serif_font: None,
             scene_mono_font: None,
             edit_state: None,
+            document_editor: None,
+            caret_visible: true,
         }
     }
 
     pub fn with_edit_state(mut self, state: &'a TextEditState) -> Self {
         self.edit_state = Some(state);
+        self
+    }
+
+    pub fn with_document_editor(mut self, item_index: usize, editor: &'a DocumentEditor) -> Self {
+        self.scroll_y = editor.scroll_y();
+        self.document_editor = Some((item_index, editor));
+        self
+    }
+
+    pub fn with_caret_visible(mut self, visible: bool) -> Self {
+        self.caret_visible = visible;
         self
     }
 
@@ -1165,7 +1206,7 @@ impl<'a> DocumentCanvas<'a> {
         }
 
         let rel_x = point.x - content.x;
-        let rel_y = point.y - content.y;
+        let rel_y = point.y - content.y + self.scroll_y as i32;
         let target_point = Point::new(rel_x, rel_y);
 
         for item in self.items.iter().rev() {
@@ -1237,7 +1278,7 @@ impl<'a> DocumentCanvas<'a> {
         } else if self.items.is_empty() {
             self.draw_empty_label(canvas, content, theme);
         } else {
-            self.draw_items(canvas, content);
+            self.draw_items(canvas, content, theme);
         }
     }
 
@@ -1262,11 +1303,19 @@ impl<'a> DocumentCanvas<'a> {
         );
     }
 
-    fn draw_items(&self, canvas: &mut Canvas, content: Rect) {
-        let active_idx = self.edit_state.and_then(|es| es.active_item_index);
+    fn draw_items(&self, canvas: &mut Canvas, content: Rect, theme: &Theme) {
+        let active_idx = self
+            .document_editor
+            .map(|(index, _)| index)
+            .or_else(|| self.edit_state.and_then(|es| es.active_item_index));
         for (idx, item) in self.items.iter().enumerate() {
             let is_active = active_idx == Some(idx);
-            let caret_byte = if is_active {
+            let editor = self
+                .document_editor
+                .and_then(|(index, editor)| (index == idx).then_some(editor));
+            let caret_byte = if let Some(editor) = editor {
+                editor.caret_byte()
+            } else if is_active {
                 self.edit_state.map_or(0, |es| es.caret_byte)
             } else {
                 0
@@ -1274,7 +1323,8 @@ impl<'a> DocumentCanvas<'a> {
             match *item {
                 DocumentCanvasItem::Text { x, y, text, style } => {
                     let px = content.x + x;
-                    let py = content.y + y;
+                    let item_scroll = if editor.is_some() { self.scroll_y } else { 0 };
+                    let py = content.y + y - item_scroll as i32;
                     if py >= content.bottom() {
                         continue;
                     }
@@ -1284,11 +1334,63 @@ impl<'a> DocumentCanvas<'a> {
                             .font
                             .map(|f| f.line_height())
                             .unwrap_or(crate::paint::font::GLYPH_H);
-                        let lines = layout_text_lines(style.font, text, max_w, line_h);
-                        for line in &lines {
+                        let computed_lines;
+                        let lines = if let Some(editor) = editor {
+                            editor.lines()
+                        } else {
+                            computed_lines = layout_text_lines(style.font, text, max_w, line_h);
+                            computed_lines.as_slice()
+                        };
+                        let selection =
+                            editor
+                                .and_then(DocumentEditor::selection_range)
+                                .or_else(|| {
+                                    self.edit_state.and_then(|state| {
+                                        let anchor = state.selection_anchor_byte?;
+                                        (anchor != caret_byte).then_some(if anchor < caret_byte {
+                                            (anchor, caret_byte)
+                                        } else {
+                                            (caret_byte, anchor)
+                                        })
+                                    })
+                                });
+                        for line in lines {
                             let ly = py + line.y_offset;
                             if ly + line_h as i32 <= content.y || ly >= content.bottom() {
                                 continue;
+                            }
+                            if let Some((selection_start, selection_end)) = selection {
+                                let line_end = if line.ends_with_newline {
+                                    line.byte_end.saturating_sub(1)
+                                } else {
+                                    line.byte_end
+                                };
+                                let start = selection_start.max(line.byte_start).min(line_end);
+                                let end = selection_end.max(line.byte_start).min(line_end);
+                                if end > start {
+                                    let x1 = caret_x_on_line(style.font, text, line, start);
+                                    let x2 = caret_x_on_line(style.font, text, line, end);
+                                    if let Some(selection_rect) = Rect::new(
+                                        px + x1 as i32,
+                                        ly,
+                                        x2.saturating_sub(x1).max(1),
+                                        line_h,
+                                    )
+                                    .intersect(content)
+                                    {
+                                        canvas.fill_rect(selection_rect, theme.chrome.selection);
+                                    }
+                                } else if selection_start < line.byte_end
+                                    && selection_end >= line.byte_end
+                                    && line.ends_with_newline
+                                {
+                                    let x1 = caret_x_on_line(style.font, text, line, line_end);
+                                    if let Some(selection_rect) =
+                                        Rect::new(px + x1 as i32, ly, 3, line_h).intersect(content)
+                                    {
+                                        canvas.fill_rect(selection_rect, theme.chrome.selection);
+                                    }
+                                }
                             }
                             let mut line_text = &text[line.byte_start..line.byte_end];
                             if line.ends_with_newline && line_text.ends_with('\n') {
@@ -1299,8 +1401,8 @@ impl<'a> DocumentCanvas<'a> {
                                 draw_text(canvas, style.font, px, ly, visible, style.color);
                             }
                         }
-                        let caret_line = find_line_index(&lines, caret_byte).unwrap_or(0usize);
-                        if let Some(line) = lines.get(caret_line) {
+                        let caret_line = find_line_index(lines, caret_byte).unwrap_or(0usize);
+                        if let Some(line) = lines.get(caret_line).filter(|_| self.caret_visible) {
                             let caret_ox = caret_x_on_line(style.font, text, line, caret_byte);
                             let caret_px = px + caret_ox as i32;
                             let caret_py = py + line.y_offset;
@@ -2059,7 +2161,7 @@ mod tests {
         line_home_byte, CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
         DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentScene,
         DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage, RenderObject,
-        RenderObjectId, RenderObjectKind, ScenePatchOperation, TextEditState, TextLineLayout,
+        RenderObjectId, RenderObjectKind, ScenePatchOperation, TextEditState,
     };
     #[cfg(feature = "app")]
     use crate::CursorShape;
@@ -2559,7 +2661,9 @@ mod tests {
     #[test]
     fn layout_empty_text_is_single_empty_line() {
         let lines = layout_text_lines(None, "", 60, 7);
-        assert!(lines.is_empty());
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].byte_start, 0);
+        assert_eq!(lines[0].byte_end, 0);
     }
 
     #[test]
@@ -2577,13 +2681,14 @@ mod tests {
 
     #[test]
     fn layout_newline_at_end_creates_trailing_line() {
-        // "ab\n" is 3 bytes.  The '\n' is included in the one visual line.
+        // "ab\n" is 3 bytes. The newline terminates the first visual line
+        // and creates a real trailing empty caret row.
         let lines = layout_text_lines(None, "ab\n", 600, 7);
-        assert_eq!(lines.len(), 1);
+        assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].byte_end, 3); // "ab\n"
         assert!(lines[0].ends_with_newline);
-        // The caret can sit at byte 3 (past '\n'), which maps to line 0.
-        assert_eq!(find_line_index(&lines, 3), Some(0));
+        assert_eq!(lines[1].byte_start, 3);
+        assert_eq!(find_line_index(&lines, 3), Some(1));
     }
 
     #[test]

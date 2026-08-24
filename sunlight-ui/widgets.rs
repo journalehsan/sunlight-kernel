@@ -5,6 +5,7 @@ pub mod conversation_bubble;
 pub mod digital_number;
 pub mod disclosure;
 pub mod document_canvas;
+pub mod document_editor;
 pub mod drive_card;
 pub mod icon_button;
 pub mod label;
@@ -53,6 +54,7 @@ pub use document_canvas::{
     RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,
     ScenePatchOperation, TextEditState, TextLineLayout,
 };
+pub use document_editor::DocumentEditor;
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
 pub use icon_button::IconButton;
 pub use label::Label;

@@ -17,16 +17,14 @@ use sunlight_ipc::{
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
-    byte_at_x_on_line, caret_x_on_line, click_to_line_and_byte, find_line_index, layout_text_lines,
-    line_end_byte, line_home_byte, AppMenuCommand, AppMenuSecondaryItem, CanvasHitTarget,
-    DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode, DocumentCanvasPresentation,
-    DocumentRectStyle, DocumentStrokeStyle, DocumentTextStyle, HeaderActionButton, HeaderChip,
-    PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, StatusBar,
-    TextEditState, TextLineLayout, TwoPaneAppMenu,
+    AppMenuCommand, AppMenuSecondaryItem, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
+    DocumentCanvasPresentation, DocumentEditor, DocumentRectStyle, DocumentStrokeStyle,
+    DocumentTextStyle, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar, RibbonButtonKind,
+    RibbonButtonSpec, RibbonGroupSpec, StatusBar, TwoPaneAppMenu,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, AxisSizing, Color, Column, CursorShape, Event,
-    LayoutBox, LayoutInvalidation, Point, Rect, Size, Sizing, Theme, Window, WindowConfig,
+    LayoutBox, LayoutInvalidation, Point, Rect, Size, Sizing, Theme, VecText, Window, WindowConfig,
     WindowDecoration, WindowEvent,
 };
 
@@ -49,10 +47,15 @@ const KEY_DOWN: u8 = 0x50;
 const KEY_HOME: u8 = 0x47;
 const KEY_END: u8 = 0x4F;
 const KEY_DELETE: u8 = 0x53;
+const KEY_PAGE_UP: u8 = 0x49;
+const KEY_PAGE_DOWN: u8 = 0x51;
+const KEY_A: u8 = 0x1E;
+const KEY_C: u8 = 0x2E;
+const KEY_V: u8 = 0x2F;
+const KEY_X: u8 = 0x2D;
 
-const SAMPLE_EDITABLE_TEXT: &str = "SunlightOS ☀️  Rabbit 🐇  Penguin 🐧  Rust 🦀";
-
-const EDITABLE_ITEM_INDEX: usize = 5;
+const EDITABLE_ITEM_INDEX: usize = 0;
+const WHEEL_SCROLL_LINES: i32 = 3;
 
 static FONT_UI_TITLE: VecFont = VecFont(FontRole::UiTitle);
 static FONT_UI_LARGE: VecFont = VecFont(FontRole::UiLarge);
@@ -800,8 +803,9 @@ struct WriterApp {
     menu_button_hover: bool,
     status_center: TextSlot,
     status_ticks: u16,
-    edit_buffer: String,
-    edit_state: TextEditState,
+    editor: DocumentEditor,
+    editor_focused: bool,
+    drag_anchor_byte: Option<usize>,
     document_modified: bool,
     prev_document_cursor: CursorShape,
     client_bounds: Rect,
@@ -834,8 +838,9 @@ impl WriterApp {
             menu_button_hover: false,
             status_center,
             status_ticks: 0,
-            edit_buffer: String::from(SAMPLE_EDITABLE_TEXT),
-            edit_state: TextEditState::default(),
+            editor: DocumentEditor::new(),
+            editor_focused: false,
+            drag_anchor_byte: None,
             document_modified: false,
             prev_document_cursor: CursorShape::Pointer,
             client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
@@ -843,6 +848,7 @@ impl WriterApp {
             layout: WriterLayout::default(),
         };
         let _ = app.ensure_layout();
+        let _ = app.configure_editor_layout();
         app
     }
 
@@ -1223,61 +1229,12 @@ impl WriterApp {
     }
 
     fn document_items(&self) -> Vec<DocumentCanvasItem<'_>> {
-        let mut items = Vec::with_capacity(self.document.blocks.len());
-        for (idx, block) in self.document.blocks.iter().enumerate() {
-            match *block {
-                WriterBlock::Text { x, y, text, role } => {
-                    let resolved_text: &str = if idx == EDITABLE_ITEM_INDEX {
-                        self.edit_buffer.as_str()
-                    } else {
-                        text
-                    };
-                    items.push(DocumentCanvasItem::Text {
-                        x,
-                        y,
-                        text: resolved_text,
-                        style: writer_text_style(role),
-                    });
-                }
-                WriterBlock::Link { x, y, text, url } => {
-                    items.push(DocumentCanvasItem::LinkText {
-                        x,
-                        y,
-                        text,
-                        url,
-                        style: writer_link_style(),
-                    });
-                }
-                WriterBlock::Rect { x, y, w, h, role } => {
-                    items.push(DocumentCanvasItem::Rect {
-                        x,
-                        y,
-                        w,
-                        h,
-                        style: writer_rect_style(role),
-                    });
-                }
-                WriterBlock::Line {
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                    role,
-                } => {
-                    items.push(DocumentCanvasItem::Line {
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        style: writer_line_style(role),
-                    });
-                }
-                WriterBlock::ImagePlaceholder { x, y, w, h, label } => {
-                    items.push(DocumentCanvasItem::ImagePlaceholder { x, y, w, h, label });
-                }
-            }
-        }
-        items
+        Vec::from([DocumentCanvasItem::Text {
+            x: 0,
+            y: 0,
+            text: self.editor.text(),
+            style: writer_text_style(WriterTextRole::Paragraph),
+        }])
     }
 
     fn document_canvas<'a>(&'a self, items: &'a [DocumentCanvasItem<'a>]) -> DocumentCanvas<'a> {
@@ -1291,7 +1248,8 @@ impl WriterApp {
                 Some(&FONT_UI_MEDIUM),
                 Some(&FONT_UI_SMALL),
             )
-            .with_edit_state(&self.edit_state)
+            .with_document_editor(EDITABLE_ITEM_INDEX, &self.editor)
+            .with_caret_visible(self.editor_focused)
     }
 
     fn quick_chip_hit(&self, point: Point) -> Option<usize> {
@@ -1373,207 +1331,80 @@ impl WriterApp {
         true
     }
 
-    fn hit_test_editable_item(&self, point: Point) -> Option<usize> {
-        let items = self.document_items();
-        let canvas = self.document_canvas(items.as_slice());
-        let content = canvas.content_rect();
-        if !content.contains(point) {
-            return None;
-        }
-        let rel_x = point.x - content.x;
-        let rel_y = point.y - content.y;
-        for (idx, item) in items.iter().enumerate() {
-            if idx != EDITABLE_ITEM_INDEX {
-                continue;
-            }
-            if let DocumentCanvasItem::Text { x, y, text, style } = *item {
-                let font = style.font;
-                let line_h = font
-                    .map(|f| f.line_height())
-                    .unwrap_or(sunlight_ui::paint::font::GLYPH_H);
-                let max_w = (content.w as i32 - x).max(1) as u32;
-                let lines = layout_text_lines(font, text, max_w, line_h);
-                if let Some((_line_idx, byte_offset)) =
-                    click_to_line_and_byte(font, text, &lines, y, rel_y, rel_x, x)
-                {
-                    return Some(byte_offset);
-                }
-            }
-        }
-        None
+    fn editor_content_rect(&self) -> Rect {
+        DocumentCanvas::new(self.content_rect(), &[])
+            .with_presentation(DocumentCanvasPresentation::Writer)
+            .content_rect()
     }
 
-    fn editable_item_font(&self) -> Option<&dyn sunlight_ui::VecText> {
-        let items = self.document_items();
-        if let Some(DocumentCanvasItem::Text { style, .. }) = items.get(EDITABLE_ITEM_INDEX) {
-            return style.font;
-        }
-        None
-    }
-
-    fn editable_item_line_h(&self) -> u32 {
-        self.editable_item_font()
-            .map(|f| f.line_height())
-            .unwrap_or(sunlight_ui::paint::font::GLYPH_H)
-    }
-
-    fn editable_item_max_w(&self) -> u32 {
-        let items = self.document_items();
-        let canvas = self.document_canvas(items.as_slice());
-        let content = canvas.content_rect();
-        let x = if let Some(DocumentCanvasItem::Text { x, .. }) = items.get(EDITABLE_ITEM_INDEX) {
-            *x
-        } else {
-            0
-        };
-        (content.w as i32 - x).max(1) as u32
-    }
-
-    fn compute_edit_lines(&self) -> Vec<TextLineLayout> {
-        layout_text_lines(
-            self.editable_item_font(),
-            self.edit_buffer.as_str(),
-            self.editable_item_max_w(),
-            self.editable_item_line_h(),
+    fn configure_editor_layout(&mut self) -> bool {
+        let content = self.editor_content_rect();
+        self.editor.configure_layout(
+            Some(&FONT_UI_MEDIUM),
+            content.w,
+            content.h,
+            FONT_UI_MEDIUM.line_height(),
         )
     }
 
-    fn caret_line_index(&self) -> usize {
-        let lines = self.compute_edit_lines();
-        find_line_index(&lines, self.edit_state.caret_byte).unwrap_or(0)
+    fn editor_hit_test(&self, point: Point) -> Option<usize> {
+        let content = self.editor_content_rect();
+        content.contains(point).then(|| {
+            self.editor.hit_test(
+                Some(&FONT_UI_MEDIUM),
+                point.x - content.x,
+                point.y - content.y,
+            )
+        })
     }
 
-    fn caret_move_left(&self) -> usize {
-        let mut prev = 0usize;
-        for (idx, ch) in self.edit_buffer.char_indices() {
-            let next = idx + ch.len_utf8();
-            if next >= self.edit_state.caret_byte {
-                return prev;
-            }
-            prev = next;
+    fn apply_editor_change(&mut self, changed: bool) -> bool {
+        if changed {
+            self.document_modified = true;
+            let _ = self.configure_editor_layout();
         }
-        prev
+        changed
     }
 
-    fn caret_move_right(&self) -> usize {
-        for (idx, _ch) in self.edit_buffer.char_indices() {
-            if idx > self.edit_state.caret_byte {
-                return idx;
-            }
-        }
-        self.edit_buffer.len()
-    }
-
-    fn caret_move_home(&self) -> usize {
-        let lines = self.compute_edit_lines();
-        let idx = self.caret_line_index();
-        line_home_byte(&lines, idx)
-    }
-
-    fn caret_move_end(&self) -> usize {
-        let lines = self.compute_edit_lines();
-        let idx = self.caret_line_index();
-        line_end_byte(&lines, idx)
-    }
-
-    fn caret_move_up(&self) -> usize {
-        let lines = self.compute_edit_lines();
-        let cur = self.caret_line_index();
-        if cur == 0 {
-            return self.edit_state.caret_byte;
-        }
-        let target_line_idx = cur.saturating_sub(1);
-        self.caret_on_line_x(&lines, target_line_idx)
-    }
-
-    fn caret_move_down(&self) -> usize {
-        let lines = self.compute_edit_lines();
-        let cur = self.caret_line_index();
-        if cur + 1 >= lines.len() {
-            return self.edit_state.caret_byte;
-        }
-        let target_line_idx = cur + 1;
-        self.caret_on_line_x(&lines, target_line_idx)
-    }
-
-    fn caret_on_line_x(&self, lines: &[TextLineLayout], line_idx: usize) -> usize {
-        let line = match lines.get(line_idx) {
-            Some(l) => l,
-            None => return self.edit_state.caret_byte,
+    fn copy_selection(&mut self) -> bool {
+        let Some(text) = self.editor.selected_text() else {
+            return false;
         };
-        let current_preferred_x = self.edit_state.preferred_caret_x.unwrap_or_else(|| {
-            let cur_line = lines.get(self.caret_line_index());
-            cur_line.map_or(0, |l| {
-                caret_x_on_line(
-                    self.editable_item_font(),
-                    self.edit_buffer.as_str(),
-                    l,
-                    self.edit_state.caret_byte,
-                )
-            })
-        });
-        byte_at_x_on_line(
-            self.editable_item_font(),
-            self.edit_buffer.as_str(),
-            line,
-            current_preferred_x as i32,
-        )
-    }
-
-    fn char_before_caret(&self) -> Option<(usize, char)> {
-        let mut result = None;
-        for (idx, ch) in self.edit_buffer.char_indices() {
-            let next = idx + ch.len_utf8();
-            if next > self.edit_state.caret_byte {
-                return result;
+        match sunlight_ui::clipboard::set_text_from(b"sunlight-writer", text) {
+            Ok(()) => true,
+            Err(error) => {
+                self.set_status_message(error.message());
+                true
             }
-            result = Some((idx, ch));
-        }
-        result
-    }
-
-    fn char_at_caret(&self) -> Option<(usize, char)> {
-        self.edit_buffer[self.edit_state.caret_byte..]
-            .chars()
-            .next()
-            .map(|ch| (self.edit_state.caret_byte, ch))
-    }
-
-    fn apply_text_mutation(&mut self, new_text: String, new_caret: usize) -> bool {
-        self.edit_buffer = new_text;
-        self.edit_state.caret_byte = new_caret;
-        self.edit_state.selection_anchor_byte = None;
-        self.edit_state.preferred_caret_x = None;
-        self.document_modified = true;
-        true
-    }
-
-    fn insert_text_at_caret(&mut self, ch: char) -> bool {
-        let mut new_text = String::from(&self.edit_buffer[..self.edit_state.caret_byte]);
-        new_text.push(ch);
-        new_text.push_str(&self.edit_buffer[self.edit_state.caret_byte..]);
-        let new_caret = self.edit_state.caret_byte + ch.len_utf8();
-        self.apply_text_mutation(new_text, new_caret)
-    }
-
-    fn backspace_at_caret(&mut self) -> bool {
-        if let Some((idx, _)) = self.char_before_caret() {
-            let mut new_text = String::from(&self.edit_buffer[..idx]);
-            new_text.push_str(&self.edit_buffer[self.edit_state.caret_byte..]);
-            self.apply_text_mutation(new_text, idx)
-        } else {
-            false
         }
     }
 
-    fn delete_forward_at_caret(&mut self) -> bool {
-        if let Some((_, ch)) = self.char_at_caret() {
-            let end = self.edit_state.caret_byte + ch.len_utf8();
-            let mut new_text = String::from(&self.edit_buffer[..self.edit_state.caret_byte]);
-            new_text.push_str(&self.edit_buffer[end..]);
-            self.apply_text_mutation(new_text, self.edit_state.caret_byte)
-        } else {
-            false
+    fn cut_selection(&mut self) -> bool {
+        let Some(text) = self.editor.selected_text() else {
+            return false;
+        };
+        match sunlight_ui::clipboard::set_text_from(b"sunlight-writer", text) {
+            Ok(()) => {
+                let changed = self.editor.delete_selection();
+                self.apply_editor_change(changed)
+            }
+            Err(error) => {
+                self.set_status_message(error.message());
+                true
+            }
+        }
+    }
+
+    fn paste_clipboard(&mut self) -> bool {
+        match sunlight_ui::clipboard::get_text() {
+            Ok(text) => {
+                let changed = self.editor.insert_str(&text);
+                self.apply_editor_change(changed)
+            }
+            Err(error) => {
+                self.set_status_message(error.message());
+                true
+            }
         }
     }
 
@@ -1595,6 +1426,7 @@ impl App for WriterApp {
         } else {
             let _ = self.ensure_layout();
         }
+        let _ = self.configure_editor_layout();
         let document_items = self.document_items();
         let document_canvas = self.document_canvas(document_items.as_slice());
         canvas.fill_rect(self.layout.root, theme.bg);
@@ -1669,13 +1501,10 @@ impl App for WriterApp {
                         self.prev_document_cursor = cursor;
                     }
                 } else {
-                    let items = self.document_items();
-                    let canvas = self.document_canvas(items.as_slice());
-                    let target = canvas.hit_target(point);
-                    let cursor = match target {
-                        CanvasHitTarget::Link => CursorShape::Hand,
-                        CanvasHitTarget::Text => CursorShape::Text,
-                        CanvasHitTarget::None => CursorShape::Pointer,
+                    let cursor = if self.editor_content_rect().contains(point) {
+                        CursorShape::Text
+                    } else {
+                        CursorShape::Pointer
                     };
                     if cursor != self.prev_document_cursor {
                         set_client_cursor(cursor);
@@ -1683,7 +1512,60 @@ impl App for WriterApp {
                     }
                 }
 
+                if let Some(anchor) = self.drag_anchor_byte {
+                    let content = self.editor_content_rect();
+                    let local_x = x - content.x;
+                    let local_y = y - content.y;
+                    if y < content.y {
+                        let _ = self.editor.scroll_by(-(self.editor.line_height() as i32));
+                    } else if y >= content.bottom() {
+                        let _ = self.editor.scroll_by(self.editor.line_height() as i32);
+                    }
+                    if self.editor.pointer_select(
+                        Some(&FONT_UI_MEDIUM),
+                        local_x,
+                        local_y,
+                        Some(anchor),
+                    ) {
+                        redraw = true;
+                    }
+                }
+
                 redraw
+            }
+            Event::MouseDown { x, y, button: 0 } => {
+                let point = Point::new(x, y);
+                let Some(byte) = self.editor_hit_test(point) else {
+                    return false;
+                };
+                self.editor_focused = true;
+                self.drag_anchor_byte = Some(byte);
+                self.editor.pointer_select(
+                    Some(&FONT_UI_MEDIUM),
+                    x - self.editor_content_rect().x,
+                    y - self.editor_content_rect().y,
+                    None,
+                );
+                true
+            }
+            Event::MouseUp { button: 0, .. } => {
+                let was_dragging = self.drag_anchor_byte.take().is_some();
+                was_dragging
+            }
+            Event::MouseWheel { x, y, delta } => {
+                if !self.editor_content_rect().contains(Point::new(x, y)) || delta == 0 {
+                    return false;
+                }
+                let detents = if delta.unsigned_abs() >= 120 {
+                    delta as i32 / 120
+                } else {
+                    delta.signum() as i32
+                };
+                self.editor.scroll_by(
+                    detents
+                        .saturating_mul(WHEEL_SCROLL_LINES)
+                        .saturating_mul(self.editor.line_height() as i32),
+                )
             }
             Event::Click { x, y } => {
                 let point = Point::new(x, y);
@@ -1721,39 +1603,43 @@ impl App for WriterApp {
                     return self.dispatch_action(Self::ribbon_action(group_idx, button_idx));
                 }
 
-                let hit = self.hit_test_editable_item(point);
-                if let Some(byte_offset) = hit {
-                    self.edit_state.active_item_index = Some(EDITABLE_ITEM_INDEX);
-                    self.edit_state.caret_byte = byte_offset;
-                    self.edit_state.selection_anchor_byte = None;
-                    self.edit_state.preferred_caret_x = None;
+                if self.editor_content_rect().contains(point) {
+                    self.editor_focused = true;
                     return true;
                 }
 
-                if self.edit_state.is_editing() {
-                    self.edit_state.clear();
+                if self.editor_focused {
+                    self.editor_focused = false;
                     return true;
                 }
 
                 false
             }
-            Event::Key(ch) if self.edit_state.is_editing() => {
+            Event::Key(ch) if self.editor_focused => {
                 if ch == '\u{8}' {
-                    return self.backspace_at_caret();
+                    let changed = self.editor.backspace();
+                    return self.apply_editor_change(changed);
                 }
-                if ch == '\r' {
-                    return false;
+                if ch == '\r' || ch == '\n' {
+                    let changed = self.editor.insert_newline();
+                    return self.apply_editor_change(changed);
                 }
                 if ch == '\t' || ch == '\u{1b}' {
                     return false;
                 }
-                if ch.is_control() && ch != '\n' {
+                if ch.is_control() {
                     return false;
                 }
-                self.insert_text_at_caret(ch)
+                let changed = self.editor.insert_char(ch);
+                self.apply_editor_change(changed)
             }
             Event::KeyPress {
-                keycode, pressed, ..
+                keycode,
+                pressed,
+                shift,
+                ctrl,
+                alt,
+                super_key,
             } => {
                 if !pressed {
                     return false;
@@ -1764,97 +1650,38 @@ impl App for WriterApp {
                         self.set_status_message("Application menu closed");
                         return true;
                     }
-                    if self.edit_state.is_editing() {
-                        self.edit_state.clear();
+                    if self.editor_focused {
+                        self.editor_focused = false;
                         return true;
                     }
                     request_close();
                 }
-                if self.edit_state.is_editing() {
-                    match keycode {
-                        KEY_LEFT => {
-                            let new_caret = self.caret_move_left();
-                            if new_caret != self.edit_state.caret_byte {
-                                self.edit_state.caret_byte = new_caret;
-                                self.edit_state.selection_anchor_byte = None;
-                                self.edit_state.preferred_caret_x = None;
-                                return true;
-                            }
-                        }
-                        KEY_RIGHT => {
-                            let new_caret = self.caret_move_right();
-                            if new_caret != self.edit_state.caret_byte {
-                                self.edit_state.caret_byte = new_caret;
-                                self.edit_state.selection_anchor_byte = None;
-                                self.edit_state.preferred_caret_x = None;
-                                return true;
-                            }
-                        }
-                        KEY_UP => {
-                            let new_caret = self.caret_move_up();
-                            if new_caret != self.edit_state.caret_byte {
-                                let old_x = self.edit_state.preferred_caret_x;
-                                self.edit_state.caret_byte = new_caret;
-                                self.edit_state.selection_anchor_byte = None;
-                                self.edit_state.preferred_caret_x = old_x.or_else(|| {
-                                    let lines = self.compute_edit_lines();
-                                    let cur = self.caret_line_index();
-                                    lines.get(cur).map(|l| {
-                                        caret_x_on_line(
-                                            self.editable_item_font(),
-                                            self.edit_buffer.as_str(),
-                                            l,
-                                            new_caret,
-                                        )
-                                    })
-                                });
-                                return true;
-                            }
-                        }
-                        KEY_DOWN => {
-                            let new_caret = self.caret_move_down();
-                            if new_caret != self.edit_state.caret_byte {
-                                let old_x = self.edit_state.preferred_caret_x;
-                                self.edit_state.caret_byte = new_caret;
-                                self.edit_state.selection_anchor_byte = None;
-                                self.edit_state.preferred_caret_x = old_x.or_else(|| {
-                                    let lines = self.compute_edit_lines();
-                                    let cur = self.caret_line_index();
-                                    lines.get(cur).map(|l| {
-                                        caret_x_on_line(
-                                            self.editable_item_font(),
-                                            self.edit_buffer.as_str(),
-                                            l,
-                                            new_caret,
-                                        )
-                                    })
-                                });
-                                return true;
-                            }
-                        }
-                        KEY_HOME => {
-                            let new_caret = self.caret_move_home();
-                            if new_caret != self.edit_state.caret_byte {
-                                self.edit_state.caret_byte = new_caret;
-                                self.edit_state.selection_anchor_byte = None;
-                                self.edit_state.preferred_caret_x = None;
-                                return true;
-                            }
-                        }
-                        KEY_END => {
-                            let end = self.caret_move_end();
-                            if self.edit_state.caret_byte != end {
-                                self.edit_state.caret_byte = end;
-                                self.edit_state.selection_anchor_byte = None;
-                                self.edit_state.preferred_caret_x = None;
-                                return true;
-                            }
-                        }
-                        KEY_DELETE => {
-                            return self.delete_forward_at_caret();
-                        }
-                        _ => {}
+                if self.editor_focused && !alt && !super_key {
+                    if ctrl {
+                        return match keycode {
+                            KEY_A => self.editor.select_all(),
+                            KEY_C => self.copy_selection(),
+                            KEY_X => self.cut_selection(),
+                            KEY_V => self.paste_clipboard(),
+                            _ => false,
+                        };
                     }
+                    let changed = match keycode {
+                        KEY_LEFT => self.editor.move_left(shift),
+                        KEY_RIGHT => self.editor.move_right(shift),
+                        KEY_UP => self.editor.move_up(Some(&FONT_UI_MEDIUM), shift),
+                        KEY_DOWN => self.editor.move_down(Some(&FONT_UI_MEDIUM), shift),
+                        KEY_HOME => self.editor.move_home(shift),
+                        KEY_END => self.editor.move_end(shift),
+                        KEY_PAGE_UP => self.editor.page_up(Some(&FONT_UI_MEDIUM), shift),
+                        KEY_PAGE_DOWN => self.editor.page_down(Some(&FONT_UI_MEDIUM), shift),
+                        KEY_DELETE => {
+                            let changed = self.editor.delete_forward();
+                            return self.apply_editor_change(changed);
+                        }
+                        _ => false,
+                    };
+                    return changed;
                 }
                 false
             }
@@ -1864,7 +1691,9 @@ impl App for WriterApp {
 
     fn window_event(&mut self, event: WindowEvent) -> bool {
         let WindowEvent::Resized { width, height } = event;
-        self.set_client_bounds(width, height)
+        let changed = self.set_client_bounds(width, height);
+        let editor_changed = self.configure_editor_layout();
+        changed || editor_changed
     }
 }
 
@@ -1906,6 +1735,8 @@ mod tests {
         DocumentCanvasItem, DocumentCanvasMode, Rect, WriterApp, WriterDocument, RIBBON_H,
         STATUS_H, TOP_BAR_H,
     };
+    use alloc::string::String;
+    use sunlight_ui::{App, Event};
 
     #[test]
     fn sample_document_converts_to_non_empty_canvas_items() {
@@ -2006,5 +1837,54 @@ mod tests {
         assert!(app.set_client_bounds(320, 180));
         assert!(app.set_client_bounds(1500, 1000));
         assert_eq!(app.layout, large);
+    }
+
+    #[test]
+    fn writer_starts_empty_and_routes_multiline_unicode_editing() {
+        let mut app = WriterApp::new();
+        assert_eq!(app.editor.text(), "");
+        app.editor_focused = true;
+        assert!(app.update(Event::key('م')));
+        assert!(app.update(Event::key('\r')));
+        assert!(app.update(Event::key('🐇')));
+        assert_eq!(app.editor.text(), "م\n🐇");
+        assert!(app.editor.text().is_char_boundary(app.editor.caret_byte()));
+    }
+
+    #[test]
+    fn writer_keyboard_selection_replaces_across_lines() {
+        let mut app = WriterApp::new();
+        app.editor_focused = true;
+        app.editor.insert_str("one\ntwo");
+        let _ = app.configure_editor_layout();
+        app.editor.set_caret(0, false);
+        assert!(app.update(Event::key_press(
+            super::KEY_DOWN,
+            true,
+            true,
+            false,
+            false,
+            false,
+        )));
+        assert!(app.editor.selection_range().is_some());
+        assert!(app.update(Event::key('X')));
+        assert_eq!(app.editor.text(), "Xtwo");
+    }
+
+    #[test]
+    fn writer_resize_reflows_without_changing_logical_text_or_caret() {
+        let mut app = WriterApp::new();
+        app.editor
+            .insert_str("a long line that wraps repeatedly across a narrow writer page");
+        let caret = app.editor.caret_byte();
+        let text = String::from(app.editor.text());
+        assert!(app.set_client_bounds(360, 260));
+        let _ = app.configure_editor_layout();
+        let narrow_lines = app.editor.lines().len();
+        assert!(app.set_client_bounds(1400, 900));
+        let _ = app.configure_editor_layout();
+        assert_eq!(app.editor.text(), text);
+        assert_eq!(app.editor.caret_byte(), caret);
+        assert!(app.editor.lines().len() <= narrow_lines);
     }
 }
