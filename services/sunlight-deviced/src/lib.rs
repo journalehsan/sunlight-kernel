@@ -6,7 +6,10 @@ use sunlight_ipc::{
     HardwareState, IpcCallError, IpcMsg, HARDWARE_INVENTORY_MAX_RECORDS,
 };
 
-pub const DEFAULT_INVENTORY_TIMEOUT_MS: u64 = 40;
+/// Inventory calls are interactive but may contend with display and startup
+/// work. Four scheduler ticks was too short under a loaded graphical session
+/// and made a healthy deviced look unavailable.
+pub const DEFAULT_INVENTORY_TIMEOUT_MS: u64 = 250;
 pub const MAX_INVENTORY_RECORDS: usize = HARDWARE_INVENTORY_MAX_RECORDS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

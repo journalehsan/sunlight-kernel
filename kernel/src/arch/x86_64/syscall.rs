@@ -2170,39 +2170,13 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let mut service_lookup_restrictions = parent.service_lookup_restrictions;
     // Embedded control tools need access to their matching control-plane
     // service, but the surrounding shell and unrelated descendants must keep
-    // the narrower user-session profile. Only root receives this per-binary
-    // upgrade; each tool gets one narrowly scoped service capability.
-    if uid == 0 {
-        let control_capability = match path_str {
-            "/bin/sunlightctl" | "/usr/bin/sunlightctl" => {
-                crate::ipc::ServiceCapability::ServiceLifecycle.bit()
-            }
-            "/bin/networkctl" | "/usr/bin/networkctl" => {
-                crate::ipc::ServiceCapability::NetworkControl.bit()
-            }
-            "/bin/devicectl"
-            | "/usr/bin/devicectl"
-            | "/bin/sunlight-hwinfo"
-            | "/usr/bin/sunlight-hwinfo" => crate::ipc::ServiceCapability::DeviceControl.bit(),
-            "/bin/powerctl" | "/usr/bin/powerctl" => {
-                crate::ipc::ServiceCapability::PowerControl.bit()
-            }
-            "/bin/thermalctl" | "/usr/bin/thermalctl" => {
-                crate::ipc::ServiceCapability::ThermalControl.bit()
-            }
-            "/bin/control-panel" | "/usr/bin/control-panel" => {
-                crate::ipc::ServiceCapability::PowerControl.bit()
-                    | crate::ipc::ServiceCapability::ThermalControl.bit()
-            }
-            "/bin/nicectl" | "/usr/bin/nicectl" => {
-                crate::ipc::ServiceCapability::SchedulerControl.bit()
-            }
-            _ => 0,
-        };
-        if control_capability != 0 {
-            service_lookup_restrictions =
-                service_lookup_restrictions.map(|mask| mask | control_capability);
-        }
+    // the narrower user-session profile. Administrative tools receive their
+    // per-binary upgrade only as root. The read-only Devices GUI is available
+    // to authenticated desktop users as well.
+    let control_capability = spawn_service_capability(path_str, uid);
+    if control_capability != 0 {
+        service_lookup_restrictions =
+            service_lookup_restrictions.map(|mask| mask | control_capability);
     }
     let parent_tty_tab = parent.tty_tab;
     let parent_tty_generation = parent.tty_generation;
@@ -2344,6 +2318,67 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         ppid
     );
     child_pid as u64
+}
+
+fn spawn_service_capability(path: &str, uid: u32) -> u64 {
+    if matches!(path, "/bin/sunlight-devices" | "/usr/bin/sunlight-devices") {
+        return crate::ipc::ServiceCapability::DeviceControl.bit();
+    }
+    if uid != 0 {
+        return 0;
+    }
+    match path {
+        "/bin/sunlightctl" | "/usr/bin/sunlightctl" => {
+            crate::ipc::ServiceCapability::ServiceLifecycle.bit()
+        }
+        "/bin/networkctl" | "/usr/bin/networkctl" => {
+            crate::ipc::ServiceCapability::NetworkControl.bit()
+        }
+        "/bin/devicectl"
+        | "/usr/bin/devicectl"
+        | "/bin/sunlight-hwinfo"
+        | "/usr/bin/sunlight-hwinfo" => crate::ipc::ServiceCapability::DeviceControl.bit(),
+        "/bin/powerctl" | "/usr/bin/powerctl" => crate::ipc::ServiceCapability::PowerControl.bit(),
+        "/bin/thermalctl" | "/usr/bin/thermalctl" => {
+            crate::ipc::ServiceCapability::ThermalControl.bit()
+        }
+        "/bin/control-panel" | "/usr/bin/control-panel" => {
+            crate::ipc::ServiceCapability::PowerControl.bit()
+                | crate::ipc::ServiceCapability::ThermalControl.bit()
+        }
+        "/bin/nicectl" | "/usr/bin/nicectl" => {
+            crate::ipc::ServiceCapability::SchedulerControl.bit()
+        }
+        _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod spawn_service_capability_tests {
+    use super::spawn_service_capability;
+    use crate::ipc::ServiceCapability;
+
+    #[test]
+    fn devices_gui_receives_deviced_lookup_capability_at_any_uid() {
+        for path in ["/bin/sunlight-devices", "/usr/bin/sunlight-devices"] {
+            for uid in [0, 1_000] {
+                assert_eq!(
+                    spawn_service_capability(path, uid),
+                    ServiceCapability::DeviceControl.bit()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn administrative_upgrade_remains_root_only() {
+        assert_eq!(
+            spawn_service_capability("/bin/devicectl", 0),
+            ServiceCapability::DeviceControl.bit()
+        );
+        assert_eq!(spawn_service_capability("/bin/devicectl", 1_000), 0);
+        assert_eq!(spawn_service_capability("/bin/rappid-rabbit", 0), 0);
+    }
 }
 
 /// Syscall: Getpid (33)

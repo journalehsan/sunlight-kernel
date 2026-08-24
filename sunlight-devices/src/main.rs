@@ -16,7 +16,7 @@ use sunlight_devices::{
 };
 use sunlight_ipc::{
     debug_log, monotonic_millis, nameserver_lookup_timeout, process_yield, CapabilityToken,
-    HardwareBus, HardwareState, ProcessExit,
+    HardwareBus, HardwareState, IpcCallError, ProcessExit,
 };
 use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
@@ -59,9 +59,22 @@ const KEY_HOME: u8 = 0x47;
 const KEY_END: u8 = 0x4f;
 const KEY_PGUP: u8 = 0x49;
 const KEY_PGDN: u8 = 0x51;
-const IPC_LOOKUP_TIMEOUT_MS: u64 = DEFAULT_INVENTORY_TIMEOUT_MS;
+const IPC_LOOKUP_TIMEOUT_MS: u64 = 500;
 const UI_INVENTORY_TIMEOUT_MS: u64 = DEFAULT_INVENTORY_TIMEOUT_MS;
-const INITIAL_REFRESH_RETRY_DELAYS_MS: [u64; 3] = [25, 75, 150];
+const INITIAL_REFRESH_RETRY_DELAYS_MS: [u64; 3] = [100, 250, 500];
+
+fn log_inventory_transport(error: IpcCallError) {
+    debug_log(match error {
+        IpcCallError::Timeout => "[DEVICES] deviced transport timeout\n",
+        IpcCallError::InvalidCapability => "[DEVICES] deviced transport invalid-capability\n",
+        IpcCallError::EndpointNotFound => "[DEVICES] deviced endpoint not found\n",
+        IpcCallError::InvalidArgument => "[DEVICES] deviced transport invalid-argument\n",
+        IpcCallError::QueueFull => "[DEVICES] deviced queue full\n",
+        IpcCallError::Cancelled => "[DEVICES] deviced request cancelled\n",
+        IpcCallError::PeerClosed => "[DEVICES] deviced endpoint closed\n",
+        IpcCallError::Unknown(_) => "[DEVICES] deviced transport unknown error\n",
+    });
+}
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -488,6 +501,7 @@ impl DevicesApp {
             RefreshPhase::Lookup => {
                 let Some(capability) = nameserver_lookup_timeout("deviced", IPC_LOOKUP_TIMEOUT_MS)
                 else {
+                    debug_log("[DEVICES] deviced lookup failed or timed out\n");
                     self.fail_refresh(RefreshFailure::ServiceUnavailable);
                     return true;
                 };
@@ -538,7 +552,8 @@ impl DevicesApp {
                     self.fail_refresh(RefreshFailure::InventoryChanged);
                     true
                 }
-                Err(InventoryClientError::Transport(_)) => {
+                Err(InventoryClientError::Transport(error)) => {
+                    log_inventory_transport(error);
                     self.fail_refresh(RefreshFailure::ServiceUnavailable);
                     true
                 }
@@ -567,7 +582,8 @@ impl DevicesApp {
                         Err(InventoryClientError::MalformedReply) => {
                             self.fail_refresh(RefreshFailure::MalformedReply)
                         }
-                        Err(InventoryClientError::Transport(_)) => {
+                        Err(InventoryClientError::Transport(error)) => {
+                            log_inventory_transport(error);
                             self.fail_refresh(RefreshFailure::ServiceUnavailable)
                         }
                     }
@@ -598,7 +614,8 @@ impl DevicesApp {
                     Err(InventoryClientError::MalformedReply) => {
                         self.fail_refresh(RefreshFailure::MalformedReply)
                     }
-                    Err(InventoryClientError::Transport(_)) => {
+                    Err(InventoryClientError::Transport(error)) => {
+                        log_inventory_transport(error);
                         self.fail_refresh(RefreshFailure::ServiceUnavailable)
                     }
                 }

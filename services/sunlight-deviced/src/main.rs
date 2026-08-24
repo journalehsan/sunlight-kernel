@@ -537,7 +537,12 @@ pub extern "C" fn _start() -> ! {
 
     let registry = unsafe { &mut *core::ptr::addr_of_mut!(REGISTRY) };
     if registry.import_inventory().is_err() {
-        debug_log("[DEVICED] hardware inventory import failed");
+        debug_log("[DEVICED] hardware inventory import failed\n");
+    } else {
+        serial_println!(
+            "[DEVICED] inventory ready records={}",
+            registry.inventory_count
+        );
     }
     let mut msg = ipc_recv(ep);
     loop {
