@@ -1,31 +1,15 @@
 {
   "state_schema": 2,
   "version_algorithm": "weighted-v1",
-  "last_known_weighted_lines": 666535.3999999999,
-  "accumulated_patch": 4173,
-  "last_version": "0.2.4173-alpha.1",
-  "last_total_raw_lines": 384703,
-  "last_total_weighted_lines": 666444.2,
-  "last_canonical_epoch": 1787569738,
+  "last_known_weighted_lines": 669035.3999999999,
+  "accumulated_patch": 4198,
+  "last_version": "0.2.4198-alpha.1",
+  "last_total_raw_lines": 386376,
+  "last_total_weighted_lines": 668953.2,
+  "last_canonical_epoch": 1787578836,
   "minor_offset_major": 0,
   "minor_offset": 1,
   "history": [
-    {
-      "timestamp": "2026-07-28T22:18:30+00:00",
-      "canonical_source": "HEAD",
-      "version": "0.2.3773-alpha.1",
-      "major": 0,
-      "minor": 2,
-      "patch": 3773,
-      "prerelease": "alpha.1",
-      "release_name": null,
-      "months_total": 1,
-      "months_in_cycle": 1,
-      "total_raw_lines": 358227,
-      "total_weighted_lines": 626435.8999999999,
-      "new_weighted_lines": 0.5,
-      "patch_increment": 1
-    },
     {
       "timestamp": "2026-07-29T16:22:01+00:00",
       "canonical_source": "HEAD",
@@ -809,6 +793,22 @@
       "total_weighted_lines": 666444.2,
       "new_weighted_lines": 8.800000000046566,
       "patch_increment": 1
+    },
+    {
+      "timestamp": "2026-08-24T13:40:36+00:00",
+      "canonical_source": "HEAD",
+      "version": "0.2.4198-alpha.1",
+      "major": 0,
+      "minor": 2,
+      "patch": 4198,
+      "prerelease": "alpha.1",
+      "release_name": null,
+      "months_total": 2,
+      "months_in_cycle": 2,
+      "total_raw_lines": 386376,
+      "total_weighted_lines": 668953.2,
+      "new_weighted_lines": 2417.8000000000466,
+      "patch_increment": 25
     }
   ]
 }

@@ -35,6 +35,12 @@ static FONT_UI_SEMIBOLD_13: &[u8] =
 static FONT_UI_16: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_16.mtf"));
 static FONT_UI_TITLE_18: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_title_18.mtf"));
+static FONT_UI_ITALIC_13: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_ui_italic_13.mtf"));
+static FONT_UI_SEMIBOLD_ITALIC_13: &[u8] = include_bytes!(concat!(
+    env!("OUT_DIR"),
+    "/sunlight_ui_semibold_italic_13.mtf"
+));
 static FONT_MONO_REGULAR: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/sunlight_mono_regular_14.mtf"));
 static FONT_MONO_MEDIUM: &[u8] =
@@ -56,6 +62,10 @@ pub enum FontRole {
     UiMedium,
     /// 13 px Inter SemiBold — headings, strong labels.
     UiBold,
+    /// 13 px Inter Italic — inline document emphasis.
+    UiItalic,
+    /// 13 px Inter SemiBold Italic — combined inline emphasis.
+    UiBoldItalic,
     /// 16 px Inter Regular — section titles within panels.
     UiLarge,
     /// 18 px Inter Medium — window titles, major section headings.
@@ -142,6 +152,8 @@ fn font_data(role: FontRole) -> &'static [u8] {
         FontRole::UiRegular => FONT_UI_13,
         FontRole::UiMedium => FONT_UI_MEDIUM_13,
         FontRole::UiBold => FONT_UI_SEMIBOLD_13,
+        FontRole::UiItalic => FONT_UI_ITALIC_13,
+        FontRole::UiBoldItalic => FONT_UI_SEMIBOLD_ITALIC_13,
         FontRole::UiLarge => FONT_UI_16,
         FontRole::UiTitle => FONT_UI_TITLE_18,
         FontRole::MonoRegular => FONT_MONO_REGULAR,
@@ -595,6 +607,8 @@ pub fn assert_fonts_valid() {
         (FontRole::UiRegular, FONT_UI_13),
         (FontRole::UiMedium, FONT_UI_MEDIUM_13),
         (FontRole::UiBold, FONT_UI_SEMIBOLD_13),
+        (FontRole::UiItalic, FONT_UI_ITALIC_13),
+        (FontRole::UiBoldItalic, FONT_UI_SEMIBOLD_ITALIC_13),
         (FontRole::UiLarge, FONT_UI_16),
         (FontRole::UiTitle, FONT_UI_TITLE_18),
         (FontRole::MonoRegular, FONT_MONO_REGULAR),
@@ -624,6 +638,8 @@ impl Typography {
     pub const UI_REGULAR: VecFont = VecFont(FontRole::UiRegular);
     pub const UI_MEDIUM: VecFont = VecFont(FontRole::UiMedium);
     pub const UI_BOLD: VecFont = VecFont(FontRole::UiBold);
+    pub const UI_ITALIC: VecFont = VecFont(FontRole::UiItalic);
+    pub const UI_BOLD_ITALIC: VecFont = VecFont(FontRole::UiBoldItalic);
     pub const UI_LARGE: VecFont = VecFont(FontRole::UiLarge);
     pub const UI_TITLE: VecFont = VecFont(FontRole::UiTitle);
     pub const MONO: VecFont = VecFont(FontRole::MonoRegular);
@@ -652,6 +668,8 @@ mod tests {
             FontRole::UiRegular,
             FontRole::UiMedium,
             FontRole::UiBold,
+            FontRole::UiItalic,
+            FontRole::UiBoldItalic,
             FontRole::UiLarge,
             FontRole::UiTitle,
             FontRole::MonoRegular,

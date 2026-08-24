@@ -19,8 +19,9 @@ use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
     AppMenuCommand, AppMenuSecondaryItem, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
     DocumentCanvasPresentation, DocumentEditor, DocumentRectStyle, DocumentStrokeStyle,
-    DocumentTextStyle, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar, RibbonButtonKind,
-    RibbonButtonSpec, RibbonGroupSpec, StatusBar, TwoPaneAppMenu,
+    DocumentTextStyle, FormattingState, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar,
+    RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, RichTextFonts, StatusBar, StyleProperty,
+    TwoPaneAppMenu,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, AxisSizing, Color, Column, CursorShape, Event,
@@ -53,6 +54,9 @@ const KEY_A: u8 = 0x1E;
 const KEY_C: u8 = 0x2E;
 const KEY_V: u8 = 0x2F;
 const KEY_X: u8 = 0x2D;
+const KEY_B: u8 = 0x30;
+const KEY_I: u8 = 0x17;
+const KEY_U: u8 = 0x16;
 
 const EDITABLE_ITEM_INDEX: usize = 0;
 const WHEEL_SCROLL_LINES: i32 = 3;
@@ -60,6 +64,9 @@ const WHEEL_SCROLL_LINES: i32 = 3;
 static FONT_UI_TITLE: VecFont = VecFont(FontRole::UiTitle);
 static FONT_UI_LARGE: VecFont = VecFont(FontRole::UiLarge);
 static FONT_UI_MEDIUM: VecFont = VecFont(FontRole::UiMedium);
+static FONT_UI_BOLD: VecFont = VecFont(FontRole::UiBold);
+static FONT_UI_ITALIC: VecFont = VecFont(FontRole::UiItalic);
+static FONT_UI_BOLD_ITALIC: VecFont = VecFont(FontRole::UiBoldItalic);
 static FONT_UI_REGULAR: VecFont = VecFont(FontRole::UiRegular);
 static FONT_UI_SMALL: VecFont = VecFont(FontRole::UiSmall);
 static FONT_SERIF: VecFont = VecFont(FontRole::SerifRegular);
@@ -1219,10 +1226,33 @@ impl WriterApp {
                 buttons: &insert,
             },
         ];
+        let mut active = [(0, 0); 3];
+        let mut mixed = [(0, 0); 3];
+        let mut active_len = 0;
+        let mut mixed_len = 0;
+        for (button, property) in [
+            (2, StyleProperty::Bold),
+            (3, StyleProperty::Italic),
+            (4, StyleProperty::Underline),
+        ] {
+            match self.editor.formatting_state(property) {
+                FormattingState::On => {
+                    active[active_len] = (1, button);
+                    active_len += 1;
+                }
+                FormattingState::Mixed => {
+                    mixed[mixed_len] = (1, button);
+                    mixed_len += 1;
+                }
+                FormattingState::Off => {}
+            }
+        }
         f(RibbonBar {
             rect: self.ribbon_rect(),
             groups: &groups,
             hovered: self.ribbon_hover,
+            active: &active[..active_len],
+            mixed: &mixed[..mixed_len],
             label_font: Some(&FONT_UI_REGULAR),
             small_font: Some(&FONT_UI_SMALL),
         })
@@ -1249,6 +1279,7 @@ impl WriterApp {
                 Some(&FONT_UI_SMALL),
             )
             .with_document_editor(EDITABLE_ITEM_INDEX, &self.editor)
+            .with_rich_text_fonts(Self::rich_text_fonts())
             .with_caret_visible(self.editor_focused)
     }
 
@@ -1309,9 +1340,11 @@ impl WriterApp {
             }
             WriterAction::FontFamily => self.set_status_message("Font picker is visual only"),
             WriterAction::FontSize => self.set_status_message("Font size picker is visual only"),
-            WriterAction::Bold => self.set_status_message("Bold toggle placeholder"),
-            WriterAction::Italic => self.set_status_message("Italic toggle placeholder"),
-            WriterAction::Underline => self.set_status_message("Underline toggle placeholder"),
+            WriterAction::Bold => return self.apply_format(StyleProperty::Bold, "Bold"),
+            WriterAction::Italic => return self.apply_format(StyleProperty::Italic, "Italic"),
+            WriterAction::Underline => {
+                return self.apply_format(StyleProperty::Underline, "Underline")
+            }
             WriterAction::AlignLeft => self.set_status_message("Align Left placeholder"),
             WriterAction::AlignCenter => self.set_status_message("Align Center placeholder"),
             WriterAction::AlignRight => self.set_status_message("Align Right placeholder"),
@@ -1337,10 +1370,32 @@ impl WriterApp {
             .content_rect()
     }
 
+    fn rich_text_fonts() -> RichTextFonts<'static> {
+        RichTextFonts {
+            regular: Some(&FONT_UI_MEDIUM),
+            bold: Some(&FONT_UI_BOLD),
+            italic: Some(&FONT_UI_ITALIC),
+            bold_italic: Some(&FONT_UI_BOLD_ITALIC),
+        }
+    }
+
+    fn apply_format(&mut self, property: StyleProperty, label: &str) -> bool {
+        let changed = self.editor.toggle_format(property);
+        if changed {
+            self.document_modified = true;
+            let _ = self.configure_editor_layout();
+            self.editor_focused = true;
+            let mut message = String::from(label);
+            message.push_str(" formatting updated");
+            self.set_status_message(&message);
+        }
+        changed
+    }
+
     fn configure_editor_layout(&mut self) -> bool {
         let content = self.editor_content_rect();
-        self.editor.configure_layout(
-            Some(&FONT_UI_MEDIUM),
+        self.editor.configure_rich_layout(
+            Self::rich_text_fonts(),
             content.w,
             content.h,
             FONT_UI_MEDIUM.line_height(),
@@ -1350,8 +1405,8 @@ impl WriterApp {
     fn editor_hit_test(&self, point: Point) -> Option<usize> {
         let content = self.editor_content_rect();
         content.contains(point).then(|| {
-            self.editor.hit_test(
-                Some(&FONT_UI_MEDIUM),
+            self.editor.rich_hit_test(
+                Self::rich_text_fonts(),
                 point.x - content.x,
                 point.y - content.y,
             )
@@ -1521,8 +1576,8 @@ impl App for WriterApp {
                     } else if y >= content.bottom() {
                         let _ = self.editor.scroll_by(self.editor.line_height() as i32);
                     }
-                    if self.editor.pointer_select(
-                        Some(&FONT_UI_MEDIUM),
+                    if self.editor.rich_pointer_select(
+                        Self::rich_text_fonts(),
                         local_x,
                         local_y,
                         Some(anchor),
@@ -1540,8 +1595,8 @@ impl App for WriterApp {
                 };
                 self.editor_focused = true;
                 self.drag_anchor_byte = Some(byte);
-                self.editor.pointer_select(
-                    Some(&FONT_UI_MEDIUM),
+                self.editor.rich_pointer_select(
+                    Self::rich_text_fonts(),
                     x - self.editor_content_rect().x,
                     y - self.editor_content_rect().y,
                     None,
@@ -1663,18 +1718,21 @@ impl App for WriterApp {
                             KEY_C => self.copy_selection(),
                             KEY_X => self.cut_selection(),
                             KEY_V => self.paste_clipboard(),
+                            KEY_B => self.dispatch_action(WriterAction::Bold),
+                            KEY_I => self.dispatch_action(WriterAction::Italic),
+                            KEY_U => self.dispatch_action(WriterAction::Underline),
                             _ => false,
                         };
                     }
                     let changed = match keycode {
                         KEY_LEFT => self.editor.move_left(shift),
                         KEY_RIGHT => self.editor.move_right(shift),
-                        KEY_UP => self.editor.move_up(Some(&FONT_UI_MEDIUM), shift),
-                        KEY_DOWN => self.editor.move_down(Some(&FONT_UI_MEDIUM), shift),
+                        KEY_UP => self.editor.move_up_rich(Self::rich_text_fonts(), shift),
+                        KEY_DOWN => self.editor.move_down_rich(Self::rich_text_fonts(), shift),
                         KEY_HOME => self.editor.move_home(shift),
                         KEY_END => self.editor.move_end(shift),
-                        KEY_PAGE_UP => self.editor.page_up(Some(&FONT_UI_MEDIUM), shift),
-                        KEY_PAGE_DOWN => self.editor.page_down(Some(&FONT_UI_MEDIUM), shift),
+                        KEY_PAGE_UP => self.editor.page_up_rich(Self::rich_text_fonts(), shift),
+                        KEY_PAGE_DOWN => self.editor.page_down_rich(Self::rich_text_fonts(), shift),
                         KEY_DELETE => {
                             let changed = self.editor.delete_forward();
                             return self.apply_editor_change(changed);
@@ -1732,10 +1790,11 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
 #[cfg(test)]
 mod tests {
     use super::{
-        DocumentCanvasItem, DocumentCanvasMode, Rect, WriterApp, WriterDocument, RIBBON_H,
-        STATUS_H, TOP_BAR_H,
+        DocumentCanvasItem, DocumentCanvasMode, Rect, WriterAction, WriterApp, WriterDocument,
+        KEY_B, KEY_I, KEY_U, RIBBON_H, STATUS_H, TOP_BAR_H,
     };
     use alloc::string::String;
+    use sunlight_ui::widgets::{FormattingState, StyleProperty};
     use sunlight_ui::{App, Event};
 
     #[test]
@@ -1795,6 +1854,44 @@ mod tests {
         let items = app.document_items();
         let canvas = app.document_canvas(items.as_slice());
         assert_eq!(canvas.rect, app.content_rect());
+    }
+
+    #[test]
+    fn writer_format_commands_preserve_selection_and_update_toolbar_state() {
+        let mut app = WriterApp::new();
+        app.editor.insert_str("hello world");
+        app.editor.set_caret(0, false);
+        app.editor.set_caret(5, true);
+        app.editor_focused = true;
+        assert!(app.dispatch_action(WriterAction::Bold));
+        assert_eq!(app.editor.selected_text(), Some("hello"));
+        assert_eq!(
+            app.editor.formatting_state(StyleProperty::Bold),
+            FormattingState::On
+        );
+        assert!(app.editor_focused);
+        app.with_ribbon_bar(|bar| assert!(bar.active.contains(&(1, 2))));
+        app.editor.select_all();
+        app.with_ribbon_bar(|bar| assert!(bar.mixed.contains(&(1, 2))));
+    }
+
+    #[test]
+    fn writer_ctrl_shortcuts_toggle_composable_typing_styles() {
+        let mut app = WriterApp::new();
+        app.editor_focused = true;
+        for keycode in [KEY_B, KEY_I, KEY_U] {
+            assert!(app.update(Event::KeyPress {
+                keycode,
+                pressed: true,
+                shift: false,
+                ctrl: true,
+                alt: false,
+                super_key: false
+            }));
+        }
+        app.update(Event::Key('x'));
+        let style = app.editor.document().runs()[0].style;
+        assert!(style.bold && style.italic && style.underline);
     }
 
     #[test]

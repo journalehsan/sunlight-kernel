@@ -1,21 +1,30 @@
-//! Plain UTF-8 full-document editing state for [`DocumentCanvas`].
+//! UTF-8 rich-document editing state for [`DocumentCanvas`].
 //!
 //! Logical positions are byte offsets into `text`; cached [`TextLineLayout`]
 //! entries map them to visual wrapped lines and pixels. Soft wrapping never
 //! changes `text`.
 
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 
 use crate::font::VecText;
 
 use super::document_canvas::{
-    byte_at_x_on_line, caret_x_on_line, find_line_index, layout_text_lines, line_end_byte,
-    line_home_byte, TextLineLayout,
+    byte_at_x_on_line, caret_x_on_line, find_line_index, layout_rich_text_lines, layout_text_lines,
+    line_end_byte, line_home_byte, rich_byte_at_x_on_line, rich_caret_x_on_line, RichTextFonts,
+    TextLineLayout,
 };
+use super::rich_document::{RichDocument, StyleProperty, TextStyle};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormattingState {
+    Off,
+    On,
+    Mixed,
+}
 
 #[derive(Clone, Debug)]
 pub struct DocumentEditor {
-    text: String,
+    document: RichDocument,
     caret_byte: usize,
     selection_anchor_byte: Option<usize>,
     preferred_caret_x: Option<u32>,
@@ -25,6 +34,7 @@ pub struct DocumentEditor {
     line_height: u32,
     lines: Vec<TextLineLayout>,
     layout_dirty: bool,
+    typing_style: TextStyle,
 }
 
 impl Default for DocumentEditor {
@@ -40,7 +50,7 @@ impl DocumentEditor {
 
     pub fn from_text(text: &str) -> Self {
         Self {
-            text: String::from(text),
+            document: RichDocument::from_text(text),
             caret_byte: 0,
             selection_anchor_byte: None,
             preferred_caret_x: None,
@@ -50,11 +60,20 @@ impl DocumentEditor {
             line_height: 1,
             lines: Vec::new(),
             layout_dirty: true,
+            typing_style: TextStyle::default(),
         }
     }
 
     pub fn text(&self) -> &str {
-        &self.text
+        self.document.text()
+    }
+
+    pub fn document(&self) -> &RichDocument {
+        &self.document
+    }
+
+    pub fn typing_style(&self) -> TextStyle {
+        self.typing_style
     }
 
     pub fn caret_byte(&self) -> usize {
@@ -96,7 +115,7 @@ impl DocumentEditor {
 
     pub fn selected_text(&self) -> Option<&str> {
         let (start, end) = self.selection_range()?;
-        self.text.get(start..end)
+        self.text().get(start..end)
     }
 
     pub fn set_caret(&mut self, byte: usize, extend_selection: bool) -> bool {
@@ -109,6 +128,7 @@ impl DocumentEditor {
         }
         self.caret_byte = byte;
         self.preferred_caret_x = None;
+        self.sync_typing_style();
         self.ensure_caret_visible();
         old != (self.caret_byte, self.selection_anchor_byte)
     }
@@ -129,7 +149,34 @@ impl DocumentEditor {
         self.viewport_h = viewport_h;
         self.line_height = line_height;
         if geometry_changed || self.layout_dirty {
-            self.lines = layout_text_lines(font, &self.text, wrap_width, line_height);
+            self.lines = layout_text_lines(font, self.text(), wrap_width, line_height);
+            self.layout_dirty = false;
+            self.clamp_invariants();
+            self.ensure_caret_visible();
+            true
+        } else {
+            self.clamp_scroll();
+            false
+        }
+    }
+
+    pub fn configure_rich_layout(
+        &mut self,
+        fonts: RichTextFonts<'_>,
+        wrap_width: u32,
+        viewport_h: u32,
+        line_height: u32,
+    ) -> bool {
+        let wrap_width = wrap_width.max(1);
+        let line_height = line_height.max(1);
+        let geometry_changed = self.wrap_width != wrap_width
+            || self.viewport_h != viewport_h
+            || self.line_height != line_height;
+        self.wrap_width = wrap_width;
+        self.viewport_h = viewport_h;
+        self.line_height = line_height;
+        if geometry_changed || self.layout_dirty {
+            self.lines = layout_rich_text_lines(fonts, &self.document, wrap_width, line_height);
             self.layout_dirty = false;
             self.clamp_invariants();
             self.ensure_caret_visible();
@@ -167,7 +214,17 @@ impl DocumentEditor {
         let document_y = y.max(0).saturating_add(self.scroll_y as i32);
         let line_index = (document_y / self.line_height() as i32).max(0) as usize;
         let line = &self.lines[line_index.min(self.lines.len() - 1)];
-        byte_at_x_on_line(font, &self.text, line, x)
+        byte_at_x_on_line(font, self.text(), line, x)
+    }
+
+    pub fn rich_hit_test(&self, fonts: RichTextFonts<'_>, x: i32, y: i32) -> usize {
+        if self.lines.is_empty() {
+            return 0;
+        }
+        let document_y = y.max(0).saturating_add(self.scroll_y as i32);
+        let line_index = (document_y / self.line_height() as i32).max(0) as usize;
+        let line = &self.lines[line_index.min(self.lines.len() - 1)];
+        rich_byte_at_x_on_line(fonts, &self.document, line, x)
     }
 
     pub fn pointer_select(
@@ -182,6 +239,24 @@ impl DocumentEditor {
         self.caret_byte = byte;
         self.selection_anchor_byte = anchor.map(|value| self.clamp_boundary(value));
         self.preferred_caret_x = None;
+        self.sync_typing_style();
+        self.ensure_caret_visible();
+        old != (self.caret_byte, self.selection_anchor_byte)
+    }
+
+    pub fn rich_pointer_select(
+        &mut self,
+        fonts: RichTextFonts<'_>,
+        x: i32,
+        y: i32,
+        anchor: Option<usize>,
+    ) -> bool {
+        let byte = self.rich_hit_test(fonts, x, y);
+        let old = (self.caret_byte, self.selection_anchor_byte);
+        self.caret_byte = byte;
+        self.selection_anchor_byte = anchor.map(|value| self.clamp_boundary(value));
+        self.preferred_caret_x = None;
+        self.sync_typing_style();
         self.ensure_caret_visible();
         old != (self.caret_byte, self.selection_anchor_byte)
     }
@@ -189,7 +264,7 @@ impl DocumentEditor {
     pub fn select_all(&mut self) -> bool {
         let old = (self.caret_byte, self.selection_anchor_byte);
         self.selection_anchor_byte = Some(0);
-        self.caret_byte = self.text.len();
+        self.caret_byte = self.text().len();
         self.preferred_caret_x = None;
         self.ensure_caret_visible();
         old != (self.caret_byte, self.selection_anchor_byte)
@@ -202,7 +277,7 @@ impl DocumentEditor {
         let (start, end) = self
             .selection_range()
             .unwrap_or((self.caret_byte, self.caret_byte));
-        self.text.replace_range(start..end, value);
+        self.document.replace(start..end, value, self.typing_style);
         self.caret_byte = start + value.len();
         self.after_mutation();
         true
@@ -221,9 +296,10 @@ impl DocumentEditor {
         let Some((start, end)) = self.selection_range() else {
             return false;
         };
-        self.text.replace_range(start..end, "");
+        self.document.replace(start..end, "", self.typing_style);
         self.caret_byte = start;
         self.after_mutation();
+        self.sync_typing_style();
         true
     }
 
@@ -231,12 +307,14 @@ impl DocumentEditor {
         if self.delete_selection() {
             return true;
         }
-        let Some(start) = previous_boundary(&self.text, self.caret_byte) else {
+        let Some(start) = previous_boundary(self.text(), self.caret_byte) else {
             return false;
         };
-        self.text.replace_range(start..self.caret_byte, "");
+        self.document
+            .replace(start..self.caret_byte, "", self.typing_style);
         self.caret_byte = start;
         self.after_mutation();
+        self.sync_typing_style();
         true
     }
 
@@ -244,11 +322,13 @@ impl DocumentEditor {
         if self.delete_selection() {
             return true;
         }
-        let Some(end) = next_boundary(&self.text, self.caret_byte) else {
+        let Some(end) = next_boundary(self.text(), self.caret_byte) else {
             return false;
         };
-        self.text.replace_range(self.caret_byte..end, "");
+        self.document
+            .replace(self.caret_byte..end, "", self.typing_style);
         self.after_mutation();
+        self.sync_typing_style();
         true
     }
 
@@ -258,7 +338,7 @@ impl DocumentEditor {
                 return self.set_caret(start, false);
             }
         }
-        let target = previous_boundary(&self.text, self.caret_byte).unwrap_or(0);
+        let target = previous_boundary(self.text(), self.caret_byte).unwrap_or(0);
         self.move_to(target, extend, false)
     }
 
@@ -268,7 +348,7 @@ impl DocumentEditor {
                 return self.set_caret(end, false);
             }
         }
-        let target = next_boundary(&self.text, self.caret_byte).unwrap_or(self.text.len());
+        let target = next_boundary(self.text(), self.caret_byte).unwrap_or(self.text().len());
         self.move_to(target, extend, false)
     }
 
@@ -300,6 +380,24 @@ impl DocumentEditor {
         self.move_vertical(font, count, extend)
     }
 
+    pub fn move_up_rich(&mut self, fonts: RichTextFonts<'_>, extend: bool) -> bool {
+        self.move_vertical_rich(fonts, -1, extend)
+    }
+
+    pub fn move_down_rich(&mut self, fonts: RichTextFonts<'_>, extend: bool) -> bool {
+        self.move_vertical_rich(fonts, 1, extend)
+    }
+
+    pub fn page_up_rich(&mut self, fonts: RichTextFonts<'_>, extend: bool) -> bool {
+        let count = (self.viewport_h / self.line_height()).max(1) as i32;
+        self.move_vertical_rich(fonts, -count, extend)
+    }
+
+    pub fn page_down_rich(&mut self, fonts: RichTextFonts<'_>, extend: bool) -> bool {
+        let count = (self.viewport_h / self.line_height()).max(1) as i32;
+        self.move_vertical_rich(fonts, count, extend)
+    }
+
     pub fn ensure_caret_visible(&mut self) {
         let line = self.caret_line_index() as u32;
         let top = line.saturating_mul(self.line_height());
@@ -323,12 +421,42 @@ impl DocumentEditor {
         }
         let current = self.caret_line_index();
         let desired_x = self.preferred_caret_x.unwrap_or_else(|| {
-            caret_x_on_line(font, &self.text, &self.lines[current], self.caret_byte)
+            caret_x_on_line(font, self.text(), &self.lines[current], self.caret_byte)
         });
         let last = self.lines.len().saturating_sub(1) as i32;
         let target_line = (current as i32).saturating_add(delta_lines).clamp(0, last) as usize;
-        let target =
-            byte_at_x_on_line(font, &self.text, &self.lines[target_line], desired_x as i32);
+        let target = byte_at_x_on_line(
+            font,
+            self.text(),
+            &self.lines[target_line],
+            desired_x as i32,
+        );
+        let changed = self.move_to(target, extend, true);
+        self.preferred_caret_x = Some(desired_x);
+        changed
+    }
+
+    fn move_vertical_rich(
+        &mut self,
+        fonts: RichTextFonts<'_>,
+        delta_lines: i32,
+        extend: bool,
+    ) -> bool {
+        if self.lines.is_empty() {
+            return false;
+        }
+        let current = self.caret_line_index();
+        let desired_x = self.preferred_caret_x.unwrap_or_else(|| {
+            rich_caret_x_on_line(fonts, &self.document, &self.lines[current], self.caret_byte)
+        });
+        let last = self.lines.len().saturating_sub(1) as i32;
+        let target_line = (current as i32).saturating_add(delta_lines).clamp(0, last) as usize;
+        let target = rich_byte_at_x_on_line(
+            fonts,
+            &self.document,
+            &self.lines[target_line],
+            desired_x as i32,
+        );
         let changed = self.move_to(target, extend, true);
         self.preferred_caret_x = Some(desired_x);
         changed
@@ -342,6 +470,7 @@ impl DocumentEditor {
             self.selection_anchor_byte = None;
         }
         self.caret_byte = self.clamp_boundary(target);
+        self.sync_typing_style();
         if !vertical {
             self.preferred_caret_x = None;
         }
@@ -360,9 +489,48 @@ impl DocumentEditor {
         self.clamp_invariants();
     }
 
+    pub fn formatting_state(&self, property: StyleProperty) -> FormattingState {
+        if let Some((start, end)) = self.selection_range() {
+            return match self.document.range_uniform(start..end, property) {
+                Some(true) => FormattingState::On,
+                Some(false) => FormattingState::Off,
+                None => FormattingState::Mixed,
+            };
+        }
+        if self.typing_style.has(property) {
+            FormattingState::On
+        } else {
+            FormattingState::Off
+        }
+    }
+
+    /// Toggle a property predictably: a mixed selection becomes fully styled,
+    /// while a uniformly styled selection has that property removed.
+    pub fn toggle_format(&mut self, property: StyleProperty) -> bool {
+        if let Some((start, end)) = self.selection_range() {
+            let enabled = self.document.range_uniform(start..end, property) != Some(true);
+            let changed = self.document.format(start..end, property, enabled);
+            self.typing_style = self.typing_style.with(property, enabled);
+            if changed {
+                self.layout_dirty = true;
+            }
+            return changed;
+        }
+        self.typing_style = self
+            .typing_style
+            .with(property, !self.typing_style.has(property));
+        true
+    }
+
+    fn sync_typing_style(&mut self) {
+        if self.selection_range().is_none() {
+            self.typing_style = self.document.insertion_style(self.caret_byte);
+        }
+    }
+
     fn clamp_boundary(&self, requested: usize) -> usize {
-        let mut value = requested.min(self.text.len());
-        while value > 0 && !self.text.is_char_boundary(value) {
+        let mut value = requested.min(self.text().len());
+        while value > 0 && !self.text().is_char_boundary(value) {
             value -= 1;
         }
         value
@@ -374,10 +542,10 @@ impl DocumentEditor {
             .selection_anchor_byte
             .map(|anchor| self.clamp_boundary(anchor));
         self.clamp_scroll();
-        debug_assert!(self.text.is_char_boundary(self.caret_byte));
+        debug_assert!(self.text().is_char_boundary(self.caret_byte));
         debug_assert!(self
             .selection_anchor_byte
-            .is_none_or(|anchor| self.text.is_char_boundary(anchor)));
+            .is_none_or(|anchor| self.text().is_char_boundary(anchor)));
         debug_assert!(!self.lines.is_empty() || self.layout_dirty);
     }
 
@@ -404,7 +572,8 @@ fn next_boundary(text: &str, byte: usize) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::DocumentEditor;
+    use super::{DocumentEditor, FormattingState};
+    use crate::widgets::rich_document::{StyleProperty, TextStyle};
 
     fn editor(text: &str, width: u32, height: u32) -> DocumentEditor {
         let mut editor = DocumentEditor::from_text(text);
@@ -575,5 +744,120 @@ mod tests {
         assert!(value.move_right(false));
         assert_eq!(value.caret_byte(), 5);
         assert!(value.selection_range().is_none());
+    }
+
+    #[test]
+    fn active_typing_style_creates_and_combines_normalized_runs() {
+        let mut value = editor("", 600, 70);
+        value.toggle_format(StyleProperty::Bold);
+        value.insert_str("bold");
+        assert_eq!(
+            value.document().runs()[0].style,
+            TextStyle {
+                bold: true,
+                italic: false,
+                underline: false
+            }
+        );
+        value.toggle_format(StyleProperty::Italic);
+        value.toggle_format(StyleProperty::Underline);
+        value.insert_str(" all");
+        assert_eq!(
+            value.document().runs()[1].style,
+            TextStyle {
+                bold: true,
+                italic: true,
+                underline: true
+            }
+        );
+        value.toggle_format(StyleProperty::Bold);
+        value.insert_str(" iu");
+        assert_eq!(
+            value.document().runs()[2].style,
+            TextStyle {
+                bold: false,
+                italic: true,
+                underline: true
+            }
+        );
+    }
+
+    #[test]
+    fn selection_toggle_uses_uniform_and_mixed_semantics() {
+        let mut value = editor("hello world", 600, 70);
+        value.set_caret(0, false);
+        value.set_caret(5, true);
+        value.toggle_format(StyleProperty::Bold);
+        assert_eq!(
+            value.formatting_state(StyleProperty::Bold),
+            FormattingState::On
+        );
+        value.select_all();
+        assert_eq!(
+            value.formatting_state(StyleProperty::Bold),
+            FormattingState::Mixed
+        );
+        value.toggle_format(StyleProperty::Bold);
+        assert_eq!(
+            value.formatting_state(StyleProperty::Bold),
+            FormattingState::On
+        );
+        value.toggle_format(StyleProperty::Bold);
+        assert_eq!(
+            value.formatting_state(StyleProperty::Bold),
+            FormattingState::Off
+        );
+    }
+
+    #[test]
+    fn insert_delete_replace_and_paragraph_merge_preserve_styles() {
+        let mut value = editor("ab\ncd", 600, 70);
+        value.set_caret(0, false);
+        value.set_caret(2, true);
+        value.toggle_format(StyleProperty::Bold);
+        value.set_caret(1, false);
+        value.insert_str("🐇");
+        assert!(value.document().style_at(1).bold);
+        value.set_caret("a🐇b".len(), false);
+        value.delete_forward();
+        assert_eq!(value.text(), "a🐇bcd");
+        assert!(value.document().style_at(0).bold);
+        assert!(!value.document().style_at(value.text().len() - 1).bold);
+        value.set_caret(1, false);
+        value.set_caret("a🐇".len(), true);
+        value.insert_str("Z");
+        assert_eq!(value.text(), "aZbcd");
+        assert!(value.document().style_at(1).bold);
+    }
+
+    #[test]
+    fn enter_and_boundary_affinity_inherit_left_style() {
+        let mut value = editor("Hello world", 600, 70);
+        value.set_caret(0, false);
+        value.set_caret(5, true);
+        value.toggle_format(StyleProperty::Italic);
+        value.set_caret(5, false);
+        assert!(value.typing_style().italic);
+        value.insert_newline();
+        value.insert_str("new");
+        assert_eq!(value.text(), "Hello\nnew world");
+        assert!(value.document().style_at(6).italic);
+    }
+
+    #[test]
+    fn unicode_selection_formats_only_valid_byte_range() {
+        let mut value = editor("a🐇بz", 600, 70);
+        value.set_caret(1, false);
+        value.set_caret("a🐇ب".len(), true);
+        value.toggle_format(StyleProperty::Underline);
+        assert!(!value.document().style_at(0).underline);
+        assert!(value.document().style_at(1).underline);
+        assert!(!value.document().style_at(value.text().len() - 1).underline);
+        assert!(value
+            .document()
+            .runs()
+            .iter()
+            .all(|run| value.text().is_char_boundary(run.range.start)
+                && value.text().is_char_boundary(run.range.end)));
     }
 }

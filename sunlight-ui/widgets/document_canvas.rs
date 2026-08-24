@@ -1,10 +1,36 @@
 use alloc::{collections::BTreeMap, string::String, sync::Arc, vec, vec::Vec};
 
 use super::document_editor::DocumentEditor;
+use super::rich_document::{RichDocument, TextStyle as RichTextStyle};
 use crate::font::VecText;
 use crate::geom::{Point, Rect, Size};
 use crate::paint::Canvas;
 use crate::theme::{Color, Theme};
+
+/// Font faces used by format-neutral styled text layout. Applications choose
+/// concrete faces; Canvas only resolves the boolean character style.
+#[derive(Clone, Copy)]
+pub struct RichTextFonts<'a> {
+    pub regular: Option<&'a dyn VecText>,
+    pub bold: Option<&'a dyn VecText>,
+    pub italic: Option<&'a dyn VecText>,
+    pub bold_italic: Option<&'a dyn VecText>,
+}
+
+impl<'a> RichTextFonts<'a> {
+    pub fn font(self, style: RichTextStyle) -> Option<&'a dyn VecText> {
+        match (style.bold, style.italic) {
+            (true, true) => self
+                .bold_italic
+                .or(self.bold)
+                .or(self.italic)
+                .or(self.regular),
+            (true, false) => self.bold.or(self.regular),
+            (false, true) => self.italic.or(self.regular),
+            (false, false) => self.regular,
+        }
+    }
+}
 
 /// Temporary per-item editing state — never stored in persistent document data.
 ///
@@ -196,6 +222,153 @@ pub fn layout_text_lines(
     }
 
     lines
+}
+
+pub fn layout_rich_text_lines(
+    fonts: RichTextFonts<'_>,
+    document: &RichDocument,
+    max_width: u32,
+    line_height: u32,
+) -> Vec<TextLineLayout> {
+    let text = document.text();
+    let mut lines = Vec::new();
+    let mut start = 0;
+    let mut y = 0;
+    while start < text.len() {
+        let mut end = start;
+        let mut width = 0u32;
+        let mut last_space: Option<(usize, u32)> = None;
+        let mut newline = false;
+        for (relative, ch) in text[start..].char_indices() {
+            let at = start + relative;
+            let next = at + ch.len_utf8();
+            if ch == '\n' {
+                end = next;
+                newline = true;
+                break;
+            }
+            let char_width = measure_text_width(fonts.font(document.style_at(at)), &text[at..next]);
+            if width.saturating_add(char_width) > max_width {
+                if let Some((space_end, space_width)) = last_space {
+                    end = space_end;
+                    width = space_width;
+                } else if end == start {
+                    end = next;
+                    width = char_width;
+                }
+                break;
+            }
+            width = width.saturating_add(char_width);
+            end = next;
+            if ch == ' ' {
+                last_space = Some((next, width));
+            }
+        }
+        if end == start {
+            let ch = text[start..].chars().next().unwrap();
+            end = start + ch.len_utf8();
+            width = measure_text_width(fonts.font(document.style_at(start)), &text[start..end]);
+        }
+        lines.push(TextLineLayout {
+            byte_start: start,
+            byte_end: end,
+            y_offset: y,
+            pixel_width: if newline {
+                rich_width(fonts, document, start, end - 1)
+            } else {
+                width
+            },
+            ends_with_newline: newline,
+        });
+        start = end;
+        y = y.saturating_add(line_height as i32);
+    }
+    if lines.is_empty() || text.ends_with('\n') {
+        lines.push(TextLineLayout {
+            byte_start: text.len(),
+            byte_end: text.len(),
+            y_offset: y,
+            pixel_width: 0,
+            ends_with_newline: false,
+        });
+    }
+    lines
+}
+
+pub fn rich_width(
+    fonts: RichTextFonts<'_>,
+    document: &RichDocument,
+    start: usize,
+    end: usize,
+) -> u32 {
+    if start >= end {
+        return 0;
+    }
+    let mut width = 0u32;
+    for run in document.runs() {
+        let left = run.range.start.max(start);
+        let right = run.range.end.min(end);
+        if left < right {
+            width = width.saturating_add(measure_text_width(
+                fonts.font(run.style),
+                &document.text()[left..right],
+            ));
+        }
+    }
+    width
+}
+
+pub fn rich_caret_x_on_line(
+    fonts: RichTextFonts<'_>,
+    document: &RichDocument,
+    line: &TextLineLayout,
+    caret: usize,
+) -> u32 {
+    let visible_end = if line.ends_with_newline {
+        line.byte_end.saturating_sub(1)
+    } else {
+        line.byte_end
+    };
+    rich_width(
+        fonts,
+        document,
+        line.byte_start,
+        caret.clamp(line.byte_start, visible_end),
+    )
+}
+
+pub fn rich_byte_at_x_on_line(
+    fonts: RichTextFonts<'_>,
+    document: &RichDocument,
+    line: &TextLineLayout,
+    target_x: i32,
+) -> usize {
+    if target_x <= 0 {
+        return line.byte_start;
+    }
+    let end = if line.ends_with_newline {
+        line.byte_end.saturating_sub(1)
+    } else {
+        line.byte_end
+    };
+    let mut width = 0u32;
+    for (relative, ch) in document.text()[line.byte_start..end].char_indices() {
+        let at = line.byte_start + relative;
+        let next = at + ch.len_utf8();
+        let next_width = width.saturating_add(measure_text_width(
+            fonts.font(document.style_at(at)),
+            &document.text()[at..next],
+        ));
+        if target_x as u32 <= next_width {
+            return if target_x as u32 <= (width + next_width) / 2 {
+                at
+            } else {
+                next
+            };
+        }
+        width = next_width;
+    }
+    end
 }
 
 /// Index into `lines` that contains `byte_offset`.  If the offset falls on a
@@ -842,6 +1015,43 @@ fn clip_text_to_width<'a>(font: Option<&dyn VecText>, text: &'a str, max_w: u32)
     &text[..end]
 }
 
+fn draw_rich_line(
+    canvas: &mut Canvas,
+    fonts: RichTextFonts<'_>,
+    document: &RichDocument,
+    line: &TextLineLayout,
+    x: i32,
+    y: i32,
+    line_height: u32,
+    color: Color,
+    clip: Rect,
+) {
+    let line_end = if line.ends_with_newline {
+        line.byte_end.saturating_sub(1)
+    } else {
+        line.byte_end
+    };
+    let mut cursor_x = x;
+    for run in document.runs() {
+        let start = run.range.start.max(line.byte_start);
+        let end = run.range.end.min(line_end);
+        if start >= end {
+            continue;
+        }
+        let segment = &document.text()[start..end];
+        let font = fonts.font(run.style);
+        draw_text(canvas, font, cursor_x, y, segment, color);
+        let width = measure_text_width(font, segment);
+        if run.style.underline {
+            let underline_y = y + line_height.saturating_sub(2) as i32;
+            if let Some(rect) = Rect::new(cursor_x, underline_y, width.max(1), 1).intersect(clip) {
+                canvas.fill_rect(rect, color);
+            }
+        }
+        cursor_x = cursor_x.saturating_add(width as i32);
+    }
+}
+
 /// Approximate bounding box for immediate-mode items used during
 /// semantic hit-testing.  Text boxes are computed from the item's font
 /// and measured width; shape items use their explicit geometry.
@@ -1068,6 +1278,7 @@ pub struct DocumentCanvas<'a> {
     /// Optional full-page plain-text editor. This is deliberately absent for
     /// retained/read-only consumers such as Rappid Rabbit.
     pub document_editor: Option<(usize, &'a DocumentEditor)>,
+    pub rich_text_fonts: Option<RichTextFonts<'a>>,
     pub caret_visible: bool,
 }
 
@@ -1088,6 +1299,7 @@ impl<'a> DocumentCanvas<'a> {
             scene_mono_font: None,
             edit_state: None,
             document_editor: None,
+            rich_text_fonts: None,
             caret_visible: true,
         }
     }
@@ -1100,6 +1312,11 @@ impl<'a> DocumentCanvas<'a> {
     pub fn with_document_editor(mut self, item_index: usize, editor: &'a DocumentEditor) -> Self {
         self.scroll_y = editor.scroll_y();
         self.document_editor = Some((item_index, editor));
+        self
+    }
+
+    pub fn with_rich_text_fonts(mut self, fonts: RichTextFonts<'a>) -> Self {
+        self.rich_text_fonts = Some(fonts);
         self
     }
 
@@ -1368,8 +1585,20 @@ impl<'a> DocumentCanvas<'a> {
                                 let start = selection_start.max(line.byte_start).min(line_end);
                                 let end = selection_end.max(line.byte_start).min(line_end);
                                 if end > start {
-                                    let x1 = caret_x_on_line(style.font, text, line, start);
-                                    let x2 = caret_x_on_line(style.font, text, line, end);
+                                    let x1 = if let (Some(fonts), Some(editor)) =
+                                        (self.rich_text_fonts, editor)
+                                    {
+                                        rich_caret_x_on_line(fonts, editor.document(), line, start)
+                                    } else {
+                                        caret_x_on_line(style.font, text, line, start)
+                                    };
+                                    let x2 = if let (Some(fonts), Some(editor)) =
+                                        (self.rich_text_fonts, editor)
+                                    {
+                                        rich_caret_x_on_line(fonts, editor.document(), line, end)
+                                    } else {
+                                        caret_x_on_line(style.font, text, line, end)
+                                    };
                                     if let Some(selection_rect) = Rect::new(
                                         px + x1 as i32,
                                         ly,
@@ -1384,7 +1613,18 @@ impl<'a> DocumentCanvas<'a> {
                                     && selection_end >= line.byte_end
                                     && line.ends_with_newline
                                 {
-                                    let x1 = caret_x_on_line(style.font, text, line, line_end);
+                                    let x1 = if let (Some(fonts), Some(editor)) =
+                                        (self.rich_text_fonts, editor)
+                                    {
+                                        rich_caret_x_on_line(
+                                            fonts,
+                                            editor.document(),
+                                            line,
+                                            line_end,
+                                        )
+                                    } else {
+                                        caret_x_on_line(style.font, text, line, line_end)
+                                    };
                                     if let Some(selection_rect) =
                                         Rect::new(px + x1 as i32, ly, 3, line_h).intersect(content)
                                     {
@@ -1396,14 +1636,34 @@ impl<'a> DocumentCanvas<'a> {
                             if line.ends_with_newline && line_text.ends_with('\n') {
                                 line_text = &line_text[..line_text.len() - 1];
                             }
-                            let visible = clip_text_to_width(style.font, line_text, max_w);
-                            if !visible.is_empty() {
-                                draw_text(canvas, style.font, px, ly, visible, style.color);
+                            if let (Some(fonts), Some(editor)) = (self.rich_text_fonts, editor) {
+                                draw_rich_line(
+                                    canvas,
+                                    fonts,
+                                    editor.document(),
+                                    line,
+                                    px,
+                                    ly,
+                                    line_h,
+                                    style.color,
+                                    content,
+                                );
+                            } else {
+                                let visible = clip_text_to_width(style.font, line_text, max_w);
+                                if !visible.is_empty() {
+                                    draw_text(canvas, style.font, px, ly, visible, style.color);
+                                }
                             }
                         }
                         let caret_line = find_line_index(lines, caret_byte).unwrap_or(0usize);
                         if let Some(line) = lines.get(caret_line).filter(|_| self.caret_visible) {
-                            let caret_ox = caret_x_on_line(style.font, text, line, caret_byte);
+                            let caret_ox = if let (Some(fonts), Some(editor)) =
+                                (self.rich_text_fonts, editor)
+                            {
+                                rich_caret_x_on_line(fonts, editor.document(), line, caret_byte)
+                            } else {
+                                caret_x_on_line(style.font, text, line, caret_byte)
+                            };
                             let caret_px = px + caret_ox as i32;
                             let caret_py = py + line.y_offset;
                             if let Some(caret_rect) =
@@ -2157,15 +2417,17 @@ fn draw_raster_image(canvas: &mut Canvas, clipped: Rect, destination: Rect, imag
 mod tests {
     use super::{
         byte_at_x_on_line, byte_offset_at_x, caret_x_at_byte, caret_x_on_line,
-        click_to_line_and_byte, diff_scenes, find_line_index, layout_text_lines, line_end_byte,
-        line_home_byte, CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
+        click_to_line_and_byte, diff_scenes, find_line_index, layout_rich_text_lines,
+        layout_text_lines, line_end_byte, line_home_byte, rich_byte_at_x_on_line,
+        rich_caret_x_on_line, CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
         DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentScene,
         DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage, RenderObject,
-        RenderObjectId, RenderObjectKind, ScenePatchOperation, TextEditState,
+        RenderObjectId, RenderObjectKind, RichTextFonts, ScenePatchOperation, TextEditState,
     };
+    use crate::widgets::{RichDocument, StyleProperty};
     #[cfg(feature = "app")]
     use crate::CursorShape;
-    use crate::{Canvas, Color, Point, Rect, Size, Theme};
+    use crate::{Canvas, Color, Point, Rect, Size, Theme, VecText};
     use alloc::sync::Arc;
 
     fn scene_with_text(text: &str, x: i32) -> DocumentScene {
@@ -2191,6 +2453,72 @@ mod tests {
         }));
         scene.finalize();
         scene
+    }
+
+    struct WidthFont(u32);
+    impl VecText for WidthFont {
+        fn draw(&self, _: &mut Canvas, text: &str, x: i32, _: i32, _: Color) -> i32 {
+            x + self.measure_w(text) as i32
+        }
+        fn draw_vcenter(
+            &self,
+            canvas: &mut Canvas,
+            text: &str,
+            x: i32,
+            y: i32,
+            _: u32,
+            color: Color,
+        ) -> i32 {
+            self.draw(canvas, text, x, y, color)
+        }
+        fn measure_w(&self, text: &str) -> u32 {
+            text.chars().count() as u32 * self.0
+        }
+        fn line_height(&self) -> u32 {
+            12
+        }
+    }
+
+    static NARROW_FONT: WidthFont = WidthFont(4);
+    static WIDE_FONT: WidthFont = WidthFont(8);
+
+    #[test]
+    fn rich_layout_wraps_and_hit_tests_with_actual_style_metrics() {
+        let mut document = RichDocument::from_text("aa bbcc dd");
+        document.format(3..7, StyleProperty::Bold, true);
+        let fonts = RichTextFonts {
+            regular: Some(&NARROW_FONT),
+            bold: Some(&WIDE_FONT),
+            italic: Some(&NARROW_FONT),
+            bold_italic: Some(&WIDE_FONT),
+        };
+        let lines = layout_rich_text_lines(fonts, &document, 28, 12);
+        assert!(lines.len() >= 3);
+        assert_eq!(rich_caret_x_on_line(fonts, &document, &lines[0], 2), 8);
+        let bold_line = lines
+            .iter()
+            .find(|line| line.byte_start <= 3 && line.byte_end > 3)
+            .unwrap();
+        let hit = rich_byte_at_x_on_line(fonts, &document, bold_line, 7);
+        assert!(document.text().is_char_boundary(hit));
+        assert!(hit == 3 || hit == 4);
+    }
+
+    #[test]
+    fn resizing_rich_layout_reflows_without_changing_styles() {
+        let mut document = RichDocument::from_text("a long bold sentence that wraps");
+        document.format(2..20, StyleProperty::Bold, true);
+        let before = document.runs().to_vec();
+        let fonts = RichTextFonts {
+            regular: Some(&NARROW_FONT),
+            bold: Some(&WIDE_FONT),
+            italic: Some(&NARROW_FONT),
+            bold_italic: Some(&WIDE_FONT),
+        };
+        let narrow = layout_rich_text_lines(fonts, &document, 36, 12);
+        let wide = layout_rich_text_lines(fonts, &document, 300, 12);
+        assert!(narrow.len() > wide.len());
+        assert_eq!(document.runs(), before.as_slice());
     }
 
     #[test]

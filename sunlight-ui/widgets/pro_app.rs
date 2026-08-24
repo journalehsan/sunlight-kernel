@@ -545,6 +545,8 @@ impl<'a> RibbonGroupSpec<'a> {
         theme: &Theme,
         group_rect: Rect,
         hovered_button: Option<usize>,
+        active_button: Option<usize>,
+        mixed_button: Option<usize>,
         label_font: Option<&dyn VecText>,
         small_font: Option<&dyn VecText>,
     ) {
@@ -561,10 +563,16 @@ impl<'a> RibbonGroupSpec<'a> {
         for (idx, button) in self.buttons.iter().enumerate() {
             let rect = self.button_rect(group_rect, idx);
             let hovered = hovered_button == Some(idx);
+            let active = active_button == Some(idx);
+            let mixed = mixed_button == Some(idx);
             let fill = match button.kind {
                 RibbonButtonKind::Dropdown => theme.panel_alt.lighten(6),
                 RibbonButtonKind::Toggle => {
-                    if hovered {
+                    if active {
+                        theme.accent.lighten(20)
+                    } else if mixed {
+                        theme.chrome.selection
+                    } else if hovered {
                         theme.accent.darken(36)
                     } else {
                         theme.panel_alt
@@ -578,7 +586,7 @@ impl<'a> RibbonGroupSpec<'a> {
                     }
                 }
             };
-            let border = if hovered {
+            let border = if active || mixed || hovered {
                 theme.accent.darken(70)
             } else {
                 theme.border
@@ -609,7 +617,7 @@ impl<'a> RibbonGroupSpec<'a> {
                         canvas.draw_tga_icon_tinted(
                             icon,
                             Rect::new(rect.x + ((rect.w as i32 - 18) / 2), rect.y + 7, 18, 18),
-                            if hovered {
+                            if active || mixed || hovered {
                                 theme.accent
                             } else {
                                 theme.icon_foreground
@@ -669,6 +677,8 @@ pub struct RibbonBar<'a> {
     pub rect: Rect,
     pub groups: &'a [RibbonGroupSpec<'a>],
     pub hovered: Option<(usize, usize)>,
+    pub active: &'a [(usize, usize)],
+    pub mixed: &'a [(usize, usize)],
     pub label_font: Option<&'a dyn VecText>,
     pub small_font: Option<&'a dyn VecText>,
 }
@@ -738,6 +748,14 @@ impl<'a> RibbonBar<'a> {
                 self.group_rect(group_idx),
                 self.hovered.and_then(|(hover_group, hover_button)| {
                     (hover_group == group_idx).then_some(hover_button)
+                }),
+                self.active
+                    .iter()
+                    .find_map(|(active_group, active_button)| {
+                        (*active_group == group_idx).then_some(*active_button)
+                    }),
+                self.mixed.iter().find_map(|(mixed_group, mixed_button)| {
+                    (*mixed_group == group_idx).then_some(*mixed_button)
                 }),
                 self.label_font,
                 self.small_font,

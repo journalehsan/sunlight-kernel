@@ -12,6 +12,7 @@ pub mod label;
 pub mod owl_avatar;
 pub mod panel;
 pub mod pro_app;
+pub mod rich_document;
 pub mod search_palette;
 pub mod sidebar;
 pub mod sidebar_item;
@@ -47,14 +48,15 @@ pub use disclosure::{
 };
 pub use document_canvas::{
     byte_at_x_on_line, byte_offset_at_x, caret_x_at_byte, caret_x_on_line, click_to_line_and_byte,
-    diff_scenes, find_line_index, layout_text_lines, line_end_byte, line_home_byte,
-    CanvasHitTarget, CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
+    diff_scenes, find_line_index, layout_rich_text_lines, layout_text_lines, line_end_byte,
+    line_home_byte, rich_byte_at_x_on_line, rich_caret_x_on_line, rich_width, CanvasHitTarget,
+    CornerRadii, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
     DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentRectStyle,
     DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage,
-    RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, ScenePatch,
+    RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, RichTextFonts, ScenePatch,
     ScenePatchOperation, TextEditState, TextLineLayout,
 };
-pub use document_editor::DocumentEditor;
+pub use document_editor::{DocumentEditor, FormattingState};
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
 pub use icon_button::IconButton;
 pub use label::Label;
@@ -64,6 +66,7 @@ pub use pro_app::{
     AppMenuCommand, AppMenuSecondaryItem, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar,
     RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, TwoPaneAppMenu,
 };
+pub use rich_document::{RichDocument, StyleProperty, StyleRun, TextStyle as RichTextStyle};
 pub use search_palette::{
     draw_palette_ambient_shadow, search_page_count, BoundedSearchField, SearchPaletteFonts,
     SearchPaletteLayout, SearchPalettePanel, SearchResultRow, SearchResultState, SearchResultView,

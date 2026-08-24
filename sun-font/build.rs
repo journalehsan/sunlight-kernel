@@ -48,6 +48,8 @@ fn main() {
         inter.join("Inter_18pt-Regular.ttf"),
         inter.join("Inter_18pt-Medium.ttf"),
         inter.join("Inter_18pt-SemiBold.ttf"),
+        inter.join("Inter_18pt-Italic.ttf"),
+        inter.join("Inter_18pt-SemiBoldItalic.ttf"),
         fira.join("FiraCode-Regular.ttf"),
         fira.join("FiraCode-Medium.ttf"),
         noto_serif.clone(),
@@ -70,10 +72,12 @@ fn main() {
     let regular = font(&sources[0]);
     let medium = font(&sources[1]);
     let semibold = font(&sources[2]);
-    let mono = font(&sources[3]);
-    let mono_medium = font(&sources[4]);
-    let serif = font(&sources[5]);
-    let material = font(&sources[6]);
+    let italic = font(&sources[3]);
+    let semibold_italic = font(&sources[4]);
+    let mono = font(&sources[5]);
+    let mono_medium = font(&sources[6]);
+    let serif = font(&sources[7]);
+    let material = font(&sources[8]);
     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     for (face, px, name) in [
@@ -81,6 +85,8 @@ fn main() {
         (&regular, 13.0, "sunlight_ui_13.mtf"),
         (&medium, 13.0, "sunlight_ui_medium_13.mtf"),
         (&semibold, 13.0, "sunlight_ui_semibold_13.mtf"),
+        (&italic, 13.0, "sunlight_ui_italic_13.mtf"),
+        (&semibold_italic, 13.0, "sunlight_ui_semibold_italic_13.mtf"),
         (&regular, 16.0, "sunlight_ui_16.mtf"),
         (&medium, 18.0, "sunlight_ui_title_18.mtf"),
         (&mono, 14.0, "sunlight_mono_regular_14.mtf"),
