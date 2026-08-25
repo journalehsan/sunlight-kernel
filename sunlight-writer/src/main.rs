@@ -1635,11 +1635,13 @@ impl WriterApp {
                 allowed_mime_types: Vec::from([
                     String::from("text/markdown"),
                     String::from("text/plain"),
+                    String::from("application/rtf"),
                 ]),
                 allowed_extensions: Vec::from([
                     String::from(".md"),
                     String::from(".markdown"),
                     String::from(".txt"),
+                    String::from(".rtf"),
                 ]),
                 allow_multiple: false,
                 show_preview: true,
@@ -1648,7 +1650,7 @@ impl WriterApp {
         match show_writer_dialog(&request) {
             Ok(sunlight_dialogs::DialogResult::FileSelected(path)) => {
                 let Some(format) = format_from_path(&path) else {
-                    self.set_status_message("Choose a Markdown or text file");
+                    self.set_status_message("Choose a Markdown, RTF, or text file");
                     return true;
                 };
                 match read_writer_file(path.as_bytes()) {
@@ -1680,7 +1682,7 @@ impl WriterApp {
 
     fn open_path(&mut self, path: String) {
         let Some(format) = format_from_path(&path) else {
-            self.set_status_message("Choose a Markdown or text file");
+            self.set_status_message("Choose a Markdown, RTF, or text file");
             return;
         };
         match read_writer_file(path.as_bytes()) {
@@ -1711,9 +1713,10 @@ impl WriterApp {
                 sunlight_dialogs::DialogRequest::SaveFile(sunlight_dialogs::SaveFileRequest {
                     title: String::from("Save Document As"),
                     initial_dir: Some(String::from("/root")),
-                    suggested_name: Some(String::from("untitled.md")),
-                    default_extension: Some(String::from(".md")),
+                    suggested_name: Some(String::from("untitled.rtf")),
+                    default_extension: Some(String::from(".rtf")),
                     allowed_extensions: Vec::from([
+                        String::from(".rtf"),
                         String::from(".md"),
                         String::from(".markdown"),
                         String::from(".txt"),
@@ -1755,6 +1758,7 @@ impl WriterApp {
                 DocumentFormat::Markdown => {
                     "Underline formatting cannot be saved in Markdown. Continue?"
                 }
+                DocumentFormat::Rtf => "",
             };
             let request =
                 sunlight_dialogs::DialogRequest::Confirm(sunlight_dialogs::ConfirmRequest {
