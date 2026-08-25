@@ -270,6 +270,7 @@ path = "src/main.rs"
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
+sunlight-dialogs = { path = "../sunlight-dialogs" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
 

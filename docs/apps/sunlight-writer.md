@@ -1,26 +1,45 @@
 # Sunlight Writer
 
-**Status:** UI-only professional document shell (`sunlight-writer`).
+**Status:** Phase 3 document editor with Markdown/TXT persistence.
 
 ## Overview
 
-`sunlight-writer` is the first premium document-application shell for
-SunlightOS. This phase only establishes the window layout and interaction model:
+`sunlight-writer` is the premium document application shell for SunlightOS.
+Writer owns the rich document model; the shared `DocumentCanvas` and
+`DocumentEditor` widgets provide layout, editing, selection, scrolling, and
+styled rendering.
 
-- application menu with a two-column `Open -> Recent Documents` panel
-- ribbon-style command surface
-- large central white document placeholder
-- status bar and professional workspace framing
+Phase 3 adds:
 
-## Not In This Phase
+- Open, Save, and Save As through `sunlight-dialogs`
+- UTF-8 Markdown (`.md`, `.markdown`) and plain text (`.txt`) import/export
+- atomic temporary-file replacement with a safe direct-write fallback
+- current path, format, revision, dirty-state, and unsaved-change tracking
+- direct opening of a supported path passed in launch argv
 
-- real canvas widget
-- document editing logic
-- file open/save implementation
-- document model, formatting engine, or export pipeline
+## Persistence policy
 
-## Future Integration
+Markdown supports ordinary paragraphs plus `*italic*`, `**bold**`, and
+`***bold italic***`. Unsupported syntax remains visible as text. Plain text is
+literal and never parses Markdown. UTF-8 BOMs and LF/CRLF/CR newlines are
+handled; invalid UTF-8 is rejected. Underline text is preserved but underline
+formatting is dropped when exporting Markdown or TXT.
 
-The future canvas widget should replace the placeholder drawing inside the main
-document surface area in `sunlight-writer/src/main.rs`, using the bounded
-`canvas_insertion_rect()` layout region.
+An untitled Save invokes Save As. Save As infers format case-insensitively from
+`.md`, `.markdown`, or `.txt`; a missing or unknown extension defaults to
+Markdown. Failed reads, imports, writes, and canceled dialogs leave the
+current document and dirty state unchanged.
+
+## Architecture audit
+
+- Existing `sunlight-dialogs` typed OpenFile/SaveFile/Confirm requests are reused.
+- Existing `sunlight_libc` bounded file-descriptor APIs provide reads, writes,
+  and rename; Writer writes a temporary sibling before replacement.
+- Helios Note's atomic-save approach informed fallback behavior, while Writer
+  keeps serialization independent in `src/persistence.rs`.
+- The shared Canvas remains file-format agnostic and Rapid Rabbit-compatible.
+
+## Deferred
+
+RTF, DOCX, ODT, HTML, PDF, recent documents, autosave, recovery files, and
+system-wide MIME registration remain future work.

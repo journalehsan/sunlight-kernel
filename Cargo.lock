@@ -2879,6 +2879,7 @@ version = "0.2.4198-alpha.1"
 dependencies = [
  "fontdue",
  "sun-font",
+ "sunlight-dialogs",
  "sunlight-ipc",
  "sunlight-libc",
  "sunlight-ui",

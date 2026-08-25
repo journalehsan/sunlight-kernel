@@ -64,6 +64,32 @@ impl DocumentEditor {
         }
     }
 
+    /// Create an editor around an already imported rich document.
+    ///
+    /// Persistence belongs to the owning application; this constructor keeps
+    /// the canvas/editor layer format-neutral while allowing Writer to replace
+    /// its document only after an import has succeeded.
+    pub fn from_document(document: RichDocument) -> Self {
+        Self {
+            document,
+            caret_byte: 0,
+            selection_anchor_byte: None,
+            preferred_caret_x: None,
+            scroll_y: 0,
+            viewport_h: 0,
+            wrap_width: 1,
+            line_height: 1,
+            lines: Vec::new(),
+            layout_dirty: true,
+            typing_style: TextStyle::default(),
+        }
+    }
+
+    /// Replace the edited document and reset transient navigation state.
+    pub fn set_document(&mut self, document: RichDocument) {
+        *self = Self::from_document(document);
+    }
+
     pub fn text(&self) -> &str {
         self.document.text()
     }

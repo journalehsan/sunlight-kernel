@@ -29,6 +29,11 @@ use sunlight_ui::{
     WindowDecoration, WindowEvent,
 };
 
+mod persistence;
+use persistence::{
+    export, format_from_path, import, loses_formatting, DocumentFormat, WriterDocumentSession,
+};
+
 const WIN_W: u32 = 1240;
 const WIN_H: u32 = 860;
 const TOP_BAR_H: u32 = 52;
@@ -39,6 +44,7 @@ const APP_MENU_Y_GAP: i32 = 6;
 const APP_MENU_LEFT_W: u32 = 222;
 const APP_MENU_RIGHT_W: u32 = 300;
 const MSG_LEN: usize = 96;
+const MAX_FILE_BYTES: usize = 8 * 1024 * 1024;
 const KEY_ESC: u8 = 0x01;
 
 const KEY_LEFT: u8 = 0x4B;
@@ -51,6 +57,8 @@ const KEY_DELETE: u8 = 0x53;
 const KEY_PAGE_UP: u8 = 0x49;
 const KEY_PAGE_DOWN: u8 = 0x51;
 const KEY_A: u8 = 0x1E;
+const KEY_O: u8 = 0x18;
+const KEY_S: u8 = 0x1F;
 const KEY_C: u8 = 0x2E;
 const KEY_V: u8 = 0x2F;
 const KEY_X: u8 = 0x2D;
@@ -474,6 +482,98 @@ fn writer_line_style(role: WriterLineRole) -> DocumentStrokeStyle {
     }
 }
 
+fn show_writer_dialog(
+    request: &sunlight_dialogs::DialogRequest,
+) -> Result<sunlight_dialogs::DialogResult, &'static str> {
+    let result = sunlight_dialogs::DialogClient::new()
+        .show(request)
+        .map_err(|_| "Dialog host unavailable")?;
+    Ok(result)
+}
+
+fn read_writer_file(path: &[u8]) -> Result<Vec<u8>, &'static str> {
+    let fd = sunlight_libc::open(path).map_err(|_| "Could not open file")?;
+    let mut out = Vec::with_capacity(4096);
+    let mut chunk = [0u8; 4096];
+    loop {
+        let count = sunlight_libc::read(fd, &mut chunk).map_err(|_| "Read failed")?;
+        if count == 0 {
+            break;
+        }
+        if out.len().saturating_add(count) > MAX_FILE_BYTES {
+            let _ = sunlight_libc::close(fd);
+            return Err("File too large");
+        }
+        out.extend_from_slice(&chunk[..count]);
+    }
+    let _ = sunlight_libc::close(fd);
+    Ok(out)
+}
+
+fn push_decimal(out: &mut String, mut value: u64) {
+    if value == 0 {
+        out.push('0');
+        return;
+    }
+    let mut digits = [0u8; 20];
+    let mut len = 0;
+    while value > 0 {
+        digits[len] = b'0' + (value % 10) as u8;
+        len += 1;
+        value /= 10;
+    }
+    while len > 0 {
+        len -= 1;
+        out.push(digits[len] as char);
+    }
+}
+
+fn write_writer_file(path: &[u8], data: &[u8]) -> Result<(), &'static str> {
+    if data.len() > MAX_FILE_BYTES {
+        return Err("Document is too large to save");
+    }
+    let path_str = core::str::from_utf8(path).map_err(|_| "Invalid path")?;
+    let mut temporary = String::from(path_str);
+    temporary.push_str(".sunwriter-");
+    push_decimal(&mut temporary, sunlight_ipc::getpid());
+    let temp_bytes = temporary.as_bytes();
+    let fd = sunlight_libc::open_with_flags(
+        temp_bytes,
+        sunlight_libc::O_WRONLY | sunlight_libc::O_CREAT | sunlight_libc::O_TRUNC,
+    )
+    .map_err(|_| "Could not create temporary file")?;
+    let mut offset = 0;
+    while offset < data.len() {
+        let count = sunlight_libc::write(fd, &data[offset..]).map_err(|_| "Write failed")?;
+        if count == 0 {
+            let _ = sunlight_libc::close(fd);
+            let _ = sunlight_libc::unlink(temp_bytes);
+            return Err("Write stalled");
+        }
+        offset += count;
+    }
+    sunlight_libc::close(fd).map_err(|_| "Could not close temporary file")?;
+    if sunlight_libc::rename(temp_bytes, path).is_ok() {
+        return Ok(());
+    }
+    let _ = sunlight_libc::unlink(temp_bytes);
+    let fd = sunlight_libc::open_with_flags(
+        path,
+        sunlight_libc::O_WRONLY | sunlight_libc::O_CREAT | sunlight_libc::O_TRUNC,
+    )
+    .map_err(|_| "Could not open destination for writing")?;
+    let mut offset = 0;
+    while offset < data.len() {
+        let count = sunlight_libc::write(fd, &data[offset..]).map_err(|_| "Write failed")?;
+        if count == 0 {
+            let _ = sunlight_libc::close(fd);
+            return Err("Write stalled");
+        }
+        offset += count;
+    }
+    sunlight_libc::close(fd).map_err(|_| "Could not close destination")
+}
+
 struct WriterIcons {
     menu: Option<TgaImage>,
     new_doc: Option<TgaImage>,
@@ -809,11 +909,12 @@ struct WriterApp {
     ribbon_hover: Option<(usize, usize)>,
     menu_button_hover: bool,
     status_center: TextSlot,
+    window_title: TextSlot,
     status_ticks: u16,
     editor: DocumentEditor,
     editor_focused: bool,
     drag_anchor_byte: Option<usize>,
-    document_modified: bool,
+    session: WriterDocumentSession,
     prev_document_cursor: CursorShape,
     client_bounds: Rect,
     layout_invalidation: LayoutInvalidation,
@@ -833,6 +934,8 @@ impl WriterApp {
     fn new() -> Self {
         let mut status_center = TextSlot::empty();
         status_center.set("Document Canvas Ready");
+        let mut window_title = TextSlot::empty();
+        window_title.set("Untitled — Sunlight Writer");
         let mut app = Self {
             icons: WriterIcons::load(),
             document: WriterDocument::sample(),
@@ -844,11 +947,12 @@ impl WriterApp {
             ribbon_hover: None,
             menu_button_hover: false,
             status_center,
+            window_title,
             status_ticks: 0,
             editor: DocumentEditor::new(),
             editor_focused: false,
             drag_anchor_byte: None,
-            document_modified: false,
+            session: WriterDocumentSession::new(),
             prev_document_cursor: CursorShape::Pointer,
             client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
             layout_invalidation: LayoutInvalidation::new(),
@@ -902,6 +1006,20 @@ impl WriterApp {
     fn set_status_message(&mut self, text: &str) {
         self.status_center.set(text);
         self.status_ticks = 32;
+    }
+
+    fn sync_window_title(&mut self) {
+        let mut title = String::new();
+        if self.session.is_dirty() {
+            title.push('*');
+        }
+        if let Some(path) = self.session.path.as_deref() {
+            title.push_str(path.rsplit('/').next().unwrap_or(path));
+        } else {
+            title.push_str("Untitled");
+        }
+        title.push_str(" — Sunlight Writer");
+        self.window_title.set(&title);
     }
 
     fn top_bar_rect(&self) -> Rect {
@@ -971,7 +1089,7 @@ impl WriterApp {
         });
         f(PremiumHeader {
             rect: self.top_bar_rect(),
-            title: "Sunlight Writer",
+            title: self.window_title.as_str(),
             subtitle: "Professional document shell . ribbon workspace . canvas-ready layout",
             leading_button: button,
             chips: &chips,
@@ -1325,19 +1443,25 @@ impl WriterApp {
 
     fn dispatch_action(&mut self, action: WriterAction) -> bool {
         match action {
-            WriterAction::New => self.set_status_message("New document is a UI placeholder"),
-            WriterAction::Open => self.set_status_message("Open panel is a UI placeholder"),
-            WriterAction::Save => self.set_status_message("Save is not implemented in this phase"),
-            WriterAction::SaveAs => {
-                self.set_status_message("Save As is not implemented in this phase")
+            WriterAction::New => {
+                if !self.confirm_replace("Create a new document?") {
+                    return true;
+                }
+                self.editor
+                    .set_document(sunlight_ui::widgets::RichDocument::new());
+                self.session = WriterDocumentSession::new();
+                self.sync_window_title();
+                self.editor_focused = true;
+                let _ = self.configure_editor_layout();
+                self.set_status_message("New document");
             }
+            WriterAction::Open => return self.open_document(),
+            WriterAction::Save => return self.save_document(false),
+            WriterAction::SaveAs => return self.save_document(true),
             WriterAction::Print => self.set_status_message("Print is a placeholder command"),
             WriterAction::Share => self.set_status_message("Share is a placeholder command"),
             WriterAction::Export => self.set_status_message("Export is a placeholder command"),
-            WriterAction::Exit => {
-                request_close();
-                return false;
-            }
+            WriterAction::Exit => return self.try_close(),
             WriterAction::FontFamily => self.set_status_message("Font picker is visual only"),
             WriterAction::FontSize => self.set_status_message("Font size picker is visual only"),
             WriterAction::Bold => return self.apply_format(StyleProperty::Bold, "Bold"),
@@ -1382,7 +1506,8 @@ impl WriterApp {
     fn apply_format(&mut self, property: StyleProperty, label: &str) -> bool {
         let changed = self.editor.toggle_format(property);
         if changed {
-            self.document_modified = true;
+            self.session.mark_changed(self.editor.document());
+            self.sync_window_title();
             let _ = self.configure_editor_layout();
             self.editor_focused = true;
             let mut message = String::from(label);
@@ -1415,7 +1540,8 @@ impl WriterApp {
 
     fn apply_editor_change(&mut self, changed: bool) -> bool {
         if changed {
-            self.document_modified = true;
+            self.session.mark_changed(self.editor.document());
+            self.sync_window_title();
             let _ = self.configure_editor_layout();
         }
         changed
@@ -1463,6 +1589,218 @@ impl WriterApp {
         }
     }
 
+    fn confirm_replace(&mut self, message: &str) -> bool {
+        if !self.session.is_dirty() {
+            return true;
+        }
+        match show_writer_dialog(&sunlight_dialogs::DialogRequest::Confirm(
+            sunlight_dialogs::ConfirmRequest {
+                common: sunlight_dialogs::DialogCommonOptions {
+                    title: String::from("Unsaved Changes"),
+                    message: String::from(message),
+                    severity: sunlight_dialogs::DialogSeverity::Question,
+                    silent: false,
+                },
+                style: sunlight_dialogs::ConfirmStyle::YesNo,
+                default_button: sunlight_dialogs::DialogButton::Yes,
+            },
+        )) {
+            Ok(sunlight_dialogs::DialogResult::Yes) => self.save_document(false),
+            Ok(sunlight_dialogs::DialogResult::No) => true,
+            Ok(
+                sunlight_dialogs::DialogResult::Cancel
+                | sunlight_dialogs::DialogResult::Cancelled
+                | sunlight_dialogs::DialogResult::Dismissed,
+            ) => false,
+            Ok(sunlight_dialogs::DialogResult::Error(message)) => {
+                self.set_status_message(&message);
+                false
+            }
+            Err(message) => {
+                self.set_status_message(message);
+                false
+            }
+            _ => false,
+        }
+    }
+
+    fn open_document(&mut self) -> bool {
+        if !self.confirm_replace("Open another document and discard unsaved changes?") {
+            return true;
+        }
+        let request =
+            sunlight_dialogs::DialogRequest::OpenFile(sunlight_dialogs::OpenFileRequest {
+                title: String::from("Open Document"),
+                initial_dir: Some(String::from("/root")),
+                allowed_mime_types: Vec::from([
+                    String::from("text/markdown"),
+                    String::from("text/plain"),
+                ]),
+                allowed_extensions: Vec::from([
+                    String::from(".md"),
+                    String::from(".markdown"),
+                    String::from(".txt"),
+                ]),
+                allow_multiple: false,
+                show_preview: true,
+                confirm_button_label: Some(String::from("Open")),
+            });
+        match show_writer_dialog(&request) {
+            Ok(sunlight_dialogs::DialogResult::FileSelected(path)) => {
+                let Some(format) = format_from_path(&path) else {
+                    self.set_status_message("Choose a Markdown or text file");
+                    return true;
+                };
+                match read_writer_file(path.as_bytes()) {
+                    Ok(bytes) => match import(format, &bytes) {
+                        Ok(document) => {
+                            self.editor.set_document(document.clone());
+                            self.session.replace_loaded(document, path, format);
+                            self.sync_window_title();
+                            self.editor_focused = true;
+                            let _ = self.configure_editor_layout();
+                            self.set_status_message("Document opened");
+                        }
+                        Err(error) => self.set_status_message(error.message()),
+                    },
+                    Err(message) => self.set_status_message(message),
+                }
+            }
+            Ok(
+                sunlight_dialogs::DialogResult::Cancelled
+                | sunlight_dialogs::DialogResult::Cancel
+                | sunlight_dialogs::DialogResult::Dismissed,
+            ) => self.set_status_message("Open cancelled"),
+            Ok(sunlight_dialogs::DialogResult::Error(message)) => self.set_status_message(&message),
+            Err(message) => self.set_status_message(message),
+            _ => self.set_status_message("Open dialog returned an unexpected result"),
+        }
+        true
+    }
+
+    fn open_path(&mut self, path: String) {
+        let Some(format) = format_from_path(&path) else {
+            self.set_status_message("Choose a Markdown or text file");
+            return;
+        };
+        match read_writer_file(path.as_bytes()) {
+            Ok(bytes) => match import(format, &bytes) {
+                Ok(document) => {
+                    self.editor.set_document(document.clone());
+                    self.session.replace_loaded(document, path, format);
+                    self.sync_window_title();
+                    let _ = self.configure_editor_layout();
+                    self.set_status_message("Document opened");
+                }
+                Err(error) => self.set_status_message(error.message()),
+            },
+            Err(message) => self.set_status_message(message),
+        }
+    }
+
+    fn save_document(&mut self, force_save_as: bool) -> bool {
+        let target = if !force_save_as {
+            self.session.path.clone().zip(self.session.format)
+        } else {
+            None
+        };
+        let (path, format) = if let Some(target) = target {
+            target
+        } else {
+            let request =
+                sunlight_dialogs::DialogRequest::SaveFile(sunlight_dialogs::SaveFileRequest {
+                    title: String::from("Save Document As"),
+                    initial_dir: Some(String::from("/root")),
+                    suggested_name: Some(String::from("untitled.md")),
+                    default_extension: Some(String::from(".md")),
+                    allowed_extensions: Vec::from([
+                        String::from(".md"),
+                        String::from(".markdown"),
+                        String::from(".txt"),
+                    ]),
+                    overwrite_confirm: true,
+                    confirm_button_label: Some(String::from("Save")),
+                });
+            let selected = match show_writer_dialog(&request) {
+                Ok(sunlight_dialogs::DialogResult::SavePathSelected(path)) => path,
+                Ok(
+                    sunlight_dialogs::DialogResult::Cancelled
+                    | sunlight_dialogs::DialogResult::Cancel
+                    | sunlight_dialogs::DialogResult::Dismissed,
+                ) => {
+                    self.set_status_message("Save cancelled");
+                    return false;
+                }
+                Ok(sunlight_dialogs::DialogResult::Error(message)) => {
+                    self.set_status_message(&message);
+                    return false;
+                }
+                Err(message) => {
+                    self.set_status_message(message);
+                    return false;
+                }
+                _ => {
+                    self.set_status_message("Save dialog returned an unexpected result");
+                    return false;
+                }
+            };
+            let format = format_from_path(&selected).unwrap_or(DocumentFormat::Markdown);
+            (selected, format)
+        };
+        if force_save_as && loses_formatting(format, self.editor.document()) {
+            let message = match format {
+                DocumentFormat::PlainText => {
+                    "Some formatting cannot be saved in plain text. Continue?"
+                }
+                DocumentFormat::Markdown => {
+                    "Underline formatting cannot be saved in Markdown. Continue?"
+                }
+            };
+            let request =
+                sunlight_dialogs::DialogRequest::Confirm(sunlight_dialogs::ConfirmRequest {
+                    common: sunlight_dialogs::DialogCommonOptions {
+                        title: String::from("Formatting Will Be Lost"),
+                        message: String::from(message),
+                        severity: sunlight_dialogs::DialogSeverity::Warning,
+                        silent: false,
+                    },
+                    style: sunlight_dialogs::ConfirmStyle::YesNo,
+                    default_button: sunlight_dialogs::DialogButton::No,
+                });
+            if !matches!(
+                show_writer_dialog(&request),
+                Ok(sunlight_dialogs::DialogResult::Yes)
+            ) {
+                self.set_status_message("Save cancelled");
+                return false;
+            }
+        }
+        let data = export(format, self.editor.document());
+        match write_writer_file(path.as_bytes(), data.as_bytes()) {
+            Ok(()) => {
+                self.session.set_saved_target(path, format);
+                self.session.mark_saved(self.editor.document());
+                self.sync_window_title();
+                self.set_status_message("Document saved");
+                true
+            }
+            Err(message) => {
+                self.set_status_message(message);
+                false
+            }
+        }
+    }
+
+    fn try_close(&mut self) -> bool {
+        if self.session.is_dirty() {
+            if !self.confirm_replace("Save changes before closing?") {
+                return true;
+            }
+        }
+        request_close();
+        true
+    }
+
     fn ribbon_action(group_idx: usize, button_idx: usize) -> WriterAction {
         match group_idx {
             0 => FILE_GROUP_DEFS[button_idx].action,
@@ -1488,7 +1826,7 @@ impl App for WriterApp {
         self.with_header(|header| header.draw(canvas, theme));
         self.with_ribbon_bar(|bar| bar.draw(canvas, theme));
         document_canvas.draw(canvas, theme);
-        let right_status = if self.document_modified {
+        let right_status = if self.session.is_dirty() {
             "100% | Modified"
         } else {
             "100% | Document Canvas Active | Editable"
@@ -1711,6 +2049,14 @@ impl App for WriterApp {
                     }
                     request_close();
                 }
+                if ctrl && !alt && !super_key {
+                    match keycode {
+                        KEY_O => return self.dispatch_action(WriterAction::Open),
+                        KEY_S if shift => return self.dispatch_action(WriterAction::SaveAs),
+                        KEY_S => return self.dispatch_action(WriterAction::Save),
+                        _ => {}
+                    }
+                }
                 if self.editor_focused && !alt && !super_key {
                     if ctrl {
                         return match keycode {
@@ -1768,6 +2114,18 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     );
 
     let mut app = WriterApp::new();
+    if argc > 1 && !argv.is_null() {
+        let raw = unsafe { *argv.add(1) };
+        if !raw.is_null() {
+            let len = unsafe { sunlight_libc::crt0::cstr_len(raw, sunlight_libc::MAX_PATH) };
+            if len > 0 {
+                let bytes = unsafe { core::slice::from_raw_parts(raw, len) };
+                if let Ok(path) = core::str::from_utf8(bytes) {
+                    app.open_path(String::from(path));
+                }
+            }
+        }
+    }
     let mut window = match Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
