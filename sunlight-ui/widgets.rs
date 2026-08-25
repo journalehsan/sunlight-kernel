@@ -66,7 +66,11 @@ pub use pro_app::{
     AppMenuCommand, AppMenuSecondaryItem, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar,
     RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, TwoPaneAppMenu,
 };
-pub use rich_document::{RichDocument, StyleProperty, StyleRun, TextStyle as RichTextStyle};
+pub use rich_document::{
+    clamp_font_size, FontSize, ParagraphAlignment, ParagraphKind, ParagraphStyle, RichDocument,
+    StyleProperty, StyleRun, TextStyle as RichTextStyle, DEFAULT_FONT_SIZE, MAX_FONT_SIZE,
+    MIN_FONT_SIZE,
+};
 pub use search_palette::{
     draw_palette_ambient_shadow, search_page_count, BoundedSearchField, SearchPaletteFonts,
     SearchPaletteLayout, SearchPalettePanel, SearchResultRow, SearchResultState, SearchResultView,

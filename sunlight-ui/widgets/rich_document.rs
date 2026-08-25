@@ -8,11 +8,39 @@
 use alloc::{string::String, vec::Vec};
 use core::ops::Range;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub type FontSize = u16;
+pub const DEFAULT_FONT_SIZE: FontSize = 13;
+pub const MIN_FONT_SIZE: FontSize = 8;
+pub const MAX_FONT_SIZE: FontSize = 48;
+
+pub const fn clamp_font_size(size: FontSize) -> FontSize {
+    if size < MIN_FONT_SIZE {
+        MIN_FONT_SIZE
+    } else if size > MAX_FONT_SIZE {
+        MAX_FONT_SIZE
+    } else {
+        size
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TextStyle {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
+    /// Font size in points. Values are always bounded by `clamp_font_size`.
+    pub font_size: FontSize,
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self {
+            bold: false,
+            italic: false,
+            underline: false,
+            font_size: DEFAULT_FONT_SIZE,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,6 +51,13 @@ pub enum StyleProperty {
 }
 
 impl TextStyle {
+    pub const fn with_font_size(self, size: FontSize) -> Self {
+        Self {
+            font_size: clamp_font_size(size),
+            ..self
+        }
+    }
+
     pub const fn with(self, property: StyleProperty, enabled: bool) -> Self {
         match property {
             StyleProperty::Bold => Self {
@@ -49,6 +84,49 @@ impl TextStyle {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ParagraphAlignment {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ParagraphKind {
+    #[default]
+    Normal,
+    Heading1,
+    Heading2,
+    Heading3,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ParagraphStyle {
+    pub alignment: ParagraphAlignment,
+    pub kind: ParagraphKind,
+}
+
+impl ParagraphStyle {
+    pub const fn resolved(self, inline: TextStyle) -> TextStyle {
+        let (heading_size, heading_bold) = match self.kind {
+            ParagraphKind::Normal => (DEFAULT_FONT_SIZE, false),
+            ParagraphKind::Heading1 => (24, true),
+            ParagraphKind::Heading2 => (20, true),
+            ParagraphKind::Heading3 => (16, true),
+        };
+        TextStyle {
+            bold: inline.bold || heading_bold,
+            font_size: if inline.font_size == DEFAULT_FONT_SIZE {
+                heading_size
+            } else {
+                inline.font_size
+            },
+            ..inline
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StyleRun {
     pub range: Range<usize>,
@@ -59,6 +137,7 @@ pub struct StyleRun {
 pub struct RichDocument {
     text: String,
     runs: Vec<StyleRun>,
+    paragraph_styles: Vec<ParagraphStyle>,
 }
 
 impl Default for RichDocument {
@@ -72,6 +151,7 @@ impl RichDocument {
         Self {
             text: String::new(),
             runs: Vec::new(),
+            paragraph_styles: Vec::from([ParagraphStyle::default()]),
         }
     }
 
@@ -80,6 +160,7 @@ impl RichDocument {
     }
 
     pub fn from_styled_text(text: &str, style: TextStyle) -> Self {
+        let style = style.with_font_size(style.font_size);
         let runs = if text.is_empty() {
             Vec::new()
         } else {
@@ -91,6 +172,9 @@ impl RichDocument {
         Self {
             text: String::from(text),
             runs,
+            paragraph_styles: core::iter::repeat(ParagraphStyle::default())
+                .take(text.bytes().filter(|b| *b == b'\n').count() + 1)
+                .collect(),
         }
     }
 
@@ -105,6 +189,10 @@ impl RichDocument {
     }
     pub fn runs(&self) -> &[StyleRun] {
         &self.runs
+    }
+
+    pub fn paragraph_styles(&self) -> &[ParagraphStyle] {
+        &self.paragraph_styles
     }
 
     /// Number of explicit logical paragraphs.  Even an empty document has one.
@@ -126,6 +214,55 @@ impl RichDocument {
             }
         }
         (current == index).then_some(start..self.text.len())
+    }
+
+    pub fn paragraph_index_at(&self, byte: usize) -> usize {
+        self.text
+            .as_bytes()
+            .get(..byte.min(self.text.len()))
+            .unwrap_or(self.text.as_bytes())
+            .iter()
+            .filter(|b| **b == b'\n')
+            .count()
+    }
+
+    pub fn paragraph_style(&self, index: usize) -> ParagraphStyle {
+        self.paragraph_styles
+            .get(index)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn paragraph_style_at(&self, byte: usize) -> ParagraphStyle {
+        self.paragraph_style(self.paragraph_index_at(byte))
+    }
+
+    pub fn resolved_style_at(&self, byte: usize) -> TextStyle {
+        self.paragraph_style_at(byte).resolved(self.style_at(byte))
+    }
+
+    pub fn set_paragraph_style(&mut self, index: usize, style: ParagraphStyle) -> bool {
+        let Some(previous) = self.paragraph_styles.get_mut(index) else {
+            return false;
+        };
+        if *previous == style {
+            return false;
+        }
+        *previous = style;
+        true
+    }
+
+    pub fn set_paragraph_styles(&mut self, range: Range<usize>, style: ParagraphStyle) -> bool {
+        let Some(range) = self.valid_range(range) else {
+            return false;
+        };
+        let first = self.paragraph_index_at(range.start);
+        let last = self.paragraph_index_at(range.end.saturating_sub(1).max(range.start));
+        let mut changed = false;
+        for index in first..=last.min(self.paragraph_styles.len().saturating_sub(1)) {
+            changed |= self.set_paragraph_style(index, style);
+        }
+        changed
     }
 
     pub fn style_at(&self, byte: usize) -> TextStyle {
@@ -174,6 +311,53 @@ impl RichDocument {
         value
     }
 
+    pub fn range_uniform_font_size(&self, range: Range<usize>) -> Option<FontSize> {
+        let range = self.valid_range(range)?;
+        if range.is_empty() {
+            return None;
+        }
+        let mut value = None;
+        for run in self.runs.iter().filter(|run| overlaps(&run.range, &range)) {
+            match value {
+                None => value = Some(run.style.font_size),
+                Some(previous) if previous != run.style.font_size => return None,
+                _ => {}
+            }
+        }
+        value
+    }
+
+    pub fn set_font_size(&mut self, range: Range<usize>, size: FontSize) -> bool {
+        let Some(range) = self.valid_range(range) else {
+            return false;
+        };
+        if range.is_empty() {
+            return false;
+        }
+        let size = clamp_font_size(size);
+        let mut changed = false;
+        let mut next = Vec::with_capacity(self.runs.len() + 2);
+        for run in &self.runs {
+            if !overlaps(&run.range, &range) {
+                push_run(&mut next, run.range.clone(), run.style);
+                continue;
+            }
+            if run.range.start < range.start {
+                push_run(&mut next, run.range.start..range.start, run.style);
+            }
+            let middle = run.range.start.max(range.start)..run.range.end.min(range.end);
+            let style = run.style.with_font_size(size);
+            changed |= style != run.style;
+            push_run(&mut next, middle, style);
+            if run.range.end > range.end {
+                push_run(&mut next, range.end..run.range.end, run.style);
+            }
+        }
+        self.runs = next;
+        self.assert_invariants();
+        changed
+    }
+
     pub fn format(&mut self, range: Range<usize>, property: StyleProperty, enabled: bool) -> bool {
         let Some(range) = self.valid_range(range) else {
             return false;
@@ -211,8 +395,23 @@ impl RichDocument {
         if range.is_empty() && value.is_empty() {
             return false;
         }
+        let style = style.with_font_size(style.font_size);
         let removed = range.end - range.start;
         let inserted = value.len();
+        let start_paragraph = self.paragraph_index_at(range.start);
+        let end_paragraph = if range.end > range.start {
+            let end_includes_newline =
+                self.text.as_bytes()[range.start..range.end].contains(&b'\n');
+            if end_includes_newline {
+                self.paragraph_index_at(range.end)
+            } else {
+                self.paragraph_index_at(range.end - 1)
+            }
+        } else {
+            start_paragraph
+        };
+        let inherited_paragraph_style = self.paragraph_style(start_paragraph);
+        let old_paragraph_styles = self.paragraph_styles.clone();
         let mut next = Vec::with_capacity(self.runs.len() + 1);
 
         for run in &self.runs {
@@ -232,6 +431,20 @@ impl RichDocument {
         }
         self.text.replace_range(range, value);
         self.runs = next;
+        let inserted_paragraphs = value.bytes().filter(|b| *b == b'\n').count();
+        let mut paragraph_styles = Vec::with_capacity(
+            old_paragraph_styles
+                .len()
+                .saturating_sub(end_paragraph.saturating_sub(start_paragraph))
+                .saturating_add(inserted_paragraphs),
+        );
+        paragraph_styles.extend_from_slice(&old_paragraph_styles[..start_paragraph]);
+        paragraph_styles
+            .extend(core::iter::repeat(inherited_paragraph_style).take(inserted_paragraphs + 1));
+        if end_paragraph + 1 < old_paragraph_styles.len() {
+            paragraph_styles.extend_from_slice(&old_paragraph_styles[end_paragraph + 1..]);
+        }
+        self.paragraph_styles = paragraph_styles;
         self.assert_invariants();
         true
     }
@@ -250,10 +463,12 @@ impl RichDocument {
             self.runs.last().map(|run| run.range.end).unwrap_or(0),
             self.text.len()
         );
+        debug_assert_eq!(self.paragraph_styles.len(), self.paragraph_count());
         for (index, run) in self.runs.iter().enumerate() {
             debug_assert!(run.range.start < run.range.end);
             debug_assert!(self.text.is_char_boundary(run.range.start));
             debug_assert!(self.text.is_char_boundary(run.range.end));
+            debug_assert!((MIN_FONT_SIZE..=MAX_FONT_SIZE).contains(&run.style.font_size));
             if let Some(previous) = index.checked_sub(1).and_then(|i| self.runs.get(i)) {
                 debug_assert_eq!(previous.range.end, run.range.start);
                 debug_assert_ne!(previous.style, run.style);
@@ -281,13 +496,17 @@ fn push_run(runs: &mut Vec<StyleRun>, range: Range<usize>, style: TextStyle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{RichDocument, StyleProperty, TextStyle};
+    use super::{
+        ParagraphAlignment, ParagraphKind, ParagraphStyle, RichDocument, StyleProperty, TextStyle,
+        DEFAULT_FONT_SIZE,
+    };
 
     fn style(bold: bool, italic: bool, underline: bool) -> TextStyle {
         TextStyle {
             bold,
             italic,
             underline,
+            font_size: DEFAULT_FONT_SIZE,
         }
     }
 
@@ -349,5 +568,26 @@ mod tests {
         assert_eq!(doc.range_uniform(0..5, StyleProperty::Bold), Some(true));
         assert_eq!(doc.range_uniform(6..11, StyleProperty::Bold), Some(false));
         assert_eq!(doc.range_uniform(0..11, StyleProperty::Bold), None);
+    }
+
+    #[test]
+    fn paragraph_styles_and_font_sizes_are_structural_and_normalized() {
+        let mut doc = RichDocument::from_text("Title\nbody");
+        assert_eq!(doc.paragraph_count(), 2);
+        assert!(doc.set_paragraph_style(
+            0,
+            ParagraphStyle {
+                alignment: ParagraphAlignment::Center,
+                kind: ParagraphKind::Heading1,
+            }
+        ));
+        assert_eq!(doc.paragraph_style_at(0).kind, ParagraphKind::Heading1);
+        assert_eq!(doc.resolved_style_at(0).font_size, 24);
+        assert!(doc.set_font_size(0..5, 18));
+        assert_eq!(doc.runs()[0].style.font_size, 18);
+        doc.replace(5..5, "\n", TextStyle::default());
+        assert_eq!(doc.paragraph_count(), 3);
+        assert_eq!(doc.paragraph_style(0).kind, ParagraphKind::Heading1);
+        assert_eq!(doc.paragraph_style(1).kind, ParagraphKind::Heading1);
     }
 }

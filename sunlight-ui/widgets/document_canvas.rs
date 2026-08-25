@@ -1,7 +1,7 @@
 use alloc::{collections::BTreeMap, string::String, sync::Arc, vec, vec::Vec};
 
 use super::document_editor::DocumentEditor;
-use super::rich_document::{RichDocument, TextStyle as RichTextStyle};
+use super::rich_document::{ParagraphAlignment, RichDocument, TextStyle as RichTextStyle};
 use crate::font::VecText;
 use crate::geom::{Point, Rect, Size};
 use crate::paint::Canvas;
@@ -11,7 +11,10 @@ use crate::theme::{Color, Theme};
 /// concrete faces; Canvas only resolves the boolean character style.
 #[derive(Clone, Copy)]
 pub struct RichTextFonts<'a> {
+    pub small: Option<&'a dyn VecText>,
     pub regular: Option<&'a dyn VecText>,
+    pub large: Option<&'a dyn VecText>,
+    pub title: Option<&'a dyn VecText>,
     pub bold: Option<&'a dyn VecText>,
     pub italic: Option<&'a dyn VecText>,
     pub bold_italic: Option<&'a dyn VecText>,
@@ -19,7 +22,7 @@ pub struct RichTextFonts<'a> {
 
 impl<'a> RichTextFonts<'a> {
     pub fn font(self, style: RichTextStyle) -> Option<&'a dyn VecText> {
-        match (style.bold, style.italic) {
+        let face = match (style.bold, style.italic) {
             (true, true) => self
                 .bold_italic
                 .or(self.bold)
@@ -28,6 +31,15 @@ impl<'a> RichTextFonts<'a> {
             (true, false) => self.bold.or(self.regular),
             (false, true) => self.italic.or(self.regular),
             (false, false) => self.regular,
+        };
+        if style.font_size >= 20 {
+            self.title.or(self.large).or(face)
+        } else if style.font_size >= 15 {
+            self.large.or(face)
+        } else if style.font_size <= 11 {
+            self.small.or(face)
+        } else {
+            face
         }
     }
 }
@@ -126,6 +138,8 @@ pub struct TextLineLayout {
     pub byte_end: usize,
     pub y_offset: i32,
     pub pixel_width: u32,
+    /// Actual visual height of this line after resolving styled runs.
+    pub height: u32,
     pub ends_with_newline: bool,
 }
 
@@ -202,6 +216,7 @@ pub fn layout_text_lines(
             byte_end: line_end,
             y_offset,
             pixel_width: px_width,
+            height: line_height,
             ends_with_newline,
         });
 
@@ -217,6 +232,7 @@ pub fn layout_text_lines(
             byte_end: text.len(),
             y_offset,
             pixel_width: 0,
+            height: line_height,
             ends_with_newline: false,
         });
     }
@@ -247,7 +263,8 @@ pub fn layout_rich_text_lines(
                 newline = true;
                 break;
             }
-            let char_width = measure_text_width(fonts.font(document.style_at(at)), &text[at..next]);
+            let char_width =
+                measure_text_width(fonts.font(document.resolved_style_at(at)), &text[at..next]);
             if width.saturating_add(char_width) > max_width {
                 if let Some((space_end, space_width)) = last_space {
                     end = space_end;
@@ -267,8 +284,22 @@ pub fn layout_rich_text_lines(
         if end == start {
             let ch = text[start..].chars().next().unwrap();
             end = start + ch.len_utf8();
-            width = measure_text_width(fonts.font(document.style_at(start)), &text[start..end]);
+            width = measure_text_width(
+                fonts.font(document.resolved_style_at(start)),
+                &text[start..end],
+            );
         }
+        let line_height_for_line = text[start..end]
+            .char_indices()
+            .map(|(relative, _)| {
+                fonts
+                    .font(document.resolved_style_at(start + relative))
+                    .map(|font| font.line_height())
+                    .unwrap_or(line_height)
+            })
+            .max()
+            .unwrap_or(line_height)
+            .max(line_height);
         lines.push(TextLineLayout {
             byte_start: start,
             byte_end: end,
@@ -278,10 +309,11 @@ pub fn layout_rich_text_lines(
             } else {
                 width
             },
+            height: line_height_for_line,
             ends_with_newline: newline,
         });
         start = end;
-        y = y.saturating_add(line_height as i32);
+        y = y.saturating_add(line_height_for_line as i32);
     }
     if lines.is_empty() || text.ends_with('\n') {
         lines.push(TextLineLayout {
@@ -289,6 +321,7 @@ pub fn layout_rich_text_lines(
             byte_end: text.len(),
             y_offset: y,
             pixel_width: 0,
+            height: line_height,
             ends_with_newline: false,
         });
     }
@@ -310,7 +343,7 @@ pub fn rich_width(
         let right = run.range.end.min(end);
         if left < right {
             width = width.saturating_add(measure_text_width(
-                fonts.font(run.style),
+                fonts.font(document.resolved_style_at(left)),
                 &document.text()[left..right],
             ));
         }
@@ -356,7 +389,7 @@ pub fn rich_byte_at_x_on_line(
         let at = line.byte_start + relative;
         let next = at + ch.len_utf8();
         let next_width = width.saturating_add(measure_text_width(
-            fonts.font(document.style_at(at)),
+            fonts.font(document.resolved_style_at(at)),
             &document.text()[at..next],
         ));
         if target_x as u32 <= next_width {
@@ -1039,10 +1072,11 @@ fn draw_rich_line(
             continue;
         }
         let segment = &document.text()[start..end];
-        let font = fonts.font(run.style);
+        let style = document.resolved_style_at(start);
+        let font = fonts.font(style);
         draw_text(canvas, font, cursor_x, y, segment, color);
         let width = measure_text_width(font, segment);
-        if run.style.underline {
+        if style.underline {
             let underline_y = y + line_height.saturating_sub(2) as i32;
             if let Some(rect) = Rect::new(cursor_x, underline_y, width.max(1), 1).intersect(clip) {
                 canvas.fill_rect(rect, color);
@@ -1050,6 +1084,18 @@ fn draw_rich_line(
         }
         cursor_x = cursor_x.saturating_add(width as i32);
     }
+}
+
+fn aligned_line_x(document: &RichDocument, line: &TextLineLayout, base_x: i32, width: u32) -> i32 {
+    let alignment = document.paragraph_style_at(line.byte_start).alignment;
+    let available = width as i64;
+    let line_width = line.pixel_width as i64;
+    let offset = match alignment {
+        ParagraphAlignment::Left => 0,
+        ParagraphAlignment::Center => (available - line_width) / 2,
+        ParagraphAlignment::Right => available - line_width,
+    };
+    base_x.saturating_add(offset.clamp(0, i64::from(i32::MAX)) as i32)
 }
 
 /// Approximate bounding box for immediate-mode items used during
@@ -1545,9 +1591,9 @@ impl<'a> DocumentCanvas<'a> {
                     if py >= content.bottom() {
                         continue;
                     }
-                    let max_w = (content.right() - px).max(0) as u32;
+                    let max_w = content.w;
                     if is_active {
-                        let line_h = style
+                        let base_line_h = style
                             .font
                             .map(|f| f.line_height())
                             .unwrap_or(crate::paint::font::GLYPH_H);
@@ -1555,7 +1601,8 @@ impl<'a> DocumentCanvas<'a> {
                         let lines = if let Some(editor) = editor {
                             editor.lines()
                         } else {
-                            computed_lines = layout_text_lines(style.font, text, max_w, line_h);
+                            computed_lines =
+                                layout_text_lines(style.font, text, max_w, base_line_h);
                             computed_lines.as_slice()
                         };
                         let selection =
@@ -1572,6 +1619,14 @@ impl<'a> DocumentCanvas<'a> {
                                     })
                                 });
                         for line in lines {
+                            let line_h = line.height.max(base_line_h);
+                            let line_x = if let (Some(editor), Some(_fonts)) =
+                                (editor, self.rich_text_fonts)
+                            {
+                                aligned_line_x(editor.document(), line, px, content.w)
+                            } else {
+                                px
+                            };
                             let ly = py + line.y_offset;
                             if ly + line_h as i32 <= content.y || ly >= content.bottom() {
                                 continue;
@@ -1600,7 +1655,7 @@ impl<'a> DocumentCanvas<'a> {
                                         caret_x_on_line(style.font, text, line, end)
                                     };
                                     if let Some(selection_rect) = Rect::new(
-                                        px + x1 as i32,
+                                        line_x + x1 as i32,
                                         ly,
                                         x2.saturating_sub(x1).max(1),
                                         line_h,
@@ -1626,7 +1681,8 @@ impl<'a> DocumentCanvas<'a> {
                                         caret_x_on_line(style.font, text, line, line_end)
                                     };
                                     if let Some(selection_rect) =
-                                        Rect::new(px + x1 as i32, ly, 3, line_h).intersect(content)
+                                        Rect::new(line_x + x1 as i32, ly, 3, line_h)
+                                            .intersect(content)
                                     {
                                         canvas.fill_rect(selection_rect, theme.chrome.selection);
                                     }
@@ -1642,7 +1698,7 @@ impl<'a> DocumentCanvas<'a> {
                                     fonts,
                                     editor.document(),
                                     line,
-                                    px,
+                                    line_x,
                                     ly,
                                     line_h,
                                     style.color,
@@ -1651,12 +1707,13 @@ impl<'a> DocumentCanvas<'a> {
                             } else {
                                 let visible = clip_text_to_width(style.font, line_text, max_w);
                                 if !visible.is_empty() {
-                                    draw_text(canvas, style.font, px, ly, visible, style.color);
+                                    draw_text(canvas, style.font, line_x, ly, visible, style.color);
                                 }
                             }
                         }
                         let caret_line = find_line_index(lines, caret_byte).unwrap_or(0usize);
                         if let Some(line) = lines.get(caret_line).filter(|_| self.caret_visible) {
+                            let line_h = line.height.max(base_line_h);
                             let caret_ox = if let (Some(fonts), Some(editor)) =
                                 (self.rich_text_fonts, editor)
                             {
@@ -1664,7 +1721,14 @@ impl<'a> DocumentCanvas<'a> {
                             } else {
                                 caret_x_on_line(style.font, text, line, caret_byte)
                             };
-                            let caret_px = px + caret_ox as i32;
+                            let caret_x = if let (Some(editor), Some(_fonts)) =
+                                (editor, self.rich_text_fonts)
+                            {
+                                aligned_line_x(editor.document(), line, px, content.w)
+                            } else {
+                                px
+                            };
+                            let caret_px = caret_x + caret_ox as i32;
                             let caret_py = py + line.y_offset;
                             if let Some(caret_rect) =
                                 Rect::new(caret_px, caret_py, 1, line_h).intersect(content)
@@ -2487,7 +2551,10 @@ mod tests {
         let mut document = RichDocument::from_text("aa bbcc dd");
         document.format(3..7, StyleProperty::Bold, true);
         let fonts = RichTextFonts {
+            small: Some(&NARROW_FONT),
             regular: Some(&NARROW_FONT),
+            large: Some(&WIDE_FONT),
+            title: Some(&WIDE_FONT),
             bold: Some(&WIDE_FONT),
             italic: Some(&NARROW_FONT),
             bold_italic: Some(&WIDE_FONT),
@@ -2510,7 +2577,10 @@ mod tests {
         document.format(2..20, StyleProperty::Bold, true);
         let before = document.runs().to_vec();
         let fonts = RichTextFonts {
+            small: Some(&NARROW_FONT),
             regular: Some(&NARROW_FONT),
+            large: Some(&WIDE_FONT),
+            title: Some(&WIDE_FONT),
             bold: Some(&WIDE_FONT),
             italic: Some(&NARROW_FONT),
             bold_italic: Some(&WIDE_FONT),

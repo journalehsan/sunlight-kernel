@@ -5,6 +5,7 @@
 //! changes `text`.
 
 use alloc::vec::Vec;
+use core::ops::Range;
 
 use crate::font::VecText;
 
@@ -13,7 +14,10 @@ use super::document_canvas::{
     line_end_byte, line_home_byte, rich_byte_at_x_on_line, rich_caret_x_on_line, RichTextFonts,
     TextLineLayout,
 };
-use super::rich_document::{RichDocument, StyleProperty, TextStyle};
+use super::rich_document::{
+    FontSize, ParagraphAlignment, ParagraphKind, ParagraphStyle, RichDocument, StyleProperty,
+    TextStyle, DEFAULT_FONT_SIZE,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FormattingState {
@@ -70,6 +74,7 @@ impl DocumentEditor {
     /// the canvas/editor layer format-neutral while allowing Writer to replace
     /// its document only after an import has succeeded.
     pub fn from_document(document: RichDocument) -> Self {
+        let typing_style = document.insertion_style(0);
         Self {
             document,
             caret_byte: 0,
@@ -81,7 +86,7 @@ impl DocumentEditor {
             line_height: 1,
             lines: Vec::new(),
             layout_dirty: true,
-            typing_style: TextStyle::default(),
+            typing_style,
         }
     }
 
@@ -214,7 +219,10 @@ impl DocumentEditor {
     }
 
     pub fn content_height(&self) -> u32 {
-        (self.lines.len() as u32).saturating_mul(self.line_height())
+        self.lines
+            .last()
+            .map(|line| (line.y_offset.max(0) as u32).saturating_add(line.height))
+            .unwrap_or(0)
     }
 
     pub fn max_scroll_y(&self) -> u32 {
@@ -238,8 +246,7 @@ impl DocumentEditor {
             return 0;
         }
         let document_y = y.max(0).saturating_add(self.scroll_y as i32);
-        let line_index = (document_y / self.line_height() as i32).max(0) as usize;
-        let line = &self.lines[line_index.min(self.lines.len() - 1)];
+        let line = &self.lines[self.line_index_at_y(document_y)];
         byte_at_x_on_line(font, self.text(), line, x)
     }
 
@@ -248,9 +255,18 @@ impl DocumentEditor {
             return 0;
         }
         let document_y = y.max(0).saturating_add(self.scroll_y as i32);
-        let line_index = (document_y / self.line_height() as i32).max(0) as usize;
-        let line = &self.lines[line_index.min(self.lines.len() - 1)];
-        rich_byte_at_x_on_line(fonts, &self.document, line, x)
+        let line = &self.lines[self.line_index_at_y(document_y)];
+        let offset = match self.document.paragraph_style_at(line.byte_start).alignment {
+            super::rich_document::ParagraphAlignment::Left => 0,
+            super::rich_document::ParagraphAlignment::Center => {
+                (self.wrap_width as i32 - line.pixel_width as i32) / 2
+            }
+            super::rich_document::ParagraphAlignment::Right => {
+                self.wrap_width as i32 - line.pixel_width as i32
+            }
+        }
+        .max(0);
+        rich_byte_at_x_on_line(fonts, &self.document, line, x.saturating_sub(offset))
     }
 
     pub fn pointer_select(
@@ -315,7 +331,23 @@ impl DocumentEditor {
     }
 
     pub fn insert_newline(&mut self) -> bool {
-        self.insert_str("\n")
+        let paragraph = self.document.paragraph_index_at(self.caret_byte);
+        let at_end = self
+            .document
+            .paragraph_range(paragraph)
+            .is_some_and(|range| self.caret_byte >= range.end);
+        let was_heading = matches!(
+            self.document.paragraph_style(paragraph).kind,
+            ParagraphKind::Heading1 | ParagraphKind::Heading2 | ParagraphKind::Heading3
+        );
+        let changed = self.insert_str("\n");
+        if changed && at_end && was_heading {
+            let _ = self
+                .document
+                .set_paragraph_style(paragraph + 1, ParagraphStyle::default());
+            self.sync_typing_style();
+        }
+        changed
     }
 
     pub fn delete_selection(&mut self) -> bool {
@@ -425,9 +457,17 @@ impl DocumentEditor {
     }
 
     pub fn ensure_caret_visible(&mut self) {
-        let line = self.caret_line_index() as u32;
-        let top = line.saturating_mul(self.line_height());
-        let bottom = top.saturating_add(self.line_height());
+        let index = self.caret_line_index();
+        let (top, bottom) = self
+            .lines
+            .get(index)
+            .map(|line| {
+                (
+                    line.y_offset.max(0) as u32,
+                    (line.y_offset.max(0) as u32).saturating_add(line.height),
+                )
+            })
+            .unwrap_or((0, self.line_height()));
         if top < self.scroll_y {
             self.scroll_y = top;
         } else if self.viewport_h > 0 && bottom > self.scroll_y.saturating_add(self.viewport_h) {
@@ -508,6 +548,16 @@ impl DocumentEditor {
         find_line_index(&self.lines, self.caret_byte).unwrap_or(0)
     }
 
+    fn line_index_at_y(&self, y: i32) -> usize {
+        let y = y.max(0);
+        self.lines
+            .iter()
+            .enumerate()
+            .find(|(_, line)| y < line.y_offset.saturating_add(line.height as i32))
+            .map(|(index, _)| index)
+            .unwrap_or(self.lines.len().saturating_sub(1))
+    }
+
     fn after_mutation(&mut self) {
         self.selection_anchor_byte = None;
         self.preferred_caret_x = None;
@@ -528,6 +578,101 @@ impl DocumentEditor {
         } else {
             FormattingState::Off
         }
+    }
+
+    pub fn font_size_state(&self) -> Option<FontSize> {
+        if let Some((start, end)) = self.selection_range() {
+            return self.document.range_uniform_font_size(start..end);
+        }
+        Some(self.typing_style.font_size)
+    }
+
+    pub fn paragraph_style_state(&self) -> Option<ParagraphStyle> {
+        let range = self.touched_paragraphs()?;
+        let first = self.document.paragraph_style(range.start);
+        self.document.paragraph_styles()[range]
+            .iter()
+            .all(|style| *style == first)
+            .then_some(first)
+    }
+
+    pub fn paragraph_alignment_state(&self) -> Option<ParagraphAlignment> {
+        let range = self.touched_paragraphs()?;
+        let first = self.document.paragraph_style(range.start).alignment;
+        self.document.paragraph_styles()[range]
+            .iter()
+            .all(|style| style.alignment == first)
+            .then_some(first)
+    }
+
+    pub fn paragraph_kind_state(&self) -> Option<ParagraphKind> {
+        let range = self.touched_paragraphs()?;
+        let first = self.document.paragraph_style(range.start).kind;
+        self.document.paragraph_styles()[range]
+            .iter()
+            .all(|style| style.kind == first)
+            .then_some(first)
+    }
+
+    pub fn touched_paragraphs(&self) -> Option<Range<usize>> {
+        let (start, end) = self
+            .selection_range()
+            .unwrap_or((self.caret_byte, self.caret_byte));
+        let first = self.document.paragraph_index_at(start);
+        let last = self
+            .document
+            .paragraph_index_at(end.saturating_sub(1).max(start));
+        Some(first..last.saturating_add(1))
+    }
+
+    pub fn set_font_size(&mut self, size: FontSize) -> bool {
+        let size = size.clamp(
+            super::rich_document::MIN_FONT_SIZE,
+            super::rich_document::MAX_FONT_SIZE,
+        );
+        if let Some((start, end)) = self.selection_range() {
+            let changed = self.document.set_font_size(start..end, size);
+            self.typing_style = self.typing_style.with_font_size(size);
+            if changed {
+                self.layout_dirty = true;
+            }
+            return changed;
+        }
+        let changed = self.typing_style.font_size != size;
+        self.typing_style = self.typing_style.with_font_size(size);
+        changed
+    }
+
+    pub fn set_alignment(&mut self, alignment: ParagraphAlignment) -> bool {
+        let Some(range) = self.touched_paragraphs() else {
+            return false;
+        };
+        let mut changed = false;
+        for index in range {
+            let mut style = self.document.paragraph_style(index);
+            style.alignment = alignment;
+            changed |= self.document.set_paragraph_style(index, style);
+        }
+        if changed {
+            self.layout_dirty = true;
+        }
+        changed
+    }
+
+    pub fn set_paragraph_kind(&mut self, kind: ParagraphKind) -> bool {
+        let Some(range) = self.touched_paragraphs() else {
+            return false;
+        };
+        let mut changed = false;
+        for index in range {
+            let mut style = self.document.paragraph_style(index);
+            style.kind = kind;
+            changed |= self.document.set_paragraph_style(index, style);
+        }
+        if changed {
+            self.layout_dirty = true;
+        }
+        changed
     }
 
     /// Toggle a property predictably: a mixed selection becomes fully styled,
@@ -551,6 +696,9 @@ impl DocumentEditor {
     fn sync_typing_style(&mut self) {
         if self.selection_range().is_none() {
             self.typing_style = self.document.insertion_style(self.caret_byte);
+            if self.typing_style.font_size == 0 {
+                self.typing_style.font_size = DEFAULT_FONT_SIZE;
+            }
         }
     }
 
@@ -599,7 +747,10 @@ fn next_boundary(text: &str, byte: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::{DocumentEditor, FormattingState};
-    use crate::widgets::rich_document::{StyleProperty, TextStyle};
+    use crate::widgets::rich_document::DEFAULT_FONT_SIZE;
+    use crate::widgets::rich_document::{
+        ParagraphAlignment, ParagraphKind, ParagraphStyle, StyleProperty, TextStyle,
+    };
 
     fn editor(text: &str, width: u32, height: u32) -> DocumentEditor {
         let mut editor = DocumentEditor::from_text(text);
@@ -782,7 +933,8 @@ mod tests {
             TextStyle {
                 bold: true,
                 italic: false,
-                underline: false
+                underline: false,
+                font_size: DEFAULT_FONT_SIZE
             }
         );
         value.toggle_format(StyleProperty::Italic);
@@ -793,7 +945,8 @@ mod tests {
             TextStyle {
                 bold: true,
                 italic: true,
-                underline: true
+                underline: true,
+                font_size: DEFAULT_FONT_SIZE
             }
         );
         value.toggle_format(StyleProperty::Bold);
@@ -803,7 +956,8 @@ mod tests {
             TextStyle {
                 bold: false,
                 italic: true,
-                underline: true
+                underline: true,
+                font_size: DEFAULT_FONT_SIZE
             }
         );
     }
@@ -885,5 +1039,72 @@ mod tests {
             .iter()
             .all(|run| value.text().is_char_boundary(run.range.start)
                 && value.text().is_char_boundary(run.range.end)));
+    }
+
+    #[test]
+    fn font_size_selection_and_typing_state_are_distinct() {
+        let mut value = editor("small large", 600, 70);
+        value.set_caret(0, false);
+        value.set_caret(5, true);
+        assert!(value.set_font_size(24));
+        assert_eq!(value.font_size_state(), Some(24));
+        value.set_caret(5, false);
+        assert_eq!(value.typing_style().font_size, 24);
+        assert!(value.insert_str("!"));
+        assert_eq!(value.document().style_at(5).font_size, 24);
+        value.select_all();
+        assert_eq!(value.font_size_state(), None);
+        assert!(value.set_font_size(18));
+        assert_eq!(value.document().runs().len(), 1);
+        assert_eq!(value.document().runs()[0].style.font_size, 18);
+    }
+
+    #[test]
+    fn heading_enter_resets_at_end_and_preserves_in_middle() {
+        let mut value = editor("Heading", 600, 70);
+        assert!(value.set_paragraph_kind(ParagraphKind::Heading1));
+        value.set_caret(value.text().len(), false);
+        assert!(value.insert_newline());
+        assert_eq!(
+            value.document().paragraph_style(0).kind,
+            ParagraphKind::Heading1
+        );
+        assert_eq!(
+            value.document().paragraph_style(1).kind,
+            ParagraphKind::Normal
+        );
+
+        let mut middle = editor("Heading", 600, 70);
+        middle.set_paragraph_kind(ParagraphKind::Heading2);
+        middle.set_caret(3, false);
+        assert!(middle.insert_newline());
+        assert_eq!(
+            middle.document().paragraph_style(0).kind,
+            ParagraphKind::Heading2
+        );
+        assert_eq!(
+            middle.document().paragraph_style(1).kind,
+            ParagraphKind::Heading2
+        );
+    }
+
+    #[test]
+    fn alignment_applies_to_all_touched_paragraphs() {
+        let mut value = editor("one\ntwo\nthree", 600, 70);
+        value.set_caret(1, false);
+        value.set_caret(10, true);
+        assert!(value.set_alignment(ParagraphAlignment::Center));
+        assert!(value
+            .document()
+            .paragraph_styles()
+            .iter()
+            .all(|style| style.alignment == ParagraphAlignment::Center));
+        assert_eq!(
+            value.paragraph_style_state(),
+            Some(ParagraphStyle {
+                alignment: ParagraphAlignment::Center,
+                kind: ParagraphKind::Normal,
+            })
+        );
     }
 }

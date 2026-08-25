@@ -19,9 +19,9 @@ use sunlight_ui::image::TgaImage;
 use sunlight_ui::widgets::{
     AppMenuCommand, AppMenuSecondaryItem, DocumentCanvas, DocumentCanvasItem, DocumentCanvasMode,
     DocumentCanvasPresentation, DocumentEditor, DocumentRectStyle, DocumentStrokeStyle,
-    DocumentTextStyle, FormattingState, HeaderActionButton, HeaderChip, PremiumHeader, RibbonBar,
-    RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec, RichTextFonts, StatusBar, StyleProperty,
-    TwoPaneAppMenu,
+    DocumentTextStyle, FormattingState, HeaderActionButton, HeaderChip, ParagraphAlignment,
+    ParagraphKind, PremiumHeader, RibbonBar, RibbonButtonKind, RibbonButtonSpec, RibbonGroupSpec,
+    RichTextFonts, StatusBar, StyleProperty, TwoPaneAppMenu,
 };
 use sunlight_ui::{
     request_close, set_client_cursor, App, AxisSizing, Color, Column, CursorShape, Event,
@@ -65,6 +65,13 @@ const KEY_X: u8 = 0x2D;
 const KEY_B: u8 = 0x30;
 const KEY_I: u8 = 0x17;
 const KEY_U: u8 = 0x16;
+const KEY_E: u8 = 0x12;
+const KEY_L: u8 = 0x26;
+const KEY_R: u8 = 0x13;
+const KEY_0: u8 = 0x0B;
+const KEY_1: u8 = 0x02;
+const KEY_2: u8 = 0x03;
+const KEY_3: u8 = 0x04;
 
 const EDITABLE_ITEM_INDEX: usize = 0;
 const WHEEL_SCROLL_LINES: i32 = 3;
@@ -169,6 +176,11 @@ enum WriterAction {
     Exit,
     FontFamily,
     FontSize,
+    SetFontSize(u16),
+    ParagraphNormal,
+    Heading1,
+    Heading2,
+    Heading3,
     Bold,
     Italic,
     Underline,
@@ -812,7 +824,7 @@ const FONT_GROUP_DEFS: [RibbonCommandDef; 5] = [
     },
 ];
 
-const PARAGRAPH_GROUP_DEFS: [RibbonCommandDef; 6] = [
+const PARAGRAPH_GROUP_DEFS: [RibbonCommandDef; 10] = [
     RibbonCommandDef {
         label: "",
         icon: Some(IconId::AlignLeft),
@@ -860,6 +872,38 @@ const PARAGRAPH_GROUP_DEFS: [RibbonCommandDef; 6] = [
         kind: RibbonButtonKind::IconButton,
         row: 1,
         action: WriterAction::Numbering,
+    },
+    RibbonCommandDef {
+        label: "Normal",
+        icon: None,
+        width: 68,
+        kind: RibbonButtonKind::Dropdown,
+        row: 0,
+        action: WriterAction::ParagraphNormal,
+    },
+    RibbonCommandDef {
+        label: "H1",
+        icon: None,
+        width: 42,
+        kind: RibbonButtonKind::WideButton,
+        row: 1,
+        action: WriterAction::Heading1,
+    },
+    RibbonCommandDef {
+        label: "H2",
+        icon: None,
+        width: 42,
+        kind: RibbonButtonKind::WideButton,
+        row: 1,
+        action: WriterAction::Heading2,
+    },
+    RibbonCommandDef {
+        label: "H3",
+        icon: None,
+        width: 42,
+        kind: RibbonButtonKind::WideButton,
+        row: 1,
+        action: WriterAction::Heading3,
     },
 ];
 
@@ -1295,6 +1339,34 @@ impl WriterApp {
                 kind: PARAGRAPH_GROUP_DEFS[5].kind,
                 row: PARAGRAPH_GROUP_DEFS[5].row,
             },
+            RibbonButtonSpec {
+                label: PARAGRAPH_GROUP_DEFS[6].label,
+                icon: None,
+                width: PARAGRAPH_GROUP_DEFS[6].width,
+                kind: PARAGRAPH_GROUP_DEFS[6].kind,
+                row: PARAGRAPH_GROUP_DEFS[6].row,
+            },
+            RibbonButtonSpec {
+                label: PARAGRAPH_GROUP_DEFS[7].label,
+                icon: None,
+                width: PARAGRAPH_GROUP_DEFS[7].width,
+                kind: PARAGRAPH_GROUP_DEFS[7].kind,
+                row: PARAGRAPH_GROUP_DEFS[7].row,
+            },
+            RibbonButtonSpec {
+                label: PARAGRAPH_GROUP_DEFS[8].label,
+                icon: None,
+                width: PARAGRAPH_GROUP_DEFS[8].width,
+                kind: PARAGRAPH_GROUP_DEFS[8].kind,
+                row: PARAGRAPH_GROUP_DEFS[8].row,
+            },
+            RibbonButtonSpec {
+                label: PARAGRAPH_GROUP_DEFS[9].label,
+                icon: None,
+                width: PARAGRAPH_GROUP_DEFS[9].width,
+                kind: PARAGRAPH_GROUP_DEFS[9].kind,
+                row: PARAGRAPH_GROUP_DEFS[9].row,
+            },
         ];
         let insert = [
             RibbonButtonSpec {
@@ -1344,8 +1416,8 @@ impl WriterApp {
                 buttons: &insert,
             },
         ];
-        let mut active = [(0, 0); 3];
-        let mut mixed = [(0, 0); 3];
+        let mut active = [(0, 0); 6];
+        let mut mixed = [(0, 0); 6];
         let mut active_len = 0;
         let mut mixed_len = 0;
         for (button, property) in [
@@ -1364,6 +1436,35 @@ impl WriterApp {
                 }
                 FormattingState::Off => {}
             }
+        }
+        if let Some(alignment) = self.editor.paragraph_alignment_state() {
+            let button = match alignment {
+                ParagraphAlignment::Left => 0,
+                ParagraphAlignment::Center => 1,
+                ParagraphAlignment::Right => 2,
+            };
+            if active_len < active.len() {
+                active[active_len] = (2, button);
+                active_len += 1;
+            }
+        } else if mixed_len < mixed.len() {
+            mixed[mixed_len] = (2, 0);
+            mixed_len += 1;
+        }
+        if let Some(kind) = self.editor.paragraph_kind_state() {
+            let button = match kind {
+                ParagraphKind::Normal => 6,
+                ParagraphKind::Heading1 => 7,
+                ParagraphKind::Heading2 => 8,
+                ParagraphKind::Heading3 => 9,
+            };
+            if active_len < active.len() {
+                active[active_len] = (2, button);
+                active_len += 1;
+            }
+        } else if mixed_len < mixed.len() {
+            mixed[mixed_len] = (2, 6);
+            mixed_len += 1;
         }
         f(RibbonBar {
             rect: self.ribbon_rect(),
@@ -1463,15 +1564,22 @@ impl WriterApp {
             WriterAction::Export => self.set_status_message("Export is a placeholder command"),
             WriterAction::Exit => return self.try_close(),
             WriterAction::FontFamily => self.set_status_message("Font picker is visual only"),
-            WriterAction::FontSize => self.set_status_message("Font size picker is visual only"),
+            WriterAction::FontSize => return self.apply_font_size(18),
+            WriterAction::SetFontSize(size) => return self.apply_font_size(size),
+            WriterAction::ParagraphNormal => {
+                return self.apply_paragraph_kind(ParagraphKind::Normal)
+            }
+            WriterAction::Heading1 => return self.apply_paragraph_kind(ParagraphKind::Heading1),
+            WriterAction::Heading2 => return self.apply_paragraph_kind(ParagraphKind::Heading2),
+            WriterAction::Heading3 => return self.apply_paragraph_kind(ParagraphKind::Heading3),
             WriterAction::Bold => return self.apply_format(StyleProperty::Bold, "Bold"),
             WriterAction::Italic => return self.apply_format(StyleProperty::Italic, "Italic"),
             WriterAction::Underline => {
                 return self.apply_format(StyleProperty::Underline, "Underline")
             }
-            WriterAction::AlignLeft => self.set_status_message("Align Left placeholder"),
-            WriterAction::AlignCenter => self.set_status_message("Align Center placeholder"),
-            WriterAction::AlignRight => self.set_status_message("Align Right placeholder"),
+            WriterAction::AlignLeft => return self.apply_alignment(ParagraphAlignment::Left),
+            WriterAction::AlignCenter => return self.apply_alignment(ParagraphAlignment::Center),
+            WriterAction::AlignRight => return self.apply_alignment(ParagraphAlignment::Right),
             WriterAction::AlignJustify => self.set_status_message("Justify placeholder"),
             WriterAction::Bullets => self.set_status_message("Bullets placeholder"),
             WriterAction::Numbering => self.set_status_message("Numbering placeholder"),
@@ -1496,7 +1604,10 @@ impl WriterApp {
 
     fn rich_text_fonts() -> RichTextFonts<'static> {
         RichTextFonts {
+            small: Some(&FONT_UI_SMALL),
             regular: Some(&FONT_UI_MEDIUM),
+            large: Some(&FONT_UI_LARGE),
+            title: Some(&FONT_UI_TITLE),
             bold: Some(&FONT_UI_BOLD),
             italic: Some(&FONT_UI_ITALIC),
             bold_italic: Some(&FONT_UI_BOLD_ITALIC),
@@ -1513,6 +1624,42 @@ impl WriterApp {
             let mut message = String::from(label);
             message.push_str(" formatting updated");
             self.set_status_message(&message);
+        }
+        changed
+    }
+
+    fn apply_font_size(&mut self, size: u16) -> bool {
+        let changed = self.editor.set_font_size(size);
+        if changed {
+            self.session.mark_changed(self.editor.document());
+            self.sync_window_title();
+            let _ = self.configure_editor_layout();
+            self.editor_focused = true;
+            self.set_status_message("Font size updated");
+        }
+        changed
+    }
+
+    fn apply_alignment(&mut self, alignment: ParagraphAlignment) -> bool {
+        let changed = self.editor.set_alignment(alignment);
+        if changed {
+            self.session.mark_changed(self.editor.document());
+            self.sync_window_title();
+            let _ = self.configure_editor_layout();
+            self.editor_focused = true;
+            self.set_status_message("Paragraph alignment updated");
+        }
+        changed
+    }
+
+    fn apply_paragraph_kind(&mut self, kind: ParagraphKind) -> bool {
+        let changed = self.editor.set_paragraph_kind(kind);
+        if changed {
+            self.session.mark_changed(self.editor.document());
+            self.sync_window_title();
+            let _ = self.configure_editor_layout();
+            self.editor_focused = true;
+            self.set_status_message("Paragraph style updated");
         }
         changed
     }
@@ -1756,7 +1903,7 @@ impl WriterApp {
                     "Some formatting cannot be saved in plain text. Continue?"
                 }
                 DocumentFormat::Markdown => {
-                    "Underline formatting cannot be saved in Markdown. Continue?"
+                    "Underline, custom font size, or paragraph alignment cannot be saved in Markdown. Continue?"
                 }
                 DocumentFormat::Rtf => "",
             };
@@ -2071,6 +2218,13 @@ impl App for WriterApp {
                             KEY_B => self.dispatch_action(WriterAction::Bold),
                             KEY_I => self.dispatch_action(WriterAction::Italic),
                             KEY_U => self.dispatch_action(WriterAction::Underline),
+                            KEY_L => self.dispatch_action(WriterAction::AlignLeft),
+                            KEY_E => self.dispatch_action(WriterAction::AlignCenter),
+                            KEY_R => self.dispatch_action(WriterAction::AlignRight),
+                            KEY_0 => self.dispatch_action(WriterAction::ParagraphNormal),
+                            KEY_1 => self.dispatch_action(WriterAction::Heading1),
+                            KEY_2 => self.dispatch_action(WriterAction::Heading2),
+                            KEY_3 => self.dispatch_action(WriterAction::Heading3),
                             _ => false,
                         };
                     }

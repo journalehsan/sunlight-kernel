@@ -10,7 +10,10 @@ use alloc::{
 };
 use core::fmt;
 
-use sunlight_ui::widgets::{RichDocument, RichTextStyle, StyleProperty};
+use sunlight_ui::widgets::{
+    clamp_font_size, ParagraphAlignment, ParagraphKind, ParagraphStyle, RichDocument,
+    RichTextStyle, StyleProperty, DEFAULT_FONT_SIZE, MAX_FONT_SIZE, MIN_FONT_SIZE,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DocumentFormat {
@@ -42,16 +45,25 @@ impl DocumentFormat {
                 bold: true,
                 italic: true,
                 underline: false,
+                font_size: false,
+                alignment: false,
+                headings: true,
             },
             Self::PlainText => FormatCapabilities {
                 bold: false,
                 italic: false,
                 underline: false,
+                font_size: false,
+                alignment: false,
+                headings: false,
             },
             Self::Rtf => FormatCapabilities {
                 bold: true,
                 italic: true,
                 underline: true,
+                font_size: true,
+                alignment: true,
+                headings: false,
             },
         }
     }
@@ -62,6 +74,9 @@ pub struct FormatCapabilities {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
+    pub font_size: bool,
+    pub alignment: bool,
+    pub headings: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -171,6 +186,7 @@ fn marker_at(bytes: &[u8], index: usize) -> Option<(&'static [u8], RichTextStyle
                 bold: true,
                 italic: true,
                 underline: false,
+                font_size: DEFAULT_FONT_SIZE,
             },
         ))
     } else if bytes.get(index..index + 2) == Some(b"**") {
@@ -180,6 +196,7 @@ fn marker_at(bytes: &[u8], index: usize) -> Option<(&'static [u8], RichTextStyle
                 bold: true,
                 italic: false,
                 underline: false,
+                font_size: DEFAULT_FONT_SIZE,
             },
         ))
     } else if bytes.get(index) == Some(&b'*') {
@@ -189,6 +206,7 @@ fn marker_at(bytes: &[u8], index: usize) -> Option<(&'static [u8], RichTextStyle
                 bold: false,
                 italic: true,
                 underline: false,
+                font_size: DEFAULT_FONT_SIZE,
             },
         ))
     } else {
@@ -239,6 +257,7 @@ fn parse_inline(text: &str, inherited: RichTextStyle, chunks: &mut Vec<StyledChu
             bold: inherited.bold || marker_style.bold,
             italic: inherited.italic || marker_style.italic,
             underline: inherited.underline,
+            font_size: inherited.font_size,
         };
         parse_inline(&text[search_start..end], nested, chunks);
         index = end + marker_len;
@@ -249,16 +268,38 @@ fn parse_inline(text: &str, inherited: RichTextStyle, chunks: &mut Vec<StyledChu
 
 pub fn import_markdown(bytes: &[u8]) -> Result<RichDocument, PersistenceError> {
     let source = normalize_newlines(normalize_text(bytes)?);
-    let mut chunks = Vec::new();
-    parse_inline(&source, RichTextStyle::default(), &mut chunks);
     let mut text = String::new();
     let mut ranges = Vec::new();
-    for chunk in chunks {
-        let start = text.len();
-        text.push_str(&chunk.text);
-        ranges.push((start..text.len(), chunk.style));
+    let mut paragraph_styles = Vec::new();
+    for (line_index, line) in source.split('\n').enumerate() {
+        if line_index != 0 {
+            text.push('\n');
+        }
+        let (kind, content) = if let Some(rest) = line.strip_prefix("### ") {
+            (ParagraphKind::Heading3, rest)
+        } else if let Some(rest) = line.strip_prefix("## ") {
+            (ParagraphKind::Heading2, rest)
+        } else if let Some(rest) = line.strip_prefix("# ") {
+            (ParagraphKind::Heading1, rest)
+        } else {
+            (ParagraphKind::Normal, line)
+        };
+        paragraph_styles.push(ParagraphStyle {
+            alignment: ParagraphAlignment::Left,
+            kind,
+        });
+        let mut chunks = Vec::new();
+        parse_inline(content, RichTextStyle::default(), &mut chunks);
+        for chunk in chunks {
+            let start = text.len();
+            text.push_str(&chunk.text);
+            ranges.push((start..text.len(), chunk.style));
+        }
     }
     let mut document = RichDocument::from_text(&text);
+    for (index, style) in paragraph_styles.into_iter().enumerate() {
+        let _ = document.set_paragraph_style(index, style);
+    }
     for (range, style) in ranges {
         for (property, enabled) in [
             (StyleProperty::Bold, style.bold),
@@ -268,6 +309,9 @@ pub fn import_markdown(bytes: &[u8]) -> Result<RichDocument, PersistenceError> {
             if enabled {
                 let _ = document.format(range.clone(), property, true);
             }
+        }
+        if style.font_size != DEFAULT_FONT_SIZE {
+            let _ = document.set_font_size(range.clone(), style.font_size);
         }
     }
     Ok(document)
@@ -296,31 +340,35 @@ pub fn export_plain_text(document: &RichDocument) -> String {
 
 pub fn export_markdown(document: &RichDocument) -> String {
     let mut out = String::new();
-    for run in document.runs() {
-        let marker = match (run.style.bold, run.style.italic) {
-            (true, true) => "***",
-            (true, false) => "**",
-            (false, true) => "*",
-            (false, false) => "",
-        };
-        let mut segment_start = run.range.start;
-        while segment_start < run.range.end {
-            let segment_end = document.text()[segment_start..run.range.end]
-                .find('\n')
-                .map(|offset| segment_start + offset)
-                .unwrap_or(run.range.end);
-            if !marker.is_empty() && segment_end > segment_start {
+    for index in 0..document.paragraph_count() {
+        if index > 0 {
+            out.push('\n');
+        }
+        let range = document.paragraph_range(index).unwrap_or(0..0);
+        match document.paragraph_style(index).kind {
+            ParagraphKind::Heading1 => out.push_str("# "),
+            ParagraphKind::Heading2 => out.push_str("## "),
+            ParagraphKind::Heading3 => out.push_str("### "),
+            ParagraphKind::Normal => {}
+        }
+        for run in document.runs() {
+            let start = run.range.start.max(range.start);
+            let end = run.range.end.min(range.end);
+            if start >= end {
+                continue;
+            }
+            let marker = match (run.style.bold, run.style.italic) {
+                (true, true) => "***",
+                (true, false) => "**",
+                (false, true) => "*",
+                (false, false) => "",
+            };
+            if !marker.is_empty() {
                 out.push_str(marker);
             }
-            escape_markdown(&document.text()[segment_start..segment_end], &mut out);
-            if !marker.is_empty() && segment_end > segment_start {
+            escape_markdown(&document.text()[start..end], &mut out);
+            if !marker.is_empty() {
                 out.push_str(marker);
-            }
-            if segment_end < run.range.end {
-                out.push('\n');
-                segment_start = segment_end + 1;
-            } else {
-                segment_start = run.range.end;
             }
         }
     }
@@ -332,6 +380,7 @@ const MAX_RTF_NESTING: usize = 64;
 #[derive(Clone, Copy)]
 struct RtfState {
     style: RichTextStyle,
+    paragraph_style: ParagraphStyle,
     destination_skip: bool,
     ignorable: bool,
     uc_skip: usize,
@@ -341,6 +390,7 @@ impl Default for RtfState {
     fn default() -> Self {
         Self {
             style: RichTextStyle::default(),
+            paragraph_style: ParagraphStyle::default(),
             destination_skip: false,
             ignorable: false,
             uc_skip: 1,
@@ -421,6 +471,8 @@ pub fn import_rtf(bytes: &[u8]) -> Result<RichDocument, PersistenceError> {
     let mut index = 0usize;
     let mut skip_unicode = 0usize;
     let mut pending_high: Option<u16> = None;
+    let mut paragraph_styles = Vec::from([ParagraphStyle::default()]);
+    let mut paragraph_index = 0usize;
 
     while index < input.len() {
         if skip_unicode != 0 {
@@ -518,6 +570,45 @@ pub fn import_rtf(bytes: &[u8]) -> Result<RichDocument, PersistenceError> {
                     }
                     "ulnone" => state.style.underline = false,
                     "plain" => state.style = RichTextStyle::default(),
+                    "pard" => {
+                        state.paragraph_style = ParagraphStyle::default();
+                        if let Some(style) = paragraph_styles.get_mut(paragraph_index) {
+                            *style = state.paragraph_style;
+                        }
+                    }
+                    "ql" => {
+                        state.paragraph_style.alignment = ParagraphAlignment::Left;
+                        if let Some(style) = paragraph_styles.get_mut(paragraph_index) {
+                            *style = state.paragraph_style;
+                        }
+                    }
+                    "qc" => {
+                        state.paragraph_style.alignment = ParagraphAlignment::Center;
+                        if let Some(style) = paragraph_styles.get_mut(paragraph_index) {
+                            *style = state.paragraph_style;
+                        }
+                    }
+                    "qr" => {
+                        state.paragraph_style.alignment = ParagraphAlignment::Right;
+                        if let Some(style) = paragraph_styles.get_mut(paragraph_index) {
+                            *style = state.paragraph_style;
+                        }
+                    }
+                    "qj" => {
+                        state.paragraph_style.alignment = ParagraphAlignment::Left;
+                        if let Some(style) = paragraph_styles.get_mut(paragraph_index) {
+                            *style = state.paragraph_style;
+                        }
+                    }
+                    "fs" => {
+                        let value = number.unwrap_or(DEFAULT_FONT_SIZE as i32 * 2);
+                        let points = if value <= 0 {
+                            DEFAULT_FONT_SIZE
+                        } else {
+                            ((value as u32) / 2).min(MAX_FONT_SIZE as u32) as u16
+                        };
+                        state.style.font_size = clamp_font_size(points.max(MIN_FONT_SIZE));
+                    }
                     "uc" => state.uc_skip = number.unwrap_or(1).clamp(0, 16) as usize,
                     "u" => {
                         let value = number.ok_or(PersistenceError::InvalidRtf)?;
@@ -552,6 +643,8 @@ pub fn import_rtf(bytes: &[u8]) -> Result<RichDocument, PersistenceError> {
                         rtf_flush_pending(&mut chunks, &mut pending_high, state.style);
                         if !state.destination_skip {
                             rtf_push_char(&mut chunks, '\n', state.style);
+                            paragraph_index = paragraph_index.saturating_add(1);
+                            paragraph_styles.push(state.paragraph_style);
                         }
                     }
                     "line" => {
@@ -596,6 +689,9 @@ pub fn import_rtf(bytes: &[u8]) -> Result<RichDocument, PersistenceError> {
         ranges.push((start..text.len(), chunk.style));
     }
     let mut document = RichDocument::from_text(&text);
+    for (index, style) in paragraph_styles.into_iter().enumerate() {
+        let _ = document.set_paragraph_style(index, style);
+    }
     for (range, style) in ranges {
         for (property, enabled) in [
             (StyleProperty::Bold, style.bold),
@@ -605,6 +701,9 @@ pub fn import_rtf(bytes: &[u8]) -> Result<RichDocument, PersistenceError> {
             if enabled {
                 let _ = document.format(range.clone(), property, true);
             }
+        }
+        if style.font_size != DEFAULT_FONT_SIZE {
+            let _ = document.set_font_size(range.clone(), style.font_size);
         }
     }
     Ok(document)
@@ -639,19 +738,60 @@ fn export_rtf_text(text: &str, out: &mut String) {
 pub fn export_rtf(document: &RichDocument) -> String {
     let mut out = String::from("{\\rtf1\\ansi\\deff0\n");
     let mut current = RichTextStyle::default();
-    for run in document.runs() {
-        let style = run.style;
-        if style.bold != current.bold {
-            out.push_str(if style.bold { "\\b " } else { "\\b0 " });
+    for paragraph_index in 0..document.paragraph_count() {
+        let range = document.paragraph_range(paragraph_index).unwrap_or(0..0);
+        out.push_str("\\pard ");
+        match document.paragraph_style(paragraph_index).alignment {
+            ParagraphAlignment::Left => out.push_str("\\ql "),
+            ParagraphAlignment::Center => out.push_str("\\qc "),
+            ParagraphAlignment::Right => out.push_str("\\qr "),
         }
-        if style.italic != current.italic {
-            out.push_str(if style.italic { "\\i " } else { "\\i0 " });
+        let paragraph_defaults = document
+            .paragraph_style(paragraph_index)
+            .resolved(RichTextStyle::default());
+        if paragraph_defaults.bold != current.bold {
+            out.push_str(if paragraph_defaults.bold {
+                "\\b "
+            } else {
+                "\\b0 "
+            });
         }
-        if style.underline != current.underline {
-            out.push_str(if style.underline { "\\ul " } else { "\\ul0 " });
+        if paragraph_defaults.font_size != current.font_size {
+            out.push_str("\\fs");
+            out.push_str(&(paragraph_defaults.font_size as u32 * 2).to_string());
+            out.push(' ');
         }
-        export_rtf_text(&document.text()[run.range.clone()], &mut out);
-        current = style;
+        current = paragraph_defaults;
+        for run in document.runs() {
+            let start = run.range.start.max(range.start);
+            let end = run.range.end.min(range.end);
+            if start >= end {
+                continue;
+            }
+            let style = document
+                .paragraph_style(paragraph_index)
+                .resolved(run.style);
+            if style.bold != current.bold {
+                out.push_str(if style.bold { "\\b " } else { "\\b0 " });
+            }
+            if style.italic != current.italic {
+                out.push_str(if style.italic { "\\i " } else { "\\i0 " });
+            }
+            if style.underline != current.underline {
+                out.push_str(if style.underline { "\\ul " } else { "\\ul0 " });
+            }
+            if style.font_size != current.font_size {
+                let half_points = (style.font_size as u32).saturating_mul(2);
+                out.push_str("\\fs");
+                out.push_str(&half_points.to_string());
+                out.push(' ');
+            }
+            export_rtf_text(&document.text()[start..end], &mut out);
+            current = style;
+        }
+        if paragraph_index + 1 < document.paragraph_count() {
+            out.push_str("\\par\n");
+        }
     }
     out.push('}');
     out
@@ -667,11 +807,18 @@ pub fn export(format: DocumentFormat, document: &RichDocument) -> String {
 
 pub fn loses_formatting(format: DocumentFormat, document: &RichDocument) -> bool {
     let capabilities = format.capabilities();
-    document.runs().iter().any(|run| {
+    let inline_loss = document.runs().iter().any(|run| {
         (run.style.bold && !capabilities.bold)
             || (run.style.italic && !capabilities.italic)
             || (run.style.underline && !capabilities.underline)
-    })
+            || (run.style.font_size != DEFAULT_FONT_SIZE && !capabilities.font_size)
+    });
+    let paragraph_loss = (0..document.paragraph_count()).any(|index| {
+        let style = document.paragraph_style(index);
+        (style.alignment != ParagraphAlignment::Left && !capabilities.alignment)
+            || (style.kind != ParagraphKind::Normal && !capabilities.headings)
+    });
+    inline_loss || paragraph_loss
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -892,6 +1039,82 @@ mod tests {
     fn rtf_unicode_skips_ascii_and_hex_fallbacks() {
         let ascii = import_rtf(br"{\rtf1\uc1\u1587? \u1588\'3f}").unwrap();
         assert_eq!(ascii.text(), "س ش");
+    }
+
+    #[test]
+    fn markdown_headings_round_trip_semantically_with_inline_styles() {
+        let document = import_markdown(b"# One\n## **Two**\n### *Three*").unwrap();
+        assert_eq!(document.paragraph_style(0).kind, ParagraphKind::Heading1);
+        assert_eq!(document.paragraph_style(1).kind, ParagraphKind::Heading2);
+        assert_eq!(document.paragraph_style(2).kind, ParagraphKind::Heading3);
+        assert!(style_at(&document, "Two").bold);
+        assert!(style_at(&document, "Three").italic);
+        let encoded = export_markdown(&document);
+        assert_eq!(encoded, "# One\n## **Two**\n### *Three*");
+    }
+
+    #[test]
+    fn rtf_round_trips_font_sizes_and_alignment() {
+        let mut document = RichDocument::from_text("small\nlarge\nright");
+        document.set_font_size(0..5, 12);
+        document.set_font_size(6..11, 24);
+        let _ = document.set_paragraph_style(
+            1,
+            ParagraphStyle {
+                alignment: ParagraphAlignment::Center,
+                kind: ParagraphKind::Heading2,
+            },
+        );
+        let _ = document.set_paragraph_style(
+            2,
+            ParagraphStyle {
+                alignment: ParagraphAlignment::Right,
+                kind: ParagraphKind::Normal,
+            },
+        );
+        let encoded = export_rtf(&document);
+        assert!(encoded.contains("\\fs48"));
+        assert!(encoded.contains("\\qc"));
+        assert!(encoded.contains("\\qr"));
+        let decoded = import_rtf(encoded.as_bytes()).unwrap();
+        assert_eq!(decoded.text(), document.text());
+        assert_eq!(decoded.style_at(1).font_size, 12);
+        assert_eq!(decoded.style_at(7).font_size, 24);
+        assert_eq!(
+            decoded.paragraph_style(1).alignment,
+            ParagraphAlignment::Center
+        );
+        assert_eq!(
+            decoded.paragraph_style(2).alignment,
+            ParagraphAlignment::Right
+        );
+    }
+
+    #[test]
+    fn losses_include_new_phase_features_only_when_used() {
+        let document = RichDocument::from_text("plain");
+        assert!(!loses_formatting(DocumentFormat::Markdown, &document));
+        let mut styled = RichDocument::from_text("plain");
+        styled.set_font_size(0..5, 18);
+        assert!(loses_formatting(DocumentFormat::Markdown, &styled));
+        let mut heading = RichDocument::from_text("plain");
+        let _ = heading.set_paragraph_style(
+            0,
+            ParagraphStyle {
+                alignment: ParagraphAlignment::Left,
+                kind: ParagraphKind::Heading1,
+            },
+        );
+        assert!(!loses_formatting(DocumentFormat::Markdown, &heading));
+        let _ = heading.set_paragraph_style(
+            0,
+            ParagraphStyle {
+                alignment: ParagraphAlignment::Center,
+                kind: ParagraphKind::Heading1,
+            },
+        );
+        assert!(loses_formatting(DocumentFormat::Markdown, &heading));
+        assert!(loses_formatting(DocumentFormat::PlainText, &heading));
     }
 
     #[test]
