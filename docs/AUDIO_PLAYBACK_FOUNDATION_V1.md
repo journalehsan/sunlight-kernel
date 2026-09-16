@@ -61,6 +61,28 @@ This matches the existing USB-mouse userspace driver grant
   no userspace IRQ wait yet; the service loop uses an 8 ms timeout.
 * If the client exits or stops submitting, the driver plays silence.
 
+### Playback continuity
+
+* Start/restart resets the HDA stream descriptor before programming it. This
+  brings the hardware cursor back into agreement with software period zero
+  after a pause, stop, or seek.
+* All four silence periods are prepared and marked occupied before setting
+  RUN. The first producer write waits for a completed period, so it cannot
+  overwrite the descriptor currently being played at startup.
+* Each service pass observes DMA consumption before assigning new period
+  ownership and refills up to four free periods before waiting for IPC. This
+  lets the service catch up after a delayed poll.
+* Test-tone phase advances only when a period is accepted. A full ring must
+  not discard part of the waveform or count as a silence underrun.
+* If observed DMA progress exhausts the prepared periods, recovery reserves
+  the currently playing descriptor and resumes writes after it. This counts
+  an underrun without overwriting samples already being read by hardware.
+
+Host regressions exercise rejected tone writes, startup DMA ownership,
+starvation recovery, and byte-exact PCM refills across delayed polls and ring
+wraps. Decoder tests also cover the bundled WAV and Ogg fixtures. These checks
+do not establish audible quality on a physical device or the host audio backend.
+
 ## audiod protocol (`audio.v1`)
 
 Registered name: `audiod`.
@@ -157,11 +179,15 @@ audioctl test
 The tester must hear a 440 Hz tone. This document does not claim that
 host speakers were heard during implementation.
 
+For Melody Mina, play both bundled 48 kHz WAV and Ogg samples through EOF,
+then repeat with pause/resume, Stop/Play, and seeks. Listen for repeated blocks,
+gaps, or clicks at period boundaries and check that the position reaches the
+track duration. This exercises the media producer as well as the tone path.
+
 ## Test commands
 
 ```bash
-cargo test -p sunlight-audio --lib
-cargo test -p sunlight-audiod --lib
+cargo test -p sunlight-audio -p sunlight-audiod -p sunlight-media --lib --target x86_64-unknown-linux-gnu
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build -p sunlight-control-panel --release
 cargo test -p sunlight-vortex-shell --lib
 cargo test -p sunlight-libc --lib
@@ -172,7 +198,10 @@ cargo test -p sunlight-libc --lib
 
 * One output stream. No mixer, capture, resampling, or hot-plug policy.
 * Software gain only. Codec amps are unmuted, not used as the master.
-* IRQ-driven refill is not implemented; the service polls DPIB.
+* IRQ-driven refill is not implemented; the service polls LPIB.
+* Polling must keep up with the roughly 85 ms DMA ring. Whole-ring laps cannot
+  be reconstructed from the modulo hardware cursor alone; long scheduling
+  stalls can still cause playback discontinuities.
 * `SUBMIT_PCM` is SHM-backed and limited to one page in v1.
 * Persistence requires a writable `/root/.config/sunlight`.
 * No-device boots stay usable; audiod reports `Unavailable`.

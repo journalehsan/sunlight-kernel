@@ -185,6 +185,7 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package memoryctl --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzo --release

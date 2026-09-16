@@ -8,7 +8,7 @@
 
 use sunlight_audio::{
     effective_system_gain,
-    hda::{HdaPlayback, ENGINE_PERIOD_BYTES, PERIOD_FRAME_COUNT},
+    hda::{HdaPlayback, ENGINE_PERIOD_BYTES, ENGINE_PERIOD_COUNT, PERIOD_FRAME_COUNT},
     pcm::{validate_pcm, AudioBuffer, AudioFormat, MAX_PCM_BYTES, NATIVE_RATE_HZ},
     render_persisted_buf, AudioDeviceState, AudioError, MasterVolume, OutputDeviceKind,
     PersistedAudio, SystemSoundSettings,
@@ -209,18 +209,38 @@ impl ServiceState {
     }
 
     fn pump(&mut self) {
+        // Catch up all free descriptors before sleeping or handling another
+        // IPC request. Bound the burst so producers still get serviced.
+        for _ in 0..ENGINE_PERIOD_COUNT {
+            self.pump_period();
+        }
+    }
+
+    fn pump_period(&mut self) {
         if self.tone_frames_left == 0 && self.active_system_sound.is_none() {
             self.activate_next_system_sound();
         }
         let Some(dev) = self.device.as_mut() else {
             return;
         };
+        // Retire old ownership before tagging freshly written descriptors.
+        let progress = dev.poll_dma_progress_report();
+        self.stream_progress.observe_dma(
+            progress.first_completed_period as usize,
+            progress.completed_periods as usize,
+            progress.current_period as usize,
+            progress.current_period_frames,
+        );
+        if !dev.can_submit_period() {
+            return;
+        }
         let vol = self.volume.effective();
         let mut tmp = [0u8; ENGINE_PERIOD_BYTES];
         if self.tone_frames_left > 0 {
             match dev.fill_sine(&mut self.tone_phase, self.tone_hz, vol) {
                 Ok(true) => {
-                    self.stream_progress.clear_period(dev.last_submitted_period());
+                    self.stream_progress
+                        .clear_period(dev.last_submitted_period());
                     self.tone_frames_left = self
                         .tone_frames_left
                         .saturating_sub(PERIOD_FRAME_COUNT as u32);
@@ -242,7 +262,8 @@ impl ServiceState {
             let gain = effective_system_gain(vol, self.system_settings.volume);
             match dev.fill_pcm(&active.pcm[active.offset..end], gain) {
                 Ok(true) => {
-                    self.stream_progress.clear_period(dev.last_submitted_period());
+                    self.stream_progress
+                        .clear_period(dev.last_submitted_period());
                     if !active.submitted {
                         serial_println!(
                             "[AUDIOD] system-sound pcm submitted id={} gain={}",
@@ -272,16 +293,6 @@ impl ServiceState {
             // Do not remove producer data until a hardware period is free.
             // `fill_pcm` can legitimately return false while the ring is full;
             // popping first used to discard that entire PCM period.
-            if !dev.can_submit_period() {
-                let progress = dev.poll_dma_progress_report();
-                self.stream_progress.observe_dma(
-                    progress.first_completed_period as usize,
-                    progress.completed_periods as usize,
-                    progress.current_period as usize,
-                    progress.current_period_frames,
-                );
-                return;
-            }
             let n = self.queue.peek_into(&mut tmp);
             if n == 0 {
                 return;
@@ -300,17 +311,11 @@ impl ServiceState {
         } else {
             let filled = dev.fill_silence_ready().unwrap_or(0);
             for offset in 0..filled as usize {
-                let period = (dev.last_submitted_period() + 4 - offset) % 4;
+                let period = (dev.last_submitted_period() + ENGINE_PERIOD_COUNT - offset)
+                    % ENGINE_PERIOD_COUNT;
                 self.stream_progress.clear_period(period);
             }
         }
-        let progress = dev.poll_dma_progress_report();
-        self.stream_progress.observe_dma(
-            progress.first_completed_period as usize,
-            progress.completed_periods as usize,
-            progress.current_period as usize,
-            progress.current_period_frames,
-        );
         let played = progress.total_frames;
         let log_interval = if self.last_dma_log_frames == 0 {
             DMA_FIRST_LOG_FRAMES
@@ -423,8 +428,8 @@ pub extern "C" fn _start() -> ! {
         state.pump();
         match ipc_recv_timeout(ep, ENGINE_WAIT_MS) {
             Some(msg) => {
-                let status_diag = msg.label == AudiodMsg::GET_STREAM_STATUS
-                    && state.status_diag_count < 16;
+                let status_diag =
+                    msg.label == AudiodMsg::GET_STREAM_STATUS && state.status_diag_count < 16;
                 let pcm_diag = msg.label == AudiodMsg::SUBMIT_PCM && state.pcm_diag_count < 4;
                 if status_diag {
                     serial_println!(
@@ -487,7 +492,11 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
         AudiodMsg::GET_STATUS | AudiodMsg::GET_VOLUME => pack_audio_status(state.status()),
         AudiodMsg::GET_SYSTEM_SOUNDS => pack_audio_status(state.status()),
         AudiodMsg::GET_STREAM_STATUS => {
-            let underruns = state.device.as_ref().map(|dev| dev.underruns()).unwrap_or(0);
+            let underruns = state
+                .device
+                .as_ref()
+                .map(|dev| dev.underruns())
+                .unwrap_or(0);
             pack_audio_stream_status(state.stream_progress.status(msg.badge, underruns))
         }
         AudiodMsg::GET_DEVICE => IpcMsg::with_label(AudiodMsg::REPLY)
@@ -588,7 +597,11 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
                     progress.current_period_frames,
                 );
             }
-            let underruns = state.device.as_ref().map(|dev| dev.underruns()).unwrap_or(0);
+            let underruns = state
+                .device
+                .as_ref()
+                .map(|dev| dev.underruns())
+                .unwrap_or(0);
             let stopped = state.stream_progress.status(msg.badge, underruns);
             state.tone_frames_left = 0;
             state.queue.clear();
@@ -642,12 +655,19 @@ fn submit_pcm(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
     match queued {
         Ok(()) => {
             state.queue_owner = Some(msg.badge);
-            if !state.stream_progress.begin_submission(msg.badge, len as u64 / 4) {
+            if !state
+                .stream_progress
+                .begin_submission(msg.badge, len as u64 / 4)
+            {
                 state.queue.clear();
                 state.queue_owner = None;
                 return err(AudiodMsg::ERR_OVERFLOW);
             }
-            let underruns = state.device.as_ref().map(|dev| dev.underruns()).unwrap_or(0);
+            let underruns = state
+                .device
+                .as_ref()
+                .map(|dev| dev.underruns())
+                .unwrap_or(0);
             pack_audio_stream_status(state.stream_progress.status(msg.badge, underruns))
         }
         Err(_) => err(AudiodMsg::ERR_OVERFLOW),

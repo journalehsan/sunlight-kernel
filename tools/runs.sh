@@ -339,6 +339,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package memoryctl --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features sunlightos --no-default-features --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
     # Session lock policy (init-launched) + recovery CLI. Must use SERVICE_RUSTFLAGS

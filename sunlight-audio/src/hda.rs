@@ -232,8 +232,28 @@ impl HdaPlayback {
         if self.running {
             return Ok(());
         }
+        // RUN alone resumes the old hardware cursor. Reset the descriptor so
+        // pause/seek/restart really starts at the software ring's period zero.
+        unsafe {
+            self.w8(self.stream_base, 0);
+            if !self.wait_mask_u32(self.stream_base, 0x2, 0, RESET_TIMEOUT_MS) {
+                return Err(HdaError::ResetTimeout);
+            }
+            self.w8(self.stream_base, 0x1);
+            if !self.wait_mask_u32(self.stream_base, 0x1, 0x1, RESET_TIMEOUT_MS) {
+                return Err(HdaError::ResetTimeout);
+            }
+            self.w8(self.stream_base, 0);
+            if !self.wait_mask_u32(self.stream_base, 0x1, 0, RESET_TIMEOUT_MS) {
+                return Err(HdaError::ResetTimeout);
+            }
+        }
         self.write_period = 0;
-        self.filled_periods = 0;
+        self.last_lpib = 0;
+        self.last_hw_period = 0;
+        // All four silence periods belong to DMA before RUN. In particular,
+        // period zero must not be rewritten while the controller reads it.
+        self.filled_periods = PERIODS;
         unsafe {
             core::ptr::write_bytes(self.dma.add(PAGE), 0, RING_BYTES);
         }
@@ -250,8 +270,6 @@ impl HdaPlayback {
             let stream = (STREAM_ID as u32) << 20;
             self.w32(self.stream_base, ctl | stream | 0x2);
         }
-        self.last_lpib = self.dma_position_bytes();
-        self.last_hw_period = (self.last_lpib as usize / PERIOD_BYTES) % PERIODS;
         self.running = true;
         Ok(())
     }
@@ -329,9 +347,6 @@ impl HdaPlayback {
             }
             filled = filled.saturating_add(1);
         }
-        if filled == 0 {
-            self.underruns = self.underruns.saturating_add(1);
-        }
         Ok(filled)
     }
 
@@ -344,8 +359,11 @@ impl HdaPlayback {
         let mut tmp = [0u8; PERIOD_BYTES];
         let (next, _) =
             generate_sine_s16le_stereo(&mut tmp, *phase, freq_hz, NATIVE_RATE_HZ, volume);
-        *phase = next;
-        self.submit_period(&tmp)
+        let submitted = self.submit_period(&tmp)?;
+        if submitted {
+            *phase = next;
+        }
+        Ok(submitted)
     }
 
     pub fn fill_pcm(&mut self, pcm: &[u8], volume: u8) -> Result<bool, HdaError> {
@@ -390,9 +408,15 @@ impl HdaPlayback {
         let first_completed_period = self.last_hw_period;
         let periods_advanced = ring_advance_periods(self.last_hw_period, current_period, PERIODS);
         if periods_advanced != 0 {
-            self.filled_periods = self
-                .filled_periods
-                .saturating_sub(periods_advanced.min(PERIODS));
+            if periods_advanced >= self.filled_periods {
+                // DMA reached an unrefilled descriptor. It already owns the
+                // current period; resume writing AFTER it, never into it.
+                self.underruns = self.underruns.saturating_add(1);
+                self.write_period = (current_period + 1) % PERIODS;
+                self.filled_periods = 1;
+            } else {
+                self.filled_periods -= periods_advanced;
+            }
             self.last_hw_period = current_period;
         }
         self.last_lpib = current;
@@ -749,10 +773,138 @@ const fn amp_zero_db_gain(amp_caps: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        amp_zero_db_gain, first_codec_in_status, ring_advance_bytes, ring_advance_periods,
-        RING_BYTES,
-    };
+    use super::*;
+
+    // Ordinary aligned memory stands in for MMIO and coherent DMA. Cursor
+    // movement is explicit so tests can verify exactly which samples change.
+    fn with_device(test: impl FnOnce(&mut HdaPlayback)) {
+        let mut mmio = [0u32; 128];
+        let mut dma = std::vec![0u64; DMA_PAGES * PAGE / 8];
+        let mut dev = HdaPlayback {
+            mmio: mmio.as_mut_ptr().cast(),
+            dma: dma.as_mut_ptr().cast(),
+            dma_phys: PAGE as u64,
+            bar_phys: 0,
+            bar_size: 512,
+            vendor_id: 0,
+            device_id: 0,
+            codec: 0,
+            dac: 0,
+            pin: 0,
+            stream_base: 0x80,
+            write_period: 0,
+            filled_periods: 0,
+            last_hw_period: 0,
+            frames_played: 0,
+            last_lpib: 0,
+            underruns: 0,
+            running: false,
+        };
+        test(&mut dev);
+    }
+
+    #[test]
+    fn startup_silence_is_owned_by_dma_before_run() {
+        with_device(|dev| {
+            dev.start().unwrap();
+            assert!(!dev.can_submit_period());
+            assert!(!dev.submit_period(&[0x55; PERIOD_BYTES]).unwrap());
+            assert_eq!(dev.fill_silence_ready().unwrap(), 0);
+            assert_eq!(dev.underruns(), 0, "a full ring is not an underrun");
+            let pcm = unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), RING_BYTES) };
+            assert!(pcm.iter().all(|byte| *byte == 0));
+        });
+    }
+
+    #[test]
+    fn rejected_tone_writes_preserve_waveform_phase() {
+        with_device(|dev| {
+            dev.start().unwrap();
+            dev.fill_silence_ready().unwrap();
+            let mut phase = 0x1234_5678;
+            for _ in 0..10 {
+                assert!(!dev.fill_sine(&mut phase, 440, 65).unwrap());
+                assert_eq!(phase, 0x1234_5678);
+            }
+            unsafe { dev.w32(dev.stream_base + 0x04, PERIOD_BYTES as u32) };
+            dev.poll_dma_progress_report();
+            let mut expected = [0u8; PERIOD_BYTES];
+            let (next, _) =
+                generate_sine_s16le_stereo(&mut expected, phase, 440, NATIVE_RATE_HZ, 65);
+            assert!(dev.fill_sine(&mut phase, 440, 65).unwrap());
+            assert_eq!(phase, next);
+            let actual = unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), PERIOD_BYTES) };
+            assert_eq!(actual, expected);
+        });
+    }
+
+    #[test]
+    fn pcm_refill_after_delayed_poll_preserves_active_period_and_order() {
+        with_device(|dev| {
+            dev.start().unwrap();
+            dev.fill_silence_ready().unwrap();
+            // Each poll frees two descriptors, including across ring wrap.
+            for step in 1..=20 {
+                let current = (step * 2) % PERIODS;
+                unsafe {
+                    dev.w32(
+                        dev.stream_base + 0x04,
+                        (current * PERIOD_BYTES + 128) as u32,
+                    )
+                };
+                let progress = dev.poll_dma_progress_report();
+                assert_eq!(progress.completed_periods, 2);
+                let active = unsafe {
+                    core::slice::from_raw_parts(
+                        dev.dma.add(PAGE + current * PERIOD_BYTES),
+                        PERIOD_BYTES,
+                    )
+                }
+                .to_vec();
+                for offset in 0..2 {
+                    let samples = [((step * 2 + offset) % 256) as u8; PERIOD_BYTES];
+                    assert!(dev.submit_period(&samples).unwrap());
+                    let period = (progress.first_completed_period as usize + offset) % PERIODS;
+                    assert_eq!(dev.last_submitted_period(), period);
+                    let actual = unsafe {
+                        core::slice::from_raw_parts(
+                            dev.dma.add(PAGE + period * PERIOD_BYTES),
+                            PERIOD_BYTES,
+                        )
+                    };
+                    assert_eq!(actual, samples);
+                }
+                assert!(!dev.submit_period(&[0xff; PERIOD_BYTES]).unwrap());
+                let after = unsafe {
+                    core::slice::from_raw_parts(
+                        dev.dma.add(PAGE + current * PERIOD_BYTES),
+                        PERIOD_BYTES,
+                    )
+                };
+                assert_eq!(after, active);
+            }
+        });
+    }
+
+    #[test]
+    fn starvation_recovery_does_not_write_into_the_playing_descriptor() {
+        with_device(|dev| {
+            dev.start().unwrap();
+            // Poll for a complete lap without providing any replacement data.
+            for period in [1, 2, 3, 0] {
+                unsafe { dev.w32(dev.stream_base + 0x04, (period * PERIOD_BYTES) as u32) };
+                dev.poll_dma_progress_report();
+            }
+            assert_eq!(dev.underruns(), 1);
+            for period in 1..PERIODS {
+                assert!(dev.submit_period(&[0x55; PERIOD_BYTES]).unwrap());
+                assert_eq!(dev.last_submitted_period(), period);
+            }
+            assert!(!dev.can_submit_period());
+            let active = unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), PERIOD_BYTES) };
+            assert!(active.iter().all(|byte| *byte == 0));
+        });
+    }
 
     #[test]
     fn codec_presence_selects_lowest_codec_address() {

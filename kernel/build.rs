@@ -350,6 +350,12 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
+            package: "memoryctl",
+            output: "memoryctl",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-fetch",
             output: "fetch",
             rustflags: service_rustflags,
