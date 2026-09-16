@@ -2540,7 +2540,13 @@ fn bytes_eq(mut ptr: *const u8, expected: &[u8]) -> bool {
     unsafe { *ptr == 0 }
 }
 
+// Opt-in diagnostics: serial writes must not be part of ordinary input handling.
+const INPUT_DEBUG: bool = false;
+
 fn log_term_key(ch: char, ctrl: bool, alt: bool) {
+    if !INPUT_DEBUG {
+        return;
+    }
     // Rate-limited enough for diagnosis without flooding serial on hold-repeat.
     static mut COUNT: u32 = 0;
     let n = unsafe {
@@ -2578,6 +2584,9 @@ fn log_term_key(ch: char, ctrl: bool, alt: bool) {
 }
 
 fn log_term_footer_len(input_len: usize) {
+    if !INPUT_DEBUG {
+        return;
+    }
     let mut buf = [0u8; 48];
     let mut len = 0usize;
     len += copy_ascii(b"[TERM] footer_len=", &mut buf[len..]);

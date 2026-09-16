@@ -133,28 +133,60 @@ pub fn log_phase(
     pid: Option<u64>,
     timestamp_ms: u64,
 ) {
-    debug_log("launch[");
-    debug_log_u64(trace.launch_id);
-    debug_log("] source=");
-    debug_log(trace.source.as_str());
-    if !subject.is_empty() {
-        debug_log(" ");
-        debug_log(subject);
+    let mut bytes = [0u8; 256];
+    let len = format_phase(&mut bytes, trace, subject, phase, pid, timestamp_ms);
+    // One bounded syscall keeps a record together and avoids dozens of
+    // scheduler transitions and serial-lock acquisitions per launch phase.
+    debug_log(core::str::from_utf8(&bytes[..len]).unwrap_or("launch: invalid trace"));
+}
+
+fn format_phase(
+    bytes: &mut [u8; 256],
+    trace: LaunchTrace,
+    subject: &str,
+    phase: &str,
+    pid: Option<u64>,
+    timestamp_ms: u64,
+) -> usize {
+    use core::fmt::Write;
+    struct Line<'a> {
+        bytes: &'a mut [u8],
+        len: usize,
     }
-    debug_log(" phase=");
-    debug_log(phase);
-    debug_log(" timestamp_ms=");
-    debug_log_u64(timestamp_ms);
+    impl core::fmt::Write for Line<'_> {
+        fn write_str(&mut self, value: &str) -> core::fmt::Result {
+            copy_bytes(value.as_bytes(), self.bytes, &mut self.len).ok_or(core::fmt::Error)
+        }
+    }
+    fn bounded(value: &str) -> &str {
+        let mut end = value.len().min(48);
+        while !value.is_char_boundary(end) {
+            end -= 1;
+        }
+        &value[..end]
+    }
+    let mut line = Line { bytes, len: 0 };
+    let _ = write!(
+        line,
+        "launch[{}] source={} {} phase={} timestamp_ms={}",
+        trace.launch_id,
+        trace.source.as_str(),
+        bounded(subject),
+        bounded(phase),
+        timestamp_ms
+    );
     if trace.requested_at_ms != 0 {
-        debug_log(" delta=");
-        debug_log_u64(timestamp_ms.saturating_sub(trace.requested_at_ms));
-        debug_log("ms");
+        let _ = write!(
+            line,
+            " delta={}ms",
+            timestamp_ms.saturating_sub(trace.requested_at_ms)
+        );
     }
     if let Some(pid) = pid {
-        debug_log(" pid=");
-        debug_log_u64(pid);
+        let _ = write!(line, " pid={}", pid);
     }
-    debug_log("\n");
+    let _ = line.write_str("\n");
+    line.len
 }
 
 pub fn log_phase_now(trace: LaunchTrace, subject: &str, phase: &str, pid: Option<u64>) {
@@ -214,18 +246,33 @@ fn append_u64(mut value: u64, dst: &mut [u8], len: &mut usize) -> Option<()> {
     copy_bytes(&buf[i..], dst, len)
 }
 
-fn debug_log_u64(mut value: u64) {
-    let mut buf = [0u8; 20];
-    let mut i = buf.len();
-    loop {
-        i -= 1;
-        buf[i] = b'0' + (value % 10) as u8;
-        value /= 10;
-        if value == 0 {
-            break;
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phase_log_is_one_complete_bounded_record() {
+        let mut bytes = [0; 256];
+        let len = format_phase(
+            &mut bytes,
+            LaunchTrace::new(7, LaunchSource::Dock, 100),
+            "Terminal",
+            "window_registered",
+            Some(42),
+            150,
+        );
+        assert_eq!(core::str::from_utf8(&bytes[..len]).unwrap(),
+            "launch[7] source=dock Terminal phase=window_registered timestamp_ms=150 delta=50ms pid=42\n");
+        let long = "🌞".repeat(80);
+        let len = format_phase(
+            &mut bytes,
+            LaunchTrace::new(u64::MAX, LaunchSource::Shortcut, 1),
+            &long,
+            &long,
+            Some(u64::MAX),
+            u64::MAX,
+        );
+        assert!(len <= 256);
+        assert!(core::str::from_utf8(&bytes[..len]).unwrap().ends_with('\n'));
     }
-    // SAFETY: decimal formatting produces valid ASCII.
-    let s = unsafe { core::str::from_utf8_unchecked(&buf[i..]) };
-    debug_log(s);
 }

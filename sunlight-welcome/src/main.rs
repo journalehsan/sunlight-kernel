@@ -11,7 +11,7 @@ extern crate alloc;
 use core::fmt::Write;
 use sun_font::{draw_text, FontRole, TextStyle, Typography, VecFont};
 use sunlight_ipc::{
-    debug_log, ipc_call, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_yield,
+    debug_log, ipc_call_timeout, monotonic_millis, nameserver_lookup, process_yield,
     query_display_metrics, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit,
     SessionMsg, SESSION_ENDPOINT,
 };
@@ -51,9 +51,9 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 }
 
 fn log_pass(marker: &str) {
-    debug_log("[WELCOME-WIZARD] ");
-    debug_log(marker);
-    debug_log(" PASS\n");
+    let mut line = heapless::String::<96>::new();
+    let _ = writeln!(line, "[WELCOME-WIZARD] {} PASS", marker);
+    debug_log(line.as_str());
 }
 
 /// Word-wrap body text for dark-theme screens (Label is single-line).
@@ -138,24 +138,14 @@ fn notify_brain_welcome_completed() {
 }
 
 fn report_session_completion() -> bool {
-    let Some(ep) = nameserver_lookup(SESSION_ENDPOINT) else {
+    let Some(ep) = sunlight_ipc::nameserver_lookup_timeout(SESSION_ENDPOINT, 500) else {
         debug_log("[WELCOME-WIZARD] session endpoint missing\n");
         return false;
     };
-    let mut msg = IpcMsg::with_label(SessionMsg::SESSION_STARTUP_COMPLETE);
-    let bytes = BUNDLE_ID.as_bytes();
-    msg.words[0] = bytes.len().min(32) as u64;
-    for w in 2..6 {
-        msg.words[w] = 0;
-    }
-    for (i, b) in bytes.iter().take(32).enumerate() {
-        let word = 2 + i / 8;
-        let shift = (i % 8) * 8;
-        msg.words[word] |= (*b as u64) << shift;
-    }
-    msg.word_count = 6;
-    let reply = ipc_call(ep, msg);
-    reply.label == SessionMsg::REPLY
+    let Some(msg) = sunlight_ipc::session_completion::request(BUNDLE_ID) else {
+        return false;
+    };
+    matches!(ipc_call_timeout(ep, msg, 1_000), Ok(reply) if reply.label == SessionMsg::REPLY)
 }
 
 fn open_action(card: &ActionCard) -> Result<(), &'static str> {

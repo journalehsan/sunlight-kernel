@@ -840,7 +840,8 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         let mut changed = false;
         for entry in profile.entries.iter_mut() {
             if entry.app_id.as_str() != config_ops::WELCOME_APP_ID
-                && (entry.app_id.as_str() == config_ops::WELCOME_APP_ID_LEGACY
+                && (entry.app_id.as_str() == "org.sunlight.welc"
+                    || entry.app_id.as_str() == config_ops::WELCOME_APP_ID_LEGACY
                     || entry.app_id.as_str().starts_with("org.sunlight.wiseowl"))
             {
                 entry.app_id.clear();
@@ -850,7 +851,8 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         }
         for st in profile.policy_state.iter_mut() {
             if st.app_id.as_str() != config_ops::WELCOME_APP_ID
-                && (st.app_id.as_str() == config_ops::WELCOME_APP_ID_LEGACY
+                && (st.app_id.as_str() == "org.sunlight.welc"
+                    || st.app_id.as_str() == config_ops::WELCOME_APP_ID_LEGACY
                     || st.app_id.as_str().starts_with("org.sunlight.wiseowl"))
             {
                 st.app_id.clear();
@@ -1426,11 +1428,27 @@ fn handle_startup_complete(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     let Some(caller) = session_query_process(msg.badge) else {
         return error(SessionMsg::ERR_UNAUTHORIZED);
     };
-    let app_len = (msg.words[0] & 0xff) as usize;
-    let app_id = unpack_app_id(&msg, app_len);
-    if app_id.is_empty() {
-        return error(SessionMsg::ERR_INVALID_ARGUMENT);
-    }
+    let mut bytes = [0; sunlight_ipc::session_completion::MAX_APP_ID_BYTES];
+    let app_id = if msg.label == SessionMsg::SESSION_STARTUP_COMPLETE_V2 {
+        let Some(len) = sunlight_ipc::session_completion::decode(&msg, &mut bytes) else {
+            return error(SessionMsg::ERR_INVALID_ARGUMENT);
+        };
+        // decode validates UTF-8 before returning the length.
+        core::str::from_utf8(&bytes[..len]).unwrap()
+    } else {
+        let len = (msg.words[0] & 0xff) as usize;
+        // Reject old clients that advertised bytes the register ABI never sent.
+        if len == 0 || len > 16 || msg.word_count < 4 {
+            return error(SessionMsg::ERR_INVALID_ARGUMENT);
+        }
+        for (i, byte) in bytes[..len].iter_mut().enumerate() {
+            *byte = (msg.words[2 + i / 8] >> ((i % 8) * 8)) as u8;
+        }
+        let Ok(id) = core::str::from_utf8(&bytes[..len]) else {
+            return error(SessionMsg::ERR_INVALID_ARGUMENT);
+        };
+        id
+    };
     let Some(active) = state.active.as_mut() else {
         return error(SessionMsg::ERR_INVALID_STATE);
     };
@@ -1447,7 +1465,7 @@ fn handle_startup_complete(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         frozen,
         &mut active.profile,
         caller.pid,
-        app_id.as_str(),
+        app_id,
         active.system_release_generation,
         now,
         &mut state.config_stats,
@@ -1546,7 +1564,9 @@ pub extern "C" fn _start() -> ! {
             }
             SessionMsg::SESSION_PROFILE_PREVIEW_PLAN => handle_preview_plan(&mut state, message),
             SessionMsg::SESSION_PROFILE_STATUS => handle_profile_status(&mut state, message),
-            SessionMsg::SESSION_STARTUP_COMPLETE => handle_startup_complete(&mut state, message),
+            SessionMsg::SESSION_STARTUP_COMPLETE | SessionMsg::SESSION_STARTUP_COMPLETE_V2 => {
+                handle_startup_complete(&mut state, message)
+            }
             SessionMsg::ATTEST_DELEGATED_WISEOWL_CONSOLE => {
                 attest_delegated_wiseowl_console(&mut state, message)
             }

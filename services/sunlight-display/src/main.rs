@@ -2017,6 +2017,12 @@ fn register_launch_trace(
         existing.trace = trace;
         return;
     }
+    // Traces can arrive before a window exists (including failed launches).
+    // Keep diagnostic history bounded even when no close event follows.
+    const MAX_LAUNCH_TRACES: usize = 128;
+    if state.launch_traces.len() >= MAX_LAUNCH_TRACES {
+        state.launch_traces.remove(0);
+    }
     state.launch_traces.push(LaunchTraceRecord { pid, trace });
 }
 
@@ -2178,7 +2184,9 @@ fn ingest_notification(state: &mut CompositorState, msg: &IpcMsg) -> Notificatio
         };
     };
 
-    let wire = unsafe { &*(ptr as *const NotificationWire) };
+    // Copy before unmapping: validation below has several early returns.
+    let wire = unsafe { core::ptr::read_unaligned(ptr as *const NotificationWire) };
+    let _ = sunlight_ipc::shm_free(msg.caps[0]);
     if wire.version != NOTIFICATION_WIRE_VERSION
         || wire.flags & !NOTIFICATION_FLAG_SILENT != 0
         || wire.identity == 0
@@ -2555,6 +2563,15 @@ fn close_window(state: &mut CompositorState, win_id: u64, requester_pid: Option<
     mark_dirty_rect(state, old_damage);
     if state.client_pointer_capture == Some(win_id) {
         state.client_pointer_capture = None;
+    }
+    if !state
+        .windows
+        .iter()
+        .any(|other| other.owner_pid == win.owner_pid)
+    {
+        state
+            .launch_traces
+            .retain(|entry| entry.pid != win.owner_pid);
     }
     let was_desktop = win.config.window_type == WindowType::Desktop;
     let was_lock_presenter = state.lock_presenter_window == win_id;
@@ -5312,6 +5329,9 @@ fn debug_i32(val: i32) {
 
 #[cfg(not(test))]
 fn log_pointer_button_event(event: PointerButtonEvent, event_queued: bool, event_dequeued: bool) {
+    if !INPUT_DEBUG {
+        return;
+    }
     debug_log("[DISPLAY-MOUSE-BUTTON] raw_buttons_before=");
     debug_dec(event.raw_buttons_before as u32);
     debug_log(" raw_buttons_after=");
@@ -5529,6 +5549,22 @@ mod tests {
             has_presented_frame: true,
             first_present_logged: false,
         }
+    }
+
+    #[test]
+    fn launch_trace_history_stays_bounded_across_failed_launches() {
+        let mut state = test_state(Vec::new());
+        for pid in 1..=10_000 {
+            register_launch_trace(&mut state, pid, LaunchSource::Dock, pid, pid);
+        }
+        assert_eq!(state.launch_traces.len(), 128);
+        assert_eq!(state.launch_traces.first().unwrap().pid, 9_873);
+        register_launch_trace(&mut state, 42, LaunchSource::Runner, 10_000, 99);
+        assert_eq!(state.launch_traces.len(), 128);
+        assert_eq!(
+            state.launch_traces.last().unwrap().trace,
+            LaunchTrace::new(42, LaunchSource::Runner, 99)
+        );
     }
 
     #[test]
@@ -7312,39 +7348,50 @@ pub extern "C" fn _start() -> ! {
     debug_log("[DISPLAY] metrics published generation=1\n");
 
     let mut next_win_id: u64 = 1;
+    let mut next_maintenance_ms: u64 = 0;
     loop {
         let lifecycle_now = monotonic_millis();
         if !wiseowl_lifecycle_connected && lifecycle_now >= next_wiseowl_lifecycle_retry {
             wiseowl_lifecycle_connected = connect_wiseowl_lifecycle();
             next_wiseowl_lifecycle_retry = lifecycle_now.saturating_add(2_000);
         }
-        let msg = if let Some(timeout_ms) = compositor_poll_timeout_ms(&state) {
-            if let Some(msg) = ipc_recv_timeout(my_ep, timeout_ms) {
-                msg
-            } else {
-                let now = monotonic_millis();
-                let mut needs_redraw = false;
-                if prune_notifications(&mut state, now) {
-                    mark_dirty_full(&mut state);
-                    needs_redraw = true;
-                }
-                if update_overlay_window_visibility(&mut state, now, false, false) {
-                    needs_redraw = true;
-                }
+        // Incoming traffic must not starve expiry and process cleanup.
+        // Keep the full owner scan off the per-message path.
+        if lifecycle_now >= next_maintenance_ms {
+            let now = monotonic_millis();
+            let mut needs_redraw = false;
+            if prune_notifications(&mut state, now) {
+                mark_dirty_full(&mut state);
+                needs_redraw = true;
+            }
+            if update_overlay_window_visibility(&mut state, now, false, false) {
+                needs_redraw = true;
+            }
+            if now >= state.app_tracker.next_zombie_sweep_ms {
                 if sweep_app_zombies(&mut state, now) {
                     needs_redraw = true;
                 }
                 if prune_dead_owner_windows(&mut state) {
                     needs_redraw = true;
                 }
-                if let Some(reason) = mode_transaction_revert_reason(&state, now) {
-                    if revert_mode_transaction(&mut state, reason) {
-                        needs_redraw = true;
-                    }
+            }
+            if let Some(reason) = mode_transaction_revert_reason(&state, now) {
+                if revert_mode_transaction(&mut state, reason) {
+                    needs_redraw = true;
                 }
-                if needs_redraw {
-                    redraw_scene(&mut state);
-                }
+            }
+            if needs_redraw {
+                redraw_scene(&mut state);
+            }
+            next_maintenance_ms = monotonic_millis().saturating_add(100);
+        }
+        let msg = if let Some(timeout_ms) = compositor_poll_timeout_ms(&state) {
+            if let Some(msg) = ipc_recv_timeout(my_ep, timeout_ms) {
+                msg
+            } else {
+                // A notification/overlay deadline can precede the periodic
+                // maintenance check. Process it now rather than polling at 0ms.
+                next_maintenance_ms = 0;
                 continue;
             }
         } else {
@@ -7655,6 +7702,7 @@ pub extern "C" fn _start() -> ! {
                     if msg.cap_count > 0 && msg.caps[0] != CapabilityToken::INVALID {
                         if let Ok(p) = sunlight_ipc::shm_map(msg.caps[0]) {
                             win.config.apply_shm_title(p as *const u8, 4096);
+                            let _ = sunlight_ipc::shm_free(msg.caps[0]);
                         }
                     }
                     state
@@ -8192,7 +8240,7 @@ pub extern "C" fn _start() -> ! {
                     if let Some(packed) = key_event {
                         let (keycode, pressed, _, ctrl, _, _, ascii) =
                             sunlight_ipc::unpack_key_event(packed);
-                        if pressed {
+                        if INPUT_DEBUG && pressed {
                             debug_log(&alloc::format!(
                                 "[DISPLAY] deliver key win={} keycode={:#x} ctrl={} ascii={}\n",
                                 win_id,
@@ -8407,7 +8455,7 @@ pub extern "C" fn _start() -> ! {
                             _queued_super,
                             queued_ascii,
                         ) = sunlight_ipc::unpack_key_event(packed);
-                        if queued_pressed {
+                        if INPUT_DEBUG && queued_pressed {
                             debug_log(&alloc::format!(
                                 "[DISPLAY] queued key win={} keycode={:#x} ctrl={} ascii={}\n",
                                 win.id,

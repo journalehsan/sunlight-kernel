@@ -1054,12 +1054,8 @@ pub fn complete_app_reported(
         }
     }
     if opt.process_id != Some(caller_pid) {
-        // Still record completion if this pid is the live welcome process.
-        if !is_welcome_app_id(opt.app_id.as_str()) || !process_is_alive(caller_pid) {
-            debug_log("[SESSION-CONFIG] complete: pid mismatch\n");
-            return Err(SessionMsg::ERR_UNAUTHORIZED);
-        }
-        opt.process_id = Some(caller_pid);
+        debug_log("[SESSION-CONFIG] complete: pid mismatch\n");
+        return Err(SessionMsg::ERR_UNAUTHORIZED);
     }
     if opt.app_completion_recorded {
         return Ok(());

@@ -3,6 +3,7 @@
 pub mod display_metrics;
 pub mod display_modes;
 pub mod swap_policy;
+pub mod session_completion;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
     BORDER_W as DISPLAY_BORDER_W, MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE,
@@ -2075,9 +2076,12 @@ pub mod SessionMsg {
     pub const SESSION_PROFILE_PREVIEW_PLAN: u64 = 0xC11A;
     pub const SESSION_PROFILE_STATUS: u64 = 0xC11B;
     /// Optional startup app reports one-time policy completion (wizard finished).
-    /// words[0] = app_id length; words[2..] packed app_id bytes (up to 32).
+    /// Legacy: words[0] = app_id length; words[2..4] = at most 16 bytes.
     /// Caller must be the live optional process for that app in the active plan.
     pub const SESSION_STARTUP_COMPLETE: u64 = 0xC11C;
+    /// V2: zero-padded UTF-8 app ID in words[0..4], up to 32 bytes.
+    /// All four words are required. Caller identity still comes from the kernel badge.
+    pub const SESSION_STARTUP_COMPLETE_V2: u64 = 0xC11D;
     /// Braind -> sessiond: one-shot kernel-backed Console attestation.
     pub const ATTEST_DELEGATED_WISEOWL_CONSOLE: u64 = 0xC120;
     pub const REPLY: u64 = 0xC1FF;
@@ -4695,6 +4699,11 @@ pub fn name_to_u64(name: &str) -> u64 {
 }
 
 pub fn debug_log(msg: &str) {
+    // Native syscall 99 is Linux sysinfo(2), which writes into its pointer.
+    // Never issue it with a string buffer in hosted builds or host unit tests.
+    #[cfg(not(target_os = "none"))]
+    let _ = msg;
+    #[cfg(target_os = "none")]
     // SAFETY: DebugLog receives a valid string pointer and bounded length.
     unsafe {
         raw_syscall(
@@ -5445,7 +5454,8 @@ pub fn shm_map(token: CapabilityToken) -> Result<*mut u8, ShmError> {
     Ok(ret as *mut u8)
 }
 
-/// Unmap and (if owner) release the shared page grant.
+/// Release the newest local mapping of this token. Older views stay mapped;
+/// backing frames are reclaimed only when the final mapping is released.
 pub fn shm_free(token: CapabilityToken) -> Result<(), ShmError> {
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::ShmFree, token.0, 0, 0, 0, 0, 0, 0) };
     if ret == 0 {

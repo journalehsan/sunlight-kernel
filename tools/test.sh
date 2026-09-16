@@ -756,6 +756,12 @@ wait $QEMU_PID 2>/dev/null
 QEMU_EXIT=$?
 set -e
 
+# Preserve the raw serial evidence when requested, before the EXIT trap removes it.
+# Example: SUNLIGHT_TEST_SERIAL_LOG=target/ipc-serial.log ./tools/test.sh phase2.6
+if [[ -n "${SUNLIGHT_TEST_SERIAL_LOG:-}" ]]; then
+    cp "$QEMU_OUTPUT" "$SUNLIGHT_TEST_SERIAL_LOG"
+fi
+
 if [[ "$PHASE" == "phase3.75" ]]; then
     cp "$QEMU_OUTPUT" target/wiseowl-phase375-serial.log
 fi

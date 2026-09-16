@@ -4,6 +4,7 @@
 [VMM] OK
 [IDT] OK
 [HEAP] OK
+[MM-0] temporary SHM views preserve persistent mappings: OK
 [CAP]  Capability broker initialized
 [IPC]  IPC bus initialized
 [IPC]  IpcMsg format: fixed 80-byte struct

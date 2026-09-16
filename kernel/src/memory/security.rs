@@ -247,6 +247,33 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
         },
         0x5A
     );
+    // Compositor title/notification payloads may alias an existing surface.
+    // Temporary map/free must preserve the older view in both owner and peer.
+    for (process, original) in [(&mut shm_owner, owner_virt), (&mut shm_peer, peer_virt)] {
+        for _ in 0..16 {
+            let temporary =
+                crate::memory::shared::map_shared_page(process, token, pmm, &mut shm_caps, hhdm)
+                    .expect("MM-0 temporary SHM view");
+            crate::memory::shared::free_shared_page(process, token, pmm, &mut shm_caps, hhdm)
+                .expect("MM-0 release temporary SHM view");
+            let original_page =
+                x86_64::structures::paging::Page::from_start_address(original).unwrap();
+            let temporary_page =
+                x86_64::structures::paging::Page::from_start_address(temporary).unwrap();
+            assert_eq!(
+                unsafe { process.address_space.lookup_phys(original_page, hhdm) },
+                Some(shm_first_frame)
+            );
+            assert!(unsafe { process.address_space.lookup_phys(temporary_page, hhdm) }.is_none());
+            assert_eq!(process.mapped_shared.len(), 1);
+        }
+    }
+    assert_eq!(shm_owner.owned_shared.len(), 1);
+    assert_eq!(
+        unsafe { (hhdm + shm_first_frame.as_u64()).as_ptr::<u8>().read_volatile() },
+        0x5A
+    );
+    crate::serial_println!("[MM-0] temporary SHM views preserve persistent mappings: OK");
     crate::memory::shared::cleanup_shared_pages(&mut shm_peer, pmm, &mut shm_caps);
     crate::memory::shared::cleanup_shared_pages(&mut shm_owner, pmm, &mut shm_caps);
     unsafe {

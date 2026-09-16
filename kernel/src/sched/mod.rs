@@ -1848,6 +1848,7 @@ impl Scheduler {
             return;
         }
 
+        #[cfg(feature = "verbose_diag")]
         serial_println!(
             "[SCHED] process_reap_attempt idx={} pid={} name='{}'",
             idx,
@@ -1857,6 +1858,7 @@ impl Scheduler {
 
         // Safety: never reap while still current on a core or queued.
         if self.processes[idx].owning_core != u8::MAX {
+            #[cfg(feature = "verbose_diag")]
             serial_println!(
                 "[SCHED] process_reap_blocked_reason idx={} reason=owning_core cpu={}",
                 idx,
@@ -1865,6 +1867,7 @@ impl Scheduler {
             return;
         }
         if self.processes[idx].queued_on_core != u8::MAX {
+            #[cfg(feature = "verbose_diag")]
             serial_println!(
                 "[SCHED] process_reap_blocked_reason idx={} reason=queued_on_core",
                 idx
@@ -1879,6 +1882,7 @@ impl Scheduler {
             let borrowers = self.live_address_space_borrowers(idx);
             if borrowers != 0 {
                 self.terminate_address_space_borrowers(idx, "address-space-owner-exit");
+                #[cfg(feature = "verbose_diag")]
                 serial_println!(
                     "[SCHED] process_reap_blocked_reason idx={} reason=live_address_space_borrowers count={}",
                     idx,
@@ -1890,6 +1894,7 @@ impl Scheduler {
         let hhdm_offset = match crate::HHDM_REQ.response() {
             Some(resp) => x86_64::VirtAddr::new(resp.offset),
             None => {
+                #[cfg(feature = "verbose_diag")]
                 serial_println!(
                     "[SCHED] process_reap_blocked_reason idx={} reason=no_hhdm",
                     idx
@@ -1901,6 +1906,7 @@ impl Scheduler {
         // Additional safety: do not reap the live current on this or other cores (double-check).
         for c in 0..self.online_cores {
             if self.core_current_task(c) == Some(idx) {
+                #[cfg(feature = "verbose_diag")]
                 serial_println!(
                     "[SCHED] process_reap_blocked_reason idx={} reason=current_on_cpu={}",
                     idx,
@@ -1914,6 +1920,7 @@ impl Scheduler {
             let active_mask =
                 crate::memory::tlb::active_cpu_mask(self.processes[idx].address_space.identity());
             if active_mask != 0 {
+                #[cfg(feature = "verbose_diag")]
                 serial_println!(
                     "[SCHED] process_reap_blocked_reason idx={} reason=active_address_space mask={:#x}",
                     idx,
@@ -2089,6 +2096,7 @@ impl Scheduler {
             }
             // Safety checks per requirements
             if self.processes[idx].owning_core != u8::MAX {
+                #[cfg(feature = "verbose_diag")]
                 serial_println!(
                     "[SCHED] process_reap_blocked_reason pid={} idx={} reason=owning_core",
                     self.processes[idx].pid,
@@ -2097,6 +2105,7 @@ impl Scheduler {
                 continue;
             }
             if self.processes[idx].queued_on_core != u8::MAX {
+                #[cfg(feature = "verbose_diag")]
                 serial_println!(
                     "[SCHED] process_reap_blocked_reason pid={} idx={} reason=queued",
                     self.processes[idx].pid,
@@ -2105,6 +2114,7 @@ impl Scheduler {
                 continue;
             }
             if in_use[..online].iter().any(|&cur| cur == idx) {
+                #[cfg(feature = "verbose_diag")]
                 serial_println!(
                     "[SCHED] process_reap_blocked_reason pid={} idx={} reason=in_use_on_core",
                     self.processes[idx].pid,
@@ -2115,6 +2125,7 @@ impl Scheduler {
             // Do not reap if this idx is still the current on its last known owner (paranoia).
             if let Some(c) = self.live_owner_core(idx) {
                 if c < online {
+                    #[cfg(feature = "verbose_diag")]
                     serial_println!(
                         "[SCHED] process_reap_blocked_reason pid={} idx={} reason=live_owner",
                         self.processes[idx].pid,
@@ -2124,6 +2135,7 @@ impl Scheduler {
                 }
             }
 
+            #[cfg(feature = "verbose_diag")]
             serial_println!(
                 "[SCHED] process_reap_attempt pid={} idx={} name='{}'",
                 self.processes[idx].pid,

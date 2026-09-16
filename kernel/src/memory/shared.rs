@@ -219,11 +219,12 @@ pub fn free_shared_page(
     caps: &mut CapabilityBroker,
     hhdm_offset: VirtAddr,
 ) -> Result<(), SharedMemError> {
-    // Unmap any local mapping(s) for this token (multi-page aware).
+    // Release the newest local view. A temporary map/copy/free must not
+    // invalidate an older persistent surface mapped with the same token.
     let pos = process
         .mapped_shared
         .iter()
-        .position(|(t, _, _)| *t == token)
+        .rposition(|(t, _, _)| *t == token)
         .ok_or(SharedMemError::InvalidToken)?;
     {
         let object = caps
@@ -303,8 +304,10 @@ pub fn free_shared_page(
     }
 
     // Remove ownership tracking without freeing frames here — ref counting handles that.
-    if let Some(pos) = process.owned_shared.iter().position(|sp| sp.token == token) {
-        process.owned_shared.remove(pos);
+    if !process.mapped_shared.iter().any(|(t, _, _)| *t == token) {
+        if let Some(pos) = process.owned_shared.iter().position(|sp| sp.token == token) {
+            process.owned_shared.remove(pos);
+        }
     }
     Ok(())
 }
