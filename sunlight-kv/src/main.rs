@@ -173,9 +173,9 @@ fn sm_mkdir_all(path: &[u8]) {
         let reply = ipc_call(cap, msg);
         let ok = reply.label == SmMsg::REPLY_OK;
         serial_println!(
-            "[KV][SM] mkdir path={} ok={}",
+            "[KV][SM] mkdir path={} result={}",
             core::str::from_utf8(path).unwrap_or("?"),
-            ok
+            if ok { "ok" } else { "failed" }
         );
         let _ = shm_free(tok);
     }

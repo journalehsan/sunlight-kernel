@@ -283,7 +283,19 @@ fn do_mkdir_all(pathb: &[u8]) -> Result<(), u64> {
     }
     mkdir_parents(pathb);
     // ensure the dir itself
-    let _ = libc::mkdir(pathb, 0o755);
+    if let Ok(metadata) = libc::stat(pathb) {
+        if metadata.file_type == libc::FT_DIR {
+            serial_println!("[SM][MKDIR] path={} ok=true existing=true", norm_s);
+            log_allow("mkdir", norm_s, 0);
+            return Ok(());
+        }
+        log_deny("mkdir", norm_s, "path-not-directory");
+        return Err(SmMsg::ERR_IO);
+    }
+    if libc::mkdir(pathb, 0o755).is_err() {
+        log_deny("mkdir", norm_s, "mkdir-failed");
+        return Err(SmMsg::ERR_IO);
+    }
     serial_println!("[SM][MKDIR] path={} ok=true", norm_s);
     log_allow("mkdir", norm_s, 0);
     Ok(())
