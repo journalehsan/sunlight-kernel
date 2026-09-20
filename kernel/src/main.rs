@@ -397,9 +397,12 @@ pub extern "C" fn _start() -> ! {
     serial_println!("[SUNLIGHT BUILD]");
     serial_println!("  git=devel");
     serial_println!("  profile=debug");
-    serial_println!("  timestamp=2026-07-11T00:00:00Z");
+    serial_println!(
+        "  timestamp={}",
+        option_env!("SUNLIGHT_BUILD_TIMESTAMP").unwrap_or("unknown")
+    );
     serial_println!("  net_backends=virtio-net,vmxnet3");
-    serial_println!("  marker=VMXNET3-AUDIT-20260711-A");
+    serial_println!("  marker=VMXNET3-AUDIT-current-build");
 
     // 1. PMM
     serial_println!("[PMM] Initializing...");

@@ -19,6 +19,10 @@ fn main() {
     let release_dir = target_dir.join("x86_64-unknown-none").join("release");
     let scratch_target_dir = target_dir.join("embedded-build");
 
+    let build_timestamp = build_timestamp();
+    println!("cargo:rustc-env=SUNLIGHT_BUILD_TIMESTAMP={build_timestamp}");
+    println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
+
     let service_rustflags = "-C link-arg=-Tservices/user-space.ld -C relocation-model=static";
     let tls_rustflags = concat!(
         "-C link-arg=-Tservices/user-space.ld -C relocation-model=static ",
@@ -725,6 +729,23 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed=build.rs");
+}
+
+fn build_timestamp() -> String {
+    let mut command = Command::new("date");
+    command.arg("-u");
+    if let Ok(epoch) = env::var("SOURCE_DATE_EPOCH") {
+        command.args(["-d", &format!("@{epoch}")]);
+    }
+    command.arg("+%Y-%m-%dT%H:%M:%SZ");
+    command
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "unknown".to_owned())
 }
 
 /// Reject ELFs linked with the kernel linker script (vaddr in HHDM / -2GiB).
