@@ -73,7 +73,17 @@ Calculator and Light Lens:
   draws a UTF-8-safe prefix of that layout, so line breaks do not reflow while
   prose appears and no growing text buffer is allocated per frame.
 
-No graphics-engine extension was required for this slice.
+The illustration layer in `src/scenery.rs` adds a layered amber skyline, lit
+windows, animated rain and water reflections, drifting indoor dust, perspective
+floors, and restrained edge shading. The bedroom includes a bed, pinned notes,
+cast shadows, window light, keyboard, mug, and CRT scanlines/glow. The title uses
+a large pixel-cut wordmark over the city. Chapter objects composite translucent
+fills so shelf, terminal, and building details retain their intended contrast.
+These effects use bounded loops and no per-frame heap allocation; geometry stays
+seed-stable while weather follows the existing 90 ms redraw cadence. Effects are
+confined to the illustration and preserve narrative layout and interaction bounds.
+
+No graphics-engine extension or external image assets are required.
 
 ## Validation
 

@@ -3,6 +3,8 @@
 
 extern crate alloc;
 
+mod scenery;
+
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::{boxed::Box, string::String};
@@ -895,7 +897,14 @@ impl SiliconEchoesApp {
         canvas.blend_rect(floor, Color::rgba(0xED, 0xE6, 0xD8, 18));
 
         let window = self.layout.bedroom_hotspot_rect(HotspotId::Window);
-        canvas.blend_rect(window, Color::rgba(0xED, 0xE6, 0xD8, 30));
+        scenery::bedroom_props(
+            canvas,
+            rect,
+            self.layout.bedroom_hotspot_rect(HotspotId::Desk),
+            window,
+        );
+        scenery::city(canvas, window, self.ambient_seed, self.last_tick_ms);
+        scenery::atmosphere(canvas, window, true, self.ambient_seed, self.last_tick_ms);
         canvas.draw_rect(window, BONE);
         canvas.vline(
             window.x + window.w as i32 / 2,
@@ -909,15 +918,6 @@ impl SiliconEchoesApp {
             window.w,
             Color::rgba(0xED, 0xE6, 0xD8, 150),
         );
-        for index in 0..6 {
-            let x = window.x
-                + 8
-                + ((self.ambient_seed.wrapping_add(index as u32 * 71) % window.w.max(12)) as i32);
-            let y = window.y
-                + 8
-                + ((self.ambient_seed.rotate_left(index as u32) % window.h.max(12)) as i32);
-            canvas.blend_pixel(x, y, Color::rgba(0xFF, 0x98, 0x00, 90));
-        }
 
         let clock = self.layout.bedroom_hotspot_rect(HotspotId::Clock);
         canvas.blend_rounded_rect(clock, 6, Color::rgba(0xED, 0xE6, 0xD8, 36));
@@ -952,13 +952,20 @@ impl SiliconEchoesApp {
             workstation.w,
             workstation.h * 66 / 100,
         );
-        let glow = Rect::new(crt.x - 5, crt.y - 5, crt.w + 10, crt.h + 10);
-        canvas.blend_rounded_rect(glow, 14, Color::rgba(0xFF, 0x98, 0x00, 20));
+        for spread in [28, 18, 9] {
+            canvas.blend_rounded_rect(crt.inset(-spread), 16, Color::rgba(0xFF, 0x98, 0x00, 9));
+        }
         canvas.blend_rounded_rect(crt, 10, Color::rgba(0xED, 0xE6, 0xD8, 120));
         canvas.stroke_rounded_rect(crt, 10, 2, BONE);
         let screen = crt.inset(10);
         canvas.fill_rounded_rect(screen, 5, OBSIDIAN);
-        let flicker = ((monotonic_millis() / 120 + self.ambient_seed as u64) & 3) as u8;
+        for y in (screen.y + 3..screen.bottom() - 3).step_by(4) {
+            canvas.blend_rect(
+                Rect::new(screen.x + 3, y, screen.w - 6, 1),
+                Color::rgba(0xFF, 0x98, 0x00, 16),
+            );
+        }
+        let flicker = ((self.last_tick_ms / 240 + self.ambient_seed as u64) & 3) as u8;
         canvas.blend_rect(
             Rect::new(screen.x + 9, screen.y + 11, screen.w.saturating_sub(18), 2),
             Color::rgba(0xFF, 0x98, 0x00, 42 + flicker * 14),
@@ -980,6 +987,8 @@ impl SiliconEchoesApp {
             BONE,
         );
 
+        scenery::workstation_details(canvas, crt, desk);
+        scenery::atmosphere(canvas, rect, false, self.ambient_seed, self.last_tick_ms);
         canvas.draw_rect(rect, Color::rgba(0xED, 0xE6, 0xD8, 160));
         self.draw_hotspot_feedback(canvas);
     }
@@ -996,6 +1005,23 @@ impl SiliconEchoesApp {
         );
         canvas.blend_rect(wall, Color::rgba(0xED, 0xE6, 0xD8, 26));
         canvas.blend_rect(floor, Color::rgba(0xED, 0xE6, 0xD8, 14));
+        if scenery::outdoors(scene_id) {
+            let skyline = Rect::new(
+                wall.x,
+                wall.y,
+                wall.w,
+                rect.h
+                    * if matches!(scene_id, "street" | "transit") {
+                        60
+                    } else {
+                        90
+                    }
+                    / 100,
+            );
+            scenery::city(canvas, skyline, self.ambient_seed, self.last_tick_ms);
+        } else {
+            scenery::interior(canvas, rect);
+        }
         let label = match scene_id {
             "hallway" => "FOURTH FLOOR",
             "kitchen" => "MORNING PAPER / 1993",
@@ -1041,7 +1067,7 @@ impl SiliconEchoesApp {
                     rect.w - 176,
                     46,
                 );
-                canvas.fill_rect(desk, Color::rgba(0xED, 0xE6, 0xD8, 58));
+                canvas.blend_rect(desk, Color::rgba(0xED, 0xE6, 0xD8, 58));
                 canvas.hbar(desk.x - 8, desk.bottom() - 5, desk.w + 16, 5, BONE);
                 let card = Rect::new(desk.x + 92, desk.y - 72, 242, 52);
                 canvas.fill_rect(card, BONE);
@@ -1060,11 +1086,11 @@ impl SiliconEchoesApp {
                 for index in 0..3 {
                     let ledger =
                         Rect::new(desk.x + 410 + index * 74, desk.y - 98 + index * 10, 58, 80);
-                    canvas.fill_rect(ledger, Color::rgba(0xED, 0xE6, 0xD8, 78));
+                    canvas.blend_rect(ledger, Color::rgba(0xED, 0xE6, 0xD8, 78));
                     canvas.draw_rect(ledger, soft);
                     canvas.hline(ledger.x + 9, ledger.y + 22, ledger.w - 18, SUNLIGHT);
                 }
-                canvas.fill_rect(
+                canvas.blend_rect(
                     Rect::new(rect.right() - 194, rect.y + 72, 86, 176),
                     Color::rgba(0xED, 0xE6, 0xD8, 26),
                 );
@@ -1075,7 +1101,11 @@ impl SiliconEchoesApp {
                 canvas.blend_rounded_rect(booth, 18, Color::rgba(0xED, 0xE6, 0xD8, 48));
                 canvas.hbar(booth.x - 6, booth.bottom() - 4, booth.w + 12, 4, BONE);
                 canvas.fill_rounded_rect(Rect::new(booth.x + 44, booth.y - 72, 38, 38), 19, BONE);
-                canvas.fill_rounded_rect(Rect::new(booth.x + 38, booth.y - 38, 50, 38), 16, strong);
+                canvas.blend_rounded_rect(
+                    Rect::new(booth.x + 38, booth.y - 38, 50, 38),
+                    16,
+                    strong,
+                );
                 let riley_present = self
                     .game
                     .relationship(sunlight_silicon_echoes::ActorId("riley"))
@@ -1086,14 +1116,14 @@ impl SiliconEchoesApp {
                         21,
                         SUNLIGHT,
                     );
-                    canvas.fill_rounded_rect(
+                    canvas.blend_rounded_rect(
                         Rect::new(booth.right() - 88, booth.y - 38, 54, 38),
                         17,
                         strong,
                     );
                 }
                 let pager = Rect::new(rect.right() - 190, rect.y + 90, 94, 42);
-                canvas.fill_rounded_rect(pager, 7, Color::rgba(0xED, 0xE6, 0xD8, 70));
+                canvas.blend_rounded_rect(pager, 7, Color::rgba(0xED, 0xE6, 0xD8, 70));
                 canvas.stroke_rounded_rect(pager, 7, 2, BONE);
                 draw_center(canvas, pager, "88.3  II", FontRole::MonoRegular, SUNLIGHT);
             }
@@ -1104,10 +1134,10 @@ impl SiliconEchoesApp {
                     rect.w - 240,
                     44,
                 );
-                canvas.fill_rect(counter, Color::rgba(0xED, 0xE6, 0xD8, 58));
+                canvas.blend_rect(counter, Color::rgba(0xED, 0xE6, 0xD8, 58));
                 canvas.hbar(counter.x - 6, counter.bottom() - 5, counter.w + 12, 5, BONE);
                 let pager = Rect::new(counter.x + 230, counter.y - 50, 112, 42);
-                canvas.fill_rounded_rect(pager, 7, Color::rgba(0xED, 0xE6, 0xD8, 74));
+                canvas.blend_rounded_rect(pager, 7, Color::rgba(0xED, 0xE6, 0xD8, 74));
                 canvas.stroke_rounded_rect(pager, 7, 2, BONE);
                 draw_center(canvas, pager, "88.3 / 2", FontRole::MonoRegular, SUNLIGHT);
                 let manual = Rect::new(counter.right() - 132, counter.y - 80, 96, 62);
@@ -1115,7 +1145,11 @@ impl SiliconEchoesApp {
                 canvas.draw_rect(manual, SUNLIGHT);
                 draw_center(canvas, manual, "SERVICE", FontRole::UiSmall, OBSIDIAN);
                 canvas.fill_rounded_rect(Rect::new(rect.x + 148, rect.y + 78, 38, 40), 19, BONE);
-                canvas.fill_rounded_rect(Rect::new(rect.x + 142, rect.y + 116, 50, 88), 18, strong);
+                canvas.blend_rounded_rect(
+                    Rect::new(rect.x + 142, rect.y + 116, 50, 88),
+                    18,
+                    strong,
+                );
             }
             "c2-route" | "c2-exterior" | "c2-displacement" => {
                 let ground = rect.y + rect.h as i32 * 65 / 100;
@@ -1123,7 +1157,7 @@ impl SiliconEchoesApp {
                 for index in 0..7 {
                     let x = rect.x + 64 + index * 126;
                     let h = 44 + ((self.ambient_seed.rotate_left(index as u32 + 3) % 58) as i32);
-                    canvas.fill_rect(
+                    canvas.blend_rect(
                         Rect::new(x, ground - h, 76, h as u32),
                         Color::rgba(0xED, 0xE6, 0xD8, 30),
                     );
@@ -1134,7 +1168,7 @@ impl SiliconEchoesApp {
                     246,
                     (ground - rect.y - 72) as u32,
                 );
-                canvas.fill_rect(facade, Color::rgba(0xED, 0xE6, 0xD8, 28));
+                canvas.blend_rect(facade, Color::rgba(0xED, 0xE6, 0xD8, 28));
                 canvas.draw_rect(facade, BONE);
                 let gate = Rect::new(facade.x + 76, facade.y + 72, 94, facade.h - 72);
                 canvas.draw_rect(gate, BONE);
@@ -1170,7 +1204,7 @@ impl SiliconEchoesApp {
                         19,
                         BONE,
                     );
-                    canvas.fill_rounded_rect(
+                    canvas.blend_rounded_rect(
                         Rect::new(rect.x + 164, ground - 48, 50, 54),
                         17,
                         strong,
@@ -1204,7 +1238,11 @@ impl SiliconEchoesApp {
                     canvas.vline(gate.x + 24 + index * 38, gate.y + 12, gate.h - 24, soft);
                 }
                 canvas.fill_rounded_rect(Rect::new(rect.x + 192, rect.y + 104, 42, 42), 21, BONE);
-                canvas.fill_rounded_rect(Rect::new(rect.x + 186, rect.y + 142, 54, 98), 18, strong);
+                canvas.blend_rounded_rect(
+                    Rect::new(rect.x + 186, rect.y + 142, 54, 98),
+                    18,
+                    strong,
+                );
                 if scene_id == "c2-caretaker" {
                     canvas.fill_rounded_rect(
                         Rect::new(rect.x + 284, rect.y + 182, 30, 16),
@@ -1246,7 +1284,7 @@ impl SiliconEchoesApp {
                 canvas.hline(chamber.x, chamber.y + 44, chamber.w, soft);
                 canvas.hline(chamber.x, chamber.bottom() - 42, chamber.w, soft);
                 let projector = Rect::new(chamber.x + 92, chamber.y + 72, 138, 78);
-                canvas.fill_rounded_rect(projector, 9, Color::rgba(0xED, 0xE6, 0xD8, 52));
+                canvas.blend_rounded_rect(projector, 9, Color::rgba(0xED, 0xE6, 0xD8, 52));
                 canvas.stroke_rounded_rect(projector, 9, 2, BONE);
                 canvas.fill_rounded_rect(projector.inset(10), 5, OBSIDIAN);
                 if self.game.supports_echo_overlay()
@@ -1266,7 +1304,7 @@ impl SiliconEchoesApp {
                     );
                     canvas.hline(chamber.x + 188, chamber.y + 246, 64, SUNLIGHT);
                 } else {
-                    canvas.fill_rect(
+                    canvas.blend_rect(
                         Rect::new(chamber.x + 54, chamber.y + 156, 100, 116),
                         Color::rgba(0xED, 0xE6, 0xD8, 46),
                     );
@@ -1283,7 +1321,7 @@ impl SiliconEchoesApp {
                         19,
                         SUNLIGHT,
                     );
-                    canvas.fill_rounded_rect(
+                    canvas.blend_rounded_rect(
                         Rect::new(rect.x + 172, rect.y + 192, 50, 64),
                         18,
                         strong,
@@ -1295,7 +1333,7 @@ impl SiliconEchoesApp {
                 {
                     for index in 0..7 {
                         let x = chamber.x + 22 + index * 40;
-                        canvas.fill_rounded_rect(
+                        canvas.blend_rounded_rect(
                             Rect::new(x, chamber.y + 36, 18, 18),
                             9,
                             if index == 3 { SUNLIGHT } else { BONE },
@@ -1344,7 +1382,7 @@ impl SiliconEchoesApp {
                     rect.w * 20 / 100,
                     rect.h * 58 / 100,
                 );
-                canvas.fill_rect(door, Color::rgba(0xED, 0xE6, 0xD8, 36));
+                canvas.blend_rect(door, Color::rgba(0xED, 0xE6, 0xD8, 36));
                 canvas.draw_rect(door, BONE);
                 canvas.fill_rect(
                     Rect::new(door.right() - 18, door.y + door.h as i32 / 2, 6, 6),
@@ -1399,7 +1437,7 @@ impl SiliconEchoesApp {
                         FontRole::MonoRegular,
                         SUNLIGHT,
                     );
-                    canvas.fill_rect(
+                    canvas.blend_rect(
                         Rect::new(rect.right() - 128, rect.y + 96, 46, 68),
                         Color::rgba(0xED, 0xE6, 0xD8, 32),
                     );
@@ -1413,7 +1451,7 @@ impl SiliconEchoesApp {
                     rect.w - 136,
                     52,
                 );
-                canvas.fill_rect(counter, Color::rgba(0xED, 0xE6, 0xD8, 52));
+                canvas.blend_rect(counter, Color::rgba(0xED, 0xE6, 0xD8, 52));
                 canvas.hbar(counter.x - 8, counter.bottom() - 6, counter.w + 16, 6, BONE);
                 let paper = Rect::new(counter.x + 80, counter.y - 42, 150, 92);
                 canvas.fill_rect(paper, BONE);
@@ -1425,20 +1463,20 @@ impl SiliconEchoesApp {
                     paper.y + 15,
                     &TextStyle::new(FontRole::UiSmall, OBSIDIAN),
                 );
-                canvas.fill_rounded_rect(
+                canvas.blend_rounded_rect(
                     Rect::new(counter.right() - 160, counter.y - 25, 38, 32),
                     8,
                     Color::rgba(0xED, 0xE6, 0xD8, 130),
                 );
                 canvas.hline(counter.right() - 154, counter.y + 8, 27, SUNLIGHT);
-                canvas.fill_rect(
+                canvas.blend_rect(
                     Rect::new(rect.right() - 142, rect.y + 82, 92, 156),
                     Color::rgba(0xED, 0xE6, 0xD8, 30),
                 );
                 canvas.draw_rect(Rect::new(rect.right() - 142, rect.y + 82, 92, 156), soft);
                 canvas.hline(rect.right() - 130, rect.y + 121, 68, soft);
                 canvas.hline(rect.right() - 130, rect.y + 164, 68, soft);
-                canvas.fill_rounded_rect(
+                canvas.blend_rounded_rect(
                     Rect::new(rect.x + 382, counter.y - 30, 84, 62),
                     6,
                     Color::rgba(0xED, 0xE6, 0xD8, 88),
@@ -1447,15 +1485,6 @@ impl SiliconEchoesApp {
             }
             "street" | "transit" => {
                 let skyline_y = rect.y + rect.h as i32 * 43 / 100;
-                for index in 0..8 {
-                    let x = rect.x + 36 + index * 118;
-                    let h = 58 + ((self.ambient_seed.rotate_left(index as u32) % 76) as i32);
-                    canvas.fill_rect(
-                        Rect::new(x, skyline_y - h, 72, h as u32),
-                        Color::rgba(0xED, 0xE6, 0xD8, 34),
-                    );
-                    canvas.blend_rect(Rect::new(x + 12, skyline_y - h + 16, 12, 3), glow);
-                }
                 canvas.hbar(rect.x + 12, skyline_y, rect.w - 24, 3, BONE);
                 canvas.hbar(rect.x + 12, skyline_y + 82, rect.w - 24, 2, soft);
                 let booth = Rect::new(rect.x + 74, rect.y + 92, 66, 144);
@@ -1498,7 +1527,7 @@ impl SiliconEchoesApp {
                     );
                     for i in 0..2 {
                         let lx = board.x + board.w as i32 - 36 - i * 42;
-                        canvas.fill_rect(
+                        canvas.blend_rect(
                             Rect::new(lx, board.y + 22, 24, 18),
                             Color::rgba(0xED, 0xE6, 0xD8, 52),
                         );
@@ -1507,7 +1536,11 @@ impl SiliconEchoesApp {
                 for index in 0..5 {
                     let x = rect.x + 110 + index * 150;
                     let h = 38 + ((self.ambient_seed.rotate_left(index as u32 + 7) % 18) as i32);
-                    canvas.fill_rounded_rect(Rect::new(x, skyline_y + 20, 16, h as u32), 7, strong);
+                    canvas.blend_rounded_rect(
+                        Rect::new(x, skyline_y + 20, 16, h as u32),
+                        7,
+                        strong,
+                    );
                     let head_w =
                         22 + ((self.ambient_seed.wrapping_add(index as u32 * 3) % 10) as i32);
                     canvas.fill_rounded_rect(
@@ -1516,14 +1549,14 @@ impl SiliconEchoesApp {
                         BONE,
                     );
                     if self.ambient_seed.wrapping_add(index as u32) % 3 == 0 {
-                        canvas.fill_rect(
+                        canvas.blend_rect(
                             Rect::new(x - 8, skyline_y + 26, 32, 12),
                             Color::rgba(0xED, 0xE6, 0xD8, 72),
                         );
                     }
                 }
                 if scene_id == "street" {
-                    canvas.fill_rect(
+                    canvas.blend_rect(
                         Rect::new(rect.x + rect.w as i32 * 33 / 100, skyline_y + 12, 38, 42),
                         Color::rgba(0xED, 0xE6, 0xD8, 88),
                     );
@@ -1563,13 +1596,13 @@ impl SiliconEchoesApp {
                     300,
                     34,
                 );
-                canvas.fill_rounded_rect(table, 8, Color::rgba(0xED, 0xE6, 0xD8, 64));
+                canvas.blend_rounded_rect(table, 8, Color::rgba(0xED, 0xE6, 0xD8, 64));
                 canvas.hbar(table.x - 4, table.bottom() - 4, table.w + 8, 4, BONE);
                 // Mara — lighter silhouette, slightly shorter
                 let mara_head = Rect::new(table.x + 44, table.y - 88, 32, 32);
                 let mara_body = Rect::new(table.x + 32, table.y - 58, 56, 58);
                 canvas.fill_rounded_rect(mara_head, 16, BONE);
-                canvas.fill_rounded_rect(mara_body, 16, Color::rgba(0xED, 0xE6, 0xD8, 150));
+                canvas.blend_rounded_rect(mara_body, 16, Color::rgba(0xED, 0xE6, 0xD8, 150));
                 canvas.hline(
                     mara_body.x + 8,
                     mara_body.bottom() - 5,
@@ -1580,7 +1613,7 @@ impl SiliconEchoesApp {
                 let riley_head = Rect::new(table.x + 202, table.y - 95, 36, 36);
                 let riley_body = Rect::new(table.x + 188, table.y - 62, 64, 62);
                 canvas.fill_rounded_rect(riley_head, 18, SUNLIGHT);
-                canvas.fill_rounded_rect(riley_body, 18, strong);
+                canvas.blend_rounded_rect(riley_body, 18, strong);
                 canvas.hline(
                     riley_body.x + 10,
                     riley_body.bottom() - 5,
@@ -1626,7 +1659,7 @@ impl SiliconEchoesApp {
                     // Keypad
                     for row in 0..3 {
                         for col in 0..3 {
-                            canvas.fill_rounded_rect(
+                            canvas.blend_rounded_rect(
                                 Rect::new(phone.x + 28 + col * 17, phone.y + 76 + row * 12, 8, 6),
                                 2,
                                 Color::rgba(0xED, 0xE6, 0xD8, 150),
@@ -1647,7 +1680,7 @@ impl SiliconEchoesApp {
                     for item in 0..6 {
                         let kind_idx = ((index * 3 + item) % 5) as usize;
                         let (iw, ih) = item_kinds[kind_idx];
-                        canvas.fill_rect(
+                        canvas.blend_rect(
                             Rect::new(
                                 shelf.x + 22 + item * 102,
                                 shelf.y - ih,
@@ -1672,7 +1705,7 @@ impl SiliconEchoesApp {
                     rect.w - 296,
                     46,
                 );
-                canvas.fill_rect(counter, Color::rgba(0xED, 0xE6, 0xD8, 56));
+                canvas.blend_rect(counter, Color::rgba(0xED, 0xE6, 0xD8, 56));
                 canvas.hbar(counter.x - 6, counter.bottom() - 5, counter.w + 12, 5, BONE);
                 let pager = Rect::new(
                     counter.x + counter.w as i32 * 55 / 100,
@@ -1684,7 +1717,7 @@ impl SiliconEchoesApp {
                 canvas.stroke_rounded_rect(pager, 7, 2, BONE);
                 draw_center(canvas, pager, "88.3", FontRole::MonoMedium, SUNLIGHT);
                 // Test instrument on counter
-                canvas.fill_rounded_rect(
+                canvas.blend_rounded_rect(
                     Rect::new(counter.x + 66, counter.y - 42, 76, 44),
                     6,
                     Color::rgba(0xED, 0xE6, 0xD8, 72),
@@ -1694,7 +1727,7 @@ impl SiliconEchoesApp {
                 canvas.fill_rect(freq, OBSIDIAN);
                 draw_center(canvas, freq, "88.3", FontRole::MonoRegular, SUNLIGHT);
                 // Lio
-                canvas.fill_rounded_rect(
+                canvas.blend_rounded_rect(
                     Rect::new(rect.x + 144, rect.y + 96, 46, 102),
                     20,
                     Color::rgba(0xED, 0xE6, 0xD8, 155),
@@ -1703,7 +1736,7 @@ impl SiliconEchoesApp {
                 canvas.hline(rect.x + 134, rect.y + 162, 68, SUNLIGHT);
                 // Soldering lamp
                 canvas.hline(rect.x + 370, rect.y + 86, 18, SUNLIGHT);
-                canvas.fill_rect(
+                canvas.blend_rect(
                     Rect::new(rect.x + 382, rect.y + 72, 6, 16),
                     Color::rgba(0xFF, 0x98, 0x00, 60),
                 );
@@ -1740,7 +1773,7 @@ impl SiliconEchoesApp {
                 for index in 0..5 {
                     let x = rect.x + 68 + index * 168;
                     let w = 112;
-                    canvas.fill_rect(
+                    canvas.blend_rect(
                         Rect::new(x, rect.y + 44, w, rect.h - 110),
                         Color::rgba(0xED, 0xE6, 0xD8, 24),
                     );
@@ -1750,7 +1783,7 @@ impl SiliconEchoesApp {
                         canvas.hline(x + 6, rect.y + 68 + shelf * 44, w - 12, soft);
                         for item in 0..2 {
                             let item_w = 54 - (shelf * 4) as u32;
-                            canvas.fill_rect(
+                            canvas.blend_rect(
                                 Rect::new(x + 12 + item * 44, rect.y + 50 + shelf * 44, item_w, 14),
                                 Color::rgba(0xED, 0xE6, 0xD8, 38 + (shelf as u8 * 5)),
                             );
@@ -1813,24 +1846,24 @@ impl SiliconEchoesApp {
                     BONE,
                 );
                 // Base
-                canvas.fill_rounded_rect(
+                canvas.blend_rounded_rect(
                     Rect::new(monitor.x + 26, monitor.bottom() + 12, monitor.w - 52, 12),
                     4,
                     Color::rgba(0xED, 0xE6, 0xD8, 100),
                 );
                 // Keyboard — separated from monitor
                 let kb = Rect::new(monitor.x + 14, monitor.bottom() + 28, monitor.w - 28, 28);
-                canvas.fill_rounded_rect(kb, 4, Color::rgba(0xED, 0xE6, 0xD8, 52));
+                canvas.blend_rounded_rect(kb, 4, Color::rgba(0xED, 0xE6, 0xD8, 52));
                 for row in 0..3 {
                     for col in 0..12 {
-                        canvas.fill_rect(
+                        canvas.blend_rect(
                             Rect::new(kb.x + 4 + col * 15, kb.y + 5 + row * 8, 8, 4),
                             Color::rgba(0xED, 0xE6, 0xD8, 82),
                         );
                     }
                 }
                 if scene_id == "archive-lobby" {
-                    canvas.fill_rect(
+                    canvas.blend_rect(
                         Rect::new(rect.x + 244, rect.y + 165, 176, 56),
                         Color::rgba(0xED, 0xE6, 0xD8, 60),
                     );
@@ -1906,6 +1939,13 @@ impl SiliconEchoesApp {
             }
             _ => {}
         }
+        scenery::atmosphere(
+            canvas,
+            rect,
+            scenery::outdoors(scene_id),
+            self.ambient_seed,
+            self.last_tick_ms,
+        );
         canvas.blend_rect(
             Rect::new(rect.x + 18, rect.y + 18, rect.w - 36, 30),
             Color::rgba(0x0A, 0x0A, 0x0C, 120),
@@ -1951,19 +1991,28 @@ impl SiliconEchoesApp {
     }
 
     fn draw_title(&self, canvas: &mut Canvas) {
-        self.draw_room(canvas);
-        canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 138));
-        draw_center(
+        scenery::city(
+            canvas,
+            self.layout.image,
+            self.ambient_seed,
+            self.last_tick_ms,
+        );
+        scenery::atmosphere(
+            canvas,
+            self.layout.image,
+            true,
+            self.ambient_seed,
+            self.last_tick_ms,
+        );
+        canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 65));
+        scenery::title_mark(
             canvas,
             Rect::new(
                 self.layout.image.x,
-                self.layout.image.y + 72,
+                self.layout.image.y + 54,
                 self.layout.image.w,
-                32,
+                48,
             ),
-            "SILICON ECHOES",
-            FontRole::UiTitle,
-            BONE,
         );
         draw_center(
             canvas,
@@ -1985,7 +2034,7 @@ impl SiliconEchoesApp {
                 self.layout.image.w,
                 20,
             ),
-            "A native SunlightOS story",
+            "Every memory leaves a trace.",
             FontRole::UiRegular,
             Color::rgba(0xED, 0xE6, 0xD8, 174),
         );
@@ -2331,6 +2380,13 @@ impl SiliconEchoesApp {
         };
         canvas.blend_rounded_rect(rect, 6, fill);
         canvas.stroke_rounded_rect(rect, 6, if focused { 2 } else { 1 }, border);
+        if hovered || focused {
+            canvas.fill_rounded_rect(
+                Rect::new(rect.x + 1, rect.y + 6, 3, rect.h.saturating_sub(12)),
+                1,
+                SUNLIGHT,
+            );
+        }
         let shortcut = shortcut_label(visible_index);
         // Shortcut stays on the first line; wrapped prose indents past it.
         draw_text(
