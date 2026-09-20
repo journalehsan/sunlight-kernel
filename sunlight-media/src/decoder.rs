@@ -59,6 +59,9 @@ impl AudioDecoder for WavPcmDecoder<'_> {
 
     fn decode(&mut self, output: &mut [i16]) -> Result<DecodeChunk, MediaError> {
         let channels = self.layout.info.channels as usize;
+        if output.len() < channels {
+            return Err(MediaError::new(MediaErrorKind::Decode, 2));
+        }
         let capacity = output.len() - output.len() % channels;
         let remaining_frames =
             (self.layout.data_len / (channels * 2)).saturating_sub(self.frame_position as usize);
@@ -201,7 +204,7 @@ fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
         let payload = &source[header_end..payload_end];
         match &header[..4] {
             b"fmt " => {
-                if payload.len() < 16 {
+                if payload.len() < 16 || format.is_some() {
                     return Err(MediaError::new(MediaErrorKind::MalformedMedia, 19));
                 }
                 let encoding = u16::from_le_bytes(payload[0..2].try_into().unwrap());
@@ -213,8 +216,17 @@ fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
                 let extensible_pcm = if encoding == 0xfffe {
                     const PCM_SUBFORMAT_GUID: &[u8; 16] =
                         b"\x01\x00\x00\x00\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71";
-                    payload.len() >= 40
-                        && u16::from_le_bytes(payload[16..18].try_into().unwrap()) >= 22
+                    if payload.len() < 40 {
+                        return Err(MediaError::new(MediaErrorKind::MalformedMedia, 19));
+                    }
+                    let extension_len =
+                        u16::from_le_bytes(payload[16..18].try_into().unwrap()) as usize;
+                    if extension_len < 22 || extension_len > payload.len() - 18 {
+                        return Err(MediaError::new(MediaErrorKind::MalformedMedia, 19));
+                    }
+                    let mask = u32::from_le_bytes(payload[20..24].try_into().unwrap());
+                    // Only unspecified, front-center mono, or front L/R stereo.
+                    (mask == 0 || (channels == 1 && mask == 4) || (channels == 2 && mask == 3))
                         && u16::from_le_bytes(payload[18..20].try_into().unwrap()) == bits
                         && payload.get(24..40) == Some(PCM_SUBFORMAT_GUID)
                 } else {
@@ -239,6 +251,9 @@ fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
                 format = Some((channels as u8, rate, block_align as usize));
             }
             b"data" => {
+                if data.is_some() {
+                    return Err(MediaError::new(MediaErrorKind::MalformedMedia, 23));
+                }
                 data = Some((header_end, payload.len()));
             }
             _ => {}
@@ -278,13 +293,12 @@ pub struct VorbisDecoder<'a> {
 impl<'a> VorbisDecoder<'a> {
     pub fn open(source: &'a [u8]) -> Result<Self, MediaError> {
         validate_ogg_vorbis(source)?;
+        let frames = single_ogg_stream_frames(source)?;
         let reader = lewton::inside_ogg::OggStreamReader::new(source)
             .map_err(|_| MediaError::new(MediaErrorKind::MalformedMedia, 1))?;
         let rate = reader.ident_hdr.audio_sample_rate;
         let channels = reader.ident_hdr.audio_channels;
-        let duration = last_granule_position(source)
-            .filter(|_| rate != 0)
-            .map(|frames| MediaTime::from_frames(frames, rate));
+        let duration = Some(MediaTime::from_frames(frames, rate));
         let info = AudioStreamInfo {
             sample_rate_hz: rate,
             channels,
@@ -411,31 +425,56 @@ fn validate_ogg_vorbis(source: &[u8]) -> Result<(), MediaError> {
     Ok(())
 }
 
-fn last_granule_position(source: &[u8]) -> Option<u64> {
+// The player has one immutable channel/rate contract per source. Lewton can
+// follow chained logical streams, but their format and granule clock can
+// change. Reject chained/multiplexed input before any PCM reaches the sink.
+fn single_ogg_stream_frames(source: &[u8]) -> Result<u64, MediaError> {
+    let malformed = || MediaError::new(MediaErrorKind::MalformedMedia, 9);
     let mut offset = 0usize;
-    let mut last = None;
-    while offset.checked_add(27)? <= source.len() {
-        if source.get(offset..offset + 4)? != b"OggS" {
-            return None;
+    let mut serial = None;
+    let mut sequence = 0u32;
+    while offset < source.len() {
+        let header_end = offset.checked_add(27).ok_or_else(malformed)?;
+        let header = source.get(offset..header_end).ok_or_else(malformed)?;
+        if &header[..4] != b"OggS" || header[4] != 0 || header[5] & !7 != 0 {
+            return Err(malformed());
         }
-        let segments = source[offset + 26] as usize;
-        let table_end = offset.checked_add(27)?.checked_add(segments)?;
-        let body = source.get(offset + 27..table_end)?;
+        let page_serial = u32::from_le_bytes(header[14..18].try_into().unwrap());
+        if serial.is_some_and(|serial| serial != page_serial) || (offset != 0 && header[5] & 2 != 0)
+        {
+            return Err(MediaError::new(MediaErrorKind::UnsupportedContainer, 2));
+        }
+        if (offset == 0 && header[5] & 3 != 2)
+            || u32::from_le_bytes(header[18..22].try_into().unwrap()) != sequence
+        {
+            return Err(malformed());
+        }
+        serial = Some(page_serial);
+        sequence = sequence.wrapping_add(1);
+        let segments = header[26] as usize;
+        let table_end = header_end.checked_add(segments).ok_or_else(malformed)?;
+        let body = source.get(header_end..table_end).ok_or_else(malformed)?;
         let body_len = body
             .iter()
-            .try_fold(0usize, |sum, value| sum.checked_add(*value as usize))?;
-        let page_end = table_end.checked_add(body_len)?;
+            .try_fold(0usize, |sum, value| sum.checked_add(*value as usize))
+            .ok_or_else(malformed)?;
+        let page_end = table_end.checked_add(body_len).ok_or_else(malformed)?;
         if page_end > source.len() {
-            return None;
+            return Err(malformed());
         }
-        let bytes: [u8; 8] = source.get(offset + 6..offset + 14)?.try_into().ok()?;
-        let granule = u64::from_le_bytes(bytes);
-        if granule != u64::MAX {
-            last = Some(granule);
+        if header[5] & 4 != 0 {
+            if page_end != source.len() {
+                return Err(MediaError::new(MediaErrorKind::UnsupportedContainer, 2));
+            }
+            let frames = u64::from_le_bytes(header[6..14].try_into().unwrap());
+            if frames == u64::MAX {
+                return Err(malformed());
+            }
+            return Ok(frames);
         }
         offset = page_end;
     }
-    (offset == source.len()).then_some(last).flatten()
+    Err(malformed())
 }
 
 #[cfg(test)]
@@ -615,6 +654,19 @@ mod tests {
         let pcm = [1, 0, 2, 0];
         assert!(WavPcmDecoder::open(&wav_with_format(&format, &pcm)).is_ok());
 
+        format[16..18].copy_from_slice(&23u16.to_le_bytes());
+        assert_eq!(
+            probe(&wav_with_format(&format, &pcm)).unwrap_err().kind,
+            MediaErrorKind::MalformedMedia
+        );
+        format[16..18].copy_from_slice(&22u16.to_le_bytes());
+        format[20..24].copy_from_slice(&0x30u32.to_le_bytes());
+        assert_eq!(
+            probe(&wav_with_format(&format, &pcm)).unwrap_err().kind,
+            MediaErrorKind::UnsupportedSampleFormat
+        );
+        format[20..24].copy_from_slice(&3u32.to_le_bytes());
+
         format[24] = 3;
         let error = match WavPcmDecoder::open(&wav_with_format(&format, &pcm)) {
             Ok(_) => panic!("non-PCM extensible WAV was accepted"),
@@ -632,6 +684,153 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(error.kind, MediaErrorKind::MalformedMedia);
+    }
+
+    #[test]
+    fn container_detection_uses_bytes_and_rejects_unsupported_codecs() {
+        assert!(matches!(
+            ProbeDecoder::open(TEST_WAV),
+            Ok(ProbeDecoder::Wav(_))
+        ));
+        assert!(matches!(
+            ProbeDecoder::open(TEST_OGG),
+            Ok(ProbeDecoder::Vorbis(_))
+        ));
+        for bytes in [b"ID3".as_slice(), b"fLaC", b"RIFF\0\0\0\0AVI "] {
+            assert!(ProbeDecoder::open(bytes).is_err());
+        }
+        let mut opus = TEST_OGG.to_vec();
+        let packet = 27 + opus[26] as usize;
+        opus[packet..packet + 8].copy_from_slice(b"OpusHead");
+        assert_eq!(
+            probe(&opus).unwrap_err().kind,
+            MediaErrorKind::UnsupportedCodec
+        );
+    }
+
+    #[test]
+    fn rejects_chained_and_truncated_ogg_before_playback() {
+        let mut chained = TEST_OGG.to_vec();
+        chained.extend_from_slice(TEST_OGG);
+        assert_eq!(
+            probe(&chained).unwrap_err().kind,
+            MediaErrorKind::UnsupportedContainer
+        );
+        assert_eq!(
+            probe(&TEST_OGG[..TEST_OGG.len() - 1]).unwrap_err().kind,
+            MediaErrorKind::MalformedMedia
+        );
+        // A complete header page alone is not a complete local audio file.
+        let first_page_end = 27
+            + TEST_OGG[26] as usize
+            + TEST_OGG[27..27 + TEST_OGG[26] as usize]
+                .iter()
+                .map(|v| *v as usize)
+                .sum::<usize>();
+        assert!(single_ogg_stream_frames(&TEST_OGG[..first_page_end]).is_err());
+    }
+
+    #[test]
+    fn rejects_multiplexed_or_out_of_sequence_ogg_pages() {
+        let second = 27
+            + TEST_OGG[26] as usize
+            + TEST_OGG[27..27 + TEST_OGG[26] as usize]
+                .iter()
+                .map(|v| *v as usize)
+                .sum::<usize>();
+        let mut bytes = TEST_OGG.to_vec();
+        bytes[second + 14] ^= 1;
+        assert_eq!(
+            single_ogg_stream_frames(&bytes).unwrap_err().kind,
+            MediaErrorKind::UnsupportedContainer
+        );
+        let mut bytes = TEST_OGG.to_vec();
+        bytes[second + 18] ^= 1;
+        assert_eq!(
+            single_ogg_stream_frames(&bytes).unwrap_err().kind,
+            MediaErrorKind::MalformedMedia
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_wav_chunks_and_short_decode_buffers() {
+        let mut wav = wav_with_format(&pcm_format(48_000), &[1, 0, 2, 0]);
+        let mut decoder = WavPcmDecoder::open(&wav).unwrap();
+        assert_eq!(
+            decoder.decode(&mut [0i16; 1]).err().unwrap().kind,
+            MediaErrorKind::Decode
+        );
+        wav.extend_from_slice(b"data\x04\0\0\0\x03\0\x04\0");
+        let len = (wav.len() - 8) as u32;
+        wav[4..8].copy_from_slice(&len.to_le_bytes());
+        assert_eq!(
+            probe(&wav).unwrap_err().kind,
+            MediaErrorKind::MalformedMedia
+        );
+        let mut wav = wav_with_format(&pcm_format(48_000), &[0; 4]);
+        let fmt = wav[12..36].to_vec();
+        wav.extend_from_slice(&fmt);
+        let len = (wav.len() - 8) as u32;
+        wav[4..8].copy_from_slice(&len.to_le_bytes());
+        assert_eq!(
+            probe(&wav).unwrap_err().kind,
+            MediaErrorKind::MalformedMedia
+        );
+    }
+
+    #[test]
+    fn rejects_wav_encodings_that_cannot_be_read_as_s16_pcm() {
+        for encoding in [2u16, 3, 6, 7, 0x55] {
+            let mut format = pcm_format(48_000);
+            format[..2].copy_from_slice(&encoding.to_le_bytes());
+            assert_eq!(
+                probe(&wav_with_format(&format, &[0; 4])).unwrap_err().kind,
+                MediaErrorKind::UnsupportedSampleFormat
+            );
+        }
+        for bits in [8u16, 24, 32] {
+            let mut format = pcm_format(48_000);
+            format[14..16].copy_from_slice(&bits.to_le_bytes());
+            assert_eq!(
+                probe(&wav_with_format(&format, &[0; 4])).unwrap_err().kind,
+                MediaErrorKind::UnsupportedSampleFormat
+            );
+        }
+    }
+
+    #[test]
+    fn mono_pcm_preserves_samples_and_counts_frames() {
+        let mut format = pcm_format(48_000);
+        format[2..4].copy_from_slice(&1u16.to_le_bytes());
+        format[8..12].copy_from_slice(&96_000u32.to_le_bytes());
+        format[12..14].copy_from_slice(&2u16.to_le_bytes());
+        let wav = wav_with_format(&format, &[0x00, 0x80, 0xff, 0x7f]);
+        let mut decoder = WavPcmDecoder::open(&wav).unwrap();
+        let mut samples = [0; 2];
+        let chunk = decoder.decode(&mut samples).unwrap();
+        assert_eq!(chunk.frames, 2);
+        assert!(chunk.end_of_stream);
+        assert_eq!(samples, [i16::MIN, i16::MAX]);
+    }
+
+    #[test]
+    fn full_bundled_song_decodes_to_the_declared_frame_count() {
+        let bytes = include_bytes!("../../assets/sounds/catch-the-sunlight-48k.ogg");
+        assert!(bytes.len() <= MAX_COMPRESSED_BYTES);
+        let mut decoder = ProbeDecoder::open(bytes).unwrap();
+        assert_eq!(decoder.stream_info().sample_rate_hz, 48_000);
+        assert_eq!(decoder.stream_info().channels, 2);
+        let mut samples = [0; 2048];
+        let mut frames = 0;
+        loop {
+            let chunk = decoder.decode(&mut samples).unwrap();
+            frames += chunk.frames;
+            if chunk.end_of_stream {
+                break;
+            }
+            assert!(chunk.frames > 0);
+        }
+        assert_eq!(frames, 9_345_828);
     }
 
     #[test]

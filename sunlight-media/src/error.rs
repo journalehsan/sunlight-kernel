@@ -73,6 +73,12 @@ impl MediaError {
     /// not need to duplicate audio-service error knowledge.
     pub const fn user_message(self) -> &'static str {
         match self.kind {
+            MediaErrorKind::UnsupportedContainer if self.detail == 2 => {
+                "Chained or multiplexed Ogg streams are not supported"
+            }
+            MediaErrorKind::UnsupportedSampleFormat if self.detail == 20 => {
+                "WAV requires 16-bit integer PCM with mono or stereo channels"
+            }
             MediaErrorKind::AudioOutput => match self.detail {
                 1 => "Audio service is unavailable",
                 2 => "Audio output format is not supported",

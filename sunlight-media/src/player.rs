@@ -75,6 +75,8 @@ struct Shared {
     rate_hz: AtomicU64,
     channels: AtomicU8,
     seekable: AtomicBool,
+    #[cfg(target_os = "none")]
+    audio_stopped_for_open: AtomicBool,
     seek_ms: AtomicU64,
     volume: AtomicU8,
     path_locked: AtomicBool,
@@ -104,6 +106,8 @@ impl Shared {
             rate_hz: AtomicU64::new(0),
             channels: AtomicU8::new(0),
             seekable: AtomicBool::new(false),
+            #[cfg(target_os = "none")]
+            audio_stopped_for_open: AtomicBool::new(false),
             seek_ms: AtomicU64::new(0),
             volume: AtomicU8::new(68),
             path_locked: AtomicBool::new(false),
@@ -305,6 +309,18 @@ impl MediaPlayer {
         shared
             .state
             .store(PlaybackState::Loading as u8, Ordering::Release);
+        #[cfg(target_os = "none")]
+        {
+            // Stop the application stream before publishing the replacement
+            // command. This retracts PCM already queued in audiod/HDA while
+            // the worker is reading and probing the new source.
+            let stopped = sunlight_audiod::AudioClient::new()
+                .stop_stream()
+                .is_ok();
+            shared
+                .audio_stopped_for_open
+                .store(stopped, Ordering::Release);
+        }
         shared.path_locked.store(false, Ordering::Release);
         shared.command.store(COMMAND_OPEN, Ordering::Release);
         shared.command_locked.store(false, Ordering::Release);
@@ -554,8 +570,10 @@ fn handle_command(
 ) -> Result<(), MediaError> {
     match command {
         COMMAND_OPEN => {
-            if let Some(output) = sink.as_mut() {
-                output.flush()?;
+            if !shared.audio_stopped_for_open.swap(false, Ordering::AcqRel) {
+                if let Some(output) = sink.as_mut() {
+                    output.flush()?;
+                }
             }
             *loaded = None;
             *sink = None;

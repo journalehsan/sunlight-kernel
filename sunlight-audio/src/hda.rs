@@ -271,6 +271,16 @@ impl HdaPlayback {
             self.w32(self.stream_base, ctl | stream | 0x2);
         }
         self.running = true;
+        // The controller may expose a non-zero LPIB immediately after RUN
+        // (notably when a stream reset is posted asynchronously). Anchor the
+        // software accounting to the cursor we actually observe so the first
+        // refill cannot be attributed to the wrong descriptor.
+        let cursor = self.dma_position_bytes() % RING_BYTES as u32;
+        self.last_lpib = cursor;
+        self.last_hw_period = (cursor as usize / PERIOD_BYTES) % PERIODS;
+        // The ring is full, so its next free slot will be the descriptor
+        // currently playing, even if RUN was first observed after period 0.
+        self.write_period = self.last_hw_period;
         Ok(())
     }
 
@@ -341,7 +351,12 @@ impl HdaPlayback {
 
     pub fn fill_silence_ready(&mut self) -> Result<u8, HdaError> {
         let mut filled = 0u8;
-        for _ in 0..PERIODS {
+        // Leave free descriptors available for a producer arriving between
+        // audiod pump/receive iterations. Filling the entire ring with silence
+        // commits audible gaps even when PCM arrives well before its deadline.
+        // Keep the playing descriptor plus one guard descriptor initialized:
+        // at 48 kHz this leaves at least 21 ms for audiod's 8 ms poll interval.
+        while self.filled_periods < 2 {
             if !self.submit_period(&[])? {
                 break;
             }
@@ -903,6 +918,64 @@ mod tests {
             assert!(!dev.can_submit_period());
             let active = unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), PERIOD_BYTES) };
             assert!(active.iter().all(|byte| *byte == 0));
+        });
+    }
+
+    #[test]
+    fn late_producer_refills_free_period_without_an_inserted_silence_gap() {
+        with_device(|dev| {
+            dev.start().unwrap();
+            let first = [0x11; PERIOD_BYTES];
+            let second = [0x22; PERIOD_BYTES];
+            // Put the first PCM period at slot zero, behind startup silence.
+            unsafe { dev.w32(dev.stream_base + 0x04, PERIOD_BYTES as u32) };
+            dev.poll_dma_progress_report();
+            assert!(dev.submit_period(&first).unwrap());
+            // The next slot becomes free just before the producer's IPC is
+            // received. An empty producer queue must not commit silence here:
+            // slots 2, 3, 0 still give it over two periods to deliver PCM.
+            unsafe { dev.w32(dev.stream_base + 0x04, (2 * PERIOD_BYTES) as u32) };
+            dev.poll_dma_progress_report();
+            assert_eq!(dev.fill_silence_ready().unwrap(), 0);
+            assert!(dev.submit_period(&second).unwrap());
+            let pcm = unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), 2 * PERIOD_BYTES) };
+            assert_eq!(&pcm[..PERIOD_BYTES], first);
+            assert_eq!(&pcm[PERIOD_BYTES..], second);
+            assert_eq!(dev.underruns(), 0);
+        });
+    }
+
+    #[test]
+    fn idle_silence_keeps_a_guard_period_and_clears_old_pcm() {
+        with_device(|dev| {
+            dev.start().unwrap();
+            unsafe { dev.w32(dev.stream_base + 0x04, PERIOD_BYTES as u32) };
+            dev.poll_dma_progress_report();
+            assert!(dev.submit_period(&[0x55; PERIOD_BYTES]).unwrap());
+            for step in 2..=24 {
+                let current = step % PERIODS;
+                unsafe { dev.w32(dev.stream_base + 0x04, (current * PERIOD_BYTES) as u32) };
+                dev.poll_dma_progress_report();
+                dev.fill_silence_ready().unwrap();
+                assert!(dev.filled_periods >= 2);
+                assert_eq!(dev.underruns(), 0);
+            }
+            let pcm = unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), RING_BYTES) };
+            assert!(pcm.iter().all(|byte| *byte == 0));
+        });
+    }
+
+    #[test]
+    fn nonzero_start_cursor_keeps_refill_order_aligned() {
+        with_device(|dev| {
+            // Our MMIO fixture retains this cursor across the simulated reset.
+            unsafe { dev.w32(dev.stream_base + 0x04, (PERIOD_BYTES + 128) as u32) };
+            dev.start().unwrap();
+            unsafe { dev.w32(dev.stream_base + 0x04, (2 * PERIOD_BYTES) as u32) };
+            let progress = dev.poll_dma_progress_report();
+            assert_eq!(progress.first_completed_period, 1);
+            assert!(dev.submit_period(&[0x55; PERIOD_BYTES]).unwrap());
+            assert_eq!(dev.last_submitted_period(), 1);
         });
     }
 
