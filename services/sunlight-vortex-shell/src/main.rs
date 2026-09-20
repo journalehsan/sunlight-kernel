@@ -1744,6 +1744,8 @@ struct VortexShell {
     cal_view_year: u16,
     cal_selected_day: u8,
     cal_event_days: [bool; CAL_POPUP_DAYS],
+    cal_scan_day: u8,
+    cal_hover_day: Option<u8>,
     cal_selected_events: Vec<CalendarMiniEvent>,
     cal_selected_tasks: Vec<SelectedDayTaskPreview>,
     cal_selected_reminders: Vec<SelectedDayReminderPreview>,
@@ -1806,9 +1808,6 @@ struct VortexShell {
     /// Compact Apple-style system menu anchored below the SunlightOS brand.
     show_system_menu: bool,
     system_menu_hover: Option<usize>,
-    /// After the Start Menu closes because the user clicked the dock grid
-    /// icon, suppress the follow-up `Click` so the menu stays closed.
-    suppress_launcher_open: bool,
     /// Session-only most-recently-used app list (newest first, capped),
     /// shown in the Start Menu's "Recent" section. Not persisted across
     /// restarts — falls back to a static "Suggested" set when empty.
@@ -1920,6 +1919,8 @@ impl VortexShell {
             cal_view_year: 1970,
             cal_selected_day: 1,
             cal_event_days: [false; CAL_POPUP_DAYS],
+            cal_scan_day: 0,
+            cal_hover_day: None,
             cal_selected_events: Vec::new(),
             cal_selected_tasks: Vec::new(),
             cal_selected_reminders: Vec::new(),
@@ -2002,7 +2003,6 @@ impl VortexShell {
             start_menu: start_menu::StartMenuState::new(),
             show_system_menu: false,
             system_menu_hover: None,
-            suppress_launcher_open: false,
             recent_apps: Vec::new(),
             #[cfg(feature = "stress")]
             stress_cycles: 0,
@@ -2056,10 +2056,6 @@ impl VortexShell {
                     first_valid_snapshot = self.status_time.is_none();
                     self.status_time = Some(next);
                     clock_changed = true;
-                    if self.show_calendar_popover && (1..=12).contains(&mon) && y >= 1970 {
-                        self.cal_view_month = mon;
-                        self.cal_view_year = y;
-                    }
                     if tmp_tz_l > 0 && tmp_tz_l <= 48 {
                         self.tz_id[..tmp_tz_l].copy_from_slice(&tmp_tz[..tmp_tz_l]);
                         self.tz_id_len = tmp_tz_l;
@@ -2164,8 +2160,41 @@ impl VortexShell {
         self.cal_view_month = today.map_or(1, |time| time.month);
         self.cal_view_year = today.map_or(1970, |time| time.year);
         self.cal_selected_day = today.map_or(1, |time| time.day);
+        self.cal_event_days = [false; CAL_POPUP_DAYS];
+        self.cal_scan_day = 1;
+        self.cal_hover_day = None;
+        self.invalidate_calendar_selection();
+    }
+
+    fn invalidate_calendar_selection(&mut self) {
         self.cal_last_loaded_key_len = 0;
-        self.refresh_calendar_popover_data();
+        self.cal_selected_events.clear();
+        self.cal_selected_tasks.clear();
+        self.cal_selected_reminders.clear();
+    }
+
+    /// One bounded storage step per input-poll opportunity, never during paint.
+    fn advance_calendar_load(&mut self) -> bool {
+        if !self.show_calendar_popover {
+            return false;
+        }
+        if self.cal_last_loaded_key_len == 0 {
+            self.refresh_calendar_popover_data();
+            return true;
+        }
+        let day = self.cal_scan_day;
+        if day == 0 {
+            return false;
+        }
+        let idx = cal_weekday_sun0(self.cal_view_year, self.cal_view_month, 1) + day as usize - 1;
+        self.cal_event_days[idx] =
+            calendar_day_has_items(self.cal_view_year, self.cal_view_month, day);
+        self.cal_scan_day = if day < cal_days_in_month(self.cal_view_year, self.cal_view_month) {
+            day + 1
+        } else {
+            0
+        };
+        self.cal_event_days[idx]
     }
 
     fn refresh_calendar_popover_data(&mut self) {
@@ -2179,16 +2208,6 @@ impl VortexShell {
             && self.cal_last_loaded_key[..self.cal_last_loaded_key_len] == *kb
         {
             return;
-        }
-        self.cal_event_days = [false; CAL_POPUP_DAYS];
-        let offset = cal_weekday_sun0(self.cal_view_year, self.cal_view_month, 1);
-        let dim = cal_days_in_month(self.cal_view_year, self.cal_view_month);
-        for day in 1..=dim {
-            let idx = offset + (day as usize - 1);
-            if idx < CAL_POPUP_DAYS {
-                self.cal_event_days[idx] =
-                    calendar_day_has_items(self.cal_view_year, self.cal_view_month, day);
-            }
         }
         self.cal_selected_events = load_calendar_events_for_day(
             self.cal_view_year,
@@ -3960,7 +3979,7 @@ impl VortexShell {
     fn apply_start_menu_action(&mut self, action: start_menu::StartMenuAction, now: u64) {
         use start_menu::{PowerAction, StartMenuAction};
         match action {
-            StartMenuAction::None | StartMenuAction::DismissedOutside { .. } => {}
+            StartMenuAction::None | StartMenuAction::DismissedOutside => {}
             StartMenuAction::Launch(app_id) => {
                 let _ = self.open_app_from_ui(app_id, now, LaunchSource::Shell);
             }
@@ -6952,7 +6971,6 @@ impl VortexShell {
     }
 
     fn draw_calendar_popover(&mut self, canvas: &mut Canvas, theme: &Theme, cw: u32, _ch: u32) {
-        self.refresh_calendar_popover_data();
         let panel = self.calendar_popover_rect(cw);
         let x = panel.x;
         let y = panel.y;
@@ -6975,7 +6993,7 @@ impl VortexShell {
         );
 
         let mut hx = x + 12;
-        let cell = 38u32;
+        let cell = pw.saturating_sub(24) / 7;
         for &wd in &["S", "M", "T", "W", "T", "F", "S"] {
             draw_text_vcenter(
                 canvas,
@@ -7017,12 +7035,14 @@ impl VortexShell {
             } else if is_today {
                 canvas.fill_rounded_rect(cell_r, 4, theme.panel_alt);
                 canvas.stroke_rounded_rect(cell_r, 4, 1, theme.accent);
+            } else if self.cal_hover_day == Some(day) {
+                canvas.fill_rounded_rect(cell_r, 4, theme.panel_alt);
             }
             let s = alloc::format!("{}", day);
             draw_text_vcenter(
                 canvas,
                 &s,
-                gx + 7,
+                gx + (cell_r.w as i32 - measure_text(&s, FontRole::UiSmall).w as i32) / 2,
                 cell_r.y,
                 cell_r.h,
                 &TextStyle::new(
@@ -7063,173 +7083,80 @@ impl VortexShell {
             &TextStyle::new(FontRole::UiSmall, theme.text_muted),
         );
 
-        let mut item_y = list_y + 18;
-        draw_text_vcenter(
-            canvas,
-            "Events",
-            x + 12,
-            item_y,
-            16,
-            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
-        );
-        item_y += 16;
-        if self.cal_selected_events.is_empty() {
-            draw_text_vcenter(
-                canvas,
-                "No events for this day",
-                x + 12,
-                item_y,
-                18,
-                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
-            );
-            item_y += 20;
-        } else {
-            for event in self.cal_selected_events.iter().take(3) {
-                let row = Rect::new(x + 12, item_y, pw - 24, 20);
-                canvas.fill_rounded_rect(row, 4, theme.panel_alt);
+        // Clip agenda content above the fixed footer. Rows use local coordinates
+        // so long titles and short screens cannot paint over the button or desktop.
+        let agenda_y = list_y + 18;
+        let agenda_h = (panel.bottom() - 36 - agenda_y).max(0) as u32;
+        if agenda_h > 0 {
+            let mut agenda = canvas.sub_canvas(Rect::new(x + 12, agenda_y, pw - 24, agenda_h));
+            let mut rows: Vec<(String, String)> = Vec::new();
+            if self.cal_last_loaded_key_len == 0 {
+                rows.push((String::new(), String::from("Loading agenda…")));
+            } else {
+                for event in self.cal_selected_events.iter().take(3) {
+                    rows.push((event.time.clone(), event.title.clone()));
+                }
+                for task in self.cal_selected_tasks.iter().take(CAL_POPUP_TASKS) {
+                    let marker = if task.status == sunlight_reminders::TaskStatus::Done {
+                        "Done"
+                    } else {
+                        "Task"
+                    };
+                    rows.push((
+                        task.due_time.clone(),
+                        alloc::format!("{} · {}", marker, task.title),
+                    ));
+                }
+                for reminder in self.cal_selected_reminders.iter().take(CAL_POPUP_REMINDERS) {
+                    rows.push((
+                        reminder.reminder_time.clone(),
+                        alloc::format!("Reminder · {}", reminder.title),
+                    ));
+                }
+                if rows.is_empty() {
+                    rows.push((String::new(), String::from("Nothing planned for this day")));
+                }
+            }
+            let capacity = (agenda_h / 26) as usize;
+            let more = rows.len() > capacity
+                || self.cal_selected_events.len() > 3
+                || self.cal_selected_tasks.len() > CAL_POPUP_TASKS
+                || self.cal_selected_reminders.len() > CAL_POPUP_REMINDERS;
+            let shown = if more {
+                capacity.saturating_sub(1)
+            } else {
+                capacity
+            };
+            for (idx, (label, title)) in rows.iter().take(shown).enumerate() {
+                let row = Rect::new(0, idx as i32 * 26, pw - 24, 24);
+                agenda.fill_rounded_rect(row, 5, theme.panel_alt);
                 draw_text_vcenter(
-                    canvas,
-                    &event.time,
-                    row.x + 6,
+                    &mut agenda,
+                    label,
+                    6,
                     row.y,
                     row.h,
                     &TextStyle::new(FontRole::UiSmall, theme.accent),
                 );
+                let title_x = if label.is_empty() { 6 } else { 62 };
                 draw_text_vcenter(
-                    canvas,
-                    &event.title,
-                    row.x + 62,
+                    &mut agenda,
+                    &ellipsize_label(title, 29),
+                    title_x,
                     row.y,
                     row.h,
                     &TextStyle::new(FontRole::UiSmall, theme.text),
                 );
-                item_y += 22;
             }
-            if self.cal_selected_events.len() > 3 {
+            if more && capacity > 0 {
                 draw_text_vcenter(
-                    canvas,
+                    &mut agenda,
                     "More in Calendar…",
-                    x + 12,
-                    item_y,
-                    18,
+                    6,
+                    shown as i32 * 26,
+                    24,
                     &TextStyle::new(FontRole::UiSmall, theme.text_muted),
                 );
-                item_y += 18;
-            }
-        }
-
-        item_y += 2;
-        draw_text_vcenter(
-            canvas,
-            "Tasks",
-            x + 12,
-            item_y,
-            16,
-            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
-        );
-        item_y += 16;
-        if self.cal_selected_tasks.is_empty() {
-            draw_text_vcenter(
-                canvas,
-                "No tasks for this day",
-                x + 12,
-                item_y,
-                18,
-                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
-            );
-            item_y += 20;
-        } else {
-            for task in self.cal_selected_tasks.iter().take(CAL_POPUP_TASKS) {
-                let row = Rect::new(x + 12, item_y, pw - 24, 20);
-                canvas.fill_rounded_rect(row, 4, theme.panel_alt);
-                let marker = if task.status == sunlight_reminders::TaskStatus::Done {
-                    "[x]"
-                } else {
-                    "[ ]"
-                };
-                draw_text_vcenter(
-                    canvas,
-                    marker,
-                    row.x + 6,
-                    row.y,
-                    row.h,
-                    &TextStyle::new(FontRole::UiSmall, theme.accent),
-                );
-                let mut title = task.title.clone();
-                if title.chars().count() > 28 {
-                    title = ellipsize_label(&title, 28);
-                }
-                draw_text_vcenter(
-                    canvas,
-                    &title,
-                    row.x + 34,
-                    row.y,
-                    row.h,
-                    &TextStyle::new(FontRole::UiSmall, theme.text),
-                );
-                if !task.due_time.is_empty() {
-                    draw_text_vcenter(
-                        canvas,
-                        &task.due_time,
-                        row.right() - 42,
-                        row.y,
-                        row.h,
-                        &TextStyle::new(FontRole::UiSmall, theme.text_muted),
-                    );
-                }
-                item_y += 22;
-            }
-        }
-
-        item_y += 2;
-        draw_text_vcenter(
-            canvas,
-            "Reminders",
-            x + 12,
-            item_y,
-            16,
-            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
-        );
-        item_y += 16;
-        if self.cal_selected_reminders.is_empty() {
-            draw_text_vcenter(
-                canvas,
-                "No reminders",
-                x + 12,
-                item_y,
-                18,
-                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
-            );
-        } else {
-            for reminder in self.cal_selected_reminders.iter().take(CAL_POPUP_REMINDERS) {
-                let row = Rect::new(x + 12, item_y, pw - 24, 20);
-                canvas.fill_rounded_rect(row, 4, theme.panel_alt);
-                let time = if reminder.reminder_time.is_empty() {
-                    "--:--"
-                } else {
-                    reminder.reminder_time.as_str()
-                };
-                draw_text_vcenter(
-                    canvas,
-                    time,
-                    row.x + 6,
-                    row.y,
-                    row.h,
-                    &TextStyle::new(FontRole::UiSmall, theme.accent),
-                );
-                let mut title = reminder.title.clone();
-                if title.chars().count() > 30 {
-                    title = ellipsize_label(&title, 30);
-                }
-                draw_text_vcenter(
-                    canvas,
-                    &title,
-                    row.x + 52,
-                    row.y,
-                    row.h,
-                    &TextStyle::new(FontRole::UiSmall, theme.text),
-                );
-                item_y += 22;
             }
         }
 
@@ -7250,13 +7177,14 @@ impl VortexShell {
     }
 
     fn calendar_popover_rect(&self, cw: u32) -> Rect {
-        let pw = 300u32;
-        let ph = 310u32;
-        let cx = self.datetime_zone.x + (self.datetime_zone.w as i32) / 2;
-        let x = (cx - (pw as i32) / 2)
-            .max(TOP_PAD)
-            .min((cw - pw - TOP_PAD as u32) as i32);
-        Rect::new(x, self.datetime_zone.bottom() + 2, pw, ph)
+        let pw = 300u32.min(cw.saturating_sub(16));
+        let y = self.datetime_zone.bottom() + 8;
+        let ph = 440u32.min(self.screen_h.saturating_sub(y.max(0) as u32 + 12));
+        let cx = self.datetime_zone.x + self.datetime_zone.w as i32 / 2;
+        let x = (cx - pw as i32 / 2)
+            .max(8)
+            .min(cw.saturating_sub(pw + 8) as i32);
+        Rect::new(x, y, pw, ph)
     }
 
     fn calendar_day_at_point(&self, point: Point, cw: u32) -> Option<u8> {
@@ -7266,7 +7194,11 @@ impl VortexShell {
         if point.x < grid_x || point.y < grid_y {
             return None;
         }
-        let col = (point.x - grid_x) / 38;
+        let cell = panel.w.saturating_sub(24) / 7;
+        if cell == 0 || !panel.contains(point) {
+            return None;
+        }
+        let col = (point.x - grid_x) / cell as i32;
         let row = (point.y - grid_y) / 22;
         if col < 0 || col >= 7 || row < 0 || row >= 6 {
             return None;
@@ -8111,6 +8043,25 @@ mod shelf_control_tests {
 // ---------------------------------------------------------------------------
 
 impl App for VortexShell {
+    fn desktop_overlay_rect(&self) -> Option<Rect> {
+        self.start_menu
+            .overlay_rect(self.screen_w, self.screen_h, &self.recent_apps)
+            .or_else(|| {
+                self.show_calendar_popover
+                    .then(|| self.calendar_popover_rect(self.screen_w))
+            })
+    }
+
+    fn poll_timeout_ms(&self) -> u64 {
+        if self.show_calendar_popover
+            && (self.cal_last_loaded_key_len == 0 || self.cal_scan_day != 0)
+        {
+            1
+        } else {
+            200
+        }
+    }
+
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         if self.status_time.is_none() {
             let _ = self.refresh_status();
@@ -8353,6 +8304,32 @@ impl App for VortexShell {
 
     fn update(&mut self, event: Event) -> bool {
         self.note_event_progress(event);
+        if self.show_calendar_popover {
+            match event {
+                Event::MouseDown { button: 1, .. } => {
+                    self.show_calendar_popover = false;
+                    return true;
+                }
+                Event::MouseDown { .. } | Event::MouseUp { .. } => return false,
+                Event::KeyPress {
+                    keycode: 1,
+                    pressed: true,
+                    ..
+                } => {
+                    self.show_calendar_popover = false;
+                    return true;
+                }
+                _ => {}
+            }
+            if let Event::MouseMove { x, y } = event {
+                let hover = self.calendar_day_at_point(Point::new(x, y), self.screen_w);
+                if hover != self.cal_hover_day {
+                    self.cal_hover_day = hover;
+                    return true;
+                }
+                return false;
+            }
+        }
         let sidebar_top = top_bar_rect(self.screen_w, self.top_panel_presentation).bottom() + 8;
         let sidebar_bottom = bot_y(self.screen_h) - 8;
         let switcher_top = sidebar_top;
@@ -8554,14 +8531,6 @@ impl App for VortexShell {
                         &self.recent_apps,
                         now,
                     );
-                    if let start_menu::StartMenuAction::DismissedOutside { x, y } = action {
-                        if matches!(event, Event::MouseDown { .. }) {
-                            self.suppress_next_click = true;
-                        }
-                        if self.launcher_zone.contains(Point::new(x, y)) {
-                            self.suppress_launcher_open = true;
-                        }
-                    }
                     self.apply_start_menu_action(action, now);
                     return dirty;
                 }
@@ -8702,14 +8671,20 @@ impl App for VortexShell {
                 }
                 if self.show_calendar_popover {
                     if let Some(day) = self.calendar_day_at_point(point, self.screen_w) {
-                        self.cal_selected_day = day;
-                        self.cal_last_loaded_key_len = 0;
-                        self.refresh_calendar_popover_data();
-                        return true;
+                        if self.cal_selected_day != day {
+                            self.cal_selected_day = day;
+                            self.invalidate_calendar_selection();
+                            return true;
+                        }
+                        return false;
                     }
                     if self.calendar_popover_rect(self.screen_w).contains(point) {
                         return true;
                     }
+                    // Consume outside dismissal so this gesture cannot activate
+                    // an application or a desktop item underneath the popup.
+                    self.show_calendar_popover = false;
+                    return true;
                 }
                 if self.show_network_popover {
                     if self.network_settings_btn.contains(point) {
@@ -8867,10 +8842,6 @@ impl App for VortexShell {
                 if self.launcher_zone.contains(point) {
                     self.show_system_menu = false;
                     self.system_menu_hover = None;
-                    if self.suppress_launcher_open {
-                        self.suppress_launcher_open = false;
-                        return true;
-                    }
                     if self.start_menu.is_open() {
                         self.start_menu.close();
                     } else {
@@ -9290,7 +9261,7 @@ impl App for VortexShell {
             }
             Event::Tick => {
                 let now = monotonic_millis();
-                let mut dirty = false;
+                let mut dirty = self.advance_calendar_load();
                 #[cfg(feature = "stress")]
                 self.run_stress_cycle();
                 if self.sync_app_registry(now, false) {

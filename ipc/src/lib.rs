@@ -1051,6 +1051,10 @@ pub mod sgp {
     pub mod SgpMsg {
         // Client -> Display Server Requests
         pub const CREATE_WINDOW: u64 = 0xA101;
+        /// words[0]=window id. For an owned Desktop surface only, words[1]
+        /// packs overlay x/y (u32), words[2] packs width/height (u32).
+        /// A nonempty, in-bounds rectangle is a modal shell overlay; zero size
+        /// clears it. Geometry and pixels are published in the same commit.
         pub const COMMIT_FRAME: u64 = 0xA102;
         pub const EVENT_POLL: u64 = 0xA103;
         /// EVENT_POLL reply words[3] low byte is the physical button mask.

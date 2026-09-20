@@ -972,10 +972,7 @@ pub(crate) enum StartMenuAction {
     /// Pointer dismissed the menu from outside the panel. The shell keeps
     /// this consumed so the same gesture does not leak through to desktop,
     /// dock, or other shell chrome underneath.
-    DismissedOutside {
-        x: i32,
-        y: i32,
-    },
+    DismissedOutside,
     Launch(AppId),
     Unavailable(&'static str),
     Power(PowerAction),
@@ -1079,7 +1076,7 @@ impl StartMenuState {
                 let p = Point::new(x, y);
                 if !layout.panel.contains(p) {
                     self.close();
-                    return (true, StartMenuAction::DismissedOutside { x, y });
+                    return (true, StartMenuAction::DismissedOutside);
                 }
                 if layout.close_btn.contains(p) {
                     self.close();
@@ -1124,17 +1121,16 @@ impl StartMenuState {
                 // Click landed on panel padding/labels/dividers — swallow it.
                 (true, StartMenuAction::None)
             }
-            // Close immediately on an outside press so the overlay disappears
-            // before the click completes; the shell consumes the follow-up
-            // click to avoid click-through into content underneath.
+            // Keep left-button ownership through release, then dismiss in the
+            // Click branch. Closing on press restores app focus too early and
+            // can strand the shell's follow-up click suppression.
             Event::MouseDown { x, y, button } => {
                 let p = Point::new(x, y);
-                if !layout.panel.contains(p) {
+                if button != 0 && !layout.panel.contains(p) {
                     self.close();
-                    return (true, StartMenuAction::DismissedOutside { x, y });
+                    return (true, StartMenuAction::DismissedOutside);
                 }
-                let _ = button;
-                (true, StartMenuAction::None)
+                (false, StartMenuAction::None)
             }
             Event::MouseUp { .. } => (true, StartMenuAction::None),
             Event::MouseMove { x, y } => {
@@ -1307,6 +1303,26 @@ impl StartMenuState {
             }
             _ => (false, StartMenuAction::None),
         }
+    }
+
+    pub(crate) fn overlay_rect(&self, w: u32, h: u32, recent: &[AppId]) -> Option<Rect> {
+        self.is_open.then(|| {
+            let panel = compute_layout(
+                w,
+                h,
+                self.search.value(),
+                recent,
+                self.page,
+                self.all_apps_page,
+            )
+            .panel;
+            Rect::new(
+                panel.x,
+                panel.y,
+                panel.w.min(w.saturating_sub(panel.x.max(0) as u32)),
+                panel.h.min(h.saturating_sub(panel.y.max(0) as u32)),
+            )
+        })
     }
 
     /// Draw the menu. No-op when closed. Reads `apps` only for a small
@@ -1710,6 +1726,52 @@ mod tests {
         compute_layout, page_count, AppId, StartMenuPage, ALL_APPS_PAGE_CAP, APP_CATALOG_LEN,
         RANDOM_CAP, RECENT_CAP, SMALL_COLS,
     };
+
+    #[test]
+    fn outside_left_click_keeps_modal_until_release_and_allows_reopening() {
+        let mut menu = super::StartMenuState::new();
+        menu.open_menu();
+        let (_, action) = menu.handle_event(
+            super::Event::MouseDown {
+                x: 790,
+                y: 590,
+                button: 0,
+            },
+            800,
+            600,
+            &[],
+            0,
+        );
+        assert!(menu.is_open());
+        assert!(matches!(action, super::StartMenuAction::None));
+        let (dirty, action) =
+            menu.handle_event(super::Event::Click { x: 790, y: 590 }, 800, 600, &[], 1);
+        assert!(dirty);
+        assert!(!menu.is_open());
+        assert!(matches!(action, super::StartMenuAction::DismissedOutside));
+        menu.open_menu();
+        assert!(menu.is_open());
+    }
+
+    #[test]
+    fn published_overlay_tracks_current_page_and_is_clipped_to_screen() {
+        let mut menu = super::StartMenuState::new();
+        assert!(menu.overlay_rect(800, 600, &[]).is_none());
+        menu.open_menu();
+        for (w, h) in [(1280, 900), (800, 600), (640, 480), (320, 240)] {
+            for page in [StartMenuPage::Home, StartMenuPage::AllApps] {
+                menu.page = page;
+                let panel = compute_layout(w, h, "", &[], page, 0).panel;
+                let overlay = menu.overlay_rect(w, h, &[]).unwrap();
+                assert_eq!(overlay.x, panel.x);
+                assert_eq!(overlay.y, panel.y);
+                assert!(overlay.right() <= w as i32);
+                assert!(overlay.bottom() <= h as i32);
+            }
+        }
+        menu.close();
+        assert!(menu.overlay_rect(800, 600, &[]).is_none());
+    }
 
     #[test]
     fn all_apps_pagination_handles_empty_and_partial_pages() {

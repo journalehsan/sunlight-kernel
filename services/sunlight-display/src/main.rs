@@ -681,6 +681,7 @@ struct Window {
     /// Monotonic identity of the currently attached client surface. Generation
     /// one is the CREATE_WINDOW surface; zero is never published.
     surface_generation: u64,
+    desktop_overlay: Option<Rect>,
     x: u32, // chrome top-left on screen
     y: u32,
     // Saved normal geometry for restore from maximized/fullscreen.
@@ -1490,12 +1491,44 @@ fn is_focusable_window(win: &Window) -> bool {
         && win.config.window_type != WindowType::Widget
 }
 
+/// Modal shell input never takes priority over the lock screen or mode dialog.
+fn desktop_overlay_idx(state: &CompositorState) -> Option<usize> {
+    if state.lock_generation != 0 || state.mode_transaction.is_some() {
+        return None;
+    }
+    state.windows.iter().rposition(|win| {
+        win.config.window_type == WindowType::Desktop
+            && win.desktop_overlay.is_some()
+            && is_window_visible(state, win)
+    })
+}
+
+fn desktop_overlay_from_commit(win: &Window, caller: u64, xy: u64, wh: u64) -> Option<Rect> {
+    if win.owner_pid != caller || win.config.window_type != WindowType::Desktop {
+        return None;
+    }
+    let (x, y, w, h) = (xy as u32, (xy >> 32) as u32, wh as u32, (wh >> 32) as u32);
+    if w == 0
+        || h == 0
+        || x > i32::MAX as u32
+        || y > i32::MAX as u32
+        || x.checked_add(w)? > win.surface_width_pixels
+        || y.checked_add(h)? > win.surface_height_rows
+    {
+        return None;
+    }
+    Some(Rect::new(x as i32, y as i32, w, h))
+}
+
 fn focused_window_idx(state: &CompositorState) -> Option<usize> {
     if state.lock_generation != 0 {
         return state
             .windows
             .iter()
             .position(|window| window.id == state.lock_presenter_window);
+    }
+    if let Some(idx) = desktop_overlay_idx(state) {
+        return Some(idx);
     }
     state
         .windows
@@ -1539,6 +1572,17 @@ fn topmost_window_idx_at(state: &CompositorState, cx: u32, cy: u32) -> Option<us
             .windows
             .iter()
             .position(|window| window.id == dialog_id && is_window_visible(state, window));
+    }
+    if let Some(idx) = desktop_overlay_idx(state) {
+        return Some(idx);
+    }
+    // Match the panel strip that is re-composited above application windows.
+    if cy < top_panel_strip_height(state) {
+        if let Some(idx) = state.windows.iter().rposition(|win| {
+            win.config.window_type == WindowType::Desktop && is_window_visible(state, win)
+        }) {
+            return Some(idx);
+        }
     }
     state
         .windows
@@ -4368,8 +4412,8 @@ fn debug_log_window_state(state: &CompositorState, win_id: u64) {
     debug_log("\n");
 }
 
-/// Re-blit the top panel strip from the Desktop window onto the back buffer
-/// after all normal windows have been composited.  This ensures the Vortex Shell
+/// Re-blit the top panel and committed modal popup from the Desktop surface
+/// after all application windows have been composited.  This ensures the Vortex Shell
 /// top bar is never visually obscured even when a normal window manages to
 /// overlap that region.
 ///
@@ -4378,13 +4422,17 @@ fn debug_log_window_state(state: &CompositorState, win_id: u64) {
 /// reserved strip; integrated mode restores only the exact panel height so the
 /// maximized titlebar touches it without being overpainted.
 fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) {
-    let desktop = match state.windows.iter().find(|w| {
-        w.config.window_type == WindowType::Desktop
-            && !w.buffer.is_null()
-            && is_window_visible(state, w)
-    }) {
-        Some(w) => w,
-        None => return,
+    let desktop = match desktop_overlay_idx(state)
+        .map(|idx| &state.windows[idx])
+        .or_else(|| {
+            state.windows.iter().find(|w| {
+                w.config.window_type == WindowType::Desktop
+                    && !w.buffer.is_null()
+                    && is_window_visible(state, w)
+            })
+        }) {
+        Some(w) if !w.buffer.is_null() => w,
+        _ => return,
     };
     let Ok(layout) = surface::SurfaceLayout::validate(
         desktop.surface_width_pixels,
@@ -4394,20 +4442,34 @@ fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) 
     ) else {
         return;
     };
-    let panel_strip_h = top_panel_strip_height(state);
-    let Ok(source) = layout.readable_rect(0, 0, state.fb_width, panel_strip_h.min(state.fb_height))
-    else {
-        return;
-    };
-    let strip_rows = source.height as usize;
-    let blit_w = source.width as usize;
-    let stride = fb_stride(state);
-    for row in 0..strip_rows {
-        let src = unsafe {
-            core::slice::from_raw_parts(desktop.buffer.add(row * layout.stride_pixels), blit_w)
+    let panel = Rect::new(
+        0,
+        0,
+        state.fb_width,
+        top_panel_strip_height(state).min(state.fb_height),
+    );
+    let overlay = desktop_overlay_idx(state).and_then(|idx| state.windows[idx].desktop_overlay);
+    for rect in [Some(panel), overlay].into_iter().flatten() {
+        let x = rect.x.max(0) as u32;
+        let y = rect.y.max(0) as u32;
+        let width = rect.w.min(state.fb_width.saturating_sub(x));
+        let height = rect.h.min(state.fb_height.saturating_sub(y));
+        let Ok(source) = layout.readable_rect(x, y, width, height) else {
+            continue;
         };
-        let dst_start = row * stride;
-        back_buffer[dst_start..dst_start + blit_w].copy_from_slice(src);
+        let stride = fb_stride(state);
+        for row in 0..source.height as usize {
+            let src = unsafe {
+                core::slice::from_raw_parts(
+                    desktop
+                        .buffer
+                        .add((y as usize + row) * layout.stride_pixels + x as usize),
+                    source.width as usize,
+                )
+            };
+            let dst = (y as usize + row) * stride + x as usize;
+            back_buffer[dst..dst + source.width as usize].copy_from_slice(src);
+        }
     }
 }
 
@@ -5507,6 +5569,7 @@ mod tests {
             surface_stride_bytes: w as usize * surface::BYTES_PER_PIXEL as usize,
             surface_len_bytes: w as usize * h as usize * surface::BYTES_PER_PIXEL as usize,
             surface_generation: 1,
+            desktop_overlay: None,
             x,
             y,
             saved_x: x,
@@ -6839,6 +6902,104 @@ mod tests {
     }
 
     #[test]
+    fn desktop_overlay_routes_input_above_on_top_apps_and_restores_focus() {
+        let mut desktop = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Fullscreen,
+            ZIndexType::Normal,
+        );
+        desktop.desktop_overlay = Some(Rect::new(100, 100, 300, 400));
+        let app = test_window(
+            2,
+            20,
+            50,
+            600,
+            500,
+            WindowType::Normal,
+            WindowState::Normal,
+            ZIndexType::OnTop,
+        );
+        let mut state = test_state(vec![desktop, app]);
+        assert_eq!(focused_window_id(&state), Some(1));
+        assert_eq!(topmost_window_id_at(&state, 200, 200), Some(1));
+        // Outside dismissal belongs to the shell, never the covered app.
+        assert_eq!(topmost_window_id_at(&state, 550, 400), Some(1));
+        state.lock_generation = 1;
+        state.lock_presenter_window = 2;
+        assert_eq!(focused_window_id(&state), Some(2));
+        assert_eq!(topmost_window_id_at(&state, 200, 200), Some(2));
+        assert_eq!(desktop_overlay_idx(&state), None);
+        state.lock_generation = 0;
+        state.windows[0].desktop_overlay = None;
+        assert_eq!(focused_window_id(&state), Some(2));
+        assert_eq!(topmost_window_id_at(&state, 200, 200), Some(2));
+        assert_eq!(topmost_window_id_at(&state, 200, 20), Some(1));
+    }
+
+    #[test]
+    fn desktop_overlay_commit_rejects_foreign_normal_and_out_of_bounds_surfaces() {
+        let mut desktop = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Fullscreen,
+            ZIndexType::Normal,
+        );
+        let xy = 100 | (100u64 << 32);
+        let wh = 300 | (400u64 << 32);
+        assert_eq!(
+            desktop_overlay_from_commit(&desktop, 1, xy, wh),
+            Some(Rect::new(100, 100, 300, 400))
+        );
+        assert_eq!(desktop_overlay_from_commit(&desktop, 2, xy, wh), None);
+        assert_eq!(desktop_overlay_from_commit(&desktop, 1, xy, 0), None);
+        assert_eq!(
+            desktop_overlay_from_commit(&desktop, 1, xy, 800 | (600u64 << 32)),
+            None
+        );
+        assert_eq!(desktop_overlay_from_commit(&desktop, 1, u64::MAX, wh), None);
+        desktop.config.window_type = WindowType::Normal;
+        assert_eq!(desktop_overlay_from_commit(&desktop, 1, xy, wh), None);
+    }
+
+    #[test]
+    fn desktop_overlay_reblit_preserves_application_pixels_outside_popup() {
+        let mut pixels = vec![0x00123456u32; 800 * 600];
+        let mut desktop = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Fullscreen,
+            ZIndexType::Normal,
+        );
+        desktop.buffer = pixels.as_mut_ptr();
+        desktop.desktop_overlay = Some(Rect::new(100, 100, 300, 400));
+        let mut state = test_state(vec![desktop]);
+        let mut output = vec![0x00654321; 800 * 600];
+        reblit_desktop_panel_strip(&state, &mut output);
+        assert_eq!(output[20 * 800 + 10], 0x00123456);
+        assert_eq!(output[100 * 800 + 100], 0x00123456);
+        assert_eq!(output[499 * 800 + 399], 0x00123456);
+        assert_eq!(output[500 * 800 + 399], 0x00654321);
+        assert_eq!(output[200 * 800 + 400], 0x00654321);
+        state.windows[0].desktop_overlay = None;
+        output.fill(0x00654321);
+        reblit_desktop_panel_strip(&state, &mut output);
+        assert_eq!(output[200 * 800 + 200], 0x00654321);
+    }
+
+    #[test]
     fn panel_strip_tracks_visible_maximized_normal_windows() {
         let mut win = test_window(
             1,
@@ -7524,6 +7685,7 @@ pub extern "C" fn _start() -> ! {
                                 surface_stride_bytes: layout.stride_bytes,
                                 surface_len_bytes: layout.surface_len_bytes,
                                 surface_generation: 1,
+                                desktop_overlay: None,
                                 x: win_x,
                                 y: win_y,
                                 saved_x: win_x,
@@ -8109,7 +8271,18 @@ pub extern "C" fn _start() -> ! {
             SgpMsg::COMMIT_FRAME => {
                 let win_id = msg.words[0];
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
-                if let Some(win_idx) = state.windows.iter().position(|w| w.id == win_id) {
+                if let Some(win_idx) = state
+                    .windows
+                    .iter()
+                    .position(|w| w.id == win_id && w.owner_pid == msg.badge)
+                {
+                    let overlay = desktop_overlay_from_commit(
+                        &state.windows[win_idx],
+                        msg.badge,
+                        msg.words[1],
+                        msg.words[2],
+                    );
+                    state.windows[win_idx].desktop_overlay = overlay;
                     let (chrome_rect, owner_pid, first_present, trace, subject) = {
                         let win = &state.windows[win_idx];
                         let trace = trace_for_pid(&state, win.owner_pid);
@@ -8364,6 +8537,9 @@ pub extern "C" fn _start() -> ! {
                     if let Some(index) = focused_window_idx(&state) {
                         state.windows[index].pending_keys.push(packed);
                     }
+                    consumed = true;
+                } else if let Some(index) = desktop_overlay_idx(&state) {
+                    state.windows[index].pending_keys.push(packed);
                     consumed = true;
                 } else if state
                     .keyboard

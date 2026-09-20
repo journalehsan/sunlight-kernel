@@ -31,6 +31,7 @@ use sunlight_ipc::{
 use crate::event::{Event, WindowEvent};
 use crate::paint::Canvas;
 use crate::theme::Theme;
+use crate::Rect;
 
 /// Default timeout for `EVENT_POLL` (milliseconds).
 /// When no event arrives within this window, the loop delivers `Event::Tick`.
@@ -698,6 +699,10 @@ impl Window {
     /// compositor dequeues it, leaving a newly created window permanently
     /// non-visible. The display server always acknowledges accepted commits.
     pub fn commit(&mut self) {
+        self.commit_with_desktop_overlay(None);
+    }
+
+    fn commit_with_desktop_overlay(&mut self, overlay: Option<Rect>) {
         let frame_len = self.frame_len();
         let draw_offset = self.draw_buffer_offset();
         if draw_offset != 0 {
@@ -707,9 +712,13 @@ impl Window {
                 ptr::copy_nonoverlapping(self.buffer.add(draw_offset), self.buffer, frame_len);
             }
         }
+        let rect = overlay.unwrap_or_default();
         let _ = ipc_call(
             self.display_ep,
-            IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, self.win_id),
+            IpcMsg::with_label(SgpMsg::COMMIT_FRAME)
+                .word(0, self.win_id)
+                .word(1, rect.x as u32 as u64 | ((rect.y as u32 as u64) << 32))
+                .word(2, rect.w as u64 | ((rect.h as u64) << 32)),
         );
     }
 
@@ -808,7 +817,7 @@ impl Window {
         {
             let mut c = self.canvas();
             app.view(&mut c, theme);
-            self.commit();
+            self.commit_with_desktop_overlay(app.desktop_overlay_rect());
         }
 
         // First frame is committed and visible. Fire on_ready() so the app
@@ -824,7 +833,7 @@ impl Window {
         if app.on_ready() {
             let mut c = self.canvas();
             app.view(&mut c, theme);
-            self.commit();
+            self.commit_with_desktop_overlay(app.desktop_overlay_rect());
         }
         launch_trace::log_phase_now(
             self.launch_trace,
@@ -894,7 +903,7 @@ impl Window {
             if needs_redraw {
                 let mut c = self.canvas();
                 app.view(&mut c, theme);
-                self.commit();
+                self.commit_with_desktop_overlay(app.desktop_overlay_rect());
             }
         }
     }
@@ -1038,6 +1047,13 @@ impl Drop for Window {
 /// }
 /// ```
 pub trait App {
+    /// Desktop-only modal rectangle, published with the painted frame. The
+    /// compositor restores this region above applications and gives the desktop
+    /// input until the next commit clears it. Ordinary windows ignore it.
+    fn desktop_overlay_rect(&self) -> Option<Rect> {
+        None
+    }
+
     /// Draw the current application state into the canvas.
     ///
     /// Called immediately at startup (before `on_ready`) and whenever

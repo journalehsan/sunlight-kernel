@@ -53,12 +53,41 @@ button) — while the Start Menu owns discovery of everything else.
   calls `StartMenuState::open_menu()` when closed, or closes the menu when
   already open. While open, `VortexShell::update()` routes all
   pointer/keyboard events straight into `StartMenuState::handle_event()`
-  before any other shell input handling runs. Outside clicks/presses close
+  before any other shell input handling runs. Outside clicks close
   the menu and are consumed so the same gesture does not leak through and
   accidentally activate the desktop, dock, or other shell chrome below.
   `Event::Tick` deliberately still falls through to the normal path so
   background app-registry polling keeps the menu's running-app badges
   fresh even while it's open.
+
+## Compositor stacking and input
+
+Start Menu and the top-panel calendar publish their visible rectangle through
+`App::desktop_overlay_rect()` with each `COMMIT_FRAME`. The display service
+validates the owner and surface bounds, then copies that rectangle above normal
+and on-top application windows, using the same desktop surface as the top panel.
+The wallpaper stays in the desktop layer; only the popup rectangle is promoted.
+
+While a popup is published, the shell owns keyboard and pointer input, including
+outside clicks for dismissal. Closing or launching clears the rectangle in the
+next frame and restores application focus without changing application z-order.
+The lock screen and display-mode confirmation take priority. Ordinary application
+windows cannot publish a desktop overlay. Both the shell and display service must
+be rebuilt for this behavior; older commits with zero rectangle fields remain
+compatible.
+
+### Calendar responsiveness and layout
+
+Opening the date/time popup paints the month immediately with a loading message.
+Calendar storage reads run on ticks, never in drawing or the opening click: the
+selected day's agenda loads first, followed by one day's month indicators per
+poll opportunity. Selecting another date reloads only its agenda, retaining the
+month indicators. Closing stops pending work; reopening refreshes the data.
+
+The calendar has centered date labels and day hover feedback. Its taller panel is
+clamped to the display, and agenda rows are clipped above the fixed Open Calendar
+button, with a More in Calendar hint when entries exceed the preview. Escape and
+outside clicks dismiss it without activating content underneath.
 
 ## Layout (dark theme MVP)
 
@@ -167,7 +196,9 @@ launch surface. It is:
 - Opening the menu focuses the search field automatically.
 - Clicking outside the panel, the header close button, or pressing `Escape`
   (with an empty search query) closes the menu. Outside dismissal is
-  intentionally consumed to avoid click-through bugs; clicking the dock
+  intentionally consumed to avoid click-through bugs. Left-button dismissal
+  waits for release so modal input ownership lasts for the whole gesture;
+  no follow-up click suppression is needed. Clicking the dock
   grid icon while the menu is open only closes it (toggle-off).
 - Clicking a tile launches it (or shows "coming soon" for placeholders);
   clicking a power button arms/executes it (see below).
