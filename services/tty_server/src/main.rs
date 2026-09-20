@@ -253,6 +253,24 @@ fn erase_tui_pointer(fb_addr: u64, fb_w: u32, fb_h: u32, fb_p: u32, pointer: &mu
     }
 }
 
+fn debug_log_u64(mut value: u64) {
+    let mut digits = [0u8; 20];
+    let mut len = 0usize;
+    if value == 0 {
+        debug_log("0");
+        return;
+    }
+    while value != 0 {
+        digits[len] = b'0' + (value % 10) as u8;
+        len += 1;
+        value /= 10;
+    }
+    digits[..len].reverse();
+    if let Ok(text) = core::str::from_utf8(&digits[..len]) {
+        debug_log(text);
+    }
+}
+
 fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) -> bool {
     let requires_activation_ack = msg.label == SgpMsg::SESSION_ACTIVATE;
     let timeout_ms = if requires_activation_ack {
@@ -281,7 +299,11 @@ fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) 
                     || DISPLAY_TIMEOUT_COUNT % DISPLAY_TIMEOUT_LOG_INTERVAL == 0
             };
             if should_log {
-                debug_log("[TTY] display request timeout/failure\n");
+                debug_log("[TTY] display request timeout/failure label=");
+                debug_log_u64(msg.label);
+                debug_log(" timeout_ms=");
+                debug_log_u64(timeout_ms);
+                debug_log("\n");
             }
             *display_cap = None;
             false
