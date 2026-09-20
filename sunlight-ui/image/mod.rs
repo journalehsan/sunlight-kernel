@@ -15,5 +15,8 @@ pub use mime_icon::{
     MAX_MIME_ICON_NAME, UNKNOWN_ICON,
 };
 pub use mono_icon::{draw_mono_icon, MonoIcon, MonoIconError};
+/// Format-neutral name; `decode_simg` remains available for existing callers.
+pub use simg::decode as decode_image;
 pub use simg::{decode as decode_simg, encode_tga_type2_bgr24, scale_fit, DecodeError, RgbaImage};
+pub use sun_img::inspect_dimensions as inspect_image_dimensions;
 pub use tga::TgaImage;

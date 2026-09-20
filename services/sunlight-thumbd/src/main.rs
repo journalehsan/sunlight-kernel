@@ -1,6 +1,6 @@
 //! sunlight-thumbd — asynchronous thumbnail daemon for SunlightOS.
 //!
-//! Receives thumbnail requests via IPC, decodes .simg/.tga sources, scales
+//! Receives thumbnail requests via IPC, decodes SIMG/TGA/PNG/JPEG sources, scales
 //! them, and writes to the on-disk cache:
 //!
 //!   <home>/.cache/sunlightos/thumbs/normal/<hex>.simg  (≤128×128)
@@ -208,7 +208,7 @@ fn generate_thumb(src_path: &[u8], home: &[u8], size_flag: u32) {
     }
     src_data.truncate(n);
 
-    // Decode SIMG/TGA.
+    // Decode SIMG/TGA/PNG/JPEG.
     let img = match decode(&src_data) {
         Ok(i) => i,
         Err(_) => {

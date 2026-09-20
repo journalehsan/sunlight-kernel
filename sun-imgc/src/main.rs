@@ -155,6 +155,13 @@ fn inspect_cmd(input: &Path) -> Result<(), String> {
             println!("crc32: {:#x}", h.crc32);
             println!("file_size: {}", bytes.len());
         }
+        ImageFormat::Png | ImageFormat::Jpeg => {
+            let image = decode_image(&bytes).map_err(|err| err.to_string())?;
+            println!("width: {}", image.width);
+            println!("height: {}", image.height);
+            println!("decoded_bit_depth: 32");
+            println!("support: supported");
+        }
         _ => {}
     }
     Ok(())
@@ -225,7 +232,10 @@ fn bench_corpus_cmd(dir: &Path, limit: usize) -> Result<(), String> {
         files.truncate(limit);
     }
     if files.is_empty() {
-        return Err(format!("no .tga/.simg files under {}", dir.display()));
+        return Err(format!(
+            "no .tga/.simg/.png/.jpg/.jpeg files under {}",
+            dir.display()
+        ));
     }
 
     let mut total_current = 0u64;
@@ -360,7 +370,7 @@ fn collect_images(dir: &Path) -> Result<Vec<PathBuf>, String> {
                 walk(&path, out)?;
             } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                 let e = ext.to_ascii_lowercase();
-                if e == "tga" || e == "simg" {
+                if matches!(e.as_str(), "tga" | "simg" | "png" | "jpg" | "jpeg") {
                     out.push(path);
                 }
             }

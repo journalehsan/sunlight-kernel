@@ -190,7 +190,12 @@ pub fn decode_image(
     let image = match format {
         ImageFormat::Png => decode_png(bytes)?,
         ImageFormat::Tga => decode_tga(bytes)?,
-        ImageFormat::Jpeg => return Err(String::from("JPEG decoding is not implemented")),
+        ImageFormat::Jpeg => {
+            let (width, height) = sunlight_ui::image::inspect_image_dimensions(bytes)
+                .map_err(|_| String::from("invalid JPEG header"))?;
+            validate_pixels(width, height, width as usize * height as usize)?;
+            decode_tga(bytes)?
+        }
         ImageFormat::Svg => {
             #[cfg(feature = "svg")]
             {
@@ -239,6 +244,9 @@ fn format_tga_error(error: sunlight_ui::image::DecodeError) -> String {
             String::from("unsupported TGA depth")
         }
         sunlight_ui::image::DecodeError::Truncated => String::from("truncated TGA pixels"),
+        sunlight_ui::image::DecodeError::CompressedImageInvalid => {
+            String::from("invalid PNG/JPEG image")
+        }
         sunlight_ui::image::DecodeError::SimgV2Invalid => String::from("invalid SIMG v2 image"),
         sunlight_ui::image::DecodeError::SimgV2Unsupported => {
             String::from("unsupported SIMG v2 image")
@@ -510,6 +518,23 @@ fn be_u32(bytes: &[u8]) -> u32 {
 mod tests {
     use super::*;
     use miniz_oxide::deflate::compress_to_vec_zlib;
+
+    #[test]
+    fn jpeg_uses_shared_decoder_and_browser_limits() {
+        let bytes = include_bytes!("../../sun-img/tests/fixtures/gray.jpg");
+        let decoded = decode_image(bytes, Some("image/jpeg"), "test.jpg").unwrap();
+        assert_eq!(decoded.format, ImageFormat::Jpeg);
+        assert_eq!((decoded.image.width, decoded.image.height), (8, 8));
+        assert!(decoded.image.pixels.iter().all(|p| *p == 0xff7b7b7b));
+        let mut oversized = bytes.to_vec();
+        let sof = oversized
+            .windows(2)
+            .position(|p| p == [0xff, 0xc0])
+            .unwrap();
+        oversized[sof + 5..sof + 7].copy_from_slice(&4096u16.to_be_bytes());
+        oversized[sof + 7..sof + 9].copy_from_slice(&4096u16.to_be_bytes());
+        assert!(decode_image(&oversized, None, "test.jpg").is_err());
+    }
 
     const TINY_PNG: &[u8] = &[
         137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,

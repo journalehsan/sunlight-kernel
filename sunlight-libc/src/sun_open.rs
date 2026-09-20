@@ -44,7 +44,9 @@ pub fn app_for_mime(mime: &[u8]) -> Option<&'static [u8]> {
         b"text/plain" | b"text/markdown" | b"text/toml" | b"text/rust" | b"application/json" => {
             Some(b"/bin/sunlight-edit")
         }
-        b"image/x-sunlight-simg" | b"image/x-tga" => Some(b"/bin/light-lens"),
+        b"image/x-sunlight-simg" | b"image/x-tga" | b"image/png" | b"image/jpeg" => {
+            Some(b"/bin/light-lens")
+        }
         _ => None,
     }
 }
@@ -199,6 +201,8 @@ fn mime_from_extension(ext: &[u8]) -> &'static [u8] {
         b"json" => b"application/json",
         b"simg" => b"image/x-sunlight-simg",
         b"tga" => b"image/x-tga",
+        b"png" => b"image/png",
+        b"jpg" | b"jpeg" => b"image/jpeg",
         b"ogg" | b"oga" => b"audio/ogg",
         b"wav" => b"audio/wav",
         _ => b"application/octet-stream",
@@ -236,6 +240,18 @@ fn extension_bytes(path: &[u8], out: &mut [u8; MAX_EXT]) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::mime_from_path;
+
+    #[test]
+    fn png_and_jpeg_open_in_light_lens() {
+        for path in [b"/Pictures/a.PNG".as_slice(), b"a.jpg", b"a.JPEG"] {
+            let mime = mime_from_path(path);
+            assert!(mime == b"image/png" || mime == b"image/jpeg");
+            assert_eq!(
+                super::app_for_mime(mime),
+                Some(b"/bin/light-lens".as_slice())
+            );
+        }
+    }
 
     #[test]
     fn audio_extensions_have_selectable_audio_mimes() {

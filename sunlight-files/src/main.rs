@@ -530,7 +530,12 @@ impl PropertiesState {
                         } else {
                             "24-bit"
                         };
-                        push(&mut rows, &mut n, "Color depth:", depth);
+                        let label = if matches!(self.img_format, "PNG" | "JPEG") {
+                            "Decoded depth:"
+                        } else {
+                            "Color depth:"
+                        };
+                        push(&mut rows, &mut n, label, depth);
                     }
                 }
                 if let Some(app) = self.opener_path {
@@ -822,7 +827,7 @@ fn log_usize(value: usize) {
 // ---------------------------------------------------------------------------
 
 // Static buffer large enough for a 128×128 BGRA24 TGA (18-byte header + pixels).
-/// Returns true if the file name ends in .simg or .tga.
+/// Resolve the image and document MIME types supported by the opener.
 fn mime_for_name(name: &[u8]) -> &'static [u8] {
     sun_open::mime_from_path(name)
 }
@@ -892,6 +897,12 @@ fn text_type_label(name: &[u8]) -> &'static str {
 fn image_type_label(name: &[u8]) -> &'static str {
     if ends_with_ignore_ascii_case(name, b".simg") {
         "Sunlight Image"
+    } else if ends_with_ignore_ascii_case(name, b".png") {
+        "PNG Image"
+    } else if ends_with_ignore_ascii_case(name, b".jpg")
+        || ends_with_ignore_ascii_case(name, b".jpeg")
+    {
+        "JPEG Image"
     } else {
         "TGA Image"
     }
@@ -1091,12 +1102,12 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 // Manager keeps working with placeholders only.
 
 // ---------------------------------------------------------------------------
-// Synchronous image preview — no threads, no heap.
+// Synchronous image preview — no threads, allocation-free drawing.
 //
-// When a .simg/.tga file is selected in the directory view, we read it
+// When a supported image file is selected in the directory view, we read it
 // directly into a static source buffer and draw it in the details pane on
 // every frame using the existing draw_tga_bytes helper. No thread is spawned,
-// no atomic mailbox is needed, and the decode is zero-alloc.
+// no atomic mailbox is needed. Compressed files allocate only during loading.
 // ---------------------------------------------------------------------------
 
 /// Maximum source file size we will preview. Files larger than this show
@@ -1111,9 +1122,9 @@ static mut PREVIEW_SRC_FILLED: usize = 0;
 /// Native dimensions (pre-scale) from the file header.
 static mut PREVIEW_SRC_W: u32 = 0;
 static mut PREVIEW_SRC_H: u32 = 0;
-/// 1 if the source file was SIMG v2 (buffer holds expanded TGA-32 for draw).
-static mut PREVIEW_FROM_SIMG_V2: u8 = 0;
-/// Raw file bytes, or expanded TGA-32 for SIMG v2 — BSS, not in the ELF image.
+/// Source format: 0 = TGA, 1 = SIMG v2, 2 = PNG, 3 = JPEG.
+static mut PREVIEW_FORMAT: u8 = 0;
+/// Raw TGA or expanded TGA-32 pixels — BSS, not in the ELF image.
 static mut PREVIEW_SRC_BUF: [u8; PREVIEW_SRC_BUF_LEN] = [0u8; PREVIEW_SRC_BUF_LEN];
 static mut TEXT_PREVIEW_READY: u8 = 0;
 static mut TEXT_PREVIEW_LEN: usize = 0;
@@ -1133,7 +1144,7 @@ fn load_preview_sync(path: &[u8]) {
         PREVIEW_SRC_FILLED = 0;
         PREVIEW_SRC_W = 0;
         PREVIEW_SRC_H = 0;
-        PREVIEW_FROM_SIMG_V2 = 0;
+        PREVIEW_FORMAT = 0;
     }
 
     let stat = match libc::stat(path) {
@@ -1181,15 +1192,18 @@ fn load_preview_sync(path: &[u8]) {
 
     unsafe {
         PREVIEW_SRC_FILLED = total;
-        let Some((w, h, _bpp)) = tga_header_dims(&PREVIEW_SRC_BUF[..total]) else {
-            PREVIEW_READY = 2;
-            return;
-        };
-        PREVIEW_SRC_W = w;
-        PREVIEW_SRC_H = h;
-
-        // Expand SIMG v2 → TGA-32 once so draw_tga_bytes stays zero-alloc/frame.
-        if total >= 4 && PREVIEW_SRC_BUF[0..4] == *b"SIMG" {
+        // Expand compressed formats once so drawing stays allocation-free per frame.
+        let compressed = PREVIEW_SRC_BUF[..total].starts_with(b"SIMG")
+            || PREVIEW_SRC_BUF[..total].starts_with(b"\x89PNG\r\n\x1a\n")
+            || PREVIEW_SRC_BUF[..total].starts_with(b"\xff\xd8\xff");
+        if compressed {
+            PREVIEW_FORMAT = if PREVIEW_SRC_BUF[..total].starts_with(b"SIMG") {
+                1
+            } else if PREVIEW_SRC_BUF[..total].starts_with(b"\x89PNG") {
+                2
+            } else {
+                3
+            };
             let Ok(decoded) = (|| {
                 let src = &PREVIEW_SRC_BUF[..total];
                 decode_simg(src)
@@ -1225,10 +1239,13 @@ fn load_preview_sync(path: &[u8]) {
             PREVIEW_SRC_FILLED = need;
             PREVIEW_SRC_W = decoded.width;
             PREVIEW_SRC_H = decoded.height;
-            PREVIEW_FROM_SIMG_V2 = 1;
-        } else if total < 18 {
-            PREVIEW_READY = 2;
-            return;
+        } else {
+            let Some((w, h, _)) = tga_header_dims(&PREVIEW_SRC_BUF[..total]) else {
+                PREVIEW_READY = 2;
+                return;
+            };
+            PREVIEW_SRC_W = w;
+            PREVIEW_SRC_H = h;
         }
 
         PREVIEW_READY = 1;
@@ -2815,7 +2832,7 @@ impl FilesApp {
                     props.img_format = image_format_compact(name_bytes);
                     // Peek at the header only — never decode the whole image,
                     // and never touch the preview pane's buffer.
-                    let mut head = [0u8; 32];
+                    let mut head = [0u8; 8192];
                     let n = read_file_head(props.path.as_str().as_bytes(), &mut head);
                     if let Some((w, h, bpp)) = tga_header_dims(&head[..n]) {
                         props.img_w = w;
@@ -3889,10 +3906,11 @@ impl FilesApp {
                 );
             }
 
-            let format_label = if unsafe { PREVIEW_FROM_SIMG_V2 } != 0 {
-                "SIMG v2"
-            } else {
-                "TGA"
+            let format_label = match unsafe { PREVIEW_FORMAT } {
+                1 => "SIMG v2",
+                2 => "PNG",
+                3 => "JPEG",
+                _ => "TGA",
             };
             Self::draw_prop_row(
                 canvas,
@@ -4973,9 +4991,13 @@ fn write_number(value: u64, out: &mut [u8], suffix: &[u8]) -> usize {
 const EMPTY_BYTES: &[u8] = b"";
 
 /// Parse width/height/bpp from an image header.
-/// Supports SIMG v2 and uncompressed TGA type-2 (legacy `.simg` / `.tga`).
+/// Supports SIMG v2, TGA type-2, PNG, and JPEG.
 /// Reads only the header — never decodes pixels.
 fn tga_header_dims(buf: &[u8]) -> Option<(u32, u32, u8)> {
+    if buf.starts_with(b"\x89PNG\r\n\x1a\n") || buf.starts_with(b"\xff\xd8\xff") {
+        let (w, h) = sunlight_ui::image::inspect_image_dimensions(buf).ok()?;
+        return Some((w, h, 32));
+    }
     if buf.len() >= 4 && buf[0..4] == *b"SIMG" {
         if buf.len() < 36 {
             return None;
@@ -5012,6 +5034,12 @@ fn image_format_compact(name: &[u8]) -> &'static str {
         "SIMG"
     } else if ends_with_ignore_ascii_case(name, b".tga") {
         "TGA"
+    } else if ends_with_ignore_ascii_case(name, b".png") {
+        "PNG"
+    } else if ends_with_ignore_ascii_case(name, b".jpg")
+        || ends_with_ignore_ascii_case(name, b".jpeg")
+    {
+        "JPEG"
     } else {
         "Image"
     }

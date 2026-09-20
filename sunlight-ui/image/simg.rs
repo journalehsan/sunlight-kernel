@@ -1,4 +1,4 @@
-//! Owned (heap-backed) SIMG/TGA decoder + premultiplied bilinear scaler.
+//! Owned (heap-backed) SIMG/TGA/PNG/JPEG decoder + premultiplied bilinear scaler.
 //!
 //! `image::tga::TgaImage` is a zero-alloc view over a `&'static [u8]`, which is
 //! ideal for `include_bytes!` assets but cannot decode files loaded at runtime
@@ -14,7 +14,8 @@
 //!
 //! **SIMG v2** introduces an explicit `SIMG` magic, versioned header, optional
 //! Sub filter, and LZ4 block compression. Detection selects **one** parser:
-//! magic match → strict v2 (no TGA fallback); otherwise → TGA type-2.
+//! magic match → strict v2 (no TGA fallback); PNG/JPEG signatures select
+//! their decoders; otherwise → TGA type-2.
 //! See `docs/SIMG_V2.md`.
 //!
 //! # Legal / patent notice
@@ -43,6 +44,8 @@ pub enum DecodeError {
     SimgV2Invalid,
     /// SIMG v2 version or feature is not supported by this decoder.
     SimgV2Unsupported,
+    /// PNG or JPEG failed validation, decoding, or resource limits.
+    CompressedImageInvalid,
 }
 
 /// Decoded image: width, height, and packed ARGB8888 pixels (top-down).
@@ -74,13 +77,30 @@ impl RgbaImage {
     }
 }
 
-/// Decode a legacy TGA type-2 image or a SIMG v2 file from `data`.
+/// Decode TGA, SIMG v2, PNG, or JPEG from `data`.
 ///
 /// Detection: if the file starts with magic `SIMG`, only the v2 parser runs.
-/// Otherwise the TGA type-2 path runs (covers historical `.simg` assets).
+/// PNG/JPEG signatures select their parsers; otherwise use legacy TGA type-2.
 pub fn decode(data: &[u8]) -> Result<RgbaImage, DecodeError> {
     if sun_img::is_simg_v2(data) {
         return decode_simg_v2(data);
+    }
+    if matches!(
+        sun_img::detect_format(data),
+        sun_img::ImageFormat::Png | sun_img::ImageFormat::Jpeg
+    ) {
+        let decoded =
+            sun_img::decode_image(data).map_err(|_| DecodeError::CompressedImageInvalid)?;
+        let pixels = decoded
+            .pixels
+            .chunks_exact(4)
+            .map(|p| u32::from_be_bytes([p[3], p[0], p[1], p[2]]))
+            .collect();
+        return Ok(RgbaImage {
+            width: decoded.width,
+            height: decoded.height,
+            pixels,
+        });
     }
     decode_tga_type2(data)
 }
@@ -273,6 +293,23 @@ pub fn encode_tga_type2_bgr24(img: &RgbaImage) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn png_and_jpeg_use_renderer_argb_layout() {
+        let png = decode(include_bytes!("../../sun-img/tests/fixtures/rgba.png")).unwrap();
+        assert_eq!(png.pixels, [0xffff0000, 0x8000ff00, 0x000000ff, 0x400c2238]);
+        let jpeg = decode(include_bytes!("../../sun-img/tests/fixtures/gray.jpg")).unwrap();
+        assert_eq!((jpeg.width, jpeg.height), (8, 8));
+        assert!(jpeg.pixels.iter().all(|p| *p == 0xff7b7b7b));
+        assert_eq!(
+            decode(b"\x89PNG\r\n\x1a\n"),
+            Err(DecodeError::CompressedImageInvalid)
+        );
+        assert_eq!(
+            decode(b"\xff\xd8\xff"),
+            Err(DecodeError::CompressedImageInvalid)
+        );
+    }
 
     fn tiny_tga() -> Vec<u8> {
         let mut v = Vec::new();

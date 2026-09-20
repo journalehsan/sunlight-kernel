@@ -213,8 +213,10 @@ pub fn draw_tga_background(fb: &mut Framebuffer, img: &TgaImage, overlay_alpha: 
 
 /// Aspect-fill ARGB8888 buffer (row-major, top-down) with optional dark overlay.
 ///
-/// Used for pre-decoded SIMG v2 login backgrounds (decode happens outside this
-/// no-heap crate).
+/// Supports pre-decoded SIMG v2, PNG, and JPEG backgrounds. Decode with
+/// `sunlight_ui::image::decode_image` in an allocation-capable caller, then pass
+/// its width, height, and ARGB pixels here. This crate remains heap-free;
+/// `TgaImage::parse` continues to accept only uncompressed TGA bytes.
 pub fn draw_argb_background(
     fb: &mut Framebuffer,
     width: u32,

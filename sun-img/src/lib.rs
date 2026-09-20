@@ -1,4 +1,4 @@
-//! SunlightOS image conversion foundation (TGA + SIMG v2).
+//! SunlightOS image conversion foundation (TGA, SIMG v2, PNG, and JPEG).
 //!
 //! Host tooling uses the default `std` feature. Freestanding UI crates depend
 //! with `default-features = false` (`no_std` + `alloc`).
@@ -12,7 +12,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
 
+mod compressed;
 pub mod crc32;
+pub use compressed::{decode_jpeg, decode_png};
 pub mod simg_v2;
 
 pub use simg_v2::{
@@ -131,7 +133,47 @@ pub fn detect_format(bytes: &[u8]) -> ImageFormat {
     ImageFormat::Unknown
 }
 
-/// Decode TGA or SIMG v2 into host RGBA8 (straight alpha).
+/// Inspect dimensions without decoding pixels. PNG/TGA need only their headers;
+/// JPEG needs the SOF segment after any metadata. SIMG v2 also validates that
+/// its declared payload is present.
+pub fn inspect_dimensions(bytes: &[u8]) -> Result<(u32, u32), ImageError> {
+    let dimensions = match detect_format(bytes) {
+        ImageFormat::Png => {
+            if bytes.len() < 33 {
+                return Err(ImageError::TruncatedInput);
+            }
+            if bytes[8..16] != *b"\0\0\0\rIHDR" {
+                return Err(ImageError::InvalidHeader);
+            }
+            (
+                u32::from_be_bytes(bytes[16..20].try_into().unwrap()),
+                u32::from_be_bytes(bytes[20..24].try_into().unwrap()),
+            )
+        }
+        ImageFormat::Jpeg => compressed::jpeg_dimensions(bytes)?,
+        ImageFormat::SimgV2 => {
+            let header = parse_simg_v2_header(bytes)?;
+            (header.width, header.height)
+        }
+        ImageFormat::Tga => {
+            let header = inspect_tga(bytes)?;
+            if !header.supported {
+                return Err(ImageError::UnsupportedFormat);
+            }
+            (header.width, header.height)
+        }
+        _ => return Err(ImageError::UnsupportedFormat),
+    };
+    if dimensions.0 > MAX_DIMENSION
+        || dimensions.1 > MAX_DIMENSION
+        || rgba_len(dimensions.0, dimensions.1)? > MAX_DECODED_BYTES as usize
+    {
+        return Err(ImageError::InvalidDimensions);
+    }
+    Ok(dimensions)
+}
+
+/// Decode TGA, SIMG v2, PNG, or JPEG into top-down RGBA8 (straight alpha).
 pub fn decode_image(bytes: &[u8]) -> Result<ImageRgba8, ImageError> {
     if simg_v2::is_simg_v2(bytes) {
         // Strict v2 path — never fall back to TGA after magic match.
@@ -143,9 +185,9 @@ pub fn decode_image(bytes: &[u8]) -> Result<ImageRgba8, ImageError> {
     match detect_format(bytes) {
         ImageFormat::Tga => decode_tga(bytes),
         ImageFormat::SimgV2 => simg_v2::decode(bytes),
-        ImageFormat::Bmp | ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Unknown => {
-            Err(ImageError::UnsupportedFormat)
-        }
+        ImageFormat::Png => decode_png(bytes),
+        ImageFormat::Jpeg => decode_jpeg(bytes),
+        ImageFormat::Bmp | ImageFormat::Unknown => Err(ImageError::UnsupportedFormat),
     }
 }
 
@@ -197,7 +239,7 @@ pub fn convert_with_options(input: &[u8], options: &ConvertOptions) -> Result<Ve
     }
 }
 
-/// Encode input image bytes (TGA/SIMG) to SIMG v2 without force-opaque alpha.
+/// Encode input image bytes (TGA/SIMG/PNG/JPEG) to SIMG v2 without force-opaque alpha.
 pub fn convert_to_simg_v2(input: &[u8]) -> Result<simg_v2::EncodeReport, ImageError> {
     let image = decode_image(input)?;
     simg_v2::encode(&image)

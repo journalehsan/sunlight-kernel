@@ -235,6 +235,8 @@ enum FormatKind {
     /// Versioned SIMG v2 container (magic `SIMG`).
     SimgV2,
     Tga,
+    Png,
+    Jpeg,
     Unknown,
 }
 
@@ -1386,7 +1388,7 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 /// Decode runtime image bytes from `IMAGE_BUF` into an owned ARGB buffer.
 ///
-/// Uses the shared `decode_simg` path (SIMG v2 strict, else TGA type-2) so
+/// Uses the shared `decode_simg` path (SIMG v2, TGA, PNG, JPEG) so
 /// Light Lens matches File Manager preview decode. Drawing forces opaque
 /// ARGB (see [`LightLensApp::draw_photo`]) to avoid the gray alpha-hole that
 /// previously affected the Files preview pane on glass surfaces.
@@ -1396,6 +1398,10 @@ unsafe fn decode_runtime_image(total: usize) -> Option<(RgbaImage, FormatKind)> 
     }
     let kind = if IMAGE_BUF[..4] == *b"SIMG" {
         FormatKind::SimgV2
+    } else if IMAGE_BUF[..total].starts_with(b"\x89PNG\r\n\x1a\n") {
+        FormatKind::Png
+    } else if IMAGE_BUF[..total].starts_with(b"\xff\xd8\xff") {
+        FormatKind::Jpeg
     } else {
         FormatKind::Tga
     };
@@ -1416,6 +1422,12 @@ fn format_from_name(name: &[u8]) -> FormatKind {
         FormatKind::SimgLegacy
     } else if ends_with_ignore_ascii_case(name, b".tga") {
         FormatKind::Tga
+    } else if ends_with_ignore_ascii_case(name, b".png") {
+        FormatKind::Png
+    } else if ends_with_ignore_ascii_case(name, b".jpg")
+        || ends_with_ignore_ascii_case(name, b".jpeg")
+    {
+        FormatKind::Jpeg
     } else {
         FormatKind::Unknown
     }
@@ -1426,12 +1438,14 @@ fn format_label(kind: FormatKind) -> &'static str {
         FormatKind::SimgLegacy => "SIMG (legacy TGA)",
         FormatKind::SimgV2 => "SIMG v2",
         FormatKind::Tga => "TGA",
+        FormatKind::Png => "PNG",
+        FormatKind::Jpeg => "JPEG",
         FormatKind::Unknown => "Unknown",
     }
 }
 
 fn is_supported_image_name(name: &[u8]) -> bool {
-    ends_with_ignore_ascii_case(name, b".simg") || ends_with_ignore_ascii_case(name, b".tga")
+    format_from_name(name) != FormatKind::Unknown
 }
 
 fn ends_with_ignore_ascii_case(name: &[u8], suffix: &[u8]) -> bool {

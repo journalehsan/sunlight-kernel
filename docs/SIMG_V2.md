@@ -49,7 +49,8 @@ These findings were recorded **before** finalizing the v2 header. Legacy
 - Detection order for loaders that accept both:
 
   1. If magic == `SIMG` → **only** the SIMG v2 parser (never fall back to TGA).
-  2. Else → legacy TGA type-2 parser (covers both `.tga` and historical `.simg`).
+  2. PNG or JPEG signature → the corresponding decoder (no TGA fallback).
+  3. Else → legacy TGA type-2 parser (covers both `.tga` and historical `.simg`).
 
 - A malformed SIMG v2 file (magic matched, validation failed) remains a **v2
   error**. It must not be reinterpreted as TGA.
@@ -277,8 +278,55 @@ kernel ZRAM.
 
 `sun-imgc` commands (see crate help):
 
-- `inspect` — detect TGA / SIMG v2 and print fields
-- `convert` — TGA/legacy → TGA (existing) or → SIMG v2
+- `inspect` — detect TGA / SIMG v2 / PNG / JPEG and print fields
+- `convert` — TGA / SIMG v2 / PNG / JPEG → TGA RGBA32 (forces opaque alpha)
 - `to-simg` — encode SIMG v2 with method selection + optional verify
 - `from-simg` — decode SIMG v2 → TGA RGBA32
 - `bench-corpus` — measure sizes/methods over a directory without overwriting sources
+
+
+## PNG and JPEG interoperability
+
+PNG and JPEG are additional input formats, not new SIMG compression methods.
+The SIMG v2 byte layout and historical TGA-based `.simg` compatibility stay the
+same. `sun-img::decode_image` detects content signatures and returns top-down,
+straight-alpha RGBA8. `sunlight_ui::image::decode_image` (also available under
+its existing `decode_simg` name) returns the renderer's straight-alpha ARGB8888.
+
+- **PNG:** grayscale, grayscale-alpha, RGB/RGBA, indexed palettes, `tRNS`
+  transparency, and Adam7 interlacing. Legal 1/2/4-bit samples expand to 8 bits;
+  16-bit channels retain their high eight bits. Chunk CRCs are checked.
+  Animated PNG is rejected.
+- **JPEG:** baseline and progressive images, grayscale and CMYK conversion;
+  decoded pixels are opaque. EXIF orientation and ICC color management are not
+  applied. Progressive decoding is limited to 100 scans.
+- Both inputs are limited to 64 MiB encoded bytes, 8192 pixels per dimension,
+  and 64 MiB final RGBA pixels. Dimensions are checked before pixel decoding.
+  Decoder scratch space and conversion buffers are additional allocations;
+  the decoded-pixel limit is not a total process-memory limit.
+- Runtime codecs use `zune-png` and `zune-jpeg` 0.4 with default features
+  disabled, preserving `no_std + alloc` and avoiding platform SIMD requirements.
+
+Light Lens accepts `.png`, `.jpg`, and `.jpeg` (case-insensitive), including
+sibling navigation. MIME routing sends these formats to Light Lens. Files uses
+the shared decoder for previews and thumbd uses it for thumbnail generation.
+Files inspects up to 8 KiB of headers for Properties; JPEGs with larger metadata
+before their frame header may omit dimensions there. Existing application
+limits still apply: Light Lens reads at most 8 MiB of encoded data, and Files'
+preview buffer must also fit the expanded TGA representation (8 MiB). Rappid
+Rabbit uses the shared JPEG decoder with its existing stricter browser limits;
+its separate PNG decoder remains in place.
+
+The heap-free `sunlight-tui::tga::TgaImage` remains a borrowed TGA parser.
+Allocation-capable callers can decode PNG/JPEG using the UI API and pass the
+result to `draw_argb_background`; compressed decoding is not performed inside
+TUI or the early boot renderer.
+
+`sun-imgc to-simg --verify input.png output.simg` and the equivalent JPEG command
+preserve the decoded pixels in SIMG v2. JPEG-to-SIMG conversion cannot recover
+information already lost in the source JPEG. PNG/JPEG encoding is not included.
+
+Host fixtures in `sun-img/tests/fixtures` cover alpha, palettes, packed grayscale,
+16-bit grayscale, RGB transparency, Adam7, baseline/progressive JPEG, grayscale,
+and CMYK. Run `cargo test -p sun-img --target x86_64-unknown-linux-gnu` and
+`cargo test -p sunlight-ui --features std --lib --target x86_64-unknown-linux-gnu`.
