@@ -1278,15 +1278,19 @@ impl SiliconEchoesApp {
                     rect.x + rect.w as i32 * 38 / 100,
                     rect.y + 64,
                     322,
-                    rect.h * 62 / 100,
+                    (rect.h * 62 / 100).max(290),
                 );
-                canvas.draw_rect(chamber, BONE);
-                canvas.hline(chamber.x, chamber.y + 44, chamber.w, soft);
-                canvas.hline(chamber.x, chamber.bottom() - 42, chamber.w, soft);
-                let projector = Rect::new(chamber.x + 92, chamber.y + 72, 138, 78);
-                canvas.blend_rounded_rect(projector, 9, Color::rgba(0xED, 0xE6, 0xD8, 52));
-                canvas.stroke_rounded_rect(projector, 9, 2, BONE);
-                canvas.fill_rounded_rect(projector.inset(10), 5, OBSIDIAN);
+                scenery::revision_cabinet(canvas, chamber);
+                let projector = scenery::revision_monitor_rect(rect);
+                let message = match scene_id {
+                    "c2-predicted-choice" => "SEND THE NAME",
+                    "c2-response" => "2013 / RECEIVED",
+                    "c2-turning-point" if self.mode != Mode::Ending => {
+                        "I REMEMBER YOU\nDIFFERENTLY"
+                    }
+                    _ => "REVISION / 7",
+                };
+                scenery::revision_monitor(canvas, projector, message, self.mode == Mode::Ending);
                 if self.game.supports_echo_overlay()
                     && self.game.echo_layer == EchoLayer::Revision2013
                 {
@@ -1310,6 +1314,7 @@ impl SiliconEchoesApp {
                     );
                     canvas.draw_rect(Rect::new(chamber.x + 54, chamber.y + 156, 100, 116), BONE);
                     canvas.draw_rect(Rect::new(chamber.x + 178, chamber.y + 154, 84, 120), BONE);
+                    scenery::revision_panel_details(canvas, chamber);
                 }
                 if scene_id == "c2-personal-record" || scene_id == "c2-intervention" {
                     let card = Rect::new(chamber.x + 188, chamber.y + 176, 92, 54);
@@ -1340,39 +1345,6 @@ impl SiliconEchoesApp {
                         );
                         canvas.hline(x + 9, chamber.y + 54, 46, soft);
                     }
-                    draw_center(
-                        canvas,
-                        Rect::new(projector.x, projector.y + 22, projector.w, 22),
-                        if scene_id == "c2-predicted-choice" {
-                            "SEND THE NAME"
-                        } else if scene_id == "c2-response" {
-                            "2013 / RECEIVED"
-                        } else {
-                            "REVISION / 7"
-                        },
-                        FontRole::MonoRegular,
-                        SUNLIGHT,
-                    );
-                }
-                if scene_id == "c2-turning-point" {
-                    // On the ending screen the primary artifact carries the
-                    // reply; keep only a low-contrast machine whisper here.
-                    let color = if self.mode == Mode::Ending {
-                        Color::rgba(0xFF, 0x98, 0x00, 48)
-                    } else {
-                        SUNLIGHT
-                    };
-                    draw_center(
-                        canvas,
-                        projector,
-                        if self.mode == Mode::Ending {
-                            "REVISION / 7"
-                        } else {
-                            "I REMEMBER YOU\nDIFFERENTLY"
-                        },
-                        FontRole::MonoRegular,
-                        color,
-                    );
                 }
             }
             "hallway" | "landing" | "stairwell" => {
@@ -2951,12 +2923,7 @@ fn scene_object_bounds(scene_id: SceneId, image: Rect) -> Vec<(SceneObjectTarget
         ],
         "c2-intervention" => vec![(
             choice("c2.intervention.follow"),
-            Rect::new(
-                image.x + image.w as i32 * 38 / 100 + 92,
-                image.y + 64 + 72,
-                138,
-                78,
-            ),
+            scenery::revision_monitor_rect(image),
         )],
         "c2-chamber" => vec![
             (
@@ -2981,12 +2948,7 @@ fn scene_object_bounds(scene_id: SceneId, image: Rect) -> Vec<(SceneObjectTarget
         "c2-predicted-choice" => vec![
             (
                 choice("c2.predicted.refuse"),
-                Rect::new(
-                    image.x + image.w as i32 * 38 / 100 + 92,
-                    image.y + 64 + 72,
-                    138,
-                    78,
-                ),
+                scenery::revision_monitor_rect(image),
             ),
             (
                 choice("c2.predicted.preserve"),
@@ -3014,12 +2976,7 @@ fn scene_object_bounds(scene_id: SceneId, image: Rect) -> Vec<(SceneObjectTarget
             ),
             (
                 choice("c2.response.send-name"),
-                Rect::new(
-                    image.x + image.w as i32 * 38 / 100 + 92,
-                    image.y + 64 + 72,
-                    138,
-                    78,
-                ),
+                scenery::revision_monitor_rect(image),
             ),
         ],
         "c2-consequence" => vec![(
@@ -3054,12 +3011,7 @@ fn scene_object_bounds(scene_id: SceneId, image: Rect) -> Vec<(SceneObjectTarget
         "c2-turning-point" => vec![
             (
                 choice("c2.turning.keep-channel"),
-                Rect::new(
-                    image.x + image.w as i32 * 38 / 100 + 92,
-                    image.y + 64 + 72,
-                    138,
-                    78,
-                ),
+                scenery::revision_monitor_rect(image),
             ),
             (
                 choice("c2.turning.close-notebook"),

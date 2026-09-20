@@ -1,4 +1,5 @@
 //! Allocation-free scenery. Time animates weather only; geometry is seed-stable.
+use sun_font::{draw_text, line_height, measure_text, FontRole, TextStyle};
 use sunlight_ui::{Canvas, Color, Rect};
 
 const INK: Color = Color::rgb(10, 10, 12);
@@ -9,6 +10,183 @@ fn bone(alpha: u8) -> Color {
 }
 fn amber(alpha: u8) -> Color {
     Color::rgba(255, 152, 0, alpha)
+}
+
+/// Shared by the illustration and its interactive monitor hotspots.
+pub fn revision_monitor_rect(image: Rect) -> Rect {
+    Rect::new(
+        image.x + image.w as i32 * 38 / 100 + 62,
+        image.y + 64 + 66,
+        198,
+        86,
+    )
+}
+
+pub fn revision_cabinet(canvas: &mut Canvas, cabinet: Rect) {
+    canvas.blend_rounded_rect(
+        Rect::new(cabinet.x - 18, cabinet.bottom() - 8, cabinet.w + 36, 20),
+        10,
+        Color::rgba(10, 10, 12, 150),
+    );
+    canvas.fill_rounded_rect(cabinet, 6, INK);
+    canvas.blend_rounded_rect(cabinet.inset(2), 5, bone(22));
+    canvas.stroke_rounded_rect(cabinet, 6, 1, bone(160));
+    line(
+        canvas,
+        (cabinet.x + 6, cabinet.y + 6),
+        (cabinet.right() - 6, cabinet.y + 6),
+        bone(65),
+    );
+    line(
+        canvas,
+        (cabinet.x + 1, cabinet.y + 44),
+        (cabinet.right() - 2, cabinet.y + 44),
+        bone(75),
+    );
+    for x in [cabinet.x + 10, cabinet.right() - 12] {
+        for y in [cabinet.y + 10, cabinet.bottom() - 12] {
+            canvas.blend_rounded_rect(Rect::new(x, y, 3, 3), 1, bone(130));
+        }
+    }
+    // Compact windows keep the footer clear of the notebook and service panel.
+    if cabinet.h < 330 {
+        return;
+    }
+    line(
+        canvas,
+        (cabinet.x + 1, cabinet.bottom() - 42),
+        (cabinet.right() - 2, cabinet.bottom() - 42),
+        bone(75),
+    );
+    for index in 0..12 {
+        canvas.fill_rect(
+            Rect::new(cabinet.x + 26 + index * 12, cabinet.bottom() - 28, 7, 13),
+            INK,
+        );
+    }
+    canvas.blend_rounded_rect(
+        Rect::new(cabinet.right() - 72, cabinet.bottom() - 29, 48, 14),
+        3,
+        amber(22),
+    );
+    for index in 0..3 {
+        canvas.blend_rounded_rect(
+            Rect::new(
+                cabinet.right() - 66 + index * 14,
+                cabinet.bottom() - 24,
+                4,
+                4,
+            ),
+            2,
+            if index == 0 { AMBER } else { bone(65) },
+        );
+    }
+}
+
+pub fn revision_panel_details(canvas: &mut Canvas, cabinet: Rect) {
+    // A bound notebook and a recessed service panel retain their authored bounds.
+    canvas.blend_rect(Rect::new(cabinet.x + 60, cabinet.y + 158, 5, 112), bone(65));
+    canvas.blend_rect(Rect::new(cabinet.x + 73, cabinet.y + 174, 55, 3), amber(95));
+    for row in 0..5 {
+        canvas.blend_rect(
+            Rect::new(
+                cabinet.x + 73,
+                cabinet.y + 191 + row * 10,
+                64 - row as u32 * 6,
+                1,
+            ),
+            bone(65),
+        );
+    }
+    canvas.fill_rounded_rect(Rect::new(cabinet.x + 188, cabinet.y + 170, 64, 10), 2, INK);
+    line(
+        canvas,
+        (cabinet.x + 194, cabinet.y + 175),
+        (cabinet.x + 246, cabinet.y + 175),
+        bone(60),
+    );
+    canvas.blend_rect(
+        Rect::new(cabinet.x + 245, cabinet.y + 207, 4, 20),
+        bone(100),
+    );
+    for row in 0..4 {
+        canvas.blend_rect(
+            Rect::new(cabinet.x + 191, cabinet.y + 241 + row * 5, 47, 1),
+            bone(45),
+        );
+    }
+}
+
+/// The CRT owns its text clipping and explicit line breaks. Font primitives
+/// render one line at a time, so passing a newline directly would draw a glyph.
+pub fn revision_monitor(canvas: &mut Canvas, monitor: Rect, message: &str, subdued: bool) {
+    for spread in (1..=5).rev() {
+        canvas.blend_rounded_rect(
+            Rect::new(
+                monitor.x - spread * 4,
+                monitor.y - spread * 3,
+                monitor.w + spread as u32 * 8,
+                monitor.h + spread as u32 * 6,
+            ),
+            12,
+            amber(if subdued { 2 } else { 4 }),
+        );
+    }
+    canvas.fill_rounded_rect(monitor, 9, INK);
+    canvas.blend_rounded_rect(monitor, 9, bone(55));
+    canvas.stroke_rounded_rect(monitor, 9, 1, bone(180));
+    let screen = Rect::new(
+        monitor.x + 12,
+        monitor.y + 10,
+        monitor.w - 24,
+        monitor.h - 28,
+    );
+    canvas.fill_rounded_rect(screen, 5, INK);
+    canvas.blend_rounded_rect(screen.inset(1), 4, amber(if subdued { 5 } else { 14 }));
+    // Inset the rectangular clip so glyphs cannot touch the rounded glass edge.
+    {
+        let mut glass = canvas.sub_canvas(screen.inset(5));
+        for y in (0..glass.height as i32).step_by(3) {
+            glass.blend_rect(Rect::new(0, y, glass.width, 1), amber(12));
+        }
+        let role = FontRole::MonoRegular;
+        let step = line_height(role) as i32 + 3;
+        let count = message.lines().count() as i32;
+        let top = (glass.height as i32 - (count * step - 3)) / 2;
+        // sun-font's glyph coverage owns alpha; use a dim opaque ink for endings.
+        let color = if subdued {
+            Color::rgb(88, 56, 16)
+        } else {
+            AMBER
+        };
+        for (index, text) in message.lines().enumerate() {
+            let x = (glass.width as i32 - measure_text(text, role).w as i32) / 2;
+            draw_text(
+                &mut glass,
+                text,
+                x,
+                top + index as i32 * step,
+                &TextStyle::new(role, color),
+            );
+        }
+    }
+    line(
+        canvas,
+        (screen.x + 6, screen.y + 2),
+        (screen.right() - 7, screen.y + 2),
+        bone(32),
+    );
+    for index in 0..5 {
+        canvas.fill_rect(
+            Rect::new(monitor.x + 16 + index * 5, monitor.bottom() - 10, 2, 4),
+            INK,
+        );
+    }
+    canvas.blend_rounded_rect(
+        Rect::new(monitor.right() - 22, monitor.bottom() - 11, 5, 5),
+        2,
+        AMBER,
+    );
 }
 
 // Canvas line primitives replace pixels; these strokes composite instead.
