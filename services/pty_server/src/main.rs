@@ -380,6 +380,84 @@ mod tests {
     }
 
     #[test]
+    fn bulk_pages_preserve_order_across_backpressure_and_wraparound() {
+        let mut ring = ByteRing::<BUFFER_CAP>::new();
+        let source: Vec<u8> = (0..BUFFER_CAP * 3 + 17)
+            .map(|index| (index % 251) as u8)
+            .collect();
+        let mut page = [0u8; PtyMsg::BULK_BYTES];
+        let mut written = 0;
+        let mut received = Vec::new();
+        let mut hit_backpressure = false;
+        while received.len() < source.len() {
+            while written < source.len() {
+                let length = (source.len() - written).min(page.len());
+                page[..length].copy_from_slice(&source[written..written + length]);
+                let accepted =
+                    unsafe { transfer_page(&mut ring, PtyRole::Slave, page.as_mut_ptr(), length) };
+                written += accepted;
+                if accepted == 0 {
+                    hit_backpressure = true;
+                    break;
+                }
+            }
+            let count =
+                unsafe { transfer_page(&mut ring, PtyRole::Master, page.as_mut_ptr(), 997) };
+            assert!(count > 0);
+            received.extend_from_slice(&page[..count]);
+        }
+        assert!(hit_backpressure);
+        assert_eq!(received, source);
+    }
+
+    #[test]
+    fn bulk_rejects_wrong_authority_generation_and_oversized_pages() {
+        let mut server = PtyServer::new();
+        let (id, generation, master, control) =
+            server.create(CALLER, 0, DEFAULT_WINDOW_SIZE).unwrap();
+        let request = IpcMsg::with_label(PtyMsg::READ_MASTER_BULK)
+            .word(0, id)
+            .word(1, generation)
+            .word(2, PtyMsg::BULK_BYTES as u64)
+            .with_cap(0, master)
+            .with_cap(1, CapabilityToken(123));
+        assert_eq!(
+            transfer_bulk(&mut server, &request.with_cap(0, control), CALLER).words[0],
+            PtyMsg::ERR_PERMISSION_DENIED
+        );
+        assert_eq!(
+            transfer_bulk(&mut server, &request.word(1, generation + 1), CALLER).words[0],
+            PtyMsg::ERR_STALE_HANDLE
+        );
+        assert_eq!(
+            transfer_bulk(
+                &mut server,
+                &request.word(2, PtyMsg::BULK_BYTES as u64 + 1),
+                CALLER
+            )
+            .words[0],
+            PtyMsg::ERR_BUFFER_FULL
+        );
+        let stranger = PtyCallerCredentials {
+            pid: CALLER.pid + 1,
+            ..CALLER
+        };
+        assert_eq!(
+            transfer_bulk(&mut server, &request, stranger).words[0],
+            PtyMsg::ERR_PERMISSION_DENIED
+        );
+        assert_eq!(
+            transfer_bulk(&mut server, &request, CALLER).words[0],
+            PtyMsg::ERR_WOULD_BLOCK
+        );
+        server.sessions[id as usize - 1].slave_open = false;
+        assert_eq!(
+            transfer_bulk(&mut server, &request, CALLER).words[0],
+            PtyMsg::ERR_PEER_CLOSED
+        );
+    }
+
+    #[test]
     fn capacity_is_bounded() {
         let mut server = PtyServer::new();
         for _ in 0..MAX_SESSIONS {
@@ -502,6 +580,7 @@ fn handle_message(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
         PtyMsg::WRITE_SLAVE => write_slave(server, msg, caller),
         PtyMsg::READ_MASTER => read_master(server, msg, caller),
         PtyMsg::READ_SLAVE => read_slave(server, msg, caller),
+        PtyMsg::READ_MASTER_BULK | PtyMsg::WRITE_SLAVE_BULK => transfer_bulk(server, msg, caller),
         PtyMsg::CLOSE_MASTER => close_endpoint(server, msg, caller, PtyRole::Master),
         PtyMsg::CLOSE_SLAVE => close_endpoint(server, msg, caller, PtyRole::Slave),
         PtyMsg::CLOSE_SESSION => close_session(server, msg, caller),
@@ -738,6 +817,64 @@ fn read_ring(
     let mut bytes = [0u8; CHUNK_BYTES];
     let count = ring.pop_slice(&mut bytes[..requested.min(CHUNK_BYTES)]);
     pack_reply(id, generation, &bytes[..count])
+}
+
+fn transfer_bulk(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+    let role = if msg.label == PtyMsg::READ_MASTER_BULK {
+        PtyRole::Master
+    } else {
+        PtyRole::Slave
+    };
+    let index = match server.check(msg, caller, role) {
+        Ok(index) => index,
+        Err(code) => return error(code),
+    };
+    let length = msg.words[2] as usize;
+    if length > PtyMsg::BULK_BYTES || msg.cap_count < 2 {
+        return error(PtyMsg::ERR_BUFFER_FULL);
+    }
+    let session = &mut server.sessions[index];
+    if !session.master_open || (role == PtyRole::Slave && !session.slave_open) {
+        return error(PtyMsg::ERR_PEER_CLOSED);
+    }
+    if role == PtyRole::Master && session.output.len() == 0 && length != 0 {
+        return error(if session.slave_open {
+            PtyMsg::ERR_WOULD_BLOCK
+        } else {
+            PtyMsg::ERR_PEER_CLOSED
+        });
+    }
+    let Ok(pointer) = sunlight_ipc::shm_map(msg.caps[1]) else {
+        return error(PtyMsg::ERR_PERMISSION_DENIED);
+    };
+    let count = unsafe { transfer_page(&mut session.output, role, pointer, length) };
+    let _ = sunlight_ipc::shm_free(msg.caps[1]);
+    if count == 0 && length != 0 {
+        error(PtyMsg::ERR_WOULD_BLOCK)
+    } else {
+        ok_identity(session.id, session.generation).word(2, count as u64)
+    }
+}
+
+unsafe fn transfer_page(
+    output: &mut ByteRing<BUFFER_CAP>,
+    role: PtyRole,
+    pointer: *mut u8,
+    length: usize,
+) -> usize {
+    let mut bytes = [0u8; PtyMsg::BULK_BYTES];
+    if role == PtyRole::Master {
+        let count = output.pop_slice(&mut bytes[..length]);
+        for (offset, byte) in bytes[..count].iter().enumerate() {
+            unsafe { pointer.add(offset).write_volatile(*byte) };
+        }
+        count
+    } else {
+        for (offset, byte) in bytes[..length].iter_mut().enumerate() {
+            *byte = unsafe { pointer.add(offset).read_volatile() };
+        }
+        output.push_slice(&bytes[..length])
+    }
 }
 
 fn close_endpoint(

@@ -123,6 +123,8 @@
 //! - PTY reads/writes use short bounded IPC calls so a delayed PTY server
 //!   cannot freeze the window's input and redraw loop.
 
+extern crate alloc;
+
 use sun_font::{self, FontRole, VecFont};
 use sunlight_ipc::{
     debug_log, ipc_call_timeout,
@@ -134,20 +136,19 @@ use sunlight_libc as libc;
 use sunlight_tty::TerminalGrid as ModelGrid;
 use sunlight_ui::{
     widgets::{Label, StatusBar},
-    App, Canvas, Event, HBox, Point, Rect, VecText, Window, WindowConfig, WindowEvent,
+    App, Canvas, Event, Point, Rect, VecText, Window, WindowConfig, WindowEvent,
 };
 
-static F_UI: VecFont = VecFont(FontRole::UiRegular);
 static F_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
-const WIN_W: u32 = 656;
-const WIN_H: u32 = 468;
-const TAB_H: u32 = 28;
-const FOOTER_H: u32 = 32;
-const PAD_X: u32 = 8;
-const PAD_Y: u32 = 4;
-const CELL_W: u32 = 8;
-const CELL_H: u32 = 16;
+const WIN_W: u32 = 900;
+const WIN_H: u32 = 580;
+const TAB_H: u32 = 34;
+const FOOTER_H: u32 = 28;
+const PAD_X: u32 = 10;
+const PAD_Y: u32 = 10;
+const CELL_W: u32 = 9;
+const CELL_H: u32 = 20;
 /// Allocation bounds for six independent grids in the terminal's reclaiming
 /// 16 MiB heap. This covers a complete 4K client at the current cell metrics.
 const MAX_RENDER_COLUMNS: u32 = 512;
@@ -234,11 +235,19 @@ const INPUT_MAX: usize = 240;
 const PROMPT_MAX: usize = 64;
 const APP_NAME_MAX: usize = 32;
 const HIST_MAX: usize = 32;
-const READ_BUF: usize = 256;
+const READ_BUF: usize = PtyMsg::BULK_BYTES;
 const ANSI_COLORS: [u32; 16] = [
-    0xFF000000, 0xFFCC241D, 0xFF98971A, 0xFFD79921, 0xFF458588, 0xFFB16286, 0xFF689D6A, 0xFFA89984,
-    0xFF928374, 0xFFFB4934, 0xFFB8BB26, 0xFFFABD2F, 0xFF83A598, 0xFFD3869B, 0xFF8EC07C, 0xFFEBDBB2,
+    0xFF15191F, 0xFFE06C75, 0xFF98C379, 0xFFE5C07B, 0xFF61AFEF, 0xFFC678DD, 0xFF56B6C2, 0xFFD7DAE0,
+    0xFF697383, 0xFFEF8790, 0xFFB3D994, 0xFFF2D399, 0xFF8BC8FF, 0xFFDDA2F0, 0xFF83D4DD, 0xFFF4F6FA,
 ];
+const TERM_BG: u32 = ANSI_COLORS[0];
+const TERM_SURFACE: u32 = 0xFF1D222B;
+const TERM_SEPARATOR: u32 = 0xFF2D3541;
+const TERM_ACCENT: u32 = 0xFFE8B86D;
+const IDLE_POLL_TIMEOUT_MS: u64 = 16;
+const STREAM_POLL_TIMEOUT_MS: u64 = 1;
+const FAST_POLL_HOLD_MS: u64 = 80;
+const PTY_DRAIN_BUDGET_MS: u64 = 4;
 
 /// Signal number for a graceful stop request. Matches the constant used
 /// elsewhere in the tree (e.g. `services/sunlight-display`, `sunlightd`).
@@ -312,6 +321,7 @@ struct PtySession {
     service_cap: CapabilityToken,
     master: CapabilityToken,
     control: CapabilityToken,
+    output_buffer: Option<sunlight_ipc::pty::PtyBuffer>,
 }
 
 impl PtySession {
@@ -344,6 +354,7 @@ impl PtySession {
             service_cap: cap,
             master: reply.caps[0],
             control: reply.caps[1],
+            output_buffer: sunlight_ipc::pty::PtyBuffer::new().ok(),
         })
     }
 
@@ -400,78 +411,115 @@ impl PtySession {
     }
 
     fn write(&self, bytes: &[u8]) {
-        let mut pos = 0;
-        while pos < bytes.len() {
-            let chunk = (bytes.len() - pos).min(8);
-            let mut msg = IpcMsg::with_label(PtyMsg::WRITE_MASTER)
-                .word(0, self.id)
-                .word(1, self.generation)
-                .word(2, chunk as u64)
-                .with_cap(0, self.master);
-            let mut word = 0u64;
-            for (byte_index, &byte) in bytes[pos..pos + chunk].iter().enumerate() {
-                word |= (byte as u64) << (byte_index * 8);
-            }
-            msg = msg.word(3, word);
-            let mut attempt = 0usize;
-            let reply = loop {
-                match ipc_call_timeout(self.service_cap, msg, PTY_IO_TIMEOUT_MS) {
-                    Ok(reply) => break reply,
-                    Err(IpcCallError::Timeout)
-                    | Err(IpcCallError::QueueFull)
-                    | Err(IpcCallError::Cancelled) => {
-                        attempt += 1;
-                        if attempt >= PTY_WRITE_RETRIES {
-                            return;
-                        }
-                        process_yield();
-                    }
-                    Err(_) => return,
+        #[cfg(test)]
+        {
+            let _ = bytes;
+            return;
+        }
+        #[cfg(not(test))]
+        {
+            let mut pos = 0;
+            while pos < bytes.len() {
+                let chunk = (bytes.len() - pos).min(8);
+                let mut msg = IpcMsg::with_label(PtyMsg::WRITE_MASTER)
+                    .word(0, self.id)
+                    .word(1, self.generation)
+                    .word(2, chunk as u64)
+                    .with_cap(0, self.master);
+                let mut word = 0u64;
+                for (byte_index, &byte) in bytes[pos..pos + chunk].iter().enumerate() {
+                    word |= (byte as u64) << (byte_index * 8);
                 }
-            };
-            if reply.label != PtyMsg::REPLY {
-                break;
+                msg = msg.word(3, word);
+                let mut attempt = 0usize;
+                let reply = loop {
+                    match ipc_call_timeout(self.service_cap, msg, PTY_IO_TIMEOUT_MS) {
+                        Ok(reply) => break reply,
+                        Err(IpcCallError::Timeout)
+                        | Err(IpcCallError::QueueFull)
+                        | Err(IpcCallError::Cancelled) => {
+                            attempt += 1;
+                            if attempt >= PTY_WRITE_RETRIES {
+                                return;
+                            }
+                            process_yield();
+                        }
+                        Err(_) => return,
+                    }
+                };
+                if reply.label != PtyMsg::REPLY {
+                    break;
+                }
+                let accepted = (reply.words[2] as usize).min(chunk);
+                if accepted == 0 {
+                    break;
+                }
+                pos += accepted;
             }
-            let accepted = (reply.words[2] as usize).min(chunk);
-            if accepted == 0 {
-                break;
-            }
-            pos += accepted;
         }
     }
 
     fn read(&self, out: &mut [u8]) -> usize {
-        let mut total = 0;
-        while total < out.len() {
-            let chunk = (out.len() - total).min(8);
-            let reply = match ipc_call_timeout(
-                self.service_cap,
-                IpcMsg::with_label(PtyMsg::READ_MASTER)
-                    .word(0, self.id)
-                    .word(1, self.generation)
-                    .word(2, chunk as u64)
-                    .with_cap(0, self.master),
-                PTY_IO_TIMEOUT_MS,
-            ) {
-                Ok(reply) => reply,
-                Err(_) => break,
-            };
-            if reply.label != PtyMsg::REPLY {
-                break;
-            }
-            let n = (reply.words[2] as usize).min(chunk);
-            if n == 0 {
-                break;
-            }
-            for i in 0..n {
-                out[total + i] = ((reply.words[3] >> (i * 8)) & 0xFF) as u8;
-            }
-            total += n;
-            if n < chunk {
-                break;
-            }
+        #[cfg(test)]
+        {
+            let _ = out;
+            return 0;
         }
-        total
+        #[cfg(not(test))]
+        {
+            if let Some(buffer) = self.output_buffer.as_ref() {
+                let request = buffer.request(
+                    PtyMsg::READ_MASTER_BULK,
+                    self.id,
+                    self.generation,
+                    self.master,
+                    out.len(),
+                );
+                let Ok(reply) = ipc_call_timeout(self.service_cap, request, PTY_IO_TIMEOUT_MS)
+                else {
+                    return 0;
+                };
+                if reply.label != PtyMsg::REPLY
+                    || reply.words[0] != self.id
+                    || reply.words[1] != self.generation
+                {
+                    return 0;
+                }
+                return buffer.copy_to(out, reply.words[2] as usize);
+            }
+            let started = monotonic_millis();
+            let mut total = 0;
+            while total < out.len() {
+                let chunk = (out.len() - total).min(8);
+                let reply = match ipc_call_timeout(
+                    self.service_cap,
+                    IpcMsg::with_label(PtyMsg::READ_MASTER)
+                        .word(0, self.id)
+                        .word(1, self.generation)
+                        .word(2, chunk as u64)
+                        .with_cap(0, self.master),
+                    PTY_IO_TIMEOUT_MS,
+                ) {
+                    Ok(reply) => reply,
+                    Err(_) => break,
+                };
+                if reply.label != PtyMsg::REPLY {
+                    break;
+                }
+                let n = (reply.words[2] as usize).min(chunk);
+                if n == 0 {
+                    break;
+                }
+                for i in 0..n {
+                    out[total + i] = ((reply.words[3] >> (i * 8)) & 0xFF) as u8;
+                }
+                total += n;
+                if n < chunk || monotonic_millis().saturating_sub(started) >= PTY_DRAIN_BUDGET_MS {
+                    break;
+                }
+            }
+            total
+        }
     }
 
     fn attach_slave_timeout(&self, timeout_ms: u64) -> Result<CapabilityToken, PtyIoError> {
@@ -826,60 +874,93 @@ fn parse_osc(body: &[u8]) -> OscCmd<'_> {
     OscCmd::Unknown
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct PaintedCell {
+    cell: sunlight_tty::grid::Cell,
+    cursor: bool,
+}
+
 struct TerminalViewport {
     rect: Rect,
+    painted: alloc::vec::Vec<Option<PaintedCell>>,
 }
 
 impl TerminalViewport {
-    const fn new(rect: Rect) -> Self {
-        Self { rect }
+    fn new(rect: Rect) -> Self {
+        Self {
+            rect,
+            painted: alloc::vec::Vec::new(),
+        }
+    }
+
+    fn invalidate(&mut self, rect: Rect) {
+        self.rect = rect;
+        self.painted.clear();
     }
 
     fn draw(
-        &self,
+        &mut self,
         canvas: &mut Canvas,
-        grid: &mut ModelGrid,
-        theme: &sunlight_ui::Theme,
+        grid: &ModelGrid,
         scrollback_offset: usize,
+        cursor_on: bool,
     ) {
-        canvas.fill_rect(self.rect, theme.panel);
-        canvas.draw_rect(self.rect, theme.border);
-
         let cols = grid.cols;
         let rows = grid.rows;
-        let cells = if scrollback_offset == 0 || grid.in_alt_screen() {
-            grid.to_term_cells(&ANSI_COLORS)
-        } else {
-            grid.to_term_cells_with_offset(&ANSI_COLORS, scrollback_offset)
-        };
+        self.painted.resize(cols * rows, None);
+        let cursor_visible =
+            grid.cursor_visible() && (scrollback_offset == 0 || grid.in_alt_screen()) && cursor_on;
+        let cursor = grid.cursor();
         let mut clipped = canvas.sub_canvas(self.rect.inset(1));
         for row in 0..rows {
             for col in 0..cols {
-                let idx = row * cols + col;
-                if idx >= cells.len() {
-                    break;
+                let cell = grid.viewport_cell(row, col, scrollback_offset);
+                let painted = PaintedCell {
+                    cell,
+                    cursor: cursor_visible && cursor == (row, col),
+                };
+                let index = row * cols + col;
+                if self.painted[index] == Some(painted) {
+                    continue;
                 }
-                let cell = cells[idx];
-                let x = col as i32 * CELL_W as i32;
-                let y = row as i32 * CELL_H as i32;
-                clipped.fill_rect(Rect::new(x, y, CELL_W, CELL_H), sunlight_ui::Color(cell.bg));
-                if cell.ch >= b' ' && cell.ch <= b'~' && cell.ch != b' ' {
-                    clipped.draw_char(x, y, cell.ch as char, sunlight_ui::Color(cell.fg));
+                self.painted[index] = Some(painted);
+                let foreground = if cell.bold && cell.fg < 8 {
+                    cell.fg + 8
+                } else {
+                    cell.fg
+                };
+                let mut fg = ANSI_COLORS[foreground as usize % 16];
+                let mut bg = ANSI_COLORS[cell.bg as usize % 16];
+                if cell.inverse ^ painted.cursor {
+                    core::mem::swap(&mut fg, &mut bg);
                 }
-            }
-        }
-        if grid.cursor_visible() {
-            let (cursor_row, cursor_col) = grid.cursor();
-            if cursor_row < rows && cursor_col < cols {
-                clipped.draw_rect(
-                    Rect::new(
-                        cursor_col as i32 * CELL_W as i32,
-                        cursor_row as i32 * CELL_H as i32,
-                        CELL_W,
-                        CELL_H,
-                    ),
-                    theme.accent,
+                let rect = Rect::new(
+                    col as i32 * CELL_W as i32,
+                    row as i32 * CELL_H as i32,
+                    CELL_W,
+                    CELL_H,
                 );
+                let mut target = clipped.sub_canvas(rect);
+                target.fill_rect(Rect::new(0, 0, CELL_W, CELL_H), sunlight_ui::Color(bg));
+                if cell.ch.is_ascii_graphic() {
+                    let bytes = [cell.ch];
+                    let text = core::str::from_utf8(&bytes).unwrap_or("?");
+                    let role = if cell.bold {
+                        FontRole::MonoMedium
+                    } else {
+                        FontRole::MonoRegular
+                    };
+                    sun_font::draw_text(
+                        &mut target,
+                        text,
+                        0,
+                        (CELL_H.saturating_sub(sun_font::line_height(role)) / 2) as i32,
+                        &sun_font::TextStyle::new(role, sunlight_ui::Color(fg)),
+                    );
+                }
+                if cell.underline {
+                    target.hbar(0, CELL_H as i32 - 3, CELL_W, 1, sunlight_ui::Color(fg));
+                }
             }
         }
     }
@@ -1028,16 +1109,25 @@ impl TerminalTab {
     /// A no-op (returns `false`) while `pty` is `None` (i.e. `Connecting`
     /// or `Failed`).
     fn poll_pty(&mut self, read_buf: &mut [u8], console_buf: &mut [u8], debug: DebugFlags) -> bool {
-        let Some(pty) = self.pty.as_ref() else {
-            return false;
-        };
-        let n = pty.read(read_buf);
-        if n == 0 {
+        if self.pty.is_none() {
             return false;
         }
-        self.ingest(&read_buf[..n], console_buf, debug);
-        self.scrollback_offset = 0;
-        true
+        let mut produced = false;
+        let started = monotonic_millis();
+        for _ in 0..4 {
+            let n = self.pty.as_ref().map(|pty| pty.read(read_buf)).unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            self.ingest(&read_buf[..n], console_buf, debug);
+            produced = true;
+            if n < read_buf.len()
+                || monotonic_millis().saturating_sub(started) >= PTY_DRAIN_BUDGET_MS
+            {
+                break;
+            }
+        }
+        produced
     }
 
     fn publish_geometry(&mut self, size: TerminalWinsize) -> bool {
@@ -1192,6 +1282,7 @@ impl TerminalTab {
     }
 
     fn submit_line(&mut self) {
+        self.scrollback_offset = 0;
         let Some(pty) = self.pty.as_ref() else {
             return;
         };
@@ -1230,7 +1321,7 @@ struct TerminalApp {
     next_tab_id: TabId,
     pty_cap: CapabilityToken,
     read_buf: [u8; READ_BUF],
-    console_buf: [u8; READ_BUF],
+    console_buf: [u8; READ_BUF + 2],
     debug: DebugFlags,
     mods: Mods,
     /// Compositor keyboard focus for this window. Keys are ignored while false
@@ -1238,10 +1329,14 @@ struct TerminalApp {
     window_focused: bool,
     pending_spawn: Option<PendingSpawn>,
     layout: TerminalLayout,
+    last_output_ms: u64,
+    cursor_phase: bool,
+    viewport: TerminalViewport,
+    painted_view: Option<(TerminalLayout, TabId, TabStatus)>,
 }
 
 impl TerminalApp {
-    const TAB_W: u32 = 92;
+    const TAB_W: u32 = 124;
     /// Wider than a single glyph so the new-tab button has a comfortable
     /// click target.
     const NEW_TAB_W: u32 = 34;
@@ -1257,7 +1352,7 @@ impl TerminalApp {
             next_tab_id: 1,
             pty_cap,
             read_buf: [0; READ_BUF],
-            console_buf: [0; READ_BUF],
+            console_buf: [0; READ_BUF + 2],
             debug,
             mods: Mods::default(),
             // Optimistic: a newly opened window is raised and focused by the
@@ -1265,6 +1360,10 @@ impl TerminalApp {
             window_focused: true,
             pending_spawn: None,
             layout,
+            last_output_ms: 0,
+            cursor_phase: true,
+            viewport: TerminalViewport::new(layout.content),
+            painted_view: None,
         }
     }
 
@@ -1615,8 +1714,11 @@ impl TerminalApp {
         }
 
         if let Some(tab) = self.tabs.get_mut(self.active).and_then(|t| t.as_mut()) {
+            let previous_status = tab.status;
             tab.refresh_status();
+            redraw |= previous_status != tab.status;
             if tab.poll_pty(&mut self.read_buf, &mut self.console_buf, self.debug) {
+                self.last_output_ms = monotonic_millis();
                 redraw = true;
             }
         }
@@ -1633,7 +1735,9 @@ impl TerminalApp {
             if idx != self.active {
                 self.poll_cursor = (idx + 1) % self.tab_count;
                 if let Some(tab) = self.tabs[idx].as_mut() {
+                    let previous_status = tab.status;
                     tab.refresh_status();
+                    redraw |= previous_status != tab.status;
                     let produced =
                         tab.poll_pty(&mut self.read_buf, &mut self.console_buf, self.debug);
                     if produced && !tab.dirty {
@@ -1668,13 +1772,24 @@ impl TerminalApp {
         }
     }
 
-    fn tab_rect(index: usize) -> Rect {
-        Rect::new((index as u32 * Self::TAB_W) as i32, 0, Self::TAB_W, TAB_H)
+    fn tab_width(&self) -> u32 {
+        let reserve = if self.tab_count < MAX_TABS {
+            Self::NEW_TAB_W
+        } else {
+            0
+        };
+        (self.layout.client_width.saturating_sub(reserve) / self.tab_count.max(1) as u32)
+            .min(Self::TAB_W)
     }
 
-    fn new_tab_rect(tab_count: usize) -> Rect {
+    fn tab_rect(&self, index: usize) -> Rect {
+        let width = self.tab_width();
+        Rect::new((index as u32 * width) as i32, 0, width, TAB_H)
+    }
+
+    fn new_tab_rect(&self) -> Rect {
         Rect::new(
-            (tab_count as u32 * Self::TAB_W) as i32,
+            (self.tab_count as u32 * self.tab_width()) as i32,
             0,
             Self::NEW_TAB_W,
             TAB_H,
@@ -1701,19 +1816,19 @@ impl TerminalApp {
 
         if self.tab_count > 1 {
             for i in 0..self.tab_count {
-                let r = Self::tab_rect(i);
-                if Self::close_btn_rect(r).contains(point) {
+                let r = self.tab_rect(i);
+                if r.w >= 48 && Self::close_btn_rect(r).contains(point) {
                     self.close_tab(i);
                     return true;
                 }
             }
         }
         for i in 0..self.tab_count {
-            if Self::tab_rect(i).contains(point) {
+            if self.tab_rect(i).contains(point) {
                 return self.switch_tab(i);
             }
         }
-        if self.tab_count < MAX_TABS && Self::new_tab_rect(self.tab_count).contains(point) {
+        if self.tab_count < MAX_TABS && self.new_tab_rect().contains(point) {
             return self.spawn_tab();
         }
         false
@@ -1722,40 +1837,53 @@ impl TerminalApp {
     fn draw_tab_bar(&self, canvas: &mut Canvas, theme: &sunlight_ui::Theme) {
         canvas.fill_rect(
             Rect::new(0, 0, self.layout.client_width, TAB_H),
-            theme.panel,
+            sunlight_ui::Color(TERM_SURFACE),
         );
         canvas.hbar(
             0,
             TAB_H as i32 - 1,
             self.layout.client_width,
             1,
-            theme.border,
+            sunlight_ui::Color(TERM_SEPARATOR),
         );
 
         for i in 0..self.tab_count {
             let Some(tab) = self.tabs[i].as_ref() else {
                 continue;
             };
-            let r = Self::tab_rect(i);
+            let r = self.tab_rect(i);
             let active = i == self.active;
 
-            canvas.fill_rect(r, if active { theme.panel_alt } else { theme.panel });
+            canvas.fill_rect(
+                r,
+                sunlight_ui::Color(if active { TERM_BG } else { TERM_SURFACE }),
+            );
 
             let text_color = match tab.status {
                 TabStatus::Failed | TabStatus::Exited => theme.danger,
                 TabStatus::Connecting => theme.warn,
-                TabStatus::Running if active => theme.accent,
+                TabStatus::Running if active => sunlight_ui::Color(TERM_ACCENT),
                 TabStatus::Running => theme.text_dim,
             };
-            F_SMALL.draw_vcenter(canvas, tab.title_str(), r.x + 8, r.y, TAB_H, text_color);
+            let label = if tab.app_owns_input() && !tab.footer.app_name_str().is_empty() {
+                tab.footer.app_name_str()
+            } else {
+                tab.title_str()
+            };
+            let mut label_canvas =
+                canvas.sub_canvas(Rect::new(r.x + 10, r.y, r.w.saturating_sub(36), r.h));
+            F_SMALL.draw_vcenter(&mut label_canvas, label, 0, 0, TAB_H, text_color);
 
             if active {
-                canvas.hbar(r.x, r.bottom() - 2, r.w, 2, theme.accent);
+                canvas.hbar(r.x, r.bottom() - 2, r.w, 2, sunlight_ui::Color(TERM_ACCENT));
             } else if tab.dirty {
-                canvas.fill_rect(Rect::new(r.right() - 10, r.y + 5, 4, 4), theme.accent);
+                canvas.fill_rect(
+                    Rect::new(r.right() - 10, r.y + 5, 4, 4),
+                    sunlight_ui::Color(TERM_ACCENT),
+                );
             }
 
-            if self.tab_count > 1 {
+            if self.tab_count > 1 && r.w >= 48 {
                 let close_r = Self::close_btn_rect(r);
                 F_SMALL.draw_vcenter(
                     canvas,
@@ -1772,13 +1900,13 @@ impl TerminalApp {
                     r.right() - 1,
                     r.y + 5,
                     TAB_H.saturating_sub(10),
-                    theme.border,
+                    sunlight_ui::Color(TERM_SEPARATOR),
                 );
             }
         }
 
         if self.tab_count < MAX_TABS {
-            let nr = Self::new_tab_rect(self.tab_count);
+            let nr = self.new_tab_rect();
             let plus_w = sun_font::measure_text("+", FontRole::UiSmall).w as i32;
             let plus_x = nr.x + ((nr.w as i32 - plus_w) / 2).max(0);
             F_SMALL.draw_vcenter(canvas, "+", plus_x, nr.y, TAB_H, theme.text_dim);
@@ -1802,11 +1930,17 @@ impl TerminalApp {
 
     fn footer_right_text(tab: &TerminalTab, pending_spawn_for_tab: bool) -> &'static str {
         if pending_spawn_for_tab {
-            "new tab pending"
-        } else if tab.pty.is_some() {
-            "session attached"
+            "Starting..."
+        } else if tab.scrollback_offset != 0 && !tab.grid.in_alt_screen() {
+            "Scrollback"
         } else {
-            "no session"
+            match tab.status {
+                TabStatus::Connecting => "Connecting...",
+                TabStatus::Failed => "Failed",
+                TabStatus::Exited => "Exited",
+                TabStatus::Running if tab.app_owns_input() => "Running",
+                TabStatus::Running => "Ready",
+            }
         }
     }
 }
@@ -1829,6 +1963,8 @@ impl TerminalApp {
 /// `docs/terminal/tab-support.md`.
 #[cfg(test)]
 mod tests {
+    extern crate std;
+
     use super::*;
 
     fn test_pty(id: u64) -> PtySession {
@@ -1838,6 +1974,7 @@ mod tests {
             service_cap: CapabilityToken::INVALID,
             master: CapabilityToken::INVALID,
             control: CapabilityToken::INVALID,
+            output_buffer: None,
         }
     }
 
@@ -2132,14 +2269,161 @@ mod tests {
         let mut app = test_app();
         assert!(!app.advance_pending_spawn());
     }
+
+    #[test]
+    fn alt_screen_and_app_mode_own_keyboard_input() {
+        let mut tab = test_tab(1, b"Tab 1");
+        assert!(!tab.app_owns_input());
+        let mut console_buf = [0u8; READ_BUF];
+        tab.ingest(b"\x1b[?1049h", &mut console_buf, DebugFlags::new());
+        assert!(tab.grid.in_alt_screen());
+        assert!(tab.app_owns_input());
+
+        tab.ingest(b"\x1b[?1049l", &mut console_buf, DebugFlags::new());
+        assert!(!tab.grid.in_alt_screen());
+        tab.footer.enter_app_mode(b"top");
+        assert!(tab.app_owns_input());
+        tab.footer.exit_app_mode();
+        assert!(!tab.app_owns_input());
+    }
+
+    #[test]
+    fn app_mode_does_not_treat_letters_as_new_tab_shortcuts() {
+        let mut app = test_app();
+        assert!(app.insert_tab(test_tab(1, b"Tab 1")));
+        app.tabs[0].as_mut().unwrap().footer.enter_app_mode(b"top");
+        app.mods.ctrl = true;
+        // Ctrl+T must reach the app, not open a tab.
+        let _ = app.update(Event::Key('t'));
+        assert_eq!(app.tab_count, 1);
+        assert!(app.pending_spawn.is_none());
+        app.mods.ctrl = false;
+        assert!(app.update(Event::Key('s')));
+        assert!(app.update(Event::Key('q')));
+        assert_eq!(app.tab_count, 1);
+    }
+
+    #[test]
+    fn idle_poll_is_short_and_pending_spawn_is_immediate() {
+        let app = test_app();
+        assert_eq!(app.poll_timeout_ms(), IDLE_POLL_TIMEOUT_MS);
+        let mut spawning = test_app();
+        assert!(spawning.spawn_tab());
+        assert_eq!(spawning.poll_timeout_ms(), 0);
+    }
+
+    #[test]
+    fn terminal_font_matches_cell_geometry() {
+        for role in [FontRole::MonoRegular, FontRole::MonoMedium] {
+            assert_eq!(sun_font::measure_text("M", role).w, CELL_W);
+            assert!(sun_font::line_height(role) <= CELL_H);
+        }
+    }
+
+    #[test]
+    fn resized_tabs_remain_inside_the_window_and_keep_their_hit_targets() {
+        let mut app = test_app();
+        for index in 0..MAX_TABS {
+            assert!(app.insert_tab(test_tab(index as TabId + 1, b"Shell")));
+        }
+        app.set_client_size(360, 240);
+        for index in 0..MAX_TABS {
+            let rect = app.tab_rect(index);
+            assert!(rect.right() <= app.layout.client_width as i32);
+            let _ = app.handle_click(rect.x + 4, 8);
+            assert_eq!(app.active, index);
+        }
+    }
+
+    #[test]
+    fn incremental_paint_matches_full_paint_after_updates_and_cursor_changes() {
+        let theme = sunlight_ui::Theme::sunlight_dark();
+        let mut app = test_app();
+        assert!(app.insert_tab(test_tab(1, b"Shell")));
+        let mut pixels = alloc::vec![0; (WIN_W * WIN_H) as usize];
+        let sequences: &[&[u8]] = &[
+            b"hello\r\n\x1b[1;32mworld\x1b[0m",
+            b"\x1b[1;1H\x1b[2Kchanged",
+            b"\x1b[?1049h\x1b[4;10H\x1b[4;34munderlined\x1b[0m",
+            b"\x1b[?25l\x1b[2J\x1b[Hrefresh",
+            b"\x1b[?1049l",
+        ];
+        for sequence in sequences {
+            app.tabs[0].as_mut().unwrap().grid.feed(sequence);
+            for phase in [true, false] {
+                app.cursor_phase = phase;
+                app.view(&mut Canvas::new(&mut pixels, WIN_W, WIN_W, WIN_H), &theme);
+                let mut fresh = alloc::vec![0; pixels.len()];
+                app.painted_view = None;
+                app.view(&mut Canvas::new(&mut fresh, WIN_W, WIN_W, WIN_H), &theme);
+                assert_eq!(pixels, fresh);
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_preview_and_small_window_clipping() {
+        let theme = sunlight_ui::Theme::sunlight_dark();
+        let mut app = test_app();
+        assert!(app.insert_tab(test_tab(1, b"Shell")));
+        let tab = app.tabs[0].as_mut().unwrap();
+        tab.footer.set_prompt(b"sunlight@sunlight:~$ ");
+        tab.grid.feed(b"\x1b[1;36mWelcome to SunlightOS\x1b[0m\r\n\r\n\x1b[33msunlight@sunlight:~$\x1b[0m ls\r\n\x1b[34mDocuments  Downloads  Pictures  Projects\x1b[0m\r\n\r\n\x1b[33msunlight@sunlight:~$\x1b[0m echo Ready for a new day\r\nReady for a new day\r\n");
+        for byte in b"cargo build" {
+            tab.footer.insert(*byte);
+        }
+        for mode in ["shell", "top"] {
+            if mode == "top" {
+                let tab = app.tabs[0].as_mut().unwrap();
+                tab.footer.enter_app_mode(b"sunlight-top");
+                tab.grid.feed(b"\x1b[?1049h\x1b[?25l\x1b[1;36m SUNLIGHT TOP\x1b[0m\r\n\r\n Uptime  00:12:45    Tasks  37    Cores  4\r\n\x1b[32m CPU    [||||||||                          ]  24%\r\n\x1b[34m Memory [||||||||||||                      ]  36%\x1b[0m\r\n\r\n\x1b[1;33m PID    STATE       CPU%    MEMORY    NAME\x1b[0m\r\n   1    sleeping     0.0     12 MB    init\r\n   3    sleeping     0.1     46 MB    vfs-server\r\n   4    sleeping     0.0     25 MB    tty-server\r\n  12    running      2.4     32 MB    sunlight-display\r\n  24    running      0.8     16 MB    sunlight-terminal\r\n\r\n\x1b[90m q Quit   s Sort   r Refresh\x1b[0m");
+            }
+            let mut pixels = alloc::vec![0; (WIN_W * WIN_H) as usize];
+            app.painted_view = None;
+            app.view(&mut Canvas::new(&mut pixels, WIN_W, WIN_W, WIN_H), &theme);
+            if let Ok(prefix) = std::env::var("SUNLIGHT_TERMINAL_PREVIEW") {
+                let mut image = alloc::format!("P6\n{} {}\n255\n", WIN_W, WIN_H).into_bytes();
+                for pixel in pixels {
+                    image.extend_from_slice(&[
+                        (pixel >> 16) as u8,
+                        (pixel >> 8) as u8,
+                        pixel as u8,
+                    ]);
+                }
+                std::fs::write(alloc::format!("{}-{}.ppm", prefix, mode), image).unwrap();
+            }
+        }
+        for (width, height) in [(320, 180), (64, 64), (1, 1)] {
+            assert!(app.set_client_size(width, height));
+            let mut pixels = alloc::vec![0; (width * height) as usize];
+            app.view(&mut Canvas::new(&mut pixels, width, width, height), &theme);
+        }
+    }
 }
 
 impl App for TerminalApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &sunlight_ui::Theme) {
-        canvas.fill_rect(
-            Rect::new(0, 0, self.layout.client_width, self.layout.client_height),
-            theme.bg,
-        );
+        if canvas.width < PAD_X * 2 + CELL_W + 2
+            || canvas.height < TAB_H + FOOTER_H + PAD_Y * 2 + CELL_H + 2
+        {
+            canvas.fill_rect(
+                Rect::new(0, 0, canvas.width, canvas.height),
+                sunlight_ui::Color(TERM_BG),
+            );
+            self.painted_view = None;
+            return;
+        }
+        let view = self.tabs[self.active]
+            .as_ref()
+            .map(|tab| (self.layout, tab.id, tab.status));
+        if self.painted_view != view || view.is_none() {
+            canvas.fill_rect(
+                Rect::new(0, 0, self.layout.client_width, self.layout.client_height),
+                sunlight_ui::Color(TERM_BG),
+            );
+            self.viewport.invalidate(self.layout.content);
+            self.painted_view = view;
+        }
         self.draw_tab_bar(canvas, theme);
 
         let content = self.layout.content;
@@ -2155,7 +2439,12 @@ impl App for TerminalApp {
             log_tab_phase(tab.id, "first_tab_frame");
         }
 
-        TerminalViewport::new(content).draw(canvas, &mut tab.grid, theme, tab.scrollback_offset);
+        self.viewport.draw(
+            canvas,
+            &tab.grid,
+            tab.scrollback_offset,
+            self.cursor_phase && self.window_focused && tab.app_owns_input(),
+        );
 
         let status_label = match tab.status {
             TabStatus::Connecting => Some("Connecting..."),
@@ -2164,104 +2453,126 @@ impl App for TerminalApp {
         };
         if let Some(text) = status_label {
             Label::new(
-                Rect::new(content.x + 8, content.y + 8, content.w - 16, 20),
+                Rect::new(
+                    content.x + 8,
+                    content.y + 8,
+                    content.w.saturating_sub(16),
+                    20,
+                ),
                 text,
             )
             .with_font(&F_SMALL)
             .draw(canvas, theme);
         }
 
-        let pending_spawn_for_tab = self.pending_spawn.as_ref().map(|p| p.tab_id) == Some(tab.id);
-        // Background + right status only. Never put center status over the
-        // prompt/input field — that made typed text look "dead" (status paint
-        // sat under/through the line editor).
-        StatusBar::new(
-            footer,
-            "",
-            "",
-            Self::footer_right_text(tab, pending_spawn_for_tab),
-        )
-        .draw(canvas, theme);
-        if tab.app_owns_input() {
-            Label::new(
-                Rect::new(8, footer.y + 4, 220, FOOTER_H - 8),
-                tab.footer.app_name_str(),
-            )
-            .with_font(&F_SMALL)
-            .draw(canvas, theme);
-            Label::new(
-                Rect::new(240, footer.y + 4, 200, FOOTER_H - 8),
-                Self::footer_center_text(tab),
-            )
-            .with_font(&F_SMALL)
-            .dim()
-            .draw(canvas, theme);
-        } else {
-            // Reserve the right ~120px for the status strip; keep the rest for
-            // prompt + input so long OSC prompts cannot zero out input_w.
-            let status_reserve = 120u32;
-            let prompt_area = Rect::new(
-                8,
-                footer.y + 4,
-                self.layout.client_width.saturating_sub(16 + status_reserve),
-                FOOTER_H - 8,
+        let pending_spawn_for_tab =
+            self.pending_spawn.as_ref().map(|pending| pending.tab_id) == Some(tab.id);
+        canvas.fill_rect(footer, sunlight_ui::Color(TERM_SURFACE));
+        canvas.hbar(
+            footer.x,
+            footer.y,
+            footer.w,
+            1,
+            sunlight_ui::Color(TERM_SEPARATOR),
+        );
+        let status_width = if footer.w >= 480 { 124 } else { 0 };
+        if status_width != 0 {
+            let status = Rect::new(
+                footer.right() - status_width as i32,
+                footer.y,
+                status_width,
+                footer.h,
             );
-            // Visible input trough so caret/text always contrast with chrome.
-            canvas.fill_rect(prompt_area, theme.bg);
-            canvas.draw_rect(prompt_area, theme.border);
-
-            let prompt_w = sun_font::measure_text(tab.footer.prompt_str(), FontRole::UiSmall)
-                .w
-                .min(prompt_area.w / 2)
-                + 4;
-            let spacing = 8;
-            let input_w = prompt_area
-                .w
-                .saturating_sub(prompt_w)
-                .saturating_sub(spacing)
-                .max(32);
-            let prompt_widths = [prompt_w, input_w];
-            let mut prompt_cells = HBox::new(prompt_area.inset(2))
-                .with_spacing(spacing)
-                .layout(&prompt_widths);
-            if let Some(prompt_rect) = prompt_cells.next() {
-                Label::new(prompt_rect, tab.footer.prompt_str())
-                    .with_font(&F_SMALL)
-                    .draw(canvas, theme);
-            }
-            if let Some(input_rect) = prompt_cells.next() {
-                Label::new(input_rect, tab.footer.input_str())
-                    .with_font(&F_UI)
-                    .draw(canvas, theme);
-                let prefix_w =
-                    sun_font::measure_text(tab.footer.input_prefix_str(), FontRole::UiRegular).w
-                        as i32;
-                let caret_x = (input_rect.x + prefix_w).min(input_rect.right() - 1);
-                canvas.vline(
-                    caret_x,
-                    input_rect.y + 2,
-                    input_rect.h.saturating_sub(4),
-                    theme.accent,
+            let mut status_canvas = canvas.sub_canvas(status);
+            F_SMALL.draw_vcenter(
+                &mut status_canvas,
+                Self::footer_right_text(tab, pending_spawn_for_tab),
+                4,
+                0,
+                footer.h,
+                sunlight_ui::Color(ANSI_COLORS[8]),
+            );
+        }
+        let input_area = Rect::new(
+            PAD_X as i32,
+            footer.y + 4,
+            footer.w.saturating_sub(PAD_X * 2 + status_width),
+            footer.h.saturating_sub(8),
+        );
+        let mut input_canvas = canvas.sub_canvas(input_area);
+        if tab.app_owns_input() {
+            let label = if tab.footer.app_name_str().is_empty() {
+                "Terminal"
+            } else {
+                tab.footer.app_name_str()
+            };
+            F_SMALL.draw_vcenter(
+                &mut input_canvas,
+                label,
+                0,
+                0,
+                input_area.h,
+                sunlight_ui::Color(TERM_ACCENT),
+            );
+            if input_area.w > 320 {
+                F_SMALL.draw_vcenter(
+                    &mut input_canvas,
+                    Self::footer_center_text(tab),
+                    180,
+                    0,
+                    input_area.h,
+                    sunlight_ui::Color(ANSI_COLORS[8]),
                 );
-                if tab.footer.input_cursor < tab.footer.input_len {
-                    let suffix = tab.footer.input_suffix_str();
-                    if let Some(ch) = suffix.chars().next() {
-                        let mut buf = [0u8; 4];
-                        let text = ch.encode_utf8(&mut buf);
-                        let char_w = sun_font::measure_text(text, FontRole::UiRegular)
-                            .w
-                            .min(input_rect.w);
-                        canvas.fill_rect(
-                            Rect::new(
-                                caret_x,
-                                input_rect.y + 1,
-                                char_w,
-                                input_rect.h.saturating_sub(2),
-                            ),
-                            theme.accent,
-                        );
-                        canvas.draw_char(caret_x, input_rect.y, ch, theme.bg);
-                    }
+            }
+        } else {
+            let role = FontRole::MonoRegular;
+            let prompt_width = sun_font::measure_text(tab.footer.prompt_str(), role)
+                .w
+                .min(input_area.w / 2);
+            {
+                let mut prompt_canvas =
+                    input_canvas.sub_canvas(Rect::new(0, 0, prompt_width, input_area.h));
+                sun_font::draw_text(
+                    &mut prompt_canvas,
+                    tab.footer.prompt_str(),
+                    0,
+                    0,
+                    &sun_font::TextStyle::new(role, sunlight_ui::Color(TERM_ACCENT)),
+                );
+            }
+            let edit_rect = Rect::new(
+                prompt_width as i32 + 4,
+                0,
+                input_area.w.saturating_sub(prompt_width + 4),
+                input_area.h,
+            );
+            let mut edit_canvas = input_canvas.sub_canvas(edit_rect);
+            let prefix_width = sun_font::measure_text(tab.footer.input_prefix_str(), role).w;
+            let scroll = prefix_width.saturating_sub(edit_rect.w.saturating_sub(CELL_W));
+            sun_font::draw_text(
+                &mut edit_canvas,
+                tab.footer.input_str(),
+                -(scroll as i32),
+                0,
+                &sun_font::TextStyle::new(role, sunlight_ui::Color(ANSI_COLORS[7])),
+            );
+            if self.window_focused && self.cursor_phase {
+                let caret = Rect::new(
+                    prefix_width.saturating_sub(scroll) as i32,
+                    0,
+                    CELL_W,
+                    edit_rect.h,
+                );
+                edit_canvas.fill_rect(caret, sunlight_ui::Color(TERM_ACCENT));
+                if let Some(character) = tab.footer.input_suffix_str().chars().next() {
+                    let mut bytes = [0; 4];
+                    sun_font::draw_text(
+                        &mut edit_canvas,
+                        character.encode_utf8(&mut bytes),
+                        caret.x,
+                        0,
+                        &sun_font::TextStyle::new(role, sunlight_ui::Color(TERM_BG)),
+                    );
                 }
             }
         }
@@ -2272,8 +2583,20 @@ impl App for TerminalApp {
         match event {
             Event::Tick => {
                 dirty |= self.poll_all_tabs();
+                let now = monotonic_millis();
+                let phase = ((now / 530) & 1) == 0;
+                let cursor_visible = self.window_focused
+                    && self.tabs[self.active].as_ref().is_some_and(|tab| {
+                        !tab.app_owns_input()
+                            || (tab.grid.cursor_visible() && tab.scrollback_offset == 0)
+                    });
+                if phase != self.cursor_phase {
+                    self.cursor_phase = phase;
+                    dirty |= cursor_visible;
+                }
             }
             Event::FocusChanged { focused } => {
+                dirty |= self.window_focused != focused;
                 // Always resync modifiers on focus edges: a dropped key-up
                 // while unfocused would otherwise leave ctrl/alt stuck and
                 // turn the next plain letter into a shortcut.
@@ -2320,14 +2643,23 @@ impl App for TerminalApp {
                 // Same as KeyPress: key delivery implies compositor focus.
                 self.window_focused = true;
                 log_term_key(ch, self.mods.ctrl, self.mods.alt);
-                if self.mods.ctrl && (ch == 't' || ch == 'T') {
+                let app_input = self
+                    .active_tab_mut()
+                    .map(|tab| tab.app_owns_input())
+                    .unwrap_or(false);
+                if !app_input && self.mods.ctrl && (ch == 't' || ch == 'T') {
                     dirty |= self.spawn_tab();
-                } else if self.mods.ctrl && (ch == 'w' || ch == 'W') {
+                } else if !app_input && self.mods.ctrl && (ch == 'w' || ch == 'W') {
                     // Plain Ctrl+W never reaches here -- `sunlight-display`
                     // still intercepts it globally to close the window. Only
                     // Ctrl+Shift+W is left unconsumed for apps.
                     dirty |= self.close_tab(self.active);
-                } else if self.mods.alt && !self.mods.ctrl && ch.is_ascii_digit() && ch != '0' {
+                } else if !app_input
+                    && self.mods.alt
+                    && !self.mods.ctrl
+                    && ch.is_ascii_digit()
+                    && ch != '0'
+                {
                     let idx = (ch as u8 - b'1') as usize;
                     dirty |= self.switch_tab(idx);
                 } else if let Some(tab) = self.active_tab_mut() {
@@ -2375,6 +2707,19 @@ impl App for TerminalApp {
     fn window_event(&mut self, event: WindowEvent) -> bool {
         let WindowEvent::Resized { width, height } = event;
         self.set_client_size(width, height)
+    }
+
+    fn poll_timeout_ms(&self) -> u64 {
+        let now = monotonic_millis();
+        if self.pending_spawn.is_some() {
+            0
+        } else if self.last_output_ms != 0
+            && now.saturating_sub(self.last_output_ms) < FAST_POLL_HOLD_MS
+        {
+            STREAM_POLL_TIMEOUT_MS
+        } else {
+            IDLE_POLL_TIMEOUT_MS
+        }
     }
 }
 

@@ -2735,6 +2735,8 @@ mod sunlight {
         n
     }
 
+    static mut PTY_OUTPUT_BUFFER: Option<sunlight_ipc::pty::PtyBuffer> = None;
+
     fn pty_write(
         service_cap: CapabilityToken,
         slave_cap: CapabilityToken,
@@ -2744,6 +2746,32 @@ mod sunlight {
     ) -> usize {
         let mut written = 0usize;
         while written < bytes.len() {
+            if let Some(buffer) = unsafe { PTY_OUTPUT_BUFFER.as_mut() } {
+                let chunk = buffer.copy_from(&bytes[written..]);
+                let reply = ipc_call(
+                    service_cap,
+                    buffer.request(
+                        PtyMsg::WRITE_SLAVE_BULK,
+                        session_id,
+                        generation,
+                        slave_cap,
+                        chunk,
+                    ),
+                );
+                if reply.label == PtyMsg::ERROR && reply.words[0] == PtyMsg::ERR_WOULD_BLOCK {
+                    process_yield();
+                    continue;
+                }
+                if reply.label != PtyMsg::REPLY {
+                    break;
+                }
+                let accepted = (reply.words[2] as usize).min(chunk);
+                if accepted == 0 {
+                    break;
+                }
+                written += accepted;
+                continue;
+            }
             let chunk = (bytes.len() - written).min(8);
             let mut msg = IpcMsg::with_label(PtyMsg::WRITE_SLAVE)
                 .word(0, session_id)
@@ -2756,6 +2784,10 @@ mod sunlight {
             }
             msg = msg.word(3, word);
             let reply = ipc_call(service_cap, msg);
+            if reply.label == PtyMsg::ERROR && reply.words[0] == PtyMsg::ERR_WOULD_BLOCK {
+                process_yield();
+                continue;
+            }
             if reply.label != PtyMsg::REPLY {
                 break;
             }
@@ -2958,6 +2990,9 @@ mod sunlight {
         slave_cap: CapabilityToken,
     ) -> ! {
         debug_log("[PTY-SHELL] starting PTY slave mode");
+        unsafe {
+            PTY_OUTPUT_BUFFER = sunlight_ipc::pty::PtyBuffer::new().ok();
+        }
 
         let mut shell = Shell::new();
         shell.load_user_by_uid(uid);
@@ -2974,7 +3009,7 @@ mod sunlight {
 
         let shell_tab = shell_id as u32;
         let mut in_buf = [0u8; 64];
-        let mut child_buf = [0u8; 128];
+        let mut child_buf = [0u8; PtyMsg::BULK_BYTES];
         // Track what the user is typing so we can extract the app name when it launches.
         let mut cmd_buf = [0u8; 64];
         let mut cmd_len = 0usize;
@@ -3002,6 +3037,22 @@ mod sunlight {
                     progress = true;
                 }
                 if let Ok(Some(code)) = sunlight_libc::try_waitpid(pid) {
+                    loop {
+                        let pulled = tty_stdout_pull(shell_tab, &mut child_buf);
+                        if pulled == 0 {
+                            break;
+                        }
+                        if pty_write(
+                            service_cap,
+                            slave_cap,
+                            session_id,
+                            generation,
+                            &child_buf[..pulled],
+                        ) != pulled
+                        {
+                            break;
+                        }
+                    }
                     shell.fg_pid = None;
                     shell.env.set("?", &alloc::format!("{}", code));
                     // Tell terminal to exit app mode, add separator, then show new prompt.

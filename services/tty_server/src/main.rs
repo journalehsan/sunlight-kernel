@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
+use core::cell::RefCell;
 use sunlight_ipc::{
     debug_log, endpoint_create, get_time_utc, ipc_call, ipc_call_timeout, ipc_recv,
     ipc_reply_and_try_recv, kill,
@@ -16,12 +16,12 @@ use sunlight_ipc::{
 };
 use sunlight_libc::sun_exec;
 use sunlight_telemetry::Telemetry;
+use sunlight_tty::console::Console;
 use sunlight_tty::login::{
     login_display_name, login_user_icon, FocusArea, LoginResult, LoginScreen, LoginUserIcon,
     SessionType, MAX_USERS,
 };
 use sunlight_tty::proc::{ProcOp, SIGKILL};
-use sunlight_tty::TerminalGrid;
 use sunlight_tui::interaction::PointerSurface;
 use sunlight_tui::ANSI_COLORS;
 
@@ -94,7 +94,6 @@ const KEY_T: u8 = 0x14;
 /// even for small edits; 4 KiB could roll over mid-CSI sequence and replay a
 /// fragment such as `9m` as visible text. Event-driven clients now emit far
 /// less idle traffic, while 64 KiB keeps ordinary editing sessions intact.
-const TERM_OUTPUT_MAX: usize = 64 * 1024;
 const IPC_OUTPUT_BYTES: usize = 16;
 const INPUT_LINE_MAX: usize = 256;
 const PENDING_INPUT_MAX: usize = 128;
@@ -1133,13 +1132,12 @@ static mut TERMINAL_GEOMETRY: [TerminalGeometry; MAX_TABS] = [TerminalGeometry {
     authoritative: false,
 }; MAX_TABS];
 
-#[derive(Clone, Copy)]
 struct ShellTab {
     shell_id: u64,
     pid: u64,
     session_pid: u64,
     cap: Option<CapabilityToken>,
-    output: [u8; TERM_OUTPUT_MAX],
+    output: RefCell<Option<Console>>,
     output_len: usize,
     input_line: [u8; INPUT_LINE_MAX],
     input_line_len: usize,
@@ -1177,11 +1175,6 @@ struct ShellTab {
 /// Global scrollback state for all tabs (indexed by active_tab)
 static mut SCROLLBACK_STATE: [TabScrollback; MAX_TABS] =
     [TabScrollback { viewport_offset: 0 }; MAX_TABS];
-
-/// FIX: Cached TerminalGrid to avoid repeated 400KB+ allocations per frame
-/// This single grid is reused across all renders, preventing heap exhaustion
-/// See ROOT_CAUSE_FOUND.md for detailed explanation
-static mut GRID_CACHE: Option<Box<TerminalGrid>> = None;
 
 /// Shell command history, shared across all tabs (like a single ~/.bash_history).
 const HIST_MAX: usize = 32;
@@ -1296,7 +1289,7 @@ impl ShellTab {
             pid: 0,
             session_pid: 0,
             cap: None,
-            output: [0; TERM_OUTPUT_MAX],
+            output: RefCell::new(None),
             output_len: 0,
             input_line: [0; INPUT_LINE_MAX],
             input_line_len: 0,
@@ -1391,7 +1384,7 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
     let mut state = TtyState::Login;
     let mut spawn_cap: Option<CapabilityToken> = None;
-    let mut tabs = [ShellTab::empty(); MAX_TABS];
+    let mut tabs = core::array::from_fn(|_| ShellTab::empty());
     let mut tab_count = 0usize;
     let mut active_tab = 0usize;
     let mut next_shell_id = 0u64;
@@ -2291,15 +2284,10 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
             {
                 let fg = active_shell_tab(&tabs, active_tab).and_then(|t| t.fg_pid);
                 if let Some(pid) = fg {
-                    // Drain the foreground app's output (kernel stdout ring,
-                    // keyed by shell_id) into the tab's scrollback. The existing
-                    // replay renderer then shows the live screen; full-screen
-                    // apps redraw in place (their alt-screen enter resets the
-                    // buffer in append_term), streaming output simply scrolls.
                     let mut drained = false;
                     if let Some(tab) = active_shell_tab_mut(&mut tabs, active_tab) {
                         let mut buf = [0u8; 1024];
-                        loop {
+                        for _ in 0..16 {
                             let n = tty_stdout_pull(tab.shell_id as u32, &mut buf);
                             if n == 0 {
                                 break;
@@ -2561,66 +2549,38 @@ fn render_active_shell_fb(
 
     // A foreground app owns the screen, so suppress the shell prompt/input line.
     let mut prompt_buf = [0u8; 32];
-    let (output, input_line, prompt_slice, input_cursor) = active_shell_tab(tabs, active_tab)
-        .map(|tab| {
-            if show_prompt {
-                let prompt_len = build_prompt(tab, &mut prompt_buf);
-                (
-                    &tab.output[..tab.output_len],
-                    &tab.input_line[..tab.input_line_len],
-                    &prompt_buf[..prompt_len],
-                    tab.input_cursor,
-                )
-            } else {
-                (&tab.output[..tab.output_len], &[][..], &b""[..], 0usize)
-            }
-        })
-        .unwrap_or((&[][..], &[][..], b"root@sunlight:/$ ", 0usize));
-
-    // Parse output into a terminal-sized grid. The framebuffer renderer already
-    // offsets this grid below the title/tab chrome, so the VT cursor must stay
-    // relative to the terminal content, not the full framebuffer.
-
-    // FIX: Reuse cached grid instead of allocating 400KB+ per frame
-    // This prevents bump allocator memory exhaustion that was causing freezes
-    let grid = unsafe {
-        match &mut GRID_CACHE {
-            Some(cached) => {
-                // Grid exists - check if dimensions match
-                if cached.cols == cols && cached.rows == rows {
-                    // Dimensions match - reuse grid, clear for fresh content
-                    cached.clear_screen(); // FIX: Clear previous content before reuse
-                    cached.as_mut()
-                } else {
-                    // Dimensions changed - allocate new grid
-                    debug_log("[TTY]  Grid dimensions changed, reallocating");
-                    *cached = Box::new(TerminalGrid::new(cols, rows));
-                    cached.as_mut()
-                }
-            }
-            None => {
-                // First render - allocate and cache the grid
-                debug_log("[TTY]  First render, caching grid");
-                GRID_CACHE = Some(Box::new(TerminalGrid::new(cols, rows)));
-                GRID_CACHE.as_mut().unwrap().as_mut()
-            }
-        }
+    let Some(tab) = active_shell_tab(tabs, active_tab) else {
+        return;
     };
-
-    grid.feed(output);
-    let (cursor_row, cursor_col) = grid.cursor();
-
-    // Get viewport offset for scrollback
-    let viewport_offset = unsafe { SCROLLBACK_STATE[active_tab].viewport_offset };
-
-    // Render with scrollback offset if active. Both methods fill the grid's
-    // internal term-cell buffer in place and return a borrowed slice — no
-    // per-frame allocation (the bump allocator never frees).
-    let term_cells = if viewport_offset > 0 {
-        grid.to_term_cells_with_offset(&ANSI_COLORS, viewport_offset)
+    let (input_line, prompt_slice, input_cursor) = if show_prompt {
+        let prompt_len = build_prompt(tab, &mut prompt_buf);
+        (
+            &tab.input_line[..tab.input_line_len],
+            &prompt_buf[..prompt_len],
+            tab.input_cursor,
+        )
     } else {
-        grid.to_term_cells(&ANSI_COLORS)
+        (&[][..], &[][..], 0)
     };
+    let mut output = tab.output.borrow_mut();
+    let grid = output.get_or_insert_with(|| Console::new(cols, rows));
+    if !grid.resize(cols, rows) {
+        return;
+    }
+    let viewport_offset = unsafe {
+        let offset = SCROLLBACK_STATE[active_tab]
+            .viewport_offset
+            .min(grid.scrollback_len());
+        SCROLLBACK_STATE[active_tab].viewport_offset = offset;
+        offset
+    };
+    grid.set_scroll_offset(viewport_offset);
+    let (cursor_row, cursor_col) = if grid.cursor_visible() {
+        grid.cursor()
+    } else {
+        (rows, cols)
+    };
+    let term_cells = grid.to_term_cells_with_offset(&ANSI_COLORS, viewport_offset);
 
     // Title-bar stats: "CPU 15% RAM 42%  12:22 AM | 2026/6/12 | eth0".
     // Cached and refreshed at most once per minute (the same cadence the clock
@@ -2660,10 +2620,6 @@ fn render_active_shell_fb(
     unsafe {
         mouse.draw_overlay(fb_addr as *mut u32, fb_w, fb_h, fb_p);
     }
-
-    // NOTE: Grid is NOT dropped here - it's cached in GRID_CACHE for reuse on next render
-    // This prevents the 400KB+ allocation that was exhausting the bump allocator heap
-    // Grid stays alive until dimensions change or process exits
 }
 
 fn reset_login(login: &mut LoginScreen) {
@@ -2779,7 +2735,7 @@ fn spawn_tab_from_active_shell(
     if *tab_count >= MAX_TABS || *next_shell_id == 0 || *next_shell_id > u8::MAX as u64 {
         return false;
     }
-    let Some(parent) = active_shell_tab(tabs, *active_tab).copied() else {
+    let Some(parent) = active_shell_tab(tabs, *active_tab) else {
         return false;
     };
     let Some(cap) = parent.cap else {
@@ -2787,6 +2743,8 @@ fn spawn_tab_from_active_shell(
         return false;
     };
 
+    let username = parent.username;
+    let username_len = parent.username_len;
     let shell_id = *next_shell_id;
     let request = IpcMsg::with_label(ShellMsg::SPAWN_TAB).word(0, shell_id);
     let Ok(reply) = ipc_call_timeout(cap, request, SHELL_IPC_TIMEOUT_MS) else {
@@ -2806,8 +2764,8 @@ fn spawn_tab_from_active_shell(
     tabs[index].shell_id = shell_id;
     tabs[index].pid = reply.words[0];
     tabs[index].session_pid = reply.words[0];
-    tabs[index].username = parent.username;
-    tabs[index].username_len = parent.username_len;
+    tabs[index].username = username;
+    tabs[index].username_len = username_len;
     *active_tab = index;
     *tab_count += 1;
     *next_shell_id += 1;
@@ -2887,14 +2845,16 @@ fn close_active_tab(
     }
 
     for i in *active_tab..(*tab_count - 1) {
-        tabs[i] = tabs[i + 1];
+        tabs.swap(i, i + 1);
         unsafe {
             TERMINAL_GEOMETRY[i] = TERMINAL_GEOMETRY[i + 1];
+            SCROLLBACK_STATE[i] = SCROLLBACK_STATE[i + 1];
         }
     }
     tabs[*tab_count - 1] = ShellTab::empty();
     unsafe {
         TERMINAL_GEOMETRY[*tab_count - 1] = TerminalGeometry::new();
+        SCROLLBACK_STATE[*tab_count - 1].viewport_offset = 0;
     }
     *tab_count -= 1;
     if *active_tab >= *tab_count {
@@ -2978,7 +2938,7 @@ enum ShellKeyResult {
 fn send_key_to_shell(
     cap: CapabilityToken,
     byte: u8,
-    term_output: &mut [u8; TERM_OUTPUT_MAX],
+    term_output: &mut RefCell<Option<Console>>,
     term_output_len: &mut usize,
 ) -> ShellKeyResult {
     let kbd_msg = IpcMsg::with_label(KBD_LABEL).word(0, byte as u64);
@@ -3030,7 +2990,7 @@ fn send_key_to_shell(
 
 fn append_shell_reply(
     cap: CapabilityToken,
-    term_output: &mut [u8; TERM_OUTPUT_MAX],
+    term_output: &mut RefCell<Option<Console>>,
     term_output_len: &mut usize,
     reply: &IpcMsg,
 ) {
@@ -3067,7 +3027,7 @@ fn append_shell_reply(
 }
 
 fn append_one_chunk(
-    term_output: &mut [u8; TERM_OUTPUT_MAX],
+    term_output: &mut RefCell<Option<Console>>,
     term_output_len: &mut usize,
     reply: &IpcMsg,
     append_missing_newline: bool,
@@ -3094,53 +3054,15 @@ fn append_one_chunk(
 }
 
 /// True if `needle` appears anywhere in `haystack`.
-fn slice_contains(haystack: &[u8], needle: &[u8]) -> bool {
-    if needle.is_empty() || needle.len() > haystack.len() {
-        return false;
-    }
-    haystack.windows(needle.len()).any(|w| w == needle)
-}
-
-fn append_term(output: &mut [u8; TERM_OUTPUT_MAX], output_len: &mut usize, data: &[u8]) {
+fn append_term(output: &mut RefCell<Option<Console>>, output_len: &mut usize, data: &[u8]) {
     if data.is_empty() {
         return;
     }
-
-    // Reset the buffer on a full-screen clear (ESC[2J) or on alt-screen
-    // enter/exit (ESC[?1049h / ESC[?1049l). This gives full-screen apps like
-    // top a clean screen and returns to a clean prompt when they exit, without
-    // clearing scrollback for ordinary streaming commands (ls, cat, ...), whose
-    // output simply appends and slides on overflow below.
-    let starts_with_clear = data.len() >= 4
-        && data[0] == b'\x1B'
-        && data[1] == b'['
-        && data[2] == b'2'
-        && data[3] == b'J';
-    if starts_with_clear || slice_contains(data, b"\x1b[?1049") {
-        *output_len = 0; // Clear the accumulated output buffer
-    }
-
-    if data.len() >= output.len() {
-        let start = data.len() - output.len();
-        output.copy_from_slice(&data[start..]);
-        *output_len = output.len();
-        return;
-    }
-
-    let overflow = output_len
-        .saturating_add(data.len())
-        .saturating_sub(output.len());
-    if overflow > 0 {
-        let keep = *output_len - overflow;
-        for i in 0..keep {
-            output[i] = output[i + overflow];
-        }
-        *output_len = keep;
-    }
-
-    let start = *output_len;
-    output[start..start + data.len()].copy_from_slice(data);
-    *output_len += data.len();
+    output
+        .get_mut()
+        .get_or_insert_with(|| Console::new(80, 24))
+        .feed(data);
+    *output_len = output_len.saturating_add(data.len());
 }
 
 fn launch_shortcut_app(

@@ -2,6 +2,7 @@
 
 pub mod display_metrics;
 pub mod display_modes;
+pub mod pty;
 pub mod swap_policy;
 pub mod session_completion;
 pub use display_metrics::{
@@ -867,6 +868,9 @@ pub mod PtyMsg {
     pub const CLOSE_SLAVE: u64 = 0x730D;
     pub const CLOSE_SESSION: u64 = 0x730E;
     pub const GET_STATE: u64 = 0x730F;
+    pub const READ_MASTER_BULK: u64 = 0x7310;
+    pub const WRITE_SLAVE_BULK: u64 = 0x7311;
+    pub const BULK_BYTES: usize = 4096;
     pub const REPLY: u64 = 0x73FF;
     pub const ERROR: u64 = 0x73FE;
     /// Bit 0: canonical/cooked mode.

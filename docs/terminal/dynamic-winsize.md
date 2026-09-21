@@ -4,7 +4,7 @@ The drawable client dimensions reported by `sunlight-ui::WindowEvent::Resized`
 are the frontend input. They already exclude compositor borders and titlebar.
 `sunlight-terminal` subtracts its tab strip, footer, padding, and the terminal
 viewport's one-pixel border. It divides the remaining width and height by the
-renderer-owned 8×16 cell metrics. Incomplete cells at the right and bottom are
+renderer-owned 9×20 cell metrics (14 px Sun Mono). Incomplete cells at the right and bottom are
 intentionally ignored and painted as terminal background.
 
 The resulting `TerminalWinsize` is sent with `PtyMsg::CREATE` and on each real
@@ -42,7 +42,7 @@ geometry-only poll readiness or periodic wake hack is introduced.
 ```text
 compositor drawable client surface
   -> terminal chrome/padding subtraction
-  -> renderer 8x16 complete-cell grid
+  -> renderer 9x20 complete-cell grid
   -> PTY session TerminalWinsize (authoritative)
   -> generation-qualified kernel TTY cache (derived)
      -> native terminal_winsize()

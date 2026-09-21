@@ -46,6 +46,8 @@ pub struct TerminalGrid {
     main_cursor_col: usize,
     alt_cursor_row: usize,
     alt_cursor_col: usize,
+    main_wrap_pending: bool,
+    alt_wrap_pending: bool,
     saved_cursor: Option<(usize, usize)>,
     saved_main_cursor: (usize, usize),
     cur_fg: u8,
@@ -92,6 +94,8 @@ impl TerminalGrid {
             main_cursor_col: 0,
             alt_cursor_row: 0,
             alt_cursor_col: 0,
+            main_wrap_pending: false,
+            alt_wrap_pending: false,
             saved_cursor: None,
             saved_main_cursor: (0, 0),
             cur_fg: 7,
@@ -171,6 +175,8 @@ impl TerminalGrid {
         self.scrollback_head = 0;
         self.scrollback_count = 0;
         self.term_cells = term_cells;
+        self.main_wrap_pending = false;
+        self.alt_wrap_pending = false;
         self.main_cursor_row = self.main_cursor_row.min(rows - 1);
         self.main_cursor_col = self.main_cursor_col.min(cols - 1);
         self.alt_cursor_row = self.alt_cursor_row.min(rows - 1);
@@ -231,6 +237,14 @@ impl TerminalGrid {
     }
 
     fn write_char(&mut self, ch: u8) {
+        let wrap_pending = if self.use_alt_screen {
+            self.alt_wrap_pending
+        } else {
+            self.main_wrap_pending
+        };
+        if wrap_pending {
+            self.newline();
+        }
         let (row, col) = self.cursor();
         let cell = Cell {
             ch,
@@ -249,19 +263,26 @@ impl TerminalGrid {
         }
 
         let cols = self.cols;
-        let rows = self.rows;
-        let (cursor_row, cursor_col) = self.cursor_mut();
-        *cursor_col += 1;
-        if *cursor_col >= cols {
-            *cursor_col = 0;
-            *cursor_row += 1;
-            if *cursor_row >= rows {
-                self.scroll_up();
-            }
+        let (_, cursor_col) = self.cursor_mut();
+        if *cursor_col + 1 < cols {
+            *cursor_col += 1;
+        } else if self.use_alt_screen {
+            self.alt_wrap_pending = true;
+        } else {
+            self.main_wrap_pending = true;
+        }
+    }
+
+    fn cancel_wrap(&mut self) {
+        if self.use_alt_screen {
+            self.alt_wrap_pending = false;
+        } else {
+            self.main_wrap_pending = false;
         }
     }
 
     fn newline(&mut self) {
+        self.cancel_wrap();
         let (cursor_row, cursor_col) = self.cursor_mut();
         *cursor_col = 0;
         *cursor_row += 1;
@@ -271,16 +292,19 @@ impl TerminalGrid {
     }
 
     fn carriage_return(&mut self) {
+        self.cancel_wrap();
         let (_, cursor_col) = self.cursor_mut();
         *cursor_col = 0;
     }
 
     fn backspace(&mut self) {
+        self.cancel_wrap();
         let (_, cursor_col) = self.cursor_mut();
         *cursor_col = cursor_col.saturating_sub(1);
     }
 
     fn tab(&mut self) {
+        self.cancel_wrap();
         let cols = self.cols;
         let (_, cursor_col) = self.cursor_mut();
         let next = ((*cursor_col / 8) + 1) * 8;
@@ -288,6 +312,7 @@ impl TerminalGrid {
     }
 
     fn set_cursor(&mut self, row: usize, col: usize) {
+        self.cancel_wrap();
         let rows = self.rows;
         let cols = self.cols;
         let (cursor_row, cursor_col) = self.cursor_mut();
@@ -313,6 +338,8 @@ impl TerminalGrid {
         self.main_cursor_col = 0;
         self.alt_cursor_row = 0;
         self.alt_cursor_col = 0;
+        self.main_wrap_pending = false;
+        self.alt_wrap_pending = false;
         self.scrollback_head = 0;
         self.scrollback_count = 0;
         self.saved_cursor = None;
@@ -480,6 +507,7 @@ impl TerminalGrid {
         }
         self.saved_main_cursor = (self.main_cursor_row, self.main_cursor_col);
         self.use_alt_screen = true;
+        self.alt_wrap_pending = false;
         self.alt_cursor_row = 0;
         self.alt_cursor_col = 0;
         for cell in &mut self.alt_cells {
@@ -582,6 +610,22 @@ impl TerminalGrid {
         &self.term_cells
     }
 
+    pub fn viewport_cell(&self, row: usize, col: usize, offset: usize) -> Cell {
+        if row >= self.rows || col >= self.cols {
+            return Cell::blank();
+        }
+        if self.use_alt_screen || offset == 0 {
+            return self.cell(row, col);
+        }
+        let history_row = self.scrollback_count - offset.min(self.scrollback_count) + row;
+        if history_row < self.scrollback_count {
+            let slot = (self.scrollback_head + history_row) % SCROLLBACK_LINES;
+            self.scrollback[slot * self.cols + col]
+        } else {
+            self.main_cells[(history_row - self.scrollback_count) * self.cols + col]
+        }
+    }
+
     pub fn to_term_cells_with_offset(
         &mut self,
         ansi_colors: &[u32; 16],
@@ -592,26 +636,12 @@ impl TerminalGrid {
         }
 
         for screen_row in 0..self.rows {
-            let history_row_idx = if self.scrollback_count > viewport_offset {
-                self.scrollback_count - viewport_offset + screen_row
-            } else {
-                screen_row
-            };
-
             let dst_start = screen_row * self.cols;
-            if history_row_idx < self.scrollback_count {
-                let src_start =
-                    ((self.scrollback_head + history_row_idx) % SCROLLBACK_LINES) * self.cols;
-                for col in 0..self.cols {
-                    self.term_cells[dst_start + col] =
-                        resolve_cell(self.scrollback[src_start + col], ansi_colors);
-                }
-            } else {
-                let src_start = screen_row * self.cols;
-                for col in 0..self.cols {
-                    self.term_cells[dst_start + col] =
-                        resolve_cell(self.main_cells[src_start + col], ansi_colors);
-                }
+            for col in 0..self.cols {
+                self.term_cells[dst_start + col] = resolve_cell(
+                    self.viewport_cell(screen_row, col, viewport_offset),
+                    ansi_colors,
+                );
             }
         }
 
