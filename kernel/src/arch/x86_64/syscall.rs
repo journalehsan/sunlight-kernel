@@ -178,6 +178,9 @@ pub enum SunlightSyscall {
     MapMmio = 131,
     DmaAlloc = 132,
     HdaInfo = 147,
+    ReadDirFrom = 148,
+    RenameNoReplace = 149,
+    FileReserve = 150,
 
     DebugLog = 99,
 }
@@ -672,13 +675,16 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         51 => sys_munmap(frame),
         52 => sys_mprotect(frame),
         53 => sys_mremap(frame),
-        60 => sys_readdir(frame),
+        60 => sys_readdir(frame, 0),
+        148 => sys_readdir(frame, frame.r10 as usize),
+        149 => sys_rename(frame, true),
+        150 => sys_file_reserve(frame),
         61 => sys_stat_path(frame),
         62 => sys_mkdir(frame),
         63 => sys_chdir(frame),
         64 => sys_getcwd(frame),
         65 => sys_unlink(frame),
-        66 => sys_rename(frame),
+        66 => sys_rename(frame, false),
         67 => sys_chmod(frame),
         68 => sys_chown(frame),
         69 => sys_secret_create(frame),
@@ -5234,13 +5240,13 @@ fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
     total_written
 }
 
-/// Syscall: ReadDir (60)
+/// Syscall: ReadDir (60), or ReadDirFrom (148) with an entry offset in r10.
 /// rdi = pathname (user-space pointer)
 /// rsi = output buffer (array of 80-byte records)
 /// rdx = buffer length in bytes
 /// Record layout (repr(C), 80 bytes): name[64], name_len u8, file_type u8
 /// (1=file, 2=dir), pad[6], size u64. Returns the number of records written.
-fn sys_readdir(frame: &mut SyscallFrame) -> u64 {
+fn sys_readdir(frame: &mut SyscallFrame, offset: usize) -> u64 {
     use sunlight_fs::vfs::FileType;
     const RECORD: usize = 80;
 
@@ -5260,6 +5266,7 @@ fn sys_readdir(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     }
 
+    let mut skipped = 0usize;
     let mut records = alloc::vec::Vec::<[u8; RECORD]>::new();
     if records.try_reserve(max_entries).is_err() {
         return u64::MAX;
@@ -5271,6 +5278,10 @@ fn sys_readdir(frame: &mut SyscallFrame) -> u64 {
         };
         if vfs
             .read_dir(path, &mut |entry| {
+                if skipped < offset {
+                    skipped += 1;
+                    return true;
+                }
                 if records.len() >= max_entries {
                     return false;
                 }
@@ -5426,9 +5437,9 @@ fn sys_unlink(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
-/// Syscall: rename (66) — rename/move a file.
+/// Syscall: rename (66), or RenameNoReplace (149) for atomic collision checking.
 /// rdi = NUL-terminated old path, rsi = NUL-terminated new path
-fn sys_rename(frame: &mut SyscallFrame) -> u64 {
+fn sys_rename(frame: &mut SyscallFrame, no_replace: bool) -> u64 {
     let old_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
         Ok(bytes) => bytes,
         Err(error) => return user_memory_failure(error),
@@ -5474,9 +5485,53 @@ fn sys_rename(frame: &mut SyscallFrame) -> u64 {
     let Some(vfs) = guard.as_mut() else {
         return u64::MAX;
     };
-    match vfs.rename(old_path, new_path) {
+    let result = if no_replace {
+        vfs.rename_no_replace(old_path, new_path)
+    } else {
+        vfs.rename(old_path, new_path)
+    };
+    match result {
         Ok(()) => 0,
         Err(_) => u64::MAX,
+    }
+}
+
+/// Syscall: FileReserve (150) — reserve backing storage for an open file.
+/// rdi = fd, rsi = expected final size. The visible file length is unchanged.
+fn sys_file_reserve(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let size = match usize::try_from(frame.rsi) {
+        Ok(size) => size,
+        Err(_) => return ERR_ERANGE,
+    };
+    let entry = {
+        let sched = crate::sched::SCHEDULER.lock();
+        if sched
+            .current_process()
+            .fd_table
+            .check_rights(
+                fd,
+                crate::process::fd_table::CapRights::new(
+                    crate::process::fd_table::CapRights::WRITE,
+                ),
+            )
+            .is_err()
+        {
+            return ERR_EBADF;
+        }
+        match sched.current_process().fd_table.get(fd).copied() {
+            Some(entry) if entry.handle.is_vfs() => entry,
+            _ => return ERR_EBADF,
+        }
+    };
+    let handle = sunlight_fs::vfs::FileHandle(entry.handle.vfs_handle());
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return ERR_EIO;
+    };
+    match vfs.reserve(handle, size) {
+        Ok(()) => 0,
+        Err(error) => fs_error_raw(error),
     }
 }
 

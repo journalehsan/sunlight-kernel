@@ -158,6 +158,11 @@ fn handle_request(
     match msg.label {
         ClipMsg::SET_CLIPBOARD => {
             let request = decode_set_request(&take_request_page(msg)?)?;
+            // Optional compare-and-set for a partially completed cut operation.
+            let expected = if msg.word_count > 1 { msg.words[1] } else { 0 };
+            if !state.matches_expected_current(expected) {
+                return Ok(IpcMsg::with_label(ClipMsg::REPLY));
+            }
             let outcome = state.set_item(request, monotonic_millis())?;
             persist_after_set(state, kv, &outcome)?;
             Ok(IpcMsg::with_label(ClipMsg::REPLY).word(0, outcome.current_id as u64))
@@ -204,6 +209,11 @@ fn handle_request(
             Ok(IpcMsg::with_label(ClipMsg::REPLY).word(0, id as u64))
         }
         ClipMsg::CLEAR_CLIPBOARD => {
+            // Zero preserves the unconditional CLI operation.
+            let expected = if msg.word_count > 0 { msg.words[0] } else { 0 };
+            if !state.matches_expected_current(expected) {
+                return Ok(IpcMsg::with_label(ClipMsg::REPLY));
+            }
             state.clear_current();
             persist_current(state, kv);
             Ok(IpcMsg::with_label(ClipMsg::REPLY).word(0, 0))

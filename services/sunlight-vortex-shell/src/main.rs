@@ -1516,6 +1516,11 @@ struct DesktopPaths {
 
 #[derive(Clone, Copy)]
 enum ContextMenuAction {
+    Open,
+    Copy,
+    Cut,
+    CopyPath,
+    Paste,
     NewFolder,
     NewTextFile,
     Refresh,
@@ -1527,13 +1532,14 @@ enum ContextMenuAction {
 #[derive(Clone, Copy)]
 struct MenuItem {
     action: ContextMenuAction,
+    label: &'static str,
     rect: Rect,
     icon: Option<TgaImage>,
 }
 
 struct ContextMenuState {
     rect: Rect,
-    items: [MenuItem; 6],
+    items: Vec<MenuItem>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1553,7 +1559,8 @@ const SYSTEM_MENU_ITEMS: [(&str, SystemMenuAction); 5] = [
     ("Control Panel", SystemMenuAction::ControlPanel),
 ];
 
-const MENU_LABELS: [(&str, ContextMenuAction); 6] = [
+const MENU_LABELS: [(&str, ContextMenuAction); 7] = [
+    ("Paste", ContextMenuAction::Paste),
     ("New Folder", ContextMenuAction::NewFolder),
     ("New Text File", ContextMenuAction::NewTextFile),
     ("Refresh", ContextMenuAction::Refresh),
@@ -2227,10 +2234,10 @@ impl VortexShell {
     }
 
     fn reload_desktop_icons(&mut self) {
+        self.context_menu = None;
         self.desktop_icons = load_desktop_icons(&self.desktop_paths);
         self.trash_full = trash_has_items(&self.desktop_paths.trash_dir);
-        self.selected_icons
-            .retain(|idx| *idx < self.desktop_icons.len());
+        self.selected_icons.clear();
         self.last_desktop_click_idx = None;
         self.last_desktop_click_at = 0;
         if self.selected_icons.is_empty() {
@@ -2409,6 +2416,123 @@ impl VortexShell {
         }
     }
 
+    fn selected_file_paths(&self) -> Result<Vec<String>, &'static str> {
+        let mut paths = Vec::new();
+        for index in &self.selected_icons {
+            let icon = self
+                .desktop_icons
+                .get(*index)
+                .ok_or("Selection is no longer available")?;
+            if !matches!(
+                icon.kind,
+                DesktopIconKind::File
+                    | DesktopIconKind::Image
+                    | DesktopIconKind::DesktopEntry
+                    | DesktopIconKind::Folder
+            ) {
+                return Err(
+                    "Select desktop files or folders; system shortcuts cannot be transferred",
+                );
+            }
+            paths.push(icon._action.clone());
+        }
+        if paths.is_empty() {
+            return Err("No desktop files selected");
+        }
+        Ok(paths)
+    }
+
+    fn desktop_file_error(message: &str) {
+        let _ = show_notification(NotificationKind::Error, "Desktop files", message, 6000);
+    }
+
+    fn copy_desktop_files(&mut self, cut: bool, path_text: bool) -> bool {
+        let result = self.selected_file_paths().and_then(|paths| {
+            if path_text {
+                sunlight_ui::clipboard::set_text_from(b"sunlight-vortex-shell", &paths.join("\n"))
+            } else {
+                sunlight_ui::clipboard::set_files(b"sunlight-vortex-shell", &paths, cut)
+            }
+            .map_err(|error| error.message())
+        });
+        match result {
+            Ok(()) => {
+                let _ = show_notification(
+                    NotificationKind::Info,
+                    "Desktop files",
+                    if path_text {
+                        "Paths copied"
+                    } else if cut {
+                        "Cut selection; paste to move"
+                    } else {
+                        "Selection copied"
+                    },
+                    2500,
+                );
+            }
+            Err(message) => Self::desktop_file_error(message),
+        }
+        true
+    }
+
+    fn paste_desktop_files(&mut self) -> bool {
+        let item = match sunlight_ui::clipboard::get_files() {
+            Ok(item) => item,
+            Err(error) => {
+                Self::desktop_file_error(
+                    if error == sunlight_ui::clipboard::ClipboardError::Unsupported {
+                        "Clipboard does not contain files"
+                    } else {
+                        error.message()
+                    },
+                );
+                return true;
+            }
+        };
+        let result =
+            libc::file_ops::transfer(&item.paths, &self.desktop_paths.desktop_dir, item.cut);
+        let completed = match &result {
+            Ok(count) => *count,
+            Err(error) => error.completed,
+        };
+        let consumed =
+            sunlight_ui::clipboard::finish_cut(&item, completed, b"sunlight-vortex-shell");
+        self.reload_desktop_icons();
+        match result {
+            Ok(_) => {
+                let _ = show_notification(
+                    NotificationKind::Info,
+                    "Desktop files",
+                    if item.cut {
+                        "Selection moved to Desktop"
+                    } else {
+                        "Selection copied to Desktop"
+                    },
+                    3000,
+                );
+            }
+            Err(error) => Self::desktop_file_error(&alloc::format!(
+                "{} completed. {}",
+                completed,
+                error.message
+            )),
+        }
+        if consumed.is_err() {
+            Self::desktop_file_error(
+                "Move completed, but clipboard update failed; copy the remaining items again",
+            );
+        }
+        true
+    }
+
+    fn create_desktop_item(&mut self, folder: bool) -> bool {
+        if let Err(message) = libc::file_ops::create_item(&self.desktop_paths.desktop_dir, folder) {
+            Self::desktop_file_error(message);
+        }
+        self.reload_desktop_icons();
+        true
+    }
+
     fn select_only_desktop_icon(&mut self, idx: usize) {
         self.selected_icons.clear();
         self.selected_icons.push(idx);
@@ -2459,10 +2583,23 @@ impl VortexShell {
             DesktopIconKind::Network => {
                 self.open_app_from_ui(AppId::Settings, now, LaunchSource::Shortcut)
             }
-            DesktopIconKind::Computer
-            | DesktopIconKind::Home
-            | DesktopIconKind::Drive
-            | DesktopIconKind::Folder => {
+            DesktopIconKind::Folder | DesktopIconKind::Home | DesktopIconKind::Drive => {
+                let trace = self.next_launch_trace(LaunchSource::Shortcut);
+                match sun_exec::launch(sun_exec::LaunchRequest {
+                    trace,
+                    source: LaunchSource::Shortcut,
+                    command: b"files",
+                    args: &[path.as_bytes()],
+                    require_display: true,
+                }) {
+                    Ok(_) => true,
+                    Err(_) => {
+                        Self::desktop_file_error("Cannot open folder in Files");
+                        false
+                    }
+                }
+            }
+            DesktopIconKind::Computer => {
                 self.open_app_from_ui(AppId::Files, now, LaunchSource::Shortcut)
             }
         }
@@ -5809,10 +5946,12 @@ fn load_drive_icons() -> Vec<DesktopIcon> {
 
 fn load_desktop_dir_icons(desktop_dir: &str) -> Vec<DesktopIcon> {
     let mut icons = Vec::new();
-    let mut entries = [DirEntry::zeroed(); MAX_DIR_ENTRIES];
-    if let Ok(count) = libc::read_dir(desktop_dir.as_bytes(), &mut entries) {
-        for entry in entries.iter().take(count) {
-            let name = sanitize_ascii(entry.name_bytes());
+    if let Ok(entries) = libc::file_ops::read_directory(desktop_dir, 4096) {
+        for entry in &entries {
+            let Ok(name) = core::str::from_utf8(entry.name_bytes()) else {
+                continue;
+            };
+            let name = String::from(name);
             if name.is_empty() {
                 continue;
             }
@@ -6021,41 +6160,59 @@ fn draw_desktop_marquee(canvas: &mut Canvas, theme: &Theme, rect: Rect) {
     }
 }
 
-fn make_context_menu(x: i32, y: i32, screen_w: u32, screen_h: u32) -> ContextMenuState {
-    let menu_h = MENU_ITEM_H * MENU_LABELS.len() as u32 + 8;
-    let max_x = screen_w as i32 - MENU_W as i32 - 6;
-    let max_y = screen_h as i32 - menu_h as i32 - 6;
+fn make_context_menu(
+    x: i32,
+    y: i32,
+    screen_w: u32,
+    screen_h: u32,
+    selected: bool,
+    transferable: bool,
+) -> ContextMenuState {
+    let mut labels = Vec::new();
+    if selected {
+        labels.push(("Open", ContextMenuAction::Open));
+    }
+    if transferable {
+        labels.extend_from_slice(&[
+            ("Copy", ContextMenuAction::Copy),
+            ("Cut", ContextMenuAction::Cut),
+            ("Copy Path", ContextMenuAction::CopyPath),
+        ]);
+    }
+    labels.extend_from_slice(&MENU_LABELS);
+    let menu_h = MENU_ITEM_H * labels.len() as u32 + 8;
     let rect = Rect::new(
-        x.clamp(6, max_x.max(6)),
-        y.clamp(6, max_y.max(6)),
+        x.clamp(6, (screen_w as i32 - MENU_W as i32 - 6).max(6)),
+        y.clamp(6, (screen_h as i32 - menu_h as i32 - 6).max(6)),
         MENU_W,
         menu_h,
     );
-    let mut items = [MenuItem {
-        action: ContextMenuAction::Refresh,
-        rect: Rect::new(0, 0, 0, 0),
-        icon: None,
-    }; 6];
-    for (i, (_, action)) in MENU_LABELS.iter().enumerate() {
-        let icon = match action {
-            ContextMenuAction::NewFolder => TgaImage::parse(MENU_NEW_FOLDER_TGA).ok(),
-            ContextMenuAction::NewTextFile => TgaImage::parse(MENU_NEW_TEXT_TGA).ok(),
-            ContextMenuAction::Refresh => TgaImage::parse(MENU_REFRESH_TGA).ok(),
-            ContextMenuAction::SortByName => TgaImage::parse(MENU_SORT_TGA).ok(),
-            ContextMenuAction::OpenTerminalHere => TgaImage::parse(MENU_TERMINAL_TGA).ok(),
-            ContextMenuAction::WallpaperSettings => TgaImage::parse(ICON_SETTINGS_TGA).ok(),
-        };
-        items[i] = MenuItem {
-            action: *action,
-            rect: Rect::new(
-                rect.x + 4,
-                rect.y + 4 + i as i32 * MENU_ITEM_H as i32,
-                MENU_W - 8,
-                MENU_ITEM_H,
-            ),
-            icon,
-        };
-    }
+    let items = labels
+        .iter()
+        .enumerate()
+        .map(|(i, (label, action))| {
+            let icon = match action {
+                ContextMenuAction::NewFolder => TgaImage::parse(MENU_NEW_FOLDER_TGA).ok(),
+                ContextMenuAction::NewTextFile => TgaImage::parse(MENU_NEW_TEXT_TGA).ok(),
+                ContextMenuAction::Refresh => TgaImage::parse(MENU_REFRESH_TGA).ok(),
+                ContextMenuAction::SortByName => TgaImage::parse(MENU_SORT_TGA).ok(),
+                ContextMenuAction::OpenTerminalHere => TgaImage::parse(MENU_TERMINAL_TGA).ok(),
+                ContextMenuAction::WallpaperSettings => TgaImage::parse(ICON_SETTINGS_TGA).ok(),
+                _ => None,
+            };
+            MenuItem {
+                action: *action,
+                label,
+                rect: Rect::new(
+                    rect.x + 4,
+                    rect.y + 4 + i as i32 * MENU_ITEM_H as i32,
+                    MENU_W - 8,
+                    MENU_ITEM_H,
+                ),
+                icon,
+            }
+        })
+        .collect();
     ContextMenuState { rect, items }
 }
 
@@ -6065,8 +6222,9 @@ fn draw_context_menu(canvas: &mut Canvas, theme: &Theme, menu: &ContextMenuState
         sunlight_ui::Material::for_role(sunlight_ui::SurfaceRole::PopupOrMenu, theme)
             .with_radius(8),
     );
-    for (i, (label, _)) in MENU_LABELS.iter().enumerate() {
-        let item = menu.items[i].rect;
+    for (i, entry) in menu.items.iter().enumerate() {
+        let label = entry.label;
+        let item = entry.rect;
         canvas.fill_rect(Rect::new(item.x, item.y, item.w, item.h), theme.panel_alt);
         if i == 0 {
             canvas.fill_rect(Rect::new(item.x, item.y, item.w, 1), theme.border);
@@ -6174,69 +6332,6 @@ fn menu_action_at(menu: &ContextMenuState, p: Point) -> Option<ContextMenuAction
         .iter()
         .find(|item| item.rect.contains(p))
         .map(|item| item.action)
-}
-
-fn create_new_folder(desktop_dir: &str) {
-    for n in 0..100u32 {
-        let mut name = String::from("New Folder");
-        if n > 0 {
-            name.push(' ');
-            let mut digits = [0u8; 10];
-            let len = fmt_u32_ascii(n + 1, &mut digits);
-            for &b in &digits[..len] {
-                name.push(b as char);
-            }
-        }
-        let path = join_path(desktop_dir, &name);
-        if libc::stat(path.as_bytes()).is_ok() {
-            continue;
-        }
-        if libc::mkdir(path.as_bytes(), 0o755).is_err() {
-            debug_log("[VORTEX] new folder create failed\n");
-        }
-        return;
-    }
-}
-
-fn create_new_text_file(desktop_dir: &str) {
-    for n in 0..100u32 {
-        let mut name = String::from("New Text File");
-        if n > 0 {
-            name.push(' ');
-            let mut digits = [0u8; 10];
-            let len = fmt_u32_ascii(n + 1, &mut digits);
-            for &b in &digits[..len] {
-                name.push(b as char);
-            }
-        }
-        name.push_str(".txt");
-        let path = join_path(desktop_dir, &name);
-        if libc::stat(path.as_bytes()).is_ok() {
-            continue;
-        }
-        if libc::create(path.as_bytes()).is_err() {
-            debug_log("[VORTEX] new text file create failed\n");
-        }
-        return;
-    }
-}
-
-fn fmt_u32_ascii(mut value: u32, out: &mut [u8; 10]) -> usize {
-    if value == 0 {
-        out[0] = b'0';
-        return 1;
-    }
-    let mut rev = [0u8; 10];
-    let mut n = 0usize;
-    while value > 0 {
-        rev[n] = b'0' + (value % 10) as u8;
-        value /= 10;
-        n += 1;
-    }
-    for i in 0..n {
-        out[i] = rev[n - 1 - i];
-    }
-    n
 }
 
 fn copy_sanitized_ascii(bytes: &[u8], out: &mut [u8]) -> usize {
@@ -7966,6 +8061,42 @@ mod shelf_control_tests {
     }
 
     #[test]
+    fn desktop_file_menus_offer_transfers_only_for_real_files() {
+        let background = super::make_context_menu(790, 590, 800, 600, false, false);
+        assert!(background
+            .items
+            .iter()
+            .any(|item| matches!(item.action, super::ContextMenuAction::Paste)));
+        assert!(!background
+            .items
+            .iter()
+            .any(|item| matches!(item.action, super::ContextMenuAction::Cut)));
+        let files = super::make_context_menu(790, 590, 800, 600, true, true);
+        assert!(files
+            .items
+            .iter()
+            .any(|item| matches!(item.action, super::ContextMenuAction::Copy)));
+        assert!(files
+            .items
+            .iter()
+            .any(|item| matches!(item.action, super::ContextMenuAction::Cut)));
+        assert!(files
+            .items
+            .iter()
+            .any(|item| matches!(item.action, super::ContextMenuAction::CopyPath)));
+        assert!(files.rect.right() <= 800 && files.rect.bottom() <= 600);
+        let shortcut = super::make_context_menu(10, 10, 800, 600, true, false);
+        assert!(shortcut
+            .items
+            .iter()
+            .any(|item| matches!(item.action, super::ContextMenuAction::Open)));
+        assert!(!shortcut.items.iter().any(|item| matches!(
+            item.action,
+            super::ContextMenuAction::Copy | super::ContextMenuAction::Cut
+        )));
+    }
+
+    #[test]
     fn shelf_controls_have_independent_targets_at_supported_widths() {
         let overview_x = TOP_PAD + CLUSTER_PAD;
         let sidebar_x = overview_x + OVERVIEW_BTN as i32 + ICON_GAP;
@@ -8626,13 +8757,28 @@ impl App for VortexShell {
                 if let Some(menu) = self.context_menu.take() {
                     if let Some(action) = menu_action_at(&menu, point) {
                         match action {
+                            ContextMenuAction::Open => {
+                                if let Some(index) = self.selected_icons.first().copied() {
+                                    self.launch_desktop_icon(index, monotonic_millis());
+                                }
+                            }
+                            ContextMenuAction::Copy => {
+                                self.copy_desktop_files(false, false);
+                            }
+                            ContextMenuAction::Cut => {
+                                self.copy_desktop_files(true, false);
+                            }
+                            ContextMenuAction::CopyPath => {
+                                self.copy_desktop_files(false, true);
+                            }
+                            ContextMenuAction::Paste => {
+                                self.paste_desktop_files();
+                            }
                             ContextMenuAction::NewFolder => {
-                                create_new_folder(&self.desktop_paths.desktop_dir);
-                                self.reload_desktop_icons();
+                                self.create_desktop_item(true);
                             }
                             ContextMenuAction::NewTextFile => {
-                                create_new_text_file(&self.desktop_paths.desktop_dir);
-                                self.reload_desktop_icons();
+                                self.create_desktop_item(false);
                             }
                             ContextMenuAction::Refresh | ContextMenuAction::SortByName => {
                                 self.reload_desktop_icons();
@@ -8904,6 +9050,10 @@ impl App for VortexShell {
                 changed
             }
             Event::MouseDown { x, y, button } if button == 0 => {
+                // The release activates/dismisses the menu. Do not change its selection on press.
+                if self.context_menu.is_some() {
+                    return true;
+                }
                 let point = Point::new(x, y);
                 if self.show_sound_popover
                     && self
@@ -9026,15 +9176,77 @@ impl App for VortexShell {
                 }
                 self.end_selection_gesture();
                 if let Some(idx) = icon_at(&self.desktop_icons, point) {
-                    self.select_only_desktop_icon(idx);
+                    if !self.selected_icons.contains(&idx) {
+                        self.select_only_desktop_icon(idx);
+                    }
                 } else {
                     self.clear_desktop_selection();
                 }
-                self.context_menu = Some(make_context_menu(x, y, self.screen_w, self.screen_h));
+                self.context_menu = Some(make_context_menu(
+                    x,
+                    y,
+                    self.screen_w,
+                    self.screen_h,
+                    !self.selected_icons.is_empty(),
+                    self.selected_file_paths().is_ok(),
+                ));
+                true
+            }
+            Event::KeyPress {
+                keycode,
+                pressed: true,
+                ctrl: true,
+                shift,
+                ..
+            } if self.top_panel_focus.is_none()
+                && !self.show_calendar_popover
+                && !self.show_network_popover
+                && !self.show_sound_popover
+                && !self.show_notif_panel
+                && !self.show_logout_confirm
+                && !self.show_system_menu =>
+            {
+                self.context_menu = None;
+                match keycode {
+                    0x2E => self.copy_desktop_files(false, shift),
+                    0x2D => self.copy_desktop_files(true, false),
+                    0x2F => self.paste_desktop_files(),
+                    0x31 if shift => self.create_desktop_item(true),
+                    0x1E => {
+                        self.selected_icons = self
+                            .desktop_icons
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, icon)| {
+                                matches!(
+                                    icon.kind,
+                                    DesktopIconKind::File
+                                        | DesktopIconKind::Image
+                                        | DesktopIconKind::DesktopEntry
+                                        | DesktopIconKind::Folder
+                                )
+                                .then_some(i)
+                            })
+                            .collect();
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            Event::KeyPress {
+                keycode: 0x3F,
+                pressed: true,
+                ..
+            } => {
+                self.reload_desktop_icons();
+                true
+            }
+            Event::FocusChanged { focused: true } => {
+                self.reload_desktop_icons();
                 true
             }
             Event::Key('\x1b') => {
-                let mut did = false;
+                let mut did = self.context_menu.take().is_some();
                 if self.show_system_menu {
                     self.show_system_menu = false;
                     self.system_menu_hover = None;
@@ -9100,6 +9312,9 @@ impl App for VortexShell {
                 pressed: true,
                 ..
             } => {
+                if self.context_menu.take().is_some() {
+                    return true;
+                }
                 if self.show_system_menu {
                     self.show_system_menu = false;
                     self.system_menu_hover = None;

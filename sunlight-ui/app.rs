@@ -117,7 +117,7 @@ fn decode_resize_surface_reply(reply: &IpcMsg) -> Option<ResizeSurfaceReply> {
 /// Decode a packed display-server key word into an [`Event`].
 ///
 /// Returns `None` when `key_word == 0` (no key in this poll). Printable ASCII,
-/// backspace, and enter become [`Event::Key`]; everything else becomes
+/// backspace, and enter without Ctrl/Alt/Super become [`Event::Key`]; everything else becomes
 /// [`Event::KeyPress`] (including key-up and pure modifiers).
 fn decode_key_event_word(key_word: u64) -> Option<Event> {
     if key_word == 0 {
@@ -125,7 +125,7 @@ fn decode_key_event_word(key_word: u64) -> Option<Event> {
     }
     let (keycode, pressed, shift, ctrl, alt, super_key, ascii) =
         sunlight_ipc::unpack_key_event(key_word);
-    if pressed {
+    if pressed && !ctrl && !alt && !super_key {
         if let Some(ch) = ascii {
             match ch {
                 0x20..=0x7E => return Some(Event::key(ch as char)),
@@ -912,8 +912,9 @@ impl Window {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_resize_surface_reply, should_deliver_local_tick, window_create_timeout_ms,
-        WindowDecoration, WindowEvent, MAX_LOCAL_TICKS_BEFORE_EVENT_POLL,
+        decode_key_event_word, decode_resize_surface_reply, should_deliver_local_tick,
+        window_create_timeout_ms, Event, WindowDecoration, WindowEvent,
+        MAX_LOCAL_TICKS_BEFORE_EVENT_POLL,
     };
     use sunlight_ipc::{CapabilityToken, IpcMsg, SgpMsg};
 
@@ -931,6 +932,29 @@ mod tests {
                 SgpMsg::EVENT_FLAG_WINDOW_VALID | SgpMsg::EVENT_FLAG_RESIZED,
             )
             .with_cap(0, CapabilityToken(7))
+    }
+
+    #[test]
+    fn printable_clipboard_chords_keep_modifiers() {
+        for (keycode, ascii) in [(0x2E, b'c'), (0x2D, b'x'), (0x2F, b'v'), (0x1E, b'a')] {
+            let packed =
+                sunlight_ipc::pack_key_event(keycode, true, false, true, false, false, Some(ascii));
+            assert!(
+                matches!(decode_key_event_word(packed), Some(Event::KeyPress { keycode: code, ctrl: true, pressed: true, .. }) if code == keycode)
+            );
+            let plain = sunlight_ipc::pack_key_event(
+                keycode,
+                true,
+                false,
+                false,
+                false,
+                false,
+                Some(ascii),
+            );
+            assert!(
+                matches!(decode_key_event_word(plain), Some(Event::Key(ch)) if ch == ascii as char)
+            );
+        }
     }
 
     #[test]

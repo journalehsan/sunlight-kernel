@@ -321,21 +321,60 @@ impl FileSystem for RamFs {
         if self.is_dir(entry_idx) {
             return Err(FsError::IsDir);
         }
-        let current = self.entry_data(entry_idx);
-        let mut new_data = Vec::new();
-        if offset <= current.len() {
-            new_data.extend_from_slice(&current[..offset]);
-        } else {
-            new_data.extend_from_slice(current);
-            new_data.resize(offset, 0);
-        }
         let end = offset.checked_add(buf.len()).ok_or(FsError::Io)?;
-        if end > new_data.len() {
-            new_data.resize(end, 0);
+
+        // Static initramfs entries borrow their original bytes. Materialize a
+        // mutable copy only on the first write, reserving the complete size up
+        // front so `extend_from_slice` cannot invoke the infallible allocator.
+        if entry_idx < self.entries.len() && self.buffers[entry_idx].is_none() {
+            let original = self.entries[entry_idx].data;
+            let required = original.len().max(end);
+            let mut data = Vec::new();
+            data.try_reserve_exact(required).map_err(|_| FsError::Io)?;
+            data.extend_from_slice(original);
+            self.buffers[entry_idx] = Some(data);
         }
-        new_data[offset..end].copy_from_slice(buf);
-        self.set_entry_data(entry_idx, new_data);
+
+        let data = if entry_idx < self.entries.len() {
+            self.buffers[entry_idx].as_mut().ok_or(FsError::Io)?
+        } else {
+            &mut self.dynamic[entry_idx - self.entries.len()].data
+        };
+        if end > data.len() {
+            data.try_reserve(end - data.len())
+                .map_err(|_| FsError::Io)?;
+            data.resize(end, 0);
+        }
+        data[offset..end].copy_from_slice(buf);
         Ok(buf.len())
+    }
+
+    fn reserve(&mut self, handle: FileHandle, size: usize) -> Result<(), FsError> {
+        let entry_idx = self.handle_entry_idx(handle)?;
+        if self.is_dir(entry_idx) {
+            return Err(FsError::IsDir);
+        }
+
+        if entry_idx < self.entries.len() && self.buffers[entry_idx].is_none() {
+            let original = self.entries[entry_idx].data;
+            let mut data = Vec::new();
+            data.try_reserve_exact(original.len().max(size))
+                .map_err(|_| FsError::Io)?;
+            data.extend_from_slice(original);
+            self.buffers[entry_idx] = Some(data);
+            return Ok(());
+        }
+
+        let data = if entry_idx < self.entries.len() {
+            self.buffers[entry_idx].as_mut().ok_or(FsError::Io)?
+        } else {
+            &mut self.dynamic[entry_idx - self.entries.len()].data
+        };
+        if size > data.capacity() {
+            data.try_reserve_exact(size - data.len())
+                .map_err(|_| FsError::Io)?;
+        }
+        Ok(())
     }
 
     fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
@@ -469,6 +508,47 @@ impl FileSystem for RamFs {
             return Err(FsError::ReadOnlyFilesystem);
         }
         let dyn_idx = entry_idx - self.entries.len();
+        if old == new {
+            return Ok(());
+        }
+        let parent = new
+            .rsplit_once('/')
+            .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
+            .ok_or(FsError::NotFound)?;
+        if parent != "/" && !self.is_dir(self.entry_idx(parent)?) {
+            return Err(FsError::NotDir);
+        }
+        if self.is_dir(entry_idx) {
+            let prefix = alloc::format!("{}/", old);
+            if self
+                .entries
+                .iter()
+                .any(|entry| entry.path.starts_with(&prefix))
+            {
+                return Err(FsError::ReadOnlyFilesystem);
+            }
+            if new.starts_with(&prefix) {
+                return Err(FsError::Unsupported);
+            }
+            if self.entry_idx(new).is_ok() {
+                return Err(FsError::AlreadyExists);
+            }
+            // RAMFS paths are stored in full on every entry. Move the whole subtree.
+            let mut updates = Vec::new();
+            for (index, entry) in self.dynamic.iter().enumerate() {
+                if index == dyn_idx || entry.path.starts_with(prefix.as_bytes()) {
+                    let mut path = Vec::from(new.as_bytes());
+                    path.extend_from_slice(&entry.path[old.len()..]);
+                    let text = core::str::from_utf8(&path).map_err(|_| FsError::Unsupported)?;
+                    path::validate_absolute(text)?;
+                    updates.push((index, path));
+                }
+            }
+            for (index, path) in updates {
+                self.dynamic[index].path = path;
+            }
+            return Ok(());
+        }
         // If destination exists (and is a file), remove it first.
         if let Ok(dst_idx) = self.entry_idx(new) {
             if self.is_dir(dst_idx) {
@@ -3140,6 +3220,46 @@ mod tests {
     }
 
     #[test]
+    fn streamed_large_write_grows_in_place_without_losing_data() {
+        let mut fs = RamFs::new(&[]);
+        let handle = fs.create_file("/large.simg", 0, 0, mode::FILE_644).unwrap();
+        let chunk = [0x5au8; 4096];
+        let chunk_count = 512;
+        fs.reserve(handle, chunk.len() * chunk_count).unwrap();
+        assert_eq!(fs.stat("/large.simg").unwrap().size, 0);
+        let entry_idx = fs.handle_entry_idx(handle).unwrap();
+        let allocation = fs.dynamic[entry_idx - fs.entries.len()].data.as_ptr();
+
+        for index in 0..chunk_count {
+            assert_eq!(
+                fs.write(handle, index * chunk.len(), &chunk),
+                Ok(chunk.len())
+            );
+        }
+
+        assert_eq!(
+            fs.stat("/large.simg").unwrap().size,
+            chunk.len() * chunk_count
+        );
+        let data = fs.entry_data(fs.handle_entry_idx(handle).unwrap());
+        assert_eq!(data.as_ptr(), allocation);
+        assert_eq!(data.len(), chunk.len() * chunk_count);
+        assert!(data.iter().all(|byte| *byte == 0x5a));
+    }
+
+    #[test]
+    fn write_overwrite_preserves_existing_suffix_and_zero_fills_holes() {
+        let mut fs = RamFs::new(&[]);
+        let handle = fs.create_file("/data", 0, 0, mode::FILE_644).unwrap();
+        fs.write(handle, 0, b"abcdefgh").unwrap();
+        fs.write(handle, 2, b"XY").unwrap();
+        fs.write(handle, 10, b"Z").unwrap();
+
+        let data = fs.entry_data(fs.handle_entry_idx(handle).unwrap());
+        assert_eq!(data, b"abXYefgh\0\0Z");
+    }
+
+    #[test]
     fn mkdir_creates_directory() {
         let mut fs = RamFs::new(TEST_ENTRIES);
         assert_eq!(fs.mkdir("/newdir", 0, 0, 0o755), Ok(()));
@@ -3175,6 +3295,27 @@ mod tests {
         let mut buf = [0u8; 16];
         let read = fs.read(handle, 0, &mut buf).unwrap();
         assert_eq!(&buf[..read], b"updated\n");
+    }
+
+    #[test]
+    fn folder_rename_moves_descendants_and_keeps_open_handles() {
+        let mut fs = RamFs::new(&[]);
+        fs.mkdir("/source", 0, 0, 0o755).unwrap();
+        fs.mkdir("/source/sub", 0, 0, 0o755).unwrap();
+        fs.mkdir("/destination", 0, 0, 0o755).unwrap();
+        let handle = fs.create_file("/source/sub/file", 0, 0, 0o644).unwrap();
+        fs.write(handle, 0, b"retained").unwrap();
+        fs.rename("/source", "/destination/moved").unwrap();
+        assert_eq!(fs.open("/source/sub/file"), Err(FsError::NotFound));
+        assert_eq!(fs.stat("/destination/moved/sub/file").unwrap().size, 8);
+        let mut bytes = [0; 8];
+        assert_eq!(fs.read(handle, 0, &mut bytes).unwrap(), 8);
+        assert_eq!(&bytes, b"retained");
+        assert_eq!(
+            fs.rename("/destination", "/destination/moved/loop"),
+            Err(FsError::Unsupported)
+        );
+        assert!(fs.stat("/destination/moved/sub/file").is_ok());
     }
 
     #[test]

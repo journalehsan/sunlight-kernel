@@ -3,8 +3,8 @@
 pub mod display_metrics;
 pub mod display_modes;
 pub mod pty;
-pub mod swap_policy;
 pub mod session_completion;
+pub mod swap_policy;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
     BORDER_W as DISPLAY_BORDER_W, MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE,
@@ -151,6 +151,12 @@ pub enum SunlightSyscall {
     WiseOwlValidateLifecycleSource = 146,
     /// Locate the first Intel HDA PCI function and return BAR0. Gated to `audiod`.
     HdaInfo = 147,
+    /// Paged ReadDir: r10 is the entry offset.
+    ReadDirFrom = 148,
+    /// Atomic rename that fails if the destination already exists.
+    RenameNoReplace = 149,
+    /// Reserve backing storage for an open file without changing its length.
+    FileReserve = 150,
     /// Map a previously granted device BAR. Gated to the owning driver process.
     MapMmio = 131,
     /// Allocate physically contiguous DMA and map it. Gated to the owning driver.
@@ -3196,11 +3202,13 @@ impl LeaseState {
 
 #[allow(non_snake_case)]
 pub mod ClipMsg {
+    /// word 0: byte count; optional word 1: expected current ID (0 = unconditional).
     pub const SET_CLIPBOARD: u64 = 0xD101;
     pub const GET_CLIPBOARD: u64 = 0xD102;
     pub const GET_CLIPBOARD_SUMMARY: u64 = 0xD103;
     pub const LIST_CLIPBOARD_HISTORY: u64 = 0xD104;
     pub const SELECT_CLIPBOARD_HISTORY_ITEM: u64 = 0xD105;
+    /// Optional word 0: expected current ID (0 = unconditional).
     pub const CLEAR_CLIPBOARD: u64 = 0xD106;
     pub const CLEAR_CLIPBOARD_HISTORY: u64 = 0xD107;
 

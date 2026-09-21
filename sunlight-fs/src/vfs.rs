@@ -139,6 +139,12 @@ pub trait FileSystem {
     fn read(&mut self, handle: FileHandle, offset: usize, buf: &mut [u8])
         -> Result<usize, FsError>;
     fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError>;
+    /// Reserve backing storage for an expected final file size without
+    /// changing the visible length. Filesystems that do not keep file data in
+    /// the kernel heap may treat this as an advisory no-op.
+    fn reserve(&mut self, _handle: FileHandle, _size: usize) -> Result<(), FsError> {
+        Ok(())
+    }
     /// Reduce an open regular file to length zero.  This is intentionally a
     /// narrow primitive used by `O_TRUNC`; it does not add a public ftruncate
     /// ABI.
@@ -470,6 +476,13 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         }
     }
 
+    fn reserve(&mut self, handle: FileHandle, size: usize) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.reserve(handle, size),
+            Self::Fat(fs) => fs.reserve(handle, size),
+        }
+    }
+
     fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
         match self {
             Self::Ram(fs) => fs.truncate(handle),
@@ -680,6 +693,16 @@ impl<D: BlockDevice> Vfs<D> {
             .write(local_handle, offset, buf)
     }
 
+    pub fn reserve(&mut self, handle: FileHandle, size: usize) -> Result<(), FsError> {
+        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        self.mounts
+            .get_mut(mount_idx)
+            .and_then(Option::as_mut)
+            .ok_or(FsError::BadHandle)?
+            .fs
+            .reserve(local_handle, size)
+    }
+
     pub fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
         let (mount_idx, local_handle) = unpack_handle(handle)?;
         self.mounts
@@ -755,6 +778,16 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::NotFound)?
             .fs
             .unlink(local_path)
+    }
+
+    /// Must be called under the same VFS lock as rename so collisions cannot race.
+    pub fn rename_no_replace(&mut self, old_path: &str, new_path: &str) -> Result<(), FsError> {
+        match self.stat(new_path) {
+            Ok(_) => return Err(FsError::AlreadyExists),
+            Err(FsError::NotFound) => {}
+            Err(error) => return Err(error),
+        }
+        self.rename(old_path, new_path)
     }
 
     pub fn rename(&mut self, old_path: &str, new_path: &str) -> Result<(), FsError> {
@@ -968,6 +1001,23 @@ mod tests {
         mode::FILE_644,
         b"boot volume\n",
     )];
+
+    #[test]
+    fn no_replace_move_preserves_existing_target_and_source() {
+        let mut vfs: Vfs = Vfs::new();
+        vfs.mount_ramfs("/", RamFs::new(&[])).unwrap();
+        vfs.mkdir("/source", 0, 0, 0o755).unwrap();
+        vfs.mkdir("/target", 0, 0, 0o755).unwrap();
+        assert_eq!(
+            vfs.rename_no_replace("/source", "/target"),
+            Err(FsError::AlreadyExists)
+        );
+        assert!(vfs.stat("/source").is_ok());
+        assert!(vfs.stat("/target").is_ok());
+        vfs.rename_no_replace("/source", "/moved").unwrap();
+        assert!(vfs.stat("/source").is_err());
+        assert!(vfs.stat("/moved").is_ok());
+    }
 
     #[test]
     fn routes_root_mount_open_read_stat() {

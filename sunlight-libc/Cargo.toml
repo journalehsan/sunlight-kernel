@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-libc"
-version = "0.2.4253-alpha.2"
+version = "0.2.4276-alpha.2"
+
+
 
 
 
@@ -534,6 +536,8 @@ sunlight-ipc = { path = "../ipc" }
 # Only one crate in a binary may declare a global allocator, so this feature
 # must not be enabled in libraries — only in top-level binary crates.
 default = []
+# Allocating transfer helpers, enabled only by GUI file-management clients.
+file-ops = []
 global-alloc = []
 dynamic-heap = []
 # Select the shell's existing 8 MiB userspace heap budget when using the

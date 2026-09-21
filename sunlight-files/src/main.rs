@@ -3,17 +3,18 @@
 
 extern crate alloc;
 
+use alloc::{format, string::String, vec::Vec};
 use core::cmp::Ordering;
+use sunlight_ui::clipboard;
 
 use sun_font::{
     draw_text as sf_draw, draw_text_centered as sf_centered, draw_text_right as sf_right,
     draw_text_vcenter as sf_vcenter, line_height as sf_lh, FontRole, TextStyle, VecFont,
 };
 use sunlight_ipc::{
-    debug_log, ipc_call,
+    debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, nameserver_lookup_timeout, process_yield, shm_alloc, shm_free, shm_map,
-    CapabilityToken, ClipMsg, IpcMsg, ProcessExit, SHM_PAGE,
+    monotonic_millis, process_yield, ProcessExit,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
 use sunlight_ui::image::{decode_simg, mime_icon, TgaImage};
@@ -249,18 +250,11 @@ const PROP_ICON_ROW_H: u32 = 46;
 const PROP_ROW_H: u32 = 22;
 const PROP_BTN_H: u32 = 30;
 /// Cap used when counting a folder's direct children (shallow, no recursion).
-/// Mirrors the file list's own MAX_ENTRIES cap so Properties never blocks.
+/// This shallow Properties preview is capped independently of the paged file list.
 const PROP_CHILD_BUF: usize = MAX_ENTRIES;
 const PROP_ROW_CAP: usize = 10;
 const PROP_VAL_LEN: usize = 64;
 const STATUS_MSG_LEN: usize = 128;
-const CLIP_ITEM_BUF_LEN: usize = SHM_PAGE;
-const CLIP_SOURCE_APP: &[u8] = b"sunlight-files";
-const CLIP_MIME_TEXT: &[u8] = b"text/plain";
-const CLIP_MIME_FILE_LIST: &[u8] = b"x-sunlight/file-list";
-const CLIP_WIRE_MAGIC_ITEM: u32 = 0x434C_4950;
-const CLIP_WIRE_MAGIC_SET: u32 = 0x4353_4554;
-const CLIP_WIRE_VERSION: u16 = 1;
 
 // Home grid: 6 core folders (Desktop, Documents, Downloads, Pictures, Music, Videos).
 // Templates and Public are available via navigation but not shown on the home page.
@@ -330,12 +324,15 @@ enum ContextTarget {
     Background,
 }
 
-/// A single context-menu entry. Kept tiny on purpose — destructive actions
-/// (rename/delete/move) are intentionally deferred to a later pass.
+/// File and directory actions shared with the desktop clipboard.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ContextMenuItem {
     Open,
     Copy,
+    Cut,
+    NewFolder,
+    NewTextFile,
+    Refresh,
     CopyPath,
     Paste,
     Properties,
@@ -1343,7 +1340,8 @@ struct State {
     view_mode: ViewMode,
     selected_sidebar: usize,
     selected_row: Option<usize>,
-    entries: [DirEntry; MAX_ENTRIES],
+    selected_rows: Vec<bool>,
+    entries: Vec<DirEntry>,
     entry_count: usize,
     folder_count: usize,
     file_count: usize,
@@ -1366,7 +1364,8 @@ impl State {
             view_mode: ViewMode::Home,
             selected_sidebar: 0,
             selected_row: None,
-            entries: [DirEntry::zeroed(); MAX_ENTRIES],
+            selected_rows: Vec::new(),
+            entries: Vec::new(),
             entry_count: 0,
             folder_count: 0,
             file_count: 0,
@@ -1395,6 +1394,7 @@ impl State {
         self.current_path = self.home_path;
         self.selected_sidebar = 0;
         self.selected_row = None;
+        self.selected_rows.fill(false);
         self.clear_error();
         // Refresh volumes on demand (user navigated home explicitly).
         self.refresh_home_volumes();
@@ -1405,6 +1405,7 @@ impl State {
         self.view_mode = ViewMode::Volumes;
         self.selected_sidebar = 8;
         self.selected_row = None;
+        self.selected_rows.fill(false);
         self.clear_error();
         self.refresh_home_volumes();
         true
@@ -1414,6 +1415,7 @@ impl State {
         self.view_mode = ViewMode::Network;
         self.selected_sidebar = 9;
         self.selected_row = None;
+        self.selected_rows.fill(false);
         self.clear_error();
         true
     }
@@ -1480,6 +1482,8 @@ impl State {
             return false;
         }
         self.selected_row = Some(idx);
+        self.selected_rows.fill(false);
+        self.selected_rows[idx] = true;
         self.clear_error();
         true
     }
@@ -1487,6 +1491,7 @@ impl State {
     fn clear_row_selection(&mut self) -> bool {
         let changed = self.selected_row.is_some();
         self.selected_row = None;
+        self.selected_rows.fill(false);
         changed
     }
 
@@ -1495,6 +1500,8 @@ impl State {
             return false;
         }
         self.selected_row = Some(idx);
+        self.selected_rows.fill(false);
+        self.selected_rows[idx] = true;
         let entry = self.entries[idx];
         let name = entry.name_bytes();
         let name = match core::str::from_utf8(name) {
@@ -1563,6 +1570,7 @@ impl State {
             self.current_path = target;
             self.clear_error();
             self.selected_row = None;
+            self.selected_rows.fill(false);
             self.selected_sidebar = self.sidebar_index_for_path();
             debug_log("[FILES] navigate_done path=\"");
             debug_log(self.current_path.as_str());
@@ -1585,9 +1593,12 @@ impl State {
         self.folder_count = 0;
         self.file_count = 0;
         self.selected_row = None;
-        match libc::read_dir(path.as_str().as_bytes(), &mut self.entries) {
-            Ok(count) => {
-                self.entry_count = count.min(MAX_ENTRIES);
+        self.selected_rows.fill(false);
+        match libc::file_ops::read_directory(path.as_str(), 4096) {
+            Ok(entries) => {
+                self.entries = entries;
+                self.entry_count = self.entries.len();
+                self.selected_rows.resize(self.entry_count, false);
                 self.entries[..self.entry_count].sort_by(compare_entries);
                 for entry in self.entries[..self.entry_count].iter() {
                     if entry.file_type == FT_DIR {
@@ -1600,8 +1611,8 @@ impl State {
                 self.clear_error();
                 true
             }
-            Err(_) => {
-                self.set_error("Unable to read directory");
+            Err(message) => {
+                self.set_error(message);
                 false
             }
         }
@@ -1728,6 +1739,8 @@ struct FilesApp {
     last_clicked_row: Option<usize>,
     last_click_at: u64,
     /// Active right-click context menu, if any.
+    ctrl_down: bool,
+    shift_down: bool,
     context_menu: Option<ContextMenu>,
     /// Active Properties dialog, if any. Modal-lite: while set it consumes
     /// input so the underlying file list cannot be navigated.
@@ -1785,6 +1798,8 @@ impl FilesApp {
             preview_src_h: 0,
             last_clicked_row: None,
             last_click_at: 0,
+            ctrl_down: false,
+            shift_down: false,
             context_menu: None,
             properties: None,
             status_msg: [0; STATUS_MSG_LEN],
@@ -2139,6 +2154,29 @@ impl FilesApp {
     }
 
     fn handle_directory_click(&mut self, idx: usize) -> bool {
+        if self.ctrl_down {
+            self.state.selected_rows[idx] = !self.state.selected_rows[idx];
+            self.state.selected_row = if self.state.selected_rows[idx] {
+                Some(idx)
+            } else {
+                self.state
+                    .selected_rows
+                    .iter()
+                    .position(|selected| *selected)
+            };
+            self.update_preview_for_selection();
+            self.reset_row_click_state();
+            return true;
+        }
+        if self.shift_down {
+            let anchor = self.state.selected_row.unwrap_or(idx);
+            self.state.selected_rows.fill(false);
+            self.state.selected_rows[anchor.min(idx)..=anchor.max(idx)].fill(true);
+            self.state.selected_row = Some(anchor);
+            self.update_preview_for_selection();
+            self.reset_row_click_state();
+            return true;
+        }
         let now = monotonic_millis();
         let is_double_click = self.last_clicked_row == Some(idx)
             && now.saturating_sub(self.last_click_at) <= DOUBLE_CLICK_MS;
@@ -2227,204 +2265,130 @@ impl FilesApp {
         core::str::from_utf8(&self.status_msg[..self.status_msg_len]).unwrap_or("")
     }
 
-    fn selected_item_path(&self) -> Result<PathBuf, &'static str> {
+    fn selected_paths(&self) -> Result<Vec<String>, &'static str> {
         if self.state.view_mode != ViewMode::Directory {
+            return Err("Open a folder first");
+        }
+        let mut paths = Vec::new();
+        for (index, entry) in self.state.entries[..self.state.entry_count]
+            .iter()
+            .enumerate()
+        {
+            if self.state.selected_rows[index] {
+                let name =
+                    core::str::from_utf8(entry.name_bytes()).map_err(|_| "Invalid file name")?;
+                let path = self
+                    .state
+                    .current_path
+                    .join(name)
+                    .ok_or("Path is too long")?;
+                paths.push(String::from(path.as_str()));
+            }
+        }
+        if paths.is_empty() {
             return Err("No item selected");
         }
-        let Some(idx) = self.state.selected_row else {
-            return Err("No item selected");
-        };
-        if idx >= self.state.entry_count {
-            return Err("No item selected");
-        }
-        let entry = self.state.entries[idx];
-        let name = core::str::from_utf8(entry.name_bytes()).map_err(|_| "Invalid file name")?;
-        self.state.current_path.join(name).ok_or("Path is too long")
+        Ok(paths)
     }
 
     fn copy_selected_path_text(&mut self) -> bool {
-        let path = match self.selected_item_path() {
-            Ok(path) => path,
-            Err(msg) => {
-                self.state.clear_error();
-                self.set_status_error(msg);
-                return true;
-            }
-        };
-        if libc::stat(path.as_str().as_bytes()).is_err() {
-            self.state.clear_error();
-            self.set_status_error("Selected item is no longer available");
-            return true;
-        }
-        match self.set_clipboard_item(
-            ClipPayloadKind::Text,
-            CLIP_MIME_TEXT,
-            path.as_str().as_bytes(),
-        ) {
-            Ok(()) => {
-                self.state.clear_error();
-                self.set_status("Path copied");
-            }
-            Err(msg) => {
-                self.state.clear_error();
-                self.set_status_error(msg);
-            }
+        let result = self.selected_paths().and_then(|paths| {
+            clipboard::set_text_from(b"sunlight-files", &paths.join("\n"))
+                .map_err(|error| error.message())
+        });
+        self.state.clear_error();
+        match result {
+            Ok(()) => self.set_status("Path copied"),
+            Err(message) => self.set_status_error(message),
         }
         true
     }
 
-    fn copy_selected_file_list(&mut self) -> bool {
-        let path = match self.selected_item_path() {
-            Ok(path) => path,
-            Err(msg) => {
-                self.state.clear_error();
-                self.set_status_error(msg);
-                return true;
-            }
-        };
-        if libc::stat(path.as_str().as_bytes()).is_err() {
-            self.state.clear_error();
-            self.set_status_error("Selected item is no longer available");
-            return true;
+    fn copy_selected_file_list(&mut self, cut: bool) -> bool {
+        let result = self.selected_paths().and_then(|paths| {
+            clipboard::set_files(b"sunlight-files", &paths, cut).map_err(|error| error.message())
+        });
+        self.state.clear_error();
+        match result {
+            Ok(()) => self.set_status(if cut {
+                "Cut selection; paste to move"
+            } else {
+                "Selection copied"
+            }),
+            Err(message) => self.set_status_error(message),
         }
-        match self.set_clipboard_item(
-            ClipPayloadKind::FileList,
-            CLIP_MIME_FILE_LIST,
-            path.as_str().as_bytes(),
-        ) {
-            Ok(()) => {
-                self.state.clear_error();
-                self.set_status("Copied 1 item");
-            }
-            Err(msg) => {
-                self.state.clear_error();
-                self.set_status_error(msg);
-            }
+        true
+    }
+
+    fn refresh_directory(&mut self) -> bool {
+        if self.state.view_mode != ViewMode::Directory {
+            return false;
+        }
+        self.context_menu = None;
+        self.state.load_directory(self.state.current_path);
+        self.update_preview_for_selection();
+        self.reset_row_click_state();
+        true
+    }
+
+    fn create_item(&mut self, folder: bool) -> bool {
+        if self.state.view_mode != ViewMode::Directory {
+            return false;
+        }
+        let result = libc::file_ops::create_item(self.state.current_path.as_str(), folder);
+        self.refresh_directory();
+        match result {
+            Ok(_) => self.set_status(if folder {
+                "Folder created"
+            } else {
+                "Text file created"
+            }),
+            Err(message) => self.set_status_error(message),
         }
         true
     }
 
     fn paste_from_clipboard(&mut self) -> bool {
-        let mut item_buf = [0u8; CLIP_ITEM_BUF_LEN];
-        let item = match self.get_current_clipboard_item(&mut item_buf) {
-            Ok(Some(item)) => item,
-            Ok(None) => {
-                self.state.clear_error();
-                self.set_status_error("Clipboard is empty");
-                return true;
-            }
-            Err(msg) => {
-                self.state.clear_error();
-                self.set_status_error(msg);
+        self.state.clear_error();
+        if self.state.view_mode != ViewMode::Directory {
+            self.set_status_error("Open a destination folder first");
+            return true;
+        }
+        let item = match clipboard::get_files() {
+            Ok(item) => item,
+            Err(error) => {
+                self.set_status_error(if error == clipboard::ClipboardError::Unsupported {
+                    "Clipboard does not contain files"
+                } else {
+                    error.message()
+                });
                 return true;
             }
         };
-
-        match item.kind {
-            ClipPayloadKind::Text => {
-                self.state.clear_error();
-                self.set_status_error("Text paste into folder is not supported yet");
+        let result =
+            libc::file_ops::transfer(&item.paths, self.state.current_path.as_str(), item.cut);
+        let completed = match &result {
+            Ok(count) => *count,
+            Err(error) => error.completed,
+        };
+        let consumed = clipboard::finish_cut(&item, completed, b"sunlight-files");
+        self.refresh_directory();
+        match result {
+            Ok(count) => self.set_status(&format!(
+                "{} item(s) {}",
+                count,
+                if item.cut { "moved" } else { "copied" }
+            )),
+            Err(error) => {
+                self.set_status_error(&format!("{} completed. {}", completed, error.message))
             }
-            ClipPayloadKind::FileList => {
-                let (first_path, count) = match first_file_list_path(item.payload) {
-                    Ok(parsed) => parsed,
-                    Err(_) => {
-                        self.state.clear_error();
-                        self.set_status_error("Invalid clipboard item");
-                        return true;
-                    }
-                };
-                if count > 1 {
-                    self.state.clear_error();
-                    self.set_status_error("Multi-item paste is not supported yet");
-                    return true;
-                }
-                let stat = match libc::stat(first_path.as_bytes()) {
-                    Ok(stat) => stat,
-                    Err(_) => {
-                        self.state.clear_error();
-                        self.set_status_error("Clipboard file is no longer available");
-                        return true;
-                    }
-                };
-                self.state.clear_error();
-                if stat.file_type == FT_DIR {
-                    self.set_status_error("Folder paste not supported yet");
-                } else {
-                    self.set_status_error("Paste not implemented yet");
-                }
-            }
+        }
+        if consumed.is_err() {
+            self.set_status_error(
+                "Move completed, but clipboard update failed; copy the remaining items again",
+            );
         }
         true
-    }
-
-    fn set_clipboard_item(
-        &self,
-        kind: ClipPayloadKind,
-        mime: &[u8],
-        payload: &[u8],
-    ) -> Result<(), &'static str> {
-        let cap = ensure_clipboard_service().ok_or("Clipboard service unavailable")?;
-        let total_len = 16 + mime.len() + CLIP_SOURCE_APP.len() + payload.len();
-        if total_len > SHM_PAGE {
-            return Err("Clipboard payload is too large");
-        }
-        let (ptr, token) = shm_alloc().map_err(|_| "Clipboard service unavailable")?;
-        unsafe {
-            let buf = core::slice::from_raw_parts_mut(ptr, SHM_PAGE);
-            let mut index = 0usize;
-            index += push_u32_le(&mut buf[index..], CLIP_WIRE_MAGIC_SET);
-            index += push_u16_le(&mut buf[index..], CLIP_WIRE_VERSION);
-            buf[index] = kind.as_u8();
-            index += 1;
-            buf[index] = 1;
-            index += 1;
-            index += push_u16_le(&mut buf[index..], mime.len() as u16);
-            index += push_u16_le(&mut buf[index..], CLIP_SOURCE_APP.len() as u16);
-            index += push_u32_le(&mut buf[index..], payload.len() as u32);
-            index += copy_bytes(&mut buf[index..], mime);
-            index += copy_bytes(&mut buf[index..], CLIP_SOURCE_APP);
-            let _ = copy_bytes(&mut buf[index..], payload);
-        }
-        let reply = ipc_call(
-            cap,
-            IpcMsg::with_label(ClipMsg::SET_CLIPBOARD)
-                .word(0, total_len as u64)
-                .with_cap(0, token),
-        );
-        let _ = shm_free(token);
-        if reply.label == ClipMsg::ERROR {
-            return Err(clip_error_label(reply.words[0]));
-        }
-        Ok(())
-    }
-
-    fn get_current_clipboard_item<'a>(
-        &self,
-        item_buf: &'a mut [u8],
-    ) -> Result<Option<ClipboardItemView<'a>>, &'static str> {
-        let cap = ensure_clipboard_service().ok_or("Clipboard service unavailable")?;
-        let reply = ipc_call(cap, IpcMsg::with_label(ClipMsg::GET_CLIPBOARD));
-        if reply.label == ClipMsg::ERROR {
-            return Err(clip_error_label(reply.words[0]));
-        }
-        let len = reply.words[1] as usize;
-        let token = reply.caps[0];
-        if len == 0 || token == CapabilityToken::INVALID {
-            return Ok(None);
-        }
-        if len > item_buf.len() || len > SHM_PAGE {
-            let _ = shm_free(token);
-            return Err("Invalid clipboard item");
-        }
-        let ptr = shm_map(token).map_err(|_| "Invalid clipboard item")?;
-        unsafe {
-            core::ptr::copy_nonoverlapping(ptr, item_buf.as_mut_ptr(), len);
-        }
-        let _ = shm_free(token);
-        parse_clipboard_item(&item_buf[..len])
-            .map(Some)
-            .map_err(|_| "Invalid clipboard item")
     }
 
     fn toolbar_layout(&self) -> (Rect, Rect, Rect, Rect, Rect) {
@@ -2580,10 +2544,18 @@ impl FilesApp {
             ContextTarget::Row(_) => &[
                 ContextMenuItem::Open,
                 ContextMenuItem::Copy,
+                ContextMenuItem::Cut,
+                ContextMenuItem::Paste,
                 ContextMenuItem::CopyPath,
                 ContextMenuItem::Properties,
             ],
-            ContextTarget::Background => &[ContextMenuItem::Paste, ContextMenuItem::Properties],
+            ContextTarget::Background => &[
+                ContextMenuItem::Paste,
+                ContextMenuItem::NewFolder,
+                ContextMenuItem::NewTextFile,
+                ContextMenuItem::Refresh,
+                ContextMenuItem::Properties,
+            ],
         }
     }
 
@@ -2591,6 +2563,10 @@ impl FilesApp {
         match item {
             ContextMenuItem::Open => "Open",
             ContextMenuItem::Copy => "Copy",
+            ContextMenuItem::Cut => "Cut",
+            ContextMenuItem::NewFolder => "New Folder",
+            ContextMenuItem::NewTextFile => "New Text File",
+            ContextMenuItem::Refresh => "Refresh",
             ContextMenuItem::CopyPath => "Copy Path",
             ContextMenuItem::Paste => "Paste",
             ContextMenuItem::Properties => "Properties",
@@ -2601,7 +2577,7 @@ impl FilesApp {
     /// the row is selected first — without navigating — mirroring single-click.
     fn open_context_menu(&mut self, x: i32, y: i32, target: ContextTarget) -> bool {
         if let ContextTarget::Row(idx) = target {
-            if idx < self.state.entry_count && self.state.selected_row != Some(idx) {
+            if idx < self.state.entry_count && !self.state.selected_rows[idx] {
                 self.select_item(idx);
             }
         }
@@ -2707,7 +2683,11 @@ impl FilesApp {
                 }
                 true
             }
-            ContextMenuItem::Copy => self.copy_selected_file_list(),
+            ContextMenuItem::Copy => self.copy_selected_file_list(false),
+            ContextMenuItem::Cut => self.copy_selected_file_list(true),
+            ContextMenuItem::NewFolder => self.create_item(true),
+            ContextMenuItem::NewTextFile => self.create_item(false),
+            ContextMenuItem::Refresh => self.refresh_directory(),
             ContextMenuItem::CopyPath => self.copy_selected_path_text(),
             ContextMenuItem::Paste => self.paste_from_clipboard(),
             ContextMenuItem::Properties => {
@@ -3514,7 +3494,7 @@ impl FilesApp {
             let entry = self.state.entries[idx];
             let row_y = list_top + (idx as u32 * ROW_H) as i32 - scroll;
             let row = Rect::new(inner.x, row_y, row_full_w, ROW_H);
-            let selected = self.state.selected_row == Some(idx);
+            let selected = self.state.selected_rows[idx];
 
             // Skip rows fully outside the clip area (top of header or below pane)
             if row.bottom() <= list_top || row.y >= inner.bottom() {
@@ -3781,7 +3761,13 @@ impl FilesApp {
             );
         }
 
-        if let Some(selected_count) = self.state.selected_row.map(|_| 1usize) {
+        if let Some(selected_count) = self.state.selected_row.map(|_| {
+            self.state
+                .selected_rows
+                .iter()
+                .filter(|selected| **selected)
+                .count()
+        }) {
             if selected_count > 0 {
                 len = 0;
                 len += write_usize(&mut buf[len..], selected_count);
@@ -4024,11 +4010,17 @@ impl FilesApp {
 
         // Selected indicator on the right
         if self.state.selected_row.is_some() {
-            let sel_text = "1 item selected";
-            let sel_w = sun_font::measure_text(sel_text, FontRole::UiSmall).w as i32;
+            let count = self
+                .state
+                .selected_rows
+                .iter()
+                .filter(|selected| **selected)
+                .count();
+            let sel_text = format!("{} item(s) selected", count);
+            let sel_w = sun_font::measure_text(&sel_text, FontRole::UiSmall).w as i32;
             sf_vcenter(
                 canvas,
-                sel_text,
+                &sel_text,
                 status.right() - sel_w - 10,
                 status.y,
                 STATUS_H,
@@ -4176,155 +4168,6 @@ impl FilesApp {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ClipPayloadKind {
-    Text,
-    FileList,
-}
-
-impl ClipPayloadKind {
-    fn as_u8(self) -> u8 {
-        match self {
-            Self::Text => 1,
-            Self::FileList => 2,
-        }
-    }
-
-    fn from_u8(value: u8) -> Option<Self> {
-        match value {
-            1 => Some(Self::Text),
-            2 => Some(Self::FileList),
-            _ => None,
-        }
-    }
-}
-
-struct ClipboardItemView<'a> {
-    kind: ClipPayloadKind,
-    payload: &'a [u8],
-}
-
-fn parse_clipboard_item(bytes: &[u8]) -> Result<ClipboardItemView<'_>, ()> {
-    let mut index = 0usize;
-    if take_u32_le(bytes, &mut index).ok_or(())? != CLIP_WIRE_MAGIC_ITEM {
-        return Err(());
-    }
-    if take_u16_le(bytes, &mut index).ok_or(())? != CLIP_WIRE_VERSION {
-        return Err(());
-    }
-    let kind = ClipPayloadKind::from_u8(take_u8(bytes, &mut index).ok_or(())?).ok_or(())?;
-    let flags = take_u8(bytes, &mut index).ok_or(())?;
-    let _id = take_u32_le(bytes, &mut index).ok_or(())?;
-    let _created_at_ms = take_u64_le(bytes, &mut index).ok_or(())?;
-    let payload_len = take_u32_le(bytes, &mut index).ok_or(())? as usize;
-    let mime_len = take_u16_le(bytes, &mut index).ok_or(())? as usize;
-    let source_len = take_u16_le(bytes, &mut index).ok_or(())? as usize;
-    let _ = take_slice(bytes, &mut index, mime_len).ok_or(())?;
-    if (flags & 1) != 0 {
-        let _ = take_slice(bytes, &mut index, source_len).ok_or(())?;
-    } else {
-        let _ = take_slice(bytes, &mut index, source_len).ok_or(())?;
-    }
-    let payload = take_slice(bytes, &mut index, payload_len).ok_or(())?;
-    Ok(ClipboardItemView { kind, payload })
-}
-
-fn first_file_list_path(payload: &[u8]) -> Result<(&str, usize), ()> {
-    let mut first: Option<&str> = None;
-    let mut count = 0usize;
-    let mut start = 0usize;
-    let mut index = 0usize;
-    while index <= payload.len() {
-        if index == payload.len() || payload[index] == 0 {
-            if index > start {
-                let part = core::str::from_utf8(&payload[start..index]).map_err(|_| ())?;
-                if first.is_none() {
-                    first = Some(part);
-                }
-                count += 1;
-            }
-            start = index + 1;
-        }
-        index += 1;
-    }
-    match first {
-        Some(path) => Ok((path, count)),
-        None => Err(()),
-    }
-}
-
-fn clip_error_label(code: u64) -> &'static str {
-    match code {
-        x if x == ClipMsg::ERR_BAD_REQUEST => "Clipboard request is invalid",
-        x if x == ClipMsg::ERR_NOT_FOUND => "Clipboard item not found",
-        x if x == ClipMsg::ERR_TOO_LARGE => "Clipboard payload is too large",
-        x if x == ClipMsg::ERR_UNSUPPORTED => "Paste not supported for this clipboard type",
-        x if x == ClipMsg::ERR_CORRUPT => "Invalid clipboard item",
-        _ => "Clipboard service unavailable",
-    }
-}
-
-fn ensure_clipboard_service() -> Option<CapabilityToken> {
-    if let Some(cap) = nameserver_lookup_timeout("clipd", 50) {
-        return Some(cap);
-    }
-    let _ = libc::spawn(b"/sbin/sunlight-clipd", &[b"sunlight-clipd"], None)
-        .or_else(|_| libc::spawn(b"/bin/sunlight-clipd", &[b"sunlight-clipd"], None));
-    for _ in 0..8 {
-        if let Some(cap) = nameserver_lookup_timeout("clipd", 75) {
-            return Some(cap);
-        }
-        process_yield();
-    }
-    None
-}
-
-fn copy_bytes(dst: &mut [u8], src: &[u8]) -> usize {
-    let len = src.len().min(dst.len());
-    dst[..len].copy_from_slice(&src[..len]);
-    len
-}
-
-fn push_u16_le(dst: &mut [u8], value: u16) -> usize {
-    copy_bytes(dst, &value.to_le_bytes())
-}
-
-fn push_u32_le(dst: &mut [u8], value: u32) -> usize {
-    copy_bytes(dst, &value.to_le_bytes())
-}
-
-fn take_u8(bytes: &[u8], index: &mut usize) -> Option<u8> {
-    let value = *bytes.get(*index)?;
-    *index += 1;
-    Some(value)
-}
-
-fn take_u16_le(bytes: &[u8], index: &mut usize) -> Option<u16> {
-    let raw = take_slice(bytes, index, 2)?;
-    Some(u16::from_le_bytes([raw[0], raw[1]]))
-}
-
-fn take_u32_le(bytes: &[u8], index: &mut usize) -> Option<u32> {
-    let raw = take_slice(bytes, index, 4)?;
-    Some(u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]))
-}
-
-fn take_u64_le(bytes: &[u8], index: &mut usize) -> Option<u64> {
-    let raw = take_slice(bytes, index, 8)?;
-    Some(u64::from_le_bytes([
-        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
-    ]))
-}
-
-fn take_slice<'a>(bytes: &'a [u8], index: &mut usize, len: usize) -> Option<&'a [u8]> {
-    if *index + len > bytes.len() {
-        return None;
-    }
-    let out = &bytes[*index..*index + len];
-    *index += len;
-    Some(out)
-}
-
 impl App for FilesApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
         if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
@@ -4387,7 +4230,16 @@ impl App for FilesApp {
     }
 
     fn update(&mut self, event: Event) -> bool {
+        if let Event::KeyPress { ctrl, shift, .. } = event {
+            self.ctrl_down = ctrl;
+            self.shift_down = shift;
+        }
+        if let Event::FocusChanged { focused: false } = event {
+            self.ctrl_down = false;
+            self.shift_down = false;
+        }
         const KEY_ESC: u8 = 0x01;
+        const KEY_X: u8 = 0x2D;
         const KEY_C: u8 = 0x2E;
         const KEY_ENTER: u8 = 0x1C;
         const KEY_LEFT: u8 = 0x4B;
@@ -4404,6 +4256,9 @@ impl App for FilesApp {
             if self.window_focused != focused {
                 self.window_focused = focused;
                 changed = true;
+            }
+            if focused && self.properties.is_none() {
+                changed |= self.refresh_directory();
             }
             if !focused {
                 changed |= self.pressed_scrollbar.take().is_some();
@@ -4622,6 +4477,39 @@ impl App for FilesApp {
                 ..
             } => self.activate_selected(),
             Event::KeyPress {
+                keycode: KEY_X,
+                pressed: true,
+                ctrl: true,
+                ..
+            } => self.copy_selected_file_list(true),
+            Event::KeyPress {
+                keycode: 0x3F,
+                pressed: true,
+                ..
+            } => self.refresh_directory(),
+            Event::KeyPress {
+                keycode: 0x31,
+                pressed: true,
+                ctrl: true,
+                shift: true,
+                ..
+            } => self.create_item(true),
+            Event::KeyPress {
+                keycode: 0x1E,
+                pressed: true,
+                ctrl: true,
+                ..
+            } if self.state.view_mode == ViewMode::Directory => {
+                self.state.selected_rows[..self.state.entry_count].fill(true);
+                self.state.selected_row = if self.state.entry_count > 0 {
+                    Some(0)
+                } else {
+                    None
+                };
+                self.update_preview_for_selection();
+                true
+            }
+            Event::KeyPress {
                 keycode: KEY_C,
                 pressed: true,
                 ctrl: true,
@@ -4633,7 +4521,7 @@ impl App for FilesApp {
                 pressed: true,
                 ctrl: true,
                 ..
-            } => self.copy_selected_file_list(),
+            } => self.copy_selected_file_list(false),
             Event::KeyPress {
                 keycode: KEY_UP,
                 pressed: true,
@@ -5186,6 +5074,16 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
 
     // Lightweight model init — no filesystem probing, no IPC beyond env.
     let mut app = FilesApp::new();
+    let mut args = [""; libc::MAX_ARGS];
+    let count = unsafe { libc::crt0::collect_utf8_args(_argc, _argv, &mut args, libc::MAX_PATH) };
+    if let Some(path) = args[1..count.max(1)]
+        .iter()
+        .find(|arg| arg.starts_with('/'))
+    {
+        if let Some(path) = PathBuf::from_str(path) {
+            app.state.navigate_to(path);
+        }
+    }
     window.run(&mut app);
     ProcessExit::exit(0);
 }
@@ -5193,6 +5091,34 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_selection_builds_shared_clipboard_paths_and_survives_right_click() {
+        let mut app = FilesApp::new();
+        app.state.view_mode = ViewMode::Directory;
+        app.state.current_path = PathBuf::from_str("/home/user").unwrap();
+        for name in ["first.txt", "Folder with spaces"] {
+            let mut entry = DirEntry::zeroed();
+            entry.name[..name.len()].copy_from_slice(name.as_bytes());
+            entry.name_len = name.len() as u8;
+            app.state.entries.push(entry);
+        }
+        app.state.entry_count = 2;
+        app.state.selected_rows = alloc::vec![true, true];
+        app.state.selected_row = Some(0);
+        app.open_context_menu(20, 20, ContextTarget::Row(1));
+        assert_eq!(
+            app.selected_paths().unwrap(),
+            ["/home/user/first.txt", "/home/user/Folder with spaces"]
+        );
+        app.state.clear_row_selection();
+        assert!(app.selected_paths().is_err());
+        app.state.select_row(1);
+        assert_eq!(
+            app.selected_paths().unwrap(),
+            ["/home/user/Folder with spaces"]
+        );
+    }
 
     #[test]
     fn major_regions_track_client_width_and_height() {

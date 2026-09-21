@@ -26,6 +26,9 @@ pub mod env;
 pub mod errno;
 /// File descriptor helpers: `lseek`, `fstat`, `isatty`.
 pub mod fd;
+/// Shared file-manager copy/move operations (requires an application allocator).
+#[cfg(any(test, feature = "file-ops"))]
+pub mod file_ops;
 /// Launch-trace argv parsing for GUI apps.
 pub mod launch_trace;
 /// Freestanding memory primitives (memcpy, memmove, memset, memcmp, memchr).
@@ -349,6 +352,40 @@ pub fn read_dir(path: &[u8], entries: &mut [DirEntry]) -> Result<usize, Errno> {
         )
     };
     sys::check(ret).map(|n| n as usize)
+}
+
+/// Read a page of directory entries starting at an entry offset.
+/// A page holds at most 64 entries; callers continue until an empty page.
+pub fn read_dir_from(path: &[u8], entries: &mut [DirEntry], offset: usize) -> Result<usize, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe {
+        sys::syscall4(
+            sys::SYS_READDIR_FROM,
+            path_ptr as u64,
+            entries.as_mut_ptr() as u64,
+            core::mem::size_of_val(entries) as u64,
+            offset as u64,
+        )
+    };
+    sys::check(ret).map(|n| n as usize)
+}
+
+/// Atomically move within a mounted filesystem without replacing any entry.
+pub fn rename_no_replace(old: &[u8], new: &[u8]) -> Result<(), Errno> {
+    let mut old_buf = [0u8; MAX_PATH];
+    let mut new_buf = [0u8; MAX_PATH];
+    let old_ptr = cstr(&mut old_buf, old)?;
+    let new_ptr = cstr(&mut new_buf, new)?;
+    let ret = unsafe { sys::syscall2(sys::SYS_RENAME_NO_REPLACE, old_ptr as u64, new_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+/// Reserve backing storage for an expected final file size without changing
+/// the visible length. This avoids fragmented growth for large RAMFS copies.
+pub fn file_reserve(fd: Fd, size: usize) -> Result<(), Errno> {
+    let ret = unsafe { sys::syscall2(sys::SYS_FILE_RESERVE, fd.0 as u64, size as u64) };
+    sys::check(ret).map(|_| ())
 }
 
 pub fn stat(path: &[u8]) -> Result<Stat, Errno> {

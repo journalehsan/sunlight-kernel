@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-vortex-shell"
-version = "0.2.4253-alpha.2"
+version = "0.2.4276-alpha.2"
+
+
 
 
 
@@ -423,7 +425,7 @@ fontdue = "0.7"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
-sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc"] }
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "file-ops"] }
 sunlight-networkd = { path = "../sunlight-networkd" }
 sunlight-audiod = { path = "../sunlight-audiod" }
 sunlight-audio = { path = "../../sunlight-audio" }

@@ -133,6 +133,11 @@ impl ClipboardState {
         &self.history
     }
 
+    /// Optional compare-and-set guard; zero keeps existing unconditional clients compatible.
+    pub fn matches_expected_current(&self, expected: u64) -> bool {
+        expected == 0 || self.current_id.map(u64::from) == Some(expected)
+    }
+
     pub fn current_id(&self) -> Option<u32> {
         self.current_id
     }
@@ -608,7 +613,9 @@ fn validate_request(request: &ClipboardSetRequest) -> Result<(), ClipError> {
             }
         }
         ClipboardKind::FileList => {
-            if request.mime != "x-sunlight/file-list" {
+            if request.mime != "x-sunlight/file-list"
+                && request.mime != "x-sunlight/file-list;operation=cut"
+            {
                 return Err(ClipError::BadRequest);
             }
             if request.payload.len() > MAX_FILE_LIST_BYTES {
@@ -693,7 +700,39 @@ fn take_vec(bytes: &[u8], index: &mut usize, len: usize) -> Result<Vec<u8>, Clip
 mod tests {
     use alloc::string::ToString;
 
-    use super::{validate_request, ClipError, ClipboardKind, ClipboardSetRequest};
+    use super::{
+        decode_item, decode_set_request, encode_file_list, encode_item, encode_set_request,
+        validate_request, ClipError, ClipboardKind, ClipboardSetRequest, ClipboardState,
+    };
+
+    #[test]
+    fn cut_file_list_round_trips_and_remains_distinct_from_copy() {
+        let mut state = ClipboardState::new();
+        let mut request = ClipboardSetRequest {
+            kind: ClipboardKind::FileList,
+            mime: "x-sunlight/file-list;operation=cut".to_string(),
+            source_app: Some("sunlight-files".to_string()),
+            payload: encode_file_list(&["/home/a", "/home/folder"]),
+        };
+        state
+            .set_item(
+                decode_set_request(&encode_set_request(&request)).unwrap(),
+                1,
+            )
+            .unwrap();
+        let cut = state.current().unwrap().clone();
+        let decoded = decode_item(&encode_item(&cut)).unwrap();
+        assert_eq!(decoded.mime, request.mime);
+        assert_eq!(decoded.payload, request.payload);
+        assert!(state.matches_expected_current(cut.id as u64));
+        request.mime = "x-sunlight/file-list".to_string();
+        state.set_item(request, 2).unwrap();
+        assert_ne!(state.current_id(), Some(cut.id));
+        assert!(!state.matches_expected_current(cut.id as u64));
+        assert!(state.matches_expected_current(0));
+        state.clear_current();
+        assert!(!state.matches_expected_current(cut.id as u64));
+    }
 
     #[test]
     fn accepts_plain_text_mime() {

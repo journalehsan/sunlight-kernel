@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-files"
-version = "0.2.4253-alpha.2"
+version = "0.2.4276-alpha.2"
+
+
 
 
 
@@ -404,6 +406,6 @@ path = "src/main.rs"
 
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
-sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
+sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m", "file-ops"] }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
