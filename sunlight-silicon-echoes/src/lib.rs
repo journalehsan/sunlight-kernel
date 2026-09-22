@@ -12,18 +12,19 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-pub const SAVE_FORMAT_VERSION: u16 = 4;
+pub const SAVE_FORMAT_VERSION: u16 = 5;
 pub const MAX_SAVE_BYTES: usize = 4096;
-const MAX_RECORDS: usize = 192;
+const MAX_RECORDS: usize = 320;
 const MAX_TEXT_VALUE_BYTES: usize = 128;
-const MAX_VISITED_NODES: usize = 64;
-const MAX_STATE_SET_ITEMS: usize = 48;
+const MAX_VISITED_NODES: usize = 96;
+const MAX_STATE_SET_ITEMS: usize = 96;
 const MAX_RELATIONSHIPS: usize = 8;
 const MAX_TENDENCIES: usize = 8;
 const MAX_SELECTED_CHOICES: usize = 16;
 pub const START_NODE: StoryNodeId = StoryNodeId("bedroom.wake");
 pub const TEMPORARY_ENDING: EndingId = EndingId("ending.chapter-one");
 pub const CHAPTER_TWO_ENDING: EndingId = EndingId("ending.chapter-two");
+pub const CHAPTER_THREE_ENDING: EndingId = EndingId("ending.chapter-three");
 
 /// The non-canonical presentation lifecycle for a narrative scene.  This is
 /// deliberately separate from [`WorldState`]: a save restores a stable story
@@ -1418,6 +1419,148 @@ const CHAPTER_TWO_TURNING_CHOICES: &[Choice] = &[
     },
 ];
 
+const CHAPTER_THREE_ARRIVAL_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c3.arrival.read-ledger"),
+        text: "Open the standing ledger to today's page.",
+        target: Transition::Node(StoryNodeId("chapter-three.record")),
+        condition: Some(Condition::Flag("c3_read_ledger_page", false)),
+        effects: &[
+            Consequence::SetFlag("c3_saw_a_record", true),
+            Consequence::SetFlag("c3_read_ledger_page", true),
+            Consequence::AddObservation("ledger_records_mara"),
+            Consequence::Shift(Tendency::Curiosity, 1),
+        ],
+        intentionally_converges: false,
+    },
+    Choice {
+        id: ChoiceId("c3.arrival.lift-tape"),
+        text: "Lift the reel labeled with a year that has not happened.",
+        target: Transition::Node(StoryNodeId("chapter-three.tape")),
+        condition: Some(Condition::Flag("c3_heard_tape", false)),
+        effects: &[
+            Consequence::SetFlag("c3_saw_a_record", true),
+            Consequence::SetFlag("c3_heard_tape", true),
+            Consequence::AddObservation("tape_labeled_2013"),
+            Consequence::AddFact("station_records_before_arrival"),
+        ],
+        intentionally_converges: false,
+    },
+    Choice {
+        id: ChoiceId("c3.arrival.face-window"),
+        text: "Face the window that returns the room wrong.",
+        target: Transition::Node(StoryNodeId("chapter-three.window")),
+        condition: Some(Condition::Flag("c3_faced_window", false)),
+        effects: &[
+            Consequence::SetFlag("c3_saw_a_record", true),
+            Consequence::SetFlag("c3_faced_window", true),
+            Consequence::AddObservation("window_reflects_room_wrong"),
+            Consequence::Shift(Tendency::Responsibility, 1),
+        ],
+        intentionally_converges: false,
+    },
+    Choice {
+        id: ChoiceId("c3.arrival.take-ledger-to-desk"),
+        text: "Carry the ledger to the desk where it was meant to be read.",
+        target: Transition::Node(StoryNodeId("chapter-three.ledger")),
+        condition: Some(Condition::Flag("c3_saw_a_record", true)),
+        effects: &[Consequence::AddObservation("station_desk_waiting")],
+        intentionally_converges: false,
+    },
+];
+
+const CHAPTER_THREE_RECORD_CHOICES: &[Choice] = &[Choice {
+    id: ChoiceId("c3.record.step-back"),
+    text: "Step back from the page without correcting it.",
+    target: Transition::Node(StoryNodeId("chapter-three.arrival")),
+    condition: None,
+    effects: &[Consequence::AddObservation("ledger_hand_is_not_mara")],
+    intentionally_converges: true,
+}];
+
+const CHAPTER_THREE_TAPE_CHOICES: &[Choice] = &[Choice {
+    id: ChoiceId("c3.tape.set-it-down"),
+    text: "Set the warm reel back exactly as it was.",
+    target: Transition::Node(StoryNodeId("chapter-three.arrival")),
+    condition: None,
+    effects: &[Consequence::AddObservation("tape_was_playing_elsewhere")],
+    intentionally_converges: true,
+}];
+
+const CHAPTER_THREE_WINDOW_CHOICES: &[Choice] = &[Choice {
+    id: ChoiceId("c3.window.turn-away"),
+    text: "Turn away before the reflection catches up.",
+    target: Transition::Node(StoryNodeId("chapter-three.arrival")),
+    condition: None,
+    effects: &[Consequence::AddObservation("reflection_runs_ahead")],
+    intentionally_converges: true,
+}];
+
+const CHAPTER_THREE_LEDGER_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c3.ledger.read-to-last-page"),
+        text: "Read to the last page, and learn the ending you did not write.",
+        target: Transition::Node(StoryNodeId("chapter-three.transmission")),
+        condition: None,
+        effects: &[
+            Consequence::SetFlag("c3_read_ledger_to_end", true),
+            Consequence::AddObservation("read_own_ending"),
+            Consequence::AddBelief("mara_is_cited_not_authoring"),
+            Consequence::Remember("read_ledger_to_last_page"),
+            Consequence::Shift(Tendency::Curiosity, 1),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c3.ledger.close-unread"),
+        text: "Close it unread, and keep a future no one has witnessed.",
+        target: Transition::Node(StoryNodeId("chapter-three.transmission")),
+        condition: None,
+        effects: &[
+            Consequence::AddBelief("unwitnessed_future_is_still_mara"),
+            Consequence::Remember("closed_ledger_unread"),
+            Consequence::Shift(Tendency::Agency, 1),
+        ],
+        intentionally_converges: true,
+    },
+];
+
+const CHAPTER_THREE_TRANSMISSION_CHOICES: &[Choice] = &[Choice {
+    id: ChoiceId("c3.transmission.let-it-finish"),
+    text: "Let the handwriting finish its sentence.",
+    target: Transition::Node(StoryNodeId("chapter-three.threshold")),
+    condition: None,
+    effects: &[Consequence::AddObservation("watched_handwriting_finish")],
+    intentionally_converges: false,
+}];
+
+const CHAPTER_THREE_THRESHOLD_CHOICES: &[Choice] = &[
+    Choice {
+        id: ChoiceId("c3.threshold.answer"),
+        text: "Answer the message as though someone once answered you.",
+        target: Transition::Ending(CHAPTER_THREE_ENDING),
+        condition: None,
+        effects: &[
+            Consequence::AddBelief("change_is_a_conversation"),
+            Consequence::Remember("answered_the_echo"),
+            Consequence::Shift(Tendency::Attachment, 1),
+        ],
+        intentionally_converges: true,
+    },
+    Choice {
+        id: ChoiceId("c3.threshold.stay-silent"),
+        text: "Leave the channel silent and let the record stand.",
+        target: Transition::Ending(CHAPTER_THREE_ENDING),
+        condition: None,
+        effects: &[
+            Consequence::AddBelief("change_was_already_recorded"),
+            Consequence::Remember("left_the_channel_silent"),
+            Consequence::Shift(Tendency::Responsibility, 1),
+        ],
+        intentionally_converges: true,
+    },
+];
+
 const NODES: &[StoryNode] = &[
     StoryNode {
         id: START_NODE,
@@ -1843,6 +1986,72 @@ const NODES: &[StoryNode] = &[
         entry_effects: &[
             Consequence::AddObservation("chapter_two_2013_response"),
         ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-three.arrival"),
+        scene: SceneId("c3-arrival"),
+        narration: "The yard door gives onto a room the station does not list: tape reels, a standing ledger, a window with the wrong room inside it. The room is holding its breath.",
+        choices: CHAPTER_THREE_ARRIVAL_CHOICES,
+        entry_effects: &[Consequence::AddObservation("unlisted_tape_room")],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-three.record"),
+        scene: SceneId("c3-arrival"),
+        narration: "Tonight's page is already full. The hand is not yours, but the sentences are the ones you would have chosen, and they stop one line short of now.",
+        choices: CHAPTER_THREE_RECORD_CHOICES,
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-three.tape"),
+        scene: SceneId("c3-arrival"),
+        narration: "The reel is labeled 2013 by someone who pressed too hard on the nine. It is warm in your hand, the way a tape is warm when it has been playing somewhere else.",
+        choices: CHAPTER_THREE_TAPE_CHOICES,
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-three.window"),
+        scene: SceneId("c3-arrival"),
+        narration: "The glass returns the room with one chair too many and no one in it. Over your reflected shoulder, the ledger is already closed.",
+        choices: CHAPTER_THREE_WINDOW_CHOICES,
+        entry_effects: &[],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-three.ledger"),
+        scene: SceneId("c3-ledger"),
+        narration: "The ledger opens flat at the desk, the way a book opens when it has been read here many times. The late pages are dense, and they are dated after tonight.",
+        choices: CHAPTER_THREE_LEDGER_CHOICES,
+        entry_effects: &[Consequence::AddObservation("ledger_dated_after_tonight")],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-three.transmission"),
+        scene: SceneId("c3-transmission"),
+        narration: "ECHO opens one more channel without being asked. The reply arrives in your own handwriting, dated 2013, the ink still deciding whether it is dry.",
+        choices: CHAPTER_THREE_TRANSMISSION_CHOICES,
+        entry_effects: &[
+            Consequence::AddObservation("reply_in_mara_handwriting"),
+            Consequence::AddFact("handwriting_reply_cannot_be_attributed"),
+        ],
+        uncontrolled_event: false,
+        automatic_target: None,
+    },
+    StoryNode {
+        id: StoryNodeId("chapter-three.threshold"),
+        scene: SceneId("c3-threshold"),
+        narration: "The channel holds, patient as a held breath. Whatever you do now, this room has already written it down, or is about to.",
+        choices: CHAPTER_THREE_THRESHOLD_CHOICES,
+        entry_effects: &[Consequence::AddObservation("chapter_three_open_channel")],
         uncontrolled_event: false,
         automatic_target: None,
     },
@@ -2501,6 +2710,90 @@ const C2_TURNING_OBJECTS: &[SceneObject] = &[
     },
 ];
 
+const C3_ARRIVAL_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c3-arrival.ledger"),
+        kind: SceneObjectKind::Interactive,
+        label: "Standing ledger",
+        action: Some(ChoiceId("c3.arrival.read-ledger")),
+    },
+    SceneObject {
+        id: ObjectId("c3-arrival.tape"),
+        kind: SceneObjectKind::Interactive,
+        label: "Reel marked 2013",
+        action: Some(ChoiceId("c3.arrival.lift-tape")),
+    },
+    SceneObject {
+        id: ObjectId("c3-arrival.window"),
+        kind: SceneObjectKind::Stateful,
+        label: "Window with the wrong room",
+        action: Some(ChoiceId("c3.arrival.face-window")),
+    },
+    SceneObject {
+        id: ObjectId("c3-arrival.desk"),
+        kind: SceneObjectKind::Interactive,
+        label: "Reading desk",
+        action: Some(ChoiceId("c3.arrival.take-ledger-to-desk")),
+    },
+    SceneObject {
+        id: ObjectId("c3-arrival.reel-wall"),
+        kind: SceneObjectKind::Structural,
+        label: "Wall of reels",
+        action: None,
+    },
+];
+
+const C3_LEDGER_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c3-ledger.last-page"),
+        kind: SceneObjectKind::Stateful,
+        label: "The last page",
+        action: Some(ChoiceId("c3.ledger.read-to-last-page")),
+    },
+    SceneObject {
+        id: ObjectId("c3-ledger.cover"),
+        kind: SceneObjectKind::Interactive,
+        label: "Ledger cover",
+        action: Some(ChoiceId("c3.ledger.close-unread")),
+    },
+    SceneObject {
+        id: ObjectId("c3-ledger.lamp"),
+        kind: SceneObjectKind::Decorative,
+        label: "Desk lamp",
+        action: None,
+    },
+];
+
+const C3_TRANSMISSION_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c3-transmission.handwriting"),
+        kind: SceneObjectKind::Stateful,
+        label: "Reply in Mara's hand",
+        action: Some(ChoiceId("c3.transmission.let-it-finish")),
+    },
+    SceneObject {
+        id: ObjectId("c3-transmission.terminal"),
+        kind: SceneObjectKind::Structural,
+        label: "Station terminal",
+        action: None,
+    },
+];
+
+const C3_THRESHOLD_OBJECTS: &[SceneObject] = &[
+    SceneObject {
+        id: ObjectId("c3-threshold.open-channel"),
+        kind: SceneObjectKind::Stateful,
+        label: "Open channel",
+        action: Some(ChoiceId("c3.threshold.answer")),
+    },
+    SceneObject {
+        id: ObjectId("c3-threshold.closed-ledger"),
+        kind: SceneObjectKind::Interactive,
+        label: "The record, still open",
+        action: Some(ChoiceId("c3.threshold.stay-silent")),
+    },
+];
+
 const C2_OVERLAY_ECHO_OBJECTS: &[EchoObject] = &[
     EchoObject {
         id: ObjectId("c2-overlay.door"),
@@ -2736,6 +3029,30 @@ const SCENES: &[Scene] = &[
         hotspots: &[],
         objects: C2_TURNING_OBJECTS,
     },
+    Scene {
+        id: SceneId("c3-arrival"),
+        title: "Signal Yard / Tape Room",
+        hotspots: &[],
+        objects: C3_ARRIVAL_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c3-ledger"),
+        title: "Tape Room / Standing Ledger",
+        hotspots: &[],
+        objects: C3_LEDGER_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c3-transmission"),
+        title: "Tape Room / Your Own Hand",
+        hotspots: &[],
+        objects: C3_TRANSMISSION_OBJECTS,
+    },
+    Scene {
+        id: SceneId("c3-threshold"),
+        title: "Chapter Three / Witness",
+        hotspots: &[],
+        objects: C3_THRESHOLD_OBJECTS,
+    },
 ];
 
 pub fn scenes() -> &'static [Scene] {
@@ -2884,6 +3201,20 @@ impl WorldState {
         self.chapter_complete = false;
         self.echo_layer = EchoLayer::Physical1993;
         self.try_apply_transition(Transition::Node(StoryNodeId("chapter-two.address")))?;
+        Ok(())
+    }
+
+    pub fn begin_chapter_three(&mut self) -> Result<(), StoryError> {
+        if !self.chapter_complete
+            || self.chapter != 2
+            || self.current_node != StoryNodeId("chapter-two.turning-point")
+        {
+            return Err(StoryError::UnavailableChoice);
+        }
+        self.chapter = 3;
+        self.chapter_complete = false;
+        self.echo_layer = EchoLayer::Physical1993;
+        self.try_apply_transition(Transition::Node(StoryNodeId("chapter-three.arrival")))?;
         Ok(())
     }
 
@@ -3195,6 +3526,68 @@ pub fn chapter_two_consequence_summary() -> String {
     ])
 }
 
+/// Chapter Three ending summary.  It reports what the station holds, and
+/// deliberately declines to say which threshold choice saved anything.
+pub fn chapter_three_consequence_summary() -> String {
+    join_prose(&[
+        "The log predates Mara and does not stop where she stopped.",
+        "A reel is labeled with a year she has not lived.",
+        "The reply is in her handwriting, and the handwriting proves nothing.",
+        "Whether she answered or stayed quiet, the record remains open.",
+        "Author or citation, the station kept writing either way.",
+    ])
+}
+
+/// Closing narration for Chapter Three, written to mirror the first line of
+/// Chapter One ("You wake beneath a ceiling you remember from somewhere
+/// else. The room is holding its breath.").
+pub const CHAPTER_THREE_MIRROR_LINE: &str =
+    "You stand beneath a ceiling that remembers you from somewhere else. The room lets out its breath.";
+
+/// One ambient cue per scene, named rather than synthesised: audio is still
+/// deferred, so this is the authored hint a future mixer would consume.
+pub fn scene_ambient_cue(scene: SceneId) -> &'static str {
+    match scene.0 {
+        "bedroom" => "room tone, one distant car",
+        "hallway" => "fluorescent hum",
+        "kitchen" => "refrigerator cycling",
+        "landing" => "building settling",
+        "stairwell" => "footsteps in a concrete shaft",
+        "street" => "rain on parked metal",
+        "diner" => "cups and low conversation",
+        "phone" => "dial tone under the receiver",
+        "repair-shop" => "solder fan and radio static",
+        "transit" => "wind across an empty shelter",
+        "archive-lobby" => "ceiling vent",
+        "archive-stacks" => "paper and distant drives",
+        "revelation" => "drive seek, repeating",
+        "turning-point" => "morning traffic, far off",
+        "c2-address" => "pen on card stock",
+        "c2-contact" => "pager tone, twice",
+        "c2-frequency" => "tuning hiss",
+        "c2-records" => "drawer runners",
+        "c2-route" => "river water against pilings",
+        "c2-exterior" => "rain on corrugated steel",
+        "c2-caretaker" => "keys on a ring",
+        "c2-entry" => "hinge under load",
+        "c2-overlay" => "two room tones, slightly apart",
+        "c2-disagreement" => "cabinet lock turning nothing",
+        "c2-personal-record" => "card sliding from a sleeve",
+        "c2-intervention" => "relay click",
+        "c2-chamber" => "cooling fans in a deep room",
+        "c2-predicted-choice" => "cursor tick",
+        "c2-response" => "line opening",
+        "c2-consequence" => "channel going quiet",
+        "c2-displacement" => "rain, and one warm fan",
+        "c2-turning-point" => "tape hiss under a held note",
+        "c3-arrival" => "tape hiss from a reel no one started",
+        "c3-ledger" => "pages under a lamp",
+        "c3-transmission" => "nib on paper, somewhere else",
+        "c3-threshold" => "an open line, breathing",
+        _ => "room tone",
+    }
+}
+
 pub fn presentation_narration(world: &WorldState, story_node: &StoryNode) -> String {
     let mut text = String::from(story_node.narration);
     match story_node.id.0 {
@@ -3365,6 +3758,7 @@ pub struct TurningPointLayout {
     pub artifact: (i32, i32, i32, i32),
     pub chapter_title: (i32, i32, i32, i32),
     pub theme_line: (i32, i32, i32, i32),
+    pub continue_button: (i32, i32, i32, i32),
     pub return_button: (i32, i32, i32, i32),
     pub summary: (i32, i32, i32, i32),
 }
@@ -3375,8 +3769,10 @@ fn rect_intersects(a: (i32, i32, i32, i32), b: (i32, i32, i32, i32)) -> bool {
     ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
 }
 
-/// Compute the contemplative ending hierarchy for Chapter Two.
-pub fn chapter_two_turning_point_layout(width: u32, height: u32) -> TurningPointLayout {
+/// Compute the contemplative ending hierarchy for a chapter turning point.
+/// Chapter Three reuses this geometry and simply leaves the continue button
+/// undrawn, because no later chapter is authored yet.
+pub fn turning_point_layout(width: u32, height: u32) -> TurningPointLayout {
     let frame_x = 22i32;
     let frame_y = 20i32;
     let frame_w = width.saturating_sub(44) as i32;
@@ -3402,7 +3798,19 @@ pub fn chapter_two_turning_point_layout(width: u32, height: u32) -> TurningPoint
         image_w - 96,
         22,
     );
-    let return_button = (image_x + image_w / 2 - 100, image_y + image_h - 64, 200, 34);
+    // Both buttons stay below the theme line even in the shortest viewport.
+    let continue_button = (
+        image_x + image_w / 2 - 124,
+        (image_y + image_h - 106).max(theme_line.1 + theme_line.3 + 16),
+        248,
+        34,
+    );
+    let return_button = (
+        image_x + image_w / 2 - 100,
+        (image_y + image_h - 64).max(continue_button.1 + continue_button.3 + 8),
+        200,
+        34,
+    );
     let summary = (
         image_x + 12,
         narrative_y + 18,
@@ -3413,6 +3821,7 @@ pub fn chapter_two_turning_point_layout(width: u32, height: u32) -> TurningPoint
         artifact,
         chapter_title,
         theme_line,
+        continue_button,
         return_button,
         summary,
     }
@@ -3424,6 +3833,7 @@ pub fn turning_point_layout_has_overlap(layout: &TurningPointLayout) -> bool {
         layout.artifact,
         layout.chapter_title,
         layout.theme_line,
+        layout.continue_button,
         layout.return_button,
     ];
     for i in 0..rects.len() {
@@ -3435,6 +3845,7 @@ pub fn turning_point_layout_has_overlap(layout: &TurningPointLayout) -> bool {
     }
     // Summary lives in the narrative band and must stay below the image chrome.
     rect_intersects(layout.summary, layout.return_button)
+        || rect_intersects(layout.summary, layout.continue_button)
         || rect_intersects(layout.summary, layout.theme_line)
 }
 
@@ -3585,7 +3996,7 @@ pub fn validate_graph() -> Result<(), Vec<ValidationError>> {
             errors.push(ValidationError::UnmarkedConvergence(String::from(target)));
         }
     }
-    for ending in [TEMPORARY_ENDING, CHAPTER_TWO_ENDING] {
+    for ending in [TEMPORARY_ENDING, CHAPTER_TWO_ENDING, CHAPTER_THREE_ENDING] {
         if !ending_reachable(ending) {
             errors.push(ValidationError::MissingEnding(String::from(ending.0)));
             errors.push(ValidationError::UnreachableEnding(String::from(ending.0)));
@@ -3705,146 +4116,269 @@ fn validate_delayed_effect(
     }
 }
 
+/// Closed state vocabularies, in save-encoding order.  Version 5 saves store a
+/// position in these tables instead of the key text, which is what keeps a
+/// full three-chapter record inside one shared-memory page.  Only append to
+/// them: renaming or reordering an entry would reinterpret existing saves.
+const FLAG_KEYS: &[&str] = &[
+    "saw_date",
+    "saw_prompt",
+    "opened_letter",
+    "signal_arrived",
+    "has_archive_card",
+    "vale_vouched",
+    "patterson_closed_route",
+    "riley_followed_address",
+    "lio_closed_channel",
+    "echo_overlay_unlocked",
+    "mara_sealed_output_port",
+    "relay_disconnected",
+    "name_sent_to_revision",
+    "riley_copied_card",
+    "elias_closed_outer_gate",
+    "revision_reply_arrived",
+    "mara_kept_revision_cartridge",
+    "c3_saw_a_record",
+    "c3_read_ledger_page",
+    "c3_heard_tape",
+    "c3_faced_window",
+    "c3_read_ledger_to_end",
+];
+
+const FACT_KEYS: &[&str] = &[
+    "someone_expected_mara",
+    "year_is_1993",
+    "pager_frequency_is_archival",
+    "patterson_acted_independently",
+    "echo_is_future_decision_system",
+    "return_was_not_planned",
+    "sunset_address_conflicts_with_1993",
+    "frequency_is_revision_index",
+    "sunset_lot_17_is_unassigned_1993",
+    "echo_can_render_revision_layer",
+    "echo_stores_revisions_after_observation",
+    "echo_records_observed_decisions",
+    "station_records_before_arrival",
+    "handwriting_reply_cannot_be_attributed",
+];
+
+const OBSERVATION_KEYS: &[&str] = &[
+    "clock_1993",
+    "waiting_prompt",
+    "letter_in_handwriting",
+    "wake_note",
+    "newspaper_1993",
+    "future_dated_photo",
+    "archive_card",
+    "helped_vale",
+    "street_is_alive",
+    "pager_tone",
+    "street_rumor",
+    "met_riley",
+    "riley_waited",
+    "caller_message",
+    "pager_frequency",
+    "archive_route_closed",
+    "public_index",
+    "echo_project",
+    "revision_ledger",
+    "archive_terminal",
+    "contradictory_echo_records",
+    "sunset_address",
+    "revision_7_marks_2013",
+    "riley_memory_disagrees",
+    "frequency_is_revision_channel",
+    "lio_second_channel",
+    "caller_named_revision",
+    "city_records_conflict",
+    "directory_omits_sunset",
+    "permit_names_elias",
+    "sunset_exterior_incomplete",
+    "caretaker_remembers_fire",
+    "facade_has_future_bolt_holes",
+    "elias_remembers_unbuilt_room",
+    "entered_through_1993_door",
+    "entered_through_revision_outline",
+    "physical_door_is_locked",
+    "revision_door_is_open",
+    "cabinet_and_revision_disagree",
+    "opened_mara_2013_card",
+    "riley_arrived_before_mara",
+    "mara_arrived_before_riley",
+    "riley_intervened_independently",
+    "seven_mara_revisions",
+    "echo_predicted_send_name",
+    "preserved_predicted_action",
+    "reply_exists_in_2013",
+    "lio_acted_offscreen",
+    "facade_shifted_after_reply",
+    "cartridge_has_2013_reply",
+    "chapter_two_2013_response",
+    "unlisted_tape_room",
+    "ledger_records_mara",
+    "ledger_hand_is_not_mara",
+    "tape_labeled_2013",
+    "tape_was_playing_elsewhere",
+    "window_reflects_room_wrong",
+    "reflection_runs_ahead",
+    "station_desk_waiting",
+    "ledger_dated_after_tonight",
+    "read_own_ending",
+    "reply_in_mara_handwriting",
+    "watched_handwriting_finish",
+    "chapter_three_open_channel",
+];
+
+const BELIEF_KEYS: &[&str] = &[
+    "signal_is_mara",
+    "signal_is_recording",
+    "return_was_planned",
+    "archive_is_memory",
+    "archive_is_machine",
+    "elias_may_be_protecting_someone",
+    "echo_can_describe_access",
+    "physical_record_has_priority",
+    "revision_record_has_priority",
+    "echo_can_be_limited",
+    "prediction_requires_interpretation",
+    "echo_can_reply_without_cartridge",
+    "someone_in_2013_is_listening",
+    "echo_wants_mara_to_assume_a_reply",
+    "mara_is_cited_not_authoring",
+    "unwitnessed_future_is_still_mara",
+    "change_is_a_conversation",
+    "change_was_already_recorded",
+];
+
+const ACTOR_KNOWLEDGE_KEYS: &[&str] = &[
+    "lio_knows_sunset_location",
+    "riley_knows_sunset_location",
+    "elias_knows_denied_event",
+    "riley_has_card_copy",
+];
+
+const ACTOR_BELIEF_KEYS: &[&str] = &[
+    "riley_believes_caller_is_future_mara",
+    "elias_believes_building_was_erased",
+    "riley_believes_card_is_a_test",
+    "lio_believes_channel_harms_mara",
+];
+
+/// Values reachable through [`Consequence::Remember`].  Chapter One also
+/// remembers raw choice ids, which encode against the choice table instead.
+const MEMORY_KEYS: &[&str] = &[
+    "signal_claimed",
+    "signal_listened",
+    "left_wake_note",
+    "left_archive_card",
+    "left_vale",
+    "trusted_riley",
+    "tested_riley",
+    "hung_up_on_caller",
+    "waited_for_route",
+    "walked_for_route",
+    "asked_for_archive_entry",
+    "called_riley_after_revelation",
+    "carried_revelation_alone",
+    "chapter_two_called_riley",
+    "chapter_two_carried_address",
+    "waited_for_riley_at_sunset",
+    "left_before_riley",
+    "read_second_frequency_alone",
+    "waited_for_sunset_service",
+    "walked_to_sunset",
+    "accepted_elias_key",
+    "refused_elias_key",
+    "compared_physical_door",
+    "compared_revision_door",
+    "left_mara_2013_card",
+    "refused_predicted_action",
+    "disconnected_relay",
+    "sent_name_to_revision",
+    "left_revision_cartridge",
+    "kept_2013_channel_open",
+    "closed_2013_notebook",
+    "read_ledger_to_last_page",
+    "closed_ledger_unread",
+    "answered_the_echo",
+    "left_the_channel_silent",
+];
+
+const DELAYED_IDS: &[&str] = &[
+    "signal-after-window",
+    "riley-waited",
+    "vale-vouches",
+    "lio-hears-recording",
+    "riley-follows-address",
+    "lio-sends-frequency",
+    "lio-closes-channel",
+    "service-arrival",
+    "walking-arrival",
+    "riley-copies-card",
+];
+
+fn table_position(table: &[&'static str], key: &str) -> Option<usize> {
+    table.iter().position(|entry| *entry == key)
+}
+
+fn table_entry(table: &[&'static str], index: usize) -> Option<&'static str> {
+    table.get(index).copied()
+}
+
+/// Story nodes and choices are also closed sets, so saves reference them by
+/// position in [`NODES`] rather than by id text.  Appending new nodes or
+/// choices is safe; reordering existing ones is not.
+fn node_index(id: &str) -> Option<usize> {
+    NODES.iter().position(|item| item.id.0 == id)
+}
+
+fn node_by_index(index: usize) -> Option<&'static str> {
+    NODES.get(index).map(|item| item.id.0)
+}
+
+fn choice_index(id: &str) -> Option<usize> {
+    NODES
+        .iter()
+        .flat_map(|item| item.choices)
+        .position(|choice| choice.id.0 == id)
+}
+
+fn choice_by_index(index: usize) -> Option<&'static str> {
+    NODES
+        .iter()
+        .flat_map(|item| item.choices)
+        .nth(index)
+        .map(|choice| choice.id.0)
+}
+
 fn known_flag(key: &str) -> bool {
-    matches!(
-        key,
-        "saw_date"
-            | "saw_prompt"
-            | "opened_letter"
-            | "signal_arrived"
-            | "has_archive_card"
-            | "vale_vouched"
-            | "patterson_closed_route"
-            | "riley_followed_address"
-            | "lio_closed_channel"
-            | "echo_overlay_unlocked"
-            | "mara_sealed_output_port"
-            | "relay_disconnected"
-            | "name_sent_to_revision"
-            | "riley_copied_card"
-            | "elias_closed_outer_gate"
-            | "revision_reply_arrived"
-            | "mara_kept_revision_cartridge"
-    )
+    table_position(FLAG_KEYS, key).is_some()
 }
 
 fn known_fact(key: &str) -> bool {
-    matches!(
-        key,
-        "someone_expected_mara"
-            | "year_is_1993"
-            | "pager_frequency_is_archival"
-            | "patterson_acted_independently"
-            | "echo_is_future_decision_system"
-            | "return_was_not_planned"
-            | "sunset_address_conflicts_with_1993"
-            | "frequency_is_revision_index"
-            | "sunset_lot_17_is_unassigned_1993"
-            | "echo_can_render_revision_layer"
-            | "echo_stores_revisions_after_observation"
-            | "echo_records_observed_decisions"
-    )
+    table_position(FACT_KEYS, key).is_some()
 }
 
 fn known_observation(key: &str) -> bool {
-    matches!(
-        key,
-        "clock_1993"
-            | "waiting_prompt"
-            | "letter_in_handwriting"
-            | "wake_note"
-            | "newspaper_1993"
-            | "future_dated_photo"
-            | "archive_card"
-            | "helped_vale"
-            | "street_is_alive"
-            | "pager_tone"
-            | "street_rumor"
-            | "met_riley"
-            | "riley_waited"
-            | "caller_message"
-            | "pager_frequency"
-            | "archive_route_closed"
-            | "public_index"
-            | "echo_project"
-            | "revision_ledger"
-            | "archive_terminal"
-            | "contradictory_echo_records"
-            | "sunset_address"
-            | "revision_7_marks_2013"
-            | "riley_memory_disagrees"
-            | "frequency_is_revision_channel"
-            | "lio_second_channel"
-            | "caller_named_revision"
-            | "city_records_conflict"
-            | "directory_omits_sunset"
-            | "permit_names_elias"
-            | "sunset_exterior_incomplete"
-            | "caretaker_remembers_fire"
-            | "facade_has_future_bolt_holes"
-            | "elias_remembers_unbuilt_room"
-            | "entered_through_1993_door"
-            | "entered_through_revision_outline"
-            | "physical_door_is_locked"
-            | "revision_door_is_open"
-            | "cabinet_and_revision_disagree"
-            | "opened_mara_2013_card"
-            | "riley_arrived_before_mara"
-            | "mara_arrived_before_riley"
-            | "riley_intervened_independently"
-            | "seven_mara_revisions"
-            | "echo_predicted_send_name"
-            | "preserved_predicted_action"
-            | "reply_exists_in_2013"
-            | "lio_acted_offscreen"
-            | "facade_shifted_after_reply"
-            | "cartridge_has_2013_reply"
-            | "chapter_two_2013_response"
-    )
+    table_position(OBSERVATION_KEYS, key).is_some()
 }
 
 fn known_belief(key: &str) -> bool {
-    matches!(
-        key,
-        "signal_is_mara"
-            | "signal_is_recording"
-            | "return_was_planned"
-            | "archive_is_memory"
-            | "archive_is_machine"
-            | "elias_may_be_protecting_someone"
-            | "echo_can_describe_access"
-            | "physical_record_has_priority"
-            | "revision_record_has_priority"
-            | "echo_can_be_limited"
-            | "prediction_requires_interpretation"
-            | "echo_can_reply_without_cartridge"
-            | "someone_in_2013_is_listening"
-            | "echo_wants_mara_to_assume_a_reply"
-    )
+    table_position(BELIEF_KEYS, key).is_some()
 }
 
 fn known_actor_knowledge(key: &str) -> bool {
-    matches!(
-        key,
-        "lio_knows_sunset_location"
-            | "riley_knows_sunset_location"
-            | "elias_knows_denied_event"
-            | "riley_has_card_copy"
-    )
+    table_position(ACTOR_KNOWLEDGE_KEYS, key).is_some()
 }
 
 fn known_actor_belief(key: &str) -> bool {
-    matches!(
-        key,
-        "riley_believes_caller_is_future_mara"
-            | "elias_believes_building_was_erased"
-            | "riley_believes_card_is_a_test"
-            | "lio_believes_channel_harms_mara"
-    )
+    table_position(ACTOR_BELIEF_KEYS, key).is_some()
 }
 
 fn ending_reachable(ending: EndingId) -> bool {
-    let mut pending = if ending == CHAPTER_TWO_ENDING {
+    let mut pending = if ending == CHAPTER_THREE_ENDING {
+        Vec::from([StoryNodeId("chapter-three.arrival")])
+    } else if ending == CHAPTER_TWO_ENDING {
         Vec::from([StoryNodeId("chapter-two.address")])
     } else {
         Vec::from([START_NODE])
@@ -3906,7 +4440,7 @@ pub enum SaveError {
 pub fn encode_save(state: &WorldState) -> Vec<u8> {
     let mut out = String::from("SILICON_ECHOES_SAVE\n");
     push_record(&mut out, "version", &format!("{}", SAVE_FORMAT_VERSION));
-    push_record(&mut out, "n", state.current_node.0);
+    push_index(&mut out, "n", node_index(state.current_node.0));
     push_record(&mut out, "ch", &format!("{}", state.chapter));
     push_record(
         &mut out,
@@ -3925,40 +4459,50 @@ pub fn encode_save(state: &WorldState) -> Vec<u8> {
     push_record(&mut out, "p", &format!("{}", state.play_time_ms));
     push_record(&mut out, "g", &format!("{}", state.save_generation));
     for value in &state.visited_nodes {
-        push_record(&mut out, "v", value);
+        push_index(&mut out, "v", node_index(value));
     }
     for (value, count) in &state.visit_counts {
         if *count > 1 {
-            push_record(&mut out, "vc", &format!("{}:{}", value, count));
+            if let Some(index) = node_index(value) {
+                push_record(&mut out, "vc", &format!("{}:{}", index, count));
+            }
         }
     }
     for value in &state.selected_choices {
-        push_record(&mut out, "c", value);
+        push_index(&mut out, "c", choice_index(value));
     }
     for (key, value) in state.flags.iter() {
-        push_record(
-            &mut out,
-            "fl",
-            &format!("{}:{}", key, if *value { 1 } else { 0 }),
-        );
+        if let Some(index) = table_position(FLAG_KEYS, key) {
+            push_record(
+                &mut out,
+                "fl",
+                &format!("{}:{}", index, if *value { 1 } else { 0 }),
+            );
+        }
     }
     for value in &state.facts {
-        push_record(&mut out, "f", value);
+        push_index(&mut out, "f", table_position(FACT_KEYS, value));
     }
     for value in &state.observations {
-        push_record(&mut out, "o", value);
+        push_index(&mut out, "o", table_position(OBSERVATION_KEYS, value));
     }
     for value in &state.beliefs {
-        push_record(&mut out, "b", value);
+        push_index(&mut out, "b", table_position(BELIEF_KEYS, value));
     }
     for value in &state.actor_knowledge {
-        push_record(&mut out, "ak", value);
+        push_index(&mut out, "ak", table_position(ACTOR_KNOWLEDGE_KEYS, value));
     }
     for value in &state.actor_beliefs {
-        push_record(&mut out, "ab", value);
+        push_index(&mut out, "ab", table_position(ACTOR_BELIEF_KEYS, value));
     }
     for value in &state.memories {
-        push_record(&mut out, "m", value);
+        // Chapter One remembers raw choice ids; those take a `c` prefix so the
+        // two closed sets stay distinguishable.
+        if let Some(index) = table_position(MEMORY_KEYS, value) {
+            push_record(&mut out, "m", &format!("{}", index));
+        } else if let Some(index) = choice_index(value) {
+            push_record(&mut out, "m", &format!("c{}", index));
+        }
     }
     for (actor, trust) in &state.relationships {
         push_record(&mut out, "r", &format!("{}:{}", actor, trust));
@@ -3967,18 +4511,25 @@ pub fn encode_save(state: &WorldState) -> Vec<u8> {
         push_record(&mut out, "t", &format!("{}:{}", key, value));
     }
     for delayed in &state.delayed {
+        let (Some(id), Some(after)) = (
+            table_position(DELAYED_IDS, delayed.id),
+            node_index(delayed.after_node.0),
+        ) else {
+            continue;
+        };
         push_record(
             &mut out,
             "d",
-            &format!(
-                "{}:{}:{}",
-                delayed.id,
-                delayed.after_node.0,
-                delayed_code(delayed.effect)
-            ),
+            &format!("{}:{}:{}", id, after, delayed_code(delayed.effect)),
         );
     }
     out.into_bytes()
+}
+
+fn push_index(out: &mut String, key: &str, index: Option<usize>) {
+    if let Some(index) = index {
+        push_record(out, key, &format!("{}", index));
+    }
 }
 
 pub fn decode_save(bytes: &[u8]) -> Result<WorldState, SaveError> {
@@ -4014,7 +4565,8 @@ pub fn decode_save(bytes: &[u8]) -> Result<WorldState, SaveError> {
         1 => decode_v1(&records),
         2 => decode_v2(&records),
         3 => decode_v3(&records),
-        SAVE_FORMAT_VERSION => decode_v4(&records),
+        4 => decode_v4(&records),
+        SAVE_FORMAT_VERSION => decode_v5(&records),
         _ => Err(SaveError::UnsupportedVersion),
     }
 }
@@ -4039,30 +4591,43 @@ fn empty_loaded_state() -> WorldState {
 
 fn decode_v1(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    load_common_records(&mut state, records, false, false, false)?;
+    load_common_records(&mut state, records, false, false, false, 1)?;
     finalize_loaded_state(state)
 }
 
 fn decode_v2(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    load_common_records(&mut state, records, true, false, false)?;
+    load_common_records(&mut state, records, true, false, false, 1)?;
     finalize_loaded_state(state)
 }
 
 fn decode_v3(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    load_common_records(&mut state, records, true, true, false)?;
+    load_common_records(&mut state, records, true, true, false, 1)?;
     finalize_loaded_state(state)
 }
 
 fn decode_v4(records: &[(String, String)]) -> Result<WorldState, SaveError> {
     let mut state = empty_loaded_state();
-    let expanded = expand_v4_records(records)?;
-    load_common_records(&mut state, &expanded, true, true, true)?;
+    let expanded = expand_short_records(records, false)?;
+    load_common_records(&mut state, &expanded, true, true, true, 2)?;
     finalize_loaded_state(state)
 }
 
-fn expand_v4_records(records: &[(String, String)]) -> Result<Vec<(String, String)>, SaveError> {
+fn decode_v5(records: &[(String, String)]) -> Result<WorldState, SaveError> {
+    let mut state = empty_loaded_state();
+    let expanded = expand_short_records(records, true)?;
+    load_common_records(&mut state, &expanded, true, true, true, 3)?;
+    finalize_loaded_state(state)
+}
+
+/// Expand the abbreviated record keys.  Version 5 also stores closed-vocabulary
+/// values as table positions, so `indexed` resolves them back to their names
+/// before the shared loader validates them.
+fn expand_short_records(
+    records: &[(String, String)],
+    indexed: bool,
+) -> Result<Vec<(String, String)>, SaveError> {
     let mut expanded = Vec::new();
     for (key, value) in records {
         let full_key = match key.as_str() {
@@ -4089,9 +4654,66 @@ fn expand_v4_records(records: &[(String, String)]) -> Result<Vec<(String, String
             "d" => "delayed",
             _ => return Err(SaveError::InvalidRecord),
         };
-        expanded.push((String::from(full_key), value.clone()));
+        let value = if indexed {
+            resolve_indexed_value(key.as_str(), value)?
+        } else {
+            value.clone()
+        };
+        expanded.push((String::from(full_key), value));
     }
     Ok(expanded)
+}
+
+fn resolve_indexed_value(key: &str, value: &str) -> Result<String, SaveError> {
+    match key {
+        "n" | "v" => indexed_node(value).map(String::from),
+        "vc" => {
+            let (index, count) = value.split_once(':').ok_or(SaveError::InvalidRecord)?;
+            Ok(format!("{}:{}", indexed_node(index)?, count))
+        }
+        "c" => indexed_choice(value).map(String::from),
+        "fl" => {
+            let (index, raw) = value.split_once(':').ok_or(SaveError::InvalidRecord)?;
+            Ok(format!("{}:{}", indexed_table(FLAG_KEYS, index)?, raw))
+        }
+        "f" => indexed_table(FACT_KEYS, value).map(String::from),
+        "o" => indexed_table(OBSERVATION_KEYS, value).map(String::from),
+        "b" => indexed_table(BELIEF_KEYS, value).map(String::from),
+        "ak" => indexed_table(ACTOR_KNOWLEDGE_KEYS, value).map(String::from),
+        "ab" => indexed_table(ACTOR_BELIEF_KEYS, value).map(String::from),
+        // Chapter One remembers choice ids, which are stored with a `c` prefix.
+        "m" => match value.strip_prefix('c') {
+            Some(index) => indexed_choice(index).map(String::from),
+            None => indexed_table(MEMORY_KEYS, value).map(String::from),
+        },
+        "d" => {
+            let (id, rest) = value.split_once(':').ok_or(SaveError::InvalidRecord)?;
+            let (after, code) = rest.split_once(':').ok_or(SaveError::InvalidRecord)?;
+            Ok(format!(
+                "{}:{}:{}",
+                indexed_table(DELAYED_IDS, id)?,
+                indexed_node(after)?,
+                code
+            ))
+        }
+        _ => Ok(String::from(value)),
+    }
+}
+
+fn parse_index(value: &str) -> Result<usize, SaveError> {
+    value.parse().map_err(|_| SaveError::InvalidRecord)
+}
+
+fn indexed_node(value: &str) -> Result<&'static str, SaveError> {
+    node_by_index(parse_index(value)?).ok_or(SaveError::InvalidRecord)
+}
+
+fn indexed_choice(value: &str) -> Result<&'static str, SaveError> {
+    choice_by_index(parse_index(value)?).ok_or(SaveError::InvalidRecord)
+}
+
+fn indexed_table(table: &[&'static str], value: &str) -> Result<&'static str, SaveError> {
+    table_entry(table, parse_index(value)?).ok_or(SaveError::InvalidRecord)
 }
 
 fn load_common_records(
@@ -4100,6 +4722,7 @@ fn load_common_records(
     is_v2: bool,
     has_completion: bool,
     has_chapter_two: bool,
+    max_chapter: u8,
 ) -> Result<(), SaveError> {
     let mut node_id = None;
     let mut saw_version = false;
@@ -4119,7 +4742,7 @@ fn load_common_records(
             }
             "chapter" if has_chapter_two && !saw_chapter => {
                 state.chapter = parse_u16(value).ok_or(SaveError::InvalidRecord)? as u8;
-                if !matches!(state.chapter, 1 | 2) {
+                if state.chapter < 1 || state.chapter > max_chapter {
                     return Err(SaveError::InvalidRecord);
                 }
                 saw_chapter = true;
@@ -4324,15 +4947,21 @@ fn finalize_loaded_state(mut state: WorldState) -> Result<WorldState, SaveError>
     if state.chapter_complete
         && !matches!(
             state.current_node,
-            StoryNodeId("chapter.turning-point") | StoryNodeId("chapter-two.turning-point")
+            StoryNodeId("chapter.turning-point")
+                | StoryNodeId("chapter-two.turning-point")
+                | StoryNodeId("chapter-three.threshold")
         )
     {
         return Err(SaveError::InvalidRecord);
     }
-    if state.chapter == 1 && state.current_node.0.starts_with("chapter-two.") {
-        return Err(SaveError::InvalidRecord);
-    }
-    if state.chapter == 2 && !state.current_node.0.starts_with("chapter-two.") {
+    let node_chapter = if state.current_node.0.starts_with("chapter-three.") {
+        3
+    } else if state.current_node.0.starts_with("chapter-two.") {
+        2
+    } else {
+        1
+    };
+    if state.chapter != node_chapter {
         return Err(SaveError::InvalidRecord);
     }
     if state.echo_layer == EchoLayer::Revision2013 && !state.supports_echo_overlay() {
@@ -4865,7 +5494,7 @@ mod tests {
     #[test]
     fn turning_point_layout_elements_do_not_overlap() {
         for (w, h) in [(1080u32, 720u32), (900, 600)] {
-            let layout = chapter_two_turning_point_layout(w, h);
+            let layout = turning_point_layout(w, h);
             assert!(
                 !turning_point_layout_has_overlap(&layout),
                 "overlap at {w}x{h}: {layout:?}"
@@ -4873,7 +5502,8 @@ mod tests {
             // Hierarchy: artifact above chapter title above theme above return.
             assert!(layout.artifact.1 < layout.chapter_title.1);
             assert!(layout.chapter_title.1 < layout.theme_line.1);
-            assert!(layout.theme_line.1 < layout.return_button.1);
+            assert!(layout.theme_line.1 < layout.continue_button.1);
+            assert!(layout.continue_button.1 < layout.return_button.1);
             assert!(layout.summary.1 > layout.return_button.1);
         }
     }
@@ -5581,6 +6211,219 @@ observation=sunset_address\n";
         assert_eq!(decode_save(&encode_save(&migrated)).unwrap(), migrated);
     }
 
+    #[test]
+    fn every_chapter_two_completion_variant_enters_chapter_three_without_resetting_state() {
+        for final_choice in [
+            ChoiceId("c2.turning.keep-channel"),
+            ChoiceId("c2.turning.close-notebook"),
+        ] {
+            let mut state = chapter_two_path(0x1993_0317).unwrap();
+            state.select_choice(final_choice).unwrap();
+            assert!(state.chapter_complete);
+            let chapter_two_memories = state.memories.clone();
+            let chapter_two_beliefs = state.beliefs.clone();
+            // Crossing a save boundary must not lose the chapter's history.
+            state = decode_save(&encode_save(&state)).unwrap();
+            state.begin_chapter_three().unwrap();
+            assert_eq!(state.chapter, 3);
+            assert_eq!(state.current_node, StoryNodeId("chapter-three.arrival"));
+            assert!(!state.chapter_complete);
+            assert!(state.observations.contains("unlisted_tape_room"));
+            assert!(state.memories.is_superset(&chapter_two_memories));
+            assert!(state.beliefs.is_superset(&chapter_two_beliefs));
+            assert_eq!(state.echo_layer, EchoLayer::Physical1993);
+        }
+    }
+
+    #[test]
+    fn chapter_three_cannot_be_entered_before_chapter_two_completes() {
+        let mut mid_chapter = chapter_two_path(0x33).unwrap();
+        assert_eq!(
+            mid_chapter.begin_chapter_three(),
+            Err(StoryError::UnavailableChoice)
+        );
+        let mut chapter_one = chapter_path(0x33).unwrap();
+        assert_eq!(
+            chapter_one.begin_chapter_three(),
+            Err(StoryError::UnavailableChoice)
+        );
+    }
+
+    #[test]
+    fn all_exposed_chapter_three_actions_reach_implemented_content() {
+        let mut completed_paths = 0;
+        explore_chapter_three_from(
+            chapter_three_entry(0xBEEF).unwrap(),
+            0,
+            &mut completed_paths,
+        );
+        // Each object may be examined in any order before the desk is used.
+        assert!(completed_paths >= 12);
+    }
+
+    #[test]
+    fn chapter_three_objects_reveal_partial_records_without_repeating() {
+        let mut state = chapter_three_entry(0x7A9E).unwrap();
+        assert_eq!(state.available_actions().len(), 3);
+        state
+            .select_choice(ChoiceId("c3.arrival.read-ledger"))
+            .unwrap();
+        assert!(state.observations.contains("ledger_records_mara"));
+        state
+            .select_choice(ChoiceId("c3.record.step-back"))
+            .unwrap();
+        // The examined object closes, and the desk opens once anything is seen.
+        let reachable: BTreeSet<&str> = state
+            .available_actions()
+            .iter()
+            .map(|action| action.id.0)
+            .collect();
+        assert!(!reachable.contains("c3.arrival.read-ledger"));
+        assert!(reachable.contains("c3.arrival.take-ledger-to-desk"));
+        state
+            .select_choice(ChoiceId("c3.arrival.lift-tape"))
+            .unwrap();
+        assert!(state.facts.contains("station_records_before_arrival"));
+        state
+            .select_choice(ChoiceId("c3.tape.set-it-down"))
+            .unwrap();
+        state
+            .select_choice(ChoiceId("c3.arrival.face-window"))
+            .unwrap();
+        assert!(state.observations.contains("window_reflects_room_wrong"));
+        state
+            .select_choice(ChoiceId("c3.window.turn-away"))
+            .unwrap();
+        assert_eq!(state.available_actions().len(), 1);
+    }
+
+    #[test]
+    fn ledger_dilemma_and_threshold_record_opposed_positions_without_scoring() {
+        let read = chapter_three_path(0x1111, ChoiceId("c3.ledger.read-to-last-page")).unwrap();
+        let closed = chapter_three_path(0x1111, ChoiceId("c3.ledger.close-unread")).unwrap();
+        assert!(read.beliefs.contains("mara_is_cited_not_authoring"));
+        assert!(closed.beliefs.contains("unwitnessed_future_is_still_mara"));
+        assert!(read.observations.contains("read_own_ending"));
+        assert!(!closed.observations.contains("read_own_ending"));
+        // Both halves of the dilemma reach the same ambiguous transmission.
+        assert_eq!(read.current_node, closed.current_node);
+        assert!(read.observations.contains("reply_in_mara_handwriting"));
+        assert!(closed
+            .facts
+            .contains("handwriting_reply_cannot_be_attributed"));
+
+        let mut answered = read.clone();
+        answered
+            .select_choice(ChoiceId("c3.threshold.answer"))
+            .unwrap();
+        let mut silent = read;
+        silent
+            .select_choice(ChoiceId("c3.threshold.stay-silent"))
+            .unwrap();
+        assert!(answered.chapter_complete && silent.chapter_complete);
+        assert!(answered.beliefs.contains("change_is_a_conversation"));
+        assert!(silent.beliefs.contains("change_was_already_recorded"));
+        // Neither threshold answer is privileged by the state itself.
+        assert_eq!(answered.current_node, silent.current_node);
+        assert_eq!(
+            answered.tendency(Tendency::Attachment) + answered.tendency(Tendency::Responsibility),
+            silent.tendency(Tendency::Attachment) + silent.tendency(Tendency::Responsibility)
+        );
+    }
+
+    #[test]
+    fn chapter_three_replay_and_every_stable_scene_save_are_deterministic() {
+        let first = chapter_three_path(0xC0DE, ChoiceId("c3.ledger.read-to-last-page")).unwrap();
+        let second = chapter_three_path(0xC0DE, ChoiceId("c3.ledger.read-to-last-page")).unwrap();
+        assert_eq!(first, second);
+        let mut completed = first;
+        completed
+            .select_choice(ChoiceId("c3.threshold.answer"))
+            .unwrap();
+        assert!(completed.chapter_complete);
+        assert_eq!(decode_save(&encode_save(&completed)).unwrap(), completed);
+        let mut paths = 0;
+        explore_chapter_three_saves(chapter_three_entry(0x502).unwrap(), 0, &mut paths);
+        assert!(paths >= 12);
+    }
+
+    #[test]
+    fn chapter_three_saves_stay_within_transport_page() {
+        let mut state =
+            chapter_three_path(0x9001, ChoiceId("c3.ledger.read-to-last-page")).unwrap();
+        state
+            .select_choice(ChoiceId("c3.threshold.stay-silent"))
+            .unwrap();
+        let size = encode_save(&state).len();
+        assert!(size <= MAX_SAVE_BYTES, "chapter three save is {size} bytes");
+    }
+
+    #[test]
+    fn version_four_chapter_two_completion_migrates_to_chapter_three_entry() {
+        let v4 = b"SILICON_ECHOES_SAVE\n\
+version=4\n\
+n=chapter-two.turning-point\n\
+ch=2\n\
+cc=1\n\
+el=1993\n\
+s=7\n\
+p=9\n\
+g=4\n\
+v=chapter-two.turning-point\n\
+o=chapter_two_2013_response\n";
+        let mut migrated = decode_save(v4).unwrap();
+        assert_eq!(migrated.chapter, 2);
+        assert_eq!(SAVE_FORMAT_VERSION, 5);
+        migrated.begin_chapter_three().unwrap();
+        assert_eq!(migrated.current_node, StoryNodeId("chapter-three.arrival"));
+        assert_eq!(decode_save(&encode_save(&migrated)).unwrap(), migrated);
+    }
+
+    #[test]
+    fn version_four_saves_cannot_declare_a_chapter_they_predate() {
+        let forged = b"SILICON_ECHOES_SAVE\n\
+version=4\n\
+n=chapter-three.arrival\n\
+ch=3\n\
+cc=0\n\
+el=1993\n\
+s=7\n\
+p=9\n\
+g=4\n\
+v=chapter-three.arrival\n";
+        assert_eq!(decode_save(forged), Err(SaveError::InvalidRecord));
+    }
+
+    #[test]
+    fn chapter_three_state_cannot_disagree_with_its_node() {
+        let mut state = chapter_three_entry(0x4242).unwrap();
+        state.chapter = 2;
+        let encoded = encode_save(&state);
+        assert_eq!(decode_save(&encoded), Err(SaveError::InvalidRecord));
+    }
+
+    #[test]
+    fn chapter_three_mirrors_the_opening_line_and_names_one_cue_per_scene() {
+        let opening = node(START_NODE).unwrap().narration;
+        assert!(opening.contains("holding its breath"));
+        assert!(CHAPTER_THREE_MIRROR_LINE.contains("lets out its breath"));
+        // The arrival scene re-states the opening image before inverting it.
+        assert!(node(StoryNodeId("chapter-three.arrival"))
+            .unwrap()
+            .narration
+            .contains("holding its breath"));
+        for scene in scenes() {
+            let cue = scene_ambient_cue(scene.id);
+            assert_ne!(cue, "room tone", "{} has no authored cue", scene.id.0);
+        }
+        assert!(!has_suspicious_punctuation_letter_join(
+            CHAPTER_THREE_MIRROR_LINE
+        ));
+        assert!(!has_suspicious_punctuation_letter_join(
+            &chapter_three_consequence_summary()
+        ));
+    }
+
     fn leave_signal_ready(state: &mut WorldState) {
         state.enter_hotspot(HotspotId::Clock);
         state.select_choice(ChoiceId("clock.accept-date")).unwrap();
@@ -5758,6 +6601,71 @@ observation=sunset_address\n";
                 next.select_choice(action.id)
                     .expect("revision action is valid");
                 explore_chapter_two_saves(next, depth + 1, completed_paths);
+            }
+        }
+    }
+
+    fn chapter_three_entry(seed: u32) -> Result<WorldState, StoryError> {
+        let mut state = chapter_two_path(seed)?;
+        state.select_choice(ChoiceId("c2.turning.keep-channel"))?;
+        state.begin_chapter_three()?;
+        Ok(state)
+    }
+
+    /// Walks Chapter Three as far as the threshold, examining one record on the
+    /// way so the reading desk is exposed.
+    fn chapter_three_path(seed: u32, ledger: ChoiceId) -> Result<WorldState, StoryError> {
+        let mut state = chapter_three_entry(seed)?;
+        state.select_choice(ChoiceId("c3.arrival.read-ledger"))?;
+        state.select_choice(ChoiceId("c3.record.step-back"))?;
+        state.select_choice(ChoiceId("c3.arrival.take-ledger-to-desk"))?;
+        state.select_choice(ledger)?;
+        state.select_choice(ChoiceId("c3.transmission.let-it-finish"))?;
+        Ok(state)
+    }
+
+    fn explore_chapter_three_from(state: WorldState, depth: u8, completed_paths: &mut usize) {
+        assert!(depth < 24, "Chapter Three branch did not terminate");
+        let current = node(state.current_node).expect("reachable node exists");
+        let available = state.available_actions();
+        assert!(
+            !available.is_empty(),
+            "{} has no reachable action",
+            current.id.0
+        );
+        for action in available {
+            let mut next = state.clone();
+            match next.select_choice(action.id).expect("action is valid") {
+                Transition::Node(target) => {
+                    assert!(node(target).is_some(), "target is implemented");
+                    explore_chapter_three_from(next, depth + 1, completed_paths);
+                }
+                Transition::Ending(CHAPTER_THREE_ENDING) => *completed_paths += 1,
+                Transition::Ending(_) => panic!("unexpected Chapter Three ending"),
+            }
+        }
+    }
+
+    fn explore_chapter_three_saves(state: WorldState, depth: u8, completed_paths: &mut usize) {
+        assert!(depth < 24, "Chapter Three save branch did not terminate");
+        let saved =
+            decode_save(&encode_save(&state)).expect("stable Chapter Three state round trips");
+        assert_eq!(saved, state);
+        for action in saved.available_actions() {
+            let mut next = saved.clone();
+            match next
+                .select_choice(action.id)
+                .expect("exposed action is valid")
+            {
+                Transition::Node(_) => {
+                    explore_chapter_three_saves(next, depth + 1, completed_paths)
+                }
+                Transition::Ending(CHAPTER_THREE_ENDING) => {
+                    assert!(next.chapter_complete);
+                    assert_eq!(decode_save(&encode_save(&next)).unwrap(), next);
+                    *completed_paths += 1;
+                }
+                Transition::Ending(_) => panic!("unexpected ending"),
             }
         }
     }

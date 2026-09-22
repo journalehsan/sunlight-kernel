@@ -201,6 +201,202 @@ fn line(c: &mut Canvas, a: (i32, i32), b: (i32, i32), color: Color) {
     }
 }
 
+/// Chapter Three tape room geometry.  The illustration and the interactive
+/// bounds both read these, so a hotspot cannot drift away from its silhouette.
+pub fn tape_room_ledger_rect(image: Rect) -> Rect {
+    Rect::new(image.x + image.w as i32 * 30 / 100, image.y + 132, 104, 128)
+}
+
+pub fn tape_room_reel_rect(image: Rect) -> Rect {
+    Rect::new(image.x + image.w as i32 * 62 / 100, image.y + 96, 96, 96)
+}
+
+pub fn tape_room_window_rect(image: Rect) -> Rect {
+    Rect::new(image.right() - 214, image.y + 72, 150, 118)
+}
+
+pub fn tape_room_desk_rect(image: Rect) -> Rect {
+    Rect::new(
+        image.x + image.w as i32 * 26 / 100,
+        image.y + image.h as i32 * 66 / 100,
+        image.w * 34 / 100,
+        44,
+    )
+}
+
+/// The open ledger on the reading desk, and the cover that would close it.
+pub fn ledger_page_rect(image: Rect) -> Rect {
+    let desk = tape_room_desk_rect(image);
+    Rect::new(desk.x + 34, desk.y - 96, 176, 104)
+}
+
+pub fn ledger_cover_rect(image: Rect) -> Rect {
+    let page = ledger_page_rect(image);
+    Rect::new(page.right() + 16, page.y + 18, 88, 86)
+}
+
+/// The slip of paper carrying the 2013 reply, and the channel it came through.
+pub fn handwriting_rect(image: Rect) -> Rect {
+    Rect::new(image.x + image.w as i32 * 40 / 100, image.y + 128, 224, 116)
+}
+
+/// A wall of reels: bounded loop, seed-stable, no allocation.
+pub fn tape_wall(canvas: &mut Canvas, image: Rect) {
+    let top = image.y + 70;
+    for row in 0..3 {
+        let y = top + row * 62;
+        line(
+            canvas,
+            (image.x + 44, y + 54),
+            (image.x + image.w as i32 * 24 / 100, y + 54),
+            bone(38),
+        );
+        for column in 0..3 {
+            let x = image.x + 52 + column * 52;
+            let reel = Rect::new(x, y, 40, 40);
+            canvas.stroke_rounded_rect(reel, 20, 1, bone(52));
+            canvas.blend_rounded_rect(reel.inset(13), 7, bone(40));
+        }
+    }
+}
+
+/// One reel, drawn as outline and hub only.  `warm` lights the label.
+pub fn tape_reel(canvas: &mut Canvas, rect: Rect, label: &str, warm: bool) {
+    canvas.stroke_rounded_rect(rect, rect.w / 2, 2, bone(150));
+    canvas.blend_rounded_rect(rect.inset(12), rect.w / 4, bone(30));
+    canvas.stroke_rounded_rect(rect.inset(rect.w as i32 * 5 / 12), 6, 1, bone(120));
+    for spoke in 0..4 {
+        let mid = (rect.x + rect.w as i32 / 2, rect.y + rect.h as i32 / 2);
+        let (dx, dy) = match spoke {
+            0 => (0, -1),
+            1 => (1, 0),
+            2 => (0, 1),
+            _ => (-1, 0),
+        };
+        let reach = rect.w as i32 * 5 / 12;
+        line(
+            canvas,
+            (mid.0 + dx * 8, mid.1 + dy * 8),
+            (mid.0 + dx * reach, mid.1 + dy * reach),
+            bone(60),
+        );
+    }
+    let tag = Rect::new(rect.x + rect.w as i32 / 2 - 30, rect.bottom() + 8, 60, 20);
+    canvas.fill_rect(tag, if warm { AMBER } else { BONE });
+    let role = FontRole::UiSmall;
+    let x = tag.x + (tag.w as i32 - measure_text(label, role).w as i32) / 2;
+    draw_text(
+        canvas,
+        label,
+        x,
+        tag.y + 4,
+        &TextStyle::new(role, Color::rgb(10, 10, 12)),
+    );
+}
+
+/// The standing ledger: a lectern silhouette with ruled lines and no words.
+pub fn standing_ledger(canvas: &mut Canvas, rect: Rect, filled_rows: i32) {
+    canvas.blend_rounded_rect(
+        Rect::new(rect.x - 10, rect.bottom() - 6, rect.w + 20, 14),
+        7,
+        Color::rgba(10, 10, 12, 140),
+    );
+    let post = Rect::new(rect.x + rect.w as i32 / 2 - 6, rect.y + 58, 12, rect.h - 58);
+    canvas.blend_rect(post, bone(54));
+    let page = Rect::new(rect.x, rect.y, rect.w, 72);
+    canvas.blend_rect(page, bone(46));
+    canvas.draw_rect(page, bone(150));
+    line(
+        canvas,
+        (page.x + page.w as i32 / 2, page.y + 4),
+        (page.x + page.w as i32 / 2, page.bottom() - 4),
+        bone(90),
+    );
+    for row in 0..6 {
+        let y = page.y + 12 + row * 9;
+        let ruled = if row < filled_rows {
+            amber(120)
+        } else {
+            bone(48)
+        };
+        canvas.blend_rect(Rect::new(page.x + 10, y, page.w / 2 - 16, 1), ruled);
+        canvas.blend_rect(
+            Rect::new(page.x + page.w as i32 / 2 + 8, y, page.w / 2 - 18, 1),
+            ruled,
+        );
+    }
+}
+
+/// A window that returns the room with one chair too many.  The reflected
+/// contents are deliberately not the contents of the room.
+pub fn wrong_window(canvas: &mut Canvas, rect: Rect) {
+    canvas.fill_rect(rect, INK);
+    canvas.blend_rect(rect.inset(1), bone(16));
+    canvas.draw_rect(rect, bone(140));
+    line(
+        canvas,
+        (rect.x + rect.w as i32 / 2, rect.y),
+        (rect.x + rect.w as i32 / 2, rect.bottom()),
+        bone(70),
+    );
+    line(
+        canvas,
+        (rect.x, rect.y + rect.h as i32 / 2),
+        (rect.right(), rect.y + rect.h as i32 / 2),
+        bone(70),
+    );
+    // A reflected floor line, then chairs: two that match, one that does not.
+    let floor = rect.bottom() - 30;
+    line(
+        canvas,
+        (rect.x + 8, floor),
+        (rect.right() - 8, floor),
+        bone(40),
+    );
+    for (index, x) in [18i32, 62, 106].into_iter().enumerate() {
+        let chair = Rect::new(rect.x + x, floor - 26, 24, 26);
+        let tone = if index == 2 { amber(110) } else { bone(70) };
+        canvas.draw_rect(chair, tone);
+        canvas.blend_rect(Rect::new(chair.x, chair.y + 12, chair.w, 2), tone);
+    }
+    for y in (0..rect.h as i32).step_by(4) {
+        canvas.blend_rect(Rect::new(rect.x + 1, rect.y + y, rect.w - 2, 1), bone(8));
+    }
+}
+
+/// The reply, in Mara's hand: ruled strokes that read as writing without
+/// spelling anything the player could verify.
+pub fn handwriting_slip(canvas: &mut Canvas, rect: Rect, settled: bool) {
+    canvas.blend_rounded_rect(
+        Rect::new(rect.x + 6, rect.bottom() - 4, rect.w - 12, 12),
+        6,
+        Color::rgba(10, 10, 12, 130),
+    );
+    canvas.fill_rect(rect, BONE);
+    canvas.draw_rect(rect, AMBER);
+    let role = FontRole::UiSmall;
+    draw_text(
+        canvas,
+        "2013",
+        rect.right() - 46,
+        rect.y + 8,
+        &TextStyle::new(role, Color::rgb(10, 10, 12)),
+    );
+    // Four strokes of cursive, each a slack line rather than legible text.
+    let ink = Color::rgba(10, 10, 12, if settled { 190 } else { 120 });
+    for row in 0..4 {
+        let y = rect.y + 40 + row * 18;
+        let width = rect.w as i32 - 48 - row * 14;
+        let mut x = rect.x + 20;
+        while x < rect.x + 20 + width {
+            let step = 7;
+            line(canvas, (x, y + 4), (x + step / 2, y - 3), ink);
+            line(canvas, (x + step / 2, y - 3), (x + step, y + 4), ink);
+            x += step;
+        }
+    }
+}
+
 pub fn outdoors(scene: &str) -> bool {
     matches!(
         scene,

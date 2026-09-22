@@ -17,11 +17,12 @@ use sunlight_ipc::{
 };
 use sunlight_libc::{self as libc, rand::getrandom, GRND_NONCRYPTO};
 use sunlight_silicon_echoes::{
-    chapter_two_consequence_summary, chapter_two_turning_point_layout, choice_row_height,
+    chapter_three_consequence_summary, chapter_two_consequence_summary, choice_row_height,
     decode_save, echo_object_is_active, echo_objects, encode_save, hotspot, layout_choice_rows,
-    node, presentation_narration, run_deterministic_stress, validate_graph, ChoiceId, EchoLayer,
-    GameState, HotspotId, NarrativePresentation, PresentationConfig, SaveError, SaveStage, SceneId,
-    ScenePresentation, ShortcutGate, StoryNodeId, Transition, CHOICE_LINE_HEIGHT,
+    node, presentation_narration, run_deterministic_stress, scene_ambient_cue,
+    turning_point_layout, validate_graph, ChoiceId, EchoLayer, GameState, HotspotId,
+    NarrativePresentation, PresentationConfig, SaveError, SaveStage, SceneId, ScenePresentation,
+    ShortcutGate, StoryNodeId, Transition, CHAPTER_THREE_MIRROR_LINE, CHOICE_LINE_HEIGHT,
     CHOICE_TEXT_INSET_LEFT, CHOICE_TEXT_INSET_RIGHT,
 };
 use sunlight_ui::{
@@ -72,7 +73,7 @@ enum Hover {
     Choice(usize),
     Object(SceneObjectTarget),
     ReturnTitle,
-    ContinueChapterTwo,
+    ContinueNextChapter,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -429,8 +430,13 @@ impl SiliconEchoesApp {
         self.load_save();
     }
 
-    fn continue_chapter_two(&mut self) {
-        if self.game.begin_chapter_two().is_ok() {
+    fn continue_next_chapter(&mut self) {
+        let advanced = match self.game.chapter {
+            1 => self.game.begin_chapter_two().is_ok(),
+            2 => self.game.begin_chapter_three().is_ok(),
+            _ => false,
+        };
+        if advanced {
             self.mode = Mode::Play;
             self.selected_choice = 0;
             self.refresh_scene_cache();
@@ -527,8 +533,11 @@ impl SiliconEchoesApp {
                 }
             }
             Mode::Ending => {
-                if self.game.chapter == 1 && self.layout.continue_chapter_two.contains(point) {
-                    Hover::ContinueChapterTwo
+                if self
+                    .ending_continue_rect()
+                    .is_some_and(|rect| rect.contains(point))
+                {
+                    Hover::ContinueNextChapter
                 } else if self.ending_return_rect().contains(point) {
                     Hover::ReturnTitle
                 } else {
@@ -642,9 +651,9 @@ impl SiliconEchoesApp {
     }
 
     fn ending_return_rect(&self) -> Rect {
-        if self.game.chapter == 2 {
+        if self.game.chapter >= 2 {
             let (win_w, win_h) = self.window_size();
-            let tp = chapter_two_turning_point_layout(win_w, win_h);
+            let tp = turning_point_layout(win_w, win_h);
             Rect::new(
                 tp.return_button.0,
                 tp.return_button.1,
@@ -653,6 +662,25 @@ impl SiliconEchoesApp {
             )
         } else {
             self.layout.return_title
+        }
+    }
+
+    /// Rect of the "continue to the next chapter" action on an ending screen.
+    /// Chapter Three has no successor yet, so it returns `None` there.
+    fn ending_continue_rect(&self) -> Option<Rect> {
+        match self.game.chapter {
+            1 => Some(self.layout.continue_chapter_two),
+            2 => {
+                let (win_w, win_h) = self.window_size();
+                let tp = turning_point_layout(win_w, win_h);
+                Some(Rect::new(
+                    tp.continue_button.0,
+                    tp.continue_button.1,
+                    tp.continue_button.2 as u32,
+                    tp.continue_button.3 as u32,
+                ))
+            }
+            _ => None,
         }
     }
 
@@ -750,7 +778,7 @@ impl SiliconEchoesApp {
             }
             Hover::Choice(index) => self.activate_choice(index),
             Hover::ReturnTitle => self.return_to_title(),
-            Hover::ContinueChapterTwo => self.continue_chapter_two(),
+            Hover::ContinueNextChapter => self.continue_next_chapter(),
             Hover::None => {}
         }
     }
@@ -786,7 +814,7 @@ impl SiliconEchoesApp {
                     self.start_new();
                 }
             }
-            Mode::Ending if self.game.chapter == 1 => self.continue_chapter_two(),
+            Mode::Ending if self.ending_continue_rect().is_some() => self.continue_next_chapter(),
             Mode::Ending => self.return_to_title(),
             Mode::Play if self.presentation.is_revealing() => {
                 self.presentation.skip_reveal(now_ms);
@@ -1054,6 +1082,10 @@ impl SiliconEchoesApp {
             "c2-consequence" => "AFTERIMAGE",
             "c2-displacement" => "SHIFTED THRESHOLD",
             "c2-turning-point" => "DIFFERENT MEMORY",
+            "c3-arrival" => "SIGNAL YARD",
+            "c3-ledger" => "STANDING LEDGER",
+            "c3-transmission" => "YOUR OWN HANDWRITING",
+            "c3-threshold" => "WITNESS",
             _ => "SILICON ECHOES",
         };
         let glow = Color::rgba(0xFF, 0x98, 0x00, 38);
@@ -1344,6 +1376,81 @@ impl SiliconEchoesApp {
                             if index == 3 { SUNLIGHT } else { BONE },
                         );
                         canvas.hline(x + 9, chamber.y + 54, 46, soft);
+                    }
+                }
+            }
+            "c3-arrival" | "c3-ledger" | "c3-transmission" | "c3-threshold" => {
+                scenery::tape_wall(canvas, rect);
+                let desk = scenery::tape_room_desk_rect(rect);
+                canvas.blend_rect(desk, Color::rgba(0xED, 0xE6, 0xD8, 54));
+                canvas.hbar(desk.x - 8, desk.bottom() - 5, desk.w + 16, 5, BONE);
+                scenery::wrong_window(canvas, scenery::tape_room_window_rect(rect));
+                match scene_id {
+                    "c3-arrival" => {
+                        scenery::standing_ledger(
+                            canvas,
+                            scenery::tape_room_ledger_rect(rect),
+                            if self.game.flags.get("c3_read_ledger_page") {
+                                6
+                            } else {
+                                4
+                            },
+                        );
+                        scenery::tape_reel(
+                            canvas,
+                            scenery::tape_room_reel_rect(rect),
+                            "2013",
+                            self.game.flags.get("c3_heard_tape"),
+                        );
+                    }
+                    "c3-ledger" => {
+                        let page = scenery::ledger_page_rect(rect);
+                        canvas.fill_rect(page, BONE);
+                        canvas.draw_rect(page, SUNLIGHT);
+                        canvas.vline(page.x + page.w as i32 / 2, page.y + 6, page.h - 12, glow);
+                        for row in 0..7 {
+                            let y = page.y + 16 + row * 12;
+                            canvas.hline(page.x + 12, y, page.w / 2 - 20, OBSIDIAN);
+                            canvas.hline(
+                                page.x + page.w as i32 / 2 + 10,
+                                y,
+                                page.w / 2 - 22,
+                                OBSIDIAN,
+                            );
+                        }
+                        let cover = scenery::ledger_cover_rect(rect);
+                        canvas.blend_rect(cover, Color::rgba(0xED, 0xE6, 0xD8, 70));
+                        canvas.draw_rect(cover, soft);
+                        scenery::tape_reel(
+                            canvas,
+                            scenery::tape_room_reel_rect(rect),
+                            "2013",
+                            false,
+                        );
+                    }
+                    _ => {
+                        scenery::handwriting_slip(
+                            canvas,
+                            scenery::handwriting_rect(rect),
+                            scene_id == "c3-threshold",
+                        );
+                        scenery::standing_ledger(
+                            canvas,
+                            scenery::tape_room_ledger_rect(rect),
+                            if self.game.flags.get("c3_read_ledger_to_end") {
+                                6
+                            } else {
+                                4
+                            },
+                        );
+                        if scene_id == "c3-threshold" {
+                            canvas.stroke_rounded_rect(
+                                scenery::handwriting_rect(rect).inset(-8),
+                                6,
+                                2,
+                                Color::rgba(0xFF, 0x98, 0x00, 120),
+                            );
+                        }
                     }
                 }
             }
@@ -2061,6 +2168,14 @@ impl SiliconEchoesApp {
             self.layout.narrative.y + 12,
             &TextStyle::new(FontRole::UiSmall, SUNLIGHT),
         );
+        let cue = scene_ambient_cue(story_node.scene);
+        draw_text(
+            canvas,
+            cue,
+            self.layout.choices.x - 24 - measure_text(cue, FontRole::UiSmall).w as i32,
+            self.layout.narrative.y + 12,
+            &TextStyle::new(FontRole::UiSmall, Color::rgba(0xED, 0xE6, 0xD8, 110)),
+        );
         self.ensure_narrative_layout();
         if let Some(cache) = self
             .scene_cache
@@ -2196,9 +2311,14 @@ impl SiliconEchoesApp {
         self.draw_room(canvas);
         // Stronger dim so background terminal machinery stays quiet.
         canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 214));
-        if self.game.chapter == 2 {
+        if self.game.chapter >= 2 {
             let (win_w, win_h) = self.window_size();
-            let tp = chapter_two_turning_point_layout(win_w, win_h);
+            let tp = turning_point_layout(win_w, win_h);
+            let third = self.game.chapter >= 3;
+            if third {
+                // Chapter Three closes one step darker than Chapter Two.
+                canvas.blend_rect(self.layout.image, Color::rgba(0x0A, 0x0A, 0x0C, 96));
+            }
             let artifact = Rect::new(
                 tp.artifact.0,
                 tp.artifact.1,
@@ -2216,7 +2336,11 @@ impl SiliconEchoesApp {
             canvas.draw_rect(terminal, Color::rgba(0xED, 0xE6, 0xD8, 40));
             draw_text(
                 canvas,
-                "ECHO / REVISION",
+                if third {
+                    "ECHO / WITNESS"
+                } else {
+                    "ECHO / REVISION"
+                },
                 terminal.x + 16,
                 terminal.y + 28,
                 &TextStyle::new(FontRole::MonoRegular, Color::rgba(0xFF, 0x98, 0x00, 55)),
@@ -2226,7 +2350,11 @@ impl SiliconEchoesApp {
             draw_center(
                 canvas,
                 artifact,
-                "2013 / I REMEMBER YOU DIFFERENTLY",
+                if third {
+                    "2013 / IN YOUR OWN HANDWRITING"
+                } else {
+                    "2013 / I REMEMBER YOU DIFFERENTLY"
+                },
                 FontRole::MonoRegular,
                 OBSIDIAN,
             );
@@ -2239,7 +2367,11 @@ impl SiliconEchoesApp {
             draw_center(
                 canvas,
                 chapter_title,
-                "CHAPTER TWO TURNING POINT",
+                if third {
+                    "CHAPTER THREE THRESHOLD"
+                } else {
+                    "CHAPTER TWO TURNING POINT"
+                },
                 FontRole::UiTitle,
                 BONE,
             );
@@ -2252,17 +2384,33 @@ impl SiliconEchoesApp {
             draw_center(
                 canvas,
                 theme,
-                "A reply exists. Its author remains uncertain.",
+                if third {
+                    "The record stays open. Its author stays unnamed."
+                } else {
+                    "A reply exists. Its author remains uncertain."
+                },
                 FontRole::SerifRegular,
                 Color::rgba(0xFF, 0x98, 0x00, 210),
             );
+            if let Some(rect) = self.ending_continue_rect() {
+                self.draw_action(
+                    canvas,
+                    rect,
+                    "CONTINUE TO CHAPTER THREE",
+                    self.hover == Hover::ContinueNextChapter,
+                );
+            }
             self.draw_action(
                 canvas,
                 self.ending_return_rect(),
                 "RETURN TO TITLE",
                 self.hover == Hover::ReturnTitle,
             );
-            let summary = chapter_two_consequence_summary();
+            let summary = if third {
+                chapter_three_consequence_summary()
+            } else {
+                chapter_two_consequence_summary()
+            };
             draw_wrapped(
                 canvas,
                 &summary,
@@ -2273,6 +2421,22 @@ impl SiliconEchoesApp {
                 BONE,
                 NARRATIVE_LINE_HEIGHT,
             );
+            if third {
+                // The chapter's last words deliberately echo the first line of
+                // Chapter One, one shade quieter than the summary above them.
+                draw_center(
+                    canvas,
+                    Rect::new(
+                        tp.summary.0,
+                        tp.summary.1 + tp.summary.3 - NARRATIVE_LINE_HEIGHT,
+                        tp.summary.2 as u32,
+                        NARRATIVE_LINE_HEIGHT as u32,
+                    ),
+                    CHAPTER_THREE_MIRROR_LINE,
+                    FontRole::SerifRegular,
+                    Color::rgba(0xFF, 0x98, 0x00, 170),
+                );
+            }
             return;
         }
         let card_y = self.layout.image.y + 36;
@@ -2311,7 +2475,7 @@ impl SiliconEchoesApp {
             canvas,
             self.layout.continue_chapter_two,
             "CONTINUE TO CHAPTER TWO",
-            self.hover == Hover::ContinueChapterTwo,
+            self.hover == Hover::ContinueNextChapter,
         );
         self.draw_action(
             canvas,
@@ -3021,6 +3185,60 @@ fn scene_object_bounds(scene_id: SceneId, image: Rect) -> Vec<(SceneObjectTarget
                     100,
                     116,
                 ),
+            ),
+        ],
+        "c3-arrival" => vec![
+            (
+                choice("c3.arrival.read-ledger"),
+                scenery::tape_room_ledger_rect(image),
+            ),
+            (
+                choice("c3.arrival.lift-tape"),
+                scenery::tape_room_reel_rect(image),
+            ),
+            (
+                choice("c3.arrival.face-window"),
+                scenery::tape_room_window_rect(image),
+            ),
+            (
+                choice("c3.arrival.take-ledger-to-desk"),
+                scenery::tape_room_desk_rect(image),
+            ),
+            (
+                choice("c3.record.step-back"),
+                scenery::tape_room_ledger_rect(image),
+            ),
+            (
+                choice("c3.tape.set-it-down"),
+                scenery::tape_room_reel_rect(image),
+            ),
+            (
+                choice("c3.window.turn-away"),
+                scenery::tape_room_window_rect(image),
+            ),
+        ],
+        "c3-ledger" => vec![
+            (
+                choice("c3.ledger.read-to-last-page"),
+                scenery::ledger_page_rect(image),
+            ),
+            (
+                choice("c3.ledger.close-unread"),
+                scenery::ledger_cover_rect(image),
+            ),
+        ],
+        "c3-transmission" => vec![(
+            choice("c3.transmission.let-it-finish"),
+            scenery::handwriting_rect(image),
+        )],
+        "c3-threshold" => vec![
+            (
+                choice("c3.threshold.answer"),
+                scenery::handwriting_rect(image),
+            ),
+            (
+                choice("c3.threshold.stay-silent"),
+                scenery::tape_room_ledger_rect(image),
             ),
         ],
         _ => Vec::new(),
