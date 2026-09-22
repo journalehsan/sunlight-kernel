@@ -341,6 +341,7 @@ pub struct CapabilityBroker {
     shared_regions: alloc::vec::Vec<ShmEntry>,
     vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
     auth_session_grants: alloc::vec::Vec<AuthSessionGrant>,
+    account_grants: alloc::vec::Vec<(CapabilityToken, sunlight_ipc::accounts::Grant)>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -368,7 +369,23 @@ impl CapabilityBroker {
             shared_regions: alloc::vec::Vec::new(),
             vfs_caps: alloc::vec::Vec::new(),
             auth_session_grants: alloc::vec::Vec::new(),
+            account_grants: alloc::vec::Vec::new(),
         }
+    }
+
+    pub fn mint_account_grant(&mut self, binding: sunlight_ipc::accounts::GrantBinding, now: u64) -> Option<CapabilityToken> {
+        self.account_grants.retain(|(_, grant)| !grant.used && now < grant.expires);
+        if self.account_grants.len() >= 64 { return None; }
+        let token = generate_secure_token(CapabilityToken::TAG_IPC)?;
+        if self.account_grants.iter().any(|(t,_)| *t == token) { return None; }
+        self.account_grants.push((token, sunlight_ipc::accounts::Grant { binding, expires: now.saturating_add(500), used: false }));
+        Some(token)
+    }
+
+    pub fn consume_account_grant(&mut self, token: CapabilityToken, binding: sunlight_ipc::accounts::GrantBinding, now: u64) -> bool {
+        let Some(index) = self.account_grants.iter().position(|(t,_)| *t == token) else { return false; };
+        let (_, mut grant) = self.account_grants.swap_remove(index);
+        grant.consume(binding, now)
     }
 
     pub fn mint_auth_session_grant(

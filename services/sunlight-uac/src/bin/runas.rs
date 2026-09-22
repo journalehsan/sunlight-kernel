@@ -19,27 +19,10 @@
 
 extern crate alloc;
 
-struct BumpAllocator;
-
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 16 * 1024] = [0; 16 * 1024];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
+mod account_prompt;
 #[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
+static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
+static mut HEAP: [u8; 4 * 1024 * 1024] = [0; 4 * 1024 * 1024];
 
 use sunlight_ipc::{ipc_call, nameserver_lookup, IpcMsg};
 use sunlight_uac::auth::authenticate_password;
@@ -185,9 +168,13 @@ fn current_username() -> Option<heapless::String<32>> {
 
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    unsafe { ALLOCATOR.lock().init(core::ptr::addr_of_mut!(HEAP).cast::<u8>(), 4 * 1024 * 1024); }
     let mut storage = [""; MAX_ARGS];
     let count = unsafe { collect_args(argc, argv, &mut storage) };
 
+    if count > 1 && storage[1].starts_with("--group-") {
+        sunlight_libc::exit(account_prompt::run(&storage[..count]));
+    }
     // argv[0] is "runas"; argv[1..] is the command to run elevated.
     if count < 2 {
         println!("usage: runas <command> [args...]");

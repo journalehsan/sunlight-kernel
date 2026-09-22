@@ -101,6 +101,13 @@ pub fn can_write(
         return Decision::deny(PolicyReason::DeniedImmutableRoot, FsError::InvalidPath);
     }
 
+    // The kernel resolves this actor only from the trusted-auth-broker flag.
+    // Root GUI clients and generic filesystem capabilities cannot write these.
+    if actor == (Actor::Service { name: "sunlight-uac" })
+        && matches!(path, "/etc/shadow" | "/etc/group" | "/etc/.shadow-uac-new" | "/etc/.group-uac-new" | "/etc/passwd" | "/etc/.passwd-uac-new") {
+        return Decision::allow(PolicyReason::AllowedServiceState);
+    }
+
     if is_protected_path(path) {
         return Decision::deny(
             PolicyReason::DeniedProtectedPath,
@@ -486,5 +493,22 @@ mod tests {
             .error,
             Some(FsError::InvalidPath)
         );
+    }
+}
+
+#[cfg(test)]
+mod account_policy_tests {
+    use super::*;
+    #[test] fn account_storage_is_exclusive_to_trusted_account_service() {
+        let service=Actor::Service{name:"sunlight-uac"};
+        for path in ["/etc/passwd","/etc/shadow","/etc/group","/etc/.shadow-uac-new","/etc/.group-uac-new","/etc/.passwd-uac-new"] {
+            for op in [FsOperation::Create,FsOperation::Write,FsOperation::Delete] {
+                assert!(can_write(service,path,op,None,false).allowed);
+                for actor in [Actor::Unknown,Actor::User{uid:0,name:"root"},Actor::User{uid:42,name:"ada"},Actor::Service{name:"control-panel"},Actor::Service{name:"capability-broker"}] {
+                    assert!(!can_write(actor,path,op,None,true).allowed);
+                }
+            }
+        }
+        assert!(!can_write(service,"/etc/other",FsOperation::Write,None,false).allowed);
     }
 }

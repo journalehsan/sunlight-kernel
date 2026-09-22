@@ -138,6 +138,8 @@ pub enum SunlightSyscall {
     ValidateSessionCaller = 139,
     /// Session-manager-only credentials + generation lookup for a live process PID.
     SessionGetCredentials = 140,
+    MintAccountGrant = 151,
+    ConsumeAccountGrant = 152,
     /// Current process generation (address-space identity generation).
     GetProcessGeneration = 141,
     /// Braind-only: capture the authenticated caller of its current IPC request.
@@ -398,6 +400,8 @@ pub enum ServiceCapability {
     SessionLock = 23,
     /// Narrow service-to-service access from wiseowl-indexd to MemoryDB.
     WiseOwlMemoryDb = 24,
+    /// Service access to sessiond; operation authority remains sessiond-owned.
+    SessionIdentity = 25,
 }
 
 impl ServiceCapability {
@@ -432,6 +436,7 @@ impl ServiceCapability {
             "thermal-control" => Some(Self::ThermalControl),
             "session-lock" => Some(Self::SessionLock),
             "wiseowl-memorydb" => Some(Self::WiseOwlMemoryDb),
+            "session-identity" => Some(Self::SessionIdentity),
             _ => None,
         }
     }
@@ -463,11 +468,12 @@ impl ServiceCapability {
             Self::ThermalControl => "thermal-control",
             Self::SessionLock => "session-lock",
             Self::WiseOwlMemoryDb => "wiseowl-memorydb",
+            Self::SessionIdentity => "session-identity",
         }
     }
 }
 
-pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 25] = [
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 26] = [
     ServiceCapability::Network,
     ServiceCapability::Authentication,
     ServiceCapability::Pty,
@@ -493,6 +499,7 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 25] = [
     ServiceCapability::ThermalControl,
     ServiceCapability::SessionLock,
     ServiceCapability::WiseOwlMemoryDb,
+    ServiceCapability::SessionIdentity,
 ];
 
 pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'static str> + Clone {
@@ -507,6 +514,9 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
         return true;
     }
     if mask & ServiceCapability::Network.bit() != 0 && name_key == name_to_u64("net") {
+        return true;
+    }
+    if mask & ServiceCapability::SessionIdentity.bit() != 0 && name_key == name_to_u64(SESSION_ENDPOINT) {
         return true;
     }
     if mask & ServiceCapability::Authentication.bit() != 0 && name_key == name_to_u64("uac") {
@@ -2064,6 +2074,8 @@ impl SessionAction {
 
 #[allow(non_snake_case)]
 pub mod SessionMsg {
+    /// Read-only active graphical identity; never returns a closed session.
+    pub const SESSION_CURRENT_IDENTITY: u64 = 0xC121;
     pub const SESSION_CREATE: u64 = 0xC100;
     pub const SESSION_GET: u64 = 0xC101;
     pub const SESSION_LIST: u64 = 0xC102;
@@ -6141,3 +6153,5 @@ mod audio_protocol_tests {
         assert!(unpack_audio_stream_status(&malformed).is_none());
     }
 }
+
+pub mod accounts;

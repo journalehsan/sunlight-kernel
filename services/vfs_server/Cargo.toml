@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-vfs-server"
-version = "0.2.4291-alpha.2"
+version = "0.2.4352-alpha.2"
+
 
 
 
@@ -536,6 +537,7 @@ name = "sunlight-vfs-server"
 path = "src/main.rs"
 
 [dependencies]
+sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-fs = { path = "../../sunlight-fs" }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-fat = { path = "../../sunlight-fat" }

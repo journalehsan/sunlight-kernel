@@ -305,3 +305,20 @@ Footer has three buttons: **Sleep**, **Restart**, **Shut Down**.
 - Light theme variant.
 - Scroll support if the catalog grows beyond the fixed-grid MVP size.
 - Full-screen dim/scrim behind the panel for extra visual focus.
+
+
+## Account identity (2026-09-22)
+
+The footer now uses `sunlight-ipc::accounts`, shared with System Preferences.
+UAC supplies public account metadata using sessiond's active graphical session;
+the menu no longer presents a literal user identity. A deterministic avatar is
+used when no stored avatar exists. Identity refreshes when the menu opens and
+periodically while open; unavailable accounts get an explicit fallback.
+
+Clicking the footer launches `settings --page users-groups`, which selects the
+current account. The menu never verifies passwords, decides privilege, edits
+account files or stores an account database. See
+[account-management ownership and security](../security/ACCOUNT_MANAGEMENT.md)
+for the current protocol, Run-As flow and deferred account operations. This
+supersedes the earlier limitation describing the footer as having no session
+identity.

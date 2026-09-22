@@ -13,6 +13,8 @@
 #![no_main]
 
 extern crate alloc;
+mod account_service;
+
 
 use linked_list_allocator::LockedHeap;
 use zeroize::Zeroize;
@@ -39,8 +41,8 @@ macro_rules! serial_println {
 }
 
 use sunlight_ipc::{
-    endpoint_create, get_time_utc, ipc_call, ipc_recv, ipc_reply_and_wait, nameserver_lookup,
-    nameserver_register, shm_free, shm_map, IpcMsg, VfsMsg,
+    endpoint_create, get_time_utc, ipc_recv, ipc_reply_and_wait,
+    nameserver_register, shm_free, shm_map, IpcMsg,
 };
 use sunlight_uac::auth::{
     migrate_shadow_contents, verify_shadow_credentials, AUTH_FAILURE, AUTH_PASSWD_PATH,
@@ -66,7 +68,7 @@ const OP_CHECK_EXEC: u64 = 5;
 const REPLY_OK: u64 = 1;
 /// Reply label for a rejected/unknown request.
 const REPLY_ERR: u64 = 0xff;
-const VFS_READ_CHUNK: usize = 16;
+
 
 /// Maximum cached elevated sessions.
 type Sessions = SessionStore<16>;
@@ -95,144 +97,26 @@ fn unpack_str(words: &[u64], start: usize) -> heapless::String<64> {
     s
 }
 
-fn read_vfs_bytes(path: &str, out: &mut [u8]) -> Option<usize> {
-    let vfs = nameserver_lookup("vfs")?;
-    let open_msg = path_msg(VfsMsg::OPEN, path);
-    let reply = ipc_call(vfs, open_msg);
-    if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
-        return None;
-    }
-
-    let handle = reply.words[1] as u32;
-    let mut total = 0usize;
-    loop {
-        if total >= out.len() {
-            break;
-        }
-
-        let read_msg = IpcMsg::with_label(VfsMsg::READ)
-            .word(0, handle as u64)
-            .word(1, total as u64)
-            .word(2, VFS_READ_CHUNK as u64);
-        let reply = ipc_call(vfs, read_msg);
-        if reply.label != VfsMsg::REPLY {
-            break;
-        }
-
-        let count = (reply.words[1] as usize).min(out.len().saturating_sub(total));
-        if count == 0 {
-            break;
-        }
-
-        let src = &reply.words[2..4];
-        for index in 0..count {
-            let word_index = index / 8;
-            let byte_index = index % 8;
-            out[total + index] = ((src[word_index] >> (byte_index * 8)) & 0xff) as u8;
-        }
-        total += count;
-    }
-
-    let _ = ipc_call(
-        vfs,
-        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
-    );
-    Some(total)
-}
-
-fn write_vfs_bytes(path: &str, data: &[u8]) -> bool {
-    let Some(vfs) = nameserver_lookup("vfs") else {
-        return false;
-    };
-    let open_msg = path_msg(VfsMsg::OPEN, path);
-    let reply = ipc_call(vfs, open_msg);
-    if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
-        return false;
-    }
-
-    let handle = reply.words[1] as u32;
-    let mut offset = 0usize;
-    while offset < data.len() {
-        let chunk = &data[offset..(offset + VFS_READ_CHUNK).min(data.len())];
-        let mut msg = IpcMsg::with_label(VfsMsg::WRITE)
-            .word(0, handle as u64)
-            .word(1, offset as u64);
-        let mut word_index = 2usize;
-        let mut byte_index = 0usize;
-        let mut word = 0u64;
-        for byte in chunk {
-            word |= (*byte as u64) << (byte_index * 8);
-            byte_index += 1;
-            if byte_index == 8 {
-                msg = msg.word(word_index, word);
-                word_index += 1;
-                byte_index = 0;
-                word = 0;
-            }
-        }
-        if byte_index > 0 {
-            msg = msg.word(word_index, word);
-        }
-
-        let reply = ipc_call(vfs, msg);
-        if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
-            let _ = ipc_call(
-                vfs,
-                IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
-            );
-            return false;
-        }
-
-        let written = reply.words[1] as usize;
-        if written == 0 {
-            let _ = ipc_call(
-                vfs,
-                IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
-            );
-            return false;
-        }
-        offset += written;
-    }
-
-    let _ = ipc_call(
-        vfs,
-        IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
-    );
-    true
-}
-
-fn path_msg(label: u64, path: &str) -> IpcMsg {
-    let mut msg = IpcMsg::with_label(label);
-    let bytes = path.as_bytes();
-    let mut byte_index = 0usize;
-    for word_index in 0..msg.words.len() {
-        let mut word = 0u64;
-        for shift in 0..8 {
-            if byte_index >= bytes.len() {
-                break;
-            }
-            word |= (bytes[byte_index] as u64) << (shift * 8);
-            byte_index += 1;
-        }
-        msg.words[word_index] = word;
-    }
-    msg.word_count = msg.words.len() as u32;
-    msg
+// Authentication and account mutations must use the same live backing store.
+fn read_account_bytes(path: &str, out: &mut [u8]) -> Option<usize> {
+    let mut bytes = account_service::read(path.as_bytes()).ok()?;
+    if bytes.len() > out.len() { bytes.zeroize(); return None; }
+    let len = bytes.len(); out[..len].copy_from_slice(&bytes); bytes.zeroize(); Some(len)
 }
 
 fn migrate_development_shadow() {
-    let mut passwd_data = [0u8; 512];
-    let mut shadow_data = [0u8; 512];
-    let Some(passwd_len) = read_vfs_bytes(AUTH_PASSWD_PATH, &mut passwd_data) else {
+    let mut passwd_data = [0u8; 8192];
+    let mut shadow_data = [0u8; 8192];
+    let Some(passwd_len) = read_account_bytes(AUTH_PASSWD_PATH, &mut passwd_data) else {
         serial_println!("[UAC] auth migration skipped: passwd unavailable");
         return;
     };
-    let Some(shadow_len) = read_vfs_bytes(AUTH_SHADOW_PATH, &mut shadow_data) else {
+    let Some(shadow_len) = read_account_bytes(AUTH_SHADOW_PATH, &mut shadow_data) else {
         serial_println!("[UAC] auth migration skipped: shadow unavailable");
         return;
     };
 
-    let Ok(migrated) =
+    let Ok(mut migrated) =
         migrate_shadow_contents(&passwd_data[..passwd_len], &shadow_data[..shadow_len])
     else {
         serial_println!("[UAC] auth migration failed");
@@ -240,12 +124,14 @@ fn migrate_development_shadow() {
     };
 
     if migrated.as_bytes() != &shadow_data[..shadow_len] {
-        if write_vfs_bytes(AUTH_SHADOW_PATH, migrated.as_bytes()) {
+        if account_service::publish_shadow(migrated.as_bytes()).is_ok() {
             serial_println!("[UAC] shadow migration applied");
         } else {
             serial_println!("[UAC] shadow migration write failed");
         }
     }
+    migrated.zeroize();
+    shadow_data.zeroize();
 }
 
 fn handle_auth_password(msg: &IpcMsg, issue_session_grant: bool) -> IpcMsg {
@@ -278,10 +164,10 @@ fn handle_auth_password(msg: &IpcMsg, issue_session_grant: bool) -> IpcMsg {
     }
     let _ = shm_free(token);
 
-    let mut passwd_data = [0u8; 512];
-    let mut shadow_data = [0u8; 512];
-    let result = read_vfs_bytes(AUTH_PASSWD_PATH, &mut passwd_data).and_then(|passwd_len| {
-        read_vfs_bytes(AUTH_SHADOW_PATH, &mut shadow_data).and_then(|shadow_len| {
+    let mut passwd_data = [0u8; 8192];
+    let mut shadow_data = [0u8; 8192];
+    let result = read_account_bytes(AUTH_PASSWD_PATH, &mut passwd_data).and_then(|passwd_len| {
+        read_account_bytes(AUTH_SHADOW_PATH, &mut shadow_data).and_then(|shadow_len| {
             verify_shadow_credentials(
                 &passwd_data[..passwd_len],
                 &shadow_data[..shadow_len],
@@ -291,13 +177,7 @@ fn handle_auth_password(msg: &IpcMsg, issue_session_grant: bool) -> IpcMsg {
             .ok()
         })
     });
-    serial_println!(
-        "[UAC] password auth session={} user_len={} password_len={} result={}",
-        issue_session_grant,
-        username.len(),
-        password_len,
-        if result.is_some() { "ok" } else { "denied" }
-    );
+    shadow_data.zeroize();
     password.zeroize();
 
     if let Some(success) = result {
@@ -330,6 +210,7 @@ fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
     let mut reply = IpcMsg::empty();
 
     match msg.label {
+        sunlight_ipc::accounts::SNAPSHOT | sunlight_ipc::accounts::CHANGE_OWN_PASSWORD | sunlight_ipc::accounts::AUTHORIZE | sunlight_ipc::accounts::MUTATE_GROUP | sunlight_ipc::accounts::UPDATE_OWN_PROFILE => return account_service::handle(msg),
         OP_RUNAS => {
             let caller_uid = msg.words[0] as u32;
             let target_uid = msg.words[1] as u32;

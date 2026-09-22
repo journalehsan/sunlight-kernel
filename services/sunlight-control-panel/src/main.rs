@@ -23,6 +23,7 @@
 extern crate alloc;
 
 mod about;
+mod accounts;
 mod clipboard;
 mod date_time;
 mod network;
@@ -113,7 +114,7 @@ const WIN_H: u32 = 560;
 const PAGE_HEADER_H: u32 = 44;
 const GRID_SIDE_MARGIN: u32 = 16;
 const GRID_COLUMN_GAP: u32 = 10;
-const GRID_CARD_H: u32 = 58;
+const GRID_CARD_H: u32 = 52;
 const GRID_ROW_GAP: i32 = 8;
 const DISPLAY_DIALOG_W: u32 = 420;
 const DISPLAY_DIALOG_H: u32 = 190;
@@ -143,6 +144,7 @@ enum Page {
     PowerThermal,
     DateTime,
     LoginSession,
+    UsersGroups,
     Sound,
 }
 
@@ -392,6 +394,7 @@ struct ControlPanelApp {
     power_thermal: PowerThermalPageState,
     date_time: DateTimePageState,
     login_session: SessionPageState,
+    accounts: accounts::AccountsPage,
     sound: SoundPageState,
     client_bounds: Rect,
     layout_invalidation: LayoutInvalidation,
@@ -408,7 +411,7 @@ struct ControlPanelLayout {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct GridLayout {
     sections: [Rect; 3],
-    cards: [Rect; 11],
+    cards: [Rect; 12],
 }
 
 impl ControlPanelApp {
@@ -472,6 +475,7 @@ impl ControlPanelApp {
             power_thermal: PowerThermalPageState::new(),
             date_time: DateTimePageState::new(),
             login_session: SessionPageState::new(),
+            accounts: accounts::AccountsPage::new(),
             sound: SoundPageState::new(),
             client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
             layout_invalidation: LayoutInvalidation::new(),
@@ -796,6 +800,7 @@ impl ControlPanelApp {
                     card_w,
                     GRID_CARD_H,
                 ),
+                Rect::new(start_x, system_y + (GRID_CARD_H as i32 + GRID_ROW_GAP) * 2, card_w, GRID_CARD_H),
             ],
         }
     }
@@ -886,18 +891,20 @@ impl ControlPanelApp {
         );
         Self::draw_label(
             canvas,
-            Rect::new(46, header.y + 12, header.w.saturating_sub(58), 20),
-            "System Preferences",
+            Rect::new(46, header.y + 12, Self::identity_rect(header).x.saturating_sub(54).max(0) as u32, 20),
+            if header.w < 460 { "Settings" } else { "System Preferences" },
             theme,
             FontRole::UiTitle,
         );
 
+        self.accounts.draw_identity(canvas, theme, Self::identity_rect(header));
         let grid = self.grid_layout();
         Self::draw_section_heading(canvas, theme, grid.sections[0], "Personalization");
         Self::draw_section_heading(canvas, theme, grid.sections[1], "Devices & connectivity");
         Self::draw_section_heading(canvas, theme, grid.sections[2], "System");
 
         let cards = grid.cards;
+        Self::draw_card(canvas, theme, cards[11], theme.accent, "Users & Groups", "Accounts, passwords, groups", self.icon_session);
         Self::draw_card(
             canvas,
             theme,
@@ -999,6 +1006,11 @@ impl ControlPanelApp {
         );
     }
 
+    fn identity_rect(header: Rect) -> Rect {
+        let width = (header.w / 2).min(206);
+        Rect::new((header.right() - width as i32 - 8).max(0), header.y + 2, width, 40)
+    }
+
     fn update_grid(&mut self, event: Event) -> bool {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
@@ -1034,6 +1046,11 @@ impl ControlPanelApp {
             if cards[6].contains(pt) {
                 self.page = Page::PowerThermal;
                 return self.power_thermal.refresh();
+            }
+            if cards[11].contains(pt) || Self::identity_rect(self.layout.header).contains(pt) {
+                self.page = Page::UsersGroups;
+                self.accounts.activate();
+                return true;
             }
             if cards[7].contains(pt) {
                 self.page = Page::DateTime;
@@ -1835,6 +1852,7 @@ impl App for ControlPanelApp {
             Page::Network => self.network.draw(canvas, theme, win_w, win_h),
             Page::PowerThermal => self.power_thermal.draw(canvas, theme, win_w, win_h),
             Page::DateTime => self.date_time.draw(canvas, theme, win_w, win_h),
+            Page::UsersGroups => self.accounts.draw(canvas, theme, win_w, win_h),
             Page::LoginSession => self.login_session.draw(canvas, theme, win_w, win_h),
             Page::Sound => self.sound.draw(canvas, theme, win_w, win_h),
         }
@@ -1851,7 +1869,12 @@ impl App for ControlPanelApp {
             request_close();
             return true;
         }
+        if matches!(event, Event::Tick) && matches!(self.page, Page::Grid | Page::UsersGroups) && self.accounts.poll() { return true; }
         match self.page {
+            Page::UsersGroups => {
+                if self.accounts.update(event, self.win_w(), self.win_h()) { self.page = Page::Grid; }
+                !matches!(event, Event::Tick)
+            }
             Page::Grid => self.update_grid(event),
             Page::Mouse => self.update_mouse_page(event),
             Page::Monitor => self.update_monitor_page(event),
@@ -1876,6 +1899,8 @@ impl App for ControlPanelApp {
     }
 
     fn on_ready(&mut self) -> bool {
+        self.accounts.activate();
+        if matches!(self.page, Page::UsersGroups | Page::Grid) { return true; }
         if self.page == Page::Monitor {
             self.refresh_display_modes();
             return true;
@@ -2200,6 +2225,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     };
 
     window.run(&mut app);
+    app.accounts.clear_secrets();
     ProcessExit::exit(0);
 }
 
@@ -2226,6 +2252,7 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
                 Some(ControlPanelPage::PowerThermal) => return Page::PowerThermal,
                 Some(ControlPanelPage::DateTime) => return Page::DateTime,
                 Some(ControlPanelPage::LoginSession) => return Page::LoginSession,
+                Some(ControlPanelPage::UsersGroups) => return Page::UsersGroups,
                 Some(ControlPanelPage::Sound) => return Page::Sound,
                 None => {}
             }

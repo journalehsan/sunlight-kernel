@@ -505,6 +505,7 @@ Restart=on-failure
 RestartSec=3
 User=root
 Capability=authentication
+Capability=session-identity
 Capability=vfs
 Capability=logging
 StandardOutput=journal

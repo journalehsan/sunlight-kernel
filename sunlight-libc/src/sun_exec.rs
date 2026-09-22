@@ -55,6 +55,7 @@ pub enum ControlPanelPage {
     PowerThermal,
     DateTime,
     LoginSession,
+    UsersGroups,
     Sound,
 }
 
@@ -327,6 +328,11 @@ static SETTINGS_PAGE_REGISTRY: &[SettingsPageRegistryEntry] = &[
         ],
     },
     SettingsPageRegistryEntry {
+        page: ControlPanelPage::UsersGroups,
+        display_name: "Users & Groups",
+        aliases: aliases![("en", "accounts")],
+    },
+    SettingsPageRegistryEntry {
         page: ControlPanelPage::Sound,
         display_name: "Sound",
         aliases: aliases![("en", "audio"), ("en", "volume"), ("fa", "صدا")],
@@ -352,6 +358,7 @@ impl ControlPanelPage {
             b"power-thermal" => Some(Self::PowerThermal),
             b"date-time" => Some(Self::DateTime),
             b"login-session" => Some(Self::LoginSession),
+            b"users-groups" => Some(Self::UsersGroups),
             b"sound" => Some(Self::Sound),
             _ => None,
         }
@@ -367,6 +374,7 @@ impl ControlPanelPage {
             Self::PowerThermal => b"power-thermal",
             Self::DateTime => b"date-time",
             Self::LoginSession => b"login-session",
+            Self::UsersGroups => b"users-groups",
             Self::Sound => b"sound",
         }
     }
@@ -1154,6 +1162,7 @@ mod tests {
             ControlPanelPage::PowerThermal,
             ControlPanelPage::DateTime,
             ControlPanelPage::LoginSession,
+            ControlPanelPage::UsersGroups,
             ControlPanelPage::Sound,
         ] {
             assert_eq!(ControlPanelPage::from_id(page.id()), Some(page));

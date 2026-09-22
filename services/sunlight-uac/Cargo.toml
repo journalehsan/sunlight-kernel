@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-uac"
-version = "0.2.4291-alpha.2"
+version = "0.2.4352-alpha.2"
+
 
 
 
@@ -528,13 +529,15 @@ name = "sunlight_uac"
 path = "src/lib.rs"
 
 [dependencies]
+sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
+sun-font = { path = "../../sun-font" }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 sunlight-fs = { path = "../../sunlight-fs" }
 argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "password-hash"] }
 password-hash = { version = "0.5.0", default-features = false, features = ["alloc"] }
-zeroize = { version = "1", default-features = false }
+zeroize = { version = "1", default-features = false, features = ["alloc"] }
 linked_list_allocator = "0.10"
 
 # The privileged daemon: spawned by sunlightd, registers as "uac".

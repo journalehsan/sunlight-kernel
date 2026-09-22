@@ -974,12 +974,15 @@ pub(crate) enum StartMenuAction {
     /// dock, or other shell chrome underneath.
     DismissedOutside,
     Launch(AppId),
+    UserSettings,
     Unavailable(&'static str),
     Power(PowerAction),
 }
 
 pub(crate) struct StartMenuState {
     is_open: bool,
+    account: Option<sunlight_ipc::accounts::Snapshot>,
+    account_refresh_at: u64,
     icons: StartMenuIcons,
     search: SearchField,
     page: StartMenuPage,
@@ -993,6 +996,8 @@ impl StartMenuState {
     pub(crate) fn new() -> Self {
         Self {
             is_open: false,
+            account: None,
+            account_refresh_at: 0,
             icons: StartMenuIcons::load(),
             search: SearchField::new(),
             page: StartMenuPage::Home,
@@ -1008,6 +1013,11 @@ impl StartMenuState {
     }
 
     pub(crate) fn open_menu(&mut self) {
+        self.account = sunlight_ipc::accounts::snapshot().ok();
+        #[cfg(not(test))]
+        { self.account_refresh_at = sunlight_ipc::monotonic_millis().saturating_add(5000); }
+        #[cfg(test)]
+        { self.account_refresh_at = u64::MAX; }
         self.is_open = true;
         self.search.clear();
         self.search.active = true;
@@ -1016,6 +1026,14 @@ impl StartMenuState {
         self.selected = None;
         self.hover = None;
         self.confirm = None;
+    }
+
+    pub(crate) fn refresh_identity(&mut self, now: u64) -> bool {
+        if !self.is_open || now < self.account_refresh_at { return false; }
+        let old=self.account;
+        self.account=sunlight_ipc::accounts::snapshot().ok();
+        self.account_refresh_at=now.saturating_add(5000);
+        old!=self.account
     }
 
     pub(crate) fn close(&mut self) {
@@ -1056,6 +1074,7 @@ impl StartMenuState {
         if !self.is_open {
             return (false, StartMenuAction::None);
         }
+        self.refresh_identity(now);
         if let Some((_, expires)) = self.confirm {
             if now >= expires {
                 self.confirm = None;
@@ -1077,6 +1096,10 @@ impl StartMenuState {
                 if !layout.panel.contains(p) {
                     self.close();
                     return (true, StartMenuAction::DismissedOutside);
+                }
+                if layout.user_rect.contains(p) {
+                    self.close();
+                    return (true, StartMenuAction::UserSettings);
                 }
                 if layout.close_btn.contains(p) {
                     self.close();
@@ -1604,12 +1627,14 @@ impl StartMenuState {
         if rect.w == 0 {
             return;
         }
+        let user = self.account.as_ref().and_then(|s| s.current());
         let avatar = Rect::new(rect.x, rect.y + (rect.h as i32 - 32) / 2, 32, 32);
-        canvas.fill_rounded_rect(avatar, 16, theme.accent.darken(40));
+        let tint=user.map_or(theme.accent, |u| if u.avatar_id() & 1 == 0 {theme.accent} else {theme.accent.darken(30)});
+        canvas.fill_rounded_rect(avatar, 16, tint);
         draw_text_centered(
             canvas,
             avatar,
-            "U",
+            user.map_or("?", |u| u.initial()),
             &TextStyle::new(FontRole::UiMedium, theme.text),
         );
         let name_rect = Rect::new(
@@ -1619,10 +1644,10 @@ impl StartMenuState {
             16,
         );
         draw_text_vcenter(
-            canvas,
-            "User",
-            name_rect.x,
-            name_rect.y,
+            &mut canvas.sub_canvas(name_rect),
+            user.map_or("Account unavailable", |u| u.name()),
+            0,
+            0,
             name_rect.h,
             &TextStyle::new(FontRole::UiRegular, theme.text),
         );
@@ -1633,10 +1658,10 @@ impl StartMenuState {
             14,
         );
         draw_text_vcenter(
-            canvas,
-            "SunlightOS",
-            sub_rect.x,
-            sub_rect.y,
+            &mut canvas.sub_canvas(sub_rect),
+            user.map_or("Users & Groups", |u| u.login()),
+            0,
+            0,
             sub_rect.h,
             &TextStyle::new(FontRole::UiSmall, theme.text_dim),
         );
@@ -1726,6 +1751,20 @@ mod tests {
         compute_layout, page_count, AppId, StartMenuPage, ALL_APPS_PAGE_CAP, APP_CATALOG_LEN,
         RANDOM_CAP, RECENT_CAP, SMALL_COLS,
     };
+
+    #[test]
+    fn account_footer_resolves_real_metadata_and_launches_current_user_page() {
+        let mut menu=super::StartMenuState::new();
+        menu.is_open=true;menu.account_refresh_at=u64::MAX;
+        let mut snapshot=sunlight_ipc::accounts::Snapshot::EMPTY;
+        snapshot.session_id=3;snapshot.current_uid=42;snapshot.user_count=1;snapshot.users[0].uid=42;
+        snapshot.users[0].username[..3].copy_from_slice(b"ada");snapshot.users[0].display_name[..3].copy_from_slice(b"Ada");
+        menu.account=Some(snapshot);
+        assert_eq!(menu.account.as_ref().unwrap().current().unwrap().name(),"Ada");
+        let r=compute_layout(800,600,"",&[],StartMenuPage::Home,0).user_rect;
+        let (_,action)=menu.handle_event(super::Event::Click{x:r.x+1,y:r.y+1},800,600,&[],0);
+        assert!(matches!(action,super::StartMenuAction::UserSettings));assert!(!menu.is_open());
+    }
 
     #[test]
     fn outside_left_click_keeps_modal_until_release_and_allows_reopening() {

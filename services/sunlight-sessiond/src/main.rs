@@ -1538,6 +1538,12 @@ pub extern "C" fn _start() -> ! {
         };
         reply = match message.label {
             SessionMsg::SESSION_CREATE => create_session(&mut state, message),
+            SessionMsg::SESSION_CURRENT_IDENTITY => {
+                match state.active.as_ref() {
+                    Some(active) if matches!(active.record.state, SessionState::Running | SessionState::Degraded) => session_summary_reply(&active.record),
+                    _ => error(SessionMsg::ERR_INVALID_STATE),
+                }
+            }
             SessionMsg::SESSION_GET => get_session(&mut state, message),
             SessionMsg::SESSION_LIST => list_session(&state, message.words[0]),
             SessionMsg::SESSION_GET_COMPONENTS => get_components(&state, message),

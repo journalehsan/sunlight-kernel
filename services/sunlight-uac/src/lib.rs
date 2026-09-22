@@ -11,7 +11,10 @@
 //!   `/etc/shadow` using PHC-formatted Argon2id hashes.
 
 #![no_std]
+extern crate alloc;
 
 pub mod auth;
 pub mod capability;
 pub mod session;
+
+pub mod accounts;

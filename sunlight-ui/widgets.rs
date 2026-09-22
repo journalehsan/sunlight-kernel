@@ -106,3 +106,6 @@ pub use world_map::{
     geo_to_point, hit_test_markers, land_at_texel, land_at_uv, point_to_geo, wrap_lon, GeoCoord,
     MapHit, MapMarker, WorldMapLayout, WorldMapWidget, WORLD_MAP_BITS, WORLD_MAP_H, WORLD_MAP_W,
 };
+
+mod secret_input;
+pub use secret_input::SecretInput;

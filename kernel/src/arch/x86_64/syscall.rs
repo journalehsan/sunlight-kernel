@@ -108,6 +108,8 @@ pub enum SunlightSyscall {
     ValidateSessionCaller = 139,
     /// Session-manager-only credentials + generation lookup for a live process PID.
     SessionGetCredentials = 140,
+    MintAccountGrant = 151,
+    ConsumeAccountGrant = 152,
     /// Current process generation (address-space identity generation).
     GetProcessGeneration = 141,
     WiseOwlDelegateCaller = 142,
@@ -753,6 +755,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         138 => sys_session_auth_consume(frame),
         139 => sys_validate_session_caller(frame),
         140 => sys_session_get_credentials(frame),
+        151 => sys_account_grant(frame, false),
+        152 => sys_account_grant(frame, true),
         141 => sys_get_process_generation(),
         142 => sys_wiseowl_delegate_caller(frame),
         143 => sys_wiseowl_validate_delegated_caller(frame),
@@ -1266,11 +1270,46 @@ fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
+/// Account capabilities are minted/consumed only by the authenticated broker,
+/// for the live generation-tagged IPC caller. They are never spawn grants.
+fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
+    use ::sunlight_ipc::accounts::{GrantBinding, GrantScope, Operation};
+    let sched = crate::sched::SCHEDULER.lock();
+    let caller = sched.current_process();
+    if !caller.trusted_auth_broker { return u64::MAX; }
+    let Some(target) = sched.processes.iter().find(|p| p.pid == frame.rdi as usize && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)) else { return u64::MAX; };
+    if !crate::ipc::reply_target_matches_pending_request(target.pid, target.pending_call, caller.ipc_reply_target) { return u64::MAX; }
+    let Some(operation) = Operation::from_raw(frame.rsi) else { return u64::MAX; };
+    let binding = GrantBinding {
+        pid: target.pid as u64, process_generation: target.address_space.identity().generation,
+        scope: GrantScope { revision: frame.r12, operation, target: frame.rdx as u32, member: (frame.rdx >> 32) as u32, session: frame.r8, session_generation: frame.r9 },
+    };
+    let now = sched.global_tick;
+    drop(sched);
+    let mut broker = crate::capability::CAP_BROKER.lock();
+    if consume {
+        if broker.consume_account_grant(crate::capability::CapabilityToken(frame.r10), binding, now) { 0 } else { u64::MAX }
+    } else { broker.mint_account_grant(binding, now).map_or(u64::MAX, |t| t.0) }
+}
+
 fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
     let target_pid = frame.rdi as usize;
     let sched = crate::sched::SCHEDULER.lock();
-    if !sched.current_process().trusted_session_service {
-        return u64::MAX;
+    let caller = sched.current_process();
+    if !caller.trusted_session_service {
+        // UAC may inspect only the authenticated synchronous request it is
+        // servicing. An arbitrary GUI cannot query or supply caller credentials.
+        if !caller.trusted_auth_broker {
+            return u64::MAX;
+        }
+        let Some(target) = sched.processes.iter().find(|p| p.pid == target_pid) else {
+            return u64::MAX;
+        };
+        if !crate::ipc::reply_target_matches_pending_request(
+            target_pid, target.pending_call, caller.ipc_reply_target,
+        ) {
+            return u64::MAX;
+        }
     }
     let Some(target) = sched.processes.iter().find(|process| {
         process.pid == target_pid
@@ -3358,7 +3397,9 @@ fn sys_getcwd(frame: &mut SyscallFrame) -> u64 {
 fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
     let sched = crate::sched::SCHEDULER.lock();
     let p = sched.current_process();
-    let actor = match p.name_str() {
+    let actor = if p.trusted_auth_broker {
+        sunlight_fs::Actor::Service { name: "sunlight-uac" }
+    } else { match p.name_str() {
         "sunlight-kv" => sunlight_fs::Actor::Service {
             name: "sunlight-kv",
         },
@@ -3378,9 +3419,7 @@ fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
         "sunlight-tls" => sunlight_fs::Actor::Service {
             name: "sunlight-tls",
         },
-        "uac_service" | "sunlight-uac" => sunlight_fs::Actor::Service {
-            name: "sunlight-uac",
-        },
+
         "capability-broker" => sunlight_fs::Actor::Service {
             name: "capability-broker",
         },
@@ -3388,7 +3427,7 @@ fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
             uid: p.uid,
             name: username_for_uid(p.uid),
         },
-    };
+    }};
     (p.uid, p.gid, actor)
 }
 
@@ -5579,6 +5618,9 @@ fn sys_chown(frame: &mut SyscallFrame) -> u64 {
     };
     let uid = frame.rsi as u32;
     let gid = frame.rdx as u32;
+    if matches!(path, "/etc/passwd" | "/etc/group" | "/etc/shadow" | "/etc/.shadow-uac-new" | "/etc/.group-uac-new" | "/etc/.passwd-uac-new") {
+        return u64::MAX;
+    }
 
     // Only root can chown.
     let (caller_uid, _, _) = current_fs_actor();

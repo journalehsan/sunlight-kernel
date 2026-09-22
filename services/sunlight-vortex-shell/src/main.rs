@@ -4117,6 +4117,9 @@ impl VortexShell {
         use start_menu::{PowerAction, StartMenuAction};
         match action {
             StartMenuAction::None | StartMenuAction::DismissedOutside => {}
+            StartMenuAction::UserSettings => {
+                let _ = self.launch_control_panel_page(b"users-groups", LaunchSource::Shell);
+            }
             StartMenuAction::Launch(app_id) => {
                 let _ = self.open_app_from_ui(app_id, now, LaunchSource::Shell);
             }
@@ -9475,6 +9478,7 @@ impl App for VortexShell {
                 false
             }
             Event::Tick => {
+                if self.start_menu.refresh_identity(monotonic_millis()) { return true; }
                 let now = monotonic_millis();
                 let mut dirty = self.advance_calendar_load();
                 #[cfg(feature = "stress")]
