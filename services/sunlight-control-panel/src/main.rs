@@ -111,6 +111,10 @@ const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO
 const WIN_W: u32 = 500;
 const WIN_H: u32 = 560;
 const PAGE_HEADER_H: u32 = 44;
+const GRID_SIDE_MARGIN: u32 = 16;
+const GRID_COLUMN_GAP: u32 = 10;
+const GRID_CARD_H: u32 = 58;
+const GRID_ROW_GAP: i32 = 8;
 const DISPLAY_DIALOG_W: u32 = 420;
 const DISPLAY_DIALOG_H: u32 = 190;
 const KEY_ESC: u8 = 0x01;
@@ -399,6 +403,12 @@ struct ControlPanelLayout {
     root: Rect,
     header: Rect,
     content: Rect,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GridLayout {
+    sections: [Rect; 3],
+    cards: [Rect; 11],
 }
 
 impl ControlPanelApp {
@@ -727,28 +737,71 @@ impl ControlPanelApp {
     // Grid page
     // -----------------------------------------------------------------------
 
-    fn card_rects(&self) -> [Rect; 11] {
-        let card_w = 136u32;
-        let card_h = 96u32;
-        let gap = 14i32;
-        let start_x = (self.win_w() as i32 - (card_w * 3) as i32 - gap * 2) / 2;
-        let card_y = self.layout.content.y + 8;
-        let row2_y = card_y + card_h as i32 + 10;
-        let row3_y = row2_y + card_h as i32 + 10;
-        let row4_y = row3_y + card_h as i32 + 10;
-        [
-            Rect::new(start_x, card_y, card_w, card_h),
-            Rect::new(start_x + card_w as i32 + gap, card_y, card_w, card_h),
-            Rect::new(start_x + (card_w as i32 + gap) * 2, card_y, card_w, card_h),
-            Rect::new(start_x, row2_y, card_w, card_h),
-            Rect::new(start_x + card_w as i32 + gap, row2_y, card_w, card_h),
-            Rect::new(start_x + (card_w as i32 + gap) * 2, row2_y, card_w, card_h),
-            Rect::new(start_x, row3_y, card_w, card_h),
-            Rect::new(start_x + card_w as i32 + gap, row3_y, card_w, card_h),
-            Rect::new(start_x + (card_w as i32 + gap) * 2, row3_y, card_w, card_h),
-            Rect::new(start_x, row4_y, card_w, card_h),
-            Rect::new(start_x + card_w as i32 + gap, row4_y, card_w, card_h),
-        ]
+    fn compute_grid_layout(win_w: u32, content_y: i32) -> GridLayout {
+        let available_w = win_w.saturating_sub(GRID_SIDE_MARGIN * 2 + GRID_COLUMN_GAP);
+        let card_w = (available_w / 2).max(1);
+        let row_w = card_w * 2 + GRID_COLUMN_GAP;
+        let start_x = win_w.saturating_sub(row_w) as i32 / 2;
+        let right_x = start_x + card_w as i32 + GRID_COLUMN_GAP as i32;
+
+        let personalization_heading_y = content_y + 8;
+        let personalization_y = personalization_heading_y + 22;
+        let devices_heading_y = personalization_y + GRID_CARD_H as i32 + 14;
+        let devices_y = devices_heading_y + 22;
+        let system_heading_y =
+            devices_y + (GRID_CARD_H as i32 + GRID_ROW_GAP) * 2 + GRID_CARD_H as i32 + 14;
+        let system_y = system_heading_y + 22;
+
+        let section_w = row_w.min(win_w);
+        GridLayout {
+            sections: [
+                Rect::new(start_x, personalization_heading_y, section_w, 18),
+                Rect::new(start_x, devices_heading_y, section_w, 18),
+                Rect::new(start_x, system_heading_y, section_w, 18),
+            ],
+            cards: [
+                Rect::new(start_x, personalization_y, card_w, GRID_CARD_H),
+                Rect::new(right_x, personalization_y, card_w, GRID_CARD_H),
+                Rect::new(start_x, devices_y, card_w, GRID_CARD_H),
+                Rect::new(right_x, devices_y, card_w, GRID_CARD_H),
+                Rect::new(
+                    start_x,
+                    devices_y + GRID_CARD_H as i32 + GRID_ROW_GAP,
+                    card_w,
+                    GRID_CARD_H,
+                ),
+                Rect::new(
+                    right_x,
+                    devices_y + GRID_CARD_H as i32 + GRID_ROW_GAP,
+                    card_w,
+                    GRID_CARD_H,
+                ),
+                Rect::new(
+                    start_x,
+                    devices_y + (GRID_CARD_H as i32 + GRID_ROW_GAP) * 2,
+                    card_w,
+                    GRID_CARD_H,
+                ),
+                Rect::new(start_x, system_y, card_w, GRID_CARD_H),
+                Rect::new(right_x, system_y, card_w, GRID_CARD_H),
+                Rect::new(
+                    start_x,
+                    system_y + GRID_CARD_H as i32 + GRID_ROW_GAP,
+                    card_w,
+                    GRID_CARD_H,
+                ),
+                Rect::new(
+                    right_x,
+                    system_y + GRID_CARD_H as i32 + GRID_ROW_GAP,
+                    card_w,
+                    GRID_CARD_H,
+                ),
+            ],
+        }
+    }
+
+    fn grid_layout(&self) -> GridLayout {
+        Self::compute_grid_layout(self.win_w(), self.layout.content.y)
     }
 
     fn draw_card(
@@ -770,24 +823,38 @@ impl ControlPanelApp {
         // Quiet hairline — modern grid without heavy framed tiles.
         canvas.stroke_rounded_rect(rect, 10, 1, theme.panel.lighten(22));
 
-        let ix = rect.x + rect.w as i32 / 2 - 24;
-        let iy = rect.y + 22;
-        let icon_rect = Rect::new(ix, iy, 48, 48);
+        let icon_size = 38;
+        let ix = rect.x + 10;
+        let iy = rect.y + (rect.h as i32 - icon_size as i32) / 2;
+        let icon_rect = Rect::new(ix, iy, icon_size, icon_size);
 
         if let Some(tga) = tga_icon {
             // Rounded application icon (AA corner clip + bilinear when scaled).
-            canvas.draw_tga_icon_rounded(&tga, icon_rect, 12);
+            canvas.draw_tga_icon_rounded(&tga, icon_rect, 9);
         } else {
             // Fallback: solid color square + inner highlight.
             canvas.fill_rect(icon_rect, icon_color);
-            let inner = Rect::new(ix + 12, iy + 12, 24, 24);
+            let inner = Rect::new(ix + 10, iy + 10, 18, 18);
             canvas.fill_rect(inner, theme.bg);
         }
 
-        let label_rect = Rect::new(rect.x + 8, rect.bottom() - 42, rect.w - 16, 18);
-        let sub_rect = Rect::new(rect.x + 8, rect.bottom() - 24, rect.w - 16, 14);
+        let text_x = rect.x + 58;
+        let text_w = rect.w.saturating_sub(66);
+        let label_rect = Rect::new(text_x, rect.y + 9, text_w, 18);
+        let sub_rect = Rect::new(text_x, rect.y + 30, text_w, 16);
         Self::draw_label(canvas, label_rect, label, theme, FontRole::UiMedium);
         Self::draw_dim_label(canvas, sub_rect, sublabel, theme, FontRole::UiSmall);
+    }
+
+    fn draw_section_heading(canvas: &mut Canvas, theme: &Theme, rect: Rect, label: &str) {
+        sun_font::draw_text_vcenter(
+            canvas,
+            label,
+            rect.x + 2,
+            rect.y,
+            rect.h,
+            &TextStyle::new(FontRole::UiSmall, theme.accent),
+        );
     }
 
     fn draw_grid(&mut self, canvas: &mut Canvas, theme: &Theme) {
@@ -825,38 +892,25 @@ impl ControlPanelApp {
             FontRole::UiTitle,
         );
 
-        let cards = self.card_rects();
+        let grid = self.grid_layout();
+        Self::draw_section_heading(canvas, theme, grid.sections[0], "Personalization");
+        Self::draw_section_heading(canvas, theme, grid.sections[1], "Devices & connectivity");
+        Self::draw_section_heading(canvas, theme, grid.sections[2], "System");
+
+        let cards = grid.cards;
         Self::draw_card(
             canvas,
             theme,
             cards[0],
-            theme.icon_foreground,
-            "Mouse",
-            "Pointer & Acceleration",
-            self.icon_mouse,
-        );
-        Self::draw_card(
-            canvas,
-            theme,
-            cards[1],
-            theme.icon_muted,
-            "Monitor",
-            "Resolution & Display",
-            self.icon_monitor,
-        );
-        Self::draw_card(
-            canvas,
-            theme,
-            cards[2],
             theme.accent,
             "Wallpaper",
-            "Desktop Background",
+            "Desktop background",
             self.icon_wallpaper,
         );
         Self::draw_card(
             canvas,
             theme,
-            cards[3],
+            cards[1],
             theme.icon_foreground,
             "Notifications",
             "History & DND",
@@ -865,34 +919,43 @@ impl ControlPanelApp {
         Self::draw_card(
             canvas,
             theme,
-            cards[4],
+            cards[2],
             theme.icon_foreground,
-            "About Computer",
-            "Hardware, memory, GPU",
-            self.icon_computer,
+            "Mouse",
+            "Pointer & acceleration",
+            self.icon_mouse,
+        );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[3],
+            theme.icon_muted,
+            "Monitor",
+            "Resolution & display",
+            self.icon_monitor,
+        );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[4],
+            theme.accent,
+            "Sound",
+            "Output & volume",
+            self.icon_sound,
         );
         Self::draw_card(
             canvas,
             theme,
             cards[5],
             theme.accent,
-            "About SunlightOS",
-            "OS, kernel, and build",
-            self.icon_about_os.or(self.icon_logo),
-        );
-        Self::draw_card(
-            canvas,
-            theme,
-            cards[6],
-            theme.accent,
             "Network",
-            "Ethernet & Loopback",
+            "Ethernet & loopback",
             self.icon_network,
         );
         Self::draw_card(
             canvas,
             theme,
-            cards[7],
+            cards[6],
             theme.accent,
             "Power & Thermal",
             "Modes, fans, sensors",
@@ -901,7 +964,7 @@ impl ControlPanelApp {
         Self::draw_card(
             canvas,
             theme,
-            cards[8],
+            cards[7],
             theme.accent,
             "Date & Time",
             "Clock, sync, timezone",
@@ -910,78 +973,87 @@ impl ControlPanelApp {
         Self::draw_card(
             canvas,
             theme,
-            cards[9],
+            cards[8],
             theme.accent,
             "Login & Session",
-            "Startup Apps",
+            "Startup apps",
             self.icon_session,
+        );
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[9],
+            theme.icon_foreground,
+            "About Computer",
+            "Hardware, memory, GPU",
+            self.icon_computer,
         );
         Self::draw_card(
             canvas,
             theme,
             cards[10],
             theme.accent,
-            "Sound",
-            "Output & Volume",
-            self.icon_sound,
+            "About SunlightOS",
+            "OS, kernel, and build",
+            self.icon_about_os.or(self.icon_logo),
         );
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
-            let cards = self.card_rects();
+            let cards = self.grid_layout().cards;
             if cards[0].contains(pt) {
-                self.page = Page::Mouse;
-                self.status_len = 0;
-                return true;
-            }
-            if cards[1].contains(pt) {
-                self.page = Page::Monitor;
-                self.refresh_display_modes();
-                return true;
-            }
-            if cards[2].contains(pt) {
                 self.page = Page::Wallpaper;
                 self.refresh_wallpaper_preview();
                 return true;
             }
-            if cards[3].contains(pt) {
+            if cards[1].contains(pt) {
                 self.page = Page::Notifications;
                 self.status_len = 0;
                 return true;
             }
+            if cards[2].contains(pt) {
+                self.page = Page::Mouse;
+                self.status_len = 0;
+                return true;
+            }
+            if cards[3].contains(pt) {
+                self.page = Page::Monitor;
+                self.refresh_display_modes();
+                return true;
+            }
             if cards[4].contains(pt) {
+                self.page = Page::Sound;
+                return self.sound.refresh();
+            }
+            if cards[5].contains(pt) {
+                self.page = Page::Network;
+                return self.network.refresh();
+            }
+            if cards[6].contains(pt) {
+                self.page = Page::PowerThermal;
+                return self.power_thermal.refresh();
+            }
+            if cards[7].contains(pt) {
+                self.page = Page::DateTime;
+                return self.date_time.activate();
+            }
+            if cards[8].contains(pt) {
+                self.page = Page::LoginSession;
+                return self.login_session.activate();
+            }
+            if cards[9].contains(pt) {
                 self.page = Page::AboutComputer;
                 self.about = AboutPageState::new();
                 self.refresh_sysinfo();
                 return true;
             }
-            if cards[5].contains(pt) {
+            if cards[10].contains(pt) {
                 self.page = Page::AboutOs;
                 self.about = AboutPageState::new();
                 self.refresh_sysinfo();
                 return true;
-            }
-            if cards[6].contains(pt) {
-                self.page = Page::Network;
-                return self.network.refresh();
-            }
-            if cards[7].contains(pt) {
-                self.page = Page::PowerThermal;
-                return self.power_thermal.refresh();
-            }
-            if cards[8].contains(pt) {
-                self.page = Page::DateTime;
-                return self.date_time.activate();
-            }
-            if cards[9].contains(pt) {
-                self.page = Page::LoginSession;
-                return self.login_session.activate();
-            }
-            if cards[10].contains(pt) {
-                self.page = Page::Sound;
-                return self.sound.refresh();
             }
         }
         false
@@ -2190,10 +2262,28 @@ mod tests {
         assert_eq!(wide.content.w, initial.content.w + 200);
         assert_eq!(tall.content.h, initial.content.h + 180);
         assert_eq!(wide.header.h, PAGE_HEADER_H);
-        let card_row_w = 136 * 3 + 14 * 2;
-        let start_wide = (wide.root.w as i32 - card_row_w) / 2;
-        let start_initial = (initial.root.w as i32 - card_row_w) / 2;
-        assert!(start_wide > start_initial);
+
+        let initial_grid = ControlPanelApp::compute_grid_layout(initial.root.w, initial.content.y);
+        let wide_grid = ControlPanelApp::compute_grid_layout(wide.root.w, wide.content.y);
+        assert!(wide_grid.cards[0].w > initial_grid.cards[0].w);
+        assert_eq!(initial_grid.cards[0].x, GRID_SIDE_MARGIN as i32);
+        assert_eq!(wide_grid.cards[0].x, GRID_SIDE_MARGIN as i32);
+    }
+
+    #[test]
+    fn navigation_groups_are_ordered_and_do_not_overlap() {
+        let grid = ControlPanelApp::compute_grid_layout(WIN_W, PAGE_HEADER_H as i32);
+
+        assert!(grid.sections[0].bottom() <= grid.cards[0].y);
+        assert!(grid.cards[1].bottom() < grid.sections[1].y);
+        assert!(grid.sections[1].bottom() <= grid.cards[2].y);
+        assert!(grid.cards[6].bottom() < grid.sections[2].y);
+        assert!(grid.sections[2].bottom() <= grid.cards[7].y);
+        assert!(grid.cards[10].bottom() <= WIN_H as i32);
+
+        for pair in grid.cards.windows(2) {
+            assert_ne!(pair[0], pair[1]);
+        }
     }
 
     #[test]
