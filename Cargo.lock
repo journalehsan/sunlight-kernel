@@ -3492,8 +3492,10 @@ dependencies = [
  "sunlight-locale",
  "sunlight-networkd",
  "sunlight-tz",
+ "tempfile",
  "thiserror 1.0.69",
  "wiseowl-index",
+ "wiseowl-memory",
  "wiseowl-memorydb",
 ]
 

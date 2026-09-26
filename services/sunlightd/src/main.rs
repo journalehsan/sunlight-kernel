@@ -614,12 +614,14 @@ WantedBy=sunlight.target
     }
 
     // wiseowl-memoryd.service — Wise Owl Phase 1.1 short-term cognitive memory.
-    // Optional cognitive service: depends on sunlight-kv for promotion; degrades
-    // to RAM-only when KV is unavailable. Bounded restart avoids restart storms.
+    // Optional cognitive service: depends on sunlight-kv for promotion and
+    // consumes MemoryDB identity status before durable promotion. Bounded restart
+    // avoids restart storms; KV absence still leaves RAM-only operation.
     let wiseowl_memory_service = r#"[Unit]
 Description=Wise Owl Short-Term Memory Service
-After=sunlight-kv.service
+After=sunlight-kv.service wiseowl-memorydb.service
 Wants=sunlight-kv.service
+Wants=wiseowl-memorydb.service
 
 [Service]
 Type=simple
@@ -631,6 +633,7 @@ StartLimitIntervalSec=60
 User=root
 Capability=kv-store
 Capability=logging
+Capability=wiseowl-memorydb
 StandardOutput=journal
 StandardError=journal
 
@@ -673,7 +676,8 @@ WantedBy=sunlight.target
     // restart avoids restart storms on database outage.
     let wiseowl_index_service = r#"[Unit]
 Description=Wise Owl Document Indexer
-After=vfs_server.service
+After=vfs_server.service wiseowl-memorydb.service
+Wants=wiseowl-memorydb.service
 
 [Service]
 Type=simple
@@ -702,7 +706,7 @@ WantedBy=sunlight.target
     // optional context sources (KV, MemoryDB, Index) are unavailable.
     let wiseowl_brain_service = r#"[Unit]
 Description=Wise Owl Cognitive Brain Service
-After=vfs_server.service
+After=vfs_server.service wiseowl-memorydb.service
 Wants=sunlight-kv.service
 Wants=wiseowl-memorydb.service
 Wants=wiseowl-indexd.service
@@ -718,6 +722,7 @@ User=root
 Capability=logging
 Capability=kv-store
 Capability=user-session
+Capability=wiseowl-memorydb
 StandardOutput=journal
 StandardError=journal
 
@@ -1333,6 +1338,7 @@ fn dep_unit_to_ready_name(dep: &str) -> &str {
         "net_server" => "net",
         "vfs_server" => "vfs",
         "sunlight-thumbd" => "thumbd",
+        "wiseowl-memorydb" => "wiseowl.memorydb.v1",
         // init-launched compositor; nameserver id is display_server, not the unit stem.
         "sunlight-display" => "display_server",
         other => other,
@@ -1781,6 +1787,141 @@ fn handle_control_message(
     reply
 }
 
+#[cfg(feature = "identity-phase-c-test")]
+struct IdentityPhaseCGate {
+    step: u8,
+    started_ms: u64,
+    first_pid: u32,
+    duplicate_pid: u32,
+    last_probe_ms: u64,
+}
+
+#[cfg(feature = "identity-phase-c-test")]
+impl IdentityPhaseCGate {
+    const fn new() -> Self {
+        Self { step: 0, started_ms: 0, first_pid: 0, duplicate_pid: 0, last_probe_ms: 0 }
+    }
+
+    fn index_memorydb_ready() -> Option<bool> {
+        let cap = nameserver_lookup("wiseowl.index.v1")?;
+        let reply = sunlight_ipc::ipc_call_timeout(cap, IpcMsg::with_label(0x4E0E), 3_000).ok()?;
+        // The native register IPC ABI carries words 0..3. GetHealth's word 3
+        // is a nonzero MemoryDB generation only while the connection is Ready.
+        (reply.label == 0x4E80).then_some(reply.words[3] != 0)
+    }
+
+    fn consumer_ready(endpoint: &str, op: u64, reply_label: u64) -> Option<bool> {
+        let cap = nameserver_lookup(endpoint)?;
+        let reply = sunlight_ipc::ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(op).word(0, 0xC1A0_0001),
+            3_000,
+        ).ok()?;
+        (reply.label == reply_label).then_some(reply.words[0] == 1)
+    }
+
+    fn brain_ready() -> Option<bool> {
+        Self::consumer_ready("wiseowl.brain.v1", 0xB00E, 0xBF80)
+    }
+
+    fn memory_ready() -> Option<bool> {
+        Self::consumer_ready("wiseowl-memoryd", 0x4F10, 0x4F80)
+    }
+
+    fn memory_ram_available() -> bool {
+        let Some(cap) = nameserver_lookup("wiseowl-memoryd") else { return false; };
+        let Ok(reply) = sunlight_ipc::ipc_call_timeout(
+            cap, IpcMsg::with_label(0x4F02), 3_000,
+        ) else { return false; };
+        reply.label == 0x4F80 && reply.words[0] == 2 && reply.words[1] != 0
+    }
+
+    fn poll(&mut self, services: &mut ServiceTable, spawn_cap: CapabilityToken) {
+        let Some(idx) = services.find_by_name("wiseowl-memorydb") else { return; };
+        match self.step {
+            0 => {
+                if nameserver_lookup("wiseowl.memorydb.v1").is_none()
+                    || nameserver_lookup("wiseowl.index.v1").is_none()
+                    || nameserver_lookup("wiseowl.brain.v1").is_none()
+                    || nameserver_lookup("wiseowl-memoryd").is_none() { return; }
+                if Self::index_memorydb_ready() != Some(true)
+                    || Self::brain_ready() != Some(true)
+                    || Self::memory_ready() != Some(true) { return; }
+                serial_println!("[WISEOWL-IDENTITY-C] consumers initially active");
+                let Some(first_pid) = services.get(idx).and_then(entry_pid) else { return; };
+                let Some(unit) = services.get(idx).map(|entry| entry.unit.clone()) else { return; };
+                let Some((uid, gid)) = lookup_user_credentials(unit.user.as_str()) else { return; };
+                let duplicate = spawn_named_with_identity(spawn_cap, &unit.exec_start,
+                    "wiseowl-memorydb", uid, gid, unit.capability_mask);
+                match duplicate {
+                    Ok(pid) => {
+                        self.first_pid = first_pid;
+                        self.duplicate_pid = pid;
+                        self.started_ms = monotonic_millis();
+                        self.step = 1;
+                        serial_println!("[WISEOWL-IDENTITY-C] duplicate launched first={} second={}", first_pid, pid);
+                    }
+                    Err(error) => serial_println!("[WISEOWL-IDENTITY-C] duplicate launch failed detail={}", error),
+                }
+            }
+            1 if monotonic_millis().saturating_sub(self.started_ms) >= 2000 => {
+                let _ = libc::kill(self.duplicate_pid as u64, SIGKILL);
+                if matches!(observe_managed_process(self.duplicate_pid), ProcessObservation::Alive) {
+                    return;
+                }
+                serial_println!("[WISEOWL-IDENTITY-C] duplicate stopped pid={}", self.duplicate_pid);
+                match stop_service(services, idx, spawn_cap, false) {
+                    StopOutcome::Confirmed { pid, restarted: false } if pid == self.first_pid => {
+                        self.step = 2;
+                        serial_println!("[WISEOWL-IDENTITY-C] MemoryDB-only restart old_pid={}", pid);
+                    }
+                    _ => serial_println!("[WISEOWL-IDENTITY-C] MemoryDB-only restart failed"),
+                }
+            }
+            2 => {
+                if monotonic_millis().saturating_sub(self.last_probe_ms) < 100 { return; }
+                self.last_probe_ms = monotonic_millis();
+                if Self::index_memorydb_ready() != Some(false)
+                    || Self::brain_ready() != Some(false)
+                    || Self::memory_ready() != Some(false)
+                    || !Self::memory_ram_available() { return; }
+                serial_println!("[WISEOWL-IDENTITY-C] memory RAM session available while durable blocked");
+                serial_println!("[WISEOWL-IDENTITY-C] consumers paused while MemoryDB absent");
+                match spawn_service_at(services, idx, spawn_cap) {
+                    Ok(_) => { self.step = 3; self.started_ms = monotonic_millis(); }
+                    Err(error) => serial_println!("[WISEOWL-IDENTITY-C] replacement spawn failed detail={}", error),
+                }
+            }
+            3 => {
+                if monotonic_millis().saturating_sub(self.last_probe_ms) < 100 { return; }
+                self.last_probe_ms = monotonic_millis();
+                let replacement = services.get(idx).and_then(entry_pid);
+                let index_ready = Self::index_memorydb_ready();
+                let brain_ready = Self::brain_ready();
+                let memory_ready = Self::memory_ready();
+                if monotonic_millis().saturating_sub(self.started_ms) >= 3000 {
+                    let db_ready = nameserver_lookup("wiseowl.memorydb.v1")
+                        .and_then(|cap| sunlight_ipc::ipc_call_timeout(cap, IpcMsg::with_label(0x4D0F), 1_000).ok())
+                        .map(|reply| reply.words[0]).unwrap_or(2);
+                    serial_println!("[WISEOWL-IDENTITY-C] replacement probe pid={} index={} db={}",
+                        replacement.unwrap_or(0), match index_ready { Some(true) => 1, Some(false) => 0, None => 2 }, db_ready);
+                    self.started_ms = monotonic_millis();
+                }
+                if replacement.is_some_and(|pid| pid != self.first_pid)
+                    && nameserver_lookup("wiseowl.memorydb.v1").is_some()
+                    && index_ready == Some(true)
+                    && brain_ready == Some(true)
+                    && memory_ready == Some(true) {
+                    serial_println!("[WISEOWL-IDENTITY-C] replacement ready old_pid={} new_pid={}",
+                        self.first_pid, replacement.unwrap_or(0));
+                    self.step = 4;
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 #[cfg(not(test))]
 #[no_mangle]
 fn _start() -> ! {
@@ -1817,12 +1958,17 @@ fn _start() -> ! {
     let mut startup = BootStartup::new(&services);
     autostart_services(&mut services, &mut startup, spawn_cap);
 
+    #[cfg(feature = "identity-phase-c-test")]
+    let mut identity_phase_c_gate = IdentityPhaseCGate::new();
+
     // Main control loop. Non-blocking receive lets boot autostart keep
     // progressing while dependencies register.
     let mut reply = IpcMsg::empty();
     loop {
         poll_service_exits(&mut services, spawn_cap);
         autostart_services(&mut services, &mut startup, spawn_cap);
+        #[cfg(feature = "identity-phase-c-test")]
+        identity_phase_c_gate.poll(&mut services, spawn_cap);
         match ipc_reply_and_try_recv(ep, reply) {
             Some(msg) => {
                 reply = handle_control_message(&msg, &mut services, spawn_cap);

@@ -919,6 +919,7 @@ fn registration_identity_matches(process_name: &str, registered_name: u64) -> bo
         name if name == name_hash("wiseowl-memoryd") => "wiseowl-memoryd",
         name if name == name_hash("wiseowl-memorydb") => "wiseowl-memorydb",
         name if name == name_hash("wiseowl.memorydb.v1") => "wiseowl-memorydb",
+        name if name == name_hash("wiseowl.memorydb.authority.v1") => "wiseowl-memorydb",
         name if name == name_hash("wiseowl-indexd") => "wiseowl-indexd",
         name if name == name_hash("wiseowl.index.v1") => "wiseowl-indexd",
         name if name == name_hash("wiseowl-braind") => "wiseowl-braind",

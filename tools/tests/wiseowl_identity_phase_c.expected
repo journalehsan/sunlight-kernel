@@ -1,0 +1,17 @@
+# Wise Owl persistent identity Phase C native duplicate and restart evidence
+[VFS] FAT volume mounted at /state
+[init] nameserver registry integrity tests: OK
+[WISEOWL-DB] identity status Ready fingerprint=
+[WISEOWL-IDENTITY-C] duplicate launched
+[WISEOWL-IDENTITY-C] writer rejected
+[WISEOWL-IDENTITY-C] duplicate stopped
+[WISEOWL-IDENTITY-C] MemoryDB-only restart old_pid=
+[WISEOWL-IDENTITY-C] consumers initially active
+[WISEOWL-IDENTITY-C] consumers paused while MemoryDB absent
+[WISEOWL-IDENTITY-C] brain probe mode=GenericDegraded
+[WISEOWL-IDENTITY-C] memory probe durable=0 ram=1
+[WISEOWL-IDENTITY-C] memory RAM session available while durable blocked
+[WISEOWL-IDENTITY-C] replacement ready
+[WISEOWL-INDEX] persistent identity bound
+[WISEOWL-BRAIN] persistent identity bound
+[WISEOWL] persistent identity available

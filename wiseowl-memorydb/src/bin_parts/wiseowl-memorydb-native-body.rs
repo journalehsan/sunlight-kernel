@@ -17,6 +17,8 @@ use wiseowl_memorydb::identity::{
     detect_store_state, ensure_identity, AdoptionPolicy, CreationBoundary, DetectedStoreState,
     IdentityDirEntry, IdentityStartupError, IdentityStorage, StoreDisposition,
 };
+use wiseowl_memorydb::activation::{reconcile_local, LocalActivationRecord, LOCAL_LEN};
+use wiseowl_identity::{ActivationId, ActivationState, InstallationId};
 use wiseowl_memorydb::native_ipc::{
     MemoryDbIpcHeader, MemoryDbOp, INLINE_PAYLOAD_THRESHOLD, MEMORYDB_IPC_HEADER_LEN,
     NATIVE_PROTOCOL_VERSION,
@@ -33,6 +35,9 @@ macro_rules! serial_println {
 }
 
 const STATE_DIR: &[u8] = b"/state/wiseowl-memorydb";
+const LOCAL_PATH: &str = "IDENTITY/LOCAL";
+const LOCAL_TMP_PATH: &str = "IDENTITY/LOCAL.tmp";
+const BOOT_EPOCH_PATH: &[u8] = b"/tmp/wiseowl-memorydb-boot-epoch";
 
 struct NativeIdentityStorage;
 
@@ -59,6 +64,122 @@ impl NativeIdentityStorage {
         } else {
             alloc::format!("/state/wiseowl-memorydb/{relative}")
         }
+    }
+
+    fn persist_local(&mut self, record: LocalActivationRecord) -> Result<(), IdentityStartupError> {
+        let bytes = record.encode();
+        if bytes.len() != LOCAL_LEN { return Err(IdentityStartupError::Io); }
+        self.write_file(LOCAL_TMP_PATH, &bytes)?;
+        self.sync_file(LOCAL_TMP_PATH)?;
+        self.sync_dir("IDENTITY")?;
+        libc::rename(Self::path(LOCAL_TMP_PATH).as_bytes(), Self::path(LOCAL_PATH).as_bytes())
+            .map_err(|_| IdentityStartupError::Io)?;
+        self.sync_dir("IDENTITY")?;
+        Ok(())
+    }
+
+    fn boot_epoch() -> Result<[u8; 16], IdentityStartupError> {
+        match libc::open_with_flags(BOOT_EPOCH_PATH, libc::O_RDONLY) {
+            Ok(fd) => {
+                let mut bytes = [0u8; 16];
+                let read = libc::read(fd, &mut bytes).map_err(|_| IdentityStartupError::Io)?;
+                let mut trailing = [0u8; 1];
+                let tail = libc::read(fd, &mut trailing).map_err(|_| IdentityStartupError::Io)?;
+                let _ = libc::close(fd);
+                if read != bytes.len() || tail != 0 || bytes == [0; 16] { return Err(IdentityStartupError::CorruptStagedIdentity); }
+                Ok(bytes)
+            }
+            Err(libc::Errno::NoEntry) => {
+                let mut bytes = [0u8; 16];
+                if libc::getrandom(&mut bytes, 0) != bytes.len() as isize || bytes == [0; 16] {
+                    return Err(IdentityStartupError::EntropyUnavailable);
+                }
+                let fd = libc::open_with_flags_mode(BOOT_EPOCH_PATH, libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL, 0o600)
+                    .map_err(|_| IdentityStartupError::Io)?;
+                let wrote = libc::write(fd, &bytes).map_err(|_| IdentityStartupError::Io)?;
+                let _ = libc::close(fd);
+                if wrote != bytes.len() { return Err(IdentityStartupError::Io); }
+                Ok(bytes)
+            }
+            Err(_) => Err(IdentityStartupError::Io),
+        }
+    }
+
+    fn activate_local(&mut self, identity: wiseowl_identity::IdentityId, boot: [u8; 16]) -> Result<(ActivationId, ActivationState), IdentityStartupError> {
+        for entry in self.list_dir("IDENTITY")? {
+            if entry.name.starts_with("LOCAL.") && entry.name != "LOCAL.tmp" {
+                return Err(IdentityStartupError::AmbiguousStagedIdentity);
+            }
+        }
+        let current = self.read_file(LOCAL_PATH)?.map(|bytes| LocalActivationRecord::decode(&bytes)
+            .map_err(|_| IdentityStartupError::CorruptCommittedIdentity)).transpose()?;
+        let staged_bytes = self.read_file(LOCAL_TMP_PATH)?;
+        let staged = staged_bytes.as_ref().and_then(|bytes| LocalActivationRecord::decode(bytes).ok());
+        let (previous, promote_stage) = reconcile_local(current, staged, identity)
+            .map_err(|_| IdentityStartupError::AmbiguousStagedIdentity)?;
+        if staged_bytes.is_some() {
+            if current.is_some() || !promote_stage {
+                libc::unlink(Self::path(LOCAL_TMP_PATH).as_bytes()).map_err(|_| IdentityStartupError::Io)?;
+                self.sync_dir("IDENTITY")?;
+            } else {
+                libc::rename(Self::path(LOCAL_TMP_PATH).as_bytes(), Self::path(LOCAL_PATH).as_bytes()).map_err(|_| IdentityStartupError::Io)?;
+                self.sync_dir("IDENTITY")?;
+            }
+        }
+        let mut record = match previous {
+            Some(record) => record,
+            None => {
+                    let install = InstallationId::generate_with(|bytes| {
+                        if libc::getrandom(bytes, 0) == bytes.len() as isize { Ok(()) } else { Err(wiseowl_identity::EntropyError) }
+                    }).map_err(|_| IdentityStartupError::EntropyUnavailable)?;
+                    let initial = LocalActivationRecord { identity_id: identity, installation_id: install, state: ActivationState::Activating,
+                        activation_id: None, clean_stop: false, boot_epoch: boot, activation_sequence: 1 };
+                    self.persist_local(initial)?;
+                    initial
+            }
+        };
+        if record.state == ActivationState::Suspended {
+            return Err(IdentityStartupError::CorruptCommittedIdentity);
+        }
+
+        let preserve = wiseowl_memorydb::activation::restart_preserves_activation(&record, boot);
+        let old_activation = if preserve { record.activation_id } else { None };
+        let activation = match old_activation {
+            Some(id) => id,
+            None => ActivationId::generate_with(|bytes| {
+                if libc::getrandom(bytes, 0) == bytes.len() as isize { Ok(()) } else { Err(wiseowl_identity::EntropyError) }
+            }).map_err(|_| IdentityStartupError::EntropyUnavailable)?,
+        };
+        let recovery = record.activation_id.is_some()
+            && matches!(record.state, ActivationState::Active | ActivationState::RecoveringLocal | ActivationState::Activating);
+        if !preserve && (matches!(record.state, ActivationState::Active | ActivationState::Dormant | ActivationState::RecoveringLocal)
+            || (record.state == ActivationState::Activating && record.activation_id.is_some())) {
+            record.activation_sequence = record.activation_sequence.checked_add(1)
+                .ok_or(IdentityStartupError::CorruptCommittedIdentity)?;
+        }
+        record.state = if recovery { ActivationState::RecoveringLocal } else { ActivationState::Activating };
+        record.activation_id = Some(activation);
+        record.clean_stop = false;
+        record.boot_epoch = boot;
+        let startup_state = record.state;
+        self.persist_local(record)?;
+        #[cfg(feature = "identity-phase-c-test")]
+        {
+            let install = record.installation_id.fingerprint();
+            serial_println!("[WISEOWL-IDENTITY-C] installation={}",
+                core::str::from_utf8(&install).unwrap_or("????????"));
+        }
+        // Database recovery/open occurs before final Active publication.
+        Ok((activation, startup_state))
+    }
+
+    fn mark_local_active(&mut self, identity: wiseowl_identity::IdentityId, activation: ActivationId) -> Result<(), IdentityStartupError> {
+        let bytes = self.read_file(LOCAL_PATH)?.ok_or(IdentityStartupError::CorruptCommittedIdentity)?;
+        let mut record = LocalActivationRecord::decode(&bytes).map_err(|_| IdentityStartupError::CorruptCommittedIdentity)?;
+        record.validate_identity(identity).map_err(|_| IdentityStartupError::CorruptCommittedIdentity)?;
+        if record.activation_id != Some(activation) { return Err(IdentityStartupError::CorruptCommittedIdentity); }
+        record.state = ActivationState::Active;
+        self.persist_local(record)
     }
 }
 
@@ -143,11 +264,25 @@ impl IdentityStorage for NativeIdentityStorage {
             .map_err(|_| IdentityStartupError::Io)?;
         let result = libc::file_sync(fd).map_err(|_| IdentityStartupError::Io);
         let _ = libc::close(fd);
+        #[cfg(feature = "identity-phase-a-fault-test")]
+        serial_println!(
+            "[WISEOWL-IDENTITY-A] file_sync path={} result={}",
+            relative,
+            if result.is_ok() { "ok" } else { "error" }
+        );
         result
     }
 
     fn sync_dir(&mut self, relative: &str) -> Result<(), IdentityStartupError> {
-        libc::dir_sync(Self::path(relative).as_bytes()).map_err(|_| IdentityStartupError::Io)
+        let result = libc::dir_sync(Self::path(relative).as_bytes())
+            .map_err(|_| IdentityStartupError::Io);
+        #[cfg(feature = "identity-phase-a-fault-test")]
+        serial_println!(
+            "[WISEOWL-IDENTITY-A] directory_sync path={} result={}",
+            relative,
+            if result.is_ok() { "ok" } else { "error" }
+        );
+        result
     }
 
     fn rename_no_replace(&mut self, old: &str, new: &str) -> Result<(), IdentityStartupError> {
@@ -382,6 +517,8 @@ pub extern "C" fn _start() -> ! {
             }
         },
         |boundary| {
+            #[cfg(feature = "identity-phase-a-fault-test")]
+            serial_println!("[WISEOWL-IDENTITY-A] boundary={:?}", boundary);
             if inject_synced_stage_crash && boundary == CreationBoundary::AfterRootFlush {
                 inject_synced_stage_crash = false;
                 serial_println!("[WISEOWL-IDENTITY-A] injected crash after durable staged ROOT");
@@ -401,6 +538,10 @@ pub extern "C" fn _start() -> ! {
     let fingerprint = identity.diagnostic_fingerprint();
     let fingerprint = core::str::from_utf8(&fingerprint).unwrap_or("????????");
     serial_println!("[WISEOWL-DB] identity loaded: {}", fingerprint);
+    if identity.lineage_sequence().get() != 1 || identity.continuity_generation().get() != 1 {
+        serial_println!("[WISEOWL-DB] Phase C continuity invariant failed; activation suspended");
+        loop { process_yield(); }
+    }
     let genesis = match identity.genesis_event_kind() {
         wiseowl_identity::GenesisEventKind::Created => "Created",
         wiseowl_identity::GenesisEventKind::ExistingStateAdopted => "ExistingStateAdopted",
@@ -417,6 +558,48 @@ pub extern "C" fn _start() -> ! {
     if identity.genesis_event_kind() == wiseowl_identity::GenesisEventKind::ExistingStateAdopted {
         serial_println!("[WISEOWL-DB] existing Wise Owl state adopted");
     }
+
+    // A process-owned nameserver endpoint is the volatile single-writer
+    // lease. The kernel revokes it with the owner process; init rejects a
+    // competing live registration and replaces stale endpoint registrations.
+    let authority_ep = endpoint_create();
+    if !nameserver_register("wiseowl.memorydb.authority.v1", authority_ep) {
+        serial_println!("[WISEOWL-DB] local writer authority unavailable; activation suspended");
+        #[cfg(feature = "identity-phase-c-test")]
+        serial_println!("[WISEOWL-IDENTITY-C] writer rejected pid={} generation={}",
+            sunlight_ipc::getpid(), sunlight_ipc::current_process_generation());
+        loop { process_yield(); }
+    }
+    #[cfg(feature = "identity-phase-c-test")]
+    serial_println!("[WISEOWL-IDENTITY-C] writer accepted pid={} generation={}",
+        sunlight_ipc::getpid(), sunlight_ipc::current_process_generation());
+    let boot_epoch = match NativeIdentityStorage::boot_epoch() {
+        Ok(epoch) => epoch,
+        Err(error) => {
+            serial_println!("[WISEOWL-DB] boot epoch unavailable: {:?}", error);
+            loop { process_yield(); }
+        }
+    };
+    #[cfg(feature = "identity-phase-c-test")]
+    serial_println!("[WISEOWL-IDENTITY-C] boot epoch={:02X}{:02X}{:02X}{:02X}",
+        boot_epoch[0], boot_epoch[1], boot_epoch[2], boot_epoch[3]);
+    let (activation_id, startup_state) = match identity_storage.activate_local(identity.identity_id(), boot_epoch) {
+        Ok(result) => result,
+        Err(error) => {
+            serial_println!("[WISEOWL-DB] local activation suspended: {:?}", error);
+            loop { process_yield(); }
+        }
+    };
+    let activation_fp = activation_id.fingerprint();
+    let startup_state = match startup_state {
+        ActivationState::Activating => "Activating",
+        ActivationState::RecoveringLocal => "RecoveringLocal",
+        ActivationState::Active => "Active",
+        ActivationState::Dormant => "Dormant",
+        ActivationState::Suspended => "Suspended",
+    };
+    serial_println!("[WISEOWL-ACTIVATION] state={} activation={:02X}{:02X}{:02X}{:02X}", startup_state,
+        activation_fp[0], activation_fp[1], activation_fp[2], activation_fp[3]);
     #[cfg(feature = "identity-phase-a-test")]
     serial_println!("[WISEOWL-IDENTITY-A] native gate PASS");
 
@@ -431,15 +614,22 @@ pub extern "C" fn _start() -> ! {
         }
     };
     db.bind_identity_context(identity);
+    db.bind_activation(activation_fp);
     if db.identity_context().is_none() {
         serial_println!("[WISEOWL-DB] identity context unavailable; readiness withheld");
         loop {
             process_yield();
         }
     }
+    if let Err(error) = identity_storage.mark_local_active(identity.identity_id(), activation_id) {
+        serial_println!("[WISEOWL-DB] activation commit failed: {:?}", error);
+        loop { process_yield(); }
+    }
+    serial_println!("[WISEOWL-ACTIVATION] state=Active sequence-local");
     if let Some(status) = db.identity_status() {
         let fp = core::str::from_utf8(&status.fingerprint).unwrap_or("????????");
-        serial_println!("[WISEOWL-DB] identity status Ready fingerprint={}", fp);
+        let activation = core::str::from_utf8(&status.activation_fingerprint).unwrap_or("????????");
+        serial_println!("[WISEOWL-DB] identity status Ready fingerprint={} activation={}", fp, activation);
     }
 
     let ep = endpoint_create();
@@ -488,25 +678,15 @@ fn handle_msg(
         }
         Some(MemoryDbOp::GetIdentityStatus) => match db.identity_status() {
             Some(status) => {
+                #[cfg(feature = "identity-phase-b-test")]
+                serial_println!("[WISEOWL-DB] identity status request served");
                 // Sanitized fixed-size fields; full IdentityId is never returned.
-                let fingerprint = u64::from_le_bytes(status.fingerprint);
+                let words = status.encode_native_words().unwrap_or([0; 4]);
                 IpcMsg::with_label(MemoryDbOp::Reply as u64)
-                    .word(
-                        0,
-                        status.state as u64
-                            | ((wiseowl_memorydb::identity_status::IDENTITY_STATUS_VERSION as u64)
-                                << 8),
-                    )
-                    .word(1, fingerprint)
-                    .word(2, status.lineage_sequence)
-                    .word(3, status.continuity_generation)
-                    .word(
-                        4,
-                        status.genesis_kind as u64
-                            | ((status.identity_format_version as u64) << 8)
-                            | ((status.validation_status as u64) << 24)
-                            | (1 << 32),
-                    )
+                    .word(0, words[0])
+                    .word(1, words[1])
+                    .word(2, words[2])
+                    .word(3, words[3])
             }
             None => IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 1),
         },

@@ -89,6 +89,17 @@ pub extern "C" fn _start() -> ! {
         Ok(()) => {
             serial_println!("[WISEOWL-INDEX] discovered wiseowl.memorydb.v1");
             svc.refresh_memorydb_health();
+            #[cfg(feature = "identity-phase-b-test")]
+            if let Ok(status) = svc.backend.identity_status() {
+                if status.validate() {
+                    serial_println!(
+                        "[WISEOWL-INDEX] persistent identity bound {}",
+                        core::str::from_utf8(&status.fingerprint).unwrap_or("????????")
+                    );
+                }
+            } else {
+                serial_println!("[WISEOWL-INDEX] identity status unavailable during propagation gate");
+            }
         }
         Err(_) => {
             serial_println!("[WISEOWL-INDEX] MemoryDB unavailable — Degraded");
@@ -168,6 +179,10 @@ fn handle_msg(svc: &mut NativeSvc, caller: &IndexCaller, msg: &IpcMsg) -> IpcMsg
         Some(IndexOp::GetHealth) => {
             svc.refresh_memorydb_health();
             let h = svc.health();
+            #[cfg(feature = "identity-phase-c-test")]
+            serial_println!("[WISEOWL-IDENTITY-C] index health memorydb={} endpoint={} disconnects={}",
+                h.memorydb.memorydb_ready_flag(),
+                svc.backend.endpoint_generation(), svc.backend.disconnects);
             IpcMsg::with_label(IndexOp::Reply as u64)
                 .word(0, if h.ready { 1 } else { 0 })
                 .word(1, h.state.as_u8() as u64)

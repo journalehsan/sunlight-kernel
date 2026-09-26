@@ -107,6 +107,8 @@ default = ["host"]
 host = ["dep:serde", "dep:bincode", "dep:thiserror", "dep:log", "dep:lz4_flex"]
 # Native SunlightOS daemon + CLI (no_std + alloc + sunlight-ipc).
 sunlightos = ["dep:sunlight-ipc", "dep:sunlight-libc", "dep:lz4_flex", "dep:heapless"]
+identity-phase-b-test = []
+identity-phase-c-test = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }

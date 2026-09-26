@@ -244,9 +244,20 @@ pub extern "C" fn _start() -> ! {
         active: false,
     });
 
+    let mut identity_binding = wiseowl_memory::identity_binding::MemoryIdentityBinding::default();
+    #[cfg(feature = "identity-phase-b-test")]
+    if memorydb_identity_ready(&mut identity_binding) {
+        if let Some(fingerprint) = identity_binding.fingerprint() {
+            let fingerprint = fingerprint.to_le_bytes();
+            serial_println!(
+                "[WISEOWL] persistent identity available {}",
+                core::str::from_utf8(&fingerprint).unwrap_or("????????")
+            );
+        }
+    } else {
+        serial_println!("[WISEOWL] identity status unavailable during propagation gate");
+    }
     let mut msg = ipc_recv(ep);
-    let mut identity_fingerprint: Option<u64> = None;
-    let mut identity_mismatch = false;
     loop {
         // Opportunistic client death sweep (bounded).
         for slot in clients.iter_mut() {
@@ -268,8 +279,7 @@ pub extern "C" fn _start() -> ! {
             &mut engine,
             &mut clients,
             &msg,
-            &mut identity_fingerprint,
-            &mut identity_mismatch,
+            &mut identity_binding,
         );
         msg = ipc_reply_and_wait(ep, reply);
     }
@@ -279,14 +289,21 @@ fn handle_ipc(
     engine: &mut NativeMemoryEngine<SunlightKv>,
     clients: &mut [ClientSlot; MAX_CLIENTS],
     msg: &IpcMsg,
-    identity_fingerprint: &mut Option<u64>,
-    identity_mismatch: &mut bool,
+    identity_binding: &mut wiseowl_memory::identity_binding::MemoryIdentityBinding,
 ) -> IpcMsg {
     let op = msg.label as u16;
     match MemoryOp::from_u16(op) {
         Some(MemoryOp::TransportInfo) | Some(MemoryOp::GetStats)
             if op == MemoryOp::TransportInfo.as_u16() =>
         {
+            #[cfg(feature = "identity-phase-c-test")]
+            {
+                let ready = memorydb_identity_ready(identity_binding);
+                serial_println!("[WISEOWL-IDENTITY-C] memory probe durable={} ram=1", ready as u8);
+                if msg.words[0] == 0xC1A0_0001 {
+                    return IpcMsg::with_label(MemoryOp::Reply.label()).word(0, ready as u64);
+                }
+            }
             // Transport diagnostic
             return IpcMsg::with_label(MemoryOp::Reply.label())
                 .word(0, NATIVE_PROTOCOL_VERSION as u64)
@@ -438,9 +455,7 @@ fn handle_ipc(
             return encode_response(resp, 0);
         }
         Some(MemoryOp::PromoteEntry) => {
-            if *identity_mismatch
-                || !memorydb_identity_ready(identity_fingerprint, identity_mismatch)
-            {
+            if !memorydb_identity_ready(identity_binding) {
                 return error_reply(14, 0);
             }
             let mid = match MemoryId::from_raw(msg.words[0]) {
@@ -582,38 +597,37 @@ fn handle_ipc(
 
 /// Read the sanitized MemoryDB status before every durable KV promotion.
 /// Fingerprints are retained only in this process to detect a changed endpoint.
-fn memorydb_identity_ready(previous: &mut Option<u64>, mismatch: &mut bool) -> bool {
+fn memorydb_identity_ready(
+    binding: &mut wiseowl_memory::identity_binding::MemoryIdentityBinding,
+) -> bool {
     const STATUS_OP: u64 = 0x4D18;
-    const REPLY: u64 = 0x4D80;
-    const VERSION: u16 = 1;
-    let Some(cap) = nameserver_lookup_timeout("wiseowl.memorydb.v1", 40) else {
+    const STATUS_TIMEOUT_MS: u64 = 250;
+    let Some(cap) = nameserver_lookup_timeout("wiseowl.memorydb.v1", STATUS_TIMEOUT_MS) else {
+        binding.disconnected();
+        #[cfg(feature = "identity-phase-b-test")]
+        serial_println!("[WISEOWL] identity status endpoint lookup failed");
         return false;
     };
-    let Ok(reply) = ipc_call_timeout(cap, IpcMsg::with_label(STATUS_OP), 40) else {
+    let Ok(reply) = ipc_call_timeout(cap, IpcMsg::with_label(STATUS_OP), STATUS_TIMEOUT_MS) else {
+        binding.disconnected();
+        #[cfg(feature = "identity-phase-b-test")]
+        serial_println!("[WISEOWL] identity status IPC failed");
         return false;
     };
-    if reply.label != REPLY
-        || (reply.words[0] & 0xff) != 1
-        || (reply.words[0] >> 8) as u16 != VERSION
-        || reply.words[2] == 0
-        || reply.words[3] == 0
-        || (reply.words[4] & 0xff) == 0
-        || ((reply.words[4] >> 24) & 0xff) != 1
-        || ((reply.words[4] >> 32) & 1) != 1
-    {
-        return false;
+    binding.observe_endpoint_generation(cap.0);
+    let ready = binding.observe_native_reply(reply.label, reply.word_count, reply.words);
+    #[cfg(feature = "identity-phase-b-test")]
+    if !ready {
+        serial_println!(
+            "[WISEOWL] identity status reply rejected label={} word_count={} header={} lineage={} continuity={}",
+            reply.label,
+            reply.word_count,
+            reply.words[0],
+            reply.words[2],
+            reply.words[3]
+        );
     }
-    match *previous {
-        Some(fingerprint) if fingerprint != reply.words[1] => {
-            *mismatch = true;
-            false
-        }
-        Some(_) => true,
-        None => {
-            *previous = Some(reply.words[1]);
-            true
-        }
-    }
+    ready
 }
 
 fn take_payload_shm(msg: &IpcMsg, len: u32) -> Result<Vec<u8>, MemoryError> {

@@ -111,6 +111,8 @@ gui-bridge-foundation-v1-test = []
 trusted-session-readiness-v1-test = []
 gui-live-action-activation-v1-test = []
 delegated-session-lifecycle-ipc-v1-test = []
+identity-phase-b-test = []
+identity-phase-c-test = []
 
 [dependencies]
 heapless = "0.8"
@@ -131,3 +133,7 @@ wiseowl-memorydb = { path = "../wiseowl-memorydb", default-features = false }
 wiseowl-index = { path = "../wiseowl-index", default-features = false }
 
 [dev-dependencies]
+tempfile = "3"
+wiseowl-index = { path = "../wiseowl-index", features = ["host"] }
+wiseowl-memory = { path = "../wiseowl-memory", features = ["host"] }
+wiseowl-memorydb = { path = "../wiseowl-memorydb", features = ["host"] }

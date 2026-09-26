@@ -42,6 +42,10 @@ static mut IDENTITY_BINDING: wiseowl_brain::identity_binding::BrainIdentityBindi
         mode: wiseowl_brain::identity_binding::BrainIdentityMode::Disconnected,
         fingerprint: None,
         continuity_generation: None,
+        activation_fingerprint: None,
+        connected: false,
+        endpoint_generation: None,
+        activation_suspended: false,
     };
 static mut LIFECYCLE_ADAPTERS: Option<wiseowl_brain::BraindTrustedLifecycleAdapters> = None;
 #[cfg(feature = "delegated-session-lifecycle-ipc-v1-test")]
@@ -101,6 +105,27 @@ pub extern "C" fn _start() -> ! {
         serial_println!("[WISEOWL-BRAIN] SERVICE_READY PASS");
         serial_println!("[WISEOWL-BRAIN] START_PHASE READY");
         serial_println!("[WISEOWL-BRAIN] registered {}", BRAIN_ENDPOINT);
+        #[cfg(feature = "identity-phase-b-test")]
+        {
+            let source = WiseOwlStatusContextSource::query_native();
+            unsafe {
+                IDENTITY_BINDING.observe_endpoint_generation(source.endpoint_generation);
+                IDENTITY_BINDING.observe(source.identity_status);
+                if let Some(fp) = IDENTITY_BINDING.fingerprint() {
+                    serial_println!(
+                        "[WISEOWL-BRAIN] persistent identity bound {}",
+                        core::str::from_utf8(&fp).unwrap_or("????????")
+                    );
+                } else {
+                    serial_println!(
+                        "[WISEOWL-BRAIN] identity status unavailable during propagation gate queried={} available={} healthy={}",
+                        source.queried as u8,
+                        source.available as u8,
+                        source.healthy as u8
+                    );
+                }
+            }
+        }
         if !display_endpoint_ready || !control_panel_endpoint_ready {
             serial_println!("[WISEOWL-BRAIN] START_PHASE OPTIONAL_LIFECYCLE_ENDPOINT_DEGRADED");
         }
@@ -1591,6 +1616,7 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
             IDENTITY_BINDING.disconnected();
             IDENTITY_BINDING.observe(None);
         } else {
+            IDENTITY_BINDING.observe_endpoint_generation(memdb_source.endpoint_generation);
             IDENTITY_BINDING.observe(memdb_source.identity_status);
             if let Some(fp) = IDENTITY_BINDING.fingerprint() {
                 serial_println!(
@@ -1865,6 +1891,25 @@ fn contains_ascii_case_insensitive(text: &str, needle: &str) -> bool {
 }
 
 fn handle_native_health(_msg: IpcMsg) -> IpcMsg {
+    #[cfg(feature = "identity-phase-c-test")]
+    {
+        let source = WiseOwlStatusContextSource::query_native();
+        let mode = unsafe {
+            if source.identity_status.is_none() {
+                IDENTITY_BINDING.disconnected();
+                IDENTITY_BINDING.observe(None);
+            } else {
+                IDENTITY_BINDING.observe_endpoint_generation(source.endpoint_generation);
+                IDENTITY_BINDING.observe(source.identity_status);
+            }
+            IDENTITY_BINDING.mode
+        };
+        serial_println!("[WISEOWL-IDENTITY-C] brain probe mode={:?}", mode);
+        if _msg.words[0] == 0xC1A0_0001 {
+            return IpcMsg::with_label(BrainOp::Reply.label())
+                .word(0, (mode == wiseowl_brain::identity_binding::BrainIdentityMode::Personalized) as u64);
+        }
+    }
     let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
     let snap = pipeline.diagnostics.snapshot();
     serial_println!("[WISEOWL-BRAIN] NATIVE_HEALTH PASS");

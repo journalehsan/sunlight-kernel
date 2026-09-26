@@ -333,6 +333,10 @@ fn complete_or_create_stage<S: IdentityStorage>(
             storage.write_file(&root_path, &root.encode())?;
             hit(hook, CreationBoundary::AfterRootWrite)?;
             storage.sync_file(&root_path)?;
+            // Persist the ROOT directory entry as well as its bytes before
+            // this becomes a recoverable interruption point. A file barrier
+            // alone may leave a newly-created filename absent after a crash.
+            storage.sync_dir(stage)?;
             hit(hook, CreationBoundary::AfterRootFlush)?;
             root
         }

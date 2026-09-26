@@ -22,6 +22,7 @@ pub mod entry;
 pub mod error;
 pub mod health;
 pub mod ids;
+pub mod identity_binding;
 pub mod kinds;
 pub mod lifecycle;
 pub mod native_ipc;

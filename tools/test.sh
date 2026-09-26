@@ -69,6 +69,20 @@ case "$PHASE" in
         NEED_DISK=true
         TIMEOUT=120
         ;;
+    wiseowl-identity-phase-b)
+        EXPECTED_FILE="tools/tests/wiseowl_identity_phase_b.expected"
+        FINAL_MARKER="[WISEOWL-IDENTITY-B] native gate PASS"
+        PASS_LABEL="Wise Owl Identity Phase B propagation"
+        NEED_DISK=true
+        TIMEOUT=120
+        ;;
+    wiseowl-identity-phase-c)
+        EXPECTED_FILE="tools/tests/wiseowl_identity_phase_c.expected"
+        FINAL_MARKER="[WISEOWL-IDENTITY-C] replacement ready"
+        PASS_LABEL="Wise Owl Identity Phase C activation lifecycle"
+        NEED_DISK=true
+        TIMEOUT=180
+        ;;
     phase3.6)
         EXPECTED_FILE="tools/tests/phase3_6.expected"
         FINAL_MARKER="[SunlightOS] Phase 3.6 OK"
@@ -507,7 +521,11 @@ elif [[ "$PHASE" == "wiseowl-gui-conversation-v1" ]]; then
 elif [[ "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-console --bin wiseowl --features delegated-session-lifecycle-ipc-v1-test --release >>"$BUILD_LOG" 2>&1
 fi
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release >>"$BUILD_LOG" 2>&1
+if [[ "$PHASE" == "wiseowl-identity-phase-c" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --features identity-phase-c-test --release >>"$BUILD_LOG" 2>&1
+else
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release >>"$BUILD_LOG" 2>&1
+fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-gcd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release >>"$BUILD_LOG" 2>&1
@@ -562,17 +580,31 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-control-panel --re
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
+if [[ "$PHASE" == "wiseowl-identity-phase-c" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos,identity-phase-b-test,identity-phase-c-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "wiseowl-identity-phase-b" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos,identity-phase-b-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+else
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
+fi
 if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
     # The Phase A gate injects one stop after a durable staged ROOT so the
     # next native boot exercises staged recovery on the same state volume.
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,identity-phase-a-test,identity-phase-a-fault-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "wiseowl-identity-phase-b" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,identity-phase-b-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "wiseowl-identity-phase-c" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,identity-phase-b-test,identity-phase-c-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,phase375-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 fi
-if [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
+if [[ "$PHASE" == "wiseowl-identity-phase-b" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos,identity-phase-b-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "wiseowl-identity-phase-c" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos,identity-phase-b-test,identity-phase-c-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos,phase375-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
@@ -595,6 +627,10 @@ elif [[ "$PHASE" == "wiseowl-gui-live-action-activation-v1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,gui-live-action-activation-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,delegated-session-lifecycle-ipc-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "wiseowl-identity-phase-c" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,identity-phase-b-test,identity-phase-c-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "wiseowl-identity-phase-b" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,identity-phase-b-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,phase4a-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 else
@@ -602,9 +638,19 @@ else
 fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release >>"$BUILD_LOG" 2>&1
 # --- Step 1b: Create the FAT32 volume required by this gate. ---
+if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
+    mkdir -p target/wiseowl-identity-phase-a-evidence
+    : >target/wiseowl-identity-phase-a-evidence/identity-fingerprint.txt
+fi
 if [[ "$NEED_DISK" == "true" ]]; then
     if [[ "$PHASE" == wiseowl-* || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
-        bash tools/state-disk.sh target/state-test.img >>"$BUILD_LOG" 2>&1
+        if [[ "$PHASE" == "wiseowl-identity-phase-b" \
+            && -s target/wiseowl-identity-phase-a-evidence/identity-fingerprint.txt \
+            && -f target/state-test.img ]]; then
+            echo "reusing Phase A state image for Phase B" >>"$BUILD_LOG"
+        else
+            bash tools/state-disk.sh target/state-test.img >>"$BUILD_LOG" 2>&1
+        fi
     else
         bash tools/disk.sh >>"$BUILD_LOG" 2>&1
     fi
@@ -703,10 +749,12 @@ QEMU_OUTPUT_FIRST="$QEMU_OUTPUT"
 QEMU_OUTPUT_SECOND=""
 QEMU_OUTPUT_THIRD=""
 QEMU_OUTPUT_DETACHED=""
+QEMU_OUTPUT_RESTORED=""
 ROOT_FIRST=""
 ROOT_SECOND=""
 ROOT_THIRD=""
-trap 'rm -f "$QEMU_OUTPUT_FIRST" "$QEMU_OUTPUT" "$BUILD_LOG" "${QEMU_OUTPUT_SECOND:-}" "${QEMU_OUTPUT_THIRD:-}" "${QEMU_OUTPUT_DETACHED:-}" "${ROOT_FIRST:-}" "${ROOT_SECOND:-}" "${ROOT_THIRD:-}"' EXIT
+ROOT_RESTORED=""
+trap 'rm -f "$QEMU_OUTPUT_FIRST" "$QEMU_OUTPUT" "$BUILD_LOG" "${QEMU_OUTPUT_SECOND:-}" "${QEMU_OUTPUT_THIRD:-}" "${QEMU_OUTPUT_DETACHED:-}" "${QEMU_OUTPUT_RESTORED:-}" "${ROOT_FIRST:-}" "${ROOT_SECOND:-}" "${ROOT_THIRD:-}" "${ROOT_RESTORED:-}"' EXIT
 
 # Extra QEMU flags for phases that need a virtio-blk disk
 DISK_FLAGS=""
@@ -768,6 +816,13 @@ for ((i=0; i<TIMEOUT; i++)); do
         break
     fi
     # Check if the final runtime milestone is present (early exit on success).
+    if [[ "$PHASE" == "wiseowl-identity-phase-b" ]] \
+        && { grep -Eq '\[WISEOWL-INDEX\] (persistent identity bound |identity status unavailable)' "$QEMU_OUTPUT" 2>/dev/null; } \
+        && { grep -Eq '\[WISEOWL-BRAIN\] (persistent identity bound |identity status unavailable)' "$QEMU_OUTPUT" 2>/dev/null; } \
+        && { grep -Eq '\[WISEOWL\] (persistent identity available |identity status unavailable)' "$QEMU_OUTPUT" 2>/dev/null; }; then
+        sleep 1
+        break
+    fi
     if grep -Fq "$INITIAL_MARKER" "$QEMU_OUTPUT" 2>/dev/null \
         && { [[ "$PHASE" == "mm2b" ]] || grep -Fq "[timer] 100 ticks elapsed" "$QEMU_OUTPUT" 2>/dev/null; }; then
         sleep 1
@@ -791,6 +846,13 @@ set -e
 # durable ROOT bytes after each boot, then boot without the volume and ensure
 # the initramfs /state mount-point cannot produce a temporary identity.
 if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
+    mkdir -p target/wiseowl-identity-phase-a-evidence
+    cp "$QEMU_OUTPUT" target/wiseowl-identity-phase-a-evidence/boot-1-serial.log
+    printf '%s\n' \
+        'Interruption marker: AfterRootFlush, after ROOT file and stage-directory sync.' \
+        'Harness boundary: wait for marker, send SIGTERM to QEMU, wait one second, then SIGKILL only if still alive.' \
+        'State-disk probe: mdir/mcopy run after the QEMU process exits.' \
+        >target/wiseowl-identity-phase-a-evidence/boot-1-stop-boundary.txt
     if ! command -v mcopy >/dev/null 2>&1; then
         echo "[test] mcopy is required for the Phase A state-volume reboot check" >&2
         exit 1
@@ -798,10 +860,23 @@ if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
 
     ROOT_FIRST=$(mktemp)
     ROOT_SECOND=$(mktemp)
-    if ! grep -Fq "$INITIAL_MARKER" "$QEMU_OUTPUT" || \
-        grep -Fq "[WISEOWL-DB] identity loaded:" "$QEMU_OUTPUT" || \
-        ! mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY.STAGE/ROOT "$ROOT_FIRST" >/dev/null 2>&1; then
-        echo "[test] boot 1 did not leave the expected synced staged ROOT" >&2
+    if command -v mdir >/dev/null 2>&1; then
+        mdir -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY.STAGE \
+            >target/wiseowl-identity-phase-a-evidence/boot-1-staged-directory.txt 2>&1 || true
+    fi
+    if ! grep -Fq "$INITIAL_MARKER" "$QEMU_OUTPUT"; then
+        echo "[test] boot 1 missed the post-file-sync interruption marker" >&2
+        cat "$QEMU_OUTPUT"
+        exit 1
+    fi
+    if grep -Fq "[WISEOWL-DB] identity loaded:" "$QEMU_OUTPUT"; then
+        echo "[test] boot 1 continued past the intended pre-publication interruption" >&2
+        cat "$QEMU_OUTPUT"
+        exit 1
+    fi
+    if ! mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY.STAGE/ROOT "$ROOT_FIRST" >/dev/null 2>&1; then
+        echo "[test] boot 1 staged ROOT is not readable from the stopped state disk" >&2
+        cat target/wiseowl-identity-phase-a-evidence/boot-1-staged-directory.txt 2>/dev/null || true
         cat "$QEMU_OUTPUT"
         exit 1
     fi
@@ -838,6 +913,7 @@ if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
         kill -KILL "$QEMU_PID" 2>/dev/null || true
     fi
     wait "$QEMU_PID" 2>/dev/null || true
+    cp "$QEMU_OUTPUT_SECOND" target/wiseowl-identity-phase-a-evidence/boot-2-serial.log
 
     if ! grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT_SECOND" || \
         ! grep -Fq "identity creation recovered from staged state" "$QEMU_OUTPUT_SECOND" || \
@@ -898,6 +974,7 @@ if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
         kill -KILL "$QEMU_PID" 2>/dev/null || true
     fi
     wait "$QEMU_PID" 2>/dev/null || true
+    cp "$QEMU_OUTPUT_THIRD" target/wiseowl-identity-phase-a-evidence/boot-3-serial.log
     if ! grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT_THIRD" || \
         ! mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/ROOT "$ROOT_THIRD" >/dev/null 2>&1 || \
         ! cmp -s "$ROOT_SECOND" "$ROOT_THIRD"; then
@@ -943,6 +1020,7 @@ if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
         kill -KILL "$QEMU_PID" 2>/dev/null || true
     fi
     wait "$QEMU_PID" 2>/dev/null || true
+    cp "$QEMU_OUTPUT_DETACHED" target/wiseowl-identity-phase-a-evidence/boot-without-state-serial.log
     if ! grep -Fq "$DETACHED_MARKER" "$QEMU_OUTPUT_DETACHED" || \
         grep -Fq "[WISEOWL-DB] identity loaded:" "$QEMU_OUTPUT_DETACHED" || \
         grep -Fq "[WISEOWL-DB] registered" "$QEMU_OUTPUT_DETACHED"; then
@@ -951,6 +1029,217 @@ if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
         exit 1
     fi
     echo "[test] detached state volume did not create or publish a replacement identity"
+
+    ROOT_RESTORED=$(mktemp)
+    QEMU_OUTPUT_RESTORED=$(mktemp)
+    qemu-system-x86_64 \
+        -cdrom "$ISO_PATH" \
+        -serial file:"$QEMU_OUTPUT_RESTORED" \
+        -display none \
+        -m 1024M \
+        -smp "$QEMU_SMP" \
+        $KVM_FLAGS \
+        -device virtio-rng-pci,disable-modern=on \
+        -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 \
+        $DISK_FLAGS \
+        -no-reboot \
+        -no-shutdown >>"$BUILD_LOG" 2>&1 &
+    QEMU_PID=$!
+    for ((i=0; i<TIMEOUT; i++)); do
+        if ! kill -0 "$QEMU_PID" 2>/dev/null; then
+            break
+        fi
+        if grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT_RESTORED" 2>/dev/null; then
+            sleep 1
+            break
+        fi
+        sleep 1
+    done
+    if kill -0 "$QEMU_PID" 2>/dev/null; then
+        kill -TERM "$QEMU_PID" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$QEMU_PID" 2>/dev/null || true
+    fi
+    wait "$QEMU_PID" 2>/dev/null || true
+    cp "$QEMU_OUTPUT_RESTORED" target/wiseowl-identity-phase-a-evidence/boot-with-state-restored-serial.log
+    if ! grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT_RESTORED" || \
+        ! mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/ROOT "$ROOT_RESTORED" >/dev/null 2>&1 || \
+        ! cmp -s "$ROOT_SECOND" "$ROOT_RESTORED"; then
+        echo "[test] original state volume did not restore the unchanged committed identity" >&2
+        cat "$QEMU_OUTPUT_RESTORED"
+        exit 1
+    fi
+    RESTORED_IDENTITY=$(sed -n 's/^.*identity loaded: \([0-9A-F]\{8\}\)$/\1/p' "$QEMU_OUTPUT_RESTORED" | head -n1)
+    if [[ "$RESTORED_IDENTITY" != "$SECOND_IDENTITY" ]] || \
+        ! grep -Fq "lineage sequence=1 continuity_generation=1" "$QEMU_OUTPUT_RESTORED"; then
+        echo "[test] original state volume returned with changed identity or continuity" >&2
+        cat "$QEMU_OUTPUT_RESTORED"
+        exit 1
+    fi
+    echo "[test] original state volume restored unchanged identity ($RESTORED_IDENTITY)"
+    printf '%s\n' "$FIRST_IDENTITY" >target/wiseowl-identity-phase-a-evidence/identity-fingerprint.txt
+fi
+
+if [[ "$PHASE" == "wiseowl-identity-phase-b" || "$PHASE" == "wiseowl-identity-phase-c" ]]; then
+    IDENTITY_EVIDENCE_DIR="target/$PHASE-evidence"
+    mkdir -p "$IDENTITY_EVIDENCE_DIR"
+    cp "$QEMU_OUTPUT" "$IDENTITY_EVIDENCE_DIR/boot-1-serial.log"
+    DB_STATUS=$(sed -n 's/^.*\[WISEOWL-DB\] identity status Ready fingerprint=\([0-9A-F]\{8\}\).*$/\1/p' "$QEMU_OUTPUT" | head -n1)
+    MOUNT_LINE=$(grep -nF '[VFS] FAT volume mounted at /state' "$QEMU_OUTPUT" | head -n1 | cut -d: -f1)
+    DB_START_LINE=$(grep -nF '[WISEOWL-DB] starting wiseowl-memorydb' "$QEMU_OUTPUT" | head -n1 | cut -d: -f1)
+    DB_LOAD_LINE=$(grep -nF '[WISEOWL-DB] identity loaded:' "$QEMU_OUTPUT" | head -n1 | cut -d: -f1)
+    DB_READY_LINE=$(grep -nF '[WISEOWL-DB] identity status Ready fingerprint=' "$QEMU_OUTPUT" | head -n1 | cut -d: -f1)
+    PHASE_A_STATUS=""
+    if [[ "$PHASE" == "wiseowl-identity-phase-b" \
+        && -s target/wiseowl-identity-phase-a-evidence/identity-fingerprint.txt ]]; then
+        PHASE_A_STATUS=$(cat target/wiseowl-identity-phase-a-evidence/identity-fingerprint.txt)
+    fi
+    if [[ -z "$DB_STATUS" || -z "$MOUNT_LINE" || -z "$DB_START_LINE" || -z "$DB_LOAD_LINE" || -z "$DB_READY_LINE" ]] \
+        || (( MOUNT_LINE >= DB_START_LINE || DB_START_LINE >= DB_LOAD_LINE || DB_LOAD_LINE >= DB_READY_LINE )) \
+        || { [[ -n "$PHASE_A_STATUS" ]] && [[ "$DB_STATUS" != "$PHASE_A_STATUS" ]]; } \
+        || ! grep -Fq "[WISEOWL-INDEX] persistent identity bound $DB_STATUS" "$QEMU_OUTPUT" \
+        || ! grep -Fq "[WISEOWL-BRAIN] persistent identity bound $DB_STATUS" "$QEMU_OUTPUT" \
+        || ! grep -Fq "[WISEOWL] persistent identity available $DB_STATUS" "$QEMU_OUTPUT" \
+        || ! grep -Fq 'continuity_generation=1' "$QEMU_OUTPUT"; then
+        echo '[test] native Phase B identity propagation or startup order failed' >&2
+        cat "$QEMU_OUTPUT"
+        exit 1
+    fi
+    for consumer in '[WISEOWL-INDEX] persistent identity bound' '[WISEOWL-BRAIN] persistent identity bound' '[WISEOWL] persistent identity available'; do
+        CONSUMER_LINE=$(grep -nF "$consumer" "$QEMU_OUTPUT" | head -n1 | cut -d: -f1)
+        if [[ -z "$CONSUMER_LINE" ]] || (( CONSUMER_LINE <= DB_READY_LINE )); then
+            echo "[test] consumer bound before MemoryDB status readiness: $consumer" >&2
+            cat "$QEMU_OUTPUT"
+            exit 1
+        fi
+    done
+    if [[ -n "$PHASE_A_STATUS" ]]; then
+        printf 'state_image=target/state-test.img\nphase_a_fingerprint=%s\nphase_b_fingerprint=%s\n' \
+            "$PHASE_A_STATUS" "$DB_STATUS" \
+        >"$IDENTITY_EVIDENCE_DIR/state-volume-reuse.txt"
+    else
+        printf '%s\n' 'state_image=target/state-test.img' 'source=standalone Phase B run' \
+            >"$IDENTITY_EVIDENCE_DIR/state-volume-reuse.txt"
+    fi
+    if [[ "$PHASE" == "wiseowl-identity-phase-c" ]]; then
+        ACCEPTED_COUNT=$(grep -Fc '[WISEOWL-IDENTITY-C] writer accepted' "$QEMU_OUTPUT" || true)
+        REJECTED_COUNT=$(grep -Fc '[WISEOWL-IDENTITY-C] writer rejected' "$QEMU_OUTPUT" || true)
+        ACTIVE_COUNT=$(grep -Fc '[WISEOWL-ACTIVATION] state=Active' "$QEMU_OUTPUT" || true)
+        ACCEPTED_GENERATIONS=$(sed -n 's/^.*\[WISEOWL-IDENTITY-C\] writer accepted pid=[0-9]* generation=\([0-9]*\).*$/\1/p' "$QEMU_OUTPUT" | sort -u | wc -l)
+        FIRST_ACTIVATION=$(sed -n 's/^.*\[WISEOWL-ACTIVATION\] state=Activating activation=\([0-9A-F]\{8\}\).*$/\1/p' "$QEMU_OUTPUT" | head -n1)
+        RESTART_ACTIVATION=$(sed -n 's/^.*\[WISEOWL-ACTIVATION\] state=RecoveringLocal activation=\([0-9A-F]\{8\}\).*$/\1/p' "$QEMU_OUTPUT" | head -n1)
+        BOOT_EPOCH_COUNT=$(sed -n 's/^.*\[WISEOWL-IDENTITY-C\] boot epoch=\([0-9A-F]\{8\}\).*$/\1/p' "$QEMU_OUTPUT" | sort -u | wc -l)
+        INSTALL_FP_COUNT=$(sed -n 's/^.*\[WISEOWL-IDENTITY-C\] installation=\([0-9A-F]\{8\}\).*$/\1/p' "$QEMU_OUTPUT" | sort -u | wc -l)
+        if [[ "$ACCEPTED_COUNT" != 2 || "$ACCEPTED_GENERATIONS" != 2 || "$REJECTED_COUNT" != 1 || "$ACTIVE_COUNT" != 2 \
+            || "$BOOT_EPOCH_COUNT" != 1 || "$INSTALL_FP_COUNT" != 1 || -z "$FIRST_ACTIVATION" \
+            || "$FIRST_ACTIVATION" != "$RESTART_ACTIVATION" ]] \
+            || ! grep -Fq '[WISEOWL-IDENTITY-C] duplicate stopped' "$QEMU_OUTPUT" \
+            || ! grep -Fq '[WISEOWL-IDENTITY-C] MemoryDB-only restart old_pid=' "$QEMU_OUTPUT" \
+            || ! grep -Fq '[WISEOWL-IDENTITY-C] consumers initially active' "$QEMU_OUTPUT" \
+            || ! grep -Fq '[WISEOWL-IDENTITY-C] consumers paused while MemoryDB absent' "$QEMU_OUTPUT" \
+            || ! grep -Fq '[WISEOWL-IDENTITY-C] brain probe mode=GenericDegraded' "$QEMU_OUTPUT" \
+            || ! grep -Fq '[WISEOWL-IDENTITY-C] memory probe durable=0 ram=1' "$QEMU_OUTPUT" \
+            || ! grep -Fq '[WISEOWL-IDENTITY-C] memory RAM session available while durable blocked' "$QEMU_OUTPUT" \
+            || ! grep -Fq '[WISEOWL-IDENTITY-C] replacement ready' "$QEMU_OUTPUT"; then
+            echo '[test] native Phase C duplicate/restart gate failed' >&2
+            cat "$QEMU_OUTPUT"
+            exit 1
+        fi
+        printf 'accepted_writers=%s\nrejected_writers=%s\nsame_boot_activation=%s\n' \
+            "$ACCEPTED_COUNT" "$REJECTED_COUNT" "$FIRST_ACTIVATION" \
+            >"$IDENTITY_EVIDENCE_DIR/writer-restart-comparison.txt"
+        rg '\[WISEOWL-IDENTITY-C\] (writer accepted|writer rejected|installation=|boot epoch=|index health|brain probe|memory probe|memory RAM|consumers|replacement ready)' \
+            "$QEMU_OUTPUT" >"$IDENTITY_EVIDENCE_DIR/process-endpoint-transitions.txt"
+    fi
+    echo '[WISEOWL-IDENTITY-B] native gate PASS' >>"$QEMU_OUTPUT"
+
+    # Phase C native reboot gate: the first QEMU was stopped after Active, so
+    # this is an unclean system stop. The next boot must keep Identity and
+    # Installation, recover locally, and publish a different ActivationId.
+    LOCAL_FIRST=$(mktemp)
+    LOCAL_SECOND=$(mktemp)
+    ROOT_FIRST_C=$(mktemp)
+    ROOT_SECOND_C=$(mktemp)
+    LINEAGE_FIRST_C=$(mktemp)
+    LINEAGE_SECOND_C=$(mktemp)
+    HEAD_FIRST_C=$(mktemp)
+    HEAD_SECOND_C=$(mktemp)
+    mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/LOCAL "$LOCAL_FIRST" >/dev/null 2>&1
+    mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/ROOT "$ROOT_FIRST_C" >/dev/null 2>&1
+    mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/LINEAGE "$LINEAGE_FIRST_C" >/dev/null 2>&1
+    mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/HEAD "$HEAD_FIRST_C" >/dev/null 2>&1
+    QEMU_OUTPUT_C=$(mktemp)
+    qemu-system-x86_64 \
+        -cdrom "$ISO_PATH" \
+        -serial file:"$QEMU_OUTPUT_C" \
+        -display none \
+        -m 1024M \
+        -smp "$QEMU_SMP" \
+        $KVM_FLAGS \
+        -device virtio-rng-pci,disable-modern=on \
+        -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 \
+        $DISK_FLAGS \
+        -no-reboot \
+        -no-shutdown >>"$BUILD_LOG" 2>&1 &
+    QEMU_PID=$!
+    for ((i=0; i<TIMEOUT; i++)); do
+        if ! kill -0 "$QEMU_PID" 2>/dev/null; then break; fi
+        if grep -Fq '[WISEOWL-ACTIVATION] state=Active' "$QEMU_OUTPUT_C" 2>/dev/null \
+            && grep -Fq '[WISEOWL-DB] identity status Ready fingerprint=' "$QEMU_OUTPUT_C" 2>/dev/null \
+            && grep -Fq '[WISEOWL-INDEX] persistent identity bound' "$QEMU_OUTPUT_C" 2>/dev/null \
+            && grep -Fq '[WISEOWL-BRAIN] persistent identity bound' "$QEMU_OUTPUT_C" 2>/dev/null \
+            && grep -Fq '[WISEOWL] persistent identity available' "$QEMU_OUTPUT_C" 2>/dev/null; then
+            sleep 1
+            break
+        fi
+        sleep 1
+    done
+    if kill -0 "$QEMU_PID" 2>/dev/null; then
+        kill -TERM "$QEMU_PID" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$QEMU_PID" 2>/dev/null || true
+    fi
+    wait "$QEMU_PID" 2>/dev/null || true
+    cp "$QEMU_OUTPUT_C" "$IDENTITY_EVIDENCE_DIR/boot-2-unclean-recovery-serial.log"
+    if ! grep -Fq '[WISEOWL-ACTIVATION] state=RecoveringLocal' "$QEMU_OUTPUT_C" \
+        || ! grep -Fq '[WISEOWL-ACTIVATION] state=Active' "$QEMU_OUTPUT_C" \
+        || ! grep -Fq 'continuity_generation=1' "$QEMU_OUTPUT_C"; then
+        echo '[test] unclean reboot did not recover local activation' >&2
+        cp "$BUILD_LOG" "$IDENTITY_EVIDENCE_DIR/build-output-failure.log"
+        tail -n 30 "$BUILD_LOG" >&2
+        cat "$QEMU_OUTPUT_C"
+        exit 1
+    fi
+    mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/LOCAL "$LOCAL_SECOND" >/dev/null 2>&1
+    mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/ROOT "$ROOT_SECOND_C" >/dev/null 2>&1
+    mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/LINEAGE "$LINEAGE_SECOND_C" >/dev/null 2>&1
+    mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/HEAD "$HEAD_SECOND_C" >/dev/null 2>&1
+    INSTALL_FIRST=$(od -An -tx1 -j 40 -N 16 "$LOCAL_FIRST" | tr -d ' \n')
+    INSTALL_SECOND=$(od -An -tx1 -j 40 -N 16 "$LOCAL_SECOND" | tr -d ' \n')
+    ACTIVATION_FIRST=$(od -An -tx1 -j 56 -N 16 "$LOCAL_FIRST" | tr -d ' \n')
+    ACTIVATION_SECOND=$(od -An -tx1 -j 56 -N 16 "$LOCAL_SECOND" | tr -d ' \n')
+    BOOT_EPOCH_FIRST=$(od -An -tx1 -j 80 -N 16 "$LOCAL_FIRST" | tr -d ' \n')
+    BOOT_EPOCH_SECOND=$(od -An -tx1 -j 80 -N 16 "$LOCAL_SECOND" | tr -d ' \n')
+    if [[ "$INSTALL_FIRST" != "$INSTALL_SECOND" || "$ACTIVATION_FIRST" == "$ACTIVATION_SECOND" ]] \
+        || [[ "$BOOT_EPOCH_FIRST" == "$BOOT_EPOCH_SECOND" ]] \
+        || ! cmp -s "$ROOT_FIRST_C" "$ROOT_SECOND_C" \
+        || ! cmp -s "$LINEAGE_FIRST_C" "$LINEAGE_SECOND_C" \
+        || ! cmp -s "$HEAD_FIRST_C" "$HEAD_SECOND_C"; then
+        echo '[test] reboot changed identity/installation or retained activation/changed lineage' >&2
+        exit 1
+    fi
+    cp "$LOCAL_FIRST" "$IDENTITY_EVIDENCE_DIR/boot-1-LOCAL.bin"
+    cp "$LOCAL_SECOND" "$IDENTITY_EVIDENCE_DIR/boot-2-LOCAL.bin"
+    printf 'ROOT_sha256=%s\nLINEAGE_sha256=%s\nHEAD_sha256=%s\nstate_volume_sha256=%s\n' \
+        "$(sha256sum "$ROOT_SECOND_C" | cut -d' ' -f1)" \
+        "$(sha256sum "$LINEAGE_SECOND_C" | cut -d' ' -f1)" \
+        "$(sha256sum "$HEAD_SECOND_C" | cut -d' ' -f1)" \
+        "$(sha256sum target/state-test.img | cut -d' ' -f1)" \
+        >"$IDENTITY_EVIDENCE_DIR/global-state-hashes.txt"
+    printf 'installation_id=%s\nboot_1_activation_id=%s\nboot_2_activation_id=%s\nboot_1_epoch=%s\nboot_2_epoch=%s\n' \
+        "$INSTALL_SECOND" "$ACTIVATION_FIRST" "$ACTIVATION_SECOND" "$BOOT_EPOCH_FIRST" "$BOOT_EPOCH_SECOND" \
+        >"$IDENTITY_EVIDENCE_DIR/activation-comparison.txt"
+    echo "[test] unclean reboot recovered same installation with a new activation ($INSTALL_SECOND)"
 fi
 
 # Preserve the raw serial evidence when requested, before the EXIT trap removes it.

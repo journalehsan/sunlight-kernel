@@ -539,6 +539,9 @@ sunlight-fs = { path = "../../sunlight-fs" }
 sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
+[features]
+identity-phase-c-test = []
+
 [lib]
 name = "sunlightd"
 path = "src/lib.rs"

@@ -103,33 +103,10 @@ impl NativeMemoryDbClient {
     pub fn identity_status(
         &mut self,
     ) -> Result<wiseowl_memorydb::identity_status::IdentityStatus, IndexError> {
-        use wiseowl_memorydb::identity_status::{
-            IdentityStatus, IdentityStatusState, IDENTITY_STATUS_VERSION,
-        };
+        use wiseowl_memorydb::identity_status::IdentityStatus;
         let reply = self.call(IpcMsg::with_label(MemoryDbOp::GetIdentityStatus as u64))?;
-        if reply.label as u16 != MemoryDbOp::Reply as u16
-            || (reply.words[0] >> 8) as u16 != IDENTITY_STATUS_VERSION
-        {
-            return Err(IndexError::InvalidRequest("identity status protocol"));
-        }
-        let state = match (reply.words[0] & 0xff) as u8 {
-            1 => IdentityStatusState::Ready,
-            _ => return Err(IndexError::InvalidRequest("identity status state")),
-        };
-        let status = IdentityStatus {
-            state,
-            fingerprint: reply.words[1].to_le_bytes(),
-            lineage_sequence: reply.words[2],
-            continuity_generation: reply.words[3],
-            genesis_kind: (reply.words[4] & 0xff) as u8,
-            identity_format_version: ((reply.words[4] >> 8) & 0xffff) as u16,
-            validation_status: ((reply.words[4] >> 24) & 0xff) as u8,
-            persistence_available: ((reply.words[4] >> 32) & 1) != 0,
-        };
-        if !status.validate() {
-            return Err(IndexError::InvalidRequest("malformed identity status"));
-        }
-        Ok(status)
+        IdentityStatus::decode_native_words(reply.label, reply.word_count, reply.words)
+            .ok_or(IndexError::InvalidRequest("malformed identity status"))
     }
 
     #[cfg(feature = "phase375-test")]
@@ -242,6 +219,10 @@ impl Default for NativeMemoryDbClient {
 }
 
 impl IndexMemoryDb for NativeMemoryDbClient {
+    fn endpoint_generation(&self) -> u64 {
+        self.endpoint_generation()
+    }
+
     fn identity_status(
         &mut self,
     ) -> Result<wiseowl_memorydb::identity_status::IdentityStatus, IndexError> {

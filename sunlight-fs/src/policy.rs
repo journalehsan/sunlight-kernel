@@ -185,6 +185,12 @@ fn user_decision(uid: u32, name: &str, path: &str, uac_approved: bool) -> Decisi
 }
 
 fn service_decision(service: &str, path: &str) -> Decision {
+    // MemoryDB keeps a random boot-epoch token in volatile RAMFS. This is
+    // runtime ownership evidence used to distinguish daemon restart from OS
+    // reboot; the exact file is not persistent identity state.
+    if service == "wiseowl-memorydb" && path == "/tmp/wiseowl-memorydb-boot-epoch" {
+        return Decision::allow(PolicyReason::AllowedServiceState);
+    }
     if service_state_owner(path) == Some(service) {
         return Decision::allow(PolicyReason::AllowedServiceState);
     }
@@ -333,6 +339,9 @@ mod tests {
     const TLS: Actor<'static> = Actor::Service {
         name: "sunlight-tls",
     };
+    const MEMORYDB: Actor<'static> = Actor::Service {
+        name: "wiseowl-memorydb",
+    };
 
     fn deny_reason(path: &str) -> PolicyReason {
         can_write(USER, path, FsOperation::Create, None, false).reason
@@ -425,6 +434,22 @@ mod tests {
         assert_eq!(
             can_write(KV, "/services/file", FsOperation::Create, None, false).reason,
             PolicyReason::DeniedProtectedPath
+        );
+    }
+
+    #[test]
+    fn only_memorydb_can_write_its_volatile_boot_epoch_marker() {
+        assert_eq!(
+            can_write(MEMORYDB, "/tmp/wiseowl-memorydb-boot-epoch", FsOperation::Create, None, false).reason,
+            PolicyReason::AllowedServiceState
+        );
+        assert_eq!(
+            can_write(TLS, "/tmp/wiseowl-memorydb-boot-epoch", FsOperation::Create, None, false).reason,
+            PolicyReason::DeniedImmutableRoot
+        );
+        assert_eq!(
+            can_write(MEMORYDB, "/tmp/other", FsOperation::Create, None, false).reason,
+            PolicyReason::DeniedImmutableRoot
         );
     }
 

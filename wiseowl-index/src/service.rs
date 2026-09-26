@@ -92,8 +92,11 @@ pub struct IndexerService<B: IndexMemoryDb> {
     pub virtual_roots: alloc::collections::BTreeMap<u64, Vec<(String, Vec<u8>, Option<u64>)>>,
     /// Runtime-only identity binding. The pin survives endpoint loss, never reboot.
     identity_fingerprint: Option<[u8; 8]>,
+    activation_fingerprint: Option<[u8; 8]>,
+    identity_endpoint_generation: Option<u64>,
     identity_ready: bool,
     identity_suspended: bool,
+    activation_suspended: bool,
 }
 
 impl<S: DurableStore> IndexerService<HostMemoryDbBackend<S>> {
@@ -127,8 +130,11 @@ impl<B: IndexMemoryDb> IndexerService<B> {
             reconnect: ReconnectPolicy::default(),
             virtual_roots: alloc::collections::BTreeMap::new(),
             identity_fingerprint: None,
+            activation_fingerprint: None,
+            identity_endpoint_generation: None,
             identity_ready: false,
             identity_suspended: false,
+            activation_suspended: false,
         }
     }
 
@@ -141,6 +147,9 @@ impl<B: IndexMemoryDb> IndexerService<B> {
         self.identity_ready = false;
         IndexStats::sat_add(&mut self.stats.memorydb_connection_attempts, 1);
         let endpoint_gen = self.backend_endpoint_generation();
+        if endpoint_gen != 0 && self.identity_endpoint_generation.is_some_and(|old| old != endpoint_gen) {
+            self.activation_suspended = false;
+        }
         match self.backend.health() {
             Ok(h) if h.ready => {
                 IndexStats::sat_add(&mut self.stats.memorydb_connection_successes, 1);
@@ -162,8 +171,16 @@ impl<B: IndexMemoryDb> IndexerService<B> {
                         if self.identity_fingerprint.is_some_and(|old| old != status.fingerprint) {
                             self.identity_suspended = true;
                             self.health.set_degraded(DegradedReason::MemoryDbProtocolMismatch);
+                        } else if self.identity_endpoint_generation == Some(endpoint_gen)
+                            && self.activation_fingerprint.is_some_and(|old| old != status.activation_fingerprint) {
+                            self.activation_suspended = true;
+                            self.health.set_degraded(DegradedReason::MemoryDbProtocolMismatch);
+                        } else if self.activation_suspended {
+                            self.health.set_degraded(DegradedReason::MemoryDbProtocolMismatch);
                         } else if !self.identity_suspended {
                             self.identity_fingerprint = Some(status.fingerprint);
+                            self.activation_fingerprint = Some(status.activation_fingerprint);
+                            self.identity_endpoint_generation = Some(endpoint_gen);
                             self.identity_ready = true;
                         }
                     }
@@ -208,7 +225,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
 
     /// Endpoint generation when the backend exposes one (native); 0 on host.
     fn backend_endpoint_generation(&self) -> u64 {
-        0
+        self.backend.endpoint_generation()
     }
 
     /// Bounded MemoryDB reconnect attempt (no busy loop).
@@ -764,6 +781,40 @@ mod tests {
         );
         svc.set_now_ns(1000);
         svc.refresh_memorydb_health();
+        assert_eq!(
+            svc.identity_fingerprint,
+            svc.backend
+                .inner()
+                .identity_status()
+                .map(|status| status.fingerprint),
+            "indexer must bind the current MemoryDB fingerprint before scanning"
+        );
+
+        let mut restarted_db =
+            Database::<MemoryStore>::open_memory(DbQuotaConfig::default()).unwrap();
+        restarted_db.bind_identity_context(identity);
+        let mut restarted = IndexerService::new(restarted_db, IndexerConfig::default());
+        assert_eq!(restarted.identity_fingerprint, None);
+        assert!(!restarted.identity_ready);
+        restarted.refresh_memorydb_health();
+        assert_eq!(
+            restarted.identity_fingerprint,
+            Some(identity.diagnostic_fingerprint())
+        );
+        assert!(
+            restarted.identity_ready,
+            "restart must re-query MemoryDB status"
+        );
+        assert_eq!(
+            restarted
+                .backend
+                .inner()
+                .identity_status()
+                .unwrap()
+                .continuity_generation,
+            1
+        );
+
         svc.start_scan(&caller, Some(rid)).unwrap();
         assert!(svc.stats.files_indexed >= 1);
         assert!(svc.stats.strong_hash_files >= 1);
@@ -773,6 +824,44 @@ mod tests {
         assert_eq!(hits[0].lexical_score, 1);
 
         let record_count = svc.backend.inner().stats().record_count_active;
+        svc.backend.set_identity_status_available(false);
+        svc.refresh_memorydb_health();
+        assert!(
+            !svc.identity_ready,
+            "disconnected status must revoke authority"
+        );
+        assert!(svc.start_scan(&caller, Some(rid)).is_err());
+        assert_eq!(
+            svc.backend.inner().stats().record_count_active,
+            record_count,
+            "temporary status loss must preserve existing MemoryDB records"
+        );
+        assert!(
+            !svc.search_lexical(&caller, "thermal fan", 10)
+                .unwrap()
+                .is_empty(),
+            "existing local index data remains readable during status loss"
+        );
+        svc.backend.set_identity_status_available(true);
+        svc.backend.set_endpoint_generation(2);
+        svc.refresh_memorydb_health();
+        assert!(
+            svc.identity_ready,
+            "same identity reconnect should resume work"
+        );
+        assert_eq!(svc.health.memorydb.endpoint_generation(), 2);
+        svc.start_scan(&caller, Some(rid)).unwrap();
+
+        svc.backend.inner_mut().bind_activation(*b"ACTIV002");
+        svc.refresh_memorydb_health();
+        assert!(!svc.identity_ready, "same endpoint activation change must pause durable work");
+        svc.backend.inner_mut().bind_activation(identity.diagnostic_fingerprint());
+        svc.refresh_memorydb_health();
+        assert!(!svc.identity_ready, "same endpoint cannot clear the activation alarm");
+        svc.backend.set_endpoint_generation(3);
+        svc.refresh_memorydb_health();
+        assert!(svc.identity_ready, "new endpoint generation can revalidate activation");
+
         let other_dir = tempfile::tempdir().unwrap();
         let mut other_storage =
             wiseowl_memorydb::identity::host::HostIdentityStorage::open(other_dir.path()).unwrap();

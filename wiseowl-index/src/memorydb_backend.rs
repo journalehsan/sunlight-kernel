@@ -31,6 +31,11 @@ pub struct MemoryDbHealth {
 
 /// Backend interface used by scan / ingest / reconciliation.
 pub trait IndexMemoryDb {
+    /// Current endpoint/process generation when the transport exposes one.
+    fn endpoint_generation(&self) -> u64 {
+        0
+    }
+
     /// Fresh sanitized status from the current MemoryDB endpoint.
     fn identity_status(
         &mut self,
@@ -99,11 +104,37 @@ pub trait IndexMemoryDb {
 pub struct HostMemoryDbBackend<S: DurableStore> {
     pub db: Database<S>,
     pub caller: DbCaller,
+    identity_status_available: bool,
+    endpoint_available: bool,
+    endpoint_generation: u64,
 }
 
 impl<S: DurableStore> HostMemoryDbBackend<S> {
     pub fn new(db: Database<S>, caller: DbCaller) -> Self {
-        Self { db, caller }
+        Self {
+            db,
+            caller,
+            identity_status_available: true,
+            endpoint_available: true,
+            endpoint_generation: 1,
+        }
+    }
+
+    /// Deterministic host-test control for endpoint loss on the status path.
+    #[cfg(feature = "host")]
+    pub fn set_identity_status_available(&mut self, available: bool) {
+        self.identity_status_available = available;
+    }
+
+    /// Deterministic host-test control for service endpoint loss/reappearance.
+    #[cfg(feature = "host")]
+    pub fn set_endpoint_available(&mut self, available: bool) {
+        self.endpoint_available = available;
+    }
+
+    #[cfg(feature = "host")]
+    pub fn set_endpoint_generation(&mut self, generation: u64) {
+        self.endpoint_generation = generation;
     }
 
     pub fn set_now_ns(&mut self, ns: u64) {
@@ -123,11 +154,20 @@ impl<S: DurableStore> IndexMemoryDb for HostMemoryDbBackend<S> {
     fn identity_status(
         &mut self,
     ) -> Result<wiseowl_memorydb::identity_status::IdentityStatus, IndexError> {
+        if !self.endpoint_available || !self.identity_status_available {
+            return Err(IndexError::DatabaseUnavailable);
+        }
         self.db
             .identity_status()
             .ok_or(IndexError::DatabaseUnavailable)
     }
+    fn endpoint_generation(&self) -> u64 {
+        self.endpoint_generation
+    }
     fn health(&mut self) -> Result<MemoryDbHealth, IndexError> {
+        if !self.endpoint_available {
+            return Err(IndexError::DatabaseUnavailable);
+        }
         let h = self.db.health();
         let s = self.db.stats();
         let state = match h.state {

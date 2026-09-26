@@ -368,6 +368,7 @@ pub struct Database<S: DurableStore> {
     stats: DbStats,
     health: DbHealth,
     identity_context: Option<LoadedIdentity>,
+    activation_fingerprint: Option<[u8; 8]>,
     now_ns: u64,
     wal_path: String,
     wal_bytes: u64,
@@ -416,6 +417,7 @@ impl<S: DurableStore> Database<S> {
             stats: DbStats::default(),
             health: DbHealth::starting(),
             identity_context: None,
+            activation_fingerprint: None,
             now_ns: 1,
             wal_path: String::from("WAL/wal-000001"),
             wal_bytes: 0,
@@ -455,10 +457,20 @@ impl<S: DurableStore> Database<S> {
         self.identity_context
     }
 
+    /// Bind the validated local activation before publishing the endpoint.
+    #[doc(hidden)]
+    pub fn bind_activation(&mut self, activation_fingerprint: [u8; 8]) {
+        self.activation_fingerprint = Some(activation_fingerprint);
+    }
+
     /// Sanitized identity status derived exclusively from the validated startup context.
     pub fn identity_status(&self) -> Option<crate::identity_status::IdentityStatus> {
-        self.identity_context
-            .map(crate::identity_status::IdentityStatus::ready)
+        self.identity_context.map(|identity| {
+            crate::identity_status::IdentityStatus::ready_with_activation(
+                identity,
+                self.activation_fingerprint.unwrap_or_else(|| identity.diagnostic_fingerprint()),
+            )
+        })
     }
 
     pub fn stats(&self) -> DbStats {
