@@ -5,8 +5,12 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use wiseowl_memorydb::database::{Database, DbCaller, FsStore};
+use wiseowl_memorydb::database::{validate_store_read_only, Database, DbCaller, FsStore};
 use wiseowl_memorydb::health::HealthState;
+use wiseowl_memorydb::identity::{
+    detect_store_state, ensure_identity, host::HostIdentityStorage, AdoptionPolicy,
+    DetectedStoreState, StoreDisposition,
+};
 use wiseowl_memorydb::owlql::parse_owlql;
 use wiseowl_memorydb::protocol::{DbRequest, DbResponse};
 use wiseowl_memorydb::{DbCapabilitySet, DbQuotaConfig};
@@ -25,7 +29,66 @@ fn main() {
         let _ = std::fs::remove_file(&socket);
     }
 
-    let db = Database::<FsStore>::open_fs(&data_dir, DbQuotaConfig::default())
+    let mut identity_storage = match HostIdentityStorage::open(&data_dir) {
+        Ok(storage) => storage,
+        Err(error) => {
+            eprintln!("Wise Owl identity storage unavailable: {error:?}");
+            return;
+        }
+    };
+    let detected = match detect_store_state(&identity_storage) {
+        Ok(state) => state,
+        Err(error) => {
+            eprintln!("Wise Owl identity state detection failed: {error:?}");
+            return;
+        }
+    };
+    let disposition = match detected {
+        DetectedStoreState::Fresh => StoreDisposition::Fresh,
+        DetectedStoreState::Uncertain => StoreDisposition::ExistingInvalidOrUncertain,
+        DetectedStoreState::Existing => {
+            let validation_store = match FsStore::open(&data_dir) {
+                Ok(store) => store,
+                Err(_) => {
+                    eprintln!("Wise Owl pre-identity store could not be opened for validation");
+                    return;
+                }
+            };
+            if validate_store_read_only(&validation_store, DbQuotaConfig::default()).is_ok() {
+                StoreDisposition::ExistingValidated
+            } else {
+                StoreDisposition::ExistingInvalidOrUncertain
+            }
+        }
+    };
+    let adoption_requested = cfg!(feature = "identity-adoption")
+        && std::env::var("WISEOWL_IDENTITY_ADOPT_EXISTING").as_deref() == Ok("1");
+    let adoption_policy = if adoption_requested {
+        AdoptionPolicy::AllowValidatedExistingState
+    } else {
+        AdoptionPolicy::Disabled
+    };
+    let identity = match ensure_identity(
+        &mut identity_storage,
+        disposition,
+        adoption_policy,
+        wiseowl_identity::fill_host_entropy,
+        |_| Ok(()),
+    ) {
+        Ok(identity) => identity,
+        Err(error) => {
+            eprintln!("Wise Owl identity suspended: {error:?}");
+            return;
+        }
+    };
+    let fingerprint = identity.diagnostic_fingerprint();
+    eprintln!(
+        "Wise Owl identity loaded: woid fingerprint {}",
+        std::str::from_utf8(&fingerprint).unwrap_or("????????")
+    );
+
+    let store = FsStore::open(&data_dir).expect("open wiseowl-memorydb store");
+    let db = Database::open_with_store(store, DbQuotaConfig::default())
         .expect("open wiseowl-memorydb");
     let db = Arc::new(Mutex::new(db));
 

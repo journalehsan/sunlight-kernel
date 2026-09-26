@@ -1634,6 +1634,11 @@ struct BlkCell(Option<sunlight_virtio::VirtioBlk>);
 // live for the whole kernel lifetime; access is serialized by the mutex.
 unsafe impl Send for BlkCell {}
 static VIRTIO_BLK: spin::Mutex<BlkCell> = spin::Mutex::new(BlkCell(None));
+const BLOCK_VOLUME_NONE: u8 = 0;
+const BLOCK_VOLUME_BOOT: u8 = 1;
+const BLOCK_VOLUME_STATE: u8 = 2;
+static BLOCK_VOLUME_KIND: core::sync::atomic::AtomicU8 =
+    core::sync::atomic::AtomicU8::new(BLOCK_VOLUME_NONE);
 
 /// BlockDevice adapter over the long-lived VIRTIO_BLK static.
 pub struct KernelBlkDev;
@@ -1657,14 +1662,34 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
 
     fn write_block(
         &mut self,
-        _lba: u64,
-        _buf: &[u8; sunlight_block::BLOCK_SIZE],
+        lba: u64,
+        buf: &[u8; sunlight_block::BLOCK_SIZE],
     ) -> Result<(), sunlight_block::BlockError> {
-        Err(sunlight_block::BlockError::Unsupported)
+        let mut cell = VIRTIO_BLK.lock();
+        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
+        if unsafe { blk.write_block(lba, buf) } {
+            Ok(())
+        } else {
+            Err(sunlight_block::BlockError::Io)
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), sunlight_block::BlockError> {
+        let mut cell = VIRTIO_BLK.lock();
+        let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
+        if unsafe { blk.flush() } {
+            Ok(())
+        } else {
+            Err(sunlight_block::BlockError::Unsupported)
+        }
     }
 
     fn block_count(&self) -> u64 {
-        0 // capacity not read from device config yet
+        VIRTIO_BLK
+            .lock()
+            .0
+            .as_ref()
+            .map_or(0, sunlight_virtio::VirtioBlk::block_count)
     }
 }
 
@@ -1701,8 +1726,7 @@ pub static GPU_DEVICE: spin::Mutex<Option<sunlight_virtio::VirtioGpu>> = spin::M
 /// "display_server". Boot Limine framebuffer remains the final fallback.
 pub static SVGA_DEVICE: spin::Mutex<Option<sunlight_virtio::VmwareSvga>> = spin::Mutex::new(None);
 
-/// BlockDevice adapter over the kernel's virtio-blk driver (read-only:
-/// VirtioBlk has no write path yet, and the boot volume is never written).
+/// BlockDevice adapter used during boot-time FAT probing.
 struct VirtioBootDisk<'a> {
     blk: &'a mut sunlight_virtio::VirtioBlk,
 }
@@ -1724,14 +1748,26 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
 
     fn write_block(
         &mut self,
-        _lba: u64,
-        _buf: &[u8; sunlight_block::BLOCK_SIZE],
+        lba: u64,
+        buf: &[u8; sunlight_block::BLOCK_SIZE],
     ) -> Result<(), sunlight_block::BlockError> {
-        Err(sunlight_block::BlockError::Unsupported)
+        if unsafe { self.blk.write_block(lba, buf) } {
+            Ok(())
+        } else {
+            Err(sunlight_block::BlockError::Io)
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), sunlight_block::BlockError> {
+        if unsafe { self.blk.flush() } {
+            Ok(())
+        } else {
+            Err(sunlight_block::BlockError::Unsupported)
+        }
     }
 
     fn block_count(&self) -> u64 {
-        0 // capacity not read from device config yet
+        self.blk.block_count()
     }
 }
 
@@ -1839,6 +1875,12 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
         return share_phys;
     }
     serial_println!("[BLK]  Read LBA 0 OK");
+    let volume_kind = if &sector0[71..79] == b"SUNSTATE" {
+        BLOCK_VOLUME_STATE
+    } else {
+        BLOCK_VOLUME_BOOT
+    };
+    BLOCK_VOLUME_KIND.store(volume_kind, core::sync::atomic::Ordering::Release);
     hardware_inventory::update_pci(
         bus,
         slot,
@@ -1860,7 +1902,8 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     };
     serial_println!("[FAT]  FAT32 detected");
 
-    // Populate the share page with pre-read file contents
+    // Populate the boot share only for the historical boot/test volume. A
+    // SUNSTATE-labelled volume is reserved for writable `/state`.
     // SAFETY: share_virt points to a valid writable physical frame (one page).
     let share = unsafe { &mut *(share_virt as *mut sunlight_fat::FatSharePage) };
     *share = sunlight_fat::FatSharePage::zeroed();
@@ -1868,7 +1911,9 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     let mut count = 0u32;
 
     // Read /HELLO.TXT from FAT32 root
-    if count < sunlight_fat::share::MAX_SHARE_FILES as u32 {
+    if volume_kind == BLOCK_VOLUME_BOOT
+        && count < sunlight_fat::share::MAX_SHARE_FILES as u32
+    {
         let entry = &mut share.files[count as usize];
         let src_path = b"/HELLO.TXT";
         let path_len = src_path.len().min(48);
@@ -1882,7 +1927,9 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     }
 
     // Read /BOOT/PHASE35.TXT from FAT32
-    if count < sunlight_fat::share::MAX_SHARE_FILES as u32 {
+    if volume_kind == BLOCK_VOLUME_BOOT
+        && count < sunlight_fat::share::MAX_SHARE_FILES as u32
+    {
         let entry = &mut share.files[count as usize];
         let src_path = b"/BOOT/PHASE35.TXT";
         let path_len = src_path.len().min(48);
@@ -1906,8 +1953,9 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     share_phys
 }
 
-/// Build the kernel-global VFS: INITRAMFS at `/`, and — when the boot disk is
-/// present — the FAT32 volume at `/boot`. Logs the `[VFS]` gate line.
+/// Build the kernel-global VFS: INITRAMFS at `/`, plus the detected FAT32
+/// volume. `SUNSTATE` is mounted read/write at `/state`; other volumes retain
+/// the historical `/boot` mount.
 fn init_kernel_vfs() {
     let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
 
@@ -1924,10 +1972,16 @@ fn init_kernel_vfs() {
         let disk = sunlight_block::CachedBlockDevice::new(KernelBlkDev);
         match sunlight_fat::Fat32::mount(disk) {
             Some(fat) => {
-                if vfs.mount_fat("/boot", fat).is_ok() {
-                    serial_println!("[VFS] FAT volume mounted at /boot");
+                let kind = BLOCK_VOLUME_KIND.load(core::sync::atomic::Ordering::Acquire);
+                let mountpoint = if kind == BLOCK_VOLUME_STATE {
+                    "/state"
                 } else {
-                    serial_println!("[VFS] /boot mount failed");
+                    "/boot"
+                };
+                if vfs.mount_fat(mountpoint, fat).is_ok() {
+                    serial_println!("[VFS] FAT volume mounted at {}", mountpoint);
+                } else {
+                    serial_println!("[VFS] {} mount failed", mountpoint);
                 }
             }
             None => {

@@ -28,6 +28,7 @@ pub mod codec;
 pub mod database;
 pub mod error;
 pub mod health;
+pub mod identity;
 pub mod index;
 pub mod insert_wire;
 pub mod native_ipc;

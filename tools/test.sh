@@ -62,6 +62,13 @@ case "$PHASE" in
         NEED_DISK=true
         TIMEOUT=180
         ;;
+    wiseowl-identity-phase-a)
+        EXPECTED_FILE="tools/tests/wiseowl_identity_phase_a.expected"
+        FINAL_MARKER="[WISEOWL-IDENTITY-A] native gate PASS"
+        PASS_LABEL="Wise Owl Identity Phase A"
+        NEED_DISK=true
+        TIMEOUT=120
+        ;;
     phase3.6)
         EXPECTED_FILE="tools/tests/phase3_6.expected"
         FINAL_MARKER="[SunlightOS] Phase 3.6 OK"
@@ -556,7 +563,9 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release >
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
-if [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
+if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,identity-phase-a-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+elif [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,phase375-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
@@ -590,9 +599,13 @@ else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release >>"$BUILD_LOG" 2>&1
-# --- Step 1b: Create FAT32 disk image (phase3.5+) ---
+# --- Step 1b: Create the FAT32 volume required by this gate. ---
 if [[ "$NEED_DISK" == "true" ]]; then
-    bash tools/disk.sh >>"$BUILD_LOG" 2>&1
+    if [[ "$PHASE" == wiseowl-* || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
+        bash tools/state-disk.sh target/state-test.img >>"$BUILD_LOG" 2>&1
+    else
+        bash tools/disk.sh >>"$BUILD_LOG" 2>&1
+    fi
 fi
 
 # --- Step 2: Build kernel ---
@@ -604,7 +617,7 @@ if [[ "$PHASE" == "helios-note-regression" || "$PHASE" == "helios-static-runtime
         cargo build --package helios-note --release --target x86_64-unknown-linux-musl >>"$BUILD_LOG" 2>&1
 fi
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "helios-proven-tier1" || "$PHASE" == "helios-note-regression" || "$PHASE" == "helios-static-runtime" || "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-gui-live-action-activation-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
+if [[ "$PHASE" == "helios-proven-tier1" || "$PHASE" == "helios-note-regression" || "$PHASE" == "helios-static-runtime" || "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "wiseowl-identity-phase-a" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-gui-live-action-activation-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -688,8 +701,12 @@ trap "rm -f $QEMU_OUTPUT $BUILD_LOG" EXIT
 
 # Extra QEMU flags for phases that need a virtio-blk disk
 DISK_FLAGS=""
-if [[ "$NEED_DISK" == "true" && -f "target/test.img" ]]; then
-    DISK_FLAGS="-drive id=hd0,file=target/test.img,if=none,format=raw -device virtio-blk-pci,disable-modern=on,drive=hd0"
+if [[ "$NEED_DISK" == "true" ]]; then
+    if [[ "$PHASE" == wiseowl-* || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
+        DISK_FLAGS="-drive id=hd0,file=target/state-test.img,if=none,format=raw,cache=writeback -device virtio-blk-pci,disable-modern=on,drive=hd0"
+    elif [[ -f "target/test.img" ]]; then
+        DISK_FLAGS="-drive id=hd0,file=target/test.img,if=none,format=raw -device virtio-blk-pci,disable-modern=on,drive=hd0"
+    fi
 fi
 
 # Extra QEMU flags for Phase 5 networking (virtio-net). Always add for phase5* so PCI scan + driver init succeed.

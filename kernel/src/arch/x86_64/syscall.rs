@@ -183,6 +183,10 @@ pub enum SunlightSyscall {
     ReadDirFrom = 148,
     RenameNoReplace = 149,
     FileReserve = 150,
+    /// Stable-media barrier for an open VFS file.
+    FileSync = 153,
+    /// Stable-media barrier for a VFS directory and its namespace entries.
+    DirSync = 154,
 
     DebugLog = 99,
 }
@@ -681,6 +685,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         148 => sys_readdir(frame, frame.r10 as usize),
         149 => sys_rename(frame, true),
         150 => sys_file_reserve(frame),
+        153 => sys_file_sync(frame),
+        154 => sys_dir_sync(frame),
         61 => sys_stat_path(frame),
         62 => sys_mkdir(frame),
         63 => sys_chdir(frame),
@@ -5569,6 +5575,74 @@ fn sys_file_reserve(frame: &mut SyscallFrame) -> u64 {
         return ERR_EIO;
     };
     match vfs.reserve(handle, size) {
+        Ok(()) => 0,
+        Err(error) => fs_error_raw(error),
+    }
+}
+
+/// Syscall: FileSync (153) — force an open VFS file to stable media.
+fn sys_file_sync(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let entry = {
+        let sched = crate::sched::SCHEDULER.lock();
+        if sched
+            .current_process()
+            .fd_table
+            .check_rights(
+                fd,
+                crate::process::fd_table::CapRights::new(
+                    crate::process::fd_table::CapRights::WRITE,
+                ),
+            )
+            .is_err()
+        {
+            return ERR_EBADF;
+        }
+        match sched.current_process().fd_table.get(fd).copied() {
+            Some(entry) if entry.handle.is_vfs() => entry,
+            _ => return ERR_EBADF,
+        }
+    };
+    let handle = sunlight_fs::vfs::FileHandle(entry.handle.vfs_handle());
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return ERR_EIO;
+    };
+    match vfs.sync_file(handle) {
+        Ok(()) => 0,
+        Err(error) => fs_error_raw(error),
+    }
+}
+
+/// Syscall: DirSync (154) — force directory namespace changes to stable media.
+fn sys_dir_sync(frame: &mut SyscallFrame) -> u64 {
+    let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(error) => return user_memory_failure(error),
+    };
+    let raw_path = match core::str::from_utf8(&path_bytes) {
+        Ok(path) => path,
+        Err(_) => return ERR_EINVAL,
+    };
+    let path_buf = resolve_current_path(raw_path);
+    let path = path_buf.as_str();
+    let (_, _, actor) = current_fs_actor();
+    if !sunlight_fs::can_write(
+        actor,
+        path,
+        sunlight_fs::FsOperation::Write,
+        None,
+        false,
+    )
+    .allowed
+    {
+        return ERR_EACCES;
+    }
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return ERR_EIO;
+    };
+    match vfs.sync_dir(path) {
         Ok(()) => 0,
         Err(error) => fs_error_raw(error),
     }

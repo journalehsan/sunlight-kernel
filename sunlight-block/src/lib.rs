@@ -24,6 +24,11 @@ pub enum BlockError {
 pub trait BlockDevice {
     fn read_block(&mut self, lba: u64, buf: &mut [u8; BLOCK_SIZE]) -> Result<(), BlockError>;
     fn write_block(&mut self, lba: u64, buf: &[u8; BLOCK_SIZE]) -> Result<(), BlockError>;
+    /// Force all writes accepted by this device to stable media.
+    ///
+    /// Implementations must return `Unsupported` rather than reporting
+    /// success when they cannot provide a persistence barrier.
+    fn flush(&mut self) -> Result<(), BlockError>;
     fn block_count(&self) -> u64;
 }
 
@@ -34,6 +39,10 @@ impl<D: BlockDevice + ?Sized> BlockDevice for &mut D {
 
     fn write_block(&mut self, lba: u64, buf: &[u8; BLOCK_SIZE]) -> Result<(), BlockError> {
         (**self).write_block(lba, buf)
+    }
+
+    fn flush(&mut self) -> Result<(), BlockError> {
+        (**self).flush()
     }
 
     fn block_count(&self) -> u64 {
@@ -50,6 +59,10 @@ impl BlockDevice for NullDevice {
     }
 
     fn write_block(&mut self, _lba: u64, _buf: &[u8; BLOCK_SIZE]) -> Result<(), BlockError> {
+        Err(BlockError::Unsupported)
+    }
+
+    fn flush(&mut self) -> Result<(), BlockError> {
         Err(BlockError::Unsupported)
     }
 
@@ -109,7 +122,7 @@ impl<D: BlockDevice, const N: usize> CachedBlockDevice<D, N> {
         for index in 0..N {
             self.flush_slot(index)?;
         }
-        Ok(())
+        self.inner.flush()
     }
 
     pub fn inner(&self) -> &D {
@@ -159,6 +172,10 @@ impl<D: BlockDevice, const N: usize> BlockDevice for CachedBlockDevice<D, N> {
         Ok(())
     }
 
+    fn flush(&mut self) -> Result<(), BlockError> {
+        CachedBlockDevice::flush(self)
+    }
+
     fn block_count(&self) -> u64 {
         self.inner.block_count()
     }
@@ -199,6 +216,11 @@ impl BlockDevice for MemDisk<'_> {
     fn write_block(&mut self, lba: u64, buf: &[u8; BLOCK_SIZE]) -> Result<(), BlockError> {
         let range = self.range(lba)?;
         self.data[range].copy_from_slice(buf);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), BlockError> {
+        // Memory is the stable backing store for this deterministic device.
         Ok(())
     }
 

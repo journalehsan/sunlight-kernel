@@ -388,6 +388,20 @@ pub fn file_reserve(fd: Fd, size: usize) -> Result<(), Errno> {
     sys::check(ret).map(|_| ())
 }
 
+/// Force content and metadata for an open file to stable media.
+pub fn file_sync(fd: Fd) -> Result<(), Errno> {
+    let ret = unsafe { sys::syscall1(sys::SYS_FILE_SYNC, fd.0 as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+/// Force directory-entry changes for `path` to stable media.
+pub fn dir_sync(path: &[u8]) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall1(sys::SYS_DIR_SYNC, path_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
 pub fn stat(path: &[u8]) -> Result<Stat, Errno> {
     let mut path_buf = [0u8; MAX_PATH];
     let path_ptr = cstr(&mut path_buf, path)?;

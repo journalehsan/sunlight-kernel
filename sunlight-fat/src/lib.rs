@@ -10,7 +10,7 @@ pub mod share;
 #[cfg(any(test, feature = "testutil"))]
 pub mod testimg;
 
-pub use fat::{Fat32, FatStat, MAX_NAME_83};
+pub use fat::{Fat32, FatError, FatStat, MAX_NAME_83};
 pub use share::{FatShareFile, FatSharePage, FAT_SHARE_VADDR, SHARE_MAGIC};
 
 #[cfg(test)]
@@ -131,5 +131,60 @@ mod tests {
         assert!(fat
             .read_dir_raw(b"/HELLO.TXT", &mut |_, _, _| true)
             .is_none());
+    }
+
+    #[test]
+    fn creates_writes_and_reopens_long_name_state_tree() {
+        let builder = FatImageBuilder::new(1);
+        let mut image = builder.build();
+
+        {
+            let mut fat = Fat32::mount(MemDisk::new(&mut image)).expect("mount");
+            fat.mkdir_path(b"/wiseowl-memorydb").expect("service dir");
+            fat.mkdir_path(b"/wiseowl-memorydb/IDENTITY.NEW")
+                .expect("staging dir");
+            fat.create_file_path(b"/wiseowl-memorydb/IDENTITY.NEW/ROOT")
+                .expect("root file");
+            assert_eq!(
+                fat.write_path(b"/wiseowl-memorydb/IDENTITY.NEW/ROOT", 0, b"identity-root")
+                    .expect("write"),
+                13
+            );
+            assert!(fat.flush());
+        }
+
+        let mut fat = Fat32::mount(MemDisk::new(&mut image)).expect("remount");
+        let mut out = [0u8; 32];
+        let count = fat
+            .read_file(b"/wiseowl-memorydb/IDENTITY.NEW/ROOT", &mut out)
+            .expect("read after remount");
+        assert_eq!(&out[..count], b"identity-root");
+
+        let mut listed = Vec::new();
+        fat.read_dir_raw(b"/", &mut |name, _, _| {
+            listed.push(name.to_vec());
+            true
+        })
+        .expect("list root");
+        assert_eq!(listed, [b"wiseowl-memorydb".to_vec()]);
+    }
+
+    #[test]
+    fn rename_publication_never_loses_the_object() {
+        let builder = FatImageBuilder::new(1);
+        let mut image = builder.build();
+        let mut fat = Fat32::mount(MemDisk::new(&mut image)).expect("mount");
+        fat.mkdir_path(b"/IDSTAGE").expect("stage");
+        fat.create_file_path(b"/IDSTAGE/HEAD").expect("head");
+        fat.write_path(b"/IDSTAGE/HEAD", 0, b"committed")
+            .expect("write");
+        fat.rename_path(b"/IDSTAGE", b"/IDENTITY")
+            .expect("publish");
+        assert!(fat.stat_path(b"/IDSTAGE").is_none());
+        let mut out = [0u8; 16];
+        let count = fat
+            .read_file(b"/IDENTITY/HEAD", &mut out)
+            .expect("published head");
+        assert_eq!(&out[..count], b"committed");
     }
 }

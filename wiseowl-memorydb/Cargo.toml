@@ -1,6 +1,7 @@
 [package]
 name = "wiseowl-memorydb"
-version = "0.2.4352-alpha.2"
+version = "0.2.4384-alpha.2"
+
 
 
 
@@ -110,6 +111,7 @@ host = [
     "dep:log",
     "dep:lz4_flex",
     "wiseowl-memory/host",
+    "wiseowl-identity/host",
 ]
 # Native SunlightOS daemon + CLI (no_std + alloc + sunlight-ipc).
 sunlightos = [
@@ -118,11 +120,15 @@ sunlightos = [
     "dep:lz4_flex",
     "dep:heapless",
     "wiseowl-memory/sunlightos",
+    "wiseowl-identity/sunlightos",
 ]
 phase375-test = []
+identity-adoption = []
+identity-phase-a-test = []
 
 [dependencies]
 wiseowl-memory = { path = "../wiseowl-memory", default-features = false }
+wiseowl-identity = { path = "../wiseowl-identity", default-features = false }
 serde = { version = "1", features = ["derive"], optional = true }
 bincode = { version = "1.3", optional = true }
 thiserror = { version = "1", optional = true }

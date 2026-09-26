@@ -645,7 +645,8 @@ WantedBy=sunlight.target
     // Independent of short-term wiseowl-memoryd. Uses /state/wiseowl-memorydb.
     let wiseowl_memorydb_service = r#"[Unit]
 Description=Wise Owl Long-Term Memory Database
-After=vfs_server.service
+After=vfs_server.service rand_service.service
+Requires=rand_service.service
 
 [Service]
 Type=simple
@@ -656,6 +657,7 @@ StartLimitBurst=5
 StartLimitIntervalSec=60
 User=root
 Capability=logging
+Capability=secure-random
 StandardOutput=journal
 StandardError=journal
 

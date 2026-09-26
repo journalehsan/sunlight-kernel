@@ -10,7 +10,13 @@ use sunlight_ipc::{
 use sunlight_libc as libc;
 
 use wiseowl_memorydb::attributes::AttributeValue;
-use wiseowl_memorydb::database::{Database, DbCaller, DurableStore, MemoryStore};
+use wiseowl_memorydb::database::{
+    validate_store_read_only, Database, DbCaller, DurableStore, MemoryStore,
+};
+use wiseowl_memorydb::identity::{
+    detect_store_state, ensure_identity, AdoptionPolicy, DetectedStoreState, IdentityDirEntry,
+    IdentityStartupError, IdentityStorage, StoreDisposition,
+};
 use wiseowl_memorydb::native_ipc::{
     MemoryDbIpcHeader, MemoryDbOp, INLINE_PAYLOAD_THRESHOLD, MEMORYDB_IPC_HEADER_LEN,
     NATIVE_PROTOCOL_VERSION,
@@ -27,6 +33,120 @@ macro_rules! serial_println {
 }
 
 const STATE_DIR: &[u8] = b"/state/wiseowl-memorydb";
+
+struct NativeIdentityStorage;
+
+impl NativeIdentityStorage {
+    fn open() -> Result<Self, IdentityStartupError> {
+        if libc::stat(STATE_DIR).is_err() {
+            libc::mkdir(STATE_DIR, 0o700).map_err(|_| IdentityStartupError::Io)?;
+        }
+        Ok(Self)
+    }
+
+    fn path(relative: &str) -> String {
+        if relative.is_empty() {
+            String::from("/state/wiseowl-memorydb")
+        } else {
+            alloc::format!("/state/wiseowl-memorydb/{relative}")
+        }
+    }
+}
+
+impl IdentityStorage for NativeIdentityStorage {
+    fn exists(&self, relative: &str) -> Result<bool, IdentityStartupError> {
+        Ok(libc::stat(Self::path(relative).as_bytes()).is_ok())
+    }
+
+    fn create_dir(&mut self, relative: &str) -> Result<(), IdentityStartupError> {
+        libc::mkdir(Self::path(relative).as_bytes(), 0o700)
+            .map_err(|_| IdentityStartupError::Io)
+    }
+
+    fn list_dir(&self, relative: &str) -> Result<Vec<IdentityDirEntry>, IdentityStartupError> {
+        let path = Self::path(relative);
+        let mut output = Vec::new();
+        let mut offset = 0usize;
+        loop {
+            let mut entries = [libc::DirEntry::zeroed(); 64];
+            let count = libc::read_dir_from(path.as_bytes(), &mut entries, offset)
+                .map_err(|_| IdentityStartupError::Io)?;
+            if count == 0 {
+                break;
+            }
+            for entry in entries.iter().take(count) {
+                let name = core::str::from_utf8(entry.name_bytes())
+                    .map_err(|_| IdentityStartupError::Io)?;
+                output.push(IdentityDirEntry {
+                    name: String::from(name),
+                    is_dir: entry.file_type == libc::FT_DIR,
+                });
+            }
+            offset = offset.saturating_add(count);
+            if count < entries.len() {
+                break;
+            }
+        }
+        Ok(output)
+    }
+
+    fn read_file(&self, relative: &str) -> Result<Option<Vec<u8>>, IdentityStartupError> {
+        let path = Self::path(relative);
+        let fd = match libc::open_with_flags(path.as_bytes(), libc::O_RDONLY) {
+            Ok(fd) => fd,
+            Err(libc::Errno::NoEntry) => return Ok(None),
+            Err(_) => return Err(IdentityStartupError::Io),
+        };
+        let mut output = Vec::new();
+        let mut chunk = [0u8; 256];
+        while output.len() <= 4096 {
+            let count = libc::read(fd, &mut chunk).map_err(|_| IdentityStartupError::Io)?;
+            if count == 0 {
+                break;
+            }
+            output.extend_from_slice(&chunk[..count]);
+        }
+        let _ = libc::close(fd);
+        Ok(Some(output))
+    }
+
+    fn write_file(&mut self, relative: &str, bytes: &[u8]) -> Result<(), IdentityStartupError> {
+        let path = Self::path(relative);
+        let fd = libc::open_with_flags_mode(
+            path.as_bytes(),
+            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+            0o600,
+        )
+        .map_err(|_| IdentityStartupError::Io)?;
+        let mut offset = 0usize;
+        while offset < bytes.len() {
+            let count = libc::write(fd, &bytes[offset..]).map_err(|_| IdentityStartupError::Io)?;
+            if count == 0 {
+                let _ = libc::close(fd);
+                return Err(IdentityStartupError::Io);
+            }
+            offset += count;
+        }
+        libc::close(fd).map_err(|_| IdentityStartupError::Io)
+    }
+
+    fn sync_file(&mut self, relative: &str) -> Result<(), IdentityStartupError> {
+        let fd = libc::open_with_flags(Self::path(relative).as_bytes(), libc::O_WRONLY)
+            .map_err(|_| IdentityStartupError::Io)?;
+        let result = libc::file_sync(fd).map_err(|_| IdentityStartupError::Io);
+        let _ = libc::close(fd);
+        result
+    }
+
+    fn sync_dir(&mut self, relative: &str) -> Result<(), IdentityStartupError> {
+        libc::dir_sync(Self::path(relative).as_bytes()).map_err(|_| IdentityStartupError::Io)
+    }
+
+    fn rename_no_replace(&mut self, old: &str, new: &str) -> Result<(), IdentityStartupError> {
+        libc::rename_no_replace(Self::path(old).as_bytes(), Self::path(new).as_bytes())
+            .map_err(|_| IdentityStartupError::Io)
+    }
+}
 
 /// Native durable store using sunlight-libc file ops under /state/wiseowl-memorydb.
 struct NativeFsStore {
@@ -203,7 +323,71 @@ impl DurableStore for NativeFsStore {
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     serial_println!("[WISEOWL-DB] starting wiseowl-memorydb");
-    let store = NativeFsStore::open();
+    let mut identity_storage = match NativeIdentityStorage::open() {
+        Ok(storage) => storage,
+        Err(error) => {
+            serial_println!("[WISEOWL-DB] identity storage unavailable: {:?}", error);
+            loop { process_yield(); }
+        }
+    };
+    let detected = match detect_store_state(&identity_storage) {
+        Ok(state) => state,
+        Err(error) => {
+            serial_println!("[WISEOWL-DB] identity detection failed: {:?}", error);
+            loop { process_yield(); }
+        }
+    };
+    let mut preopened_store = None;
+    let disposition = match detected {
+        DetectedStoreState::Fresh => StoreDisposition::Fresh,
+        DetectedStoreState::Uncertain => StoreDisposition::ExistingInvalidOrUncertain,
+        DetectedStoreState::Existing => {
+            let candidate = NativeFsStore::open();
+            if validate_store_read_only(&candidate, DbQuotaConfig::default()).is_ok() {
+                preopened_store = Some(candidate);
+                StoreDisposition::ExistingValidated
+            } else {
+                StoreDisposition::ExistingInvalidOrUncertain
+            }
+        }
+    };
+    let adoption_policy = if cfg!(feature = "identity-adoption") {
+        AdoptionPolicy::AllowValidatedExistingState
+    } else {
+        AdoptionPolicy::Disabled
+    };
+    let identity = match ensure_identity(
+        &mut identity_storage,
+        disposition,
+        adoption_policy,
+        |bytes| {
+            if libc::getrandom(bytes, 0) == bytes.len() as isize {
+                Ok(())
+            } else {
+                Err(wiseowl_identity::EntropyError)
+            }
+        },
+        |_| Ok(()),
+    ) {
+        Ok(identity) => identity,
+        Err(error) => {
+            serial_println!("[WISEOWL-DB] identity suspended: {:?}", error);
+            loop { process_yield(); }
+        }
+    };
+    let fingerprint = identity.diagnostic_fingerprint();
+    let fingerprint = core::str::from_utf8(&fingerprint).unwrap_or("????????");
+    serial_println!("[WISEOWL-DB] identity loaded: {}", fingerprint);
+    if identity.recovered_from_staging() {
+        serial_println!("[WISEOWL-DB] identity creation recovered from staged state");
+    }
+    if identity.genesis_event_kind() == wiseowl_identity::GenesisEventKind::ExistingStateAdopted {
+        serial_println!("[WISEOWL-DB] existing Wise Owl state adopted");
+    }
+    #[cfg(feature = "identity-phase-a-test")]
+    serial_println!("[WISEOWL-IDENTITY-A] native gate PASS");
+
+    let store = preopened_store.unwrap_or_else(NativeFsStore::open);
     let mut db = match Database::open_with_store(store, DbQuotaConfig::default()) {
         Ok(d) => d,
         Err(_) => {

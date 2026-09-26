@@ -1,6 +1,6 @@
 use crate::{path, FsError, RamFs};
 use sunlight_block::{BlockDevice, NullDevice};
-use sunlight_fat::{Fat32, MAX_NAME_83};
+use sunlight_fat::{Fat32, FatError, MAX_NAME_83};
 
 pub const MAX_MOUNTS: usize = 8;
 /// Maximum file-name length reported by `read_dir`.
@@ -150,6 +150,11 @@ pub trait FileSystem {
     /// ABI.
     fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError>;
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError>;
+    /// Force file content and its metadata to stable storage.
+    fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError>;
+    /// Force directory entries and allocation metadata reachable at `path` to
+    /// stable storage.
+    fn sync_dir(&mut self, path: &str) -> Result<(), FsError>;
     /// Return metadata for an open handle without a path round-trip.
     /// Used by `sys_fstat` and `sys_lseek(SEEK_END)`.
     fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError>;
@@ -210,6 +215,18 @@ impl<D: BlockDevice> FatFs<D> {
             .and_then(|slot| slot.filter(|open| open.generation == generation))
             .ok_or(FsError::BadHandle)
     }
+
+    fn map_error(error: FatError) -> FsError {
+        match error {
+            FatError::NotFound => FsError::NotFound,
+            FatError::AlreadyExists => FsError::AlreadyExists,
+            FatError::NotDirectory => FsError::NotDir,
+            FatError::IsDirectory => FsError::IsDir,
+            FatError::InvalidName => FsError::InvalidPath,
+            FatError::NoSpace | FatError::Io => FsError::Io,
+            FatError::NotEmpty => FsError::OperationNotPermitted,
+        }
+    }
 }
 
 impl<D: BlockDevice> FileSystem for FatFs<D> {
@@ -245,22 +262,37 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
 
     fn create_file(
         &mut self,
-        _path: &str,
+        path: &str,
         _uid: u32,
         _gid: u32,
         _mode: u16,
     ) -> Result<FileHandle, FsError> {
-        Err(FsError::ReadOnlyFilesystem)
+        match self.open(path) {
+            Ok(handle) => Ok(handle),
+            Err(FsError::NotFound) => {
+                self.fat
+                    .create_file_path(path.as_bytes())
+                    .map_err(Self::map_error)?;
+                self.open(path)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     fn create_file_exclusive(
         &mut self,
-        _path: &str,
+        path: &str,
         _uid: u32,
         _gid: u32,
         _mode: u16,
     ) -> Result<FileHandle, FsError> {
-        Err(FsError::ReadOnlyFilesystem)
+        if self.fat.stat_path(path.as_bytes()).is_some() {
+            return Err(FsError::AlreadyExists);
+        }
+        self.fat
+            .create_file_path(path.as_bytes())
+            .map_err(Self::map_error)?;
+        self.open(path)
     }
 
     fn read(
@@ -278,16 +310,43 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
             .ok_or(FsError::Io)
     }
 
-    fn write(&mut self, handle: FileHandle, _offset: usize, _buf: &[u8]) -> Result<usize, FsError> {
+    fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError> {
         let open = self.handle_slot(handle)?;
         if open.is_dir {
             return Err(FsError::IsDir);
         }
-        Err(FsError::Unsupported)
+        let path = &open.path[..open.path_len as usize];
+        let written = self
+            .fat
+            .write_path(path, offset, buf)
+            .map_err(Self::map_error)?;
+        let stat = self.fat.stat_path(path).ok_or(FsError::Io)?;
+        let (index, generation) = split_local_handle(handle)?;
+        let slot = self.handles.get_mut(index).ok_or(FsError::BadHandle)?;
+        let current = slot.as_mut().ok_or(FsError::BadHandle)?;
+        if current.generation != generation {
+            return Err(FsError::BadHandle);
+        }
+        current.first_cluster = stat.first_cluster;
+        current.size = stat.size;
+        Ok(written)
     }
 
-    fn truncate(&mut self, _handle: FileHandle) -> Result<(), FsError> {
-        Err(FsError::ReadOnlyFilesystem)
+    fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        let open = self.handle_slot(handle)?;
+        if open.is_dir {
+            return Err(FsError::IsDir);
+        }
+        let path = &open.path[..open.path_len as usize];
+        self.fat.truncate_path(path).map_err(Self::map_error)?;
+        let (index, generation) = split_local_handle(handle)?;
+        let current = self.handles[index].as_mut().ok_or(FsError::BadHandle)?;
+        if current.generation != generation {
+            return Err(FsError::BadHandle);
+        }
+        current.first_cluster = 0;
+        current.size = 0;
+        Ok(())
     }
 
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
@@ -302,6 +361,27 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         }
         *slot = None;
         Ok(())
+    }
+
+    fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        self.handle_slot(handle)?;
+        if self.fat.flush() {
+            Ok(())
+        } else {
+            Err(FsError::Unsupported)
+        }
+    }
+
+    fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
+        let stat = self.fat.stat_path(path.as_bytes()).ok_or(FsError::NotFound)?;
+        if !stat.is_dir {
+            return Err(FsError::NotDir);
+        }
+        if self.fat.flush() {
+            Ok(())
+        } else {
+            Err(FsError::Unsupported)
+        }
     }
 
     fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
@@ -354,8 +434,13 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         })
     }
 
-    fn mkdir(&mut self, _path: &str, _uid: u32, _gid: u32, _mode: u16) -> Result<(), FsError> {
-        Err(FsError::Unsupported)
+    fn mkdir(&mut self, path: &str, _uid: u32, _gid: u32, _mode: u16) -> Result<(), FsError> {
+        if self.fat.stat_path(path.as_bytes()).is_some() {
+            return Err(FsError::AlreadyExists);
+        }
+        self.fat
+            .mkdir_path(path.as_bytes())
+            .map_err(Self::map_error)
     }
 
     fn chmod(&mut self, _path: &str, _mode: u16) -> Result<(), FsError> {
@@ -366,12 +451,27 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         Err(FsError::Unsupported)
     }
 
-    fn unlink(&mut self, _path: &str) -> Result<(), FsError> {
-        Err(FsError::ReadOnlyFilesystem)
+    fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+        self.fat
+            .unlink_path(path.as_bytes())
+            .map_err(Self::map_error)
     }
 
-    fn rename(&mut self, _old: &str, _new: &str) -> Result<(), FsError> {
-        Err(FsError::ReadOnlyFilesystem)
+    fn rename(&mut self, old: &str, new: &str) -> Result<(), FsError> {
+        self.fat
+            .rename_path(old.as_bytes(), new.as_bytes())
+            .map_err(Self::map_error)?;
+        for open in self.handles.iter_mut().flatten() {
+            if &open.path[..open.path_len as usize] == old.as_bytes() {
+                if new.len() > open.path.len() {
+                    return Err(FsError::InvalidPath);
+                }
+                open.path.fill(0);
+                open.path[..new.len()].copy_from_slice(new.as_bytes());
+                open.path_len = new.len() as u8;
+            }
+        }
+        Ok(())
     }
 
     fn read_dir(
@@ -494,6 +594,20 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
         match self {
             Self::Ram(fs) => fs.close(handle),
             Self::Fat(fs) => fs.close(handle),
+        }
+    }
+
+    fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.sync_file(handle),
+            Self::Fat(fs) => fs.sync_file(handle),
+        }
+    }
+
+    fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
+        match self {
+            Self::Ram(fs) => fs.sync_dir(path),
+            Self::Fat(fs) => fs.sync_dir(path),
         }
     }
 
@@ -721,6 +835,25 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::BadHandle)?
             .fs
             .close(local_handle)
+    }
+
+    pub fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        self.mounts
+            .get_mut(mount_idx)
+            .and_then(Option::as_mut)
+            .ok_or(FsError::BadHandle)?
+            .fs
+            .sync_file(local_handle)
+    }
+
+    pub fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
+        let (mount_idx, local_path) = self.resolve_mount(path)?;
+        self.mounts[mount_idx]
+            .as_mut()
+            .ok_or(FsError::NotFound)?
+            .fs
+            .sync_dir(local_path)
     }
 
     /// Return metadata for an open handle.  Used by `sys_fstat` and
@@ -1198,9 +1331,11 @@ mod tests {
 
         // RamFs root still resolves.
         assert!(vfs.open("/etc/motd").is_ok());
-        // FAT volume is read-only.
+        // FAT volume supports mutation and a stable-media barrier.
         let handle = vfs.open("/mnt/disk/HELLO.TXT").unwrap();
-        assert_eq!(vfs.write(handle, 0, b"x"), Err(FsError::Unsupported));
+        assert_eq!(vfs.write(handle, 0, b"x"), Ok(1));
+        assert_eq!(vfs.sync_file(handle), Ok(()));
+        assert_eq!(vfs.sync_dir("/mnt/disk"), Ok(()));
     }
 
     #[test]

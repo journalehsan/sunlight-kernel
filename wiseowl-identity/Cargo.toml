@@ -1,0 +1,16 @@
+[package]
+name = "wiseowl-identity"
+version = "0.2.4384-alpha.2"
+
+edition = "2021"
+description = "Durable persistent identity contracts for Wise Owl"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = ["host"]
+host = ["dep:getrandom"]
+sunlightos = []
+
+[dependencies]
+sha2 = { version = "0.10", default-features = false }
+getrandom = { version = "0.2", optional = true }

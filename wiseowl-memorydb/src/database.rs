@@ -123,6 +123,53 @@ pub trait DurableStore {
     fn ensure_layout(&mut self) -> Result<(), DbError>;
 }
 
+struct ReadOnlyStore<'a, S: DurableStore>(&'a S);
+
+impl<S: DurableStore> DurableStore for ReadOnlyStore<'_, S> {
+    fn read_file(&self, rel: &str) -> Result<Option<Vec<u8>>, DbError> {
+        self.0.read_file(rel)
+    }
+    fn write_file_atomic(&mut self, _rel: &str, _data: &[u8]) -> Result<(), DbError> {
+        Err(DbError::Io("read-only validation write"))
+    }
+    fn append_file(&mut self, _rel: &str, _data: &[u8]) -> Result<(), DbError> {
+        Err(DbError::Io("read-only validation append"))
+    }
+    fn remove_file(&mut self, _rel: &str) -> Result<(), DbError> {
+        Err(DbError::Io("read-only validation remove"))
+    }
+    fn list_prefix(&self, dir: &str, prefix: &str) -> Result<Vec<String>, DbError> {
+        self.0.list_prefix(dir, prefix)
+    }
+    fn ensure_layout(&mut self) -> Result<(), DbError> {
+        Ok(())
+    }
+}
+
+/// Exercise the current MemoryDB recovery decoder without permitting any
+/// persistent mutation. Adoption uses this before publishing identity.
+pub fn validate_store_read_only<S: DurableStore>(
+    store: &S,
+    quotas: DbQuotaConfig,
+) -> Result<(), DbError> {
+    if let Some(manifest) = store.read_file("MANIFEST")? {
+        decode_manifest(&manifest)?;
+    }
+    for relative in store.list_prefix("SEGMENTS", "data-")? {
+        let bytes = store
+            .read_file(&relative)?
+            .ok_or(DbError::Corrupt { reason: "segment disappeared" })?;
+        open_segment(&bytes, &quotas)?;
+    }
+    if let Some(wal) = store.read_file("WAL/wal-000001")? {
+        let scan = scan_wal(&wal, quotas.max_bytes_per_transaction);
+        if scan.tail_corrupt {
+            return Err(DbError::Corrupt { reason: "wal tail" });
+        }
+    }
+    Database::open_with_store(ReadOnlyStore(store), quotas).map(|_| ())
+}
+
 /// In-memory durable store for tests (still uses real formats).
 #[derive(Debug, Default)]
 pub struct MemoryStore {

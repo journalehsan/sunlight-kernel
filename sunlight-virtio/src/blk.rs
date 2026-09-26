@@ -19,8 +19,11 @@ const STATUS_DRIVER_OK: u8 = 4;
 const DESC_F_NEXT: u16 = 1;
 const DESC_F_WRITE: u16 = 2;
 
-// virtio-blk request type: read
+// virtio-blk request types.
 const VIRTIO_BLK_T_IN: u32 = 0;
+const VIRTIO_BLK_T_OUT: u32 = 1;
+const VIRTIO_BLK_T_FLUSH: u32 = 4;
+const VIRTIO_BLK_F_FLUSH: u32 = 1 << 9;
 // virtio-blk status: OK
 const VIRTIO_BLK_S_OK: u8 = 0;
 
@@ -55,6 +58,8 @@ pub struct VirtioBlk {
     // Tracking
     avail_idx: u16,
     last_used_idx: u16,
+    capacity_sectors: u64,
+    flush_supported: bool,
 }
 
 impl VirtioBlk {
@@ -79,12 +84,15 @@ impl VirtioBlk {
             STATUS_ACKNOWLEDGE | STATUS_DRIVER,
         );
 
-        // Read and echo features (we accept all; we only use basic read)
+        // Preserve the legacy feature policy, but remember whether the device
+        // negotiated the stable-media barrier required by persistent state.
         let features = inl(io_base + REG_DEVICE_FEATURES);
-        outl(
-            io_base + REG_DRIVER_FEATURES,
-            features & !((1 << 5) | (1 << 7)),
-        );
+        let accepted_features = features & !((1 << 5) | (1 << 7));
+        outl(io_base + REG_DRIVER_FEATURES, accepted_features);
+
+        // Legacy virtio-blk device-specific configuration starts at 0x14
+        // when MSI-X is not in use. Capacity is expressed in 512-byte sectors.
+        let capacity_sectors = (inl(io_base + 0x18) as u64) << 32 | inl(io_base + 0x14) as u64;
 
         // Select queue 0
         outw(io_base + REG_QUEUE_SEL, 0);
@@ -124,71 +132,57 @@ impl VirtioBlk {
             req_virt,
             avail_idx: 0,
             last_used_idx: 0,
+            capacity_sectors,
+            flush_supported: accepted_features & VIRTIO_BLK_F_FLUSH != 0,
         })
     }
 
-    /// Read a 512-byte sector at `lba` into `buf`.
-    ///
-    /// SAFETY: All pointers initialized in `init` must still be valid.
-    pub unsafe fn read_block(&mut self, lba: u64, buf: &mut [u8; 512]) -> bool {
-        // --- Build request header at req_virt[0..16] ---
-        // type (u32): 0 = IN (read)
-        // ioprio (u32): 0
-        // sector (u64): lba
-        // SAFETY: req_virt points to a valid writable page initialized in init.
-        (self.req_virt as *mut u32).write_volatile(VIRTIO_BLK_T_IN);
+    unsafe fn submit(&mut self, request_type: u32, lba: u64, data_is_device_write: bool) -> bool {
+        (self.req_virt as *mut u32).write_volatile(request_type);
         ((self.req_virt + 4) as *mut u32).write_volatile(0);
         ((self.req_virt + 8) as *mut u64).write_volatile(lba);
 
-        // Status byte at req_virt + 16 + 512 = req_virt + 528; device writes here
         let status_ptr = (self.req_virt + 528) as *mut u8;
-        status_ptr.write_volatile(0xFF); // sentinel
+        status_ptr.write_volatile(0xFF);
 
-        // --- Fill descriptor table entries (3 descriptors starting at index 0) ---
-        // Descriptor 0: request header (device reads)
         let d0 = self.desc_virt as *mut VirtqDesc;
         (*d0).addr = self.req_phys;
         (*d0).len = 16;
         (*d0).flags = DESC_F_NEXT;
         (*d0).next = 1;
 
-        // Descriptor 1: 512-byte data buffer (device writes)
-        let d1 = (self.desc_virt + 16) as *mut VirtqDesc;
-        (*d1).addr = self.req_phys + 16;
-        (*d1).len = 512;
-        (*d1).flags = DESC_F_WRITE | DESC_F_NEXT;
-        (*d1).next = 2;
+        if request_type == VIRTIO_BLK_T_FLUSH {
+            let d1 = (self.desc_virt + 16) as *mut VirtqDesc;
+            (*d1).addr = self.req_phys + 528;
+            (*d1).len = 1;
+            (*d1).flags = DESC_F_WRITE;
+            (*d1).next = 0;
+        } else {
+            let d1 = (self.desc_virt + 16) as *mut VirtqDesc;
+            (*d1).addr = self.req_phys + 16;
+            (*d1).len = 512;
+            (*d1).flags = DESC_F_NEXT | if data_is_device_write { DESC_F_WRITE } else { 0 };
+            (*d1).next = 2;
 
-        // Descriptor 2: status byte (device writes)
-        let d2 = (self.desc_virt + 32) as *mut VirtqDesc;
-        (*d2).addr = self.req_phys + 528;
-        (*d2).len = 1;
-        (*d2).flags = DESC_F_WRITE;
-        (*d2).next = 0;
+            let d2 = (self.desc_virt + 32) as *mut VirtqDesc;
+            (*d2).addr = self.req_phys + 528;
+            (*d2).len = 1;
+            (*d2).flags = DESC_F_WRITE;
+            (*d2).next = 0;
+        }
 
-        // --- Push to available ring ---
-        // Available ring layout: [flags: u16][idx: u16][ring: u16 * qsize]...
-        let avail_ring_ptr = (self.avail_virt + 4) as *mut u16; // ring array starts at offset 4
+        let avail_ring_ptr = (self.avail_virt + 4) as *mut u16;
         let slot = (self.avail_idx as usize) % (self.queue_size as usize);
-        avail_ring_ptr.add(slot).write_volatile(0); // descriptor chain head = 0
-
+        avail_ring_ptr.add(slot).write_volatile(0);
         fence(Ordering::SeqCst);
 
-        let avail_idx_ptr = (self.avail_virt + 2) as *mut u16;
         let new_idx = self.avail_idx.wrapping_add(1);
-        avail_idx_ptr.write_volatile(new_idx);
+        ((self.avail_virt + 2) as *mut u16).write_volatile(new_idx);
         self.avail_idx = new_idx;
-
         fence(Ordering::SeqCst);
-
-        // Notify device that queue 0 has new entries
-        // SAFETY: ring-0 I/O port access.
         outw(self.io_base + REG_QUEUE_NOTIFY, 0);
 
-        // --- Poll used ring until device completes ---
-        // Used ring layout: [flags: u16][idx: u16][ring: {id: u32, len: u32} * qsize]...
         let used_idx_ptr = (self.used_virt + 2) as *const u16;
-
         let mut limit = 50_000_000u32;
         loop {
             fence(Ordering::SeqCst);
@@ -202,17 +196,42 @@ impl VirtioBlk {
             core::hint::spin_loop();
         }
         self.last_used_idx = self.last_used_idx.wrapping_add(1);
-
-        // Check the status byte written by the device
         fence(Ordering::SeqCst);
-        if status_ptr.read_volatile() != VIRTIO_BLK_S_OK {
+        status_ptr.read_volatile() == VIRTIO_BLK_S_OK
+    }
+
+    /// Read a 512-byte sector at `lba` into `buf`.
+    ///
+    /// SAFETY: All pointers initialized in `init` must still be valid.
+    pub unsafe fn read_block(&mut self, lba: u64, buf: &mut [u8; 512]) -> bool {
+        if lba >= self.capacity_sectors || !self.submit(VIRTIO_BLK_T_IN, lba, true) {
             return false;
         }
-
-        // Copy data from request buffer to caller's buffer
-        // SAFETY: req_virt + 16 points to the 512-byte data region.
         core::ptr::copy_nonoverlapping((self.req_virt + 16) as *const u8, buf.as_mut_ptr(), 512);
         true
+    }
+
+    /// Write one 512-byte sector. Completion means accepted by the device;
+    /// call [`VirtioBlk::flush`] for stable-media durability.
+    pub unsafe fn write_block(&mut self, lba: u64, buf: &[u8; 512]) -> bool {
+        if lba >= self.capacity_sectors {
+            return false;
+        }
+        core::ptr::copy_nonoverlapping(buf.as_ptr(), (self.req_virt + 16) as *mut u8, 512);
+        self.submit(VIRTIO_BLK_T_OUT, lba, false)
+    }
+
+    /// Issue the negotiated virtio-blk stable-media barrier.
+    pub unsafe fn flush(&mut self) -> bool {
+        self.flush_supported && self.submit(VIRTIO_BLK_T_FLUSH, 0, false)
+    }
+
+    pub const fn block_count(&self) -> u64 {
+        self.capacity_sectors
+    }
+
+    pub const fn supports_flush(&self) -> bool {
+        self.flush_supported
     }
 }
 

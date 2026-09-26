@@ -87,9 +87,16 @@ impl FatImageBuilder {
     }
 
     pub fn build(&self) -> Vec<u8> {
-        let fat_sectors = (self.fat.len() * 4).div_ceil(SECTOR).max(1);
+        // Leave deterministic free clusters so mutation tests can exercise
+        // allocation without needing a host formatter.
+        let spare_clusters = 64usize;
+        let fat_sectors = ((self.fat.len() + spare_clusters) * 4)
+            .div_ceil(SECTOR)
+            .max(1);
         let reserved = 1usize;
-        let total_sectors = reserved + fat_sectors + self.clusters.len() * self.spc as usize;
+        let total_sectors = reserved
+            + fat_sectors
+            + (self.clusters.len() + spare_clusters) * self.spc as usize;
         let mut image = vec![0u8; total_sectors * SECTOR];
 
         // BPB
@@ -97,6 +104,7 @@ impl FatImageBuilder {
         image[13] = self.spc;
         image[14..16].copy_from_slice(&(reserved as u16).to_le_bytes());
         image[16] = 1; // num FATs
+        image[32..36].copy_from_slice(&(total_sectors as u32).to_le_bytes());
         image[36..40].copy_from_slice(&(fat_sectors as u32).to_le_bytes());
         image[44..48].copy_from_slice(&2u32.to_le_bytes()); // root cluster
         image[82..90].copy_from_slice(b"FAT32   ");

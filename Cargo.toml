@@ -110,6 +110,7 @@ members = [
     "mezzoctl",
     "wiseowl-memory",
     "wiseowl-memorydb",
+    "wiseowl-identity",
     "wiseowl-index",
     "wiseowl-brain",
     "wiseowl-console",

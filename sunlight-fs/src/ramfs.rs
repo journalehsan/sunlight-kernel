@@ -400,6 +400,19 @@ impl FileSystem for RamFs {
         Ok(())
     }
 
+    fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        self.handle_entry_idx(handle)?;
+        Err(FsError::Unsupported)
+    }
+
+    fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
+        let entry_idx = self.entry_idx(path)?;
+        if !self.is_dir(entry_idx) {
+            return Err(FsError::NotDir);
+        }
+        Err(FsError::Unsupported)
+    }
+
     fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
         let idx = self.handle_entry_idx(handle)?;
         let ft = if self.is_dir(idx) {

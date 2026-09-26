@@ -159,6 +159,10 @@ pub enum SunlightSyscall {
     RenameNoReplace = 149,
     /// Reserve backing storage for an open file without changing its length.
     FileReserve = 150,
+    /// Stable-media barrier for an open VFS file.
+    FileSync = 153,
+    /// Stable-media barrier for a VFS directory and its namespace entries.
+    DirSync = 154,
     /// Map a previously granted device BAR. Gated to the owning driver process.
     MapMmio = 131,
     /// Allocate physically contiguous DMA and map it. Gated to the owning driver.
