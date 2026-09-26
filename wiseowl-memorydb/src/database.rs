@@ -455,6 +455,12 @@ impl<S: DurableStore> Database<S> {
         self.identity_context
     }
 
+    /// Sanitized identity status derived exclusively from the validated startup context.
+    pub fn identity_status(&self) -> Option<crate::identity_status::IdentityStatus> {
+        self.identity_context
+            .map(crate::identity_status::IdentityStatus::ready)
+    }
+
     pub fn stats(&self) -> DbStats {
         self.stats.clone()
     }

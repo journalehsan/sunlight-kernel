@@ -38,6 +38,7 @@ fn main() -> ExitCode {
 fn build_request(cmd: &str, args: &[String]) -> Result<DbRequest, ExitCode> {
     match cmd {
         "status" | "health" => Ok(DbRequest::Health),
+        "identity" => Ok(DbRequest::GetIdentityStatus),
         "stats" => Ok(DbRequest::Stats),
         "get" => {
             let id = parse_id(args.first().map(|s| s.as_str()))?;
@@ -210,6 +211,23 @@ fn print_response(resp: &DbResponse) {
                 println!("  reason: {r}");
             }
         }
+        DbResponse::IdentityStatus(wire) => {
+            let bytes = wire.as_bytes();
+            let Some(status) = wiseowl_memorydb::identity_status::IdentityStatus::decode(&bytes)
+            else {
+                eprintln!("identity status protocol error");
+                return;
+            };
+            println!(
+                "state={:?} persistence_available={} fingerprint={}",
+                status.state,
+                status.persistence_available,
+                core::str::from_utf8(&status.fingerprint).unwrap_or("????????")
+            );
+            println!("lineage_sequence={} continuity_generation={} genesis_kind={} format_version={} validation={}",
+                status.lineage_sequence, status.continuity_generation, status.genesis_kind,
+                status.identity_format_version, status.validation_status);
+        }
         DbResponse::Verify { ok, bad } => println!("verify ok={ok} bad={bad}"),
         DbResponse::Compacted { reclaimed } => println!("reclaimed_bytes={reclaimed}"),
         DbResponse::Error { code, message } => eprintln!("error {code}: {message}"),
@@ -223,6 +241,7 @@ wiseowl-memorydbctl — long-term memory database diagnostics
 
 Usage:
   wiseowl-memorydbctl status|health
+  wiseowl-memorydbctl identity
   wiseowl-memorydbctl stats
   wiseowl-memorydbctl get <memory-id> [--payload]
   wiseowl-memorydbctl history <memory-id>

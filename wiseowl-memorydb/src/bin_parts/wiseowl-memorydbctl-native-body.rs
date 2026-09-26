@@ -33,8 +33,8 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let argc = unsafe { libc::crt0::collect_utf8_args(argc, argv, &mut args, 512) };
     let command = if argc >= 2 { args[1] } else { "status" };
 
-    let Some(cap) = nameserver_lookup(ENDPOINT_NAME)
-        .or_else(|| nameserver_lookup("wiseowl-memorydb"))
+    let Some(cap) =
+        nameserver_lookup(ENDPOINT_NAME).or_else(|| nameserver_lookup("wiseowl-memorydb"))
     else {
         println!("wiseowl-memorydb not registered");
         ProcessExit::exit(1);
@@ -44,11 +44,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         "status" | "health" => {
             let health = ipc_call(cap, IpcMsg::with_label(MemoryDbOp::GetHealth as u64));
             if health.label == MemoryDbOp::Reply as u64 {
-                println!(
-                    "health ready={} state={}",
-                    health.words[0],
-                    health.words[1]
-                );
+                println!("health ready={} state={}", health.words[0], health.words[1]);
             } else {
                 println!("health error");
                 ProcessExit::exit(1);
@@ -65,6 +61,33 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             } else {
                 println!("stats error");
                 false
+            }
+        }
+        "identity" => {
+            let reply = ipc_call(
+                cap,
+                IpcMsg::with_label(MemoryDbOp::GetIdentityStatus as u64),
+            );
+            let protocol = wiseowl_memorydb::identity_status::IDENTITY_STATUS_VERSION as u64;
+            if reply.label != MemoryDbOp::Reply as u64
+                || (reply.words[0] >> 8) as u16 as u64 != protocol
+                || reply.words[0] & 0xff != 1
+                || reply.words[2] == 0
+                || reply.words[3] == 0
+                || ((reply.words[4] >> 32) & 1) != 1
+            {
+                println!("identity status unavailable or malformed");
+                false
+            } else {
+                let fingerprint = reply.words[1].to_le_bytes();
+                println!(
+                    "identity_state=Ready fingerprint={}",
+                    core::str::from_utf8(&fingerprint).unwrap_or("????????")
+                );
+                println!("lineage_sequence={} continuity_generation={} genesis_kind={} format_version={} validation={}",
+                    reply.words[2], reply.words[3], reply.words[4] & 0xff,
+                    (reply.words[4] >> 8) & 0xffff, (reply.words[4] >> 24) & 0xff);
+                true
             }
         }
         "census" => {
@@ -96,7 +119,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             }
         }
         "verify-generations" => {
-            let reply = ipc_call(cap, IpcMsg::with_label(MemoryDbOp::VerifyGenerations as u64));
+            let reply = ipc_call(
+                cap,
+                IpcMsg::with_label(MemoryDbOp::VerifyGenerations as u64),
+            );
             if reply.label == MemoryDbOp::Reply as u64 {
                 println!(
                     "verify_ok={} multi_active={} dup_import_keys={} orphan_chunks={} invalid_chains={} active_generations={}",
@@ -114,7 +140,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             }
         }
         _ => {
-            println!("usage: wiseowl-memorydbctl status|census|verify-generations");
+            println!("usage: wiseowl-memorydbctl status|identity|census|verify-generations");
             false
         }
     };

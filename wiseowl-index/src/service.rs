@@ -90,6 +90,10 @@ pub struct IndexerService<B: IndexMemoryDb> {
     pub reconnect: ReconnectPolicy,
     /// Virtual listing mode content (host path fills from FS).
     pub virtual_roots: alloc::collections::BTreeMap<u64, Vec<(String, Vec<u8>, Option<u64>)>>,
+    /// Runtime-only identity binding. The pin survives endpoint loss, never reboot.
+    identity_fingerprint: Option<[u8; 8]>,
+    identity_ready: bool,
+    identity_suspended: bool,
 }
 
 impl<S: DurableStore> IndexerService<HostMemoryDbBackend<S>> {
@@ -122,6 +126,9 @@ impl<B: IndexMemoryDb> IndexerService<B> {
             now_ns: 1,
             reconnect: ReconnectPolicy::default(),
             virtual_roots: alloc::collections::BTreeMap::new(),
+            identity_fingerprint: None,
+            identity_ready: false,
+            identity_suspended: false,
         }
     }
 
@@ -131,6 +138,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
 
     /// Probe MemoryDB and update the authoritative connection-health state.
     pub fn refresh_memorydb_health(&mut self) {
+        self.identity_ready = false;
         IndexStats::sat_add(&mut self.stats.memorydb_connection_attempts, 1);
         let endpoint_gen = self.backend_endpoint_generation();
         match self.backend.health() {
@@ -149,7 +157,24 @@ impl<B: IndexMemoryDb> IndexerService<B> {
                     self.health.ready = true;
                 }
                 self.reconnect.attempts_this_interval = 0;
-                if self.state.pending_import_count() != 0 {
+                match self.backend.identity_status() {
+                    Ok(status) if status.validate() && status.state == wiseowl_memorydb::identity_status::IdentityStatusState::Ready => {
+                        if self.identity_fingerprint.is_some_and(|old| old != status.fingerprint) {
+                            self.identity_suspended = true;
+                            self.health.set_degraded(DegradedReason::MemoryDbProtocolMismatch);
+                        } else if !self.identity_suspended {
+                            self.identity_fingerprint = Some(status.fingerprint);
+                            self.identity_ready = true;
+                        }
+                    }
+                    _ => {
+                        self.health.set_degraded(DegradedReason::MemoryDbUnavailable);
+                    }
+                }
+                if self.identity_ready
+                    && !self.identity_suspended
+                    && self.state.pending_import_count() != 0
+                {
                     let _ = self.engine.reconcile_pending(
                         &mut self.state,
                         &mut self.backend,
@@ -324,7 +349,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
         caller.caps.require(IndexCapability::ScanOwnRoots)?;
 
         self.refresh_memorydb_health();
-        if !self.health.memorydb_ready() {
+        if !self.health.memorydb_ready() || !self.identity_ready || self.identity_suspended {
             IndexStats::sat_add(&mut self.stats.memorydb_unavailable_operations, 1);
             // Degraded: control ops work; indexing pauses.
             return Err(IndexError::DatabaseUnavailable);
@@ -561,7 +586,7 @@ impl<B: IndexMemoryDb> IndexerService<B> {
     pub fn reconcile(&mut self, caller: &IndexCaller) -> Result<u32, IndexError> {
         caller.caps.require(IndexCapability::AdminIndexer)?;
         self.refresh_memorydb_health();
-        if !self.health.memorydb_ready() {
+        if !self.health.memorydb_ready() || !self.identity_ready || self.identity_suspended {
             return Err(IndexError::DatabaseUnavailable);
         }
         self.engine.reconcile_pending(
@@ -703,6 +728,22 @@ mod tests {
     #[test]
     fn end_to_end_index_and_search() {
         let db = Database::<MemoryStore>::open_memory(DbQuotaConfig::default()).unwrap();
+        let mut db = db;
+        let dir = tempfile::tempdir().unwrap();
+        let mut storage =
+            wiseowl_memorydb::identity::host::HostIdentityStorage::open(dir.path()).unwrap();
+        let identity = wiseowl_memorydb::identity::ensure_identity(
+            &mut storage,
+            wiseowl_memorydb::identity::StoreDisposition::Fresh,
+            wiseowl_memorydb::identity::AdoptionPolicy::Disabled,
+            |bytes| {
+                bytes.fill(7);
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        db.bind_identity_context(identity);
         let mut svc = IndexerService::new(db, IndexerConfig::default());
         let caller = IndexCaller::user(1);
         let mut db_caller = DbCaller::user(1);
@@ -730,6 +771,36 @@ mod tests {
         let hits = svc.search_lexical(&caller, "thermal fan", 10).unwrap();
         assert!(!hits.is_empty(), "expected lexical hits");
         assert_eq!(hits[0].lexical_score, 1);
+
+        let record_count = svc.backend.inner().stats().record_count_active;
+        let other_dir = tempfile::tempdir().unwrap();
+        let mut other_storage =
+            wiseowl_memorydb::identity::host::HostIdentityStorage::open(other_dir.path()).unwrap();
+        let other_identity = wiseowl_memorydb::identity::ensure_identity(
+            &mut other_storage,
+            wiseowl_memorydb::identity::StoreDisposition::Fresh,
+            wiseowl_memorydb::identity::AdoptionPolicy::Disabled,
+            |bytes| {
+                bytes.fill(19);
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        svc.backend
+            .inner_mut()
+            .bind_identity_context(other_identity);
+        svc.refresh_memorydb_health();
+        assert!(
+            svc.identity_suspended,
+            "unexpected identity change must suspend indexer"
+        );
+        assert!(svc.start_scan(&caller, Some(rid)).is_err());
+        assert_eq!(
+            svc.backend.inner().stats().record_count_active,
+            record_count,
+            "identity mismatch must not delete existing indexed data"
+        );
     }
 
     #[test]

@@ -878,6 +878,20 @@ mod tests {
             super::IdentityValidationStatus::Validated
         );
 
+        let status_before = db.stats();
+        let status = db.identity_status().expect("validated status is available");
+        assert_eq!(
+            status.state,
+            crate::identity_status::IdentityStatusState::Ready
+        );
+        assert_eq!(status.fingerprint, original.diagnostic_fingerprint());
+        assert_eq!(status.continuity_generation, 1);
+        assert_eq!(
+            db.stats(),
+            status_before,
+            "read-only status does not mutate MemoryDB"
+        );
+
         let before = db.stats();
         db.rebuild_indexes(&DbCaller::admin()).unwrap();
         let rebuilt = db.stats();

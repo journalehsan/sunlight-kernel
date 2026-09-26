@@ -37,6 +37,12 @@ macro_rules! serial_println {
 }
 
 static mut PIPELINE: Option<CognitivePipeline> = None;
+static mut IDENTITY_BINDING: wiseowl_brain::identity_binding::BrainIdentityBinding =
+    wiseowl_brain::identity_binding::BrainIdentityBinding {
+        mode: wiseowl_brain::identity_binding::BrainIdentityMode::Disconnected,
+        fingerprint: None,
+        continuity_generation: None,
+    };
 static mut LIFECYCLE_ADAPTERS: Option<wiseowl_brain::BraindTrustedLifecycleAdapters> = None;
 #[cfg(feature = "delegated-session-lifecycle-ipc-v1-test")]
 static mut DELEGATION_GATE_EMITTED: bool = false;
@@ -1580,6 +1586,29 @@ fn handle_native_greeting(msg: IpcMsg, _caller_uid_from_badge: u64, caller_pid: 
     let session_source = SessionContextSource;
     let kv_source = load_kv_source(pipeline, subject_uid);
     let mut memdb_source = WiseOwlStatusContextSource::query_native();
+    unsafe {
+        if memdb_source.identity_status.is_none() {
+            IDENTITY_BINDING.disconnected();
+            IDENTITY_BINDING.observe(None);
+        } else {
+            IDENTITY_BINDING.observe(memdb_source.identity_status);
+            if let Some(fp) = IDENTITY_BINDING.fingerprint() {
+                serial_println!(
+                    "[WISEOWL-BRAIN] persistent identity bound {}",
+                    core::str::from_utf8(&fp).unwrap_or("????????")
+                );
+            }
+        }
+        if IDENTITY_BINDING.mode
+            == wiseowl_brain::identity_binding::BrainIdentityMode::SuspendedMismatch
+        {
+            serial_println!(
+                "[WISEOWL-BRAIN] identity mismatch after reconnect; entering degraded mode"
+            );
+            memdb_source.healthy = false;
+            memdb_source.degraded = true;
+        }
+    }
     if memdb_source.available && !memdb_source.degraded {
         pipeline.diagnostics.inc_memorydb_success();
     } else {

@@ -1,13 +1,11 @@
-
-
-
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_reply_and_wait, monotonic_millis,
-    nameserver_lookup, nameserver_register, process_is_alive, process_yield, shm_alloc, shm_free,
-    shm_map, CapabilityToken, IpcMsg, SHM_PAGE,
+    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
+    monotonic_millis, nameserver_lookup, nameserver_lookup_timeout, nameserver_register,
+    process_is_alive, process_yield, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg,
+    SHM_PAGE,
 };
 use sunlight_libc as libc;
 
@@ -247,6 +245,8 @@ pub extern "C" fn _start() -> ! {
     });
 
     let mut msg = ipc_recv(ep);
+    let mut identity_fingerprint: Option<u64> = None;
+    let mut identity_mismatch = false;
     loop {
         // Opportunistic client death sweep (bounded).
         for slot in clients.iter_mut() {
@@ -264,7 +264,13 @@ pub extern "C" fn _start() -> ! {
         }
 
         engine.set_now_ns(monotonic_millis().saturating_mul(1_000_000).max(1));
-        let reply = handle_ipc(&mut engine, &mut clients, &msg);
+        let reply = handle_ipc(
+            &mut engine,
+            &mut clients,
+            &msg,
+            &mut identity_fingerprint,
+            &mut identity_mismatch,
+        );
         msg = ipc_reply_and_wait(ep, reply);
     }
 }
@@ -273,10 +279,14 @@ fn handle_ipc(
     engine: &mut NativeMemoryEngine<SunlightKv>,
     clients: &mut [ClientSlot; MAX_CLIENTS],
     msg: &IpcMsg,
+    identity_fingerprint: &mut Option<u64>,
+    identity_mismatch: &mut bool,
 ) -> IpcMsg {
     let op = msg.label as u16;
     match MemoryOp::from_u16(op) {
-        Some(MemoryOp::TransportInfo) | Some(MemoryOp::GetStats) if op == MemoryOp::TransportInfo.as_u16() => {
+        Some(MemoryOp::TransportInfo) | Some(MemoryOp::GetStats)
+            if op == MemoryOp::TransportInfo.as_u16() =>
+        {
             // Transport diagnostic
             return IpcMsg::with_label(MemoryOp::Reply.label())
                 .word(0, NATIVE_PROTOCOL_VERSION as u64)
@@ -335,7 +345,10 @@ fn handle_ipc(
             let session = match SessionId::from_raw(msg.words[0]) {
                 Ok(s) => s,
                 Err(_) => {
-                    return error_reply(MemoryError::MalformedIdentifier("session").code(), msg.words[7])
+                    return error_reply(
+                        MemoryError::MalformedIdentifier("session").code(),
+                        msg.words[7],
+                    )
                 }
             };
             let class = match wiseowl_memory::MemoryClass::from_u8(msg.words[1] as u8) {
@@ -425,6 +438,11 @@ fn handle_ipc(
             return encode_response(resp, 0);
         }
         Some(MemoryOp::PromoteEntry) => {
+            if *identity_mismatch
+                || !memorydb_identity_ready(identity_fingerprint, identity_mismatch)
+            {
+                return error_reply(14, 0);
+            }
             let mid = match MemoryId::from_raw(msg.words[0]) {
                 Ok(m) => m,
                 Err(_) => return error_reply(3, 0),
@@ -562,6 +580,42 @@ fn handle_ipc(
     }
 }
 
+/// Read the sanitized MemoryDB status before every durable KV promotion.
+/// Fingerprints are retained only in this process to detect a changed endpoint.
+fn memorydb_identity_ready(previous: &mut Option<u64>, mismatch: &mut bool) -> bool {
+    const STATUS_OP: u64 = 0x4D18;
+    const REPLY: u64 = 0x4D80;
+    const VERSION: u16 = 1;
+    let Some(cap) = nameserver_lookup_timeout("wiseowl.memorydb.v1", 40) else {
+        return false;
+    };
+    let Ok(reply) = ipc_call_timeout(cap, IpcMsg::with_label(STATUS_OP), 40) else {
+        return false;
+    };
+    if reply.label != REPLY
+        || (reply.words[0] & 0xff) != 1
+        || (reply.words[0] >> 8) as u16 != VERSION
+        || reply.words[2] == 0
+        || reply.words[3] == 0
+        || (reply.words[4] & 0xff) == 0
+        || ((reply.words[4] >> 24) & 0xff) != 1
+        || ((reply.words[4] >> 32) & 1) != 1
+    {
+        return false;
+    }
+    match *previous {
+        Some(fingerprint) if fingerprint != reply.words[1] => {
+            *mismatch = true;
+            false
+        }
+        Some(_) => true,
+        None => {
+            *previous = Some(reply.words[1]);
+            true
+        }
+    }
+}
+
 fn take_payload_shm(msg: &IpcMsg, len: u32) -> Result<Vec<u8>, MemoryError> {
     if len == 0 {
         return Ok(Vec::new());
@@ -576,9 +630,8 @@ fn take_payload_shm(msg: &IpcMsg, len: u32) -> Result<Vec<u8>, MemoryError> {
     if token == CapabilityToken::INVALID {
         return Err(MemoryError::SharedMemoryValidationFailure("no shm"));
     }
-    let ptr = shm_map(token).map_err(|_| {
-        MemoryError::SharedMemoryValidationFailure("map failed")
-    })?;
+    let ptr =
+        shm_map(token).map_err(|_| MemoryError::SharedMemoryValidationFailure("map failed"))?;
     let slice = unsafe { core::slice::from_raw_parts(ptr, len as usize) };
     let out = slice.to_vec();
     let _ = shm_free(token);
@@ -604,10 +657,12 @@ fn encode_response(resp: ProtocolResponse, request_id: u64) -> IpcMsg {
             .word(1, memory_id.get())
             .word(2, session_id.get())
             .word(3, request_id),
-        ProtocolResponse::SessionCreated { session_id } => IpcMsg::with_label(MemoryOp::Reply.label())
-            .word(0, 2)
-            .word(1, session_id.get())
-            .word(2, request_id),
+        ProtocolResponse::SessionCreated { session_id } => {
+            IpcMsg::with_label(MemoryOp::Reply.label())
+                .word(0, 2)
+                .word(1, session_id.get())
+                .word(2, request_id)
+        }
         ProtocolResponse::ClientRegistered { client_id } => {
             IpcMsg::with_label(MemoryOp::Reply.label())
                 .word(0, 3)

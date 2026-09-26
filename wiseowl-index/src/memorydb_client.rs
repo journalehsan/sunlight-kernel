@@ -100,6 +100,38 @@ impl NativeMemoryDbClient {
         self.endpoint.is_some()
     }
 
+    pub fn identity_status(
+        &mut self,
+    ) -> Result<wiseowl_memorydb::identity_status::IdentityStatus, IndexError> {
+        use wiseowl_memorydb::identity_status::{
+            IdentityStatus, IdentityStatusState, IDENTITY_STATUS_VERSION,
+        };
+        let reply = self.call(IpcMsg::with_label(MemoryDbOp::GetIdentityStatus as u64))?;
+        if reply.label as u16 != MemoryDbOp::Reply as u16
+            || (reply.words[0] >> 8) as u16 != IDENTITY_STATUS_VERSION
+        {
+            return Err(IndexError::InvalidRequest("identity status protocol"));
+        }
+        let state = match (reply.words[0] & 0xff) as u8 {
+            1 => IdentityStatusState::Ready,
+            _ => return Err(IndexError::InvalidRequest("identity status state")),
+        };
+        let status = IdentityStatus {
+            state,
+            fingerprint: reply.words[1].to_le_bytes(),
+            lineage_sequence: reply.words[2],
+            continuity_generation: reply.words[3],
+            genesis_kind: (reply.words[4] & 0xff) as u8,
+            identity_format_version: ((reply.words[4] >> 8) & 0xffff) as u16,
+            validation_status: ((reply.words[4] >> 24) & 0xff) as u8,
+            persistence_available: ((reply.words[4] >> 32) & 1) != 0,
+        };
+        if !status.validate() {
+            return Err(IndexError::InvalidRequest("malformed identity status"));
+        }
+        Ok(status)
+    }
+
     #[cfg(feature = "phase375-test")]
     pub fn arm_memorydb_shm_crash(&mut self) -> Result<(), IndexError> {
         let reply = self.call(IpcMsg::with_label(MemoryDbOp::TestArmShmCrash as u64))?;
@@ -210,6 +242,11 @@ impl Default for NativeMemoryDbClient {
 }
 
 impl IndexMemoryDb for NativeMemoryDbClient {
+    fn identity_status(
+        &mut self,
+    ) -> Result<wiseowl_memorydb::identity_status::IdentityStatus, IndexError> {
+        NativeMemoryDbClient::identity_status(self)
+    }
     fn persist_prepared_import(
         &mut self,
         manifest: &crate::source::SourceManifest,

@@ -75,6 +75,8 @@ pub enum DbRequest {
     RebuildIndexes,
     Stats,
     Health,
+    /// Read-only, sanitized persistent identity status.
+    GetIdentityStatus,
     Verify {
         max_segments: u32,
     },
@@ -158,6 +160,7 @@ pub enum DbResponse {
         state: String,
         reasons: Vec<String>,
     },
+    IdentityStatus(crate::identity_status::IdentityStatusWire),
     Verify {
         ok: u32,
         bad: u32,

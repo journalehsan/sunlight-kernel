@@ -116,6 +116,8 @@ pub enum MemoryDbOp {
     GenerationCensus = 0x4D16,
     /// Phase 3.875: verify generation invariants.
     VerifyGenerations = 0x4D17,
+    /// Phase B: sanitized read-only identity status.
+    GetIdentityStatus = 0x4D18,
     TestArmShmCrash = 0x4DF0,
     Reply = 0x4D80,
     Error = 0x4DFF,
@@ -147,6 +149,7 @@ impl MemoryDbOp {
             0x4D15 => Some(Self::ReconcileImport),
             0x4D16 => Some(Self::GenerationCensus),
             0x4D17 => Some(Self::VerifyGenerations),
+            0x4D18 => Some(Self::GetIdentityStatus),
             0x4DF0 => Some(Self::TestArmShmCrash),
             0x4D80 => Some(Self::Reply),
             0x4DFF => Some(Self::Error),

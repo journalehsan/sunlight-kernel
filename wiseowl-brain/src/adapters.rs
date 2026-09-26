@@ -469,6 +469,7 @@ pub struct WiseOwlStatusContextSource {
     pub record_count: u64,
     pub queried: bool,
     pub degraded: bool,
+    pub identity_status: Option<wiseowl_memorydb::identity_status::IdentityStatus>,
 }
 
 impl Default for WiseOwlStatusContextSource {
@@ -480,6 +481,7 @@ impl Default for WiseOwlStatusContextSource {
             record_count: 0,
             queried: false,
             degraded: true,
+            identity_status: None,
         }
     }
 }
@@ -493,6 +495,7 @@ impl WiseOwlStatusContextSource {
         const EP: &str = "wiseowl.memorydb.v1";
         const GET_HEALTH: u64 = 0x4D0F;
         const GET_STATS: u64 = 0x4D0E;
+        const GET_IDENTITY_STATUS: u64 = 0x4D18;
         const REPLY: u64 = 0x4D80;
         const TIMEOUT: u64 = 40;
 
@@ -514,6 +517,32 @@ impl WiseOwlStatusContextSource {
                 return out;
             }
         }
+        if let Ok(reply) = ipc_call_timeout(cap, IpcMsg::with_label(GET_IDENTITY_STATUS), TIMEOUT) {
+            use wiseowl_memorydb::identity_status::{
+                IdentityStatus, IdentityStatusState, IDENTITY_STATUS_VERSION,
+            };
+            if reply.label == REPLY && (reply.words[0] >> 8) as u16 == IDENTITY_STATUS_VERSION {
+                let status = IdentityStatus {
+                    state: if reply.words[0] & 0xff == 1 {
+                        IdentityStatusState::Ready
+                    } else {
+                        IdentityStatusState::Suspended
+                    },
+                    fingerprint: reply.words[1].to_le_bytes(),
+                    lineage_sequence: reply.words[2],
+                    continuity_generation: reply.words[3],
+                    genesis_kind: (reply.words[4] & 0xff) as u8,
+                    identity_format_version: ((reply.words[4] >> 8) & 0xffff) as u16,
+                    validation_status: ((reply.words[4] >> 24) & 0xff) as u8,
+                    persistence_available: ((reply.words[4] >> 32) & 1) != 0,
+                };
+                if status.validate() {
+                    out.identity_status = Some(status);
+                }
+            }
+        }
+        out.healthy &= out.identity_status.is_some();
+        out.degraded = !out.healthy;
         if let Ok(r) = ipc_call_timeout(cap, IpcMsg::with_label(GET_STATS), TIMEOUT) {
             if r.label == REPLY {
                 out.generation = r.words[0];

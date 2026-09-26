@@ -134,11 +134,7 @@ fn handle_client(mut stream: UnixStream, db: Arc<Mutex<Database<FsStore>>>) -> i
     }
 }
 
-fn dispatch(
-    db: &mut Database<FsStore>,
-    caller: &DbCaller,
-    req: DbRequest,
-) -> DbResponse {
+fn dispatch(db: &mut Database<FsStore>, caller: &DbCaller, req: DbRequest) -> DbResponse {
     match req {
         DbRequest::BeginTransaction => match db.begin_transaction(caller) {
             Ok(id) => DbResponse::TxId(id),
@@ -238,6 +234,18 @@ fn dispatch(
                 reasons: h.reasons.clone(),
             }
         }
+        DbRequest::GetIdentityStatus => db
+            .identity_status()
+            .and_then(|status| status.encode())
+            .map(|bytes| {
+                DbResponse::IdentityStatus(
+                    wiseowl_memorydb::identity_status::IdentityStatusWire::new(bytes),
+                )
+            })
+            .unwrap_or_else(|| DbResponse::Error {
+                code: "IdentityUnavailable".into(),
+                message: "validated identity context unavailable".into(),
+            }),
         DbRequest::Verify { max_segments } => match db.verify_bounded(max_segments) {
             Ok((ok, bad)) => DbResponse::Verify { ok, bad },
             Err(e) => DbResponse::from_error(e),
@@ -254,17 +262,21 @@ fn recv_msg<T: serde::de::DeserializeOwned>(stream: &mut UnixStream) -> io::Resu
     }
     let len = u32::from_le_bytes(len_buf) as usize;
     if len > 4 * 1024 * 1024 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "frame too large"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "frame too large",
+        ));
     }
     let mut buf = vec![0u8; len];
     stream.read_exact(&mut buf)?;
-    let msg = bincode::deserialize(&buf)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let msg =
+        bincode::deserialize(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(Some(msg))
 }
 
 fn send_msg<T: serde::Serialize>(stream: &mut UnixStream, msg: &T) -> io::Result<()> {
-    let bytes = bincode::serialize(msg).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let bytes =
+        bincode::serialize(msg).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     stream.write_all(&(bytes.len() as u32).to_le_bytes())?;
     stream.write_all(&bytes)?;
     Ok(())

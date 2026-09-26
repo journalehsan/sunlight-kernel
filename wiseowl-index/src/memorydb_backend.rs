@@ -31,6 +31,12 @@ pub struct MemoryDbHealth {
 
 /// Backend interface used by scan / ingest / reconciliation.
 pub trait IndexMemoryDb {
+    /// Fresh sanitized status from the current MemoryDB endpoint.
+    fn identity_status(
+        &mut self,
+    ) -> Result<wiseowl_memorydb::identity_status::IdentityStatus, IndexError> {
+        Err(IndexError::DatabaseUnavailable)
+    }
     /// Native operational-state barrier. Implementations must durably persist
     /// this prepared manifest before the first mutating transaction request.
     fn persist_prepared_import(&mut self, _manifest: &SourceManifest) -> Result<(), IndexError> {
@@ -114,6 +120,13 @@ impl<S: DurableStore> HostMemoryDbBackend<S> {
 }
 
 impl<S: DurableStore> IndexMemoryDb for HostMemoryDbBackend<S> {
+    fn identity_status(
+        &mut self,
+    ) -> Result<wiseowl_memorydb::identity_status::IdentityStatus, IndexError> {
+        self.db
+            .identity_status()
+            .ok_or(IndexError::DatabaseUnavailable)
+    }
     fn health(&mut self) -> Result<MemoryDbHealth, IndexError> {
         let h = self.db.health();
         let s = self.db.stats();

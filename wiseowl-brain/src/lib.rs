@@ -19,6 +19,7 @@ pub mod greeting;
 pub mod grounded;
 pub mod gui_bridge;
 pub mod gui_live_action_activation;
+pub mod identity_binding;
 pub mod kv_client;
 pub mod memory_layers;
 pub mod mtm;

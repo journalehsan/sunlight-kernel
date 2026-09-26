@@ -1,6 +1,7 @@
 # Wise Owl persistent identity Phase A native evidence
 [VFS] FAT volume mounted at /state
 [WISEOWL-DB] identity loaded:
+[WISEOWL-DB] identity status Ready fingerprint=
 [WISEOWL-DB] lineage sequence=1 continuity_generation=1 genesis=Created
 [WISEOWL-DB] registered
 [WISEOWL-IDENTITY-A] native gate PASS

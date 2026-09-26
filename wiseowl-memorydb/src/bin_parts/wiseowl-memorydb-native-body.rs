@@ -68,8 +68,7 @@ impl IdentityStorage for NativeIdentityStorage {
     }
 
     fn create_dir(&mut self, relative: &str) -> Result<(), IdentityStartupError> {
-        libc::mkdir(Self::path(relative).as_bytes(), 0o700)
-            .map_err(|_| IdentityStartupError::Io)
+        libc::mkdir(Self::path(relative).as_bytes(), 0o700).map_err(|_| IdentityStartupError::Io)
     }
 
     fn list_dir(&self, relative: &str) -> Result<Vec<IdentityDirEntry>, IdentityStartupError> {
@@ -174,10 +173,7 @@ impl NativeFsStore {
 
     fn hydrate(&mut self) {
         for (path, rel) in [
-            (
-                b"/state/wiseowl-memorydb/MANIFEST".as_slice(),
-                "MANIFEST",
-            ),
+            (b"/state/wiseowl-memorydb/MANIFEST".as_slice(), "MANIFEST"),
             (
                 b"/state/wiseowl-memorydb/WAL/wal-000001".as_slice(),
                 "WAL/wal-000001",
@@ -441,6 +437,10 @@ pub extern "C" fn _start() -> ! {
             process_yield();
         }
     }
+    if let Some(status) = db.identity_status() {
+        let fp = core::str::from_utf8(&status.fingerprint).unwrap_or("????????");
+        serial_println!("[WISEOWL-DB] identity status Ready fingerprint={}", fp);
+    }
 
     let ep = endpoint_create();
     if nameserver_register(ENDPOINT_NAME, ep) {
@@ -486,6 +486,30 @@ fn handle_msg(
                 .word(1, h.state as u8 as u64)
                 .word(2, NATIVE_PROTOCOL_VERSION as u64)
         }
+        Some(MemoryDbOp::GetIdentityStatus) => match db.identity_status() {
+            Some(status) => {
+                // Sanitized fixed-size fields; full IdentityId is never returned.
+                let fingerprint = u64::from_le_bytes(status.fingerprint);
+                IpcMsg::with_label(MemoryDbOp::Reply as u64)
+                    .word(
+                        0,
+                        status.state as u64
+                            | ((wiseowl_memorydb::identity_status::IDENTITY_STATUS_VERSION as u64)
+                                << 8),
+                    )
+                    .word(1, fingerprint)
+                    .word(2, status.lineage_sequence)
+                    .word(3, status.continuity_generation)
+                    .word(
+                        4,
+                        status.genesis_kind as u64
+                            | ((status.identity_format_version as u64) << 8)
+                            | ((status.validation_status as u64) << 24)
+                            | (1 << 32),
+                    )
+            }
+            None => IpcMsg::with_label(MemoryDbOp::Error as u64).word(0, 1),
+        },
         Some(MemoryDbOp::GetStats) => {
             let s = db.stats();
             IpcMsg::with_label(MemoryDbOp::Reply as u64)
@@ -709,7 +733,9 @@ fn handle_msg(
             let mut found = None;
             let mut conflict = false;
             for id in ids {
-                let Ok(rec) = db.get_record(caller, id, false) else { continue };
+                let Ok(rec) = db.get_record(caller, id, false) else {
+                    continue;
+                };
                 let role = rec.attributes.get("record_role");
                 if role != Some(&AttributeValue::Text(String::from("document"))) {
                     continue;
@@ -719,8 +745,14 @@ fn handle_msg(
                     _ => rec.revision,
                 };
                 match rec.attributes.get("import_key") {
-                    Some(AttributeValue::Text(value)) if value == &key => found = Some((id.get(), rec_rev)),
-                    Some(AttributeValue::Text(value)) if !value.is_empty() && rec_rev == revision => conflict = true,
+                    Some(AttributeValue::Text(value)) if value == &key => {
+                        found = Some((id.get(), rec_rev))
+                    }
+                    Some(AttributeValue::Text(value))
+                        if !value.is_empty() && rec_rev == revision =>
+                    {
+                        conflict = true
+                    }
                     _ => {}
                 }
             }
