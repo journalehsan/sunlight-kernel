@@ -7,6 +7,8 @@
 
 extern crate alloc;
 
+pub mod music;
+
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::string::String;
@@ -3544,8 +3546,8 @@ pub fn chapter_three_consequence_summary() -> String {
 pub const CHAPTER_THREE_MIRROR_LINE: &str =
     "You stand beneath a ceiling that remembers you from somewhere else. The room lets out its breath.";
 
-/// One ambient cue per scene, named rather than synthesised: audio is still
-/// deferred, so this is the authored hint a future mixer would consume.
+/// One authored ambient cue per scene. The game plays a separate music loop;
+/// these scene-specific effects remain descriptive until a mixer is available.
 pub fn scene_ambient_cue(scene: SceneId) -> &'static str {
     match scene.0 {
         "bedroom" => "room tone, one distant car",

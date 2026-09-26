@@ -87,7 +87,8 @@ cmp /tmp/mina.s16le /tmp/reference.s16le
 ## Ownership model
 
 ```text
-Applications (Melody Mina via sunlight-media, audioctl, Control Panel, Vortex)
+Applications (Melody Mina via sunlight-media, Silicon Echoes PCM, audioctl,
+              Control Panel, Vortex)
         │  IPC  "audiod"  /  audio.v1
         ▼
      audiod
@@ -245,6 +246,13 @@ For Melody Mina, play both bundled 48 kHz WAV and Ogg samples through EOF,
 then repeat with pause/resume, Stop/Play, and seeks. Listen for repeated blocks,
 gaps, or clicks at period boundaries and check that the position reaches the
 track duration. This exercises the media producer as well as the tone path.
+
+Silicon Echoes synthesizes a 16-second music loop directly in native PCM on a
+worker thread. It keeps roughly five 1024-frame chunks buffered, advances its
+composition clock only after `SUBMIT_PCM` succeeds, and flushes its stream on
+game music mute, focus loss, or exit. `M` toggles game music. The scene ambient
+cue text is not yet an audio effect. In an interactive QEMU session, listen
+across the loop boundary and test the toggle, focus changes, and window close.
 
 ## Test commands
 

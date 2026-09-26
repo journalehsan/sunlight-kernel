@@ -55,9 +55,15 @@ embedded as `/bin/silicon-echoes`.
   saves.
 - Uses `sunlight-libc`'s `global-alloc` plus `dynamic-heap-8m`; the story
   naturally uses `Box`, `Vec`, `String`, `format!`, and ordered maps.
+- The game plays an original, eight-bar 120 BPM melody with arpeggio, bass,
+  kick, snare, and shaker parts. It is generated as 48 kHz stereo S16LE PCM
+  and sent through `audiod`; no sound file or additional decoder is needed. Press `M`
+  to turn game music on or off. Music stops when the window loses focus and
+  restarts from the beginning when focus returns. The system's master volume
+  and mute still apply.
 - Each scene names one ambient audio cue through `scene_ambient_cue`, shown in
-  the narrative header. Audio playback itself is still deferred; the cue is
-  authored text that a future mixer can consume.
+  the narrative header. These scene-specific effects remain authored text
+  until the audio service supports mixing.
 - Narrative scenes share an explicit presentation lifecycle: entrance, Unicode
   scalar-safe typewriter reveal, post-reveal pause, player choice, and a
   single transition. The default Normal rhythm is 420 ms entrance, 50 ms
@@ -132,6 +138,11 @@ Within SunlightOS:
 /bin/silicon-echoes --display-stress
 ```
 
+For an audible check, launch `/bin/silicon-echoes` in an interactive QEMU
+session with HDA output, confirm the melody loops, press `M` to stop and
+restart it, switch focus to another window and back, then close the game.
+The game gives up its single application stream while unfocused or muted.
+
 `--stress` validates the graph, traverses the authored story, exercises
 deterministic save/load and repeated allocation/drop churn beyond the game heap
 cumulatively, and checks allocator recovery. `--display-stress` repeats native
@@ -139,8 +150,8 @@ window create, redraw, commit, and close lifecycles.
 
 ## Deferred
 
-- Chapters beyond the third, map/log/status UI, inventory, audio playback, and
-  additional scenes.
+- Chapters beyond the third, map/log/status UI, inventory, scene-specific
+  audio effects, and additional scenes.
 - General animation, particle, physics, scene-editor, 3D, and shader systems.
 - Client-side partial-damage or resize protocol work, which belongs in the
   graphics/display stack rather than this game.

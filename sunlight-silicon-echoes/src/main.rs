@@ -4,12 +4,14 @@
 extern crate alloc;
 
 mod scenery;
+mod soundtrack;
 
 use alloc::vec;
 use alloc::vec::Vec;
 use alloc::{boxed::Box, string::String};
 use core::sync::atomic::{AtomicBool, Ordering};
 
+use soundtrack::Soundtrack;
 use sun_font::{draw_text, draw_text_vcenter, measure_text, FontRole, TextStyle};
 use sunlight_ipc::{
     debug_log, ipc_call_timeout, monotonic_millis, nameserver_lookup_timeout, process_yield,
@@ -198,6 +200,8 @@ struct SiliconEchoesApp {
     selected_hotspot: usize,
     key_down: [bool; 256],
     scene_cache: Option<Box<SceneCache>>,
+    music: Option<Soundtrack>,
+    music_enabled: bool,
 }
 
 struct SceneCache {
@@ -281,6 +285,8 @@ impl SiliconEchoesApp {
             selected_hotspot: 0,
             key_down: [false; 256],
             scene_cache: None,
+            music: None,
+            music_enabled: true,
         }
     }
 
@@ -897,6 +903,21 @@ impl SiliconEchoesApp {
                 3,
             ),
             SUNLIGHT,
+        );
+    }
+
+    fn draw_music_status(&self, canvas: &mut Canvas) {
+        let music_label = if self.music_enabled {
+            "M: MUSIC ON"
+        } else {
+            "M: MUSIC OFF"
+        };
+        draw_text(
+            canvas,
+            music_label,
+            self.layout.frame.right() - measure_text(music_label, FontRole::UiSmall).w as i32 - 12,
+            self.layout.frame.y + 22,
+            &TextStyle::new(FontRole::UiSmall, SUNLIGHT),
         );
     }
 
@@ -2574,10 +2595,18 @@ impl App for SiliconEchoesApp {
             Mode::Play => self.draw_play(canvas),
             Mode::Ending => self.draw_ending(canvas),
         }
+        self.draw_music_status(canvas);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
+            Event::Key('m' | 'M') => {
+                self.music_enabled = !self.music_enabled;
+                if let Some(music) = &self.music {
+                    music.set_active(self.music_enabled && self.focused);
+                }
+                true
+            }
             Event::MouseMove { x, y } => {
                 let next = self.hit_test(x, y);
                 if next != self.hover {
@@ -2668,6 +2697,9 @@ impl App for SiliconEchoesApp {
             }
             Event::FocusChanged { focused } => {
                 self.focused = focused;
+                if let Some(music) = &self.music {
+                    music.set_active(self.music_enabled && focused);
+                }
                 self.hover = Hover::None;
                 self.suppress_next_click = focused;
                 self.key_down = [false; 256];
@@ -2691,6 +2723,10 @@ impl App for SiliconEchoesApp {
     fn on_ready(&mut self) -> bool {
         self.seed_ambient();
         self.load_save();
+        self.music = Soundtrack::start();
+        if let Some(music) = &self.music {
+            music.set_active(self.music_enabled && self.focused);
+        }
         true
     }
 
@@ -3588,5 +3624,6 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _: *const *const u8)
         ProcessExit::exit(1);
     };
     window.run(&mut app);
+    drop(app);
     ProcessExit::exit(0);
 }

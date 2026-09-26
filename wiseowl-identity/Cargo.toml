@@ -1,6 +1,7 @@
 [package]
 name = "wiseowl-identity"
-version = "0.2.4384-alpha.2"
+version = "0.2.4423-alpha.2"
+
 
 edition = "2021"
 description = "Durable persistent identity contracts for Wise Owl"

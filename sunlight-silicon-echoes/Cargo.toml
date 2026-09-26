@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-silicon-echoes"
-version = "0.2.4384-alpha.2"
+version = "0.2.4423-alpha.2"
+
 
 
 
@@ -189,6 +190,8 @@ path = "src/main.rs"
 
 [dependencies]
 sun-font = { path = "../sun-font" }
+sunlight-audio = { path = "../sunlight-audio" }
+sunlight-audiod = { path = "../services/sunlight-audiod" }
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
