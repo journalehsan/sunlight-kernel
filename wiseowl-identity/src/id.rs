@@ -21,9 +21,7 @@ impl IdentityId {
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, IdentityError> {
-        let bytes: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| IdentityError::InvalidLength)?;
+        let bytes: [u8; 32] = bytes.try_into().map_err(|_| IdentityError::InvalidLength)?;
         Self::from_bytes(bytes)
     }
 
@@ -85,8 +83,14 @@ mod tests {
 
     #[test]
     fn rejects_invalid_length_and_zero() {
-        assert_eq!(IdentityId::decode(&[1; 31]), Err(IdentityError::InvalidLength));
-        assert_eq!(IdentityId::decode(&[0; 32]), Err(IdentityError::InvalidIdentityId));
+        assert_eq!(
+            IdentityId::decode(&[1; 31]),
+            Err(IdentityError::InvalidLength)
+        );
+        assert_eq!(
+            IdentityId::decode(&[0; 32]),
+            Err(IdentityError::InvalidIdentityId)
+        );
     }
 
     #[test]

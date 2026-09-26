@@ -1911,9 +1911,7 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     let mut count = 0u32;
 
     // Read /HELLO.TXT from FAT32 root
-    if volume_kind == BLOCK_VOLUME_BOOT
-        && count < sunlight_fat::share::MAX_SHARE_FILES as u32
-    {
+    if volume_kind == BLOCK_VOLUME_BOOT && count < sunlight_fat::share::MAX_SHARE_FILES as u32 {
         let entry = &mut share.files[count as usize];
         let src_path = b"/HELLO.TXT";
         let path_len = src_path.len().min(48);
@@ -1927,9 +1925,7 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     }
 
     // Read /BOOT/PHASE35.TXT from FAT32
-    if volume_kind == BLOCK_VOLUME_BOOT
-        && count < sunlight_fat::share::MAX_SHARE_FILES as u32
-    {
+    if volume_kind == BLOCK_VOLUME_BOOT && count < sunlight_fat::share::MAX_SHARE_FILES as u32 {
         let entry = &mut share.files[count as usize];
         let src_path = b"/BOOT/PHASE35.TXT";
         let path_len = src_path.len().min(48);

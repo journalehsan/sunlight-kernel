@@ -112,7 +112,11 @@ impl<D: BlockDevice> Fat32<D> {
             .iter()
             .rposition(|byte| *byte == b'/')
             .ok_or(FatError::InvalidName)?;
-        let parent = if split == 0 { b"/".as_slice() } else { &path[..split] };
+        let parent = if split == 0 {
+            b"/".as_slice()
+        } else {
+            &path[..split]
+        };
         let leaf = &path[split + 1..];
         if leaf.is_empty() || leaf.len() > MAX_LFN || !leaf.is_ascii() {
             return Err(FatError::InvalidName);
@@ -311,7 +315,10 @@ impl<D: BlockDevice> Fat32<D> {
         let checksum = short_name_checksum(&short);
         for disk_index in 0..lfn_count {
             let ordinal = lfn_count - disk_index;
-            self.write_slot(slots[disk_index], &Self::lfn_entry(leaf, ordinal, lfn_count, checksum))?;
+            self.write_slot(
+                slots[disk_index],
+                &Self::lfn_entry(leaf, ordinal, lfn_count, checksum),
+            )?;
         }
         let mut short_entry = [0u8; 32];
         short_entry[..11].copy_from_slice(&short);
@@ -343,11 +350,7 @@ impl<D: BlockDevice> Fat32<D> {
         }
     }
 
-    fn chain_cluster(
-        &mut self,
-        first: &mut u32,
-        index: usize,
-    ) -> Result<u32, FatError> {
+    fn chain_cluster(&mut self, first: &mut u32, index: usize) -> Result<u32, FatError> {
         if *first < 2 {
             *first = self.allocate_cluster()?;
         }
@@ -376,8 +379,7 @@ impl<D: BlockDevice> Fat32<D> {
             .read_block(entry.short_location.lba, &mut sector)
             .map_err(|_| FatError::Io)?;
         let offset = entry.short_location.offset as usize;
-        sector[offset + 20..offset + 22]
-            .copy_from_slice(&((cluster >> 16) as u16).to_le_bytes());
+        sector[offset + 20..offset + 22].copy_from_slice(&((cluster >> 16) as u16).to_le_bytes());
         sector[offset + 26..offset + 28].copy_from_slice(&(cluster as u16).to_le_bytes());
         sector[offset + 28..offset + 32].copy_from_slice(&size.to_le_bytes());
         self.dev
@@ -466,7 +468,11 @@ impl<D: BlockDevice> Fat32<D> {
         self.free_chain(entry.cluster)
     }
 
-    fn replace_entry_data(&mut self, destination: &DirEntry, source: &DirEntry) -> Result<(), FatError> {
+    fn replace_entry_data(
+        &mut self,
+        destination: &DirEntry,
+        source: &DirEntry,
+    ) -> Result<(), FatError> {
         let mut sector = [0u8; BLOCK_SIZE];
         self.dev
             .read_block(destination.short_location.lba, &mut sector)
@@ -475,8 +481,7 @@ impl<D: BlockDevice> Fat32<D> {
         sector[offset + 11] = source.attr;
         sector[offset + 20..offset + 22]
             .copy_from_slice(&((source.cluster >> 16) as u16).to_le_bytes());
-        sector[offset + 26..offset + 28]
-            .copy_from_slice(&(source.cluster as u16).to_le_bytes());
+        sector[offset + 26..offset + 28].copy_from_slice(&(source.cluster as u16).to_le_bytes());
         sector[offset + 28..offset + 32].copy_from_slice(&source.size.to_le_bytes());
         self.dev
             .write_block(destination.short_location.lba, &sector)

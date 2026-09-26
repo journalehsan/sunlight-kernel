@@ -3554,6 +3554,7 @@ version = "0.2.4384-alpha.2"
 dependencies = [
  "bincode",
  "heapless",
+ "libc",
  "log",
  "lz4_flex",
  "serde",

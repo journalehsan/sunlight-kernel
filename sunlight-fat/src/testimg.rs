@@ -94,9 +94,8 @@ impl FatImageBuilder {
             .div_ceil(SECTOR)
             .max(1);
         let reserved = 1usize;
-        let total_sectors = reserved
-            + fat_sectors
-            + (self.clusters.len() + spare_clusters) * self.spc as usize;
+        let total_sectors =
+            reserved + fat_sectors + (self.clusters.len() + spare_clusters) * self.spc as usize;
         let mut image = vec![0u8; total_sectors * SECTOR];
 
         // BPB

@@ -564,7 +564,9 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release >>
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,identity-phase-a-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    # Adoption remains disabled in normal builds. The dedicated identity gate
+    # opts in so a pre-identity fixture can exercise the native adoption path.
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,identity-phase-a-test,identity-adoption --no-default-features --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,phase375-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 else

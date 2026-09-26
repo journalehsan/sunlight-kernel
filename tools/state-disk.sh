@@ -18,12 +18,6 @@ mkfs.fat -F32 -n SUNSTATE "$STATE_IMAGE" >/dev/null
 
 # Avoid making the data volume a BIOS boot candidate. The FAT BPB remains
 # readable by SunlightOS, which does not require the trailing boot signature.
-python3 - "$STATE_IMAGE" <<'PY'
-import sys
-
-with open(sys.argv[1], "r+b") as image:
-    image.seek(510)
-    image.write(b"\0\0")
-PY
+dd if=/dev/zero of="$STATE_IMAGE" bs=1 seek=510 count=2 conv=notrunc status=none
 
 echo "[state-disk] $STATE_IMAGE created (${STATE_SIZE_MIB} MiB FAT32, label SUNSTATE)"

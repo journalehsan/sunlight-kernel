@@ -161,7 +161,12 @@ impl VirtioBlk {
             let d1 = (self.desc_virt + 16) as *mut VirtqDesc;
             (*d1).addr = self.req_phys + 16;
             (*d1).len = 512;
-            (*d1).flags = DESC_F_NEXT | if data_is_device_write { DESC_F_WRITE } else { 0 };
+            (*d1).flags = DESC_F_NEXT
+                | if data_is_device_write {
+                    DESC_F_WRITE
+                } else {
+                    0
+                };
             (*d1).next = 2;
 
             let d2 = (self.desc_virt + 32) as *mut VirtqDesc;

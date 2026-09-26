@@ -105,6 +105,7 @@ path = "src/bin/wiseowl-memorydbctl.rs"
 default = ["host"]
 # Host / development: std, filesystem WAL/segments, Unix socket daemon, full tests.
 host = [
+    "dep:libc",
     "dep:serde",
     "dep:bincode",
     "dep:thiserror",
@@ -137,6 +138,7 @@ lz4_flex = { version = "0.11", default-features = false, optional = true }
 sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["global-alloc", "dynamic-heap"] }
 heapless = { version = "0.8", optional = true }
+libc = { version = "0.2", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

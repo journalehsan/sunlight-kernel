@@ -156,9 +156,9 @@ pub fn validate_store_read_only<S: DurableStore>(
         decode_manifest(&manifest)?;
     }
     for relative in store.list_prefix("SEGMENTS", "data-")? {
-        let bytes = store
-            .read_file(&relative)?
-            .ok_or(DbError::Corrupt { reason: "segment disappeared" })?;
+        let bytes = store.read_file(&relative)?.ok_or(DbError::Corrupt {
+            reason: "segment disappeared",
+        })?;
         open_segment(&bytes, &quotas)?;
     }
     if let Some(wal) = store.read_file("WAL/wal-000001")? {

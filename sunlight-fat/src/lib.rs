@@ -178,8 +178,7 @@ mod tests {
         fat.create_file_path(b"/IDSTAGE/HEAD").expect("head");
         fat.write_path(b"/IDSTAGE/HEAD", 0, b"committed")
             .expect("write");
-        fat.rename_path(b"/IDSTAGE", b"/IDENTITY")
-            .expect("publish");
+        fat.rename_path(b"/IDSTAGE", b"/IDENTITY").expect("publish");
         assert!(fat.stat_path(b"/IDSTAGE").is_none());
         let mut out = [0u8; 16];
         let count = fat

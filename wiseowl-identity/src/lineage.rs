@@ -45,9 +45,7 @@ impl LineageEventId {
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, IdentityError> {
-        let bytes: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| IdentityError::InvalidLength)?;
+        let bytes: [u8; 32] = bytes.try_into().map_err(|_| IdentityError::InvalidLength)?;
         Self::from_bytes(bytes)
     }
 
@@ -111,12 +109,24 @@ impl LineageRecord {
         record
     }
 
-    pub const fn identity_id(self) -> IdentityId { self.identity_id }
-    pub const fn sequence(self) -> LineageSequence { self.sequence }
-    pub const fn continuity_generation(self) -> ContinuityGeneration { self.continuity_generation }
-    pub const fn event_id(self) -> LineageEventId { self.event_id }
-    pub const fn event_kind(self) -> GenesisEventKind { self.event_kind }
-    pub const fn record_hash(self) -> [u8; 32] { self.record_hash }
+    pub const fn identity_id(self) -> IdentityId {
+        self.identity_id
+    }
+    pub const fn sequence(self) -> LineageSequence {
+        self.sequence
+    }
+    pub const fn continuity_generation(self) -> ContinuityGeneration {
+        self.continuity_generation
+    }
+    pub const fn event_id(self) -> LineageEventId {
+        self.event_id
+    }
+    pub const fn event_kind(self) -> GenesisEventKind {
+        self.event_kind
+    }
+    pub const fn record_hash(self) -> [u8; 32] {
+        self.record_hash
+    }
 
     fn encode_without_hash(self) -> [u8; LINEAGE_HASH_OFFSET] {
         let mut out = [0u8; LINEAGE_HASH_OFFSET];
@@ -146,15 +156,29 @@ impl LineageRecord {
 
     pub fn decode(bytes: &[u8]) -> Result<Self, IdentityError> {
         require_exact(bytes, LINEAGE_RECORD_LEN)?;
-        if &bytes[..8] != LINEAGE_MAGIC { return Err(IdentityError::InvalidMagic); }
-        if read_u16(bytes, 8) != IDENTITY_FORMAT_VERSION { return Err(IdentityError::UnsupportedVersion); }
-        if read_u16(bytes, 10) as usize != LINEAGE_RECORD_LEN { return Err(IdentityError::InvalidLength); }
-        if bytes[93..100] != [0; 7] { return Err(IdentityError::UnsupportedVersion); }
+        if &bytes[..8] != LINEAGE_MAGIC {
+            return Err(IdentityError::InvalidMagic);
+        }
+        if read_u16(bytes, 8) != IDENTITY_FORMAT_VERSION {
+            return Err(IdentityError::UnsupportedVersion);
+        }
+        if read_u16(bytes, 10) as usize != LINEAGE_RECORD_LEN {
+            return Err(IdentityError::InvalidLength);
+        }
+        if bytes[93..100] != [0; 7] {
+            return Err(IdentityError::UnsupportedVersion);
+        }
         let sequence = read_u64(bytes, 44);
-        if sequence != 1 { return Err(IdentityError::InvalidSequence); }
+        if sequence != 1 {
+            return Err(IdentityError::InvalidSequence);
+        }
         let generation = read_u64(bytes, 52);
-        if generation != 1 { return Err(IdentityError::InvalidContinuityGeneration); }
-        if bytes[100..132] != [0; 32] { return Err(IdentityError::InvalidGenesis); }
+        if generation != 1 {
+            return Err(IdentityError::InvalidContinuityGeneration);
+        }
+        if bytes[100..132] != [0; 32] {
+            return Err(IdentityError::InvalidGenesis);
+        }
         let mut record_hash = [0u8; 32];
         record_hash.copy_from_slice(&bytes[LINEAGE_HASH_OFFSET..]);
         let record = Self {
@@ -166,7 +190,9 @@ impl LineageRecord {
             previous_hash: [0; 32],
             record_hash,
         };
-        if record.calculate_hash() != record.record_hash { return Err(IdentityError::HashMismatch); }
+        if record.calculate_hash() != record.record_hash {
+            return Err(IdentityError::HashMismatch);
+        }
         Ok(record)
     }
 }
@@ -189,10 +215,18 @@ impl LineageHead {
         }
     }
 
-    pub const fn identity_id(self) -> IdentityId { self.identity_id }
-    pub const fn sequence(self) -> LineageSequence { self.sequence }
-    pub const fn continuity_generation(self) -> ContinuityGeneration { self.continuity_generation }
-    pub const fn committed_record_hash(self) -> [u8; 32] { self.committed_record_hash }
+    pub const fn identity_id(self) -> IdentityId {
+        self.identity_id
+    }
+    pub const fn sequence(self) -> LineageSequence {
+        self.sequence
+    }
+    pub const fn continuity_generation(self) -> ContinuityGeneration {
+        self.continuity_generation
+    }
+    pub const fn committed_record_hash(self) -> [u8; 32] {
+        self.committed_record_hash
+    }
 
     pub fn encode(self) -> [u8; LINEAGE_HEAD_LEN] {
         let mut out = [0u8; LINEAGE_HEAD_LEN];
@@ -210,16 +244,26 @@ impl LineageHead {
 
     pub fn decode(bytes: &[u8]) -> Result<Self, IdentityError> {
         require_exact(bytes, LINEAGE_HEAD_LEN)?;
-        if &bytes[..8] != HEAD_MAGIC { return Err(IdentityError::InvalidMagic); }
-        if read_u16(bytes, 8) != IDENTITY_FORMAT_VERSION { return Err(IdentityError::UnsupportedVersion); }
-        if read_u16(bytes, 10) as usize != LINEAGE_HEAD_LEN { return Err(IdentityError::InvalidLength); }
+        if &bytes[..8] != HEAD_MAGIC {
+            return Err(IdentityError::InvalidMagic);
+        }
+        if read_u16(bytes, 8) != IDENTITY_FORMAT_VERSION {
+            return Err(IdentityError::UnsupportedVersion);
+        }
+        if read_u16(bytes, 10) as usize != LINEAGE_HEAD_LEN {
+            return Err(IdentityError::InvalidLength);
+        }
         if sha256(HEAD_DOMAIN, &bytes[..HEAD_CHECKSUM_OFFSET]) != bytes[HEAD_CHECKSUM_OFFSET..] {
             return Err(IdentityError::ChecksumMismatch);
         }
         let sequence = read_u64(bytes, 44);
-        if sequence != 1 { return Err(IdentityError::InvalidSequence); }
+        if sequence != 1 {
+            return Err(IdentityError::InvalidSequence);
+        }
         let generation = read_u64(bytes, 52);
-        if generation != 1 { return Err(IdentityError::InvalidContinuityGeneration); }
+        if generation != 1 {
+            return Err(IdentityError::InvalidContinuityGeneration);
+        }
         let mut hash = [0u8; 32];
         hash.copy_from_slice(&bytes[60..92]);
         Ok(Self {
@@ -231,12 +275,64 @@ impl LineageHead {
     }
 
     pub fn validate_record(self, record: &LineageRecord) -> Result<(), IdentityError> {
-        if self.identity_id != record.identity_id { return Err(IdentityError::IdentityMismatch); }
-        if self.sequence != record.sequence { return Err(IdentityError::SequenceMismatch); }
+        if self.identity_id != record.identity_id {
+            return Err(IdentityError::IdentityMismatch);
+        }
+        if self.sequence != record.sequence {
+            return Err(IdentityError::SequenceMismatch);
+        }
         if self.continuity_generation != record.continuity_generation {
             return Err(IdentityError::GenerationMismatch);
         }
-        if self.committed_record_hash != record.record_hash { return Err(IdentityError::HashMismatch); }
+        if self.committed_record_hash != record.record_hash {
+            return Err(IdentityError::HashMismatch);
+        }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn record() -> LineageRecord {
+        LineageRecord::genesis(
+            IdentityId::from_bytes([0x11; 32]).unwrap(),
+            LineageEventId::from_bytes([0x22; 32]).unwrap(),
+            GenesisEventKind::Created,
+        )
+    }
+
+    #[test]
+    fn head_requires_exact_record_identity_sequence_generation_and_hash() {
+        let record = record();
+
+        let mut head = LineageHead::from_record(&record);
+        head.identity_id = IdentityId::from_bytes([0x33; 32]).unwrap();
+        assert_eq!(
+            head.validate_record(&record),
+            Err(IdentityError::IdentityMismatch)
+        );
+
+        let mut head = LineageHead::from_record(&record);
+        head.sequence = LineageSequence(2);
+        assert_eq!(
+            head.validate_record(&record),
+            Err(IdentityError::SequenceMismatch)
+        );
+
+        let mut head = LineageHead::from_record(&record);
+        head.continuity_generation = ContinuityGeneration(2);
+        assert_eq!(
+            head.validate_record(&record),
+            Err(IdentityError::GenerationMismatch)
+        );
+
+        let mut head = LineageHead::from_record(&record);
+        head.committed_record_hash[0] ^= 1;
+        assert_eq!(
+            head.validate_record(&record),
+            Err(IdentityError::HashMismatch)
+        );
     }
 }

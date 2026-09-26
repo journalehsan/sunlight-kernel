@@ -78,12 +78,24 @@ pub struct LoadedIdentity {
 }
 
 impl LoadedIdentity {
-    pub const fn identity_id(self) -> IdentityId { self.identity_id }
-    pub const fn lineage_sequence(self) -> LineageSequence { self.lineage_sequence }
-    pub const fn continuity_generation(self) -> ContinuityGeneration { self.continuity_generation }
-    pub const fn genesis_event_kind(self) -> GenesisEventKind { self.genesis_event_kind }
-    pub const fn recovered_from_staging(self) -> bool { self.recovered_from_staging }
-    pub fn diagnostic_fingerprint(self) -> [u8; 8] { self.identity_id.diagnostic_fingerprint() }
+    pub const fn identity_id(self) -> IdentityId {
+        self.identity_id
+    }
+    pub const fn lineage_sequence(self) -> LineageSequence {
+        self.lineage_sequence
+    }
+    pub const fn continuity_generation(self) -> ContinuityGeneration {
+        self.continuity_generation
+    }
+    pub const fn genesis_event_kind(self) -> GenesisEventKind {
+        self.genesis_event_kind
+    }
+    pub const fn recovered_from_staging(self) -> bool {
+        self.recovered_from_staging
+    }
+    pub fn diagnostic_fingerprint(self) -> [u8; 8] {
+        self.identity_id.diagnostic_fingerprint()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -113,6 +125,12 @@ pub fn detect_store_state<S: IdentityStorage>(
     let entries = storage.list_dir("")?;
     let mut existing = false;
     for entry in entries {
+        // FAT directories created by external tooling can contain explicit
+        // dot entries. They name the directory itself and its parent, not
+        // installation state.
+        if entry.name == "." || entry.name == ".." {
+            continue;
+        }
         if entry.name == COMMITTED_DIR
             || entry.name.starts_with(STAGE_PREFIX)
             || entry.name == REJECTED_STAGE
@@ -127,8 +145,7 @@ pub fn detect_store_state<S: IdentityStorage>(
             return Ok(DetectedStoreState::Uncertain);
         }
         match entry.name.as_str() {
-            "WAL" | "SEGMENTS" | "INDEX" | "SNAPSHOTS" | "ACTION_RECEIPTS"
-            | "QUARANTINE" => {
+            "WAL" | "SEGMENTS" | "INDEX" | "SNAPSHOTS" | "ACTION_RECEIPTS" | "QUARANTINE" => {
                 if !storage.list_dir(&entry.name)?.is_empty() {
                     existing = true;
                 }
@@ -166,8 +183,7 @@ fn load_set<S: IdentityStorage>(
         .read_file(&path(directory, LINEAGE_FILE))?
         .ok_or(IdentityStartupError::CorruptStagedIdentity)
         .and_then(|bytes| {
-            LineageRecord::decode(&bytes)
-                .map_err(|_| IdentityStartupError::CorruptStagedIdentity)
+            LineageRecord::decode(&bytes).map_err(|_| IdentityStartupError::CorruptStagedIdentity)
         })?;
     let head = storage
         .read_file(&path(directory, HEAD_FILE))?
@@ -226,7 +242,7 @@ fn finish_stage<S: IdentityStorage>(
     hit(hook, CreationBoundary::BeforeParentDirectoryFlush)?;
     storage.sync_dir("")?;
     hit(hook, CreationBoundary::AfterParentDirectoryFlush)?;
-    loaded.recovered_from_staging = true;
+    loaded.recovered_from_staging = false;
     Ok(loaded)
 }
 
@@ -242,8 +258,9 @@ fn complete_or_create_stage<S: IdentityStorage>(
     let head_path = path(stage, HEAD_FILE);
 
     let root = match storage.read_file(&root_path)? {
-        Some(bytes) => IdentityRoot::decode(&bytes)
-            .map_err(|_| IdentityStartupError::CorruptStagedIdentity)?,
+        Some(bytes) => {
+            IdentityRoot::decode(&bytes).map_err(|_| IdentityStartupError::CorruptStagedIdentity)?
+        }
         None => {
             if storage.exists(&lineage_path)? || storage.exists(&head_path)? {
                 return Err(IdentityStartupError::CorruptStagedIdentity);
@@ -253,8 +270,7 @@ fn complete_or_create_stage<S: IdentityStorage>(
                 .map_err(|_| IdentityStartupError::EntropyUnavailable)?;
             hit(hook, CreationBoundary::AfterIdGeneration)?;
             let mut event_bytes = [0u8; 32];
-            fill_entropy(&mut event_bytes)
-                .map_err(|_| IdentityStartupError::EntropyUnavailable)?;
+            fill_entropy(&mut event_bytes).map_err(|_| IdentityStartupError::EntropyUnavailable)?;
             let event_id = LineageEventId::from_bytes(event_bytes)
                 .map_err(|_| IdentityStartupError::EntropyUnavailable)?;
             let root = IdentityRoot::new(identity_id, event_id, kind);
@@ -286,8 +302,9 @@ fn complete_or_create_stage<S: IdentityStorage>(
         }
     };
     let head = match storage.read_file(&head_path)? {
-        Some(bytes) => LineageHead::decode(&bytes)
-            .map_err(|_| IdentityStartupError::CorruptStagedIdentity)?,
+        Some(bytes) => {
+            LineageHead::decode(&bytes).map_err(|_| IdentityStartupError::CorruptStagedIdentity)?
+        }
         None => {
             let head = LineageHead::from_record(&lineage);
             storage.write_file(&head_path, &head.encode())?;
@@ -311,9 +328,12 @@ pub fn ensure_identity<S: IdentityStorage>(
     mut hook: impl FnMut(CreationBoundary) -> Result<(), IdentityStartupError>,
 ) -> Result<LoadedIdentity, IdentityStartupError> {
     if storage.exists(COMMITTED_DIR)? {
-        return load_set(storage, COMMITTED_DIR).map_err(|_| {
-            IdentityStartupError::CorruptCommittedIdentity
-        });
+        return match load_set(storage, COMMITTED_DIR) {
+            Err(IdentityStartupError::CorruptStagedIdentity) => {
+                Err(IdentityStartupError::CorruptCommittedIdentity)
+            }
+            result => result,
+        };
     }
 
     let mut stages = storage
@@ -326,30 +346,30 @@ pub fn ensure_identity<S: IdentityStorage>(
     if stages.len() > 1 {
         return Err(IdentityStartupError::AmbiguousStagedIdentity);
     }
-    let stage = if let Some(stage) = stages.first() {
-        stage.clone()
+    let (stage, stage_preexisted, kind) = if let Some(stage) = stages.first() {
+        let kind = match storage.read_file(&path(stage, ROOT_FILE))? {
+            Some(bytes) => match IdentityRoot::decode(&bytes) {
+                Ok(root) => root.creation_event_kind(),
+                Err(_) => event_kind(disposition, adoption_policy)?,
+            },
+            None => event_kind(disposition, adoption_policy)?,
+        };
+        (stage.clone(), true, kind)
     } else {
+        // Refuse disallowed/uncertain adoption before creating any identity
+        // staging evidence in an existing installation.
+        let kind = event_kind(disposition, adoption_policy)?;
         storage.create_dir(PRIMARY_STAGE)?;
-        PRIMARY_STAGE.to_string()
+        (PRIMARY_STAGE.to_string(), false, kind)
     };
     // Once ROOT is durable it is the authoritative creation/adoption choice.
     // A later retry must not depend on a changed command-line policy.
-    let kind = match storage.read_file(&path(&stage, ROOT_FILE))? {
-        Some(bytes) => match IdentityRoot::decode(&bytes) {
-            Ok(root) => root.creation_event_kind(),
-            Err(_) => event_kind(disposition, adoption_policy)?,
-        },
-        None => event_kind(disposition, adoption_policy)?,
-    };
 
-    match complete_or_create_stage(
-        storage,
-        &stage,
-        kind,
-        &mut fill_entropy,
-        &mut hook,
-    ) {
-        Ok(identity) => Ok(identity),
+    match complete_or_create_stage(storage, &stage, kind, &mut fill_entropy, &mut hook) {
+        Ok(mut identity) => {
+            identity.recovered_from_staging = stage_preexisted;
+            Ok(identity)
+        }
         Err(IdentityStartupError::CorruptStagedIdentity)
             if disposition == StoreDisposition::Fresh && stage == PRIMARY_STAGE =>
         {
@@ -359,13 +379,11 @@ pub fn ensure_identity<S: IdentityStorage>(
             storage.rename_no_replace(&stage, REJECTED_STAGE)?;
             storage.sync_dir("")?;
             storage.create_dir(PRIMARY_STAGE)?;
-            complete_or_create_stage(
-                storage,
-                PRIMARY_STAGE,
-                kind,
-                &mut fill_entropy,
-                &mut hook,
-            )
+            complete_or_create_stage(storage, PRIMARY_STAGE, kind, &mut fill_entropy, &mut hook)
+                .map(|mut identity| {
+                    identity.recovered_from_staging = false;
+                    identity
+                })
         }
         Err(error) => Err(error),
     }
@@ -374,8 +392,10 @@ pub fn ensure_identity<S: IdentityStorage>(
 #[cfg(feature = "host")]
 pub mod host {
     use super::*;
+    use std::ffi::CString;
     use std::fs::{self, OpenOptions};
     use std::io::{Read, Write};
+    use std::os::unix::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
 
     pub struct HostIdentityStorage {
@@ -385,14 +405,20 @@ pub mod host {
     impl HostIdentityStorage {
         pub fn open(root: impl AsRef<Path>) -> Result<Self, IdentityStartupError> {
             fs::create_dir_all(root.as_ref()).map_err(|_| IdentityStartupError::Io)?;
-            Ok(Self { root: root.as_ref().to_path_buf() })
+            Ok(Self {
+                root: root.as_ref().to_path_buf(),
+            })
         }
 
         fn path(&self, relative: &str) -> Result<PathBuf, IdentityStartupError> {
             if relative.split('/').any(|part| part == "..") {
                 return Err(IdentityStartupError::Io);
             }
-            Ok(if relative.is_empty() { self.root.clone() } else { self.root.join(relative) })
+            Ok(if relative.is_empty() {
+                self.root.clone()
+            } else {
+                self.root.join(relative)
+            })
         }
     }
 
@@ -411,7 +437,10 @@ pub mod host {
                 let entry = entry.map_err(|_| IdentityStartupError::Io)?;
                 entries.push(IdentityDirEntry {
                     name: entry.file_name().to_string_lossy().into_owned(),
-                    is_dir: entry.file_type().map_err(|_| IdentityStartupError::Io)?.is_dir(),
+                    is_dir: entry
+                        .file_type()
+                        .map_err(|_| IdentityStartupError::Io)?
+                        .is_dir(),
                 });
             }
             entries.sort_by(|left, right| left.name.cmp(&right.name));
@@ -420,10 +449,14 @@ pub mod host {
 
         fn read_file(&self, relative: &str) -> Result<Option<Vec<u8>>, IdentityStartupError> {
             let path = self.path(relative)?;
-            if !path.exists() { return Ok(None); }
-            let mut file = fs::File::open(path).map_err(|_| IdentityStartupError::Io)?;
+            if !path.exists() {
+                return Ok(None);
+            }
+            let file = fs::File::open(path).map_err(|_| IdentityStartupError::Io)?;
             let mut bytes = Vec::new();
-            file.take(4097).read_to_end(&mut bytes).map_err(|_| IdentityStartupError::Io)?;
+            file.take(4097)
+                .read_to_end(&mut bytes)
+                .map_err(|_| IdentityStartupError::Io)?;
             Ok(Some(bytes))
         }
 
@@ -449,9 +482,29 @@ pub mod host {
         }
 
         fn rename_no_replace(&mut self, old: &str, new: &str) -> Result<(), IdentityStartupError> {
+            let source = self.path(old)?;
             let destination = self.path(new)?;
-            if destination.exists() { return Err(IdentityStartupError::Io); }
-            fs::rename(self.path(old)?, destination).map_err(|_| IdentityStartupError::Io)
+            let source = CString::new(source.as_os_str().as_bytes())
+                .map_err(|_| IdentityStartupError::Io)?;
+            let destination = CString::new(destination.as_os_str().as_bytes())
+                .map_err(|_| IdentityStartupError::Io)?;
+            // Linux renameat2 gives publication a true atomic no-replace
+            // boundary. A check followed by std::fs::rename would have a
+            // race in which a second creator could be overwritten.
+            let result = unsafe {
+                libc::renameat2(
+                    libc::AT_FDCWD,
+                    source.as_ptr(),
+                    libc::AT_FDCWD,
+                    destination.as_ptr(),
+                    libc::RENAME_NOREPLACE,
+                )
+            };
+            if result == 0 {
+                Ok(())
+            } else {
+                Err(IdentityStartupError::Io)
+            }
         }
     }
 }
@@ -460,8 +513,15 @@ pub mod host {
 mod tests {
     use super::host::HostIdentityStorage;
     use super::*;
+    use crate::database::{validate_store_read_only, Database, DbCaller, FsStore, InsertRequest};
+    use crate::provenance::{DerivationKind, LongTermProvenance};
+    use crate::query::DedupPolicy;
+    use crate::record::{LongTermMemoryKind, MemoryScope};
+    use crate::DbQuotaConfig;
+    use std::collections::BTreeMap;
     use std::fs;
     use std::path::Path;
+    use wiseowl_memory::{SourceKind, TrustLevel};
 
     fn entropy(start: u8) -> impl FnMut(&mut [u8]) -> Result<(), EntropyError> {
         let mut value = start.max(1);
@@ -488,12 +548,72 @@ mod tests {
         .unwrap()
     }
 
+    fn durable_files(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        fn visit(root: &Path, directory: &Path, output: &mut BTreeMap<String, Vec<u8>>) {
+            for entry in fs::read_dir(directory).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                if path.is_dir() {
+                    if !entry.file_name().to_string_lossy().starts_with("IDENTITY") {
+                        visit(root, &path, output);
+                    }
+                } else {
+                    let relative = path
+                        .strip_prefix(root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned();
+                    output.insert(relative, fs::read(path).unwrap());
+                }
+            }
+        }
+
+        let mut output = BTreeMap::new();
+        visit(root, root, &mut output);
+        output
+    }
+
+    fn existing_record_request() -> InsertRequest {
+        InsertRequest {
+            kind: LongTermMemoryKind::Observation,
+            scope: MemoryScope::User,
+            owner: 1,
+            payload: b"pre-identity record".to_vec(),
+            provenance: LongTermProvenance {
+                source_kind: SourceKind::UserInput,
+                source_id: None,
+                producer_service: String::from("identity-adoption-test"),
+                original_memory_ids: Vec::new(),
+                parent_lt_ids: Vec::new(),
+                insertion_time_ns: 1,
+                trust: TrustLevel::Untrusted,
+                source_content_hash: None,
+                external_ref: None,
+                derivation: DerivationKind::DirectImport,
+            },
+            confidence: 900,
+            importance: 100,
+            trust: TrustLevel::Untrusted,
+            valid_from_ns: None,
+            valid_until_ns: None,
+            tokens: None,
+            attributes: crate::attributes::AttributeSet::default(),
+            supersedes: None,
+            relationships: Vec::new(),
+            dedup: DedupPolicy::Allow,
+            id: None,
+            revision: 1,
+        }
+    }
+
     #[test]
     fn restart_and_reboot_keep_one_identity_and_genesis() {
         let temp = tempfile::tempdir().unwrap();
         let first = boot(temp.path(), 1);
         let second = boot(temp.path(), 80);
         let third = boot(temp.path(), 160);
+        assert!(!first.recovered_from_staging());
+        assert!(!second.recovered_from_staging());
         assert_eq!(first.identity_id(), second.identity_id());
         assert_eq!(second.identity_id(), third.identity_id());
         assert_eq!(third.lineage_sequence().get(), 1);
@@ -538,7 +658,11 @@ mod tests {
                     }
                 },
             );
-            assert_eq!(result, Err(IdentityStartupError::InjectedCrash), "{boundary:?}");
+            assert_eq!(
+                result,
+                Err(IdentityStartupError::InjectedCrash),
+                "{boundary:?}"
+            );
 
             let durable_root = ["IDENTITY/ROOT", "IDENTITY.STAGE/ROOT"]
                 .iter()
@@ -560,8 +684,14 @@ mod tests {
     #[test]
     fn adoption_is_explicit_and_does_not_rewrite_existing_bytes() {
         let temp = tempfile::tempdir().unwrap();
-        let manifest = b"pre-identity-memorydb-manifest";
-        fs::write(temp.path().join("MANIFEST"), manifest).unwrap();
+        let caller = DbCaller::user(1);
+        let mut db = Database::open_fs(temp.path(), DbQuotaConfig::default()).unwrap();
+        let existing_id = db.insert_one(&caller, existing_record_request()).unwrap();
+        db.create_checkpoint(&DbCaller::admin()).unwrap();
+        drop(db);
+        let validation_store = FsStore::open(temp.path()).unwrap();
+        validate_store_read_only(&validation_store, DbQuotaConfig::default()).unwrap();
+        let before = durable_files(temp.path());
 
         let mut denied = HostIdentityStorage::open(temp.path()).unwrap();
         assert_eq!(
@@ -575,6 +705,7 @@ mod tests {
             Err(IdentityStartupError::ExistingStateRequiresAdoption)
         );
         assert!(!temp.path().join("IDENTITY").exists());
+        assert!(!temp.path().join(PRIMARY_STAGE).exists());
 
         let mut allowed = HostIdentityStorage::open(temp.path()).unwrap();
         let adopted = ensure_identity(
@@ -585,8 +716,18 @@ mod tests {
             no_fault,
         )
         .unwrap();
-        assert_eq!(adopted.genesis_event_kind(), GenesisEventKind::ExistingStateAdopted);
-        assert_eq!(fs::read(temp.path().join("MANIFEST")).unwrap(), manifest);
+        assert!(!adopted.recovered_from_staging());
+        assert_eq!(
+            adopted.genesis_event_kind(),
+            GenesisEventKind::ExistingStateAdopted
+        );
+        assert_eq!(durable_files(temp.path()), before);
+
+        let reopened = Database::open_fs(temp.path(), DbQuotaConfig::default()).unwrap();
+        assert_eq!(
+            reopened.get_record(&caller, existing_id, false).unwrap().id,
+            existing_id
+        );
 
         let mut restart = HostIdentityStorage::open(temp.path()).unwrap();
         let same = ensure_identity(
@@ -598,6 +739,33 @@ mod tests {
         )
         .unwrap();
         assert_eq!(same.identity_id(), adopted.identity_id());
+    }
+
+    #[test]
+    fn retry_of_a_preexisting_stage_is_reported_as_recovery() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut storage = HostIdentityStorage::open(temp.path()).unwrap();
+        let mut fired = false;
+        assert_eq!(
+            ensure_identity(
+                &mut storage,
+                StoreDisposition::Fresh,
+                AdoptionPolicy::Disabled,
+                entropy(1),
+                |boundary| {
+                    if boundary == CreationBoundary::AfterRootFlush && !fired {
+                        fired = true;
+                        Err(IdentityStartupError::InjectedCrash)
+                    } else {
+                        Ok(())
+                    }
+                },
+            ),
+            Err(IdentityStartupError::InjectedCrash)
+        );
+
+        let recovered = boot(temp.path(), 90);
+        assert!(recovered.recovered_from_staging());
     }
 
     fn copy_identity(source: &Path, destination: &Path) {
@@ -656,7 +824,72 @@ mod tests {
             Err(IdentityStartupError::CorruptCommittedIdentity)
         );
         assert!(!temp.path().join(PRIMARY_STAGE).exists());
-        let root = IdentityRoot::decode(&fs::read(temp.path().join("IDENTITY/ROOT")).unwrap()).unwrap();
+        let root =
+            IdentityRoot::decode(&fs::read(temp.path().join("IDENTITY/ROOT")).unwrap()).unwrap();
         assert_eq!(root.identity_id(), original.identity_id());
+    }
+
+    #[test]
+    fn fresh_state_detection_is_conservative() {
+        let empty = tempfile::tempdir().unwrap();
+        let storage = HostIdentityStorage::open(empty.path()).unwrap();
+        assert_eq!(
+            detect_store_state(&storage).unwrap(),
+            DetectedStoreState::Fresh
+        );
+
+        for directory in ["WAL", "SEGMENTS", "INDEX", "TMP"] {
+            fs::create_dir(empty.path().join(directory)).unwrap();
+        }
+        assert_eq!(
+            detect_store_state(&storage).unwrap(),
+            DetectedStoreState::Fresh
+        );
+
+        fs::write(empty.path().join("WAL/wal-000001"), b"durable evidence").unwrap();
+        assert_eq!(
+            detect_store_state(&storage).unwrap(),
+            DetectedStoreState::Existing
+        );
+
+        let unknown = tempfile::tempdir().unwrap();
+        fs::write(unknown.path().join("unrecognized-state"), b"do not replace").unwrap();
+        let unknown_storage = HostIdentityStorage::open(unknown.path()).unwrap();
+        assert_eq!(
+            detect_store_state(&unknown_storage).unwrap(),
+            DetectedStoreState::Uncertain
+        );
+
+        let temporary = tempfile::tempdir().unwrap();
+        fs::create_dir(temporary.path().join("TMP")).unwrap();
+        fs::write(temporary.path().join("TMP/interrupted"), b"unknown").unwrap();
+        let temporary_storage = HostIdentityStorage::open(temporary.path()).unwrap();
+        assert_eq!(
+            detect_store_state(&temporary_storage).unwrap(),
+            DetectedStoreState::Uncertain
+        );
+    }
+
+    #[test]
+    fn host_publication_never_replaces_an_existing_destination() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::create_dir(temp.path().join("source")).unwrap();
+        fs::create_dir(temp.path().join("destination")).unwrap();
+        fs::write(temp.path().join("source/value"), b"source").unwrap();
+        fs::write(temp.path().join("destination/value"), b"destination").unwrap();
+
+        let mut storage = HostIdentityStorage::open(temp.path()).unwrap();
+        assert_eq!(
+            storage.rename_no_replace("source", "destination"),
+            Err(IdentityStartupError::Io)
+        );
+        assert_eq!(
+            fs::read(temp.path().join("source/value")).unwrap(),
+            b"source"
+        );
+        assert_eq!(
+            fs::read(temp.path().join("destination/value")).unwrap(),
+            b"destination"
+        );
     }
 }

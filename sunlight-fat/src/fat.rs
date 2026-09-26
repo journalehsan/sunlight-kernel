@@ -409,9 +409,8 @@ fn decode_lfn_part(raw: &[u8], ordinal: u8, out: &mut [u8; MAX_LFN]) -> bool {
 }
 
 pub(super) fn short_name_checksum(name: &[u8; 11]) -> u8 {
-    name.iter().fold(0u8, |sum, byte| {
-        sum.rotate_right(1).wrapping_add(*byte)
-    })
+    name.iter()
+        .fold(0u8, |sum, byte| sum.rotate_right(1).wrapping_add(*byte))
 }
 
 /// Convert an ASCII filename component to FAT32 8.3 form (uppercase, space-padded).

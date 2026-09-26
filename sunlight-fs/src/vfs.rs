@@ -373,7 +373,10 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
-        let stat = self.fat.stat_path(path.as_bytes()).ok_or(FsError::NotFound)?;
+        let stat = self
+            .fat
+            .stat_path(path.as_bytes())
+            .ok_or(FsError::NotFound)?;
         if !stat.is_dir {
             return Err(FsError::NotDir);
         }

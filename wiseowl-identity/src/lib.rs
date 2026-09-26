@@ -12,9 +12,9 @@ pub mod lineage;
 pub mod root;
 pub mod validation;
 
-pub use id::{EntropyError, IdentityId};
 #[cfg(feature = "host")]
 pub use id::fill_host_entropy;
+pub use id::{EntropyError, IdentityId};
 pub use lineage::{
     ContinuityGeneration, GenesisEventKind, LineageEventId, LineageHead, LineageRecord,
     LineageSequence,
