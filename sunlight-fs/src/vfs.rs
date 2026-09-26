@@ -1171,6 +1171,17 @@ mod tests {
     }
 
     #[test]
+    fn ramfs_never_claims_file_or_directory_durability() {
+        let mut vfs: Vfs = Vfs::new();
+        vfs.mount_ramfs("/", RamFs::new(ROOT_ENTRIES)).unwrap();
+
+        let handle = vfs.open("/etc/motd").unwrap();
+        assert_eq!(vfs.sync_file(handle), Err(FsError::Unsupported));
+        vfs.mkdir("/durable", 0, 0, 0o700).unwrap();
+        assert_eq!(vfs.sync_dir("/durable"), Err(FsError::Unsupported));
+    }
+
+    #[test]
     fn chooses_longest_matching_mount() {
         let mut vfs: Vfs = Vfs::new();
         vfs.mount_ramfs("/", RamFs::new(ROOT_ENTRIES)).unwrap();

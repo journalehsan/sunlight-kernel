@@ -41,6 +41,7 @@ pub enum AdoptionPolicy {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IdentityStartupError {
     Io,
+    PersistenceUnavailable,
     EntropyUnavailable,
     CorruptCommittedIdentity,
     CorruptStagedIdentity,
@@ -51,7 +52,14 @@ pub enum IdentityStartupError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IdentityValidationStatus {
+    Validated,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreationBoundary {
+    BeforeStageEntryFlush,
+    AfterStageEntryFlush,
     BeforeIdGeneration,
     AfterIdGeneration,
     AfterRootWrite,
@@ -75,6 +83,7 @@ pub struct LoadedIdentity {
     continuity_generation: ContinuityGeneration,
     genesis_event_kind: GenesisEventKind,
     recovered_from_staging: bool,
+    validation_status: IdentityValidationStatus,
 }
 
 impl LoadedIdentity {
@@ -92,6 +101,9 @@ impl LoadedIdentity {
     }
     pub const fn recovered_from_staging(self) -> bool {
         self.recovered_from_staging
+    }
+    pub const fn validation_status(self) -> IdentityValidationStatus {
+        self.validation_status
     }
     pub fn diagnostic_fingerprint(self) -> [u8; 8] {
         self.identity_id.diagnostic_fingerprint()
@@ -199,7 +211,51 @@ fn load_set<S: IdentityStorage>(
         continuity_generation: validated.continuity_generation,
         genesis_event_kind: validated.genesis_event_kind,
         recovered_from_staging: false,
+        validation_status: IdentityValidationStatus::Validated,
     })
+}
+
+fn valid_component(file: &str, bytes: &[u8]) -> bool {
+    match file {
+        ROOT_FILE => IdentityRoot::decode(bytes).is_ok(),
+        LINEAGE_FILE => LineageRecord::decode(bytes).is_ok(),
+        HEAD_FILE => LineageHead::decode(bytes).is_ok(),
+        _ => false,
+    }
+}
+
+/// A valid component in a stage is recoverable identity evidence. It must not
+/// be discarded in favor of a newly generated identity, even when another
+/// component is absent or corrupt.
+fn has_valid_stage_evidence<S: IdentityStorage>(
+    storage: &S,
+    stage: &str,
+) -> Result<bool, IdentityStartupError> {
+    for file in [ROOT_FILE, LINEAGE_FILE, HEAD_FILE] {
+        if let Some(bytes) = storage.read_file(&path(stage, file))? {
+            if valid_component(file, &bytes) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn stage_conflicts_with_committed<S: IdentityStorage>(
+    storage: &S,
+    stage: &str,
+) -> Result<bool, IdentityStartupError> {
+    for file in [ROOT_FILE, LINEAGE_FILE, HEAD_FILE] {
+        let Some(staged) = storage.read_file(&path(stage, file))? else {
+            continue;
+        };
+        if valid_component(file, &staged)
+            && storage.read_file(&path(COMMITTED_DIR, file))? != Some(staged)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn event_kind(
@@ -328,12 +384,50 @@ pub fn ensure_identity<S: IdentityStorage>(
     mut hook: impl FnMut(CreationBoundary) -> Result<(), IdentityStartupError>,
 ) -> Result<LoadedIdentity, IdentityStartupError> {
     if storage.exists(COMMITTED_DIR)? {
-        return match load_set(storage, COMMITTED_DIR) {
+        let committed = match load_set(storage, COMMITTED_DIR) {
             Err(IdentityStartupError::CorruptStagedIdentity) => {
-                Err(IdentityStartupError::CorruptCommittedIdentity)
+                return Err(IdentityStartupError::CorruptCommittedIdentity)
             }
-            result => result,
+            Err(error) => return Err(error),
+            Ok(identity) => identity,
         };
+
+        // FAT publication can durably link the destination before deleting
+        // the stage name. Keep that evidence, but only accept it as stale when
+        // it is byte-for-byte the committed genesis. A second valid identity
+        // candidate is ambiguity and must not be silently ignored.
+        let mut stages = storage
+            .list_dir("")?
+            .into_iter()
+            .filter(|entry| entry.is_dir && entry.name.starts_with(STAGE_PREFIX))
+            .map(|entry| entry.name)
+            .collect::<Vec<_>>();
+        stages.sort();
+        if stages.len() > 1 {
+            return Err(IdentityStartupError::AmbiguousStagedIdentity);
+        }
+        if let Some(stage) = stages.first() {
+            match load_set(storage, stage) {
+                Ok(_) => {
+                    for name in [ROOT_FILE, LINEAGE_FILE, HEAD_FILE] {
+                        if storage.read_file(&path(COMMITTED_DIR, name))?
+                            != storage.read_file(&path(stage, name))?
+                        {
+                            return Err(IdentityStartupError::AmbiguousStagedIdentity);
+                        }
+                    }
+                }
+                Err(IdentityStartupError::CorruptStagedIdentity) => {
+                    if stage_conflicts_with_committed(storage, stage)? {
+                        return Err(IdentityStartupError::AmbiguousStagedIdentity);
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+            // Invalid staging is retained as diagnostic evidence. Since it
+            // cannot validate as a candidate, the valid committed set wins.
+        }
+        return Ok(committed);
     }
 
     let mut stages = storage
@@ -362,6 +456,12 @@ pub fn ensure_identity<S: IdentityStorage>(
         storage.create_dir(PRIMARY_STAGE)?;
         (PRIMARY_STAGE.to_string(), false, kind)
     };
+    // Persist the staging-directory entry before generating an ID. Otherwise
+    // a file barrier could make ROOT durable while a crash loses the stage
+    // name from its parent namespace, stranding the only recoverable ID.
+    hit(&mut hook, CreationBoundary::BeforeStageEntryFlush)?;
+    storage.sync_dir("")?;
+    hit(&mut hook, CreationBoundary::AfterStageEntryFlush)?;
     // Once ROOT is durable it is the authoritative creation/adoption choice.
     // A later retry must not depend on a changed command-line policy.
 
@@ -373,12 +473,18 @@ pub fn ensure_identity<S: IdentityStorage>(
         Err(IdentityStartupError::CorruptStagedIdentity)
             if disposition == StoreDisposition::Fresh && stage == PRIMARY_STAGE =>
         {
+            if has_valid_stage_evidence(storage, &stage)? {
+                // Do not trade away a recoverable IdentityId, lineage record,
+                // or head just because a sibling component is corrupt.
+                return Err(IdentityStartupError::CorruptStagedIdentity);
+            }
             if storage.exists(REJECTED_STAGE)? {
                 return Err(IdentityStartupError::AmbiguousStagedIdentity);
             }
             storage.rename_no_replace(&stage, REJECTED_STAGE)?;
             storage.sync_dir("")?;
             storage.create_dir(PRIMARY_STAGE)?;
+            storage.sync_dir("")?;
             complete_or_create_stage(storage, PRIMARY_STAGE, kind, &mut fill_entropy, &mut hook)
                 .map(|mut identity| {
                     identity.recovered_from_staging = false;
@@ -622,8 +728,38 @@ mod tests {
     }
 
     #[test]
+    fn replacing_the_os_image_with_the_same_state_volume_keeps_identity() {
+        let state_volume = tempfile::tempdir().unwrap();
+        let build_a = boot(state_volume.path(), 31);
+        let root_a = fs::read(state_volume.path().join("IDENTITY/ROOT")).unwrap();
+
+        // The storage contract has no OS-image, VM, or device identifier
+        // input. Reopening the same state volume under a simulated replacement
+        // image can only load the already committed identity.
+        let mut replacement_image_storage = HostIdentityStorage::open(state_volume.path()).unwrap();
+        let build_b = ensure_identity(
+            &mut replacement_image_storage,
+            StoreDisposition::ExistingInvalidOrUncertain,
+            AdoptionPolicy::AllowValidatedExistingState,
+            entropy(201),
+            no_fault,
+        )
+        .unwrap();
+
+        assert_eq!(build_a.identity_id(), build_b.identity_id());
+        assert_eq!(build_b.lineage_sequence().get(), 1);
+        assert_eq!(build_b.continuity_generation().get(), 1);
+        assert_eq!(
+            fs::read(state_volume.path().join("IDENTITY/ROOT")).unwrap(),
+            root_a
+        );
+    }
+
+    #[test]
     fn every_creation_boundary_converges_without_replacing_recoverable_id() {
         let boundaries = [
+            CreationBoundary::BeforeStageEntryFlush,
+            CreationBoundary::AfterStageEntryFlush,
             CreationBoundary::BeforeIdGeneration,
             CreationBoundary::AfterIdGeneration,
             CreationBoundary::AfterRootWrite,
@@ -682,7 +818,7 @@ mod tests {
     }
 
     #[test]
-    fn adoption_is_explicit_and_does_not_rewrite_existing_bytes() {
+    fn validated_existing_state_is_adopted_without_rewriting_existing_bytes() {
         let temp = tempfile::tempdir().unwrap();
         let caller = DbCaller::user(1);
         let mut db = Database::open_fs(temp.path(), DbQuotaConfig::default()).unwrap();
@@ -692,20 +828,6 @@ mod tests {
         let validation_store = FsStore::open(temp.path()).unwrap();
         validate_store_read_only(&validation_store, DbQuotaConfig::default()).unwrap();
         let before = durable_files(temp.path());
-
-        let mut denied = HostIdentityStorage::open(temp.path()).unwrap();
-        assert_eq!(
-            ensure_identity(
-                &mut denied,
-                StoreDisposition::ExistingValidated,
-                AdoptionPolicy::Disabled,
-                entropy(1),
-                no_fault,
-            ),
-            Err(IdentityStartupError::ExistingStateRequiresAdoption)
-        );
-        assert!(!temp.path().join("IDENTITY").exists());
-        assert!(!temp.path().join(PRIMARY_STAGE).exists());
 
         let mut allowed = HostIdentityStorage::open(temp.path()).unwrap();
         let adopted = ensure_identity(
@@ -728,6 +850,7 @@ mod tests {
             reopened.get_record(&caller, existing_id, false).unwrap().id,
             existing_id
         );
+        assert_eq!(durable_files(temp.path()), before);
 
         let mut restart = HostIdentityStorage::open(temp.path()).unwrap();
         let same = ensure_identity(
@@ -739,6 +862,42 @@ mod tests {
         )
         .unwrap();
         assert_eq!(same.identity_id(), adopted.identity_id());
+    }
+
+    #[test]
+    fn database_and_index_generations_do_not_define_identity() {
+        let temp = tempfile::tempdir().unwrap();
+        let original = boot(temp.path(), 41);
+        let store = FsStore::open(temp.path()).unwrap();
+        let mut db = Database::open_with_store(store, DbQuotaConfig::default()).unwrap();
+        db.bind_identity_context(original);
+        let bound = db.identity_context().unwrap();
+        assert_eq!(bound.identity_id(), original.identity_id());
+        assert_eq!(
+            bound.validation_status(),
+            super::IdentityValidationStatus::Validated
+        );
+
+        let before = db.stats();
+        db.rebuild_indexes(&DbCaller::admin()).unwrap();
+        let rebuilt = db.stats();
+        assert_eq!(rebuilt.index_generation, before.index_generation + 1);
+        db.create_checkpoint(&DbCaller::admin()).unwrap();
+        drop(db);
+
+        let mut storage = HostIdentityStorage::open(temp.path()).unwrap();
+        let after_restart = ensure_identity(
+            &mut storage,
+            StoreDisposition::ExistingInvalidOrUncertain,
+            AdoptionPolicy::AllowValidatedExistingState,
+            entropy(219),
+            no_fault,
+        )
+        .unwrap();
+        let restarted_db = Database::open_fs(temp.path(), DbQuotaConfig::default()).unwrap();
+        assert!(restarted_db.stats().database_generation > rebuilt.database_generation);
+        assert_eq!(after_restart.identity_id(), original.identity_id());
+        assert_eq!(after_restart.continuity_generation().get(), 1);
     }
 
     #[test]
@@ -766,6 +925,61 @@ mod tests {
 
         let recovered = boot(temp.path(), 90);
         assert!(recovered.recovered_from_staging());
+    }
+
+    #[test]
+    fn corrupt_stage_with_valid_root_never_generates_a_replacement_id() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut storage = HostIdentityStorage::open(temp.path()).unwrap();
+        let mut fired = false;
+        assert_eq!(
+            ensure_identity(
+                &mut storage,
+                StoreDisposition::Fresh,
+                AdoptionPolicy::AllowValidatedExistingState,
+                entropy(13),
+                |boundary| {
+                    if boundary == CreationBoundary::AfterRootFlush && !fired {
+                        fired = true;
+                        Err(IdentityStartupError::InjectedCrash)
+                    } else {
+                        Ok(())
+                    }
+                },
+            ),
+            Err(IdentityStartupError::InjectedCrash)
+        );
+        let original =
+            IdentityRoot::decode(&fs::read(temp.path().join("IDENTITY.STAGE/ROOT")).unwrap())
+                .unwrap()
+                .identity_id();
+        fs::write(
+            temp.path().join("IDENTITY.STAGE/LINEAGE"),
+            b"corrupt lineage",
+        )
+        .unwrap();
+
+        let mut storage = HostIdentityStorage::open(temp.path()).unwrap();
+        let mut generated = false;
+        assert_eq!(
+            ensure_identity(
+                &mut storage,
+                StoreDisposition::Fresh,
+                AdoptionPolicy::AllowValidatedExistingState,
+                |bytes| {
+                    generated = true;
+                    bytes.fill(0xA4);
+                    Ok(())
+                },
+                no_fault,
+            ),
+            Err(IdentityStartupError::CorruptStagedIdentity)
+        );
+        assert!(!generated);
+        let retained =
+            IdentityRoot::decode(&fs::read(temp.path().join("IDENTITY.STAGE/ROOT")).unwrap())
+                .unwrap();
+        assert_eq!(retained.identity_id(), original);
     }
 
     fn copy_identity(source: &Path, destination: &Path) {
@@ -805,6 +1019,95 @@ mod tests {
         );
         assert_eq!(fs::read_dir(target.path()).unwrap().count(), before);
         assert!(!target.path().join(COMMITTED_DIR).exists());
+    }
+
+    #[test]
+    fn committed_identity_only_ignores_identical_stale_stage() {
+        let committed_dir = tempfile::tempdir().unwrap();
+        let committed = boot(committed_dir.path(), 11);
+        copy_identity(
+            &committed_dir.path().join(COMMITTED_DIR),
+            &committed_dir.path().join(PRIMARY_STAGE),
+        );
+
+        let mut storage = HostIdentityStorage::open(committed_dir.path()).unwrap();
+        let mut generated = false;
+        let loaded = ensure_identity(
+            &mut storage,
+            StoreDisposition::Fresh,
+            AdoptionPolicy::AllowValidatedExistingState,
+            |bytes| {
+                generated = true;
+                bytes.fill(0xE1);
+                Ok(())
+            },
+            no_fault,
+        )
+        .unwrap();
+        assert_eq!(loaded.identity_id(), committed.identity_id());
+        assert!(!generated);
+
+        let other_dir = tempfile::tempdir().unwrap();
+        boot(other_dir.path(), 77);
+        fs::remove_dir_all(committed_dir.path().join(PRIMARY_STAGE)).unwrap();
+        copy_identity(
+            &other_dir.path().join(COMMITTED_DIR),
+            &committed_dir.path().join(PRIMARY_STAGE),
+        );
+        let before = fs::read_dir(committed_dir.path()).unwrap().count();
+        let mut storage = HostIdentityStorage::open(committed_dir.path()).unwrap();
+        let mut generated = false;
+        assert_eq!(
+            ensure_identity(
+                &mut storage,
+                StoreDisposition::Fresh,
+                AdoptionPolicy::AllowValidatedExistingState,
+                |bytes| {
+                    generated = true;
+                    bytes.fill(0xE2);
+                    Ok(())
+                },
+                no_fault,
+            ),
+            Err(IdentityStartupError::AmbiguousStagedIdentity)
+        );
+        assert!(!generated);
+        assert_eq!(fs::read_dir(committed_dir.path()).unwrap().count(), before);
+        assert!(committed_dir.path().join(COMMITTED_DIR).exists());
+        assert!(committed_dir.path().join(PRIMARY_STAGE).exists());
+    }
+
+    #[test]
+    fn partial_valid_conflicting_stage_blocks_committed_identity() {
+        let committed_dir = tempfile::tempdir().unwrap();
+        boot(committed_dir.path(), 19);
+        let other_dir = tempfile::tempdir().unwrap();
+        boot(other_dir.path(), 109);
+        fs::create_dir(committed_dir.path().join(PRIMARY_STAGE)).unwrap();
+        fs::copy(
+            other_dir.path().join("IDENTITY/ROOT"),
+            committed_dir.path().join("IDENTITY.STAGE/ROOT"),
+        )
+        .unwrap();
+
+        let mut storage = HostIdentityStorage::open(committed_dir.path()).unwrap();
+        let mut generated = false;
+        assert_eq!(
+            ensure_identity(
+                &mut storage,
+                StoreDisposition::Fresh,
+                AdoptionPolicy::AllowValidatedExistingState,
+                |bytes| {
+                    generated = true;
+                    bytes.fill(0xAC);
+                    Ok(())
+                },
+                no_fault,
+            ),
+            Err(IdentityStartupError::AmbiguousStagedIdentity)
+        );
+        assert!(!generated);
+        assert!(committed_dir.path().join("IDENTITY.STAGE/ROOT").exists());
     }
 
     #[test]

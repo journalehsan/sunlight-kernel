@@ -124,8 +124,8 @@ sunlightos = [
     "wiseowl-identity/sunlightos",
 ]
 phase375-test = []
-identity-adoption = []
 identity-phase-a-test = []
+identity-phase-a-fault-test = []
 
 [dependencies]
 wiseowl-memory = { path = "../wiseowl-memory", default-features = false }

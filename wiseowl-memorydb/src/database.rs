@@ -16,6 +16,7 @@ use crate::caps::{DbCapability, DbCapabilitySet};
 use crate::codec::fnv1a64;
 use crate::error::DbError;
 use crate::health::{DbHealth, HealthState};
+use crate::identity::LoadedIdentity;
 use crate::index::{IndexSet, RecordLocation};
 use crate::query::{DedupPolicy, MemoryQuery, QueryCursor, QueryOrder, QueryResult, TrustFilter};
 use crate::quotas::DbQuotaConfig;
@@ -366,6 +367,7 @@ pub struct Database<S: DurableStore> {
     open_txs: BTreeMap<u64, OpenTx>,
     stats: DbStats,
     health: DbHealth,
+    identity_context: Option<LoadedIdentity>,
     now_ns: u64,
     wal_path: String,
     wal_bytes: u64,
@@ -413,6 +415,7 @@ impl<S: DurableStore> Database<S> {
             open_txs: BTreeMap::new(),
             stats: DbStats::default(),
             health: DbHealth::starting(),
+            identity_context: None,
             now_ns: 1,
             wal_path: String::from("WAL/wal-000001"),
             wal_bytes: 0,
@@ -437,6 +440,19 @@ impl<S: DurableStore> Database<S> {
 
     pub fn health(&self) -> &DbHealth {
         &self.health
+    }
+
+    /// Attach the validated, read-only installation identity before this
+    /// database instance is published to normal service clients.
+    #[doc(hidden)]
+    pub fn bind_identity_context(&mut self, identity: LoadedIdentity) {
+        self.identity_context = Some(identity);
+    }
+
+    /// Internal startup check; identity is not exposed through MemoryDB IPC.
+    #[doc(hidden)]
+    pub fn identity_context(&self) -> Option<LoadedIdentity> {
+        self.identity_context
     }
 
     pub fn stats(&self) -> DbStats {

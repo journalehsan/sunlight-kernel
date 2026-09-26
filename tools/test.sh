@@ -564,9 +564,9 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release >>
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
-    # Adoption remains disabled in normal builds. The dedicated identity gate
-    # opts in so a pre-identity fixture can exercise the native adoption path.
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,identity-phase-a-test,identity-adoption --no-default-features --release >>"$BUILD_LOG" 2>&1
+    # The Phase A gate injects one stop after a durable staged ROOT so the
+    # next native boot exercises staged recovery on the same state volume.
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,identity-phase-a-test,identity-phase-a-fault-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos,phase375-test --no-default-features --release >>"$BUILD_LOG" 2>&1
 else
@@ -699,7 +699,14 @@ if [[ -r /dev/kvm && -w /dev/kvm ]]; then
 fi
 
 QEMU_OUTPUT=$(mktemp)
-trap "rm -f $QEMU_OUTPUT $BUILD_LOG" EXIT
+QEMU_OUTPUT_FIRST="$QEMU_OUTPUT"
+QEMU_OUTPUT_SECOND=""
+QEMU_OUTPUT_THIRD=""
+QEMU_OUTPUT_DETACHED=""
+ROOT_FIRST=""
+ROOT_SECOND=""
+ROOT_THIRD=""
+trap 'rm -f "$QEMU_OUTPUT_FIRST" "$QEMU_OUTPUT" "$BUILD_LOG" "${QEMU_OUTPUT_SECOND:-}" "${QEMU_OUTPUT_THIRD:-}" "${QEMU_OUTPUT_DETACHED:-}" "${ROOT_FIRST:-}" "${ROOT_SECOND:-}" "${ROOT_THIRD:-}"' EXIT
 
 # Extra QEMU flags for phases that need a virtio-blk disk
 DISK_FLAGS=""
@@ -750,13 +757,18 @@ qemu-system-x86_64 \
     -no-shutdown >>"$BUILD_LOG" 2>&1 &
 QEMU_PID=$!
 
+INITIAL_MARKER="$FINAL_MARKER"
+if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
+    INITIAL_MARKER="[WISEOWL-IDENTITY-A] injected crash after durable staged ROOT"
+fi
+
 # Wait up to TIMEOUT seconds, checking if QEMU is still running
 for ((i=0; i<TIMEOUT; i++)); do
     if ! kill -0 $QEMU_PID 2>/dev/null; then
         break
     fi
     # Check if the final runtime milestone is present (early exit on success).
-    if grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT" 2>/dev/null \
+    if grep -Fq "$INITIAL_MARKER" "$QEMU_OUTPUT" 2>/dev/null \
         && { [[ "$PHASE" == "mm2b" ]] || grep -Fq "[timer] 100 ticks elapsed" "$QEMU_OUTPUT" 2>/dev/null; }; then
         sleep 1
         break
@@ -774,6 +786,172 @@ fi
 wait $QEMU_PID 2>/dev/null
 QEMU_EXIT=$?
 set -e
+
+# Phase A keeps one state image across independent VM boots. Compare the full
+# durable ROOT bytes after each boot, then boot without the volume and ensure
+# the initramfs /state mount-point cannot produce a temporary identity.
+if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
+    if ! command -v mcopy >/dev/null 2>&1; then
+        echo "[test] mcopy is required for the Phase A state-volume reboot check" >&2
+        exit 1
+    fi
+
+    ROOT_FIRST=$(mktemp)
+    ROOT_SECOND=$(mktemp)
+    if ! grep -Fq "$INITIAL_MARKER" "$QEMU_OUTPUT" || \
+        grep -Fq "[WISEOWL-DB] identity loaded:" "$QEMU_OUTPUT" || \
+        ! mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY.STAGE/ROOT "$ROOT_FIRST" >/dev/null 2>&1; then
+        echo "[test] boot 1 did not leave the expected synced staged ROOT" >&2
+        cat "$QEMU_OUTPUT"
+        exit 1
+    fi
+    FIRST_IDENTITY=$(od -An -j 12 -N4 -tx1 "$ROOT_FIRST" | tr -d ' \n' | tr '[:lower:]' '[:upper:]')
+    echo "[test] boot 1 durably staged identity ROOT ($FIRST_IDENTITY), then stopped before publication"
+
+    QEMU_OUTPUT_SECOND=$(mktemp)
+    qemu-system-x86_64 \
+        -cdrom "$ISO_PATH" \
+        -serial file:"$QEMU_OUTPUT_SECOND" \
+        -display none \
+        -m 1024M \
+        -smp "$QEMU_SMP" \
+        $KVM_FLAGS \
+        -device virtio-rng-pci,disable-modern=on \
+        -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 \
+        $DISK_FLAGS \
+        -no-reboot \
+        -no-shutdown >>"$BUILD_LOG" 2>&1 &
+    QEMU_PID=$!
+    for ((i=0; i<TIMEOUT; i++)); do
+        if ! kill -0 "$QEMU_PID" 2>/dev/null; then
+            break
+        fi
+        if grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT_SECOND" 2>/dev/null; then
+            sleep 1
+            break
+        fi
+        sleep 1
+    done
+    if kill -0 "$QEMU_PID" 2>/dev/null; then
+        kill -TERM "$QEMU_PID" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$QEMU_PID" 2>/dev/null || true
+    fi
+    wait "$QEMU_PID" 2>/dev/null || true
+
+    if ! grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT_SECOND" || \
+        ! grep -Fq "identity creation recovered from staged state" "$QEMU_OUTPUT_SECOND" || \
+        ! mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/ROOT "$ROOT_SECOND" >/dev/null 2>&1; then
+        echo "[test] boot 2 did not reload identity from the same state image" >&2
+        cat "$QEMU_OUTPUT_SECOND"
+        exit 1
+    fi
+    STATE_MOUNT_LINE=$(grep -nF '[VFS] FAT volume mounted at /state' "$QEMU_OUTPUT_SECOND" | head -n1 | cut -d: -f1)
+    MEMORYDB_START_LINE=$(grep -nF '[WISEOWL-DB] starting wiseowl-memorydb' "$QEMU_OUTPUT_SECOND" | head -n1 | cut -d: -f1)
+    if [[ -z "$STATE_MOUNT_LINE" || -z "$MEMORYDB_START_LINE" || "$STATE_MOUNT_LINE" -ge "$MEMORYDB_START_LINE" ]]; then
+        echo "[test] persistent /state was not mounted before wiseowl-memorydb startup" >&2
+        cat "$QEMU_OUTPUT_SECOND"
+        exit 1
+    fi
+    SECOND_IDENTITY=$(sed -n 's/^.*identity loaded: \([0-9A-F]\{8\}\)$/\1/p' "$QEMU_OUTPUT_SECOND" | head -n1)
+    if [[ "$FIRST_IDENTITY" != "$SECOND_IDENTITY" ]] || ! cmp -s "$ROOT_FIRST" "$ROOT_SECOND"; then
+        echo "[test] staged identity ROOT changed during native recovery" >&2
+        echo "boot 1 fingerprint: ${FIRST_IDENTITY:-missing}"
+        echo "boot 2 fingerprint: ${SECOND_IDENTITY:-missing}"
+        exit 1
+    fi
+    if ! grep -Fq "lineage sequence=1 continuity_generation=1 genesis=Created" "$QEMU_OUTPUT_SECOND"; then
+        echo "[test] recovered identity did not report genesis lineage values" >&2
+        cat "$QEMU_OUTPUT_SECOND"
+        exit 1
+    fi
+    echo "[test] boot 2 recovered the staged identity and committed genesis ($SECOND_IDENTITY)"
+
+    ROOT_THIRD=$(mktemp)
+    QEMU_OUTPUT_THIRD=$(mktemp)
+    qemu-system-x86_64 \
+        -cdrom "$ISO_PATH" \
+        -serial file:"$QEMU_OUTPUT_THIRD" \
+        -display none \
+        -m 1024M \
+        -smp "$QEMU_SMP" \
+        $KVM_FLAGS \
+        -device virtio-rng-pci,disable-modern=on \
+        -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 \
+        $DISK_FLAGS \
+        -no-reboot \
+        -no-shutdown >>"$BUILD_LOG" 2>&1 &
+    QEMU_PID=$!
+    for ((i=0; i<TIMEOUT; i++)); do
+        if ! kill -0 "$QEMU_PID" 2>/dev/null; then
+            break
+        fi
+        if grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT_THIRD" 2>/dev/null; then
+            sleep 1
+            break
+        fi
+        sleep 1
+    done
+    if kill -0 "$QEMU_PID" 2>/dev/null; then
+        kill -TERM "$QEMU_PID" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$QEMU_PID" 2>/dev/null || true
+    fi
+    wait "$QEMU_PID" 2>/dev/null || true
+    if ! grep -Fq "$FINAL_MARKER" "$QEMU_OUTPUT_THIRD" || \
+        ! mcopy -i target/state-test.img ::/WISEOWL-MEMORYDB/IDENTITY/ROOT "$ROOT_THIRD" >/dev/null 2>&1 || \
+        ! cmp -s "$ROOT_SECOND" "$ROOT_THIRD"; then
+        echo "[test] committed identity did not survive a second native reboot" >&2
+        cat "$QEMU_OUTPUT_THIRD"
+        exit 1
+    fi
+    THIRD_IDENTITY=$(sed -n 's/^.*identity loaded: \([0-9A-F]\{8\}\)$/\1/p' "$QEMU_OUTPUT_THIRD" | head -n1)
+    if [[ "$THIRD_IDENTITY" != "$SECOND_IDENTITY" ]]; then
+        echo "[test] identity fingerprint changed on the third boot" >&2
+        exit 1
+    fi
+    echo "[test] committed identity survived another independent VM boot ($THIRD_IDENTITY)"
+    QEMU_OUTPUT="$QEMU_OUTPUT_SECOND"
+
+    QEMU_OUTPUT_DETACHED=$(mktemp)
+    qemu-system-x86_64 \
+        -cdrom "$ISO_PATH" \
+        -serial file:"$QEMU_OUTPUT_DETACHED" \
+        -display none \
+        -m 1024M \
+        -smp "$QEMU_SMP" \
+        $KVM_FLAGS \
+        -device virtio-rng-pci,disable-modern=on \
+        -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 \
+        -no-reboot \
+        -no-shutdown >>"$BUILD_LOG" 2>&1 &
+    QEMU_PID=$!
+    DETACHED_MARKER="[WISEOWL-DB] persistent /state unavailable; identity startup suspended"
+    for ((i=0; i<TIMEOUT; i++)); do
+        if ! kill -0 "$QEMU_PID" 2>/dev/null; then
+            break
+        fi
+        if grep -Fq "$DETACHED_MARKER" "$QEMU_OUTPUT_DETACHED" 2>/dev/null; then
+            sleep 1
+            break
+        fi
+        sleep 1
+    done
+    if kill -0 "$QEMU_PID" 2>/dev/null; then
+        kill -TERM "$QEMU_PID" 2>/dev/null || true
+        sleep 1
+        kill -KILL "$QEMU_PID" 2>/dev/null || true
+    fi
+    wait "$QEMU_PID" 2>/dev/null || true
+    if ! grep -Fq "$DETACHED_MARKER" "$QEMU_OUTPUT_DETACHED" || \
+        grep -Fq "[WISEOWL-DB] identity loaded:" "$QEMU_OUTPUT_DETACHED" || \
+        grep -Fq "[WISEOWL-DB] registered" "$QEMU_OUTPUT_DETACHED"; then
+        echo "[test] detached state volume did not fail closed explicitly" >&2
+        cat "$QEMU_OUTPUT_DETACHED"
+        exit 1
+    fi
+    echo "[test] detached state volume did not create or publish a replacement identity"
+fi
 
 # Preserve the raw serial evidence when requested, before the EXIT trap removes it.
 # Example: SUNLIGHT_TEST_SERIAL_LOG=target/ipc-serial.log ./tools/test.sh phase2.6

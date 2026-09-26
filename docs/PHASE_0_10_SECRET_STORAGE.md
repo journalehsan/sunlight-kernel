@@ -36,7 +36,7 @@ only `host-key-admin`, `secure-random`, and `logging`.
 | lstat | absent | no symlinks exist today; future symlink support must add no-follow descriptor open |
 | umask | absent | does not affect creation |
 | ownership selection | ordinary create used process UID/GID | secret create uses current service credentials and validates them before writing |
-| fsync/fdatasync/directory sync | absent | `RequireDurability` fails; no durability claim is made |
+| native file/directory sync | absent at Phase 0.10 | syscalls now reach FAT flush and the negotiated VirtIO stable-media barrier; RamFS returns unsupported. `SecretStore` still does not use them, so its durability modes make no stable-media claim |
 
 `O_TRUNC`, `O_NOFOLLOW`, and `O_CLOEXEC` names now exist in libc. Only
 `O_EXCL`, mode-at-create, and `O_CLOEXEC` are part of the completed private
@@ -127,12 +127,13 @@ consumers; the secret helper closes staging descriptors before publish.
 
 Atomic visibility is supported. During a running system, post-publication
 readers see a complete old or complete new secret, never a partial destination.
-There is no `fsync`, `fdatasync`, or directory sync. A process crash before
-rename leaves the old destination and can leave a temp file. A crash after
-rename normally leaves one complete version during that boot. Host crash, VM
-termination, power loss, or storage loss can retain either complete version,
-lose recent contents, or lose rename metadata. No durable atomic replacement
-is claimed.
+The general VFS now has native file and directory sync syscalls, but the secret
+store has not been migrated to them. Its current publication still has atomic
+visibility only: a process crash before rename leaves the old destination and
+can leave a temp file. A crash after rename normally leaves one complete
+version during that boot. Host crash, VM termination, power loss, or storage
+loss can retain either complete version, lose recent contents, or lose rename
+metadata. No durable atomic replacement is claimed for `SecretStore`.
 
 Future durable ordering is:
 

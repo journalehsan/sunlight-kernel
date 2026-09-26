@@ -14,8 +14,8 @@ use wiseowl_memorydb::database::{
     validate_store_read_only, Database, DbCaller, DurableStore, MemoryStore,
 };
 use wiseowl_memorydb::identity::{
-    detect_store_state, ensure_identity, AdoptionPolicy, DetectedStoreState, IdentityDirEntry,
-    IdentityStartupError, IdentityStorage, StoreDisposition,
+    detect_store_state, ensure_identity, AdoptionPolicy, CreationBoundary, DetectedStoreState,
+    IdentityDirEntry, IdentityStartupError, IdentityStorage, StoreDisposition,
 };
 use wiseowl_memorydb::native_ipc::{
     MemoryDbIpcHeader, MemoryDbOp, INLINE_PAYLOAD_THRESHOLD, MEMORYDB_IPC_HEADER_LEN,
@@ -41,6 +41,15 @@ impl NativeIdentityStorage {
         if libc::stat(STATE_DIR).is_err() {
             libc::mkdir(STATE_DIR, 0o700).map_err(|_| IdentityStartupError::Io)?;
         }
+
+        // `/state` also exists in the immutable initramfs as a mount-point
+        // fallback. Prove that this service directory can reach stable media
+        // before inspecting or creating identity state. RAMFS returns
+        // Unsupported here, so a missing state volume cannot produce even a
+        // volatile staged IdentityId.
+        // FAT sync flushes all dirty sectors in the mounted volume, including
+        // the /state directory entry created above, before the block barrier.
+        libc::dir_sync(STATE_DIR).map_err(|_| IdentityStartupError::PersistenceUnavailable)?;
         Ok(Self)
     }
 
@@ -325,16 +334,28 @@ pub extern "C" fn _start() -> ! {
     serial_println!("[WISEOWL-DB] starting wiseowl-memorydb");
     let mut identity_storage = match NativeIdentityStorage::open() {
         Ok(storage) => storage,
+        Err(IdentityStartupError::PersistenceUnavailable) => {
+            serial_println!(
+                "[WISEOWL-DB] persistent /state unavailable; identity startup suspended"
+            );
+            loop {
+                process_yield();
+            }
+        }
         Err(error) => {
             serial_println!("[WISEOWL-DB] identity storage unavailable: {:?}", error);
-            loop { process_yield(); }
+            loop {
+                process_yield();
+            }
         }
     };
     let detected = match detect_store_state(&identity_storage) {
         Ok(state) => state,
         Err(error) => {
             serial_println!("[WISEOWL-DB] identity detection failed: {:?}", error);
-            loop { process_yield(); }
+            loop {
+                process_yield();
+            }
         }
     };
     let mut preopened_store = None;
@@ -351,11 +372,8 @@ pub extern "C" fn _start() -> ! {
             }
         }
     };
-    let adoption_policy = if cfg!(feature = "identity-adoption") {
-        AdoptionPolicy::AllowValidatedExistingState
-    } else {
-        AdoptionPolicy::Disabled
-    };
+    let adoption_policy = AdoptionPolicy::AllowValidatedExistingState;
+    let mut inject_synced_stage_crash = cfg!(feature = "identity-phase-a-fault-test");
     let identity = match ensure_identity(
         &mut identity_storage,
         disposition,
@@ -367,17 +385,36 @@ pub extern "C" fn _start() -> ! {
                 Err(wiseowl_identity::EntropyError)
             }
         },
-        |_| Ok(()),
+        |boundary| {
+            if inject_synced_stage_crash && boundary == CreationBoundary::AfterRootFlush {
+                inject_synced_stage_crash = false;
+                serial_println!("[WISEOWL-IDENTITY-A] injected crash after durable staged ROOT");
+                return Err(IdentityStartupError::InjectedCrash);
+            }
+            Ok(())
+        },
     ) {
         Ok(identity) => identity,
         Err(error) => {
             serial_println!("[WISEOWL-DB] identity suspended: {:?}", error);
-            loop { process_yield(); }
+            loop {
+                process_yield();
+            }
         }
     };
     let fingerprint = identity.diagnostic_fingerprint();
     let fingerprint = core::str::from_utf8(&fingerprint).unwrap_or("????????");
     serial_println!("[WISEOWL-DB] identity loaded: {}", fingerprint);
+    let genesis = match identity.genesis_event_kind() {
+        wiseowl_identity::GenesisEventKind::Created => "Created",
+        wiseowl_identity::GenesisEventKind::ExistingStateAdopted => "ExistingStateAdopted",
+    };
+    serial_println!(
+        "[WISEOWL-DB] lineage sequence={} continuity_generation={} genesis={}",
+        identity.lineage_sequence().get(),
+        identity.continuity_generation().get(),
+        genesis
+    );
     if identity.recovered_from_staging() {
         serial_println!("[WISEOWL-DB] identity creation recovered from staged state");
     }
@@ -397,6 +434,13 @@ pub extern "C" fn _start() -> ! {
             }
         }
     };
+    db.bind_identity_context(identity);
+    if db.identity_context().is_none() {
+        serial_println!("[WISEOWL-DB] identity context unavailable; readiness withheld");
+        loop {
+            process_yield();
+        }
+    }
 
     let ep = endpoint_create();
     if nameserver_register(ENDPOINT_NAME, ep) {

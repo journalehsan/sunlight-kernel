@@ -61,13 +61,7 @@ fn main() {
             }
         }
     };
-    let adoption_requested = cfg!(feature = "identity-adoption")
-        && std::env::var("WISEOWL_IDENTITY_ADOPT_EXISTING").as_deref() == Ok("1");
-    let adoption_policy = if adoption_requested {
-        AdoptionPolicy::AllowValidatedExistingState
-    } else {
-        AdoptionPolicy::Disabled
-    };
+    let adoption_policy = AdoptionPolicy::AllowValidatedExistingState;
     let identity = match ensure_identity(
         &mut identity_storage,
         disposition,
@@ -88,8 +82,13 @@ fn main() {
     );
 
     let store = FsStore::open(&data_dir).expect("open wiseowl-memorydb store");
-    let db = Database::open_with_store(store, DbQuotaConfig::default())
-        .expect("open wiseowl-memorydb");
+    let mut db =
+        Database::open_with_store(store, DbQuotaConfig::default()).expect("open wiseowl-memorydb");
+    db.bind_identity_context(identity);
+    if db.identity_context().is_none() {
+        eprintln!("Wise Owl identity context unavailable; service startup suspended");
+        return;
+    }
     let db = Arc::new(Mutex::new(db));
 
     let listener = UnixListener::bind(&socket).expect("bind socket");
