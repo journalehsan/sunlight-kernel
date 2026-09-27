@@ -21,6 +21,8 @@ extern crate std;
 extern crate alloc;
 
 pub mod action_receipts;
+#[cfg(feature = "host")]
+pub mod backup;
 pub mod attributes;
 pub mod caps;
 pub mod census;

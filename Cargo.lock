@@ -3562,6 +3562,7 @@ dependencies = [
  "log",
  "lz4_flex",
  "serde",
+ "sha2",
  "sunlight-ipc",
  "sunlight-libc",
  "tempfile",

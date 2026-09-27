@@ -11,6 +11,33 @@ fn main() -> ExitCode {
         print_help();
         return ExitCode::FAILURE;
     }
+    if args.first().map(String::as_str) == Some("backup") {
+        if args.get(1).map(String::as_str) != Some("inspect") || args.len() != 3 {
+            eprintln!("usage: wiseowl-memorydbctl backup inspect <package-path>");
+            return ExitCode::FAILURE;
+        }
+        return match wiseowl_memorydb::backup::inspect_backup(std::path::Path::new(&args[2])) {
+            Ok(view) => {
+                let m = view.manifest;
+                let fingerprint = m.identity_id.diagnostic_fingerprint();
+                println!("valid=true status=ValidCommittedBackup purpose=Backup activation_allowed=false backup_id={} identity={} lineage={} continuity={} components={} bytes={}",
+                    m.backup_id.fingerprint(), std::str::from_utf8(&fingerprint).unwrap_or("????????"),
+                    m.lineage_sequence, m.continuity_generation, m.components.len(), view.total_bytes);
+                println!("storage_independent=unknown (offline inspection)");
+                for component in &m.components {
+                    println!("component={:?} role={:?} path={} required={} present={} status={} bytes={}",
+                        component.kind, component.role, component.path, component.required, component.present,
+                        if component.present { "sha256-ok" } else { "absent-declared" }, component.size);
+                }
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                let status = wiseowl_memorydb::backup::inspect_package_status(std::path::Path::new(&args[2]));
+                eprintln!("valid=false status={status:?}: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let socket = std::env::var("WISEOWL_MEMORYDB_SOCKET")
         .unwrap_or_else(|_| "/tmp/sunlight/wiseowl-memorydb.sock".to_string());
 
@@ -251,6 +278,7 @@ Usage:
   wiseowl-memorydbctl checkpoint
   wiseowl-memorydbctl compact
   wiseowl-memorydbctl verify
+  wiseowl-memorydbctl backup inspect <package-path>
 
 Env:
   WISEOWL_MEMORYDB_SOCKET  (default /tmp/sunlight/wiseowl-memorydb.sock)

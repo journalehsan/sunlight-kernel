@@ -246,6 +246,13 @@ mod host_store {
     }
 
     impl FsStore {
+        /// Open an existing layout without creating or modifying any files.
+        pub fn open_read_only(root: impl AsRef<Path>) -> Result<Self, DbError> {
+            let root = root.as_ref().to_path_buf();
+            if !root.is_dir() { return Err(DbError::Io("missing root")); }
+            Ok(Self { root })
+        }
+
         pub fn open(root: impl AsRef<Path>) -> Result<Self, DbError> {
             let root = root.as_ref().to_path_buf();
             fs::create_dir_all(&root).map_err(|_| DbError::Io("create root"))?;
@@ -770,6 +777,11 @@ impl<S: DurableStore> Database<S> {
             },
         );
         Ok(id)
+    }
+
+    /// Exact transaction barrier check; diagnostic stats may lag mutations.
+    pub fn has_open_transactions(&self) -> bool {
+        !self.open_txs.is_empty()
     }
 
     fn expire_stale_txs(&mut self) {

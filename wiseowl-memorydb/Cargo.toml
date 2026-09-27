@@ -114,6 +114,7 @@ host = [
     "dep:lz4_flex",
     "wiseowl-memory/host",
     "wiseowl-identity/host",
+    "dep:sha2",
 ]
 # Native SunlightOS daemon + CLI (no_std + alloc + sunlight-ipc).
 sunlightos = [
@@ -142,6 +143,7 @@ sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["global-alloc", "dynamic-heap"] }
 heapless = { version = "0.8", optional = true }
 libc = { version = "0.2", optional = true }
+sha2 = { version = "0.10", default-features = false, optional = true }
 
 [dev-dependencies]
 tempfile = "3"
