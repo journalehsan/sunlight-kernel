@@ -90,6 +90,8 @@ pub struct LinuxProcessState {
     pub poll_wake_tick: Option<u64>,
     /// (eventfd pool index, required write value, waiting to write).
     pub eventfd_wait: Option<(u32, u64, bool)>,
+    /// Underlying pipe ring and direction for a blocked read/write or recv.
+    pub pipe_wait: Option<(u32, bool)>,
     pub termios: crate::arch::x86_64::syscall::LinuxTermios,
     pub altstack: [u64; 3],
     pub tid_address: u64,
@@ -107,6 +109,7 @@ impl LinuxProcessState {
             brk_current: 0,
             poll_wake_tick: None,
             eventfd_wait: None,
+            pipe_wait: None,
             termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
             altstack: [0, 2, 0],
             tid_address: 0,

@@ -975,6 +975,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/linux-thread-probe" | "/usr/bin/linux-thread-probe" => {
             Ok(crate::HELIOS_THREAD_PROBE_ELF_BYTES)
         }
+        "/bin/linux-fionbio-pipe-probe" => Ok(crate::HELIOS_FIONBIO_PROBE_ELF_BYTES),
+        "/bin/linux-recvfrom-probe" => Ok(crate::HELIOS_RECVFROM_PROBE_ELF_BYTES),
         "/bin/helios-probe-runtime"
         | "/usr/bin/helios-probe-runtime"
         | "/bin/linux-uname"

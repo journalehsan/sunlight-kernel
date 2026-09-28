@@ -22,6 +22,7 @@ pub const EPOLLIN: u32 = 0x001;
 pub const EPOLLOUT: u32 = 0x004;
 pub const EPOLLERR: u32 = 0x008;
 pub const EPOLLHUP: u32 = 0x010;
+pub const EPOLLET: u32 = 0x8000_0000;
 
 pub const EPOLL_CTL_ADD: i32 = 1;
 pub const EPOLL_CTL_DEL: i32 = 2;
@@ -33,6 +34,9 @@ pub const EPOLL_EVENT_SIZE: usize = 12;
 #[derive(Clone, Copy)]
 struct Interest {
     events: u32,
+    /// Last observed readiness for edge-triggered interests. An I/O call
+    /// that drains readiness clears this mask through refresh_after_io.
+    last_ready: u32,
     /// `epoll_data_t` as raw little-endian bytes (union of ptr/fd/u32/u64).
     data: [u8; 8],
 }
@@ -82,7 +86,7 @@ pub fn create_epoll_fd(
         // Linux O_CLOEXEC
         flags |= 0x0008_0000;
     }
-    let process = sched.current_process_mut();
+    let process = sched.current_shared_process_mut();
     match process.fd_table.open(
         handle,
         CapRights::new(CapRights::READ | CapRights::WRITE),
@@ -122,7 +126,7 @@ pub fn ctl(
             }
             instance
                 .interests
-                .insert(target_fd, Interest { events, data });
+                .insert(target_fd, Interest { events, data, last_ready: 0 });
             Ok(())
         }
         EPOLL_CTL_MOD => {
@@ -132,6 +136,7 @@ pub fn ctl(
                 .ok_or(EpollError::Noent)?;
             entry.events = events;
             entry.data = data;
+            entry.last_ready = 0;
             Ok(())
         }
         EPOLL_CTL_DEL => {
@@ -156,20 +161,35 @@ pub fn collect_ready(
     maxevents: usize,
     sched: &crate::sched::Scheduler,
 ) -> Result<Vec<ReadyEvent>, EpollError> {
-    let pool = EPOLL_POOL.lock();
+    #[cfg(not(test))]
+    let trace = if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        static TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+        TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 12
+    } else {
+        false
+    };
+    #[cfg(test)]
+    let trace = false;
+    let mut pool = EPOLL_POOL.lock();
     let instance = pool
-        .get(epoll_idx as usize)
-        .and_then(|s| s.as_ref())
+        .get_mut(epoll_idx as usize)
+        .and_then(|s| s.as_mut())
         .ok_or(EpollError::BadFd)?;
 
-    let process = sched.current_process();
+    // Linux CLONE_FILES workers use the group owner's FD table. Looking in
+    // the worker's private placeholder table reports live interests as HUP.
+    let process = sched.current_shared_process();
     let mut out = Vec::new();
 
-    for (&fd, interest) in instance.interests.iter() {
+    for (&fd, interest) in instance.interests.iter_mut() {
         if out.len() >= maxevents {
             break;
         }
         let Some(entry) = process.fd_table.get(fd) else {
+            if trace {
+                crate::serial_println!("[HELIOS-EPOLL-TRACE] fd={} missing events={:#x}", fd, interest.events);
+            }
             // Closed target: surface as ERR|HUP if caller cares about errors.
             if interest.events & (EPOLLERR | EPOLLHUP) != 0 || interest.events & EPOLLIN != 0 {
                 out.push(ReadyEvent {
@@ -182,6 +202,13 @@ pub fn collect_ready(
 
         let mut revents = 0u32;
         let handle = entry.handle;
+        if trace {
+            let (readable, writable) = fd_ready(fd, handle, process);
+            crate::serial_println!(
+                "[HELIOS-EPOLL-TRACE] fd={} handle={:#x} interest={:#x} readable={} writable={}",
+                fd, handle.0, interest.events, readable, writable
+            );
+        }
 
         if interest.events & EPOLLIN != 0 {
             if fd_ready(fd, handle, process).0 {
@@ -194,6 +221,11 @@ pub fn collect_ready(
             }
         }
 
+        if interest.events & EPOLLET != 0 {
+            let new_edges = revents & !interest.last_ready;
+            interest.last_ready = revents;
+            revents = new_edges;
+        }
         if revents != 0 {
             out.push(ReadyEvent {
                 events: revents,
@@ -205,10 +237,38 @@ pub fn collect_ready(
     Ok(out)
 }
 
+/// Called after a read or write on any descriptor referring to `handle`.
+/// If I/O drained a readiness condition, a later transition can generate a
+/// fresh EPOLLET notification even if no epoll_wait occurred while empty.
+pub fn refresh_after_io(handle: FileHandle, process: &crate::process::Process) {
+    let mut pool = EPOLL_POOL.lock();
+    for instance in pool.iter_mut().filter_map(Option::as_mut) {
+        for (&fd, interest) in instance.interests.iter_mut() {
+            if interest.events & EPOLLET == 0 ||
+                !process.fd_table.get(fd).is_some_and(|entry| entry.handle == handle) {
+                continue;
+            }
+            let (readable, writable) = fd_ready(fd, handle, process);
+            if !readable {
+                interest.last_ready &= !EPOLLIN;
+            }
+            if !writable {
+                interest.last_ready &= !EPOLLOUT;
+            }
+        }
+    }
+}
+
 /// Shared readiness query for poll and epoll, including eventfd counters.
 pub fn fd_ready(fd: i32, handle: FileHandle, process: &crate::process::Process) -> (bool, bool) {
     if handle.is_eventfd() {
         return super::eventfd::readiness(handle.eventfd_index());
+    }
+    if handle.is_socket() {
+        return super::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
+            .map(|(read, write)| (super::pipe::pipe_has_data_or_eof(read),
+                                    super::pipe::pipe_has_space_or_broken(write)))
+            .unwrap_or((true, true));
     }
     (fd_is_readable(fd, handle, process), fd_is_writable(handle))
 }
@@ -236,7 +296,11 @@ fn fd_is_readable(fd: i32, handle: FileHandle, process: &crate::process::Process
 }
 
 fn fd_is_writable(handle: FileHandle) -> bool {
-    if handle.is_tty_stdout() || handle.is_pipe() && handle.pipe_is_write() {
+    if handle.is_pipe() {
+        return handle.pipe_is_write() &&
+            crate::process::pipe::pipe_has_space_or_broken(handle.pipe_index());
+    }
+    if handle.is_tty_stdout() {
         return true;
     }
     // stdout/stderr placeholders

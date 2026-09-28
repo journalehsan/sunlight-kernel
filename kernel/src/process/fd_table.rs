@@ -1,4 +1,6 @@
 use core::num::NonZeroU32;
+use alloc::vec::Vec;
+use spin::Mutex;
 
 #[cfg(test)]
 extern crate alloc;
@@ -78,6 +80,7 @@ impl FileHandle {
     const EPOLL_FLAG: u32 = 0x0800_0000;
     const EPOLL_INDEX_MASK: u32 = 0x00FF_FFFF;
     const EVENTFD_FLAG: u32 = 0x0400_0000;
+    const SOCKET_FLAG: u32 = 0x0200_0000;
     const TTY_TAG_MASK: u32 = 0xF000_0000;
     const TTY_TAB_MASK: u32 = 0x0000_00FF;
 
@@ -155,6 +158,34 @@ impl FileHandle {
     pub fn eventfd_index(self) -> u32 {
         self.0 & Self::EPOLL_INDEX_MASK
     }
+
+    pub fn socket(index: u32, endpoint: u32) -> Self {
+        Self(Self::SOCKET_FLAG | ((endpoint & 1) << 23) | (index & 0x007f_ffff))
+    }
+
+    pub fn is_socket(self) -> bool {
+        self.0 & 0xff00_0000 == Self::SOCKET_FLAG
+    }
+
+    pub fn socket_index(self) -> u32 {
+        self.0 & 0x007f_ffff
+    }
+
+    pub fn socket_endpoint(self) -> usize {
+        ((self.0 >> 23) & 1) as usize
+    }
+}
+
+fn retain_socket(handle: FileHandle) {
+    if handle.is_socket() {
+        super::pipe::socket_retain(handle.socket_index(), handle.socket_endpoint());
+    }
+}
+
+fn retain_pipe(handle: FileHandle) {
+    if handle.is_pipe() {
+        super::pipe::pipe_retain_end(handle.pipe_index(), handle.pipe_is_write());
+    }
 }
 
 fn retain_eventfd(handle: FileHandle) {
@@ -187,6 +218,41 @@ pub struct FileDescriptor {
     pub flags: u32, // O_RDONLY, O_WRONLY, O_RDWR, O_CLOEXEC
     /// Current read/write position (VFS-backed fds only).
     pub offset: usize,
+    /// Index of the shared open file description. Duplication retains this
+    /// index; close-on-exec stays in `flags` on the individual descriptor.
+    description: u32,
+}
+
+struct OpenDescription {
+    status: u32,
+    refs: usize,
+}
+
+static DESCRIPTIONS: Mutex<Vec<Option<OpenDescription>>> = Mutex::new(Vec::new());
+
+fn new_description(flags: u32) -> u32 {
+    let mut pool = DESCRIPTIONS.lock();
+    let item = OpenDescription { status: flags & !0x0008_0000, refs: 1 };
+    if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
+        *slot = Some(item);
+        return idx as u32;
+    }
+    let idx = pool.len();
+    pool.push(Some(item));
+    idx as u32
+}
+
+fn retain_description(idx: u32) {
+    DESCRIPTIONS.lock()[idx as usize].as_mut().expect("live description").refs += 1;
+}
+
+fn release_description(idx: u32) {
+    let mut pool = DESCRIPTIONS.lock();
+    let item = pool[idx as usize].as_mut().expect("live description");
+    item.refs -= 1;
+    if item.refs == 0 {
+        pool[idx as usize] = None;
+    }
 }
 
 /// File descriptor table for a process (max 256 open fds)
@@ -205,6 +271,7 @@ impl FdTable {
             rights: CapRights::new(CapRights::READ | CapRights::FSTAT),
             flags: 0, // O_RDONLY
             offset: 0,
+            description: new_description(0),
         });
         table.entries[1] = Some(FileDescriptor {
             fd: 1,
@@ -212,6 +279,7 @@ impl FdTable {
             rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
             flags: 1, // O_WRONLY
             offset: 0,
+            description: new_description(1),
         });
         table.entries[2] = Some(FileDescriptor {
             fd: 2,
@@ -219,6 +287,7 @@ impl FdTable {
             rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
             flags: 1, // O_WRONLY
             offset: 0,
+            description: new_description(1),
         });
         table
     }
@@ -238,6 +307,7 @@ impl FdTable {
                 rights: CapRights::new(CapRights::READ | CapRights::FSTAT),
                 flags: 0,
                 offset: 0,
+                description: new_description(0),
             });
             table.entries[1] = Some(FileDescriptor {
                 fd: 1,
@@ -245,6 +315,7 @@ impl FdTable {
                 rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
                 flags: 1,
                 offset: 0,
+                description: new_description(1),
             });
             table.entries[2] = Some(FileDescriptor {
                 fd: 2,
@@ -252,6 +323,7 @@ impl FdTable {
                 rights: CapRights::new(CapRights::WRITE | CapRights::FSTAT),
                 flags: 1,
                 offset: 0,
+                description: new_description(1),
             });
             table
         }
@@ -264,7 +336,7 @@ impl FdTable {
         rights: CapRights,
         flags: u32,
     ) -> Result<i32, FdError> {
-        self.open_from(0, handle, rights, flags, 0)
+        self.open_from(0, handle, rights, flags, 0, None)
     }
 
     fn open_from(
@@ -274,6 +346,7 @@ impl FdTable {
         rights: CapRights,
         flags: u32,
         offset: usize,
+        shared_description: Option<u32>,
     ) -> Result<i32, FdError> {
         if min_fd < 0 {
             return Err(FdError::InvalidFd);
@@ -287,6 +360,14 @@ impl FdTable {
             .find_map(|(idx, entry)| entry.is_none().then_some(idx))
             .ok_or(FdError::NoSlots)?;
         let fd = slot as i32;
+        let description = if let Some(idx) = shared_description {
+            retain_description(idx);
+            retain_socket(handle);
+            retain_pipe(handle);
+            idx
+        } else {
+            new_description(flags)
+        };
         retain_eventfd(handle);
         self.entries[slot] = Some(FileDescriptor {
             fd,
@@ -294,6 +375,7 @@ impl FdTable {
             rights,
             flags,
             offset,
+            description,
         });
 
         Ok(fd)
@@ -316,6 +398,7 @@ impl FdTable {
             return Err(FdError::InvalidFd);
         }
         let entry = self.entries[fd as usize].take().ok_or(FdError::InvalidFd)?;
+        release_description(entry.description);
         release_eventfd(entry.handle);
         Ok(entry)
     }
@@ -333,6 +416,7 @@ impl FdTable {
                 .unwrap_or(false)
             {
                 handles[idx] = entry.take().map(|descriptor| {
+                    release_description(descriptor.description);
                     release_eventfd(descriptor.handle);
                     descriptor.handle
                 });
@@ -347,6 +431,7 @@ impl FdTable {
         let mut handles = [None; 256];
         for (idx, entry) in self.entries.iter_mut().enumerate() {
             handles[idx] = entry.take().map(|descriptor| {
+                release_description(descriptor.description);
                 release_eventfd(descriptor.handle);
                 descriptor.handle
             });
@@ -368,12 +453,32 @@ impl FdTable {
         })
     }
 
+    pub fn contains_pipe_ring(&self, ring: u32) -> bool {
+        self.entries.iter().flatten().any(|entry| {
+            let handle = entry.handle;
+            handle.is_pipe() && handle.pipe_index() == ring
+                || handle.is_socket() && super::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
+                    .is_some_and(|(read, write)| read == ring || write == ring)
+        })
+    }
+
     /// Get a mutable file descriptor
     pub fn get_mut(&mut self, fd: i32) -> Option<&mut FileDescriptor> {
         if fd < 0 || fd >= 256 {
             return None;
         }
         self.entries[fd as usize].as_mut()
+    }
+
+    pub fn status_flags(&self, fd: i32) -> Option<u32> {
+        let idx = self.get(fd)?.description;
+        DESCRIPTIONS.lock().get(idx as usize)?.as_ref().map(|item| item.status)
+    }
+
+    pub fn set_status_flags(&self, fd: i32, flags: u32) -> Result<(), FdError> {
+        let idx = self.get(fd).ok_or(FdError::InvalidFd)?.description;
+        DESCRIPTIONS.lock()[idx as usize].as_mut().expect("live description").status = flags & !0x0008_0000;
+        Ok(())
     }
 
     /// Install a descriptor at a fixed fd number, replacing any existing
@@ -391,8 +496,16 @@ impl FdTable {
             return Err(FdError::InvalidFd);
         }
         retain_eventfd(handle);
+        retain_socket(handle);
+        retain_pipe(handle);
         if let Some(displaced) = self.entries[fd as usize] {
             release_eventfd(displaced.handle);
+            release_description(displaced.description);
+            if displaced.handle.is_pipe() {
+                super::pipe::pipe_close_end(displaced.handle.pipe_index(), displaced.handle.pipe_is_write());
+            } else if displaced.handle.is_socket() {
+                super::pipe::socket_close(displaced.handle.socket_index(), displaced.handle.socket_endpoint());
+            }
         }
         self.entries[fd as usize] = Some(FileDescriptor {
             fd,
@@ -400,6 +513,7 @@ impl FdTable {
             rights,
             flags,
             offset: 0,
+            description: new_description(flags),
         });
         Ok(())
     }
@@ -429,7 +543,7 @@ impl FdTable {
         if cloexec {
             flags |= O_CLOEXEC;
         }
-        self.open_from(min_fd, orig.handle, orig.rights, flags, orig.offset)
+        self.open_from(min_fd, orig.handle, orig.rights, flags, orig.offset, Some(orig.description))
     }
 
     /// Duplicate `old_fd` onto `new_fd`.
@@ -473,13 +587,15 @@ impl FdTable {
         let orig = *self.get(old_fd).ok_or(FdError::InvalidFd)?;
 
         const O_CLOEXEC: u32 = 0x0008_0000;
-        let displaced = self.entries[new_fd as usize]
-            .take()
-            .map(|descriptor| descriptor.handle);
-        if let Some(handle) = displaced {
-            release_eventfd(handle);
-        }
+        let displaced = self.entries[new_fd as usize].take().map(|descriptor| {
+            release_eventfd(descriptor.handle);
+            release_description(descriptor.description);
+            descriptor.handle
+        });
         retain_eventfd(orig.handle);
+        retain_socket(orig.handle);
+        retain_pipe(orig.handle);
+        retain_description(orig.description);
         let mut flags = orig.flags & !O_CLOEXEC;
         if cloexec {
             flags |= O_CLOEXEC;
@@ -490,6 +606,7 @@ impl FdTable {
             rights: orig.rights,
             flags,
             offset: orig.offset,
+            description: orig.description,
         });
         Ok((new_fd, displaced))
     }
@@ -508,6 +625,9 @@ impl FdTable {
                 entries.add(idx).write(self.entries[idx]);
                 if let Some(entry) = self.entries[idx] {
                     retain_eventfd(entry.handle);
+                    retain_socket(entry.handle);
+                    retain_pipe(entry.handle);
+                    retain_description(entry.description);
                 }
             }
             table.assume_init()
@@ -539,6 +659,20 @@ mod tests {
     use super::*;
 
     const READ: CapRights = CapRights::new(CapRights::READ);
+
+    #[test]
+    fn status_is_shared_by_dup_but_not_independent_open() {
+        let mut table = FdTable::new();
+        let original = table.open(FileHandle(99), READ, 0).unwrap();
+        let duplicate = table.dup(original).unwrap();
+        let separate = table.open(FileHandle(99), READ, 0).unwrap();
+        table.set_status_flags(original, 0x800).unwrap();
+        assert_eq!(table.status_flags(duplicate).unwrap() & 0x800, 0x800);
+        assert_eq!(table.status_flags(separate).unwrap() & 0x800, 0);
+        table.close(original).unwrap();
+        table.set_status_flags(duplicate, 0).unwrap();
+        assert_eq!(table.status_flags(duplicate).unwrap() & 0x800, 0);
+    }
 
     #[test]
     fn closed_descriptor_is_reused_indefinitely() {

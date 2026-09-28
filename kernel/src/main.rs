@@ -242,6 +242,10 @@ static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-li
 static HELIOS_PROBE_ELF_BYTES: &[u8] = include_bytes!("../../target/helios-probes/linux-probe-all");
 static HELIOS_THREAD_PROBE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/helios-probes/linux-thread-probe");
+static HELIOS_FIONBIO_PROBE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/helios-probes/linux-fionbio-pipe-probe");
+static HELIOS_RECVFROM_PROBE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/helios-probes/linux-recvfrom-probe");
 static HELIOS_PROBE_RUNTIME_ELF_BYTES: &[u8] =
     include_bytes!("../../target/helios-probes/linux-probe-runtime");
 static SBASE_ECHO_ELF_BYTES: &[u8] = include_bytes!("../../target/helios-probes/sbase-echo");
@@ -3916,6 +3920,7 @@ fn setup_key_injection() {
         "phase2b5" => build_phase2b5_sequence(),
         "helios-proven-tier1" => build_helios_proven_tier1_sequence(),
         "helios-thread-probe" => build_helios_thread_probe_sequence(),
+        "helios-io-probe" => build_helios_io_probe_sequence(),
         "helios-note-regression" => build_helios_note_regression_sequence(),
         "helios-static-runtime" => build_helios_static_runtime_sequence(),
         "yazi-baseline" => build_yazi_sequence(b"/bin/yazi-baseline"),
@@ -4003,6 +4008,23 @@ fn build_helios_thread_probe_sequence() -> [u8; 12288] {
     }
     append_injected_delay(&mut s, &mut len, 256);
     append_injected_command(&mut s, &mut len, b"/bin/linux-thread-probe");
+    s
+}
+
+#[cfg(feature = "key_inject")]
+fn build_helios_io_probe_sequence() -> [u8; 12288] {
+    let mut s = [0u8; 12288];
+    let mut len = 0usize;
+    append_injected_delay(&mut s, &mut len, 1536);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    append_injected_delay(&mut s, &mut len, 128);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 256);
+    append_injected_command(&mut s, &mut len, b"/bin/linux-fionbio-pipe-probe");
+    append_injected_delay(&mut s, &mut len, 1024);
+    append_injected_command(&mut s, &mut len, b"/bin/linux-recvfrom-probe");
     s
 }
 

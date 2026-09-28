@@ -323,6 +323,12 @@ pub fn validate_current_write(address: u64, len: usize) -> Result<(), UserMemory
     validate_process_write(scheduler.current_process(), hhdm, address, len)
 }
 
+pub fn validate_current_read(address: u64, len: usize) -> Result<(), UserMemoryError> {
+    let hhdm = current_hhdm()?;
+    let scheduler = crate::sched::SCHEDULER.lock();
+    validate_process_read(scheduler.current_process(), hhdm, address, len)
+}
+
 pub fn copy_to_process_bytes(
     process: &Process,
     hhdm: VirtAddr,

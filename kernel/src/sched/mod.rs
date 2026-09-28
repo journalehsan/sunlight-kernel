@@ -1763,6 +1763,28 @@ impl Scheduler {
         }
     }
 
+    /// Registration, readiness and notification all run under the scheduler
+    /// lock; a producer cannot slip between the failed I/O and registration.
+    pub fn wake_linux_pipe(&mut self, ring: u32) {
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state != ProcessState::BlockedOnTimer {
+                continue;
+            }
+            let wait = self.processes[idx].linux_state().and_then(|s| s.pipe_wait);
+            let poll = wait.is_none()
+                && self.processes[idx].linux_state().is_some_and(|s| s.poll_wake_tick.is_some())
+                && self.processes[self.shared_process_index(idx)].fd_table.contains_pipe_ring(ring);
+            let ready = wait.is_some_and(|(key, writing)| key == ring && if writing {
+                crate::process::pipe::pipe_has_space_or_broken(key)
+            } else {
+                crate::process::pipe::pipe_has_data_or_eof(key)
+            });
+            if poll || ready {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
     fn expire_linux_poll_timeouts(&mut self) {
         let now = self.global_tick;
         for idx in 0..self.processes.len() {
@@ -1781,6 +1803,7 @@ impl Scheduler {
         if let Some(state) = self.processes[idx].linux_state_mut() {
             state.poll_wake_tick = None;
             state.eventfd_wait = None;
+            state.pipe_wait = None;
         }
         self.processes[idx].state = ProcessState::Ready;
         self.remove_from_ready_queues(idx);
@@ -2019,6 +2042,11 @@ impl Scheduler {
         for handle in leaked_fds.into_iter().flatten() {
             if handle.is_pipe() {
                 crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
+                self.wake_linux_pipe(handle.pipe_index());
+            } else if handle.is_socket() {
+                let (read, write) = crate::process::pipe::socket_close(handle.socket_index(), handle.socket_endpoint());
+                self.wake_linux_pipe(read);
+                self.wake_linux_pipe(write);
             } else if handle.is_epoll() {
                 crate::process::epoll::free_instance(handle.epoll_index());
             } else if handle.is_vfs() {

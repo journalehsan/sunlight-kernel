@@ -16,7 +16,6 @@ pub enum EventError {
 pub struct EventFd {
     counter: u64,
     semaphore: bool,
-    pub status: u32,
     refs: usize,
 }
 
@@ -28,7 +27,6 @@ impl EventFd {
         Ok(Self {
             counter: initval as u64,
             semaphore: flags & EFD_SEMAPHORE != 0,
-            status: flags & EFD_NONBLOCK,
             refs: 0,
         })
     }
@@ -154,21 +152,6 @@ pub fn can_write(idx: u32, value: u64) -> bool {
         .is_some_and(|event| event.can_write(value))
 }
 
-pub fn status(idx: u32) -> u32 {
-    EVENTS
-        .lock()
-        .get(idx as usize)
-        .and_then(Option::as_ref)
-        .map(|event| event.status)
-        .unwrap_or(0)
-}
-
-pub fn set_status(idx: u32, flags: u32) {
-    if let Some(Some(event)) = EVENTS.lock().get_mut(idx as usize) {
-        event.status = flags & EFD_NONBLOCK;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,9 +221,6 @@ mod tests {
         assert_eq!(readiness(idx), (true, true));
         release(idx);
         assert_eq!(read(idx), Ok(7));
-        assert_eq!(status(idx), EFD_NONBLOCK);
-        set_status(idx, 0);
-        assert_eq!(status(idx), 0);
         release(idx);
         assert_eq!(readiness(idx), (false, false));
         assert_eq!(read(idx), Err(EventError::Invalid));

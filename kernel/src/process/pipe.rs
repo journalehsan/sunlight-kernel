@@ -19,6 +19,89 @@ pub struct Pipe {
 /// Global pipe pool (slot table, None = free slot)
 static PIPE_POOL: spin::Mutex<Vec<Option<Pipe>>> = spin::Mutex::new(Vec::new());
 
+/// A Unix stream pair uses two of the existing pipe rings, one in each
+/// direction. Endpoints retain their own status descriptions in FdTable.
+struct SocketPair {
+    incoming: [u32; 2],
+    refs: [usize; 2],
+}
+
+static SOCKET_PAIRS: spin::Mutex<Vec<Option<SocketPair>>> = spin::Mutex::new(Vec::new());
+
+pub fn socket_stream(index: u32, endpoint: usize) -> Option<(u32, u32)> {
+    SOCKET_PAIRS.lock().get(index as usize)?.as_ref().map(|pair| {
+        (pair.incoming[endpoint], pair.incoming[1 - endpoint])
+    })
+}
+
+pub fn socket_retain(index: u32, endpoint: usize) {
+    let streams = {
+        let mut pool = SOCKET_PAIRS.lock();
+        let pair = pool[index as usize].as_mut().expect("live socket pair");
+        pair.refs[endpoint] += 1;
+        (pair.incoming[endpoint], pair.incoming[1 - endpoint])
+    };
+    let mut pool = PIPE_POOL.lock();
+    pool[streams.0 as usize].as_mut().expect("live read ring").add_reader();
+    pool[streams.1 as usize].as_mut().expect("live write ring").add_writer();
+}
+
+pub fn socket_close(index: u32, endpoint: usize) -> (u32, u32) {
+    let streams = {
+        let mut pool = SOCKET_PAIRS.lock();
+        let pair = pool[index as usize].as_mut().expect("live socket pair");
+        pair.refs[endpoint] -= 1;
+        let streams = (pair.incoming[endpoint], pair.incoming[1 - endpoint]);
+        if pair.refs == [0, 0] {
+            pool[index as usize] = None;
+        }
+        streams
+    };
+    pipe_close_end(streams.0, false);
+    pipe_close_end(streams.1, true);
+    streams
+}
+
+pub fn create_socketpair(sched: &mut crate::sched::Scheduler, flags: u32) -> Result<(i32, i32), PipeError> {
+    use crate::process::fd_table::{CapRights, FileHandle};
+    let first = alloc_pipe();
+    let second = alloc_pipe();
+    let index = {
+        let mut pool = SOCKET_PAIRS.lock();
+        let item = SocketPair { incoming: [first, second], refs: [1, 1] };
+        if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
+            *slot = Some(item);
+            idx as u32
+        } else {
+            let idx = pool.len();
+            pool.push(Some(item));
+            idx as u32
+        }
+    };
+    let rights = CapRights::new(CapRights::READ | CapRights::WRITE);
+    let (a, b) = {
+        let table = &mut sched.current_shared_process_mut().fd_table;
+        let a = match table.open(FileHandle::socket(index, 0), rights, flags | 2) {
+            Ok(fd) => fd,
+            Err(_) => {
+                socket_close(index, 0);
+                socket_close(index, 1);
+                return Err(PipeError::BadFd);
+            }
+        };
+        match table.open(FileHandle::socket(index, 1), rights, flags | 2) {
+            Ok(fd) => (a, fd),
+            Err(_) => {
+                let _ = table.take(a);
+                socket_close(index, 0);
+                socket_close(index, 1);
+                return Err(PipeError::BadFd);
+            }
+        }
+    };
+    Ok((a, b))
+}
+
 /// Result type for pipe operations
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PipeResult {
@@ -38,56 +121,6 @@ impl Pipe {
             readers: 1,
             writers: 1,
         }
-    }
-
-    /// Read data from pipe (non-blocking for now)
-    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, PipeError> {
-        if self.data_len == 0 {
-            if self.writers == 0 {
-                // EOF: no data and no writers
-                return Ok(0);
-            }
-            // No data available yet (would block in real implementation)
-            return Ok(0);
-        }
-
-        let to_read = core::cmp::min(buf.len(), self.data_len);
-
-        // Copy data from pipe buffer to user buffer
-        for i in 0..to_read {
-            buf[i] = self.buffer[(self.read_pos + i) % PIPE_BUFFER_SIZE];
-        }
-
-        self.read_pos = (self.read_pos + to_read) % PIPE_BUFFER_SIZE;
-        self.data_len -= to_read;
-
-        Ok(to_read)
-    }
-
-    /// Write data to pipe (non-blocking for now)
-    pub fn write(&mut self, buf: &[u8]) -> Result<usize, PipeError> {
-        if self.readers == 0 {
-            // EPIPE: no readers
-            return Err(PipeError::BrokenPipe);
-        }
-
-        let available = PIPE_BUFFER_SIZE - self.data_len;
-        if available == 0 {
-            // Pipe full (would block in real implementation)
-            return Ok(0);
-        }
-
-        let to_write = core::cmp::min(buf.len(), available);
-
-        // Copy data from user buffer to pipe buffer
-        for i in 0..to_write {
-            self.buffer[(self.write_pos + i) % PIPE_BUFFER_SIZE] = buf[i];
-        }
-
-        self.write_pos = (self.write_pos + to_write) % PIPE_BUFFER_SIZE;
-        self.data_len += to_write;
-
-        Ok(to_write)
     }
 
     pub fn add_reader(&mut self) {
@@ -162,6 +195,18 @@ pub fn pipe_has_data_or_eof(pool_idx: u32) -> bool {
     }
 }
 
+pub fn pipe_has_space_or_broken(pool_idx: u32) -> bool {
+    let pool = PIPE_POOL.lock();
+    pool.get(pool_idx as usize).and_then(Option::as_ref)
+        .is_none_or(|pipe| pipe.readers == 0 || pipe.data_len < PIPE_BUFFER_SIZE)
+}
+
+pub fn pipe_state(pool_idx: u32) -> Option<(usize, u32, u32)> {
+    let pool = PIPE_POOL.lock();
+    pool.get(pool_idx as usize).and_then(Option::as_ref)
+        .map(|pipe| (pipe.data_len, pipe.readers, pipe.writers))
+}
+
 /// Read from a pipe (non-blocking)
 pub fn pipe_read(pool_idx: u32, buf: &mut [u8]) -> PipeResult {
     let mut pool = PIPE_POOL.lock();
@@ -199,7 +244,7 @@ pub fn pipe_write(pool_idx: u32, buf: &[u8]) -> PipeResult {
         }
 
         let available = PIPE_BUFFER_SIZE - pipe.data_len;
-        if available == 0 {
+        if available == 0 || (buf.len() <= PIPE_BUFFER_SIZE && available < buf.len()) {
             return PipeResult::WouldBlock;
         }
 
@@ -236,6 +281,13 @@ pub fn pipe_close_end(pool_idx: u32, is_write: bool) {
         if pipe.readers == 0 && pipe.writers == 0 {
             pool[pool_idx as usize] = None;
         }
+    }
+}
+
+pub fn pipe_retain_end(pool_idx: u32, is_write: bool) {
+    let mut pool = PIPE_POOL.lock();
+    if let Some(Some(pipe)) = pool.get_mut(pool_idx as usize) {
+        if is_write { pipe.add_writer(); } else { pipe.add_reader(); }
     }
 }
 

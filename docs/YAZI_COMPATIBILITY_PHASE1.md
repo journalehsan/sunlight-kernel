@@ -466,3 +466,226 @@ The kernel host test target remains blocked by its existing freestanding
 panic-handler collision. Kernel scheduler/VM and futex lifecycle are covered
 here by the boot-time MM-0 tests and the live two-CPU userspace probe rather
 than by host-only tests that would mirror internal fields.
+
+## Phase 1.3: nonblocking descriptions and observed Unix stream receive
+
+The bounded *pre-change* pinned Yazi run traced FD creation before modifying
+`recvfrom` or `FIONBIO`:
+
+| FD | Creation and duplication | Object and flags at first observed call |
+| --- | --- | --- |
+| 8 | `socketpair(53, AF_UNIX=1, SOCK_STREAM\|SOCK_NONBLOCK\|SOCK_CLOEXEC=0x80801, protocol=0, pair=0x7fffffffbed8)` created FDs 6 and 7; `fcntl(6, F_DUPFD_CLOEXEC=1030, 3)` produced FD 8; `fcntl(8, F_SETFD, FD_CLOEXEC)` followed. | FD 8 shares FD 6's **open description**. The prior kernel represented its inbound direction with pipe ring 0 (`handle=0x80000000`) and reported flags `0x80000`, accidentally omitting `O_NONBLOCK` from its status. Peer FD 7 writes into that ring; the socketpair is bidirectional. |
+| 11 | `socketpair(53, AF_UNIX=1, SOCK_STREAM\|SOCK_CLOEXEC=0x80001, protocol=0, pair=0x7fffffff8748)` created FD 11 and FD 12. | FD 11 is a bidirectional socket endpoint with inbound pipe ring 2 (`handle=0x80000002` in the old kernel), initially represented with `O_RDONLY` plus descriptor `CLOEXEC` (`0x80000` in the old combined field). No duplicate of FD 11 appears before FIONBIO; FD 12 is its peer. |
+
+The FD 8 pair is created before the Tokio worker clones and FD 8 is consumed
+by worker TID 36 immediately after `epoll_pwait(281, fd=3)` returned events.
+This creation/use sequence supports an inference that FD 8 is a runtime
+reactor/wake channel, rather than an Internet socket. The later FD 9/10 pair
+is involved in the signal-handling sequence, and the FD 11/12 pair is created
+just before `sendto(fd=12, len=0, flags=MSG_DONTWAIT)` and FIONBIO. The trace
+does not identify a specific upstream crate as the owner of each pair.
+
+All six **raw** arguments of the worker's first call are
+`recvfrom(45, fd=8, buf=0x1000a08b00, len=0x80, flags=0,
+src_addr=NULL, addrlen=NULL)`. The result before this phase is raw `-ENOSYS`
+(`0xffffffffffffffda`). Its socket was connected to peer FD 7, created with
+`SOCK_NONBLOCK`. The old endpoint had a pipe receive ring, but the prior trace
+did not record its queued byte count or peer-close state at the instant of the
+call. The first main-thread FIONBIO was
+`ioctl(16, fd=11, request=0x5421, arg=0x7fffffff8de0)` and returned
+`-EINVAL`. Its pointed-to integer value must be read by the new syscall path;
+the old trace only captured the pointer.
+
+The FD-table audit found `FD_CLOEXEC` and `O_NONBLOCK` mixed in each copied
+`FileDescriptor.flags`; `fcntl(F_SETFL)` changed the copy, `pipe2(O_NONBLOCK)`
+ignored its creation flag, and both pipe reads and writes returned `EAGAIN`
+regardless of the flag. Eventfd kept its own status flag. Pipe rings contain
+queued bytes and reader/writer counts; eventfd owns a counter and semaphore
+mode. No general Unix socket object existed: the old `socketpair` returned
+plain pipe descriptors, so `recvfrom` could not validate socket identity.
+
+The implementation now gives every descriptor an index into a reference-counted
+open-description status pool. Dup, dup2/dup3, F_DUPFD, and copied native FD
+tables retain the index; descriptor CLOEXEC remains on the individual entry.
+`F_GETFL`, `F_SETFL`, `FIONBIO`, and creation flags consult the same status;
+the eventfd counter no longer owns a parallel `O_NONBLOCK` field. An
+AF_UNIX/SOCK_STREAM socketpair uses two existing pipe rings, one per direction,
+with tagged socket endpoints, separate status descriptions and reference
+counts. `read`, `write`, `sendto`, and `recvfrom` use the same underlying byte
+transfer path; poll/epoll readiness asks the rings about data, capacity, or
+EOF independently of `O_NONBLOCK`. Blocking calls register a ring wait while
+holding the scheduler lock, rewind the syscall and sleep until a writer,
+reader or close wakes them. The scope remains Unix stream socketpair; other
+socket families, datagrams and source-address copyout are not claimed.
+
+Progress ledger (runtime items only change after pinned Yazi evidence):
+
+```text
+[x] ELF loaded
+[x] main process created
+[x] affinity query succeeded
+[x] eventfd created
+[x] Linux threads created
+[x] workers execute userspace
+[x] TLS verified
+[x] futex wait/wake observed
+[x] shared FD table verified
+[x] FIONBIO pipe-backed socket path succeeds in pinned Yazi
+[x] recvfrom observed nonblocking empty-queue path returns EAGAIN
+[ ] runtime I/O driver remains operational
+[x] Tokio workers/reactor and main terminal setup positively established
+[ ] Yazi main event loop entered
+[ ] terminal initialized
+[ ] first render
+[ ] directory enumerated
+[ ] interactive navigation
+```
+
+### Phase 1.3 runtime evidence (September 28, 2026)
+
+The exact FD 8 receive was captured after the change on worker TID 36:
+`recvfrom(45, fd=8, buf=0x1000a08b00, len=0x80, flags=0,
+src_addr=NULL, addrlen=NULL)` returned `-EAGAIN` (`0xfffffffffffffff5`).
+Its Unix stream receive ring 0 contained **zero** bytes; FD 8 and its
+duplicate were both readers, and peer FD 7 was still open (ring counts
+`queued=0, readers=2, writers=1`). The open description had `O_NONBLOCK`
+from `SOCK_NONBLOCK` at creation. This is the required absence-of-data
+result, not successful delivery of bytes. The separate guest socket probe
+verified payload receive, duplicated status, nonblocking empty receive,
+peer EOF, bad buffer `EFAULT`, nonsocket `ENOTSOCK`, and bad FD `EBADF`.
+
+Main TID 35's `ioctl(16, fd=11, FIONBIO=0x5421,
+arg=0x7fffffff8de0)` read userspace integer **1**, changed its shared
+open-description status from `0x2` to `0x802`, and succeeded. FD 11 is the
+first endpoint of the AF_UNIX stream pair 11/12, implemented with pipe
+rings; it is a socket descriptor backed by a pipe, not a `pipe2` descriptor.
+No duplicate of FD 11 was observed. The guest pipe probe separately tests
+`pipe`, `pipe2(O_NONBLOCK)`, `dup`, FIONBIO set/clear, F_GETFL, empty-read
+`EAGAIN`, successful transfer, full-pipe `EAGAIN`, and EOF. Later FIONBIO
+calls on FDs 13 and 14 likewise changed `0x2` to `0x802`.
+
+The first follow-on error was on the terminal path: `ioctl(fd=1,
+TCGETS2=0x802c542a, arg=0x7fffffffb560)` returned `-EINVAL` and Yazi
+exited 1. A correct 44-byte x86-64 `termios2` copyout advanced Yazi to
+`TCSETSF2=0x402c542d` and `TCSETS2=0x402c542b`, whose original `-EINVAL`
+again caused exit 1. Supporting the observed 44-byte termios2 input path
+let the main thread enter **raw TTY mode** and continue into additional
+runtime work. No Yazi render or directory listing was visible. Worker
+epoll calls also revealed a shared-FD-table lookup error: initially they
+used a worker's placeholder FD table and reported live socket interests
+as `EPOLLERR|EPOLLHUP`. The lookup now uses the thread group's shared table.
+Infinite empty poll/epoll waits now recheck on wakeup and request immediate
+post-SYSRET scheduling; the final bounded Yazi rerun confirmed that the
+reactor waits after receiving its initial edge event.
+
+The former `yazi-phase1` gate could pass on spawn, affinity and eventfd
+markers alone even when no Yazi render had occurred. Its expected result
+now also requires `[HELIOS-YAZI] first render confirmed`, a milestone that
+must be backed by real renderer evidence before being emitted. An absent
+render marker fails the gate at its bounded timeout. A previous run with
+working termios2 passed the *old* launch-only check, but it does **not**
+establish Yazi Phase 1 acceptance. Eventfd creation at FD 4 is observed;
+an actual Tokio eventfd read/write cycle was not observed, and a persistent
+reactor idle wait remained unverified at that checkpoint (see the final
+reactor trace below). Validated `MADV_DONTNEED` and `MADV_FREE` continue to
+return `-ENOSYS` rather than claiming discard/lazy-free success.
+
+The corrected 180-second acceptance gate **failed** on its next run. Yazi
+entered raw mode, workers 36 and 37 continued to run, then the main thread
+restored cooked mode and all three threads exited cleanly (main status 1).
+The TTY output reported `Failed to read config
+"/root/.config/yazi/yazi.toml"`; the shell serial summary truncates the
+following `Caused by: In...`. The kernel also logged repeated `open(2)`
+rejections with flags `0x88000` and one `0x880c2`. Both include the Linux
+`O_LARGEFILE` bit `0x8000`, which Helios currently excludes from
+`OPEN_SUPPORTED_FLAGS`, so these calls return `-EINVAL` before VFS lookup.
+The `0x880c2` request additionally contains `O_CREAT|O_EXCL|O_RDWR`; do not
+expand this phase into config-file creation or filesystem mutation. A
+bounded path/flag trace was then used to identify precisely which rejected
+read caused the visible error. The `ppoll(271)` `-ENOSYS` calls seen just
+before teardown are another observed, unclassified fallback; do not infer
+they caused the config failure without more evidence. The corrected gate
+reports failure for exit status 1 and the missing first-render marker.
+
+The follow-up path trace confirms the exact failing read: main TID 35's
+`open(2, path="/root/.config/yazi/yazi.toml", flags=0x88000,
+mode=0)` was rejected because `unsupported=0x8000` (`O_LARGEFILE`), returning
+`-EINVAL` before VFS path lookup. Earlier read-only probes for
+`/proc/self/cgroup` and `/proc/sys/kernel/osrelease` received the same
+error; a `0x880c2` create attempt targeted a `/dev/shm/yazi-*` object.
+Accepting or emulating file creation belongs to later, separately scoped
+filesystem work. TID 35's visible config error and exit status 1 are
+directly consistent with this rejected read. The gate now exits promptly
+on a finished Yazi process while continuing to fail without a real render.
+
+The final reactor trace found another directly observed I/O gap. Tokio
+registered FD 4 (eventfd) and FDs 8/9 (Unix streams) with `EPOLLET=0x80000000`;
+FD 9 also requested `EPOLLOUT`. The old epoll readiness query returned the
+same two events on each `epoll_pwait` while the eventfd remained readable and
+FD 9 remained writable, creating a worker busy loop. Interests now remember
+delivered edge readiness. When actual eventfd or pipe/socket I/O drains a
+condition, the descriptor/readiness code rearms that edge; a subsequent
+event can wake the reactor. `EPOLL_CTL_MOD` explicitly rearms. The static
+guest socket probe also verifies eventfd `EPOLLET`: write -> one event,
+second wait while still readable -> zero, drain via read, write again ->
+one new event. Both guest I/O probes pass.
+
+After this correction, unchanged Yazi worker TID 37 received **one**
+epoll event from the writable Unix stream; the next infinite
+`epoll_pwait(fd=3, events=0x100060c000, maxevents=0x400, timeout=-1,
+sigmask=NULL, sigsetsize=8)` returned zero ready events and entered the
+scheduler wait. The subsequent config read failed at the exact `open` path
+and status above; Yazi exited 1 without a first render. The workers and
+reactor operated while main began terminal setup. A real eventfd read/write
+cycle, directory enumeration and interactive navigation remain unverified.
+The epoll empty-readiness check and wait registration now run under the
+same scheduler lock used by event producers and wakeups, closing the
+check-to-sleep lost-wakeup window on the observed reactor path.
+Generic `poll` also rechecks readiness and registers its wait under that
+lock after userspace copyout, so pipe, eventfd and TTY producers cannot
+miss a poller between those operations. Infinite waits retry the syscall
+on wakeup instead of returning a false zero-ready result.
+
+The final bounded eventfd trace captured two actual Yazi
+`write(fd=4, value=1)` operations, with FD 4 changing from unreadable to
+readable in the reactor's epoll query. No matching Yazi eventfd read was
+recorded before the main thread's config-read failure and orderly worker
+teardown, so a complete Tokio eventfd drain cycle remains unproven.
+
+The last pinned QEMU rerun after the atomic generic `poll` change again
+returned zero from `ioctl(fd=11, FIONBIO, &one)` and `-EAGAIN` from an empty
+nonblocking Unix stream receive. Worker TID 37 obtained two initial reactor
+events, then the next `epoll_pwait(fd=3, maxevents=1024, timeout=-1)` found
+zero ready events and slept; no repeated edge-event loop occurred. Main TID
+35 again rejected `open("/root/.config/yazi/yazi.toml", 0x88000, 0)` for
+unsupported `O_LARGEFILE=0x8000` before lookup, printed the config error,
+restored cooked TTY mode and exited 1. Workers 36 and 37 exited cleanly.
+The gate failed because no first render was observed, as required. The
+two-CPU thread probe, guest I/O probes, Helios Note QEMU regression and
+single-thread Linux runtime gate all passed after the wait change; the
+24-test compatibility host suite, kernel package check and `git diff --check`
+also passed.
+
+### Phase 1.3 acceptance ledger
+
+| Criterion | Evidence and current result |
+| --- | --- |
+| FD 8 provenance, arguments | AF_UNIX SOCK_STREAM socketpair 6/7, FD 8 duplicates 6; six raw arguments and `-EAGAIN` in the worker trace above. |
+| FD 11 FIONBIO | AF_UNIX stream endpoint 11, backed by pipe rings; userspace `int=1` changed status `0x2 -> 0x802` and returned zero. |
+| Generic status | Open-description pool shares `O_NONBLOCK` among dup and cloned FD tables; FIONBIO, F_SETFL, F_GETFL, pipe2 and socket creation consult it. |
+| Pipe/socket receive | Live Linux probes pass empty/nonempty/EOF, full-pipe write and duplicate cases; socket receives preserve Unix stream semantics and distinct `EBADF`/`ENOTSOCK`/`EFAULT`. |
+| Worker/reactor | Two CPU threads run with shared FD state; Tokio epoll interest includes `EPOLLET`, and a worker goes from one returned event to a zero-ready wait after edge handling. |
+| Eventfd runtime I/O | Real Yazi created FD 4, registered it with epoll, wrote value 1 twice and observed readability. A direct Yazi read/drain was **not** established; the live guest edge probe exercised that cycle separately. |
+| Yazi UI acceptance | **Failed**: TID 35 `open("/root/.config/yazi/yazi.toml", 0x88000, 0)` returned `-EINVAL` for unsupported `O_LARGEFILE=0x8000`, and Yazi exited 1 with no first render. This is small read-side Linux open flag work, but the observed `/dev/shm/yazi-*` `O_CREAT|O_EXCL|O_RDWR` request touches the separately deferred filesystem mutation scope. |
+
+Final probes: `helios-io-probe` (`IO_PIPE PASS`, `IO_SOCKET PASS`,
+including the eventfd edge cycle), `helios-thread-probe` (two CPUs, shared
+memory/FD/TLS/child-TID clear), stock `yazi-baseline` (expected ET_DYN
+rejection), `helios-note-regression` (geometry and interactive-ready),
+and `helios-static-runtime` (Linux userspace and Note) passed. The
+`sunlight-compat-linux` host suite passed all 24 tests. Kernel package
+`cargo check` and `git diff --check` passed. The freestanding kernel host
+test target retains the previously recorded duplicate panic-handler
+conflict; native boot MM-0 checks and the guest thread/I/O probes exercise
+the relevant behavior. `yazi-phase1` failed its corrected render gate, as
+required. No Yazi files or filesystem mutation behavior were changed.

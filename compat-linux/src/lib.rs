@@ -383,6 +383,8 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_EVENTFD2 => SHIM_EVENTFD2,
         SYS_SCHED_GETAFFINITY => SHIM_SCHED_GETAFFINITY,
         SYS_MADVISE => SHIM_MADVISE,
+        SYS_RECVFROM => SHIM_RECVFROM,
+        SYS_SENDTO => SHIM_SENDTO,
         SYS_POLL => SHIM_POLL,
         SYS_IOCTL => SHIM_IOCTL,
         SYS_EXIT => SUN_PROCESS_EXIT,
@@ -583,6 +585,8 @@ mod tests {
         assert_eq!(translate_syscall(22), 47); // pipe
         assert_eq!(translate_syscall(293), -25); // pipe2
         assert_eq!(translate_syscall(53), -26); // socketpair
+        assert_eq!(translate_syscall(45), abi::SHIM_RECVFROM);
+        assert_eq!(translate_syscall(44), abi::SHIM_SENDTO);
         assert_eq!(translate_syscall(999), -38);
         assert_eq!(translate_syscall(abi::SYS_FUTEX), abi::SHIM_FUTEX);
         assert_eq!(translate_syscall(abi::SYS_UNAME), abi::SHIM_UNAME);

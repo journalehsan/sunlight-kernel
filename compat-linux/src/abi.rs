@@ -99,6 +99,8 @@ pub const SYS_DUP2: u64 = 33;
 pub const SYS_NANOSLEEP: u64 = 35;
 pub const SYS_GETPID: u64 = 39;
 pub const SYS_SOCKET: u64 = 41;
+pub const SYS_SENDTO: u64 = 44;
+pub const SYS_RECVFROM: u64 = 45;
 pub const SYS_SOCKETPAIR: u64 = 53;
 pub const SYS_CLONE: u64 = 56;
 pub const SYS_FORK: u64 = 57;
@@ -223,6 +225,8 @@ pub const SHIM_READLINKAT: i64 = -39;
 pub const SHIM_EVENTFD2: i64 = -40;
 pub const SHIM_SCHED_GETAFFINITY: i64 = -41;
 pub const SHIM_MADVISE: i64 = -42;
+pub const SHIM_RECVFROM: i64 = -46;
+pub const SHIM_SENDTO: i64 = -47;
 
 pub const MAP_PRIVATE: u64 = 0x02;
 pub const MAP_FIXED: u64 = 0x10;
