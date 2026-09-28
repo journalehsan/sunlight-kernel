@@ -1804,7 +1804,12 @@ fn process_yield() -> u64 {
             // To be safe we can request reschedule; timer path handles queue hygiene.
         }
     });
-    sched::request_reschedule();
+    // Native IPC wait loops call ProcessYield after WouldBlock. Merely setting
+    // the scheduler flag leaves them spinning until the next 10 ms timer tick,
+    // which is a substantial part of a 1024-frame audio period (21.3 ms).
+    // Deliver the existing reschedule IPI after SYSRET, when the saved frame
+    // is in ring 3 and all scheduler locks have been released.
+    sched::request_reschedule_after_sysret();
     0
 }
 

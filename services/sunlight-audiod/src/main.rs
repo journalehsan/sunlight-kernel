@@ -33,6 +33,7 @@ const ENGINE_WAIT_MS: u64 = 8;
 const TONE_DEFAULT_FRAMES: u32 = NATIVE_RATE_HZ; // 1 second
 const DMA_FIRST_LOG_FRAMES: u64 = NATIVE_RATE_HZ as u64 / 2;
 const DMA_STEADY_LOG_FRAMES: u64 = NATIVE_RATE_HZ as u64 * 60;
+const IPC_DIAGNOSTICS: bool = option_env!("SUNLIGHT_AUDIO_IPC_DIAGNOSTICS").is_some();
 
 #[macro_export]
 macro_rules! serial_println {
@@ -52,6 +53,7 @@ struct ServiceState {
     device_id: u16,
     queue: PcmQueue,
     queue_owner: Option<u64>,
+    stream_underruns_base: u32,
     stream_progress: StreamProgressTracker,
     system_settings: SystemSoundSettings,
     system_queue: SystemSoundQueue,
@@ -65,6 +67,10 @@ struct ServiceState {
     persist_dirty: bool,
     status_diag_count: u8,
     pcm_diag_count: u8,
+    last_pump_ms: Option<u64>,
+    pump_gap_max_ms: u64,
+    last_starvation_log_ms: u64,
+    last_logged_underruns: u32,
 }
 
 struct ActiveSystemSound {
@@ -129,6 +135,7 @@ impl ServiceState {
             device_id,
             queue: PcmQueue::new(),
             queue_owner: None,
+            stream_underruns_base: 0,
             stream_progress: StreamProgressTracker::new(),
             system_settings,
             system_queue: SystemSoundQueue::new(),
@@ -142,6 +149,10 @@ impl ServiceState {
             persist_dirty: false,
             status_diag_count: 0,
             pcm_diag_count: 0,
+            last_pump_ms: None,
+            pump_gap_max_ms: 0,
+            last_starvation_log_ms: 0,
+            last_logged_underruns: 0,
         }
     }
 
@@ -194,6 +205,16 @@ impl ServiceState {
         }
     }
 
+    fn stream_underruns(&self) -> u32 {
+        if self.queue_owner.is_none() {
+            return 0;
+        }
+        self.device
+            .as_ref()
+            .map(|dev| dev.underruns().saturating_sub(self.stream_underruns_base))
+            .unwrap_or(0)
+    }
+
     fn start_tone(&mut self, freq_hz: u32, duration_ms: u32) -> bool {
         if self.device.is_none() {
             return false;
@@ -209,19 +230,38 @@ impl ServiceState {
     }
 
     fn pump(&mut self) {
+        let now = monotonic_millis();
+        if let Some(previous) = self.last_pump_ms.replace(now) {
+            self.pump_gap_max_ms = self.pump_gap_max_ms.max(now.saturating_sub(previous));
+        }
         // Catch up all free descriptors before sleeping or handling another
         // IPC request. Bound the burst so producers still get serviced.
         for _ in 0..ENGINE_PERIOD_COUNT {
-            self.pump_period();
+            if !self.pump_period() {
+                break;
+            }
+        }
+        let underruns = self.stream_underruns();
+        if self.queue_owner.is_some()
+            && underruns > self.last_logged_underruns
+            && now.saturating_sub(self.last_starvation_log_ms) >= 1_000
+        {
+            serial_println!(
+                "[AUDIOD][starvation] timestamp_ms={} underruns={} poll_gap_max_ms={} queue_frames={}",
+                now, underruns, self.pump_gap_max_ms, self.queue.len() / 4,
+            );
+            self.last_starvation_log_ms = now;
+            self.last_logged_underruns = underruns;
+            self.pump_gap_max_ms = 0;
         }
     }
 
-    fn pump_period(&mut self) {
+    fn pump_period(&mut self) -> bool {
         if self.tone_frames_left == 0 && self.active_system_sound.is_none() {
             self.activate_next_system_sound();
         }
         let Some(dev) = self.device.as_mut() else {
-            return;
+            return false;
         };
         // Retire old ownership before tagging freshly written descriptors.
         let progress = dev.poll_dma_progress_report();
@@ -232,11 +272,11 @@ impl ServiceState {
             progress.current_period_frames,
         );
         if !dev.can_submit_period() {
-            return;
+            return false;
         }
         let vol = self.volume.effective();
         let mut tmp = [0u8; ENGINE_PERIOD_BYTES];
-        if self.tone_frames_left > 0 {
+        let submitted = if self.tone_frames_left > 0 {
             match dev.fill_sine(&mut self.tone_phase, self.tone_hz, vol) {
                 Ok(true) => {
                     self.stream_progress
@@ -247,11 +287,13 @@ impl ServiceState {
                     if self.tone_frames_left == 0 {
                         serial_println!("[AUDIOD] test-tone done");
                     }
+                    true
                 }
-                Ok(false) => {}
+                Ok(false) => false,
                 Err(_) => {
                     serial_println!("[AUDIOD] tone submit failed");
                     self.tone_frames_left = 0;
+                    false
                 }
             }
         } else if let Some(active) = self.active_system_sound.as_mut() {
@@ -282,11 +324,13 @@ impl ServiceState {
                         );
                         self.active_system_sound = None;
                     }
+                    true
                 }
-                Ok(false) => {}
+                Ok(false) => false,
                 Err(_) => {
                     serial_println!("[AUDIOD] system-sound submit failed");
                     self.active_system_sound = None;
+                    false
                 }
             }
         } else if !self.queue.is_empty() {
@@ -295,7 +339,7 @@ impl ServiceState {
             // popping first used to discard that entire PCM period.
             let n = self.queue.peek_into(&mut tmp);
             if n == 0 {
-                return;
+                return false;
             }
             match dev.fill_pcm(&tmp[..n], vol) {
                 Ok(true) => {
@@ -304,10 +348,19 @@ impl ServiceState {
                         self.stream_progress.tag_period(period, owner, n / 4);
                     }
                     self.queue.consume(n);
+                    true
                 }
-                Ok(false) => {}
-                Err(_) => self.queue.clear(),
+                Ok(false) => false,
+                Err(_) => {
+                    self.queue.clear();
+                    false
+                }
             }
+        } else if self.queue_owner.is_some() {
+            // The media producer may deliver its next period shortly. Keep
+            // free descriptors silent but writable until their DMA deadline.
+            dev.prime_free_silence();
+            false
         } else {
             let filled = dev.fill_silence_ready().unwrap_or(0);
             for offset in 0..filled as usize {
@@ -315,7 +368,8 @@ impl ServiceState {
                     % ENGINE_PERIOD_COUNT;
                 self.stream_progress.clear_period(period);
             }
-        }
+            filled != 0
+        };
         let played = progress.total_frames;
         let log_interval = if self.last_dma_log_frames == 0 {
             DMA_FIRST_LOG_FRAMES
@@ -330,6 +384,7 @@ impl ServiceState {
             );
             self.last_dma_log_frames = played;
         }
+        submitted
     }
 
     fn persist_if_dirty(&mut self) {
@@ -428,9 +483,12 @@ pub extern "C" fn _start() -> ! {
         state.pump();
         match ipc_recv_timeout(ep, ENGINE_WAIT_MS) {
             Some(msg) => {
-                let status_diag =
-                    msg.label == AudiodMsg::GET_STREAM_STATUS && state.status_diag_count < 16;
-                let pcm_diag = msg.label == AudiodMsg::SUBMIT_PCM && state.pcm_diag_count < 4;
+                let status_diag = IPC_DIAGNOSTICS
+                    && msg.label == AudiodMsg::GET_STREAM_STATUS
+                    && state.status_diag_count < 16;
+                let pcm_diag = IPC_DIAGNOSTICS
+                    && msg.label == AudiodMsg::SUBMIT_PCM
+                    && state.pcm_diag_count < 4;
                 if status_diag {
                     serial_println!(
                         "[AUDIOD][status-request] sender_pid={} endpoint={} opcode={:#x} request_words={} status_request_bytes={}",
@@ -492,11 +550,7 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
         AudiodMsg::GET_STATUS | AudiodMsg::GET_VOLUME => pack_audio_status(state.status()),
         AudiodMsg::GET_SYSTEM_SOUNDS => pack_audio_status(state.status()),
         AudiodMsg::GET_STREAM_STATUS => {
-            let underruns = state
-                .device
-                .as_ref()
-                .map(|dev| dev.underruns())
-                .unwrap_or(0);
+            let underruns = state.stream_underruns();
             pack_audio_stream_status(state.stream_progress.status(msg.badge, underruns))
         }
         AudiodMsg::GET_DEVICE => IpcMsg::with_label(AudiodMsg::REPLY)
@@ -597,11 +651,7 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
                     progress.current_period_frames,
                 );
             }
-            let underruns = state
-                .device
-                .as_ref()
-                .map(|dev| dev.underruns())
-                .unwrap_or(0);
+            let underruns = state.stream_underruns();
             let stopped = state.stream_progress.status(msg.badge, underruns);
             state.tone_frames_left = 0;
             state.queue.clear();
@@ -654,6 +704,17 @@ fn submit_pcm(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
     let _ = shm_free(msg.caps[0]);
     match queued {
         Ok(()) => {
+            if state.queue_owner.is_none() {
+                state.last_pump_ms = Some(monotonic_millis());
+                state.pump_gap_max_ms = 0;
+                state.last_starvation_log_ms = 0;
+                state.last_logged_underruns = 0;
+                state.stream_underruns_base = state
+                    .device
+                    .as_ref()
+                    .map(|dev| dev.underruns())
+                    .unwrap_or(0);
+            }
             state.queue_owner = Some(msg.badge);
             if !state
                 .stream_progress
@@ -663,11 +724,7 @@ fn submit_pcm(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
                 state.queue_owner = None;
                 return err(AudiodMsg::ERR_OVERFLOW);
             }
-            let underruns = state
-                .device
-                .as_ref()
-                .map(|dev| dev.underruns())
-                .unwrap_or(0);
+            let underruns = state.stream_underruns();
             pack_audio_stream_status(state.stream_progress.status(msg.badge, underruns))
         }
         Err(_) => err(AudiodMsg::ERR_OVERFLOW),

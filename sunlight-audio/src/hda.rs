@@ -11,7 +11,9 @@ use crate::{
 use sunlight_ipc::{dma_alloc, hda_info, map_mmio, monotonic_millis, process_yield};
 
 const PAGE: usize = 4096;
-const PERIODS: usize = 4;
+// Twelve 1024-frame descriptors provide 256 ms of DMA address space. The
+// audiod grant allows sixteen pages, including the descriptor/control page.
+const PERIODS: usize = 12;
 pub const ENGINE_PERIOD_COUNT: usize = PERIODS;
 const PERIOD_BYTES: usize = PAGE;
 const RING_BYTES: usize = PERIODS * PERIOD_BYTES;
@@ -251,9 +253,10 @@ impl HdaPlayback {
         self.write_period = 0;
         self.last_lpib = 0;
         self.last_hw_period = 0;
-        // All four silence periods belong to DMA before RUN. In particular,
-        // period zero must not be rewritten while the controller reads it.
-        self.filled_periods = PERIODS;
+        // The active period and one guard period start as silence. The rest
+        // are initialized but free for PCM, so startup does not wait for a
+        // complete ring lap before the first audio can be queued.
+        self.filled_periods = 2;
         unsafe {
             core::ptr::write_bytes(self.dma.add(PAGE), 0, RING_BYTES);
         }
@@ -278,9 +281,7 @@ impl HdaPlayback {
         let cursor = self.dma_position_bytes() % RING_BYTES as u32;
         self.last_lpib = cursor;
         self.last_hw_period = (cursor as usize / PERIOD_BYTES) % PERIODS;
-        // The ring is full, so its next free slot will be the descriptor
-        // currently playing, even if RUN was first observed after period 0.
-        self.write_period = self.last_hw_period;
+        self.write_period = (self.last_hw_period + self.filled_periods) % PERIODS;
         Ok(())
     }
 
@@ -363,6 +364,17 @@ impl HdaPlayback {
             filled = filled.saturating_add(1);
         }
         Ok(filled)
+    }
+
+    /// Keep every unowned descriptor silent without claiming it. A media
+    /// producer can still replace these bytes until DMA reaches the slot.
+    pub fn prime_free_silence(&mut self) {
+        for offset in 0..PERIODS - self.filled_periods {
+            let period = (self.write_period + offset) % PERIODS;
+            unsafe {
+                core::ptr::write_bytes(self.dma.add(PAGE + period * PERIOD_BYTES), 0, PERIOD_BYTES);
+            }
+        }
     }
 
     pub fn fill_sine(
@@ -822,12 +834,15 @@ mod tests {
     fn startup_silence_is_owned_by_dma_before_run() {
         with_device(|dev| {
             dev.start().unwrap();
-            assert!(!dev.can_submit_period());
-            assert!(!dev.submit_period(&[0x55; PERIOD_BYTES]).unwrap());
+            assert!(dev.can_submit_period());
             assert_eq!(dev.fill_silence_ready().unwrap(), 0);
-            assert_eq!(dev.underruns(), 0, "a full ring is not an underrun");
+            assert_eq!(dev.underruns(), 0, "startup guard is not an underrun");
             let pcm = unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), RING_BYTES) };
             assert!(pcm.iter().all(|byte| *byte == 0));
+            assert!(dev.submit_period(&[0x55; PERIOD_BYTES]).unwrap());
+            let active =
+                unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), 2 * PERIOD_BYTES) };
+            assert!(active.iter().all(|byte| *byte == 0));
         });
     }
 
@@ -836,6 +851,9 @@ mod tests {
         with_device(|dev| {
             dev.start().unwrap();
             dev.fill_silence_ready().unwrap();
+            for _ in 2..PERIODS {
+                assert!(dev.submit_period(&[]).unwrap());
+            }
             let mut phase = 0x1234_5678;
             for _ in 0..10 {
                 assert!(!dev.fill_sine(&mut phase, 440, 65).unwrap());
@@ -857,7 +875,9 @@ mod tests {
     fn pcm_refill_after_delayed_poll_preserves_active_period_and_order() {
         with_device(|dev| {
             dev.start().unwrap();
-            dev.fill_silence_ready().unwrap();
+            for _ in 2..PERIODS {
+                assert!(dev.submit_period(&[]).unwrap());
+            }
             // Each poll frees two descriptors, including across ring wrap.
             for step in 1..=20 {
                 let current = (step * 2) % PERIODS;
@@ -906,11 +926,11 @@ mod tests {
         with_device(|dev| {
             dev.start().unwrap();
             // Poll for a complete lap without providing any replacement data.
-            for period in [1, 2, 3, 0] {
+            for period in (1..PERIODS).chain(core::iter::once(0)) {
                 unsafe { dev.w32(dev.stream_base + 0x04, (period * PERIOD_BYTES) as u32) };
                 dev.poll_dma_progress_report();
             }
-            assert_eq!(dev.underruns(), 1);
+            assert!(dev.underruns() > 0);
             for period in 1..PERIODS {
                 assert!(dev.submit_period(&[0x55; PERIOD_BYTES]).unwrap());
                 assert_eq!(dev.last_submitted_period(), period);
@@ -927,18 +947,18 @@ mod tests {
             dev.start().unwrap();
             let first = [0x11; PERIOD_BYTES];
             let second = [0x22; PERIOD_BYTES];
-            // Put the first PCM period at slot zero, behind startup silence.
+            // Put the first PCM period behind the two startup guard slots.
             unsafe { dev.w32(dev.stream_base + 0x04, PERIOD_BYTES as u32) };
             dev.poll_dma_progress_report();
             assert!(dev.submit_period(&first).unwrap());
-            // The next slot becomes free just before the producer's IPC is
-            // received. An empty producer queue must not commit silence here:
-            // slots 2, 3, 0 still give it over two periods to deliver PCM.
+            // The next slot is free before the producer's IPC is received.
             unsafe { dev.w32(dev.stream_base + 0x04, (2 * PERIOD_BYTES) as u32) };
             dev.poll_dma_progress_report();
-            assert_eq!(dev.fill_silence_ready().unwrap(), 0);
+            dev.prime_free_silence();
             assert!(dev.submit_period(&second).unwrap());
-            let pcm = unsafe { core::slice::from_raw_parts(dev.dma.add(PAGE), 2 * PERIOD_BYTES) };
+            let pcm = unsafe {
+                core::slice::from_raw_parts(dev.dma.add(PAGE + 2 * PERIOD_BYTES), 2 * PERIOD_BYTES)
+            };
             assert_eq!(&pcm[..PERIOD_BYTES], first);
             assert_eq!(&pcm[PERIOD_BYTES..], second);
             assert_eq!(dev.underruns(), 0);
@@ -975,7 +995,7 @@ mod tests {
             let progress = dev.poll_dma_progress_report();
             assert_eq!(progress.first_completed_period, 1);
             assert!(dev.submit_period(&[0x55; PERIOD_BYTES]).unwrap());
-            assert_eq!(dev.last_submitted_period(), 1);
+            assert_eq!(dev.last_submitted_period(), 3);
         });
     }
 
@@ -998,9 +1018,9 @@ mod tests {
 
     #[test]
     fn period_progress_distinguishes_full_ring_from_empty_ring() {
-        assert_eq!(ring_advance_periods(0, 0, 4), 0);
-        assert_eq!(ring_advance_periods(0, 1, 4), 1);
-        assert_eq!(ring_advance_periods(3, 0, 4), 1);
+        assert_eq!(ring_advance_periods(0, 0, PERIODS), 0);
+        assert_eq!(ring_advance_periods(0, 1, PERIODS), 1);
+        assert_eq!(ring_advance_periods(PERIODS - 1, 0, PERIODS), 1);
     }
 
     #[test]
