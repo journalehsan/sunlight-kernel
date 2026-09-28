@@ -1,0 +1,2 @@
+[ELF] header rejected: NotStaticExecutable
+[SYSCALL] spawn: load failed: ElfLoadFailed

@@ -9,7 +9,13 @@
 
 #![no_std]
 
+extern crate alloc;
+
 pub mod abi;
+pub mod affinity;
+pub mod clone;
+pub mod eventfd;
+pub mod madvise;
 
 use heapless::{LinearMap, String, Vec};
 
@@ -374,9 +380,14 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_OPEN => SUN_OPEN,
         SYS_CLOSE => SUN_CLOSE,
         SYS_SCHED_YIELD => SUN_PROCESS_YIELD,
+        SYS_EVENTFD2 => SHIM_EVENTFD2,
+        SYS_SCHED_GETAFFINITY => SHIM_SCHED_GETAFFINITY,
+        SYS_MADVISE => SHIM_MADVISE,
         SYS_POLL => SHIM_POLL,
         SYS_IOCTL => SHIM_IOCTL,
-        SYS_EXIT | SYS_EXIT_GROUP => SUN_PROCESS_EXIT,
+        SYS_EXIT => SUN_PROCESS_EXIT,
+        SYS_EXIT_GROUP => SHIM_EXIT_GROUP,
+        SYS_FUTEX => SHIM_FUTEX,
 
         SYS_FSTAT => SUN_FSTAT,
         SYS_LSEEK => SUN_LSEEK,
@@ -386,7 +397,8 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_DUP2 => SUN_DUP2,
         SYS_DUP3 => SHIM_DUP3,
 
-        SYS_GETPID | SYS_GETTID => SUN_GETPID,
+        SYS_GETPID => SUN_GETPID,
+        SYS_GETTID => SHIM_GETTID,
         SYS_GETPPID => SUN_GETPPID,
         SYS_GETUID | SYS_GETEUID => SUN_GETUID,
         SYS_GETGID | SYS_GETEGID => SUN_GETGID,
@@ -532,7 +544,7 @@ mod tests {
         assert_eq!(translate_syscall(24), 21); // sched_yield
         assert_eq!(translate_syscall(12), -2); // brk
         assert_eq!(translate_syscall(158), -3); // arch_prctl
-        assert_eq!(translate_syscall(186), 33); // gettid
+        assert_eq!(translate_syscall(186), abi::SHIM_GETTID); // per-thread Linux TID
         assert_eq!(translate_syscall(32), 45); // dup → SunlightOS Dup
         assert_eq!(translate_syscall(33), 46); // dup2 → SunlightOS Dup2
         assert_eq!(translate_syscall(57), 30); // fork → native fail-closed gate
@@ -552,7 +564,7 @@ mod tests {
         assert_eq!(translate_syscall(10), 52); // mprotect
         assert_eq!(translate_syscall(11), 51); // munmap
         assert_eq!(translate_syscall(131), -12); // sigaltstack
-        assert_eq!(translate_syscall(231), 20); // exit_group
+        assert_eq!(translate_syscall(231), abi::SHIM_EXIT_GROUP);
         assert_eq!(translate_syscall(72), 49); // fcntl → SunlightOS Fcntl
         assert_eq!(translate_syscall(257), -15); // openat → frame-shifted sys_open
         assert_eq!(translate_syscall(318), -16); // getrandom
@@ -572,7 +584,7 @@ mod tests {
         assert_eq!(translate_syscall(293), -25); // pipe2
         assert_eq!(translate_syscall(53), -26); // socketpair
         assert_eq!(translate_syscall(999), -38);
-        assert_eq!(translate_syscall(abi::SYS_FUTEX), -38);
+        assert_eq!(translate_syscall(abi::SYS_FUTEX), abi::SHIM_FUTEX);
         assert_eq!(translate_syscall(abi::SYS_UNAME), abi::SHIM_UNAME);
         assert_eq!(translate_syscall(abi::SYS_MKDIR), abi::SHIM_MKDIRAT);
         assert_eq!(translate_syscall(abi::SYS_MKDIRAT), abi::SHIM_MKDIRAT);

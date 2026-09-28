@@ -1567,6 +1567,26 @@ impl Scheduler {
         &mut self.processes[idx]
     }
 
+    /// The leader owns Linux group-wide resources until all its workers are
+    /// reaped. Native tasks resolve to themselves, preserving native semantics.
+    fn shared_process_index(&self, idx: usize) -> usize {
+        let Some(tgid) = self.processes[idx].linux_tgid else {
+            return idx;
+        };
+        self.process_index_by_pid(tgid).unwrap_or(idx)
+    }
+
+    pub fn current_shared_process(&self) -> &Process {
+        let idx = self.current_process_index().unwrap_or(0);
+        &self.processes[self.shared_process_index(idx)]
+    }
+
+    pub fn current_shared_process_mut(&mut self) -> &mut Process {
+        let idx = self.current_process_index().unwrap_or(0);
+        let shared = self.shared_process_index(idx);
+        &mut self.processes[shared]
+    }
+
     // ── Wake / unblock ───────────────────────────────────────────────────────
 
     /// Return the PID of the process currently running on this CPU (0 if none).
@@ -1653,6 +1673,40 @@ impl Scheduler {
         }
     }
 
+    /// Wake at most `limit` Linux waiters on a 32-bit word in this exact VM.
+    /// The global scheduler lock serializes registration and wakeup.
+    pub fn wake_linux_futex(
+        &mut self,
+        identity: crate::process::mm2b_state::AddressSpaceIdentity,
+        address: u64,
+        limit: usize,
+    ) -> usize {
+        let mut woken = 0;
+        for idx in 0..self.processes.len() {
+            if woken == limit {
+                break;
+            }
+            if self.processes[idx].state != ProcessState::BlockedOnIo
+                || self.processes[idx].address_space.identity() != identity
+                || self.processes[idx].linux_state().and_then(|s| s.futex_wait) != Some(address)
+            {
+                continue;
+            }
+            if let Some(state) = self.processes[idx].linux_state_mut() {
+                state.futex_wait = None;
+            }
+            self.processes[idx].state = ProcessState::Ready;
+            self.remove_from_ready_queues(idx);
+            if let Some(cpu) = self.live_owner_core(idx) {
+                request_reschedule_on(cpu);
+            } else {
+                self.enqueue_ready(idx);
+            }
+            woken += 1;
+        }
+        woken
+    }
+
     /// Block the current Linux task until a poll timeout expires. Syscall
     /// entry runs with interrupts disabled, so the task cannot wait in-place;
     /// the next timer interrupt deschedules it and this deadline makes it
@@ -1677,10 +1731,33 @@ impl Scheduler {
                 && self.processes[idx]
                     .linux_state()
                     .is_some_and(|state| state.poll_wake_tick.is_some())
-                && self.processes[idx].fd_table.get(0).is_some_and(|entry| {
+                && self.processes[self.shared_process_index(idx)].fd_table.get(0).is_some_and(|entry| {
                     entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab
                 });
             if waiting_on_tab {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    /// An eventfd transition may wake readers or writers blocked in a Linux
+    /// syscall. Test the condition while holding the scheduler lock so
+    /// registration and notification cannot pass each other.
+    pub fn wake_linux_eventfd(&mut self, event_idx: u32) {
+        for idx in 0..self.processes.len() {
+            let wait = self.processes[idx].linux_state().and_then(|s| s.eventfd_wait);
+            let waiting_on_poll = wait.is_none()
+                && self.processes[idx].linux_state().is_some_and(|s| s.poll_wake_tick.is_some())
+                && self.processes[self.shared_process_index(idx)].fd_table.contains_eventfd(event_idx);
+            let should_wake = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && (waiting_on_poll || wait.is_some_and(|(key, value, writing)| {
+                    key == event_idx && if writing {
+                        crate::process::eventfd::can_write(key, value)
+                    } else {
+                        crate::process::eventfd::readiness(key).0
+                    }
+                }));
+            if should_wake {
                 self.wake_linux_poll_index(idx);
             }
         }
@@ -1703,6 +1780,7 @@ impl Scheduler {
     fn wake_linux_poll_index(&mut self, idx: usize) {
         if let Some(state) = self.processes[idx].linux_state_mut() {
             state.poll_wake_tick = None;
+            state.eventfd_wait = None;
         }
         self.processes[idx].state = ProcessState::Ready;
         self.remove_from_ready_queues(idx);
@@ -1875,13 +1953,20 @@ impl Scheduler {
             return;
         }
 
+        // External group termination finishes a sibling from another CPU.
+        // Clear its TID only after it is no longer executing on any CPU.
+        // The ordinary self-exit path already performed this step.
+        self.clear_linux_child_tid(idx);
+
         let pid = self.processes[idx].pid;
         let name: alloc::string::String = self.processes[idx].name_str().into();
         let is_native_borrower = self.processes[idx].native_thread;
         if self.processes[idx].owns_address_space {
             let borrowers = self.live_address_space_borrowers(idx);
             if borrowers != 0 {
-                self.terminate_address_space_borrowers(idx, "address-space-owner-exit");
+                if self.processes[idx].linux_tgid.is_none() {
+                    self.terminate_address_space_borrowers(idx, "address-space-owner-exit");
+                }
                 #[cfg(feature = "verbose_diag")]
                 serial_println!(
                     "[SCHED] process_reap_blocked_reason idx={} reason=live_address_space_borrowers count={}",
@@ -2020,6 +2105,9 @@ impl Scheduler {
                 .retain(|entry| entry.target.call.pid != dead_pid);
         }
         self.processes[idx].capabilities.clear();
+        // Only the group owner holds the (currently empty) SEM_UNDO table.
+        // Reaping this owner was deferred until every Linux worker reaped.
+        self.processes[idx].linux_sysv_semadj = None;
         // The dying context has already pivoted to its per-core static idle
         // stack. Drop the task-local kernel stack before exposing Reaped.
         self.processes[idx].kernel_stack = None;
@@ -2071,6 +2159,31 @@ impl Scheduler {
                     max_live
                 );
             }
+        }
+    }
+
+    fn clear_linux_child_tid(&mut self, idx: usize) {
+        let address = self.processes[idx]
+            .linux_state()
+            .map(|state| state.tid_address)
+            .unwrap_or(0);
+        if address == 0 {
+            return;
+        }
+        if let Some(state) = self.processes[idx].linux_state_mut() {
+            state.tid_address = 0;
+        }
+        let Some(hhdm) = crate::HHDM_REQ.response()
+            .map(|resp| x86_64::VirtAddr::new(resp.offset)) else { return; };
+        let identity = self.processes[idx].address_space.identity();
+        if crate::memory::user::copy_to_process_bytes(
+            &self.processes[idx], hhdm, address, &0u32.to_ne_bytes(),
+        ).is_ok() {
+            let woken = self.wake_linux_futex(identity, address, 1);
+            serial_println!(
+                "[HELIOS-THREAD] clear_child_tid tid={} addr={:#x} woken={}",
+                self.processes[idx].pid, address, woken
+            );
         }
     }
 
@@ -3058,6 +3171,18 @@ pub fn request_reschedule() {
     request_reschedule_on(current_cpu_id());
 }
 
+/// Queue a voluntary context switch for the first ring-3 instruction after
+/// SYSRET. Call only with interrupts disabled and no scheduler lock held.
+pub fn request_reschedule_after_sysret() {
+    let cpu_id = current_cpu_id();
+    request_reschedule_on(cpu_id);
+    unsafe {
+        crate::arch::x86_64::lapic::send_fixed_ipi(
+            cpu_id, crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
+        );
+    }
+}
+
 pub fn note_process_finished(pid: usize, name: &str) {
     PROCESS_FINISHED.fetch_add(1, Ordering::Relaxed);
     serial_println!("[SCHED] FINISHED process pid={} name='{}'", pid, name);
@@ -3135,6 +3260,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     }
 
     let my_pid = sched.processes[cur].pid;
+    let is_linux_worker = sched.processes[cur].linux_tgid.is_some_and(|tgid| tgid != my_pid);
+    sched.clear_linux_child_tid(cur);
     let my_name: alloc::string::String = sched.processes[cur].name_str().into();
     serial_println!(
         "[SCHED] process_mark_finished pid={} name='{}' reason={} code={}",
@@ -3160,10 +3287,12 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     sched.set_core_current_task(cpu_id, None);
     sched.set_core_current_ticks(cpu_id, 0);
     sched.remove_from_ready_queues(cur);
-    if sched.processes[cur].owns_address_space {
+    if sched.processes[cur].owns_address_space && sched.processes[cur].linux_tgid.is_none() {
         sched.terminate_address_space_borrowers(cur, "address-space-owner-exit");
     }
-    sched.close_owned_ipc_endpoints(my_pid);
+    if !is_linux_worker && sched.processes[cur].linux_tgid.is_none() {
+        sched.close_owned_ipc_endpoints(my_pid);
+    }
 
     serial_println!(
         "[SCHED] terminating pid={} name='{}' reason={}",
@@ -3176,7 +3305,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     let parent_pid = sched.processes[cur].ppid;
     let parent_waiting = sched
         .process_mut_by_pid(parent_pid)
-        .is_some_and(|parent| parent.wait_child == Some(my_pid));
+        .is_some_and(|parent| !is_linux_worker && parent.wait_child == Some(my_pid));
     if parent_waiting {
         sched.wake_pid(parent_pid);
     }

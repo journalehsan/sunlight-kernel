@@ -77,6 +77,7 @@ impl FileHandle {
     /// Chosen so it does not collide with pipe/vfs/tty tag bits.
     const EPOLL_FLAG: u32 = 0x0800_0000;
     const EPOLL_INDEX_MASK: u32 = 0x00FF_FFFF;
+    const EVENTFD_FLAG: u32 = 0x0400_0000;
     const TTY_TAG_MASK: u32 = 0xF000_0000;
     const TTY_TAB_MASK: u32 = 0x0000_00FF;
 
@@ -141,6 +142,30 @@ impl FileHandle {
 
     pub fn epoll_index(self) -> u32 {
         self.0 & Self::EPOLL_INDEX_MASK
+    }
+
+    pub fn eventfd(pool_idx: u32) -> Self {
+        Self(Self::EVENTFD_FLAG | (pool_idx & Self::EPOLL_INDEX_MASK))
+    }
+
+    pub fn is_eventfd(self) -> bool {
+        self.0 & 0xFF00_0000 == Self::EVENTFD_FLAG
+    }
+
+    pub fn eventfd_index(self) -> u32 {
+        self.0 & Self::EPOLL_INDEX_MASK
+    }
+}
+
+fn retain_eventfd(handle: FileHandle) {
+    if handle.is_eventfd() {
+        super::eventfd::retain(handle.eventfd_index());
+    }
+}
+
+fn release_eventfd(handle: FileHandle) {
+    if handle.is_eventfd() {
+        super::eventfd::release(handle.eventfd_index());
     }
 }
 
@@ -262,6 +287,7 @@ impl FdTable {
             .find_map(|(idx, entry)| entry.is_none().then_some(idx))
             .ok_or(FdError::NoSlots)?;
         let fd = slot as i32;
+        retain_eventfd(handle);
         self.entries[slot] = Some(FileDescriptor {
             fd,
             handle,
@@ -289,7 +315,9 @@ impl FdTable {
         if fd < 0 || fd >= 256 {
             return Err(FdError::InvalidFd);
         }
-        self.entries[fd as usize].take().ok_or(FdError::InvalidFd)
+        let entry = self.entries[fd as usize].take().ok_or(FdError::InvalidFd)?;
+        release_eventfd(entry.handle);
+        Ok(entry)
     }
 
     /// Remove descriptors marked close-on-exec and return their backing
@@ -304,7 +332,10 @@ impl FdTable {
                 .map(|descriptor| descriptor.flags & O_CLOEXEC != 0)
                 .unwrap_or(false)
             {
-                handles[idx] = entry.take().map(|descriptor| descriptor.handle);
+                handles[idx] = entry.take().map(|descriptor| {
+                    release_eventfd(descriptor.handle);
+                    descriptor.handle
+                });
             }
         }
         handles
@@ -315,7 +346,10 @@ impl FdTable {
     pub fn take_all_handles(&mut self) -> [Option<FileHandle>; 256] {
         let mut handles = [None; 256];
         for (idx, entry) in self.entries.iter_mut().enumerate() {
-            handles[idx] = entry.take().map(|descriptor| descriptor.handle);
+            handles[idx] = entry.take().map(|descriptor| {
+                release_eventfd(descriptor.handle);
+                descriptor.handle
+            });
         }
         handles
     }
@@ -326,6 +360,12 @@ impl FdTable {
             return None;
         }
         self.entries[fd as usize].as_ref()
+    }
+
+    pub fn contains_eventfd(&self, idx: u32) -> bool {
+        self.entries.iter().flatten().any(|entry| {
+            entry.handle.is_eventfd() && entry.handle.eventfd_index() == idx
+        })
     }
 
     /// Get a mutable file descriptor
@@ -349,6 +389,10 @@ impl FdTable {
     ) -> Result<(), FdError> {
         if fd < 0 || fd >= 256 {
             return Err(FdError::InvalidFd);
+        }
+        retain_eventfd(handle);
+        if let Some(displaced) = self.entries[fd as usize] {
+            release_eventfd(displaced.handle);
         }
         self.entries[fd as usize] = Some(FileDescriptor {
             fd,
@@ -380,6 +424,7 @@ impl FdTable {
     pub fn dup_from(&mut self, fd: i32, min_fd: i32, cloexec: bool) -> Result<i32, FdError> {
         const O_CLOEXEC: u32 = 0x0008_0000;
         let orig = *self.get(fd).ok_or(FdError::InvalidFd)?;
+        // open_from retains the shared eventfd open object.
         let mut flags = orig.flags & !O_CLOEXEC;
         if cloexec {
             flags |= O_CLOEXEC;
@@ -431,6 +476,10 @@ impl FdTable {
         let displaced = self.entries[new_fd as usize]
             .take()
             .map(|descriptor| descriptor.handle);
+        if let Some(handle) = displaced {
+            release_eventfd(handle);
+        }
+        retain_eventfd(orig.handle);
         let mut flags = orig.flags & !O_CLOEXEC;
         if cloexec {
             flags |= O_CLOEXEC;
@@ -457,6 +506,9 @@ impl FdTable {
             let entries = core::ptr::addr_of_mut!((*ptr).entries) as *mut Option<FileDescriptor>;
             for idx in 0..256 {
                 entries.add(idx).write(self.entries[idx]);
+                if let Some(entry) = self.entries[idx] {
+                    retain_eventfd(entry.handle);
+                }
             }
             table.assume_init()
         }

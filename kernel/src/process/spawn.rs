@@ -104,6 +104,8 @@ pub fn exec_into_process(
     let old_trusted_wiseowl_console = process.trusted_wiseowl_console;
     let old_trusted_control_panel = process.trusted_control_panel;
     let old_personality = process.personality;
+    let old_linux_tgid = process.linux_tgid;
+    let old_linux_sysv_semadj = process.linux_sysv_semadj.take();
     process.trusted_display_service = false;
     process.trusted_swap_admin_service = false;
     process.trusted_zram_diagnostic = false;
@@ -114,6 +116,9 @@ pub fn exec_into_process(
     process.trusted_control_panel = false;
 
     process.personality = personality;
+    process.linux_tgid = process.is_linux_compat().then_some(process.pid);
+    process.linux_sysv_semadj = process.is_linux_compat()
+        .then_some(crate::process::LinuxSysvSemAdj::default());
     if process.is_linux_compat() {
         crate::serial_println!("[EXEC] Linux ELF detected");
     }
@@ -136,6 +141,8 @@ pub fn exec_into_process(
             process.trusted_wiseowl_console = old_trusted_wiseowl_console;
             process.trusted_control_panel = old_trusted_control_panel;
             process.personality = old_personality;
+            process.linux_tgid = old_linux_tgid;
+            process.linux_sysv_semadj = old_linux_sysv_semadj;
             if !activate_on_success {
                 unsafe {
                     process
@@ -959,7 +966,15 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/cpufeat" | "/usr/bin/cpufeat" => Ok(crate::CPUFEAT_ELF_BYTES),
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.
         "/bin/hello-linux" | "/usr/bin/hello-linux" => Ok(crate::HELLO_LINUX_ELF_BYTES),
+        "/bin/yazi" | "/usr/bin/yazi" => Ok(crate::YAZI_ELF_BYTES),
+        #[cfg(feature = "key_inject")]
+        "/bin/yazi-baseline" | "/usr/bin/yazi-baseline" => {
+            Ok(crate::YAZI_BASELINE_ELF_BYTES)
+        }
         "/bin/helios-probe" | "/usr/bin/helios-probe" => Ok(crate::HELIOS_PROBE_ELF_BYTES),
+        "/bin/linux-thread-probe" | "/usr/bin/linux-thread-probe" => {
+            Ok(crate::HELIOS_THREAD_PROBE_ELF_BYTES)
+        }
         "/bin/helios-probe-runtime"
         | "/usr/bin/helios-probe-runtime"
         | "/bin/linux-uname"

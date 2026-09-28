@@ -1,0 +1,468 @@
+# Yazi v26.9.1 Compatibility: Phase 1 Audit
+
+Status: Phase 1.2 thread probe passes in two-CPU QEMU; the pinned Yazi payload
+starts Linux workers but still fails during runtime initialization. Phase 1
+rendering/navigation acceptance is not yet met.
+
+## Intended execution path
+
+```text
+Sunlight Terminal
+        │
+        ▼
+   Helios process
+        │
+        ▼
+ Linux ELF / musl Yazi
+        │
+        ├── TTY / ioctl
+        ├── filesystem / VFS
+        ├── mmap / allocator
+        ├── clocks
+        ├── polling
+        ├── signals
+        └── threads / futex if required
+```
+
+## Existing path and audited contracts
+
+- Linux ELF classification is handled by `sunlight-elf`; `spawn.rs` selects a
+  Linux process personality, loads the ELF segments, constructs the initial
+  stack and auxiliary vector, and sets up the process address space. Helios
+  Note demonstrates this with a stamped static `x86_64-unknown-linux-musl`
+  `ET_EXEC` executable. The shared parser currently rejects all ELF types
+  except `ET_EXEC`, before personality dispatch or syscall entry. The existing
+  ELF-loader/static-runtime gates are `helios-proven-tier1` and
+  `helios-static-runtime`.
+- The x86-64 syscall entry in `kernel/src/arch/x86_64/syscall.rs` translates
+  Linux syscall numbers through `compat-linux/src/abi.rs`. Linux-specific
+  shims use internal syscall dispatch numbers; unsupported Linux calls should
+  return `-ENOSYS`. The dispatcher currently logs unknown calls, but there is
+  no bounded per-process syscall trace switch audited yet.
+- Linux errors are encoded as negative errno results for musl. VFS failures
+  pass through `linux_from_fs`; the error translation is in the syscall layer.
+  The process owns an fd table containing VFS, TTY, pipe, and epoll handles.
+  Duplicates refer to the underlying handle; fd-table teardown participates in
+  process cleanup.
+- Linux file calls route through the process fd table and `KERNEL_VFS`. The
+  implementation includes open/openat, read/write, seek, stat/fstat,
+  newfstatat, getdents64, readlink, access, mkdir, and several *at shims.
+  `getdents64` synthesizes `.` and `..`, then emits VFS directory entry names
+  as bytes; current source maps regular files and directories to Linux d_type.
+  Symlink metadata and statx support have not yet been established by this
+  audit. Path strings remain byte-oriented at the ABI boundary.
+- The TTY endpoint uses the existing per-terminal stdin/stdout rings and ANSI
+  parser, not an application-specific rendering path. `TCGETS`/`TCSETS*`,
+  `TIOCGWINSZ`, and raw/cooked mode state are handled by the Linux ioctl shim.
+  Window size comes from the process's terminal identity. PTY service support
+  exists elsewhere in the kernel; Yazi should use its inherited terminal fds.
+- `poll` has scheduler-backed waiting; epoll has a kernel instance table and
+  readiness checks. Fcntl supports descriptor/status flags and duplication.
+  Linux signal action/mask/altstack state is partly process-personality scoped;
+  signal delivery and live SIGWINCH behavior are limited. Timer-backed
+  `clock_gettime`/`nanosleep` exist. Linux clone/futex behavior, thread
+  lifecycle, eventfd support, and Yazi's actual use of them remain to be
+  checked against runtime evidence.
+- mmap/munmap/mprotect are implemented by the process memory manager with
+  Linux errno mapping; brk is supported for musl. `getrandom` is present.
+- The prior Helios Note audit and regression cover TTY setup, geometry, input
+  polling, ANSI rendering, file open/save, musl TLS/auxv startup, and restored
+  terminal mode. They do not establish Yazi's syscall sequence or directory
+  navigation behavior.
+- This source audit has not established runtime availability/semantics for
+  `/proc`, `/dev`, `/tmp`, `$HOME`, cwd mutation, directory fd-relative
+  traversal, `statx`, or complete Unicode rendering. The initial Yazi run will
+  determine which of these are relevant. Filesystem permissions must continue
+  to be enforced by the existing VFS/security model.
+
+## First-run record
+
+The upstream release is Yazi v26.9.1, release tag `v26.9.1`, target
+`x86_64-unknown-linux-musl`, asset
+`yazi-x86_64-unknown-linux-musl.zip`. GitHub release asset ID `539261404`
+publishes SHA-256
+`9b9c39decccf8cb0ff53a7d637d38f8a79d93bbd0099f4ea9c619ef6bb392f5d`.
+Because the direct GitHub release-assets endpoint failed local TLS hostname
+verification, the archive was fetched from the SourceForge Yazi release mirror;
+its checksum exactly matches GitHub's published digest and `unzip -t` passed.
+The ELF is x86-64 ELF64, `ET_DYN`, static-PIE, OSABI System V.
+
+**First-run blocker (classification J: environment/runtime ELF loader):** the
+stock artifact cannot be loaded by the current shared `sunlight-elf` parser,
+which requires `ET_EXEC`. It is rejected before a process is created, so this
+attempt produces no Linux syscall trace. QEMU serial evidence after registering
+the embedded payload with `sshl`:
+
+```text
+[ELF] header rejected: NotStaticExecutable
+[SYSCALL] spawn: load failed: ElfLoadFailed
+```
+
+This is a concrete reason the official release cannot currently be used as-is.
+It is static PIE with a `PT_DYNAMIC` table and 996 RELR entries expanding to
+29,209 relocations; the shared parser only accepts `ET_EXEC`, and the current
+loader has no PIE base/RELR relocation path. This limitation is documented
+before switching to a source build. The experimental binary is built from the
+exact upstream `v26.9.1` source commit `8dd895c695a5950330c2623eb43debf323b60654`
+with static musl and the project's existing non-PIE linker flags; no Yazi
+source changes are made. The official release artifact remains preserved in
+ignored `target/` for comparison.
+
+The pinned source-built image was launched by the QEMU `yazi-phase1` gate.
+Helios created the Linux process and loaded all ELF segments. During Tokio
+runtime construction, the trace reported unsupported Linux syscalls 28
+(`madvise`), 204 (`sched_getaffinity`), and 290 (`eventfd2`). Yazi then panicked
+with `Failed building the Runtime: ... code: 38 ... Function not implemented`,
+followed by a general-protection fault and process exit 139. The trace places
+`eventfd2` immediately before the runtime failure, making it the first concrete
+blocker after the request. No Linux syscall semantics have yet been changed
+based on this run. The smoke gate rejects a spawn followed by a Yazi runtime
+panic/exit, so this attempt is not reported as a pass.
+
+## Phase 1 result
+
+Not met. Automated evidence confirms ELF load and process creation, but Yazi
+does not complete Tokio initialization. Rendering, file listing, navigation,
+UTF-8 display, clean exit, and idle behavior have not been exercised. The
+first demonstrated generic work items are Linux `eventfd2`,
+`sched_getaffinity`, and `madvise`, followed by rerunning the same unmodified
+Yazi payload to reveal any subsequent requirements.
+
+## Phase 1.1: observed runtime arguments and incremental reruns
+
+The original source-built, stamped `ET_EXEC` payload remains in
+`target/x86_64-unknown-linux-musl/release/yazi` with SHA-256
+`15af218a823a16da5a8bb16caae27b03bc7c13bdf83d7c875e3d3d61d2028513`.
+The local source checkout and musl C compiler were unavailable during this
+iteration. `YAZI_USE_CACHED_ET_EXEC=1` explicitly verifies the official
+archive (`YAZI_RELEASE_ARCHIVE=target/yazi-v26.9.1-x86_64-unknown-linux-musl.zip`
+on this host), the pinned experimental payload digest, and the ELF type before the
+existing gate runs; the default builder still builds
+from the pinned, unmodified upstream source.
+
+The bounded `[HELIOS-ABI-TRACE]` is active only with
+`SUNLIGHT_INJECT_PHASE=yazi-phase1`. Its first run recorded:
+
+| Call | Raw x86-64 arguments observed | Mapping or purpose |
+| --- | --- | --- |
+| `eventfd2` (290) | `initval=0`, `flags=0x80800` | `EFD_CLOEXEC | EFD_NONBLOCK`, without `EFD_SEMAPHORE` |
+| `sched_getaffinity` (204) | `pid=0`, `cpusetsize=0x80`, mask pointers `0x7fffffffed50`, `0x7fffffffbe60`, `0x7fffffffbcc0` | calling task, 128-byte buffer |
+| `madvise` (28) | `addr=0x1000001000`, `len=0x1000`, `advice=4`; `addr=0x1000002000`, `len=0x1000`, `advice=8` | `MADV_DONTNEED` and `MADV_FREE` respectively |
+
+Each advised page came from an immediately preceding `mmap` with flags
+`0x22` (`MAP_PRIVATE | MAP_ANONYMOUS`), fd `-1`, offset `0`.
+The `MADV_DONTNEED` page was initially read/write; the `MADV_FREE` page was
+initially `PROT_NONE`. Both are in the process's own anonymous VM ledger.
+Other argument registers printed on a three-argument syscall are stale and
+do not belong to that syscall.
+
+| Requirement | Initial state | Phase 1.1 result |
+| --- | --- | --- |
+| Stock static PIE `ET_DYN` | loader rejects ELF | Deferred: no loader change |
+| `eventfd2` | `-ENOSYS` | Shared, reference-counted 64-bit counter with semaphore mode, `O_NONBLOCK` status, `CLOEXEC`, blocking read/write wakeups, checked capacity, and poll/epoll readiness. The observed request now returns a descriptor. |
+| `sched_getaffinity` | `-ENOSYS` | Validates PID, mask buffer and size; returns the scheduler's online CPU mask. Linux's **raw** success result is the number of mask bytes copied (8 for Helios's 64-CPU maximum), not libc's zero. Only those 8 bytes are copied; the remaining 120 bytes in the observed user buffer are outside the raw syscall's returned region. |
+| `madvise` | unclassified `-ENOSYS` | Validates advice, alignment, overflow, userspace range, complete VM coverage, and anonymous/private ownership. For the observed `MADV_DONTNEED` and `MADV_FREE`, returns explicit `-ENOSYS` (38) on valid mappings: eager Helios mappings cannot currently implement discard or lazy reclamation. No success is fabricated and no VM contents are changed. |
+| Next observed blocker | none | Linux `clone(CLONE_VM)` used for Tokio worker creation; existing MM-0 containment rejects it. |
+
+An intermediate test stalled during early allocations with either the
+validated `-EOPNOTSUPP` or validated `-ENOSYS` advice failure. Restoring the
+original unsupported-syscall dispatch produced the same stall, ruling out
+the new advice handler as its cause. The final path reports validated
+`-ENOSYS`, without claiming either memory-semantic operation succeeded.
+
+The bounded follow-up trace located the stall in a large
+`munmap(0x1000203000, 0x1fd000)` of a private anonymous mapping. Region and
+leaf preflight and the first TLB shootdowns completed. After shootdown, the
+existing cleanup called `swap::untrack(frame)` for every released page; each
+call scanned the entire anonymous swap-candidate deque. Removing candidates
+for the fully unmapped owner range with one scan per bounded chunk preserves
+the ownership/shootdown ordering and avoids the repeated full-deque scans.
+The repeat QEMU run completed those large unmaps, reached the affinity query
+and eventfd creation, and then failed on the previously observed thread
+clone. Temporary per-chunk VM logging was removed after that diagnosis.
+
+Linux's raw `sched_getaffinity` returns `min(cpusetsize, cpumask_size())` and
+intersects the task's mask with active CPUs (`kernel/sched/syscalls.c`). Helios
+currently has no per-task CPU restrictions, so its scheduler's available CPUs
+are the allowed mask. With two QEMU CPUs the traced mask was `0x3` and the
+raw return was 8 bytes.
+Linux's eventfd implementation limits ordinary writes to `UINT64_MAX - 1`,
+supports semaphore reads, and reports `EPOLLIN`/`EPOLLOUT` from its counter
+(`fs/eventfd.c`).
+
+After eventfd was implemented, the same payload progressed past Tokio's
+previous `Failed building the Runtime ... ENOSYS` error. The next run reached
+Tokio's worker thread creation and panicked with
+`OS can't spawn worker thread: Resource temporarily unavailable` after
+`[MM-0] rejected unsafe Linux clone(CLONE_VM)`. A later run with affinity
+enabled still reached that blocker; it did not initialize worker threads or
+enter the event loop. This requires a real shared-address-space/thread
+implementation and is not a small syscall-number addition. Phase 1 remains
+below the original rendering/navigation acceptance criteria.
+
+The next observed raw Linux call was `clone(0x7d0f00,
+0x1000a08f48, 0x1000a09b68, 0x1e016b8, 0x1000a09b38)`; the first argument
+contains `CLONE_VM`. The sixth saved register in the trace does not belong to
+this five-argument syscall. Helios returned raw `-ENOSYS` (38) through its
+existing unsafe-clone containment path; musl/Tokio surfaced worker creation
+failure as `EAGAIN`. No Tokio worker was created. Further progress requires
+sharing a live address space safely across Linux threads, including TLS,
+parent/child TID storage, exit cleanup, and synchronization; this is the next
+evidence-backed Phase 1 work item.
+
+### Phase 1.1 regression evidence (September 28, 2026)
+
+- `cargo check --package sunlight-kernel`: passed.
+- `cargo test --package sunlight-compat-linux --target x86_64-unknown-linux-gnu`:
+  20 tests passed, including eventfd counter/flags/readiness/duplicate lifetime,
+  affinity mask/size, and advice/range validation.
+- Stock Yazi artifact baseline QEMU gate: passed its expected static PIE
+  rejection (`NotStaticExecutable`); no stock process was created.
+- Pinned static `ET_EXEC` Yazi QEMU gate: intentionally **failed** its runtime
+  criterion after reaching affinity (`mask=0x3`, raw return 8), eventfd creation
+  (fd 4), and rejected `clone(CLONE_VM)`. The trace records the Tokio worker
+  creation panic and process exit. No worker, event loop, terminal setup, or
+  render was observed.
+- Helios Note QEMU regression: passed `rows=38 cols=138`, terminal
+  initialization, and `interactive-ready`.
+- `git diff --check`: passed.
+
+Eventfd readiness is wired into the existing poll/epoll readiness query and
+its blocking read/write conditions use scheduler sleep and wakeup. The Yazi
+run did not reach eventfd I/O or a poll wait, so the runtime gates do not yet
+exercise blocking wakeup or establish idle-CPU behavior for an eventfd waiter.
+The kernel's host `cargo test` target conflicts with its freestanding panic
+handler; the pure counter, lifetime, and affinity tests run in compat-linux.
+
+## Phase 1.2: Linux thread architecture audit (September 28, 2026)
+
+The observed **raw x86-64** syscall is `clone(flags=0x7d0f00,
+child_stack=0x1000a08f48, parent_tid=0x1000a09b68,
+child_tid=0x1e016b8, tls=0x1000a09b38)`. Its flags decode as follows, using
+Linux `include/uapi/linux/sched.h`, rather than matching the aggregate number:
+
+| Flag | Value | Linux meaning | Current Helios status |
+| --- | ---: | --- | --- |
+| `CLONE_VM` | `0x00000100` | shared userspace VM | native borrower shares root and ledger; Linux group lifetime absent |
+| `CLONE_FS` | `0x00000200` | shared cwd/root/umask | cwd stored separately in each task |
+| `CLONE_FILES` | `0x00000400` | shared FD table | native borrower copies FD table |
+| `CLONE_SIGHAND` | `0x00000800` | shared signal dispositions | signal handlers and mask both reside in task's `SignalState` |
+| `CLONE_THREAD` | `0x00010000` | same TGID, separate TID | only a single task PID exists today |
+| `CLONE_SYSVSEM` | `0x00040000` | shared SEM_UNDO adjustments | SysV semaphores and semadj absent; future group would hold empty semadj |
+| `CLONE_SETTLS` | `0x00080000` | child FS base from `tls` | native spawn supports per-task FS base |
+| `CLONE_PARENT_SETTID` | `0x00100000` | parent stores child TID | absent |
+| `CLONE_CHILD_CLEARTID` | `0x00200000` | child zeroes TID and futex wakes at exit | absent |
+| `CLONE_DETACHED` | `0x00400000` | legacy no-op for raw clone | ignored by modern Linux, no detached lifecycle to add |
+
+The low-byte exit signal is zero. `CLONE_CHILD_SETTID` is absent: the child TID
+pointer must be recorded for clearing, but not populated at creation. Linux
+`kernel/fork.c` rejects `CLONE_SIGHAND` without `CLONE_VM` and `CLONE_THREAD`
+without `CLONE_SIGHAND`; Linux also rejects a nonzero exit signal for a
+thread-group clone. The x86-64 raw argument order uses the fifth argument
+register `r8` for TLS and fourth register `r10` for `child_tid`. These facts
+are distinct from glibc's `clone()` wrapper and `clone3()`.
+
+### Ownership before implementation
+
+- `Process` is both the scheduler task and resource holder (`pid`, saved
+  `context_rsp`, kernel stack, FS base, `AddressSpace`, FDs, cwd, credentials,
+  signals, brk and mmap cursor). The scheduler indexes these objects in a
+  global locked vector, with per-CPU run queues and task ownership fields.
+- `AddressSpace` holds a page-table root and a generation-tagged region
+  ledger. Native `ThreadSpawn` constructs a non-owning borrower of that root;
+  it **copies** FDs, cwd, environment and signal state and starts at a native
+  trampoline. It is not a Linux `clone()` implementation.
+- `LinuxProcessState` holds `tid_address`, robust list, signal alternate stack,
+  termios, eventfd wait state, and brk counters in one per-task structure.
+  `set_tid_address` currently returns `pid`; `getpid` and `gettid` both map
+  to native `Getpid`. This is correct only while PID and TID coincide.
+- The scheduler saves/restores FS base per task on dispatch, including CPU
+  migration. Its syscall entry builds a frame **on the userspace stack**;
+  `syscall_dispatch` sees saved GPRs including `rcx` (the address immediately
+  following `syscall`) and `r11` (user RFLAGS). A Linux child needs its own
+  kernel IRET frame copied from these registers, with `RAX=0`, supplied RSP,
+  and supplied FS base. Native `ThreadSpawn` instead creates a trampoline frame.
+- Exit marks the current task Finished and pivots to its per-CPU idle stack.
+  Reaping owns FD closure, shared-memory cleanup, kernel-stack disposal, and
+  page-table reclamation. If the page-table owner exits, the scheduler
+  forcibly terminates all borrowers, including native workers. An ordinary
+  worker exit therefore cannot safely reuse this owner/borrower policy as a
+  Linux thread-group policy. Waitpid/zombies are task PID based.
+- Syscall user-memory copy validates PTEs while holding the scheduler lock,
+  then copies through HHDM, but mmap/munmap/brk mutation and userspace accesses
+  across two CPUs still need a shared VM serialization/lifetime audit.
+- There is **no Linux futex implementation**: syscall 202 translates to
+  `ENOSYS`. `FUTEX_WAIT`, `FUTEX_WAKE`, and `FUTEX_PRIVATE_FLAG` must use the
+  same VM-based wait key for group members and participate in child-TID exit.
+
+The required ownership boundary is a Linux thread group with shared VM, FD,
+FS, signal dispositions, credentials and process lifetime, and individual
+schedulable threads with TID, register context, TLS/FS base, signal mask,
+robust list, alternate stack, and clear-child-TID. A worker's `exit` must
+perform child-TID cleanup and futex wake without closing FDs, killing its
+siblings, or reclaiming the owner's VM. `exit_group` requires a separate
+group-wide termination path. This paragraph records the pre-implementation
+audit; the implementation and its remaining limitations follow below.
+
+Sources: Linux `include/uapi/linux/sched.h`, `kernel/fork.c`, and
+`man-pages/man2/clone.2` (raw x86-64 syscall ABI and historical
+`CLONE_DETACHED`).
+
+### Phase 1.2 implementation and ownership
+
+Linux threads use distinct scheduler `Process` records with separate register
+frames, kernel stacks, FS bases, signal masks, alternate stacks, robust-list
+addresses, clear-child-TID addresses, and Linux-visible TIDs. The original
+Linux task owns the group (`linux_tgid == pid`); later tasks carry its TGID
+and borrow the **same** page-table root and VM ledger. The owner's FD table,
+cwd and signal dispositions are accessed through `current_shared_process`.
+The owner and its VM survive an individual worker's exit and are reclaimed
+once all borrowers have reaped. The scheduler lock serializes shared resource
+and VM metadata mutations. Native tasks continue using their own resources.
+This is an ownership distinction within the existing `Process` structure,
+not a scheduler rewrite.
+
+The child starts at the raw caller's post-`syscall` instruction (`RCX`), with
+copied GPRs and flags (`R11`), `RAX=0`, caller-provided RSP and its own FS base
+(`tls` when requested). Clone checks the writable child stack and parent TID
+pointer before publishing the parent TID and scheduling the child. Linux
+`getpid` returns TGID; `gettid` and `set_tid_address` return the calling TID.
+Linux `exit` finishes only its calling thread; `exit_group` marks group
+members for termination. Exit clears its own `clear_child_tid` with checked
+userspace access and wakes one VM-keyed futex waiter. Invalid addresses
+cannot fault the kernel during teardown. Worker reaping does not reclaim
+the group VM or close the group's FD table.
+
+| Observed flag | Status | Boundary |
+| --- | --- | --- |
+| `CLONE_VM` | implemented | identical root and VM ledger; owner held until borrowers reap |
+| `CLONE_FS` | implemented | shared cwd; root and umask have no separate mutable Linux state yet |
+| `CLONE_FILES` | implemented | owner FD table under scheduler lock |
+| `CLONE_SIGHAND` | implemented | owner dispositions, separate per-thread masks; delivery remains partial |
+| `CLONE_THREAD` | implemented | separate TID and scheduler state, common TGID, no waitable worker process |
+| `CLONE_SYSVSEM` | represented but currently vacuous | group owner holds an empty semadj context; SysV IPC does not yet exist |
+| `CLONE_SETTLS` | implemented | child FS base from raw fifth argument, restored per task |
+| `CLONE_PARENT_SETTID` | implemented | checked 32-bit parent store before child is runnable |
+| `CLONE_CHILD_CLEARTID` | implemented | no initial store without `CHILD_SETTID`; zero and futex wake on exit |
+| `CLONE_DETACHED` | represented but currently vacuous | Linux ignores this historical bit for this raw clone combination |
+
+Flags are validated individually, including `SIGHAND`/`VM` and
+`THREAD`/`SIGHAND` dependencies, zero thread exit signal, and supported
+resource sharing. Namespace and process-copy modes return `-ENOSYS`;
+malformed combinations return `-EINVAL`. There is no fork-style copy.
+Futex `WAIT`/`WAKE` with `PRIVATE` use the shared VM identity and 32-bit
+virtual address. Timed waits, robust-futex owner death, PI futexes, and
+semadj operations remain unsupported.
+
+The direct static Linux probe exercises group/worker identities, shared
+memory, separate `%fs:0` values after scheduling, parent-TID publication,
+zeroed child TID and futex wake, shared eventfd and FD close, cwd change,
+shared signal handler with thread-local mask, and negative clone cases.
+One successful two-CPU QEMU run printed:
+
+```text
+THREAD_PROBE main_pid=0x00000023 main_tid=0x00000023
+THREAD_PROBE worker_pid=0x00000023 worker_tid=0x00000024
+shared_memory=ok
+fd_table=ok eventfd=ok
+tls=ok
+child_tid_clear=ok
+THREAD_PROBE PASS
+```
+
+Worker TID 36 reaped without reclaiming user frames; group owner TGID 35
+later reclaimed 520 user frames and 9 page tables. The final probe trace
+records `clear_child_tid tid=36 addr=0x4020f8 woken=1`, confirming that the
+zero store woke an actual waiter on the same VM-keyed futex. An attempted
+in-kernel `sti; hlt; cli` deschedule faulted because x86-64 syscall entry
+executes on the **userspace stack**; that change was removed. The final path
+instead sends a dedicated reschedule IPI while syscall interrupts are
+disabled. The IPI runs after `SYSRET` returns to ring 3, letting the normal
+interrupt path save a userspace frame and schedule another task. This vector
+does not advance the timer clock. The two-CPU probe passed with `woken=1`,
+and the pinned Yazi trace no longer showed a run of immediate `FUTEX_WAIT`
+successes on the same word. Idle CPU behavior remains unproven because Yazi
+still encounters other runtime failures.
+
+### Pinned Yazi rerun and next evidence-backed blocker
+
+The verified unchanged `ET_EXEC` v26.9.1 payload created worker TIDs 36
+and 37 under TGID 35, with distinct TLS bases. Both reached userspace.
+Worker 36 returned from `epoll_pwait(fd=3, ...)` with two events. Its raw
+`recvfrom` (45) with fd 8, buffer `0x1000a08b00`, length `0x80`, flags 0
+and null address arguments returned `-ENOSYS`. In one run it entered an abort
+path; thread ordering and later failure differed on the following rerun.
+This points to socket I/O, potentially a larger subsystem. Main TID 35 also
+got `-ENOSYS` on `prlimit64(302, pid=0, resource=7)` and
+`getrlimit(97, resource=7)`. Worker TID 37 repeatedly called
+`FUTEX_WAIT|PRIVATE` on `0x1000c0d8d8`, expecting 1, with null timeout.
+Accepting clone does not prove Tokio initialized, terminal setup or idle
+event-loop behavior. Validated `MADV_DONTNEED` and `MADV_FREE` still return
+`-ENOSYS` on the previously observed private anonymous pages.
+
+Milestones confirmed: ELF load, main process, affinity (`mask=0x3`), eventfd
+creation, clone acceptance, worker TID allocation, parent-TID publication,
+child scheduling, TLS setup, child userspace execution, worker runtime
+syscalls and futex wait attempts. Tokio runtime initialization, Yazi main
+event loop, terminal setup, rendering, directory enumeration and interactive
+navigation remain unverified.
+
+The final bounded trace on September 28, 2026 additionally captured main
+TID 35 calling `recvfrom(45, fd=9, buf=0x7fffffff8de0, len=0x400,
+flags=0x40, src=NULL, addrlen=NULL)` and
+`sendto(44, fd=12, buf=0x1, len=0, flags=0x40, dest=NULL, addrlen=0)`;
+both returned `-ENOSYS`. It then called
+`ioctl(16, fd=11, request=0x5421 /* FIONBIO */, arg=0x7fffffff8de0)`,
+which returned `-EINVAL` (`-22`). The command exited with
+`Error: Invalid argument (os error 22)`, exit status 1, after worker TIDs
+36 and 37 exited with status 0. Their reaping released zero user frames;
+the group owner's final reap released its shared VM (10,246 user frames,
+34 page tables in this run). Thus the immediate observed user-visible
+failure on this rerun is the missing FIONBIO handling for the FD 11 pipe;
+socket I/O is an independently observed missing compatibility subsystem.
+There was no first render or idle event loop. The kernel host test target
+still encounters its freestanding panic-handler conflict; the QEMU boot
+gates run the native scheduler's MM-0 borrower lifecycle test and the new
+userspace Linux thread probe instead.
+
+On the later rerun with immediate post-`SYSRET` futex descheduling, the
+probe still passed, and Yazi again reached two worker threads and the same
+missing socket operations. Worker TID 36's
+`recvfrom(45, fd=8, buf=0x1000a08b00, len=0x80, flags=0)` returned
+`-ENOSYS`; its userspace abort ended in a general-protection fault at
+`0x17d8c30`. Main TID 35's
+`ioctl(16, fd=11, request=0x5421 /* FIONBIO */, arg=0x7fffffff8de0)`
+returned `-EINVAL`, then main blocked on
+`FUTEX_WAIT|PRIVATE(addr=0x1000000968, expected=1, timeout=NULL)`; worker
+TID 37 exited. The bounded QEMU gate timed out without a Yazi exit or first
+render. No repeated immediate WAIT loop appeared in that trace. Socket I/O
+and FIONBIO/pipe status handling are the next concrete Linux runtime gaps;
+the abort signal/fault path is a separate signal-delivery limitation.
+Neither the earlier exit 1 nor this timeout establishes runtime readiness.
+
+### Phase 1.2 verification (September 28, 2026)
+
+- `cargo test --package sunlight-compat-linux --target x86_64-unknown-linux-gnu`:
+  24 passed, including the clone-flag combinations, affinity, eventfd and
+  advice tests.
+- `cargo check --package sunlight-kernel` and `git diff --check`: passed.
+- `tools/test.sh helios-thread-probe`: passed under two online QEMU CPUs;
+  actual userspace showed main PID/TID 35/35, worker PID/TID 35/36,
+  independent TLS values, shared memory/FD/FS/signal behavior, and
+  `clear_child_tid ... woken=1`. The scheduler's native MM-0 borrower and
+  address-space lifecycle boot tests passed in the same run.
+- `tools/test.sh yazi-baseline`: passed its expected official `ET_DYN`
+  loader rejection. The stock binary was not run as a process.
+- `tools/test.sh helios-note-regression`: passed with `rows=38 cols=138`,
+  terminal initialization and `interactive-ready` after the IPI change.
+- `tools/test.sh helios-static-runtime`: passed the independent single-thread
+  Linux syscall probe (`LINUX-PROBE RUNTIME PASS`) and Helios Note readiness.
+- `tools/test.sh yazi-phase1`, with the pinned, unchanged `ET_EXEC` payload:
+  intentionally failed its runtime criterion after creating two workers and
+  reaching futex/socket I/O; the last run timed out. No Yazi render, terminal
+  setup, directory navigation or idle event-loop acceptance was observed.
+
+The kernel host test target remains blocked by its existing freestanding
+panic-handler collision. Kernel scheduler/VM and futex lifecycle are covered
+here by the boot-time MM-0 tests and the live two-CPU userspace probe rather
+than by host-only tests that would mirror internal fields.

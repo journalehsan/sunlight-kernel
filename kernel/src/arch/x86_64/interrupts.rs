@@ -157,6 +157,9 @@ pub fn init() {
         idt[0x20].set_handler_addr(x86_64::VirtAddr::new(
             timer_entry as *const () as usize as u64,
         ));
+        idt[RESCHEDULE_VECTOR].set_handler_addr(x86_64::VirtAddr::new(
+            reschedule_entry as *const () as usize as u64,
+        ));
     }
 
     // Keyboard IRQ1 handler (vector 0x21)
@@ -789,6 +792,69 @@ pub unsafe extern "C" fn timer_entry() {
         "pop rax",
         "iretq",
     );
+}
+
+/// A voluntary reschedule IPI sent while syscall interrupts are disabled.
+/// It becomes pending until SYSRET enables interrupts in ring 3, so the
+/// scheduler saves a userspace frame instead of a live syscall stack frame.
+/// Unlike the timer vector, it must not advance clocks or wake timer clients.
+pub const RESCHEDULE_VECTOR: u8 = 0xF3;
+
+#[unsafe(naked)]
+pub unsafe extern "C" fn reschedule_entry() {
+    core::arch::naked_asm!(
+        "push rax",
+        "push rcx",
+        "push rdx",
+        "push rsi",
+        "push rdi",
+        "push r8",
+        "push r9",
+        "push r10",
+        "push r11",
+        "push rbx",
+        "push rbp",
+        "push r12",
+        "push r13",
+        "push r14",
+        "push r15",
+        "mov rdi, rsp",
+        "call reschedule_rust",
+        "mov r12, rax",
+        "mov rbx, [rsp + 136]",
+        "or rbx, 0x200",
+        "mov [rsp + 136], rbx",
+        "mov rax, r12",
+        "test rax, rax",
+        "jz 1f",
+        "mov rsp, rax",
+        "1:",
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop rbp",
+        "pop rbx",
+        "pop r11",
+        "pop r10",
+        "pop r9",
+        "pop r8",
+        "pop rdi",
+        "pop rsi",
+        "pop rdx",
+        "pop rcx",
+        "pop rax",
+        "iretq",
+    );
+}
+
+#[no_mangle]
+extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
+    unsafe { crate::arch::x86_64::lapic::send_eoi(); }
+    x86_64::instructions::interrupts::disable();
+    let cpu_id = crate::sched::current_cpu_id();
+    let mut sched = crate::sched::SCHEDULER.lock();
+    sched.schedule_tick(cpu_id, saved_rsp)
 }
 
 /// Wake tty_server every N timer ticks for the foreground render cadence.

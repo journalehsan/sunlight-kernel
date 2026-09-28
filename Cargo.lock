@@ -2195,6 +2195,7 @@ name = "sunlight-compat-linux"
 version = "0.2.4423-alpha.2"
 dependencies = [
  "heapless",
+ "spin",
 ]
 
 [[package]]

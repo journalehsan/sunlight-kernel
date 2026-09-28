@@ -15,6 +15,7 @@ build_asm() {
 
 build_asm linux-probe-all
 build_asm linux-probe-runtime
+build_asm linux-thread-probe
 
 # Unmodified sbase echo(1) hosted by a tiny Linux syscall libc.
 clang -nostdlib -static -ffreestanding -fno-pic -fno-pie -fno-stack-protector \

@@ -63,6 +63,15 @@ pub fn untrack(frame: PhysAddr) {
         .retain(|candidate| candidate.frame != frame);
 }
 
+/// Retire candidates for a completely unmapped owner range in one scan.
+/// The caller holds the process/VM lock and has completed the TLB shootdown
+/// before releasing any frame in the range.
+pub fn untrack_range(pid: usize, start: u64, end: u64) {
+    CANDIDATES.lock().retain(|candidate| {
+        candidate.pid != pid || candidate.vaddr.as_u64() < start || candidate.vaddr.as_u64() >= end
+    });
+}
+
 pub fn untrack_process(pid: usize) {
     CANDIDATES.lock().retain(|candidate| candidate.pid != pid);
 }

@@ -1182,6 +1182,8 @@ mod sunlight {
                     cmd,
                     "/bin/helios-probe"
                         | "/usr/bin/helios-probe"
+                        | "/bin/linux-thread-probe"
+                        | "/usr/bin/linux-thread-probe"
                         | "/bin/helios-probe-runtime"
                         | "/usr/bin/helios-probe-runtime"
                         | "/bin/linux-echo"
@@ -1208,6 +1210,10 @@ mod sunlight {
                         | "/usr/bin/linux-stat-metadata"
                         | "/bin/note"
                         | "/usr/bin/note"
+                        | "/bin/yazi"
+                        | "/usr/bin/yazi"
+                        | "/bin/yazi-baseline"
+                        | "/usr/bin/yazi-baseline"
                         | "/bin/hello-linux"
                         | "/usr/bin/hello-linux"
                 ) {
@@ -1221,6 +1227,7 @@ mod sunlight {
             let embedded_linux = matches!(
                 cmd,
                 "helios-probe"
+                    | "linux-thread-probe"
                     | "helios-probe-runtime"
                     | "linux-echo"
                     | "linux-uname"
@@ -1234,6 +1241,8 @@ mod sunlight {
                     | "linux-dup3"
                     | "linux-stat-metadata"
                     | "note"
+                    | "yazi"
+                    | "yazi-baseline"
                     | "hello-linux"
             );
             for dir in self.env.path_entries() {

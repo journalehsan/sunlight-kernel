@@ -179,6 +179,11 @@ pub struct SignalState {
 }
 
 impl SignalState {
+    /// Snapshot shared dispositions while the scheduler lock is held; masks
+    /// and pending signals remain in the calling thread's SignalState.
+    pub fn dispositions(&self) -> [SigAction; 32] {
+        self.handlers
+    }
     pub fn new() -> Self {
         let mut handlers = [SigAction::default(); 32];
 

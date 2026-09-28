@@ -184,12 +184,12 @@ pub fn collect_ready(
         let handle = entry.handle;
 
         if interest.events & EPOLLIN != 0 {
-            if fd_is_readable(fd, handle, process) {
+            if fd_ready(fd, handle, process).0 {
                 revents |= EPOLLIN;
             }
         }
         if interest.events & EPOLLOUT != 0 {
-            if fd_is_writable(handle) {
+            if fd_ready(fd, handle, process).1 {
                 revents |= EPOLLOUT;
             }
         }
@@ -203,6 +203,14 @@ pub fn collect_ready(
     }
 
     Ok(out)
+}
+
+/// Shared readiness query for poll and epoll, including eventfd counters.
+pub fn fd_ready(fd: i32, handle: FileHandle, process: &crate::process::Process) -> (bool, bool) {
+    if handle.is_eventfd() {
+        return super::eventfd::readiness(handle.eventfd_index());
+    }
+    (fd_is_readable(fd, handle, process), fd_is_writable(handle))
 }
 
 fn fd_is_readable(fd: i32, handle: FileHandle, process: &crate::process::Process) -> bool {
@@ -232,7 +240,7 @@ fn fd_is_writable(handle: FileHandle) -> bool {
         return true;
     }
     // stdout/stderr placeholders
-    !handle.is_pipe() && !handle.is_vfs() && !handle.is_epoll()
+    !handle.is_pipe() && !handle.is_vfs() && !handle.is_epoll() && !handle.is_eventfd()
 }
 
 fn pipe_readable(pool_idx: u32) -> bool {

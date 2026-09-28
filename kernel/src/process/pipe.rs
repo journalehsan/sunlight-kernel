@@ -248,7 +248,7 @@ pub fn create_pipe(
 
     let pipe_idx = alloc_pipe();
 
-    let process = sched.current_process_mut();
+    let process = sched.current_shared_process_mut();
 
     let read_handle = FileHandle(PIPE_FLAG | pipe_idx);
     let write_handle = FileHandle(PIPE_FLAG | PIPE_WRITE_FLAG | pipe_idx);

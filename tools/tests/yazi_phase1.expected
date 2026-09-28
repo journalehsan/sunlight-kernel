@@ -1,0 +1,3 @@
+[SYSCALL] spawn: /bin/yazi pid=
+[HELIOS-ABI-TRACE] sched_getaffinity pid=0 cpusetsize=128 online=
+[HELIOS-ABI-TRACE] eventfd2 fd=

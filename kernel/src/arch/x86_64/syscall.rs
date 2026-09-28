@@ -291,7 +291,10 @@ enum SignalPostAction {
 /// SIGKILL is uncatchable. Default-disposition fatal signals terminate.
 /// Success of `kill(2)` means the request was accepted (queued or force-applied),
 /// not that userspace has already observed death for catchable signals.
-fn deliver_pending_signals(process: &mut crate::process::Process) -> Option<SignalPostAction> {
+fn deliver_pending_signals(
+    process: &mut crate::process::Process,
+    dispositions: &[crate::process::signal::SigAction; 32],
+) -> Option<SignalPostAction> {
     use crate::process::signal::{SigHandler, Signal};
 
     // Forced kill first — never blocked, never ignorable.
@@ -311,7 +314,7 @@ fn deliver_pending_signals(process: &mut crate::process::Process) -> Option<Sign
         }
         process.signal_state.clear_pending(sig);
 
-        let action = process.signal_state.get_handler(sig);
+        let action = dispositions[(sig.as_u32() - 1) as usize];
         match action.handler {
             SigHandler::Ignore => {
                 crate::serial_println!("[SIG] {} ignored", sig_num);
@@ -387,7 +390,24 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     let mut num = frame.rax;
+    let original_linux_num = num;
+    let original_args = [frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9];
     let mut linux_compat = false;
+
+    // The Phase 1 compatibility gate captures only the first few observed
+    // runtime calls. Keep normal boots and other Linux processes quiet.
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+        && matches!(num, 9 | 28 | 56 | 204 | 290)
+    {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        static TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+        if TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 64 {
+            crate::serial_println!(
+                "[HELIOS-ABI-TRACE] syscall={} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x}",
+                num, frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9
+            );
+        }
+    }
 
     // Phase 4.5: Check if this is a Linux-compat process and translate syscall
     crate::sched::with_scheduler(|sched| {
@@ -483,7 +503,22 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 }
                 -18 => {
                     if linux_num == 56 {
-                        num = 1016; // Linux clone containment
+                        num = 1016; // Linux raw clone
+                    }
+                }
+                -43 => {
+                    if linux_num == 186 {
+                        num = 1041; // Linux gettid, distinct from group getpid
+                    }
+                }
+                -44 => {
+                    if linux_num == 202 {
+                        num = 1042; // Linux futex wait/wake
+                    }
+                }
+                -45 => {
+                    if linux_num == 231 {
+                        num = 1043; // Linux exit_group
                     }
                 }
                 -19 => {
@@ -618,6 +653,21 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                     }
                     if linux_num == 89 || linux_num == 267 {
                         num = 1037;
+                    }
+                }
+                -40 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_EVENTFD2 {
+                        num = 1038;
+                    }
+                }
+                -41 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_SCHED_GETAFFINITY {
+                        num = 1039;
+                    }
+                }
+                -42 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_MADVISE {
+                        num = 1040;
                     }
                 }
                 -38 => {
@@ -785,7 +835,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1013 => sys_linux_writev(frame),
         1014 => sys_linux_getrandom(frame),
         1015 => reject_linux_address_space_duplication("vfork"),
-        1016 => sys_linux_clone_unsupported(frame),
+        1016 => sys_linux_clone(frame),
+        1041 => sched::with_scheduler(|s| s.current_process().pid as u64),
+        1042 => sys_linux_futex(frame),
+        1043 => sys_linux_exit_group(frame.rdi as i32),
         1017 => sys_linux_clock_gettime(frame),
         1018 => sys_linux_renameat(frame),
         1019 => sys_linux_nanosleep(frame),
@@ -807,6 +860,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1035 => sys_linux_faccessat(frame),
         1036 => sys_linux_mkdirat(frame),
         1037 => sys_linux_readlinkat(frame),
+        1038 => sys_linux_eventfd2(frame),
+        1039 => sys_linux_sched_getaffinity(frame),
+        1040 => sys_linux_madvise(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -824,9 +880,36 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         result
     };
 
+    if linux_compat && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+        && matches!(original_linux_num, 157 | 302 | 97 | 45 | 44 | 202 | 200 | 16 | 13 | 14 | 7 | 232 | 281)
+    {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        static THREAD_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+        static FUTEX_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+        let permitted = if original_linux_num == 202 {
+            FUTEX_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 8
+        } else {
+            THREAD_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 64
+        };
+        if permitted {
+            let (tgid, tid) = sched::with_scheduler(|s| {
+                let p = s.current_process();
+                (p.linux_tgid.unwrap_or(p.pid), p.pid)
+            });
+            crate::serial_println!(
+                "[HELIOS-THREAD-TRACE] tgid={} tid={} syscall={} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x} result={:#x}",
+                tgid, tid, original_linux_num, original_args[0], original_args[1],
+                original_args[2], original_args[3], original_args[4], original_args[5], result,
+            );
+        }
+    }
+
     // Deliver pending signals before returning to user space
     let post_signal =
-        crate::sched::with_scheduler(|sched| deliver_pending_signals(sched.current_process_mut()));
+        crate::sched::with_scheduler(|sched| {
+            let dispositions = sched.current_shared_process().signal_state.dispositions();
+            deliver_pending_signals(sched.current_process_mut(), &dispositions)
+        });
     if let Some(SignalPostAction::Exit(code)) = post_signal {
         process_exit(code);
     }
@@ -885,7 +968,7 @@ fn resolve_current_path(path: &str) -> alloc::string::String {
         return alloc::string::String::from(path);
     }
 
-    let cwd = crate::sched::with_scheduler(|sched| sched.current_process().cwd.clone());
+    let cwd = crate::sched::with_scheduler(|sched| sched.current_shared_process().cwd.clone());
     if cwd == "/" {
         alloc::format!("/{}", path)
     } else {
@@ -1756,7 +1839,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
             p.cwd.clone(),
         )
     };
-    let thread_fd = sched.current_process().fd_table.clone_boxed();
+    let thread_fd = sched.current_shared_process().fd_table.clone_boxed();
 
     let new_tid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
 
@@ -1842,14 +1925,173 @@ fn reject_linux_address_space_duplication(operation: &str) -> u64 {
     linux_errno(38)
 }
 
-fn sys_linux_clone_unsupported(frame: &SyscallFrame) -> u64 {
-    const CLONE_VM: u64 = 0x0000_0100;
-    let operation = if frame.rdi & CLONE_VM != 0 {
-        "clone(CLONE_VM)"
-    } else {
-        "clone(process)"
+fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
+    use sunlight_compat_linux::clone::{validate_thread_flags, CloneFlagError, CLONE_PARENT_SETTID};
+    let flags = frame.rdi;
+    match validate_thread_flags(flags) {
+        Ok(()) => {}
+        Err(CloneFlagError::InvalidCombination) => return linux_errno(22),
+        Err(CloneFlagError::Unsupported) => return reject_linux_address_space_duplication("clone(process or unsupported flags)"),
+    }
+    let stack = frame.rsi;
+    let parent_tid = frame.rdx;
+    let child_tid = frame.r10;
+    let tls = frame.r8;
+    if stack < 8 || crate::memory::user::UserAddress::new(stack).is_err()
+        || flags & sunlight_compat_linux::clone::CLONE_SETTLS != 0
+            && crate::memory::user::UserAddress::new(tls).is_err()
+        || flags & sunlight_compat_linux::clone::CLONE_CHILD_CLEARTID != 0
+            && child_tid != 0 && crate::memory::user::UserAddress::new(child_tid).is_err()
+    {
+        return linux_errno(14);
+    }
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let Some(hhdm) = crate::HHDM_REQ.response().map(|resp| VirtAddr::new(resp.offset)) else {
+        return linux_errno(12);
     };
-    reject_linux_address_space_duplication(operation)
+    let current = sched.current_process();
+    if !current.is_linux_compat() {
+        return linux_errno(38);
+    }
+    if crate::memory::user::validate_process_write(current, hhdm, stack - 8, 8).is_err()
+        || flags & CLONE_PARENT_SETTID != 0
+            && crate::memory::user::validate_process_write(current, hhdm, parent_tid, 4).is_err()
+    {
+        return linux_errno(14);
+    }
+    // The scheduler lock serializes clone against mmap/munmap and FD mutation.
+    // Only the group leader owns the VM and shared resources; it remains live
+    // until every borrower is reaped, even if the leader exits first.
+    let tid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0).saturating_add(1);
+    let parent = sched.current_process();
+    let mut child = crate::process::Process::new_thread(
+        tid,
+        parent.ppid,
+        parent.name_str(),
+        parent.address_space.shared_handle(),
+        crate::process::fd_table::FdTable::new_boxed(),
+        crate::process::env::EnvMap::inherit(&parent.env),
+        parent.uid,
+        parent.gid,
+        parent.nice,
+        parent.capabilities.clone(),
+        parent.tty_tab,
+        parent.tty_generation,
+    );
+    child.linux_tgid = parent.linux_tgid;
+    child.personality = parent.personality;
+    if let Some(state) = child.linux_state_mut() {
+        state.tid_address = if flags & sunlight_compat_linux::clone::CLONE_CHILD_CLEARTID != 0 {
+            child_tid
+        } else {
+            0
+        };
+        state.poll_wake_tick = None;
+        state.eventfd_wait = None;
+        state.futex_wait = None;
+        state.robust_list_head = 0;
+        state.robust_list_len = 0;
+        state.altstack = [0, 2, 0];
+    }
+    child.signal_state.set_blocked_mask(parent.signal_state.get_blocked_mask());
+    child.cpu_mask = parent.cpu_mask;
+    child.init_context(frame.rcx, stack);
+    // On raw x86-64 clone, RCX is the return RIP and R11 the return RFLAGS.
+    // IRET restores the same user register state as SYSRET, with child RAX=0.
+    unsafe {
+        let regs = child.context_rsp as *mut u64;
+        for (index, value) in [
+            frame.r15, frame.r14, frame.r13, frame.r12, frame.rbp,
+            frame.rbx, frame.r11, frame.r10, frame.r9, frame.r8,
+            frame.rdi, frame.rsi, frame.rdx, frame.rcx, 0,
+        ].into_iter().enumerate() {
+            regs.add(index).write(value);
+        }
+        regs.add(17).write(frame.r11 | 0x200);
+    }
+    child.fs_base = if flags & sunlight_compat_linux::clone::CLONE_SETTLS != 0 {
+        tls
+    } else {
+        parent.fs_base
+    };
+    // The prevalidated parent store is done before the child can be runnable.
+    if flags & CLONE_PARENT_SETTID != 0 {
+        if crate::memory::user::copy_to_process_bytes(
+            parent, hhdm, parent_tid, &(tid as u32).to_ne_bytes(),
+        ).is_err() {
+            return linux_errno(14);
+        }
+    }
+    let idx = sched.add_process(child);
+    sched.enqueue_ready(idx);
+    crate::serial_println!("[HELIOS-THREAD] clone tgid={} tid={} tls={:#x} stack={:#x}",
+        sched.processes[idx].linux_tgid.unwrap_or(tid), tid, tls, stack);
+    tid as u64
+}
+
+/// Futexes are keyed by the shared address-space identity and the aligned
+/// userspace u32 address. The scheduler lock closes the compare/enqueue race.
+fn sys_linux_futex(frame: &SyscallFrame) -> u64 {
+    let address = frame.rdi;
+    let op = frame.rsi;
+    let command = op & 0x7f;
+    // PRIVATE is a keying hint. For this supported shared-VM subset the VM
+    // identity and address are also the correct private-futex key.
+    if op & !(0x7f | 0x80) != 0 || !matches!(command, 0 | 1) {
+        return linux_errno(38);
+    }
+    if address & 3 != 0 {
+        return linux_errno(22);
+    }
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let Some(hhdm) = crate::HHDM_REQ.response().map(|resp| VirtAddr::new(resp.offset)) else {
+        return linux_errno(12);
+    };
+    let current = sched.current_process();
+    if !current.is_linux_compat() {
+        return linux_errno(38);
+    }
+    let mut bytes = [0; 4];
+    if crate::memory::user::copy_from_process_bytes(current, hhdm, address, &mut bytes).is_err() {
+        return linux_errno(14);
+    }
+    let identity = current.address_space.identity();
+    if command == 1 {
+        return sched.wake_linux_futex(identity, address, frame.rdx as usize) as u64;
+    }
+    if frame.r10 != 0 {
+        // A timed wait needs Linux relative timespec handling, not a fake
+        // indefinite sleep. No timed wait was in the observed clone path.
+        return linux_errno(38);
+    }
+    if u32::from_ne_bytes(bytes) != frame.rdx as u32 {
+        return linux_errno(11); // EAGAIN
+    }
+    if let Some(state) = sched.current_process_mut().linux_state_mut() {
+        state.futex_wait = Some(address);
+    }
+    let idx = sched.current_process_index().unwrap_or(0);
+    sched.set_state(idx, ProcessState::BlockedOnIo);
+    drop(sched);
+    sched::request_reschedule_after_sysret();
+    0
+}
+
+fn sys_linux_exit_group(code: i32) -> ! {
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let tgid = sched.current_process().linux_tgid;
+    let current_tid = sched.current_process().pid;
+    if let Some(tgid) = tgid {
+        let siblings: alloc::vec::Vec<usize> = sched.processes.iter()
+            .filter(|p| p.linux_tgid == Some(tgid) && p.pid != current_tid
+                && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
+            .map(|p| p.pid).collect();
+        for tid in siblings {
+            sched.terminate_process_by_pid(tid, code, "linux-exit-group");
+        }
+    }
+    drop(sched);
+    process_exit(code)
 }
 
 /// Syscall: Exec (31)
@@ -2434,7 +2676,10 @@ mod spawn_service_capability_tests {
 
 /// Syscall: Getpid (33)
 fn sys_getpid() -> u64 {
-    sched::with_scheduler(|s| s.current_process().pid as u64)
+    sched::with_scheduler(|s| {
+        let process = s.current_process();
+        process.linux_tgid.unwrap_or(process.pid) as u64
+    })
 }
 
 fn sys_get_process_generation() -> u64 {
@@ -3191,7 +3436,7 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
     }
     let rights = crate::process::fd_table::CapRights::new(rights_bits);
     match sched
-        .current_process_mut()
+        .current_shared_process_mut()
         .fd_table
         .open(handle, rights, flags as u32)
     {
@@ -3241,7 +3486,7 @@ fn sys_secret_create(frame: &mut SyscallFrame) -> u64 {
     let rights = crate::process::fd_table::CapRights::new(
         crate::process::fd_table::CapRights::WRITE | crate::process::fd_table::CapRights::FSTAT,
     );
-    match sched.current_process_mut().fd_table.open(
+    match sched.current_shared_process_mut().fd_table.open(
         crate::process::fd_table::FileHandle::vfs(handle.0),
         rights,
         O_CLOEXEC as u32,
@@ -3341,7 +3586,7 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
     let abs_path: &str = if path.starts_with('/') {
         path
     } else {
-        let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
+        let cwd = crate::sched::with_scheduler(|s| s.current_shared_process().cwd.clone());
         resolved_buf = if cwd == "/" {
             alloc::format!("/{}", path)
         } else {
@@ -3371,7 +3616,7 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
     }
 
     crate::sched::with_scheduler(|s| {
-        s.current_process_mut().cwd = alloc::string::String::from(abs_path);
+        s.current_shared_process_mut().cwd = alloc::string::String::from(abs_path);
     });
     crate::serial_println!("[HELIOS] chdir({}) -> ok", abs_path);
     0
@@ -3382,7 +3627,7 @@ fn sys_getcwd(frame: &mut SyscallFrame) -> u64 {
     if frame.rdi == 0 || buf_len == 0 {
         return ERR_EINVAL;
     }
-    let cwd = crate::sched::with_scheduler(|s| s.current_process().cwd.clone());
+    let cwd = crate::sched::with_scheduler(|s| s.current_shared_process().cwd.clone());
     let bytes = cwd.as_bytes();
     if bytes.len() >= buf_len {
         return ERR_ERANGE;
@@ -3508,10 +3753,10 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
     let heap_base = crate::process::layout::USER_HEAP_START;
 
     let mut sched = crate::sched::SCHEDULER.lock();
-    let pid = sched.current_process().pid;
+    let pid = sched.current_shared_process().pid;
 
     let (brk_base, current_brk, mmap_next) = {
-        let Some(state) = sched.current_process_mut().linux_state_mut() else {
+        let Some(state) = sched.current_shared_process_mut().linux_state_mut() else {
             return linux_errno(sunlight_compat_linux::abi::ENOSYS as u64);
         };
         if state.brk_base == 0 {
@@ -3521,7 +3766,7 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
         (
             state.brk_base,
             state.brk_current,
-            sched.current_process().mmap_next,
+            sched.current_shared_process().mmap_next,
         )
     };
 
@@ -3547,7 +3792,7 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
 
         match result {
             Ok(_) => {
-                if let Some(state) = sched.current_process_mut().linux_state_mut() {
+                if let Some(state) = sched.current_shared_process_mut().linux_state_mut() {
                     state.brk_current = requested_brk;
                 }
             }
@@ -3569,17 +3814,17 @@ fn sys_brk(frame: &mut SyscallFrame) -> u64 {
         {
             return current_brk;
         }
-        if let Some(state) = sched.current_process_mut().linux_state_mut() {
+        if let Some(state) = sched.current_shared_process_mut().linux_state_mut() {
             state.brk_current = requested_brk;
         }
     } else {
-        if let Some(state) = sched.current_process_mut().linux_state_mut() {
+        if let Some(state) = sched.current_shared_process_mut().linux_state_mut() {
             state.brk_current = requested_brk;
         }
     }
 
     sched
-        .current_process()
+        .current_shared_process()
         .linux_state()
         .map(|state| state.brk_current)
         .unwrap_or(current_brk)
@@ -3626,6 +3871,134 @@ fn close_file_handle(handle: crate::process::fd_table::FileHandle) {
             let _ = vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle()));
         }
     }
+}
+
+fn sys_linux_eventfd2(frame: &mut SyscallFrame) -> u64 {
+    use crate::process::{eventfd, fd_table::{CapRights, FileHandle}};
+    let flags = frame.rsi;
+    if flags > u32::MAX as u64 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let idx = match eventfd::create(frame.rdi as u32, flags as u32) {
+        Ok(idx) => idx,
+        Err(_) => return linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
+    };
+    let result = crate::sched::with_scheduler(|sched| {
+        sched.current_shared_process_mut().fd_table.open(
+            FileHandle::eventfd(idx),
+            CapRights::new(CapRights::READ | CapRights::WRITE | CapRights::FSTAT),
+            (flags as u32 & (eventfd::EFD_CLOEXEC | eventfd::EFD_NONBLOCK)) | 2,
+        )
+    });
+    match result {
+        Ok(fd) => {
+            if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
+                use core::sync::atomic::{AtomicUsize, Ordering};
+                static EVENTFD_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+                if EVENTFD_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 8 {
+                    crate::serial_println!("[HELIOS-ABI-TRACE] eventfd2 fd={} flags={:#x}", fd, flags);
+                }
+            }
+            fd as u64
+        }
+        Err(_) => {
+            eventfd::release(idx);
+            linux_errno(sunlight_compat_linux::abi::EMFILE as u64)
+        }
+    }
+}
+
+fn sys_linux_sched_getaffinity(frame: &mut SyscallFrame) -> u64 {
+    use sunlight_compat_linux::{abi, affinity};
+    // The kernel ABI takes pid_t and unsigned int, independently of the
+    // 64-bit register widths. PID 0 designates the calling task.
+    let pid = frame.rdi as i32;
+    let cpusetsize = frame.rsi as u32 as usize;
+    if pid < 0 {
+        return linux_errno(abi::ESRCH as u64);
+    }
+    let (bytes, copied) = {
+        let sched = crate::sched::SCHEDULER.lock();
+        if pid != 0 && !sched.processes.iter().any(|p| {
+            p.pid == pid as usize && !matches!(p.state,
+                crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped)
+        }) {
+            return linux_errno(abi::ESRCH as u64);
+        }
+        match affinity::mask_for_online_cores(sched.online_cores, cpusetsize) {
+            Some(mask) => mask,
+            None => return linux_errno(abi::EINVAL as u64),
+        }
+    };
+    if copy_to_user(frame.rdx, &bytes).is_err() {
+        return linux_errno(abi::EFAULT as u64);
+    }
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        static AFFINITY_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+        if AFFINITY_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 8 {
+            crate::serial_println!(
+                "[HELIOS-ABI-TRACE] sched_getaffinity pid={} cpusetsize={} online={} mask={:#x} ret={}",
+                pid, cpusetsize, u64::from_ne_bytes(bytes).count_ones(),
+                u64::from_ne_bytes(bytes), copied
+            );
+        }
+    }
+    copied as u64
+}
+
+fn sys_linux_madvise(frame: &mut SyscallFrame) -> u64 {
+    use crate::process::region::{MappingKind, RegionBacking, RegionPolicy};
+    use sunlight_compat_linux::{abi, madvise};
+
+    let (start, end) = match madvise::checked_range(frame.rdi, frame.rsi, frame.rdx as u32) {
+        Ok(range) if frame.rdx <= u32::MAX as u64 => range,
+        _ => return linux_errno(abi::EINVAL as u64),
+    };
+    let Ok(span) = usize::try_from(end - start) else {
+        return linux_errno(abi::EINVAL as u64);
+    };
+    if crate::memory::user::UserRange::new(start, span).is_err() {
+        return linux_errno(abi::ENOMEM as u64);
+    }
+    if start == end {
+        return 0;
+    }
+    let sched = crate::sched::SCHEDULER.lock();
+    // A Linux worker borrows the group owner's VM ledger. Anonymous backing
+    // is tagged with that owner's PID, so validate against the shared owner.
+    let proc = sched.current_shared_process();
+    let mut cursor = start;
+    while cursor < end {
+        let Some(region) = proc.address_space.lookup_region(cursor) else {
+            return linux_errno(abi::ENOMEM as u64);
+        };
+        if region.kind != MappingKind::Anonymous
+            || region.policy.contains(RegionPolicy::SHARED)
+            || !matches!(region.backing, RegionBacking::AnonymousOwner(owner) if owner == proc.pid as u32)
+        {
+            return linux_errno(95); // EOPNOTSUPP: this mapping class is not supported.
+        }
+        cursor = region.end.min(end);
+    }
+    // Both observed modes can change future page content/residency. Helios's
+    // eager anonymous mappings currently lack lazy discard/reclamation.
+    // Report the operation unavailable after validation; no discard or
+    // lazy-reclaim semantics may be advertised before the VM supports them.
+    linux_errno(abi::ENOSYS as u64)
+}
+
+fn wait_linux_eventfd(frame: &mut SyscallFrame, sched: &mut crate::sched::Scheduler,
+                      idx: u32, value: u64, writing: bool) -> u64 {
+    sched.block_current_linux_poll(u64::MAX);
+    if let Some(state) = sched.current_process_mut().linux_state_mut() {
+        state.eventfd_wait = Some((idx, value, writing));
+    }
+    // SYSCALL is two bytes. On wakeup retry the operation and its condition
+    // atomically, rather than returning a short/zero transfer to userspace.
+    frame.rcx = frame.rcx.saturating_sub(2);
+    crate::sched::request_reschedule();
+    0
 }
 
 fn sys_linux_openat(frame: &mut SyscallFrame) -> u64 {
@@ -3730,7 +4103,7 @@ fn linux_resolve_at(dirfd: i32, path_ptr: u64) -> Result<alloc::string::String, 
     } else {
         let vfs_handle = {
             let sched = crate::sched::SCHEDULER.lock();
-            match sched.current_process().fd_table.get(dirfd) {
+            match sched.current_shared_process().fd_table.get(dirfd) {
                 None => return Err(linux_errno(sunlight_compat_linux::abi::EBADF as u64)),
                 Some(entry) if entry.handle.is_vfs() => entry.handle.vfs_handle(),
                 Some(_) => return Err(linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64)),
@@ -3844,7 +4217,7 @@ fn sys_linux_dup3(frame: &mut SyscallFrame) -> u64 {
     let cloexec = flags & sunlight_compat_linux::abi::O_CLOEXEC != 0;
     let mut sched = crate::sched::SCHEDULER.lock();
     match sched
-        .current_process_mut()
+        .current_shared_process_mut()
         .fd_table
         .dup3(old_fd, new_fd, cloexec)
     {
@@ -3901,14 +4274,14 @@ fn linux_positional_vfs_io(frame: &mut SyscallFrame, write: bool) -> u64 {
         crate::process::fd_table::CapRights::READ
     };
     if sched
-        .current_process()
+        .current_shared_process()
         .fd_table
         .check_rights(fd, crate::process::fd_table::CapRights::new(required))
         .is_err()
     {
         return linux_errno(sunlight_compat_linux::abi::EBADF as u64);
     }
-    let Some(entry) = sched.current_process().fd_table.get(fd).copied() else {
+    let Some(entry) = sched.current_shared_process().fd_table.get(fd).copied() else {
         return linux_errno(sunlight_compat_linux::abi::EBADF as u64);
     };
     if !entry.handle.is_vfs() {
@@ -3978,7 +4351,7 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
 
     let (vfs_handle, skip) = {
         let sched = crate::sched::SCHEDULER.lock();
-        match sched.current_process().fd_table.get(fd) {
+        match sched.current_shared_process().fd_table.get(fd) {
             Some(entry) if entry.handle.is_vfs() => (entry.handle.vfs_handle(), entry.offset),
             Some(_) => return linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64),
             None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
@@ -4064,7 +4437,7 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
         return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
     }
     let mut sched = crate::sched::SCHEDULER.lock();
-    if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
+    if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
         entry.offset = skip + consumed;
     }
     packed.len() as u64
@@ -4180,7 +4553,7 @@ fn sys_linux_readlinkat(frame: &mut SyscallFrame) -> u64 {
 
 fn abandon_process_fds(sched: &mut crate::sched::Scheduler, fds: [i32; 2]) {
     for fd in fds {
-        if let Ok(entry) = sched.current_process_mut().fd_table.take(fd) {
+        if let Ok(entry) = sched.current_shared_process_mut().fd_table.take(fd) {
             close_file_handle(entry.handle);
         }
     }
@@ -4306,7 +4679,7 @@ fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
             crate::serial_println!("[HELIOS-NOTE] interactive-ready");
         }
         sched
-            .current_process()
+            .current_shared_process()
             .fd_table
             .get(0)
             .map(|e| {
@@ -4325,31 +4698,22 @@ fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
         let events = i16::from_ne_bytes(pollfds[i * 8 + 4..i * 8 + 6].try_into().unwrap());
         let mut revents: i16 = 0;
 
-        if (events & 0x0001) != 0 {
-            let readable = if fd == 0 {
-                has_input
-            } else {
-                let sched = crate::sched::SCHEDULER.lock();
-                sched
-                    .current_process()
-                    .fd_table
-                    .get(fd)
-                    .map(|e| {
-                        let h = e.handle;
-                        if h.is_tty_stdin() {
-                            crate::process::tty_io::has_stdin(h.tty_tab() as usize)
-                        } else if h.is_pipe() && !h.pipe_is_write() {
-                            crate::process::pipe::pipe_has_data_or_eof(h.pipe_index())
-                        } else {
-                            false
-                        }
-                    })
-                    .unwrap_or(false)
-            };
-            if readable {
-                revents |= 0x0001; // POLLIN
-                ready_count += 1;
-            }
+        let (readable, writable) = if fd == 0 && has_input {
+            (true, false)
+        } else {
+            let sched = crate::sched::SCHEDULER.lock();
+            sched.current_shared_process().fd_table.get(fd)
+                .map(|e| crate::process::epoll::fd_ready(fd, e.handle, sched.current_process()))
+                .unwrap_or((false, false))
+        };
+        if events & 0x0001 != 0 && readable {
+            revents |= 0x0001;
+        }
+        if events & 0x0004 != 0 && writable {
+            revents |= 0x0004;
+        }
+        if revents != 0 {
+            ready_count += 1;
         }
         pollfds[i * 8 + 6..i * 8 + 8].copy_from_slice(&revents.to_ne_bytes());
     }
@@ -4441,7 +4805,7 @@ fn sys_linux_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
 
     let epoll_idx = {
         let sched = crate::sched::SCHEDULER.lock();
-        let Some(ep_entry) = sched.current_process().fd_table.get(epfd).copied() else {
+        let Some(ep_entry) = sched.current_shared_process().fd_table.get(epfd).copied() else {
             return linux_errno(9); // EBADF
         };
         if !ep_entry.handle.is_epoll() {
@@ -4450,7 +4814,7 @@ fn sys_linux_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
 
         // Target must exist for ADD/MOD (except we allow ADD only for open fds).
         if op == EPOLL_CTL_ADD || op == EPOLL_CTL_MOD {
-            if sched.current_process().fd_table.get(target_fd).is_none() {
+            if sched.current_shared_process().fd_table.get(target_fd).is_none() {
                 return linux_errno(9);
             }
         }
@@ -4512,7 +4876,7 @@ fn sys_linux_epoll_wait(frame: &mut SyscallFrame) -> u64 {
 
     let epoll_idx = {
         let sched = crate::sched::SCHEDULER.lock();
-        let Some(ep_entry) = sched.current_process().fd_table.get(epfd) else {
+        let Some(ep_entry) = sched.current_shared_process().fd_table.get(epfd) else {
             return linux_errno(9);
         };
         if !ep_entry.handle.is_epoll() {
@@ -4570,7 +4934,7 @@ fn sys_linux_pipe2(frame: &mut SyscallFrame) -> u64 {
             if flags & O_CLOEXEC != 0 {
                 // Apply CLOEXEC on both ends if the open path did not.
                 for fd in [read_fd, write_fd] {
-                    if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
+                    if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
                         entry.flags |= O_CLOEXEC;
                     }
                 }
@@ -4628,7 +4992,7 @@ fn sys_linux_socketpair(frame: &mut SyscallFrame) -> u64 {
         Ok((read_fd, write_fd)) => {
             if flags & SOCK_CLOEXEC != 0 {
                 for fd in [read_fd, write_fd] {
-                    if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
+                    if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
                         entry.flags |= SOCK_CLOEXEC;
                     }
                 }
@@ -4812,7 +5176,7 @@ fn sys_linux_rt_sigaction(frame: &mut SyscallFrame) -> u64 {
     };
     if oldact != 0 {
         let action = crate::sched::with_scheduler(|sched| {
-            sched.current_process().signal_state.get_handler(signal)
+            sched.current_shared_process().signal_state.get_handler(signal)
         });
         let handler = match action.handler {
             crate::process::signal::SigHandler::Default => 0,
@@ -4851,7 +5215,7 @@ fn sys_linux_rt_sigaction(frame: &mut SyscallFrame) -> u64 {
         };
         let result = crate::sched::with_scheduler(|sched| {
             sched
-                .current_process_mut()
+                .current_shared_process_mut()
                 .signal_state
                 .set_handler(signal, action)
         });
@@ -4938,7 +5302,7 @@ fn sys_linux_mmap(frame: &mut SyscallFrame) -> u64 {
     };
     if frame.rdi == 0 {
         crate::sched::with_scheduler(|sched| {
-            let process = sched.current_process_mut();
+            let process = sched.current_shared_process_mut();
             if process.is_linux_compat() && process.mmap_next == 0 {
                 let brk_end = process
                     .linux_state()
@@ -5120,7 +5484,7 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
             let size = {
                 let sched = crate::sched::SCHEDULER.lock();
                 let process = sched.current_process();
-                let Some(entry) = process.fd_table.get(fd).copied() else {
+                let Some(entry) = sched.current_shared_process().fd_table.get(fd).copied() else {
                     return linux_errno(9); // EBADF
                 };
                 if !entry.handle.is_tty_stdin() && !entry.handle.is_tty_stdout() {
@@ -5155,7 +5519,7 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
         }
         TIOCSWINSZ => {
             let sched = crate::sched::SCHEDULER.lock();
-            let Some(entry) = sched.current_process().fd_table.get(fd) else {
+            let Some(entry) = sched.current_shared_process().fd_table.get(fd) else {
                 return linux_errno(9); // EBADF
             };
             if !entry.handle.is_tty_stdin() && !entry.handle.is_tty_stdout() {
@@ -5552,7 +5916,7 @@ fn sys_file_reserve(frame: &mut SyscallFrame) -> u64 {
     let entry = {
         let sched = crate::sched::SCHEDULER.lock();
         if sched
-            .current_process()
+            .current_shared_process()
             .fd_table
             .check_rights(
                 fd,
@@ -5564,7 +5928,7 @@ fn sys_file_reserve(frame: &mut SyscallFrame) -> u64 {
         {
             return ERR_EBADF;
         }
-        match sched.current_process().fd_table.get(fd).copied() {
+        match sched.current_shared_process().fd_table.get(fd).copied() {
             Some(entry) if entry.handle.is_vfs() => entry,
             _ => return ERR_EBADF,
         }
@@ -5586,7 +5950,7 @@ fn sys_file_sync(frame: &mut SyscallFrame) -> u64 {
     let entry = {
         let sched = crate::sched::SCHEDULER.lock();
         if sched
-            .current_process()
+            .current_shared_process()
             .fd_table
             .check_rights(
                 fd,
@@ -5598,7 +5962,7 @@ fn sys_file_sync(frame: &mut SyscallFrame) -> u64 {
         {
             return ERR_EBADF;
         }
-        match sched.current_process().fd_table.get(fd).copied() {
+        match sched.current_shared_process().fd_table.get(fd).copied() {
             Some(entry) if entry.handle.is_vfs() => entry,
             _ => return ERR_EBADF,
         }
@@ -5723,7 +6087,7 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
     // is no ambiguous IPC completion to reconcile here.
     let handle = {
         let mut sched = crate::sched::SCHEDULER.lock();
-        match sched.current_process_mut().fd_table.take(fd) {
+        match sched.current_shared_process_mut().fd_table.take(fd) {
             Ok(entry) => entry.handle,
             Err(_) => return ERR_EBADF,
         }
@@ -5731,6 +6095,9 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
 
     if handle.is_pipe() {
         close_file_handle(handle);
+        0
+    } else if handle.is_eventfd() {
+        // FdTable::take already dropped this descriptor's eventfd reference.
         0
     } else if handle.is_epoll() {
         close_file_handle(handle);
@@ -5769,16 +6136,42 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
 
     // Distinguish an absent descriptor from a valid descriptor without READ
     // capability; libc exposes these as EBADF and EACCES respectively.
-    if sched.current_process().fd_table.get(fd).is_none() {
+    if sched.current_shared_process().fd_table.get(fd).is_none() {
         return ERR_EBADF;
     }
-    match sched.current_process().fd_table.check_rights(
+    match sched.current_shared_process().fd_table.check_rights(
         fd,
         crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::READ),
     ) {
         Ok(()) => {
-            if let Some(&fd_entry) = sched.current_process().fd_table.get(fd) {
-                if fd_entry.handle.is_pipe() {
+            if let Some(&fd_entry) = sched.current_shared_process().fd_table.get(fd) {
+                if fd_entry.handle.is_eventfd() {
+                    use crate::process::eventfd::{self, EventError, EFD_NONBLOCK};
+                    if count < 8 {
+                        return linux_errno(22);
+                    }
+                    let idx = fd_entry.handle.eventfd_index();
+                    let nonblock = eventfd::status(idx) & EFD_NONBLOCK != 0;
+                    match eventfd::read(idx) {
+                        Ok(value) => {
+                            let is_linux = sched.current_process().is_linux_compat();
+                            // A read frees capacity even when the later user
+                            // copy faults; wake capacity waiters immediately.
+                            sched.wake_linux_eventfd(idx);
+                            if let Err(error) = crate::memory::user::copy_to_process_bytes(
+                                sched.current_process(), hhdm, frame.rsi, &value.to_ne_bytes(),
+                            ) {
+                                return user_memory_failure_for(is_linux, error);
+                            }
+                            8
+                        }
+                        Err(EventError::WouldBlock) if nonblock => linux_errno(11),
+                        Err(EventError::WouldBlock) => {
+                            wait_linux_eventfd(frame, &mut sched, idx, 0, false)
+                        }
+                        Err(EventError::Invalid) => linux_errno(9),
+                    }
+                } else if fd_entry.handle.is_pipe() {
                     let pipe_idx = fd_entry.handle.pipe_index();
                     let mut kernel_buf = [0u8; 4096];
                     let read_size = core::cmp::min(count, 4096);
@@ -5834,7 +6227,7 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                             ) {
                                 return user_memory_failure_for(is_linux, error);
                             }
-                            if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
+                            if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
                                 // The overflow preflight above covers `n <= to_read`.
                                 entry.offset += n;
                             }
@@ -5886,9 +6279,12 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
                 ERR_EBADF
             }
         }
-        Err(_) => {
-            crate::serial_println!("[SYSCALL] read fd={} (capability denied)", fd);
-            ERR_EACCES
+        Err(error) => {
+            crate::serial_println!("[SYSCALL] read fd={} ({:?})", fd, error);
+            match error {
+                crate::process::fd_table::FdError::InvalidFd => ERR_EBADF,
+                _ => ERR_EACCES,
+            }
         }
     }
 }
@@ -5913,13 +6309,39 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
     let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
     // Check if fd is valid and has WRITE right
-    match sched.current_process().fd_table.check_rights(
+    match sched.current_shared_process().fd_table.check_rights(
         fd,
         crate::process::fd_table::CapRights::new(crate::process::fd_table::CapRights::WRITE),
     ) {
         Ok(()) => {
-            if let Some(&fd_entry) = sched.current_process().fd_table.get(fd) {
-                if fd_entry.handle.is_pipe() {
+            if let Some(&fd_entry) = sched.current_shared_process().fd_table.get(fd) {
+                if fd_entry.handle.is_eventfd() {
+                    use crate::process::eventfd::{self, EventError, EFD_NONBLOCK};
+                    if count != 8 {
+                        return linux_errno(22);
+                    }
+                    let mut bytes = [0u8; 8];
+                    let is_linux = sched.current_process().is_linux_compat();
+                    if let Err(error) = crate::memory::user::copy_from_process_bytes(
+                        sched.current_process(), hhdm, frame.rsi, &mut bytes,
+                    ) {
+                        return user_memory_failure_for(is_linux, error);
+                    }
+                    let value = u64::from_ne_bytes(bytes);
+                    let idx = fd_entry.handle.eventfd_index();
+                    let nonblock = eventfd::status(idx) & EFD_NONBLOCK != 0;
+                    match eventfd::write(idx, value) {
+                        Ok(()) => {
+                            sched.wake_linux_eventfd(idx);
+                            8
+                        }
+                        Err(EventError::WouldBlock) if nonblock => linux_errno(11),
+                        Err(EventError::WouldBlock) => {
+                            wait_linux_eventfd(frame, &mut sched, idx, value, true)
+                        }
+                        Err(EventError::Invalid) => linux_errno(22),
+                    }
+                } else if fd_entry.handle.is_pipe() {
                     let pipe_idx = fd_entry.handle.pipe_index();
                     let write_size = core::cmp::min(count, 4096);
                     let mut kernel_buf = [0u8; 4096];
@@ -5975,7 +6397,7 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                     };
                     match written {
                         Ok((offset, n)) => {
-                            if let Some(entry) = sched.current_process_mut().fd_table.get_mut(fd) {
+                            if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
                                 entry.offset = offset + n;
                             }
                             n as u64
@@ -6041,9 +6463,12 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
                 u64::MAX
             }
         }
-        Err(_) => {
-            crate::serial_println!("[SYSCALL] write fd={} (capability denied)", fd);
-            u64::MAX // EACCES
+        Err(error) => {
+            crate::serial_println!("[SYSCALL] write fd={} ({:?})", fd, error);
+            match error {
+                crate::process::fd_table::FdError::InvalidFd => ERR_EBADF,
+                _ => ERR_EACCES,
+            }
         }
     }
 }
@@ -6061,7 +6486,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
 
     // Copy the two values we need before releasing the borrow.
     let is_linux = sched.current_process().is_linux_compat();
-    let (current_offset, vfs_handle) = match sched.current_process().fd_table.get(fd) {
+    let (current_offset, vfs_handle) = match sched.current_shared_process().fd_table.get(fd) {
         Some(e) if e.handle.is_vfs() => (e.offset, e.handle.vfs_handle()),
         Some(_) => {
             return if is_linux {
@@ -6089,7 +6514,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
                 };
             } // EINVAL
             let new_off = offset as usize;
-            if let Some(e) = sched.current_process_mut().fd_table.get_mut(fd) {
+            if let Some(e) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
                 e.offset = new_off;
             }
             new_off as u64
@@ -6098,7 +6523,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
         1 => match (current_offset as i64).checked_add(offset) {
             Some(v) if v >= 0 => {
                 let new_off = v as usize;
-                if let Some(e) = sched.current_process_mut().fd_table.get_mut(fd) {
+                if let Some(e) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
                     e.offset = new_off;
                 }
                 new_off as u64
@@ -6131,7 +6556,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
                 Some(v) if v >= 0 => {
                     let new_off = v as usize;
                     let mut sched2 = crate::sched::SCHEDULER.lock();
-                    if let Some(e) = sched2.current_process_mut().fd_table.get_mut(fd) {
+                    if let Some(e) = sched2.current_shared_process_mut().fd_table.get_mut(fd) {
                         e.offset = new_off;
                     }
                     new_off as u64
@@ -6152,7 +6577,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
 fn sys_dup(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
     let mut sched = crate::sched::SCHEDULER.lock();
-    match sched.current_process_mut().fd_table.dup(fd) {
+    match sched.current_shared_process_mut().fd_table.dup(fd) {
         Ok(new_fd) => new_fd as u64,
         Err(_) => ERR_EBADF,
     }
@@ -6162,7 +6587,7 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
     let old_fd = frame.rdi as i32;
     let new_fd = frame.rsi as i32;
     let mut sched = crate::sched::SCHEDULER.lock();
-    match sched.current_process_mut().fd_table.dup2(old_fd, new_fd) {
+    match sched.current_shared_process_mut().fd_table.dup2(old_fd, new_fd) {
         Ok((fd, displaced)) => {
             drop(sched);
             if let Some(handle) = displaced {
@@ -6225,7 +6650,7 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
     // Read vfs_handle from fd table; release scheduler before taking VFS lock.
     let vfs_handle = {
         let sched = crate::sched::SCHEDULER.lock();
-        match sched.current_process().fd_table.get(fd) {
+        match sched.current_shared_process().fd_table.get(fd) {
             Some(e) if e.handle.is_vfs() => e.handle.vfs_handle(),
             Some(_) => {
                 return if is_linux {
@@ -6300,12 +6725,15 @@ fn sys_fcntl(frame: &mut SyscallFrame) -> u64 {
     let arg = frame.rdx;
 
     let mut sched = crate::sched::SCHEDULER.lock();
-    let proc = sched.current_process_mut();
+    let proc = sched.current_shared_process_mut();
 
     let open_flags = match proc.fd_table.get(fd) {
         Some(desc) => desc.flags,
         None => return ERR_EBADF,
     };
+    let event_idx = proc.fd_table.get(fd).and_then(|entry| {
+        entry.handle.is_eventfd().then_some(entry.handle.eventfd_index())
+    });
 
     match cmd {
         F_GETFD => {
@@ -6326,7 +6754,13 @@ fn sys_fcntl(frame: &mut SyscallFrame) -> u64 {
             }
             0
         }
-        F_GETFL => (open_flags as u64) & !O_CLOEXEC,
+        F_GETFL => {
+            if let Some(idx) = event_idx {
+                2 | crate::process::eventfd::status(idx) as u64
+            } else {
+                (open_flags as u64) & !O_CLOEXEC
+            }
+        }
         F_SETFL => {
             // Honour O_APPEND; O_NONBLOCK is already the pipe/tty behaviour.
             const STATUS_MASK: u32 = (sunlight_compat_linux::abi::O_APPEND
@@ -6336,6 +6770,9 @@ fn sys_fcntl(frame: &mut SyscallFrame) -> u64 {
                 return ERR_EBADF;
             };
             entry.flags = (entry.flags & !STATUS_MASK) | (arg as u32 & STATUS_MASK);
+            if let Some(idx) = event_idx {
+                crate::process::eventfd::set_status(idx, arg as u32);
+            }
             0
         }
         F_DUPFD | F_DUPFD_CLOEXEC => {

@@ -2,6 +2,7 @@ pub mod address_space;
 pub mod elf_loader;
 pub mod env;
 pub mod epoll;
+pub mod eventfd;
 pub mod fd_table;
 pub mod fork;
 pub mod layout;
@@ -87,9 +88,13 @@ pub struct LinuxProcessState {
     pub brk_base: u64,
     pub brk_current: u64,
     pub poll_wake_tick: Option<u64>,
+    /// (eventfd pool index, required write value, waiting to write).
+    pub eventfd_wait: Option<(u32, u64, bool)>,
     pub termios: crate::arch::x86_64::syscall::LinuxTermios,
     pub altstack: [u64; 3],
     pub tid_address: u64,
+    /// 32-bit futex address on which this thread is sleeping, if any.
+    pub futex_wait: Option<u64>,
     pub robust_list_head: u64,
     pub robust_list_len: u64,
     pub note_ready_logged: bool,
@@ -101,14 +106,25 @@ impl LinuxProcessState {
             brk_base: 0,
             brk_current: 0,
             poll_wake_tick: None,
+            eventfd_wait: None,
             termios: crate::arch::x86_64::syscall::LinuxTermios::default_cooked(),
             altstack: [0, 2, 0],
             tid_address: 0,
+            futex_wait: None,
             robust_list_head: 0,
             robust_list_len: 0,
             note_ready_logged: false,
         }
     }
+}
+
+/// Thread-group-owned SEM_UNDO context. System V semaphore operations are not
+/// implemented, so this table stays empty; future semop support can attach
+/// adjustments to the existing group owner rather than to individual tasks.
+#[derive(Default)]
+pub struct LinuxSysvSemAdj {
+    /// (semaphore set ID, semaphore number, adjustment).
+    pub adjustments: Vec<(i32, u16, i32)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -119,6 +135,10 @@ pub enum ProcessPersonality {
 
 pub struct Process {
     pub pid: usize,
+    /// Linux thread-group ID. None for native tasks. The leader has TGID=TID.
+    pub linux_tgid: Option<usize>,
+    /// Only the Linux group owner holds its shared SEM_UNDO context.
+    pub linux_sysv_semadj: Option<LinuxSysvSemAdj>,
     pub ppid: usize, // parent pid
     pub name: [u8; 32],
     pub state: ProcessState,
@@ -363,6 +383,8 @@ impl Process {
 
         Ok(Self {
             pid,
+            linux_tgid: None,
+            linux_sysv_semadj: None,
             ppid,
             name: name_arr,
             state: ProcessState::Ready,
@@ -525,6 +547,8 @@ impl Process {
 
         Self {
             pid,
+            linux_tgid: None,
+            linux_sysv_semadj: None,
             ppid,
             name: name_arr,
             state: ProcessState::Ready,
