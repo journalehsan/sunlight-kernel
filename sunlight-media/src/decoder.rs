@@ -7,7 +7,7 @@ use crate::{
     types::{AudioStreamInfo, MediaTime, PcmFormat},
 };
 
-pub const MAX_COMPRESSED_BYTES: usize = 4 * 1024 * 1024;
+pub const MAX_COMPRESSED_BYTES: usize = 8 * 1024 * 1024;
 
 pub struct DecodeChunk {
     pub frames: usize,
@@ -112,10 +112,14 @@ pub fn probe(source: &[u8]) -> Result<AudioStreamInfo, MediaError> {
         let decoder = VorbisDecoder::open(source)?;
         return Ok(decoder.stream_info());
     }
+    if crate::mp3::is_mp3(source) {
+        return Ok(crate::mp3::Mp3Decoder::open(source)?.stream_info());
+    }
     Err(MediaError::new(MediaErrorKind::UnsupportedContainer, 10))
 }
 
 pub enum ProbeDecoder<'a> {
+    Mp3(crate::mp3::Mp3Decoder<'a>),
     Vorbis(VorbisDecoder<'a>),
     Wav(WavPcmDecoder<'a>),
 }
@@ -125,12 +129,16 @@ impl<'a> ProbeDecoder<'a> {
         if source.get(..4) == Some(b"RIFF") {
             return Ok(Self::Wav(WavPcmDecoder::open(source)?));
         }
+        if crate::mp3::is_mp3(source) {
+            return Ok(Self::Mp3(crate::mp3::Mp3Decoder::open(source)?));
+        }
         Ok(Self::Vorbis(VorbisDecoder::open(source)?))
     }
 
     #[cfg(target_os = "none")]
     pub(crate) fn wav_diagnostics(&self) -> Option<WavDiagnostics> {
         match self {
+            Self::Mp3(_) => None,
             Self::Wav(decoder) => {
                 let frame_bytes = decoder.layout.info.channels as usize * 2;
                 Some(WavDiagnostics {
@@ -147,6 +155,7 @@ impl<'a> ProbeDecoder<'a> {
 impl AudioDecoder for ProbeDecoder<'_> {
     fn stream_info(&self) -> AudioStreamInfo {
         match self {
+            Self::Mp3(decoder) => decoder.stream_info(),
             Self::Vorbis(decoder) => decoder.stream_info(),
             Self::Wav(decoder) => decoder.stream_info(),
         }
@@ -154,6 +163,7 @@ impl AudioDecoder for ProbeDecoder<'_> {
 
     fn decode(&mut self, output: &mut [i16]) -> Result<DecodeChunk, MediaError> {
         match self {
+            Self::Mp3(decoder) => decoder.decode(output),
             Self::Vorbis(decoder) => decoder.decode(output),
             Self::Wav(decoder) => decoder.decode(output),
         }
@@ -161,6 +171,7 @@ impl AudioDecoder for ProbeDecoder<'_> {
 
     fn seek(&mut self, position: MediaTime) -> Result<MediaTime, MediaError> {
         match self {
+            Self::Mp3(decoder) => decoder.seek(position),
             Self::Vorbis(decoder) => decoder.seek(position),
             Self::Wav(decoder) => decoder.seek(position),
         }

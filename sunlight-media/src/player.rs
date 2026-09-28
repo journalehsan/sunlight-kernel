@@ -11,7 +11,8 @@ use core::{
 #[cfg(target_os = "none")]
 use crate::{
     decoder::{AudioDecoder, ProbeDecoder, MAX_COMPRESSED_BYTES},
-    output::{AudioSink, SunlightAudioSink},
+    output::{AudioSink, PcmPacketizer, SunlightAudioSink},
+    resampler::LinearResampler,
     state::{transition, PlaybackAction},
 };
 use crate::{
@@ -32,7 +33,7 @@ const COMMAND_SHUTDOWN: u8 = 6;
 
 #[cfg(any(target_os = "none", test))]
 fn validate_output_contract(info: AudioStreamInfo) -> Result<(), MediaError> {
-    if info.sample_rate_hz != sunlight_audio::NATIVE_RATE_HZ
+    if !(8_000..=192_000).contains(&info.sample_rate_hz)
         || !matches!(info.channels, 1 | 2)
         || info.sample_format != PcmFormat::Signed16LeInterleaved
     {
@@ -314,9 +315,7 @@ impl MediaPlayer {
             // Stop the application stream before publishing the replacement
             // command. This retracts PCM already queued in audiod/HDA while
             // the worker is reading and probing the new source.
-            let stopped = sunlight_audiod::AudioClient::new()
-                .stop_stream()
-                .is_ok();
+            let stopped = sunlight_audiod::AudioClient::new().stop_stream().is_ok();
             shared
                 .audio_stopped_for_open
                 .store(stopped, Ordering::Release);
@@ -443,10 +442,19 @@ extern "C" fn worker_entry(arg: *mut u8) -> *mut u8 {
 
 #[cfg(target_os = "none")]
 fn run_worker(shared: &Shared) {
+    // A timed kernel wait keeps the decoder off the run queue while idle.
+    // Repeated ProcessYield calls incur the scheduler's short-burst penalty,
+    // which can leave this worker under-prioritized when playback begins.
+    let idle_endpoint = sunlight_ipc::endpoint_create();
     let mut loaded: Option<LoadedMedia> = None;
     let mut sink: Option<SunlightAudioSink> = None;
     let mut visualization = VisualizationFrame::empty();
     let mut first_pcm_generation = None;
+    let mut resampler = LinearResampler::new(
+        sunlight_audio::NATIVE_RATE_HZ,
+        sunlight_audio::NATIVE_RATE_HZ,
+    );
+    let mut packetizer = PcmPacketizer::new();
     loop {
         let command = shared.command.swap(COMMAND_NONE, Ordering::AcqRel);
         if command != COMMAND_NONE {
@@ -454,14 +462,37 @@ fn run_worker(shared: &Shared) {
                 if let Some(output) = sink.as_mut() {
                     let _ = output.flush();
                 }
+                if idle_endpoint.0 != u64::MAX {
+                    sunlight_ipc::endpoint_destroy(idle_endpoint);
+                }
                 return;
             }
+            let was_playing = PlaybackState::from_u8(shared.state.load(Ordering::Acquire))
+                == PlaybackState::Playing;
             if let Err(error) = handle_command(command, shared, &mut loaded, &mut sink) {
                 shared.publish_error(error);
+            } else if command != COMMAND_PLAY || !was_playing {
+                packetizer.clear();
+                if command == COMMAND_OPEN {
+                    resampler = LinearResampler::new(
+                        loaded
+                            .as_ref()
+                            .map_or(sunlight_audio::NATIVE_RATE_HZ, |media| {
+                                media.info.sample_rate_hz
+                            }),
+                        sunlight_audio::NATIVE_RATE_HZ,
+                    );
+                } else {
+                    resampler.reset();
+                }
             }
         }
         if PlaybackState::from_u8(shared.state.load(Ordering::Acquire)) != PlaybackState::Playing {
-            sunlight_ipc::process_yield();
+            if idle_endpoint.0 == u64::MAX {
+                sunlight_ipc::process_yield();
+            } else {
+                let _ = sunlight_ipc::ipc_recv_timeout(idle_endpoint, 5);
+            }
             continue;
         }
         let (Some(media), Some(output)) = (loaded.as_mut(), sink.as_mut()) else {
@@ -485,55 +516,70 @@ fn run_worker(shared: &Shared) {
             }
         };
         if result.frames != 0 {
-            let mut pcm = [0u8; sunlight_ipc::SHM_PAGE];
-            for frame in 0..result.frames {
-                let (left, right) = if channels == 1 {
-                    (decoded[frame], decoded[frame])
-                } else {
-                    (decoded[frame * 2], decoded[frame * 2 + 1])
-                };
-                let offset = frame * 4;
-                pcm[offset..offset + 2].copy_from_slice(&left.to_le_bytes());
-                pcm[offset + 2..offset + 4].copy_from_slice(&right.to_le_bytes());
+            let mut visual_pcm = [0u8; sunlight_ipc::SHM_PAGE];
+            for (index, frame) in decoded[..result.frames * channels]
+                .chunks_exact(channels)
+                .enumerate()
+            {
+                let left = frame[0].to_le_bytes();
+                let right = frame[if channels == 1 { 0 } else { 1 }].to_le_bytes();
+                visual_pcm[index * 4..index * 4 + 2].copy_from_slice(&left);
+                visual_pcm[index * 4 + 2..index * 4 + 4].copy_from_slice(&right);
             }
-            let bytes = &pcm[..result.frames * 4];
-            visualization.analyze_s16_stereo(bytes, MAX_VISUALIZATION_BINS);
+            visualization
+                .analyze_s16_stereo(&visual_pcm[..result.frames * 4], MAX_VISUALIZATION_BINS);
             shared.publish_visualization(&visualization);
-            match output.write(bytes) {
-                Ok(consumed) => {
-                    shared.position_ms.store(
-                        MediaTime::from_frames(consumed, media.info.sample_rate_hz).as_millis(),
-                        Ordering::Release,
-                    );
-                    let generation = shared.generation.load(Ordering::Acquire);
-                    if first_pcm_generation != Some(generation) {
-                        log_first_pcm(
-                            &decoded[..result.frames * channels],
-                            result.frames,
-                            consumed,
-                        );
-                        first_pcm_generation = Some(generation);
+            let mut last_consumed = None;
+            let converted =
+                resampler.process(&decoded[..result.frames * channels], channels, |frame| {
+                    if let Some(consumed) = packetizer.push(frame, output)? {
+                        last_consumed = Some(consumed);
                     }
+                    Ok(())
+                });
+            if let Err(error) = converted {
+                let _ = output.flush();
+                packetizer.clear();
+                if PlaybackState::from_u8(shared.state.load(Ordering::Acquire))
+                    == PlaybackState::Playing
+                {
+                    shared.publish_error(error);
                 }
-                Err(error) => {
-                    let _ = output.flush();
-                    // An Open request changes state to Loading immediately.
-                    // Do not let an in-flight failure from the replaced source
-                    // overwrite that newer state.
-                    if PlaybackState::from_u8(shared.state.load(Ordering::Acquire))
-                        == PlaybackState::Playing
-                    {
-                        shared.publish_error(error);
-                    }
-                    continue;
+                continue;
+            }
+            if let Some(consumed) = last_consumed {
+                shared.position_ms.store(
+                    MediaTime::from_frames(consumed, sunlight_audio::NATIVE_RATE_HZ).as_millis(),
+                    Ordering::Release,
+                );
+                let generation = shared.generation.load(Ordering::Acquire);
+                if first_pcm_generation != Some(generation) {
+                    log_first_pcm(
+                        &decoded[..result.frames * channels],
+                        result.frames,
+                        consumed,
+                    );
+                    first_pcm_generation = Some(generation);
                 }
             }
         }
         if result.end_of_stream {
+            let completed = resampler
+                .finish(|frame| {
+                    packetizer.push(frame, output)?;
+                    Ok(())
+                })
+                .and_then(|_| packetizer.finish(output).map(|_| ()));
+            if let Err(error) = completed {
+                let _ = output.flush();
+                shared.publish_error(error);
+                continue;
+            }
             match output.drain() {
                 Ok(consumed) => {
                     shared.position_ms.store(
-                        MediaTime::from_frames(consumed, media.info.sample_rate_hz).as_millis(),
+                        MediaTime::from_frames(consumed, sunlight_audio::NATIVE_RATE_HZ)
+                            .as_millis(),
                         Ordering::Release,
                     );
                     let next = transition(PlaybackState::Playing, PlaybackAction::End)
@@ -592,6 +638,7 @@ fn handle_command(
             log_opened_media(&media);
             let _bounded_bytes = media.source_len();
             let output = SunlightAudioSink::open(shared.volume.load(Ordering::Acquire))?;
+            log_output_contract(media.info);
             shared.publish_stream(media.info);
             *loaded = Some(media);
             *sink = Some(output);
@@ -637,9 +684,9 @@ fn handle_command(
                 .ok_or_else(|| MediaError::new(MediaErrorKind::InvalidState, 34))?;
             output.flush()?;
             let consumed = output.position_frames()?;
-            let position = MediaTime::from_frames(consumed, media.info.sample_rate_hz);
+            let position = MediaTime::from_frames(consumed, sunlight_audio::NATIVE_RATE_HZ);
             let actual = media.decoder.seek(position)?;
-            output.set_position_frames(actual.frames_at(media.info.sample_rate_hz));
+            output.set_position_frames(actual.frames_at(sunlight_audio::NATIVE_RATE_HZ));
             shared.clear_visualization();
             shared
                 .position_ms
@@ -679,7 +726,7 @@ fn handle_command(
             output.flush()?;
             let target = MediaTime::from_millis(shared.seek_ms.load(Ordering::Acquire));
             let actual = media.decoder.seek(target)?;
-            output.set_position_frames(actual.frames_at(media.info.sample_rate_hz));
+            output.set_position_frames(actual.frames_at(sunlight_audio::NATIVE_RATE_HZ));
             shared
                 .position_ms
                 .store(actual.as_millis(), Ordering::Release);
@@ -737,6 +784,28 @@ fn log_opened_media(media: &LoadedMedia) {
 }
 
 #[cfg(target_os = "none")]
+fn log_output_contract(info: AudioStreamInfo) {
+    sunlight_ipc::debug_log("[MEDIA][format] input_rate_hz=");
+    debug_log_u64(info.sample_rate_hz as u64);
+    sunlight_ipc::debug_log(" input_channels=");
+    debug_log_u64(info.channels as u64);
+    sunlight_ipc::debug_log(" output_rate_hz=");
+    debug_log_u64(sunlight_audio::NATIVE_RATE_HZ as u64);
+    sunlight_ipc::debug_log(" output_channels=2 period_frames=");
+    debug_log_u64(crate::output::PERIOD_FRAMES as u64);
+    sunlight_ipc::debug_log(" startup_buffer_ms=");
+    debug_log_u64(
+        crate::output::STARTUP_PERIODS as u64 * crate::output::PERIOD_FRAMES as u64 * 1000
+            / sunlight_audio::NATIVE_RATE_HZ as u64,
+    );
+    sunlight_ipc::debug_log(" target_buffer_ms=");
+    debug_log_u64(
+        8 * crate::output::PERIOD_FRAMES as u64 * 1000 / sunlight_audio::NATIVE_RATE_HZ as u64,
+    );
+    sunlight_ipc::debug_log("\n");
+}
+
+#[cfg(target_os = "none")]
 fn log_first_pcm(samples: &[i16], frame_count: usize, consumed_frames: u64) {
     let min = samples.iter().copied().min().unwrap_or(0);
     let max = samples.iter().copied().max().unwrap_or(0);
@@ -779,7 +848,9 @@ fn log_eof(info: AudioStreamInfo, consumed_frames: u64) {
     sunlight_ipc::debug_log("[MEDIA][eof] consumed_frames=");
     debug_log_u64(consumed_frames);
     sunlight_ipc::debug_log(" position_ms=");
-    debug_log_u64(MediaTime::from_frames(consumed_frames, info.sample_rate_hz).as_millis());
+    debug_log_u64(
+        MediaTime::from_frames(consumed_frames, sunlight_audio::NATIVE_RATE_HZ).as_millis(),
+    );
     sunlight_ipc::debug_log(" duration_ms=");
     debug_log_u64(info.duration.unwrap_or(MediaTime::ZERO).as_millis());
     sunlight_ipc::debug_log(" state=Ended\n");
@@ -888,13 +959,18 @@ mod tests {
     }
 
     #[test]
-    fn non_native_sample_rate_is_a_typed_unsupported_format() {
-        let error = validate_output_contract(AudioStreamInfo {
+    fn common_non_native_sample_rate_is_accepted_but_invalid_rate_is_rejected() {
+        let info = AudioStreamInfo {
             sample_rate_hz: 44_100,
             channels: 2,
             sample_format: PcmFormat::Signed16LeInterleaved,
             duration: Some(MediaTime::from_millis(194_704)),
             seekable: true,
+        };
+        assert!(validate_output_contract(info).is_ok());
+        let error = validate_output_contract(AudioStreamInfo {
+            sample_rate_hz: 0,
+            ..info
         })
         .unwrap_err();
         assert_eq!(error.kind, MediaErrorKind::UnsupportedSampleFormat);

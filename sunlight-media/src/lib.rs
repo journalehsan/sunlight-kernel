@@ -13,8 +13,10 @@ extern crate std;
 
 pub mod decoder;
 pub mod error;
+mod mp3;
 pub mod output;
 pub mod player;
+mod resampler;
 #[cfg(any(target_os = "none", test))]
 mod state;
 pub mod types;

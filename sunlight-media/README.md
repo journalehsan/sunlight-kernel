@@ -12,13 +12,13 @@ decoder and `AudioSink` traits preserve replaceable codec and output boundaries.
 
 ## Phase 2 format contract
 
-- Container/codec: single-stream Ogg Vorbis and RIFF/WAVE integer PCM,
+- Container/codec: MPEG Layer III, single-stream Ogg Vorbis, and RIFF/WAVE integer PCM,
   selected by file signatures, not filename extensions.
 - Output: signed 16-bit little-endian interleaved PCM at 48 kHz.
 - Channels: mono (upmixed to stereo) or stereo. Other layouts are rejected.
-- Resampling: not implemented; non-48-kHz streams are rejected rather than
-  played at an incorrect rate.
-- Input: local seekable files up to 4 MiB. The compressed input is bounded but
+- Resampling: streaming linear interpolation accepts source rates from 8 to
+  192 kHz and converts to the 48 kHz output clock.
+- Input: local seekable files up to 8 MiB. The compressed input is bounded but
   currently loaded once because the selected no-std Ogg reader is slice-based.
 - Seek: exact decoder restart plus bounded decode/discard to the requested
   frame; targets past known duration are clamped.
@@ -32,7 +32,7 @@ decoder and `AudioSink` traits preserve replaceable codec and output boundaries.
 - Volume: per-stream software gain, 0 through 100, with saturating S16 scaling.
   It never changes audiod's system master volume.
 
-The PCM producer is bounded by audiod's 64 KiB queue and the HDA four-period
+The PCM producer is bounded by audiod's 64 KiB queue and the HDA twelve-period
 ring. Position is derived from controller-consumed frames reported by audiod,
 not GUI repaint time. Visualization is a replaceable latest-frame atomic
 snapshot, so a slow UI cannot block audio.
@@ -50,3 +50,4 @@ The crate pins the no-std Lewton/Ogg adaptation from `petamoriken/pxtone-rs` at
 commit `2e088b0df1ce05c28a4458ac514217ef06a80c6b`. Lewton is licensed MIT OR
 Apache-2.0; its Ogg dependency is BSD-3-Clause. Dependency-specific types are
 private to `decoder.rs` and do not appear in the public media API.
+MP3 decoding uses `nanomp3` 0.1.1 (MIT OR Apache-2.0, pure Rust, `no_std`).

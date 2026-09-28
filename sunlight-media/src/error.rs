@@ -42,12 +42,14 @@ impl MediaErrorKind {
             Self::None => "",
             Self::FileOpen => "Could not open the media file",
             Self::FileRead => "Could not read the media file",
-            Self::SourceTooLarge => "This media file exceeds the 4 MiB player limit",
+            Self::SourceTooLarge => "This media file exceeds the 8 MiB player limit",
             Self::UnsupportedContainer => "The selected file is not a supported audio stream",
             Self::UnsupportedCodec => "This audio stream uses an unsupported codec",
             Self::MalformedMedia => "The media file is damaged or malformed",
             Self::Decode => "The audio stream could not be decoded",
-            Self::UnsupportedSampleFormat => "Sunlight audio requires 48 kHz PCM audio",
+            Self::UnsupportedSampleFormat => {
+                "This audio sample rate or channel layout is not supported"
+            }
             Self::AudioOutput => "Sunlight audio output is unavailable",
             Self::Seek => "Could not seek in this media file",
             Self::InvalidState => "That playback action is not available",
@@ -86,6 +88,7 @@ impl MediaError {
                 4 => "Audio output received an invalid PCM buffer",
                 5 => "Audio output submission failed",
                 6 => "Audio output could not stop playback",
+                9 => "Audio PCM submission timed out",
                 _ => self.kind.user_message(),
             },
             _ => self.kind.user_message(),
@@ -105,7 +108,7 @@ mod tests {
         );
         assert_eq!(
             MediaError::new(MediaErrorKind::UnsupportedSampleFormat, 443).user_message(),
-            "Sunlight audio requires 48 kHz PCM audio"
+            "This audio sample rate or channel layout is not supported"
         );
     }
 }

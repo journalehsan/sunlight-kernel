@@ -428,11 +428,16 @@ impl MelodyMinaApp {
         let request = DialogRequest::OpenFile(OpenFileRequest {
             title: String::from("Open Audio"),
             initial_dir: Some(music_directory()),
-            allowed_mime_types: vec![String::from("audio/ogg"), String::from("audio/wav")],
+            allowed_mime_types: vec![
+                String::from("audio/ogg"),
+                String::from("audio/wav"),
+                String::from("audio/mpeg"),
+            ],
             allowed_extensions: vec![
                 String::from("ogg"),
                 String::from("oga"),
                 String::from("wav"),
+                String::from("mp3"),
             ],
             allow_multiple: false,
             show_preview: false,
@@ -495,7 +500,12 @@ impl MelodyMinaApp {
                 PLAYLIST_ROW_H,
             );
         }
-        self.set_track_title(path);
+        let title = self
+            .playlist
+            .get(self.selected_playlist)
+            .filter(|entry| entry.path == path)
+            .map(|entry| entry.display_title.clone());
+        self.set_track_title(title.as_deref().unwrap_or(path));
         match self.media.open(path) {
             Ok(()) => {
                 self.has_active_source = true;

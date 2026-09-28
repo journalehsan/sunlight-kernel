@@ -850,6 +850,35 @@ pub static INITRAMFS: &[RamEntry] = &[
         mode::FILE_644,
         include_bytes!("../../assets/sounds/catch-the-sunlight-48k.ogg"),
     ),
+    // MP3 playback examples are regular Music files for both local users.
+    RamEntry::file(
+        "/home/user/Music/002-Zamfir-EinsamerHirte.mp3",
+        1000,
+        1000,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/002-Zamfir-EinsamerHirte.mp3"),
+    ),
+    RamEntry::file(
+        "/root/Music/002-Zamfir-EinsamerHirte.mp3",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/002-Zamfir-EinsamerHirte.mp3"),
+    ),
+    RamEntry::file(
+        "/home/user/Music/014-SecretGarden-SongFromASecretGarden.mp3",
+        1000,
+        1000,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/014-SecretGarden-SongFromASecretGarden.mp3"),
+    ),
+    RamEntry::file(
+        "/root/Music/014-SecretGarden-SongFromASecretGarden.mp3",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/014-SecretGarden-SongFromASecretGarden.mp3"),
+    ),
     // The Living Sunlight: procedural G-minor chiptune preview. Melody Mina
     // discovers it through the ordinary Music directory scanner.
     RamEntry::file(
@@ -3490,6 +3519,20 @@ mod tests {
             assert!(!entry.is_dir);
             assert_eq!(&entry.data[..4], b"OggS");
         }
+        for name in [
+            "002-Zamfir-EinsamerHirte.mp3",
+            "014-SecretGarden-SongFromASecretGarden.mp3",
+        ] {
+            for home in ["/home/user", "/root"] {
+                let path = alloc::format!("{home}/Music/{name}");
+                let entry = INITRAMFS
+                    .iter()
+                    .find(|entry| entry.path == path)
+                    .expect("missing seeded Melody Mina MP3");
+                assert!(!entry.is_dir);
+                assert_eq!(&entry.data[..3], b"ID3");
+            }
+        }
     }
 
     #[test]
@@ -3582,7 +3625,7 @@ mod tests {
         let h = fs
             .open("/home/user/Documents/Why SunlightOS Exists.txt")
             .unwrap();
-        let mut buf = [0u8; 80];
+        let mut buf = [0u8; 160];
         let n = fs.read(h, 0, &mut buf).unwrap();
         assert!(n > 0);
         assert_eq!(&buf[..10], b"+---------");
