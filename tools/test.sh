@@ -140,6 +140,13 @@ case "$PHASE" in
         NEED_DISK=false
         TIMEOUT=150
         ;;
+    helios-open-largefile-probe)
+        EXPECTED_FILE="tools/tests/helios_open_largefile_probe.expected"
+        FINAL_MARKER="OPEN_LARGEFILE PASS"
+        PASS_LABEL="Helios Linux O_LARGEFILE open probe"
+        NEED_DISK=false
+        TIMEOUT=150
+        ;;
     helios-note-regression)
         EXPECTED_FILE="tools/tests/helios_note_regression.expected"
         FINAL_MARKER="[HELIOS-NOTE] interactive-ready"
@@ -705,7 +712,7 @@ if [[ "$PHASE" == "yazi-baseline" || "$PHASE" == "yazi-phase1" ]]; then
     bash "$SCRIPT_DIR/build_yazi.sh" >>"$BUILD_LOG" 2>&1
 fi
 KERNEL_FEATURES=""
-if [[ "$PHASE" == "helios-proven-tier1" || "$PHASE" == "helios-thread-probe" || "$PHASE" == "helios-io-probe" || "$PHASE" == "helios-note-regression" || "$PHASE" == "helios-static-runtime" || "$PHASE" == "yazi-baseline" || "$PHASE" == "yazi-phase1" || "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "wiseowl-identity-phase-a" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
+if [[ "$PHASE" == "helios-open-largefile-probe" || "$PHASE" == "helios-proven-tier1" || "$PHASE" == "helios-thread-probe" || "$PHASE" == "helios-io-probe" || "$PHASE" == "helios-note-regression" || "$PHASE" == "helios-static-runtime" || "$PHASE" == "yazi-baseline" || "$PHASE" == "yazi-phase1" || "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "wiseowl-identity-phase-a" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -766,6 +773,8 @@ elif [[ "$PHASE" == "helios-thread-probe" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=helios-thread-probe)
 elif [[ "$PHASE" == "helios-io-probe" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=helios-io-probe)
+elif [[ "$PHASE" == "helios-open-largefile-probe" ]]; then
+    EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=helios-open-largefile-probe)
 elif [[ "$PHASE" == "helios-note-regression" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=helios-note-regression)
 elif [[ "$PHASE" == "helios-static-runtime" ]]; then
@@ -853,6 +862,14 @@ qemu-system-x86_64 \
     -no-shutdown >>"$BUILD_LOG" 2>&1 &
 QEMU_PID=$!
 
+# Linux workers share the executable name but have distinct TIDs. Only the
+# spawned thread-group leader ending is a terminated Yazi application.
+yazi_leader_finished() {
+    local leader_pid
+    leader_pid=$(sed -n 's/^\[SYSCALL\] spawn: \/bin\/yazi pid=\([0-9][0-9]*\) ppid=.*/\1/p' "$QEMU_OUTPUT" | head -n1)
+    [[ -n "$leader_pid" ]] && grep -Fq "process_mark_finished pid=$leader_pid name='yazi'" "$QEMU_OUTPUT"
+}
+
 INITIAL_MARKER="$FINAL_MARKER"
 if [[ "$PHASE" == "wiseowl-identity-phase-a" ]]; then
     INITIAL_MARKER="[WISEOWL-IDENTITY-A] injected crash after durable staged ROOT"
@@ -863,8 +880,7 @@ for ((i=0; i<TIMEOUT; i++)); do
     if ! kill -0 $QEMU_PID 2>/dev/null; then
         break
     fi
-    if [[ "$PHASE" == "yazi-phase1" ]] \
-        && grep -Eq "process_mark_finished pid=[0-9]+ name='yazi'" "$QEMU_OUTPUT" 2>/dev/null; then
+    if [[ "$PHASE" == "yazi-phase1" ]] && yazi_leader_finished; then
         # A terminated Yazi cannot render later in this boot. Preserve the
         # failure evidence and finish the bounded gate immediately.
         sleep 1
@@ -1342,7 +1358,7 @@ done
 # A launch marker alone is not a Yazi runtime smoke pass: Tokio can panic
 # immediately after exec when a required Linux primitive is unavailable.
 if [[ "$PHASE" == "yazi-phase1" ]] && \
-    grep -Eq "process_mark_finished pid=[0-9]+ name='yazi'|Failed building the Runtime|OS can't spawn worker thread|thread 'main' .* panicked" "$QEMU_OUTPUT"; then
+    { yazi_leader_finished || grep -Eq "Failed building the Runtime|OS can't spawn worker thread|thread 'main' .* panicked" "$QEMU_OUTPUT"; }; then
     ALL_FOUND=false
 fi
 

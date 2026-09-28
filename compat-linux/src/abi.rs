@@ -30,6 +30,7 @@ pub const ENFILE: u32 = 23;
 pub const EMFILE: u32 = 24;
 pub const ENOTTY: u32 = 25;
 pub const ESPIPE: u32 = 29;
+pub const EROFS: u32 = 30;
 pub const ENAMETOOLONG: u32 = 36;
 pub const ENOSYS: u32 = 38;
 pub const EPIPE: u32 = 32;
@@ -117,6 +118,7 @@ pub const SYS_RENAME: u64 = 82;
 pub const SYS_MKDIR: u64 = 83;
 pub const SYS_UNLINK: u64 = 87;
 pub const SYS_READLINK: u64 = 89;
+pub const SYS_FCHMOD: u64 = 91;
 pub const SYS_GETTIMEOFDAY: u64 = 96;
 pub const SYS_GETUID: u64 = 102;
 pub const SYS_GETGID: u64 = 104;
@@ -227,6 +229,7 @@ pub const SHIM_SCHED_GETAFFINITY: i64 = -41;
 pub const SHIM_MADVISE: i64 = -42;
 pub const SHIM_RECVFROM: i64 = -46;
 pub const SHIM_SENDTO: i64 = -47;
+pub const SHIM_FCHMOD: i64 = -48;
 
 pub const MAP_PRIVATE: u64 = 0x02;
 pub const MAP_FIXED: u64 = 0x10;
@@ -248,6 +251,8 @@ pub const O_NOCTTY: u64 = 0x100;
 pub const O_TRUNC: u64 = 0x200;
 pub const O_APPEND: u64 = 0x400;
 pub const O_NONBLOCK: u64 = 0x800;
+pub const O_DIRECT: u64 = 0x4000;
+pub const O_LARGEFILE: u64 = 0x8000;
 pub const O_DIRECTORY: u64 = 0x1_0000;
 pub const O_NOFOLLOW: u64 = 0x2_0000;
 pub const O_CLOEXEC: u64 = 0x0008_0000;
@@ -256,6 +261,8 @@ pub const GRND_NONBLOCK: u64 = 0x1;
 /// Linux open(2) flags Helios accepts. Unknown bits are rejected rather than
 /// silently ignored. O_NOCTTY and O_NOFOLLOW are accepted as no-ops: Sunlight
 /// does not assign a controlling TTY on open, and the VFS has no symlinks.
+/// O_LARGEFILE is valid on x86-64; native file offsets are already 64-bit.
+/// O_DIRECT remains unsupported and must not alias the adjacent O_LARGEFILE bit.
 pub const OPEN_SUPPORTED_FLAGS: u64 = O_ACCMODE
     | O_CREAT
     | O_EXCL
@@ -263,6 +270,7 @@ pub const OPEN_SUPPORTED_FLAGS: u64 = O_ACCMODE
     | O_TRUNC
     | O_APPEND
     | O_NONBLOCK
+    | O_LARGEFILE
     | O_DIRECTORY
     | O_NOFOLLOW
     | O_CLOEXEC;

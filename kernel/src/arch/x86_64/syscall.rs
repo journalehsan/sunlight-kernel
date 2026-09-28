@@ -596,6 +596,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1025; // Linux unlinkat
                     }
                 }
+                -48 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_FCHMOD {
+                        num = 1046; // Linux fchmod by open VFS descriptor
+                    }
+                }
                 -29 => {
                     if linux_num == 61 {
                         num = 1027; // Linux wait4: ABI mismatch with native waitpid
@@ -900,6 +905,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1040 => sys_linux_madvise(frame),
         1044 => sys_linux_recvfrom(frame),
         1045 => sys_linux_sendto(frame),
+        1046 => sys_linux_fchmod(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -916,6 +922,21 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     } else {
         result
     };
+
+    if linux_compat && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+        && original_linux_num == 91
+    {
+        let (tid, handle) = sched::with_scheduler(|s| {
+            let process = s.current_process();
+            (process.pid, s.current_shared_process().fd_table.get(original_args[0] as i32).map(|fd| fd.handle))
+        });
+        let path = handle.and_then(|h| h.is_vfs().then_some(h))
+            .and_then(|h| vfs_handle_path(sunlight_fs::vfs::FileHandle(h.vfs_handle())).ok());
+        crate::serial_println!(
+            "[HELIOS-ABI-TRACE] fchmod tid={} fd={} mode={:#x} path={:?} result={:#x}",
+            tid, original_args[0], original_args[1], path, result
+        );
+    }
 
     if linux_compat && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
         && result == linux_errno(22)
@@ -3297,6 +3318,8 @@ const O_CLOEXEC: u64 = 0x0008_0000;
 const O_NOFOLLOW: u64 = 0x0002_0000;
 const O_DIRECTORY: u64 = 0x1_0000;
 const O_ACCMODE: u64 = 0x3;
+static YAZI_CONFIG_LOOKUP_SEEN: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
 const PRIVATE_SECRET_DIR: &str = "/etc/sunlight";
 const PRIVATE_SECRET_MODE: u16 = 0o600;
 
@@ -3354,24 +3377,60 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
 
 fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
     let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat());
-    if is_linux && flags & !sunlight_compat_linux::abi::OPEN_SUPPORTED_FLAGS != 0 {
-        if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
-            crate::serial_println!(
-                "[HELIOS-ABI-TRACE] open rejected path={:?} flags={:#x} mode={:#x} unsupported={:#x}",
-                path, flags, mode, flags & !sunlight_compat_linux::abi::OPEN_SUPPORTED_FLAGS
-            );
+    // Linux flags are an ABI contract, not flags passed through to VFS.
+    // Both Linux open and openat arrive here; native open keeps its own path.
+    let linux_flags = if is_linux {
+        match sunlight_compat_linux::open_flags::parse(flags) {
+            Ok(parsed) => Some(parsed),
+            Err(()) => {
+                if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
+                    crate::serial_println!(
+                        "[HELIOS-ABI-TRACE] open rejected path={:?} flags={:#x} mode={:#x} unsupported={:#x}",
+                        path, flags, mode, flags & !sunlight_compat_linux::abi::OPEN_SUPPORTED_FLAGS
+                    );
+                }
+                return ERR_EINVAL;
+            }
         }
-        return ERR_EINVAL;
-    }
-    let accmode = flags & O_ACCMODE;
-    let wants_read = accmode == 0 || accmode == 2;
-    let wants_write = accmode == 1 || accmode == 2;
-    let wants_create = flags & O_CREAT != 0;
-    let wants_exclusive = flags & O_EXCL != 0;
-    let wants_directory = flags & O_DIRECTORY != 0;
-    if accmode == 3 || (wants_exclusive && !wants_create) || (flags & O_TRUNC != 0 && !wants_write)
+    } else {
+        None
+    };
+    let (wants_read, wants_write, wants_create, wants_exclusive, wants_directory, wants_truncate) =
+        if let Some(parsed) = linux_flags {
+            (parsed.read, parsed.write, parsed.create, parsed.exclusive, parsed.directory, parsed.truncate)
+        } else {
+            let accmode = flags & O_ACCMODE;
+            let read = accmode == 0 || accmode == 2;
+            let write = accmode == 1 || accmode == 2;
+            let create = flags & O_CREAT != 0;
+            let exclusive = flags & O_EXCL != 0;
+            let truncate = flags & O_TRUNC != 0;
+            if accmode == 3 || (exclusive && !create) || (truncate && !write) {
+                return ERR_EINVAL;
+            }
+            (read, write, create, exclusive, flags & O_DIRECTORY != 0, truncate)
+        };
+    let trace_yazi_path = path == "/root/.config/yazi/yazi.toml"
+        || (path.starts_with("/dev/shm/") && path.contains("yazi-"));
+    if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+        && trace_yazi_path
     {
-        return ERR_EINVAL;
+        let tid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
+        crate::serial_println!(
+            "[HELIOS-ABI-TRACE] open accepted tid={} path={:?} flags={:#x} mode={:#x}",
+            tid, path, flags, mode
+        );
+        if path == "/root/.config/yazi/yazi.toml" {
+            YAZI_CONFIG_LOOKUP_SEEN.store(true, core::sync::atomic::Ordering::Relaxed);
+            crate::sched::with_scheduler(|sched| {
+                let process = sched.current_shared_process();
+                crate::serial_println!(
+                    "[HELIOS-ABI-TRACE] config context uid={} euid={} cwd={:?} HOME={:?} XDG_CONFIG_HOME={:?}",
+                    process.uid, process.uid, process.cwd,
+                    process.env.get("HOME"), process.env.get("XDG_CONFIG_HOME")
+                );
+            });
+        }
     }
 
     // Open on the VFS first, then register the fd. KERNEL_VFS is released
@@ -3413,6 +3472,11 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
                 decision.error
             );
             if !decision.allowed {
+                if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+                    && trace_yazi_path
+                {
+                    crate::serial_println!("[HELIOS-ABI-TRACE] open policy denied path={:?} ret=-EACCES", path);
+                }
                 return ERR_EACCES;
             }
         }
@@ -3460,7 +3524,14 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
         } else {
             let stat = match existing {
                 Some(stat) => stat,
-                None => return ERR_NOENT,
+                None => {
+                    if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+                        && path == "/root/.config/yazi/yazi.toml"
+                    {
+                        crate::serial_println!("[HELIOS-ABI-TRACE] open result path={:?} ret=-ENOENT", path);
+                    }
+                    return ERR_NOENT;
+                }
             };
             let want = if wants_write {
                 sunlight_fs::permission::PermCheck::Write
@@ -3486,7 +3557,7 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
                 }
             }
         };
-        if flags & O_TRUNC != 0 && vfs.truncate(opened).is_err() {
+        if wants_truncate && vfs.truncate(opened).is_err() {
             let _ = vfs.close(opened);
             return ERR_EIO;
         }
@@ -3503,10 +3574,13 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
         rights_bits |= crate::process::fd_table::CapRights::WRITE;
     }
     let rights = crate::process::fd_table::CapRights::new(rights_bits);
-    match sched
+    let descriptor_flags = linux_flags
+        .map(|parsed| parsed.status | if parsed.cloexec { O_CLOEXEC as u32 } else { 0 })
+        .unwrap_or(flags as u32);
+    let result = match sched
         .current_shared_process_mut()
         .fd_table
-        .open(handle, rights, flags as u32)
+        .open(handle, rights, descriptor_flags)
     {
         Ok(fd) => fd as u64,
         Err(e) => {
@@ -3517,7 +3591,13 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
             }
             u64::MAX
         }
+    };
+    if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+        && trace_yazi_path
+    {
+        crate::serial_println!("[HELIOS-ABI-TRACE] open result path={:?} ret={:#x}", path, result);
     }
+    result
 }
 
 /// Create an exclusive mode-0600 private staging file.  The restricted
@@ -4166,6 +4246,7 @@ fn linux_from_fs(error: sunlight_fs::FsError) -> u64 {
         FsError::PermissionDenied | FsError::OperationNotPermitted => {
             linux_errno(sunlight_compat_linux::abi::EACCES as u64)
         }
+        FsError::ReadOnlyFilesystem => linux_errno(sunlight_compat_linux::abi::EROFS as u64),
         FsError::InvalidPath => linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
         FsError::TooManyOpenFiles => linux_errno(sunlight_compat_linux::abi::EMFILE as u64),
         FsError::Unsupported => linux_errno(sunlight_compat_linux::abi::ENOSYS as u64),
@@ -4504,6 +4585,13 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
         Ok(path) => path,
         Err(error) => return error,
     };
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
+        let tid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
+        crate::serial_println!(
+            "[HELIOS-YAZI-DIRENT] getdents64 tid={} fd={} path={:?} count={} skip={}",
+            tid, fd, dir_path, count, skip
+        );
+    }
     {
         let mut guard = crate::KERNEL_VFS.lock();
         let Some(vfs) = guard.as_mut() else {
@@ -6301,6 +6389,54 @@ fn sys_dir_sync(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
+/// Linux fchmod(2): change permissions on the object referenced by an open fd.
+/// Resolve its VFS handle without relying on the caller's pathname. Policy,
+/// ownership and the metadata change all run while the VFS lock is held.
+fn sys_linux_fchmod(frame: &mut SyscallFrame) -> u64 {
+    use sunlight_compat_linux::abi;
+
+    let handle = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_shared_process().fd_table.get(frame.rdi as i32) {
+            None => return linux_errno(abi::EBADF as u64),
+            Some(fd) if fd.handle.is_vfs() => fd.handle.vfs_handle(),
+            Some(_) => return linux_errno(abi::EINVAL as u64),
+        }
+    };
+    let (uid, _, actor) = current_fs_actor();
+    let mut guard = crate::KERNEL_VFS.lock();
+    let Some(vfs) = guard.as_mut() else {
+        return linux_errno(abi::EIO as u64);
+    };
+    let handle = sunlight_fs::vfs::FileHandle(handle);
+    let mut path_buf = [0u8; USER_PATH_MAX];
+    let len = match vfs.handle_path(handle, &mut path_buf) {
+        Ok(len) => len,
+        Err(error) => return linux_from_fs(error),
+    };
+    let path = match core::str::from_utf8(&path_buf[..len]) {
+        Ok(path) => path,
+        Err(_) => return linux_errno(abi::EINVAL as u64),
+    };
+    if !sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Write, None, false).allowed {
+        return linux_errno(abi::EACCES as u64);
+    }
+    let stat = match vfs.fstat_handle(handle) {
+        Ok(stat) => stat,
+        Err(error) => return linux_from_fs(error),
+    };
+    if uid != 0 && stat.uid != uid {
+        return linux_errno(abi::EPERM as u64);
+    }
+    // The native VFS stores file type and permission bits in one mode field.
+    // Linux fchmod changes permissions only, retaining the existing type.
+    let mode = (stat.mode & 0o170000) | ((frame.rsi as u16) & 0o7777);
+    match vfs.chmod(path, mode) {
+        Ok(()) => 0,
+        Err(error) => linux_from_fs(error),
+    }
+}
+
 /// Syscall: chmod (67) — change file mode.
 /// rdi = NUL-terminated path, rsi = mode (u16)
 fn sys_chmod(frame: &mut SyscallFrame) -> u64 {
@@ -6771,6 +6907,34 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     {
                         if let Ok(text) = core::str::from_utf8(&kernel_buf[..write_size]) {
                             crate::serial_println!("[HELIOS-PROBE] {}", text.trim_end());
+                        }
+                    }
+                    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+                        && YAZI_CONFIG_LOOKUP_SEEN.load(core::sync::atomic::Ordering::Relaxed)
+                        && sched.current_process().name_str() == "yazi"
+                    {
+                        use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+                        static YAZI_TTY_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+                        static YAZI_ALT_SCREEN: AtomicBool = AtomicBool::new(false);
+                        static YAZI_FIRST_FRAME: AtomicBool = AtomicBool::new(false);
+                        if let Ok(text) = core::str::from_utf8(&kernel_buf[..write_size]) {
+                            if text.contains("\x1b[?1049h") {
+                                YAZI_ALT_SCREEN.store(true, Ordering::Relaxed);
+                            }
+                            // A clear-screen escape alone is not a render.
+                            // These strings were observed together in Yazi's
+                            // positioned application frame, after alt-screen.
+                            if YAZI_ALT_SCREEN.load(Ordering::Relaxed)
+                                && text.contains("\x1b[1;1H")
+                                && text.contains("Loading...")
+                                && text.contains(" NOR ")
+                                && !YAZI_FIRST_FRAME.swap(true, Ordering::Relaxed)
+                            {
+                                crate::serial_println!("[HELIOS-YAZI] first render confirmed");
+                            }
+                            if YAZI_TTY_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 16 {
+                                crate::serial_println!("[HELIOS-YAZI-TTY] tid={} {:?}", sched.current_process().pid, text);
+                            }
                         }
                     }
                     crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]) as u64

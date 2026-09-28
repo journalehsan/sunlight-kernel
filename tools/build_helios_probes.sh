@@ -18,6 +18,7 @@ build_asm linux-probe-runtime
 build_asm linux-thread-probe
 build_asm linux-fionbio-pipe-probe
 build_asm linux-recvfrom-probe
+build_asm linux-open-largefile-probe
 
 # Unmodified sbase echo(1) hosted by a tiny Linux syscall libc.
 clang -nostdlib -static -ffreestanding -fno-pic -fno-pie -fno-stack-protector \

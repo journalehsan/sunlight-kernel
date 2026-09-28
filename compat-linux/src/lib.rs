@@ -16,6 +16,7 @@ pub mod affinity;
 pub mod clone;
 pub mod eventfd;
 pub mod madvise;
+pub mod open_flags;
 
 use heapless::{LinearMap, String, Vec};
 
@@ -443,6 +444,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_UNLINKAT => SHIM_UNLINKAT,
         SYS_NANOSLEEP => SHIM_NANOSLEEP,
         SYS_MKDIR | SYS_MKDIRAT => SHIM_MKDIRAT,
+        SYS_FCHMOD => SHIM_FCHMOD,
         SYS_ACCESS | SYS_FACCESSAT => SHIM_FACCESSAT,
         SYS_PREAD64 => SHIM_PREAD64,
         SYS_PWRITE64 => SHIM_PWRITE64,
@@ -592,6 +594,7 @@ mod tests {
         assert_eq!(translate_syscall(abi::SYS_UNAME), abi::SHIM_UNAME);
         assert_eq!(translate_syscall(abi::SYS_MKDIR), abi::SHIM_MKDIRAT);
         assert_eq!(translate_syscall(abi::SYS_MKDIRAT), abi::SHIM_MKDIRAT);
+        assert_eq!(translate_syscall(abi::SYS_FCHMOD), abi::SHIM_FCHMOD);
         assert_eq!(translate_syscall(abi::SYS_GETPPID), abi::SUN_GETPPID);
         assert_eq!(translate_syscall(abi::SYS_GETUID), abi::SUN_GETUID);
         assert_eq!(translate_syscall(abi::SYS_GETEUID), abi::SUN_GETUID);

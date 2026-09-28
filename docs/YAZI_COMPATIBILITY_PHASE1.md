@@ -1,8 +1,10 @@
 # Yazi v26.9.1 Compatibility: Phase 1 Audit
 
-Status: Phase 1.2 thread probe passes in two-CPU QEMU; the pinned Yazi payload
-starts Linux workers but still fails during runtime initialization. Phase 1
-rendering/navigation acceptance is not yet met.
+Status: Phase 1.4 validates generic x86-64 `O_LARGEFILE` open flags; pinned
+Yazi reaches its first application frame and begins directory enumeration.
+Interactive navigation and clean-exit acceptance remain unverified. The
+dated runtime records below distinguish earlier failures from the latest
+observed result.
 
 ## Intended execution path
 
@@ -689,3 +691,133 @@ test target retains the previously recorded duplicate panic-handler
 conflict; native boot MM-0 checks and the guest thread/I/O probes exercise
 the relevant behavior. `yazi-phase1` failed its corrected render gate, as
 required. No Yazi files or filesystem mutation behavior were changed.
+
+### Phase 1.4 open flag audit (September 28, 2026)
+
+The captured main-thread call was `open(2,
+"/root/.config/yazi/yazi.toml", 0x88000, 0)`. The Linux x86-64
+`asm-generic/fcntl.h` definitions and musl's x86-64 open contract give the
+following complete decoding of the observed word:
+
+| Field | Value | Meaning |
+| --- | --- | --- |
+| Access mode (`O_ACCMODE`) | `0` | `O_RDONLY` |
+| `O_LARGEFILE` | `0x8000` | 64-bit file offset contract |
+| `O_CLOEXEC` | `0x80000` | descriptor-local close on exec |
+| All other bits | `0` | no further requested behavior |
+
+The adjacent, independent bits are `O_DIRECT=0x4000` (unsupported),
+`O_LARGEFILE=0x8000` (valid), and `O_DIRECTORY=0x10000` (validated as a
+directory constraint). The Linux `open` and `openat` shims both reach
+`open_resolved_path`; Linux `creat(2)` has no translation into that helper.
+Previously its `OPEN_SUPPORTED_FLAGS` mask omitted `0x8000`, and the helper
+returned native `ERR_EINVAL` before VFS pathname lookup. The syscall
+adapter translated that to Linux `-EINVAL`.
+
+The parser now validates the supported Linux bit mask and access/creation
+combinations, then keeps `O_CLOEXEC` descriptor-local and the Linux-visible
+`O_LARGEFILE` status on the shared open description for `F_GETFL`. `F_GETFD`
+still reads the descriptor's close-on-exec bit. `F_SETFL` still changes only
+`O_APPEND`/`O_NONBLOCK`; it cannot clear `O_LARGEFILE`. The VFS receives a
+path, requested access/creation operation and permissions, not a Linux
+numeric flag word. Its x86-64 read/write offsets are `usize` (64-bit); no
+32-bit truncation, 2 GiB boundary, or separate large-file operation was added.
+`F_GETFL` omits the one-time creation flags `O_CREAT`, `O_EXCL`, `O_TRUNC`
+and `O_NOCTTY`; directory and no-follow constraints remain visible.
+
+The guest `linux-open-largefile-probe` opens `/etc/passwd` with exactly
+`0x88000`, verifies its `root:` prefix, `F_GETFD=FD_CLOEXEC`, the
+`O_LARGEFILE` `F_GETFL` bit without `O_CLOEXEC`, and closes the descriptor.
+It also calls `openat` on `/definitely/not/present` with the same flags and
+requires `-ENOENT`. `O_DIRECT` and an unknown bit must still give `-EINVAL`.
+
+Phase 1.4 milestone ledger (only check a runtime item after guest evidence):
+
+```text
+[x] ELF loaded; process created; affinity query succeeded; eventfd created
+[x] Linux threads created; workers execute userspace; TLS verified; futex wait/wake
+[x] shared FD semantics; Unix socket recvfrom; FIONBIO / O_NONBLOCK
+[x] epoll initial events observed; terminal raw-mode setup began
+[x] O_LARGEFILE config lookup accepted
+[x] config lookup reaches normal VFS result (ENOENT)
+[x] Tokio workers/reactor active after config fallback
+[x] Yazi startup continues past config loading
+[ ] Yazi main event loop established
+[x] first application frame observed (Loading... pane; bounded runs vary)
+[x] getdents64 on cwd / began (worker TIDs 38, 41 and 40)
+[ ] interactive navigation
+```
+
+The pinned payload and upstream archive were verified via
+`YAZI_USE_CACHED_ET_EXEC=1` and
+`YAZI_RELEASE_ARCHIVE=target/yazi-v26.9.1-x86_64-unknown-linux-musl.zip`.
+This host does not have `musl-gcc`; the cached ET_EXEC SHA-256 is
+`15af218a823a16da5a8bb16caae27b03bc7c13bdf83d7c875e3d3d61d2028513`.
+The payload and Yazi source were not patched. The open probe's shell command
+was added to the existing allowlist of embedded Linux test executables.
+
+Main TID 35 now accepts `open("/root/.config/yazi/yazi.toml", 0x88000, 0)`
+and returns Linux `-ENOENT` from the VFS lookup, not `-EINVAL` from flag
+validation. The inherited root session has `HOME=/root`, uid/euid=0,
+`cwd=/`, and no `XDG_CONFIG_HOME`. Yazi selects `/root` consistently with
+that environment. No config file or VFS alias was added.
+
+The next actual fatal call was Linux x86-64 `fchmod(91, fd=15, mode=0700)`
+on the open `/tmp/yazi-0` cache directory. It initially returned
+`-ENOSYS` (`0xffffffffffffffda`); Yazi printed `Failed to create cache
+directory: /tmp/yazi-0: Function not implemented (os error 38)` and offered
+to continue with preset settings. This proves the missing config itself
+was not the fatal dependency. A small generic fd-based chmod shim now
+resolves the live VFS handle, enforces Sunlight's write policy and
+owner/root rule, preserves the file-type bits, and passes errors through
+Linux errno translation. Static RAM filesystem entries now return an
+explicit read-only error instead of falsely succeeding on chmod. A rerun
+confirmed `fchmod(fd=15, mode=0700, /tmp/yazi-0) -> 0`; a worker also
+successfully chmodded `/tmp/yazi+0`. This supports Yazi's internal startup
+cache without implementing any user-requested Phase 2 filesystem operation.
+
+The earlier TID 35 request in the recorded run is
+`open("/dev/shm//yazi-CABZDEI3IWVGY4O4GWVEIXS2", 0x880c2, 0600)`:
+`O_RDWR|O_CREAT|O_EXCL|O_LARGEFILE|O_CLOEXEC`, without other bits. TID 35
+received `-EACCES` from the existing immutable-root policy before a file
+was created. Yazi then used `/tmp/yazi-0`, so this request did not become
+the fatal blocker. The observed fallback suggests runtime scratch/cache
+storage; the trace does not establish unlink, mmap sharing, or locking of
+the denied object. `/dev/shm` was not implemented.
+
+After `fchmod` succeeded, real Yazi/Tokio workers remained active and the
+main thread sent terminal alternate-screen, cursor-hide and clear-screen
+escapes, followed on one bounded run by positioned application content:
+`Yazi: /` title, a `Loading...` pane with borders, and a mode/status bar
+(`NOR`, `0/0`). The actual frame content, rather than the clear-screen
+escape, establishes the **first render** milestone. The gate's first-render
+marker is emitted only after the observed alternate-screen and positioned
+application-frame bytes. A later bounded run ended before that frame was
+emitted, so render timing remains variable; no clean Phase 1 acceptance is
+claimed. No directory entries, interactive navigation or clean Yazi exit
+were observed. Eventfd FD 4 was written and epoll reported readability;
+no real Yazi eventfd read/drain/rearm cycle is established yet. A subsequent
+bounded run logged `getdents64` on the current directory `/` from worker
+TIDs 38, 41 and 40: the first call used `count=2048, skip=0` and the next
+used `skip=16`. This establishes **directory enumeration began**; the
+rendered frame had not been emitted by that run's deadline, and no completed
+interactive directory listing or navigation has been verified. A later pinned
+`yazi-phase1` gate passed the first-render marker with the existing
+`SUNLIGHT_TEST_TIMEOUT=360` override. The gate was corrected to distinguish
+the leader's `process_mark_finished` from a worker TID exiting normally;
+it still rejects a leader exit or runtime panic and still requires the
+observed application frame. This is a first-render smoke pass, not completed
+directory navigation or clean Yazi exit. Unsupported
+`inotify_init1(294)`, `socket(41)`, `prctl(157)` and `ppoll(271)` calls were
+seen, but none has been demonstrated as the next hard blocker. Previously
+validated `MADV_DONTNEED`/`MADV_FREE` still return `-ENOSYS`.
+
+Phase 1.4 verification: `linux-open-largefile-probe` (open/read/F_GETFD/
+F_GETFL/close, absent openat `ENOENT`, unsupported-bit rejection),
+`helios-thread-probe`, `helios-io-probe` (pipe and socket recvfrom), stock
+`yazi-baseline`, `helios-note-regression`, `helios-static-runtime` and the
+pinned `yazi-phase1` first-render gate passed. The compat-linux host suite
+passed 29 tests, a focused RAM filesystem chmod test passed, kernel package
+`cargo check` passed and `git diff --check` was clean. The previously
+documented duplicate panic-handler conflict still prevents claiming the
+freestanding kernel's host test target passed.

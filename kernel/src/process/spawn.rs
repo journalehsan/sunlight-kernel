@@ -977,6 +977,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         }
         "/bin/linux-fionbio-pipe-probe" => Ok(crate::HELIOS_FIONBIO_PROBE_ELF_BYTES),
         "/bin/linux-recvfrom-probe" => Ok(crate::HELIOS_RECVFROM_PROBE_ELF_BYTES),
+        "/bin/linux-open-largefile-probe" => Ok(crate::HELIOS_OPEN_LARGEFILE_PROBE_ELF_BYTES),
         "/bin/helios-probe-runtime"
         | "/usr/bin/helios-probe-runtime"
         | "/bin/linux-uname"

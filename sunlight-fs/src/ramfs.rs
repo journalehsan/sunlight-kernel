@@ -478,6 +478,9 @@ impl FileSystem for RamFs {
 
     fn chmod(&mut self, path: &str, mode: u16) -> Result<(), FsError> {
         let entry_idx = self.entry_idx(path)?;
+        if entry_idx < self.entries.len() {
+            return Err(FsError::ReadOnlyFilesystem);
+        }
         self.set_entry_mode(entry_idx, mode);
         Ok(())
     }
@@ -3078,6 +3081,13 @@ mod tests {
         ),
         RamEntry::file("/bin/sh", 0, 0, mode::FILE_755, b"shell"),
     ];
+
+    #[test]
+    fn chmod_rejects_immutable_static_entry() {
+        let mut fs = RamFs::new(TEST_ENTRIES);
+        assert_eq!(fs.chmod("/etc/motd", mode::FILE_600), Err(FsError::ReadOnlyFilesystem));
+        assert_eq!(fs.stat("/etc/motd").unwrap().mode, mode::FILE_644);
+    }
 
     #[test]
     fn open_and_read_whole_file() {
