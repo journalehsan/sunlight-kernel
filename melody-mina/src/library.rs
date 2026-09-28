@@ -248,4 +248,14 @@ mod tests {
         assert_eq!(entries[0].format, MediaFormat::WavPcm);
         let _ = fs::remove_dir_all(root);
     }
+
+    #[test]
+    fn living_sunlight_preview_is_player_compatible() {
+        let wav = include_bytes!("../../assets/sounds/the-living-sunlight-48k.wav");
+        assert!(wav.len() <= sunlight_media::decoder::MAX_COMPRESSED_BYTES);
+        let info = sunlight_media::decoder::probe(wav).unwrap();
+        assert_eq!(info.sample_rate_hz, 48_000);
+        assert_eq!(info.channels, 2);
+        assert_eq!(info.duration.unwrap().as_millis(), 18_000);
+    }
 }

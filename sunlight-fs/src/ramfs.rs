@@ -850,6 +850,22 @@ pub static INITRAMFS: &[RamEntry] = &[
         mode::FILE_644,
         include_bytes!("../../assets/sounds/catch-the-sunlight-48k.ogg"),
     ),
+    // The Living Sunlight: procedural G-minor chiptune preview. Melody Mina
+    // discovers it through the ordinary Music directory scanner.
+    RamEntry::file(
+        "/home/user/Music/The Living Sunlight.wav",
+        1000,
+        1000,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/the-living-sunlight-48k.wav"),
+    ),
+    RamEntry::file(
+        "/root/Music/The Living Sunlight.wav",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/the-living-sunlight-48k.wav"),
+    ),
 
     RamEntry::file("/tests/cat-empty", 0, 0, mode::FILE_644, b""),
     RamEntry::file("/tests/cat-hello", 0, 0, mode::FILE_644, b"hello from cat\n"),
@@ -3473,6 +3489,19 @@ mod tests {
                 .expect("missing seeded user Music track");
             assert!(!entry.is_dir);
             assert_eq!(&entry.data[..4], b"OggS");
+        }
+    }
+
+    #[test]
+    fn living_sunlight_is_available_in_default_music_libraries() {
+        for path in [
+            "/home/user/Music/The Living Sunlight.wav",
+            "/root/Music/The Living Sunlight.wav",
+        ] {
+            let entry = INITRAMFS.iter().find(|entry| entry.path == path).unwrap();
+            assert_eq!(&entry.data[..4], b"RIFF");
+            assert_eq!(&entry.data[8..12], b"WAVE");
+            assert!(entry.data.len() <= 4 * 1024 * 1024);
         }
     }
 
