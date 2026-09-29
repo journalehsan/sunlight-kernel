@@ -13,6 +13,14 @@ always copied from the backend hardware-consumption clock; the UI timer does
 not advance time. Visualization is one replaceable fixed-size latest frame,
 not an event queue.
 
+Melody reads local tags when a track is selected: ID3v2/ID3v1 for MP3,
+Vorbis comments for Ogg, and RIFF INFO or embedded ID3 for WAV. The player
+shows the tagged song title, artist, album, and embedded cover (MP3 APIC or
+Ogg `METADATA_BLOCK_PICTURE`). Missing fields and missing or unsupported cover
+art display `Unknown`. Playlist discovery uses song tags for labels when
+available; a filename remains the playlist label when a title tag is absent.
+Tag reads and image decoding are bounded for the app's 16 MiB heap.
+
 Selecting a playlist entry or choosing a file opens and starts it. The bundled
 sample loads paused at startup. Previous and Next wrap through the playlist;
 Repeat restarts the current track at end of stream. A second click during an

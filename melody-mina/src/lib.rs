@@ -6,5 +6,6 @@ extern crate std;
 pub mod controller;
 pub mod layout;
 pub mod library;
+pub mod metadata;
 pub mod model;
 pub mod visualizer;

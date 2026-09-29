@@ -8,7 +8,11 @@ use alloc::{string::String, vec};
 use melody_mina::{
     controller::MelodyMediaController,
     layout::{LayoutMode, MelodyLayout},
-    library::{builtin_entry, scan_music_directory, MediaEntry, BUILTIN_SAMPLE_PATH},
+    library::{
+        builtin_entry, read_metadata_bytes, scan_music_directory, supported_extension, MediaEntry,
+        BUILTIN_SAMPLE_PATH,
+    },
+    metadata,
     model::{format_time, next_playlist_index, seek_target_ms, timeline_percent, PlaybackState},
     visualizer::VisualizationFrame,
 };
@@ -26,7 +30,7 @@ use sunlight_ipc::{
 };
 use sunlight_ui::{
     draw_scrollbar, hit_test_scrollbar,
-    image::TgaImage,
+    image::{decode_image, RgbaImage},
     request_close, set_client_cursor,
     widgets::{ButtonState, IconButton, Slider},
     App, Canvas, CursorShape, Event, LayoutInvalidation, Point, Rect, ScrollPolicy, ScrollState,
@@ -43,9 +47,6 @@ const PLAYLIST_ROW_H: u32 = 52;
 const CONTROL_COUNT: usize = 10;
 const FRAME_MS_FOCUSED: u64 = 33;
 const FRAME_MS_UNFOCUSED: u64 = 100;
-
-static PLACEHOLDER_ART_BYTES: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
 
 fn debug_log_u64(mut value: u64) {
     let mut reversed = [0u8; 20];
@@ -91,14 +92,13 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
     }
 }
 
-#[derive(Clone, Copy)]
-struct AlbumArtView {
+struct AlbumArtView<'a> {
     rect: Rect,
-    image: Option<TgaImage>,
+    image: Option<&'a RgbaImage>,
 }
 
-impl AlbumArtView {
-    fn new(rect: Rect, image: Option<TgaImage>) -> Self {
+impl<'a> AlbumArtView<'a> {
+    fn new(rect: Rect, image: Option<&'a RgbaImage>) -> Self {
         Self { rect, image }
     }
 
@@ -140,7 +140,7 @@ impl AlbumArtView {
         clipped.fill_rect(local, theme.panel_alt);
         if let Some(image) = self.image {
             if let Some(dst) = Self::cover_rect(local, Size::new(image.width, image.height)) {
-                clipped.draw_tga_icon_tinted_rounded(&image, dst, theme.accent, 12);
+                clipped.draw_rgba_image(image, dst);
             }
         } else {
             clipped.draw_ui_symbol_centered(
@@ -151,7 +151,7 @@ impl AlbumArtView {
             draw_text_centered(
                 &mut clipped,
                 local,
-                "No artwork",
+                "Unknown",
                 &TextStyle::new(FontRole::UiSmall, theme.text_dim),
             );
         }
@@ -341,9 +341,10 @@ struct MelodyMinaApp {
     visualization_frame: VisualizationFrame,
     last_visualization_ms: u64,
     status: &'static str,
-    artwork: Option<TgaImage>,
-    track_title: [u8; 128],
-    track_title_len: usize,
+    artwork: Option<RgbaImage>,
+    track_title: String,
+    track_artist: String,
+    track_album: String,
     has_active_source: bool,
     repeat_one: bool,
     seek_committed_on_release: bool,
@@ -351,7 +352,6 @@ struct MelodyMinaApp {
 
 impl MelodyMinaApp {
     fn new() -> Self {
-        let artwork = TgaImage::parse(PLACEHOLDER_ART_BYTES).ok();
         let media = MelodyMediaController::new();
         let now_playing = media.view();
         let mut playlist = vec![builtin_entry()];
@@ -386,9 +386,10 @@ impl MelodyMinaApp {
             visualization_frame: VisualizationFrame::empty(),
             last_visualization_ms: 0,
             status: "Built-in sample ready",
-            artwork,
-            track_title: [0; 128],
-            track_title_len: 0,
+            artwork: None,
+            track_title: String::from("Unknown"),
+            track_artist: String::from("Unknown"),
+            track_album: String::from("Unknown"),
             has_active_source: false,
             repeat_one: false,
             seek_committed_on_release: false,
@@ -399,31 +400,7 @@ impl MelodyMinaApp {
     }
 
     fn track_title(&self) -> &str {
-        if self.track_title_len == 0 {
-            "No media loaded"
-        } else {
-            core::str::from_utf8(&self.track_title[..self.track_title_len])
-                .unwrap_or("Selected audio")
-        }
-    }
-
-    fn set_track_title(&mut self, path: &str) {
-        let filename = path
-            .rsplit('/')
-            .next()
-            .filter(|name| !name.is_empty())
-            .unwrap_or(path);
-        let name = filename
-            .rsplit_once('.')
-            .map(|(stem, _)| stem)
-            .filter(|stem| !stem.is_empty())
-            .unwrap_or(filename);
-        self.track_title_len = name.len().min(self.track_title.len());
-        while !name.is_char_boundary(self.track_title_len) {
-            self.track_title_len -= 1;
-        }
-        self.track_title[..self.track_title_len]
-            .copy_from_slice(&name.as_bytes()[..self.track_title_len]);
+        &self.track_title
     }
 
     fn open_media(&mut self) {
@@ -506,12 +483,6 @@ impl MelodyMinaApp {
                 PLAYLIST_ROW_H,
             );
         }
-        let title = self
-            .playlist
-            .get(self.selected_playlist)
-            .filter(|entry| entry.path == path)
-            .map(|entry| entry.display_title.clone());
-        self.set_track_title(title.as_deref().unwrap_or(path));
         let opened = if auto_play {
             self.media.open(path)
         } else {
@@ -519,6 +490,22 @@ impl MelodyMinaApp {
         };
         match opened {
             Ok(()) => {
+                let tags = supported_extension(path)
+                    .and_then(|format| {
+                        read_metadata_bytes(path, format)
+                            .map(|bytes| metadata::parse(format, &bytes))
+                    })
+                    .unwrap_or_default();
+                self.track_title = tags.title.unwrap_or_else(|| String::from("Unknown"));
+                self.track_artist = tags.artist.unwrap_or_else(|| String::from("Unknown"));
+                self.track_album = tags.album.unwrap_or_else(|| String::from("Unknown"));
+                self.artwork = tags.cover.as_deref().and_then(|cover| {
+                    let (width, height) =
+                        sunlight_ui::image::inspect_image_dimensions(cover).ok()?;
+                    (u64::from(width) * u64::from(height) <= 1024 * 1024)
+                        .then(|| decode_image(cover).ok())
+                        .flatten()
+                });
                 self.has_active_source = true;
                 self.status = "Loading audio...";
             }
@@ -764,11 +751,7 @@ impl MelodyMinaApp {
         );
         let mut artist_buf = [0u8; 96];
         let artist = elide(
-            if self.has_active_source {
-                "Unknown Artist"
-            } else {
-                "Choose a local audio file"
-            },
+            &self.track_artist,
             FontRole::UiMedium,
             rect.w,
             &mut artist_buf,
@@ -782,16 +765,7 @@ impl MelodyMinaApp {
         );
         if rect.h >= 58 {
             let mut album_buf = [0u8; 96];
-            let album = elide(
-                if self.has_active_source {
-                    "Local media"
-                } else {
-                    ""
-                },
-                FontRole::UiSmall,
-                rect.w,
-                &mut album_buf,
-            );
+            let album = elide(&self.track_album, FontRole::UiSmall, rect.w, &mut album_buf);
             draw_text(
                 canvas,
                 album,
@@ -968,7 +942,7 @@ impl App for MelodyMinaApp {
             theme.chrome.window_bg,
         );
         self.draw_header(canvas, theme);
-        AlbumArtView::new(self.layout.album_art, self.artwork).draw(canvas, theme);
+        AlbumArtView::new(self.layout.album_art, self.artwork.as_ref()).draw(canvas, theme);
         self.draw_metadata(canvas, theme);
         let now_playing = self.media.view();
         let playlist_items: alloc::vec::Vec<_> = self
@@ -983,7 +957,7 @@ impl App for MelodyMinaApp {
         let active_item = if playlist_items.is_empty() {
             vec![PlaylistItemViewModel {
                 title: self.track_title(),
-                artist: self.has_active_source.then_some("Unknown Artist"),
+                artist: self.has_active_source.then_some(self.track_artist.as_str()),
                 duration_seconds: now_playing.duration_ms.map(|value| value / 1_000),
             }]
         } else {

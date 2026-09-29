@@ -2,6 +2,7 @@
 
 extern crate alloc;
 
+use crate::metadata;
 use alloc::{string::String, vec::Vec};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,84 +52,17 @@ fn title_from_path(path: &str) -> String {
     String::from(if stem.is_empty() { filename } else { stem })
 }
 
-// Read only the small, plain-text ID3v2 frames used for playlist labels.
-// Unsupported encodings and damaged tags simply fall back to the filename.
-fn mp3_labels(bytes: &[u8]) -> (Option<String>, Option<String>, Option<String>) {
-    let mut labels = (None, None, None);
-    let Some(tag) = bytes.get(..10).filter(|tag| &tag[..3] == b"ID3") else {
-        return labels;
-    };
-    if !matches!(tag[3], 3 | 4) || tag[5] & 0xc0 != 0 || tag[6..10].iter().any(|b| b & 0x80 != 0) {
-        return labels;
-    }
-    let size = tag[6..10]
-        .iter()
-        .fold(0usize, |size, b| size * 128 + *b as usize);
-    let Some(end) = 10usize
-        .checked_add(size)
-        .filter(|end| *end <= bytes.len() && size <= 64 * 1024)
-    else {
-        return labels;
-    };
-    let mut cursor = 10;
-    while cursor + 10 <= end {
-        let frame = &bytes[cursor..cursor + 10];
-        if frame[..4] == [0; 4] {
-            break;
-        }
-        let len = if tag[3] == 4 {
-            if frame[4..8].iter().any(|b| b & 0x80 != 0) {
-                break;
-            }
-            frame[4..8]
-                .iter()
-                .fold(0usize, |size, b| size * 128 + *b as usize)
-        } else {
-            u32::from_be_bytes(frame[4..8].try_into().unwrap()) as usize
-        };
-        let Some(next) = (cursor + 10).checked_add(len).filter(|next| *next <= end) else {
-            break;
-        };
-        let destination = match &frame[..4] {
-            b"TIT2" => &mut labels.0,
-            b"TPE1" => &mut labels.1,
-            b"TALB" => &mut labels.2,
-            _ => {
-                cursor = next;
-                continue;
-            }
-        };
-        let payload = &bytes[cursor + 10..next];
-        if frame[8..10] == [0; 2] && payload.len() > 1 {
-            let text = payload[1..].split(|byte| *byte == 0).next().unwrap();
-            if !text.is_empty() && text.len() <= 128 {
-                let label = match payload[0] {
-                    0 => Some(
-                        text.iter()
-                            .map(|byte| char::from(*byte))
-                            .collect::<String>(),
-                    ),
-                    3 => core::str::from_utf8(text).ok().map(String::from),
-                    _ => None,
-                };
-                *destination = label.filter(|label| !label.chars().any(char::is_control));
-            }
-        }
-        cursor = next;
-    }
-    labels
-}
-
 fn labels_for(
     path: &str,
     format: MediaFormat,
     bytes: &[u8],
 ) -> (String, Option<String>, Option<String>) {
-    let (title, artist, album) = if format == MediaFormat::Mp3 {
-        mp3_labels(bytes)
-    } else {
-        (None, None, None)
-    };
+    let metadata::SongMetadata {
+        title,
+        artist,
+        album,
+        ..
+    } = metadata::parse_labels(format, bytes);
     (
         title.unwrap_or_else(|| title_from_path(path)),
         artist,
@@ -136,7 +70,7 @@ fn labels_for(
     )
 }
 
-fn supported_extension(path: &str) -> Option<MediaFormat> {
+pub fn supported_extension(path: &str) -> Option<MediaFormat> {
     let ext = path.rsplit_once('.')?.1;
     if ext.eq_ignore_ascii_case("ogg") || ext.eq_ignore_ascii_case("oga") {
         Some(MediaFormat::OggVorbis)
@@ -147,6 +81,93 @@ fn supported_extension(path: &str) -> Option<MediaFormat> {
     } else {
         None
     }
+}
+
+#[cfg(target_os = "none")]
+pub fn read_metadata_bytes(path: &str, format: MediaFormat) -> Option<Vec<u8>> {
+    use sunlight_libc::{self, O_RDONLY, SEEK_END};
+    use sunlight_media::decoder::MAX_COMPRESSED_BYTES;
+    let size = usize::try_from(sunlight_libc::stat(path.as_bytes()).ok()?.size).ok()?;
+    if size == 0 || size > MAX_COMPRESSED_BYTES {
+        return None;
+    }
+    let fd = sunlight_libc::open_with_flags(path.as_bytes(), O_RDONLY).ok()?;
+    if format == MediaFormat::WavPcm {
+        let result = read_wav_metadata(fd, size);
+        let _ = sunlight_libc::close(fd);
+        return result;
+    }
+    // The decoder worker can already own the entire audio source. Keep UI tag
+    // inspection bounded so opening an 8 MiB song fits the 16 MiB app heap.
+    let prefix = size.min(metadata::MAX_TAG_BYTES + 10);
+    let mut bytes = Vec::new();
+    bytes.resize(prefix, 0);
+    let mut offset = 0;
+    while offset < prefix {
+        match sunlight_libc::read(fd, &mut bytes[offset..]) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => offset += read,
+        }
+    }
+    if offset == prefix && size > prefix && format == MediaFormat::Mp3 {
+        if sunlight_libc::lseek(fd, -128, SEEK_END).is_ok() {
+            let mut tail = [0u8; 128];
+            if sunlight_libc::read(fd, &mut tail).ok() == Some(128) {
+                bytes.extend_from_slice(&tail);
+            }
+        }
+    }
+    let _ = sunlight_libc::close(fd);
+    (offset == prefix).then_some(bytes)
+}
+
+#[cfg(target_os = "none")]
+fn read_exact(fd: sunlight_libc::Fd, bytes: &mut [u8]) -> Option<()> {
+    let mut offset = 0;
+    while offset < bytes.len() {
+        let read = sunlight_libc::read(fd, &mut bytes[offset..]).ok()?;
+        if read == 0 {
+            return None;
+        }
+        offset += read;
+    }
+    Some(())
+}
+
+#[cfg(target_os = "none")]
+fn read_wav_metadata(fd: sunlight_libc::Fd, size: usize) -> Option<Vec<u8>> {
+    use sunlight_libc::SEEK_SET;
+    let mut header = [0u8; 12];
+    read_exact(fd, &mut header)?;
+    if &header[..4] != b"RIFF" || &header[8..] != b"WAVE" {
+        return None;
+    }
+    let mut result = Vec::from(header);
+    let mut offset = 12usize;
+    while offset + 8 <= size {
+        sunlight_libc::lseek(fd, offset as i64, SEEK_SET).ok()?;
+        let mut chunk = [0u8; 8];
+        read_exact(fd, &mut chunk)?;
+        let length = u32::from_le_bytes(chunk[4..8].try_into().ok()?) as usize;
+        let end = (offset + 8).checked_add(length)?;
+        if end > size {
+            break;
+        }
+        if (&chunk[..4] == b"LIST" || &chunk[..4] == b"id3 " || &chunk[..4] == b"ID3 ")
+            && length <= metadata::MAX_TAG_BYTES
+            && result.len() + 8 + length <= metadata::MAX_TAG_BYTES
+        {
+            let start = result.len();
+            result.extend_from_slice(&chunk);
+            result.resize(start + 8 + length, 0);
+            read_exact(fd, &mut result[start + 8..])?;
+            if length & 1 != 0 {
+                result.push(0);
+            }
+        }
+        offset = end + (length & 1);
+    }
+    Some(result)
 }
 
 #[cfg(target_os = "none")]
