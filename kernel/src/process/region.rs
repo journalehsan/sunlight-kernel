@@ -3,6 +3,8 @@
 //! The page tables remain the hardware truth. This module records range policy
 //! without owning physical frames or duplicating SHM accounting.
 
+use alloc::vec::Vec;
+
 pub const PAGE_SIZE: u64 = 4096;
 pub const MAX_REGIONS_PER_ADDRESS_SPACE: usize = 256;
 pub const MAX_PENDING_REGION_INSERTIONS: usize = 16;
@@ -189,7 +191,7 @@ pub struct UnmapEffects {
 /// Complete fixed-capacity ledger image staged before an unmap publishes any
 /// PTE changes. Its contents are intentionally opaque outside this module.
 pub struct UnmapPlan {
-    records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+    records: Vec<MappingRegion>,
     len: usize,
     effects: UnmapEffects,
 }
@@ -198,14 +200,14 @@ pub struct UnmapPlan {
 /// The replacement is inserted into the image before PTE changes begin, so a
 /// successful PTE transaction never publishes an intermediate ledger hole.
 pub struct ReplacePlan {
-    records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+    records: Vec<MappingRegion>,
     len: usize,
 }
 
 /// Complete fixed-capacity ledger image staged before an mprotect publishes
 /// any PTE permission changes.
 pub struct ProtectPlan {
-    records: [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+    records: Vec<MappingRegion>,
     len: usize,
 }
 
@@ -387,7 +389,7 @@ impl RegionLedger {
         }
 
         // Second pass builds the exact final sorted layout.
-        let mut records = [MappingRegion::EMPTY; MAX_REGIONS_PER_ADDRESS_SPACE];
+        let mut records = Self::staging_records()?;
         let mut output = 0usize;
         for region in self.records[..self.len].iter().copied() {
             let overlap_start = region.start.max(requested.start);
@@ -433,7 +435,7 @@ impl RegionLedger {
             return Err(LedgerError::Inconsistent);
         }
 
-        let mut records = [MappingRegion::EMPTY; MAX_REGIONS_PER_ADDRESS_SPACE];
+        let mut records = Self::staging_records()?;
         let mut output = 0usize;
         let mut inserted = false;
         for region in self.records[..self.len].iter().copied() {
@@ -478,7 +480,7 @@ impl RegionLedger {
     /// transactions for an address space, and preflight rejects pending ones.
     pub fn commit_unmap(&mut self, plan: UnmapPlan) {
         assert_eq!(self.pending_len, 0, "ledger changed during staged unmap");
-        self.records = plan.records;
+        self.records.copy_from_slice(&plan.records);
         self.len = plan.len;
         debug_assert_eq!(self.validate(), Ok(()));
     }
@@ -488,7 +490,7 @@ impl RegionLedger {
             self.pending_len, 0,
             "ledger changed during staged replacement"
         );
-        self.records = plan.records;
+        self.records.copy_from_slice(&plan.records);
         self.len = plan.len;
         debug_assert_eq!(self.validate(), Ok(()));
     }
@@ -538,7 +540,7 @@ impl RegionLedger {
             return Err(LedgerError::Hole);
         }
 
-        let mut records = [MappingRegion::EMPTY; MAX_REGIONS_PER_ADDRESS_SPACE];
+        let mut records = Self::staging_records()?;
         let mut output = 0usize;
         for region in self.records[..self.len].iter().copied() {
             let overlap_start = region.start.max(requested.start);
@@ -575,7 +577,7 @@ impl RegionLedger {
     /// mapping transactions, and preflight rejects pending insertions.
     pub fn commit_protect(&mut self, plan: ProtectPlan) {
         assert_eq!(self.pending_len, 0, "ledger changed during staged mprotect");
-        self.records = plan.records;
+        self.records.copy_from_slice(&plan.records);
         self.len = plan.len;
         debug_assert_eq!(self.validate(), Ok(()));
     }
@@ -739,8 +741,21 @@ impl RegionLedger {
         Ok(region)
     }
 
+    // Allocate before publishing any PTE changes. Returning these images by
+    // value used to put several 10 KiB arrays on the 32 KiB syscall stack.
+    // Keep the same capacity bound, but make allocation failure a preflight
+    // error and leave commit allocation-free.
+    fn staging_records() -> Result<Vec<MappingRegion>, LedgerError> {
+        let mut records = Vec::new();
+        records
+            .try_reserve_exact(MAX_REGIONS_PER_ADDRESS_SPACE)
+            .map_err(|_| LedgerError::CapacityExhausted)?;
+        records.resize(MAX_REGIONS_PER_ADDRESS_SPACE, MappingRegion::EMPTY);
+        Ok(records)
+    }
+
     fn append_staged(
-        records: &mut [MappingRegion; MAX_REGIONS_PER_ADDRESS_SPACE],
+        records: &mut [MappingRegion],
         len: &mut usize,
         region: MappingRegion,
     ) -> Result<(), LedgerError> {

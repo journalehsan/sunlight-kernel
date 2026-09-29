@@ -1,5 +1,7 @@
 #![no_std]
 
+extern crate alloc;
+
 #[path = "process/mm2a_plan.rs"]
 pub mod mm2a_plan;
 
@@ -26,6 +28,16 @@ mod tests {
         RegionPolicy, RegionProtection, MAX_REGIONS_PER_ADDRESS_SPACE,
     };
     use super::zram_codec::{self, CodecError, MAX_COMPRESSED_SIZE, PAGE_SIZE};
+
+    #[test]
+    fn mapping_plans_do_not_embed_ledger_images_on_the_kernel_stack() {
+        use super::region::{ProtectPlan, ReplacePlan, UnmapPlan};
+        // Plans cross several by-value return boundaries on a 32 KiB kernel
+        // stack. Their footprint must not grow with the ledger capacity.
+        assert!(core::mem::size_of::<UnmapPlan>() <= 128);
+        assert!(core::mem::size_of::<ReplacePlan>() <= 128);
+        assert!(core::mem::size_of::<ProtectPlan>() <= 128);
+    }
 
     #[test]
     fn stale_swap_slot_generation_is_rejected() {

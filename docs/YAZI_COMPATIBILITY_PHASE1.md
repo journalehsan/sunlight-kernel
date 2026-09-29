@@ -1,10 +1,9 @@
 # Yazi v26.9.1 Compatibility: Phase 1 Audit
 
-Status: Phase 1.4 validates generic x86-64 `O_LARGEFILE` open flags; pinned
-Yazi reaches its first application frame and begins directory enumeration.
-Interactive navigation and clean-exit acceptance remain unverified. The
-dated runtime records below distinguish earlier failures from the latest
-observed result.
+Status: September 29 kernel-stack fix removes oversized mapping transaction
+buffers. The extended QEMU run survives 30 parent/child navigation cycles;
+its later `/home/user` selection and automated clean-exit check remain
+unverified. See the dated regression record below for verification limits.
 
 ## Intended execution path
 
@@ -821,3 +820,67 @@ passed 29 tests, a focused RAM filesystem chmod test passed, kernel package
 `cargo check` passed and `git diff --check` was clean. The previously
 documented duplicate panic-handler conflict still prevents claiming the
 freestanding kernel's host test target passed.
+
+### September 29 interaction regression: kernel stack usage
+
+The one-arrow `yazi-phase1` smoke gate passes on the pre-fix kernel, but a
+longer QMP keyboard run reproduced a kernel instruction-fetch fault twice
+while repeatedly moving between `/` and `/root`. The second run stopped
+after key 53. The saved trace is `target/yazi-navigation-baseline.log`, with
+registers and the interrupted stack in
+`target/yazi-navigation-baseline-registers.txt`. Both faults reported
+`rip=0xffffffffffffffff`, `rsp=0xffffffff907b0e60`; the scheduler lock was
+unavailable to the fault diagnostic (`pid=usize::MAX`). This is a kernel
+fault, not proof that the unrelated unsupported socket or prctl calls caused
+Yazi to fail. The supplied interactive log ends after cooked-mode restoration
+without an exit status or fault, so it does not establish the identical cause.
+
+Disassembly of the pre-fix test kernel establishes a concrete stack overflow:
+`process::mmap::sys_munmap` reserves 31,128 bytes and calls
+`RegionLedger::preflight_unmap`, which reserves another 10,312 bytes, before
+counting saved registers and other callers. Task kernel stacks are 32 KiB.
+The 256-entry staging images for unmap, fixed replacement and protection
+changes were returned by value through several layers. These images now use
+fallible heap storage; the committed ledger and its 256-region capacity remain
+unchanged. Allocation failure maps to the existing capacity/ENOMEM error
+before PTE mutation, and committing a staged image requires no allocation.
+No Yazi source or payload changes are involved.
+
+The rebuilt kernel reserves 1,208 bytes in `sys_munmap`, 168 in its staging
+helper, and 264 in `sys_mprotect` (previously 20,712). The host memory suite
+includes a plan-size guard against reintroducing capacity-sized stack images.
+
+`tools/test_yazi_navigation.py` adds an extended test beyond the one-key smoke
+check. It boots the smoke-test ISO, sends real keyboard events through QMP,
+waits for actual directory changes, visits `/home/user`, and checks a requested
+quit for leader status zero and cooked TTY restoration. Faults and unexpected
+exits fail the test; serial logs, screenshots and failure registers are kept
+in a new output directory. Build the `yazi-phase1` ISO first, then run:
+
+```sh
+python3 tools/test_yazi_navigation.py \
+  --iso target/sunlightos.iso \
+  --output-dir target/yazi-navigation-check
+```
+
+The MM-2E gate's expected shootdown text was stale: the kernel emits
+`permission shootdowns acknowledged: online=4 remote=3: OK`. The expectation
+now checks that exact four-CPU result; the underlying permission and remote
+invalidation assertions are unchanged.
+
+Verification at the local commit:
+
+- Kernel package check, 35 host memory tests, and 29 compatibility host tests
+  passed. Yazi one-arrow smoke, Helios Note, and MM-2D native unmap gates passed.
+- The first MM-2E run completed all kernel assertions, including four-CPU
+  shootdowns. Its saved serial log passes the corrected expected-message list.
+  A subsequent VM rerun produced no serial output and timed out.
+- `target/yazi-navigation-acceptance/serial.log` records all 30 confirmed
+  parent/child cycles (60 directory changes) without the reproduced fault.
+  The test subsequently reached `/home` but timed out selecting `/home/user`,
+  so the **overall extended gate did not pass** and its quit check did not run.
+- A separate two-CPU extended run timed out waiting for the first-render
+  marker; no interactive acceptance is inferred from that run.
+- The additional thread/I/O reruns were not reached after the MM-2E retry
+  stopped the regression batch. Their earlier historical results above are
+  not new verification of this change.
