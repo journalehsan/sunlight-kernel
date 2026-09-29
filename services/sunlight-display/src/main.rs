@@ -599,7 +599,10 @@ impl WindowConfig {
 enum ResizeEdge {
     Left,
     Right,
+    Top,
     Bottom,
+    CornerTL,
+    CornerTR,
     CornerBL,
     CornerBR,
 }
@@ -643,7 +646,10 @@ enum HitZone {
     ClientArea,
     EdgeLeft,
     EdgeRight,
+    EdgeTop,
     EdgeBottom,
+    CornerTL,
+    CornerTR,
     CornerBL,
     CornerBR,
 }
@@ -657,11 +663,38 @@ impl HitZone {
             | HitZone::MinimizeBtn
             | HitZone::KeepOnTopBtn => CursorShape::Pointer,
             HitZone::EdgeLeft | HitZone::EdgeRight => CursorShape::ResizeH,
-            HitZone::EdgeBottom => CursorShape::ResizeV,
-            HitZone::CornerBL => CursorShape::ResizeCornerNW,
-            HitZone::CornerBR => CursorShape::ResizeCornerNE,
+            HitZone::EdgeTop | HitZone::EdgeBottom => CursorShape::ResizeV,
+            HitZone::CornerTL | HitZone::CornerBR => CursorShape::ResizeCornerNW,
+            HitZone::CornerTR | HitZone::CornerBL => CursorShape::ResizeCornerNE,
         }
     }
+}
+
+impl ResizeEdge {
+    fn cursor(self) -> CursorShape {
+        match self {
+            ResizeEdge::Left | ResizeEdge::Right => CursorShape::ResizeH,
+            ResizeEdge::Top | ResizeEdge::Bottom => CursorShape::ResizeV,
+            ResizeEdge::CornerTL | ResizeEdge::CornerBR => CursorShape::ResizeCornerNW,
+            ResizeEdge::CornerTR | ResizeEdge::CornerBL => CursorShape::ResizeCornerNE,
+        }
+    }
+}
+
+fn resize_from_left(win: &mut Window, anchor_x: i32, anchor_w: i32, delta_x: i32) {
+    let new_x = (anchor_x + delta_x)
+        .max(0)
+        .min(anchor_x + (anchor_w - MIN_WIN_W as i32).max(0));
+    win.x = new_x as u32;
+    win.width = (anchor_w - (new_x - anchor_x)) as u32;
+}
+
+fn resize_from_top(win: &mut Window, anchor_y: i32, anchor_h: i32, delta_y: i32) {
+    let new_y = (anchor_y + delta_y)
+        .max((FLOATING_PANEL_RESERVED_H as i32).min(anchor_y))
+        .min(anchor_y + (anchor_h - MIN_WIN_H as i32).max(0));
+    win.y = new_y as u32;
+    win.height = (anchor_h - (new_y - anchor_y)) as u32;
 }
 
 // ---------------------------------------------------------------------------
@@ -3457,6 +3490,24 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
                 }
             }
 
+            if win.config.state == WindowState::Normal && !win.rolled_up {
+                let corner_size = RESIZE_BORDER + 4;
+                if rel_y < corner_size && rel_x < corner_size {
+                    return HitZone::CornerTL;
+                }
+                if rel_y < corner_size && rel_x >= chrome_w.saturating_sub(corner_size) {
+                    return HitZone::CornerTR;
+                }
+                if rel_y < RESIZE_BORDER {
+                    return HitZone::EdgeTop;
+                }
+                if rel_x < RESIZE_BORDER {
+                    return HitZone::EdgeLeft;
+                }
+                if rel_x >= chrome_w.saturating_sub(RESIZE_BORDER) {
+                    return HitZone::EdgeRight;
+                }
+            }
             return HitZone::TitleBar;
         }
     }
@@ -3473,10 +3524,28 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
         return HitZone::TitleBar;
     }
 
+    // Maximized windows have fixed compositor geometry. Keep their lower edge
+    // as client space so the cursor does not advertise a resize that cannot
+    // be applied.
+    if win.config.state != WindowState::Normal {
+        return HitZone::ClientArea;
+    }
+
     // Corner zones (checked before edge zones — larger grab target wins).
     let corner_size = RESIZE_BORDER + 4;
-    let bottom_zone = rel_y >= titlebar_h + win.height.saturating_sub(corner_size);
+    // Use the same forgiving grab width as the side edges. The structural
+    // bottom rim is only a couple of pixels tall, which made the resize zone
+    // effectively invisible and prevented the vertical resize cursor from
+    // appearing during ordinary pointer movement.
+    let bottom_edge_start = chrome_h.saturating_sub(RESIZE_BORDER);
+    let bottom_zone = rel_y >= bottom_edge_start;
 
+    if rel_y < corner_size && rel_x < corner_size {
+        return HitZone::CornerTL;
+    }
+    if rel_y < corner_size && rel_x >= chrome_w.saturating_sub(corner_size) {
+        return HitZone::CornerTR;
+    }
     if bottom_zone {
         if rel_x < corner_size {
             return HitZone::CornerBL;
@@ -3484,20 +3553,18 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
         if rel_x >= chrome_w.saturating_sub(corner_size) {
             return HitZone::CornerBR;
         }
-        if rel_y >= titlebar_h + win.height {
-            return HitZone::EdgeBottom;
-        }
+        return HitZone::EdgeBottom;
     }
 
     // Edge zones.
     if rel_x < RESIZE_BORDER {
         return HitZone::EdgeLeft;
     }
-    if rel_x >= chrome_w - RESIZE_BORDER {
+    if rel_x >= chrome_w.saturating_sub(RESIZE_BORDER) {
         return HitZone::EdgeRight;
     }
-    if rel_y >= titlebar_h + win.height {
-        return HitZone::EdgeBottom;
+    if rel_y < RESIZE_BORDER {
+        return HitZone::EdgeTop;
     }
 
     HitZone::ClientArea
@@ -3505,6 +3572,12 @@ fn hit_test_window(win: &Window, cx: u32, cy: u32, fb_w: u32, fb_h: u32) -> HitZ
 
 /// Compute the cursor shape to display given all visible windows and pointer pos.
 fn cursor_for_scene(state: &CompositorState) -> CursorShape {
+    // Keep the resize affordance stable while the pointer is being dragged,
+    // including when the pointer temporarily leaves the window bounds.
+    if let ActiveDrag::Resize(drag) = state.active_drag {
+        return drag.edge.cursor();
+    }
+
     let cx = state.mouse_x as u32;
     let cy = state.mouse_y as u32;
 
@@ -8920,14 +8993,20 @@ pub extern "C" fn _start() -> ! {
                             }
                             edge @ (HitZone::EdgeLeft
                             | HitZone::EdgeRight
+                            | HitZone::EdgeTop
                             | HitZone::EdgeBottom
+                            | HitZone::CornerTL
+                            | HitZone::CornerTR
                             | HitZone::CornerBL
                             | HitZone::CornerBR) => {
                                 if let Some(win) = state.windows.iter().find(|w| w.id == id) {
                                     let re = match edge {
                                         HitZone::EdgeLeft => ResizeEdge::Left,
                                         HitZone::EdgeRight => ResizeEdge::Right,
+                                        HitZone::EdgeTop => ResizeEdge::Top,
                                         HitZone::EdgeBottom => ResizeEdge::Bottom,
+                                        HitZone::CornerTL => ResizeEdge::CornerTL,
+                                        HitZone::CornerTR => ResizeEdge::CornerTR,
                                         HitZone::CornerBL => ResizeEdge::CornerBL,
                                         _ => ResizeEdge::CornerBR,
                                     };
@@ -9018,7 +9097,7 @@ pub extern "C" fn _start() -> ! {
                             let amx = d.anchor_mx;
                             let amy = d.anchor_my;
                             let awx = d.anchor_wx;
-                            let _awy = d.anchor_wy; // reserved for future top-edge resize
+                            let awy = d.anchor_wy;
                             let aww = d.anchor_ww;
                             let awh = d.anchor_wh;
 
@@ -9036,12 +9115,20 @@ pub extern "C" fn _start() -> ! {
                                             win.height =
                                                 (awh + total_dy).max(MIN_WIN_H as i32) as u32;
                                         }
+                                        ResizeEdge::Top => {
+                                            resize_from_top(win, awy, awh, total_dy);
+                                        }
                                         ResizeEdge::Left => {
-                                            let new_w =
-                                                (aww - total_dx).max(MIN_WIN_W as i32) as u32;
-                                            let dx = aww as u32 - new_w;
-                                            win.x = (awx + dx as i32).max(0) as u32;
-                                            win.width = new_w;
+                                            resize_from_left(win, awx, aww, total_dx);
+                                        }
+                                        ResizeEdge::CornerTL => {
+                                            resize_from_left(win, awx, aww, total_dx);
+                                            resize_from_top(win, awy, awh, total_dy);
+                                        }
+                                        ResizeEdge::CornerTR => {
+                                            win.width =
+                                                (aww + total_dx).max(MIN_WIN_W as i32) as u32;
+                                            resize_from_top(win, awy, awh, total_dy);
                                         }
                                         ResizeEdge::CornerBR => {
                                             win.width =
@@ -9050,11 +9137,7 @@ pub extern "C" fn _start() -> ! {
                                                 (awh + total_dy).max(MIN_WIN_H as i32) as u32;
                                         }
                                         ResizeEdge::CornerBL => {
-                                            let new_w =
-                                                (aww - total_dx).max(MIN_WIN_W as i32) as u32;
-                                            let dx = aww as u32 - new_w;
-                                            win.x = (awx + dx as i32).max(0) as u32;
-                                            win.width = new_w;
+                                            resize_from_left(win, awx, aww, total_dx);
                                             win.height =
                                                 (awh + total_dy).max(MIN_WIN_H as i32) as u32;
                                         }
