@@ -227,6 +227,7 @@ fn is_user_frame(stack_frame: &InterruptStackFrame) -> bool {
 }
 
 extern "x86-interrupt" fn tlb_shootdown_ipi_entry(_stack_frame: InterruptStackFrame) {
+    crate::sched::accounting::interrupt_entry_local();
     crate::memory::tlb::handle_shootdown_ipi();
     unsafe {
         crate::arch::x86_64::lapic::send_eoi();
@@ -239,6 +240,7 @@ extern "x86-interrupt" fn tlb_shootdown_nmi_entry(_stack_frame: InterruptStackFr
 
 #[cfg(feature = "mm2b_smp_test")]
 extern "x86-interrupt" fn tlb_test_ipi_entry(_stack_frame: InterruptStackFrame) {
+    crate::sched::accounting::interrupt_entry_local();
     crate::memory::tlb::handle_test_ipi();
     unsafe {
         crate::arch::x86_64::lapic::send_eoi();
@@ -253,7 +255,7 @@ fn terminate_current_user_process(reason: &str, code: i32) -> ! {
         if kstack_top != 0 {
             core::arch::asm!("mov rsp, {}", in(reg) kstack_top);
         }
-        core::arch::asm!("sti", "2:", "hlt", "jmp 2b", options(noreturn),);
+        core::arch::asm!("jmp {idle}", idle = sym crate::sched::core_idle_entry, options(noreturn));
     }
 }
 
@@ -850,9 +852,12 @@ pub unsafe extern "C" fn reschedule_entry() {
 
 #[no_mangle]
 extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
-    unsafe { crate::arch::x86_64::lapic::send_eoi(); }
+    unsafe {
+        crate::arch::x86_64::lapic::send_eoi();
+    }
     x86_64::instructions::interrupts::disable();
     let cpu_id = crate::sched::current_cpu_id();
+    crate::sched::accounting::interrupt_entry(cpu_id);
     let mut sched = crate::sched::SCHEDULER.lock();
     sched.schedule_tick(cpu_id, saved_rsp)
 }
@@ -878,6 +883,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // point). Calling it once and threading the result through eliminates the
     // 2–3 redundant CPUID executions the old code did per tick per core.
     let cpu_id = crate::sched::current_cpu_id();
+    crate::sched::accounting::interrupt_entry(cpu_id);
 
     // Per-core Intel DTS sample (allowlisted models only; ~1 Hz). Each CPU
     // reads its own IA32_THERM_STATUS so readings are never mislabeled.
@@ -921,7 +927,11 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
 
         // Telemetry and cross-process timer work are BSP-only (CPU 0).
         if cpu_id == 0 {
-            if ticks_total % 100 == 0 {
+            // Elapsed deadline: delayed timer delivery may skip an exact
+            // modulo tick. Never publish repeatedly for the same global tick.
+            static LAST_TELEMETRY_TICK: AtomicU64 = AtomicU64::new(0);
+            if ticks_total.saturating_sub(LAST_TELEMETRY_TICK.load(Ordering::Relaxed)) >= 100 {
+                LAST_TELEMETRY_TICK.store(ticks_total, Ordering::Relaxed);
                 let pmm = crate::PMM.lock();
                 // Capture only scalars here; expensive walks moved out.
                 telemetry_snap = Some(crate::telemetry::capture_telemetry_snapshot(&sched, &pmm));
@@ -979,6 +989,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
 
     // Phase 2 telemetry commit outside SCHEDULER lock (expensive page walks here).
     if let Some(snap) = telemetry_snap {
+        #[cfg(feature = "cpu_accounting_diag")]
+        crate::telemetry::report_cpu_sample(&snap);
         let tel_start = now_ns();
         unsafe {
             crate::telemetry::commit_telemetry_snapshot(&snap);
@@ -1048,12 +1060,14 @@ pub fn ticks() -> u64 {
 // ---------------------------------------------------------------------------
 
 extern "x86-interrupt" fn keyboard_entry(_stack_frame: InterruptStackFrame) {
+    crate::sched::accounting::interrupt_entry_local();
     keyboard::handle_irq1();
     acknowledge_external_irq(1);
 }
 
 // Mouse IRQ12 handler
 extern "x86-interrupt" fn mouse_entry(_stack_frame: InterruptStackFrame) {
+    crate::sched::accounting::interrupt_entry_local();
     use crate::arch::x86_64::mouse;
     mouse::handle_irq12();
     acknowledge_external_irq(12);

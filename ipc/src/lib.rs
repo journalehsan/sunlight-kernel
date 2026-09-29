@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod cpu_accounting;
 pub mod display_metrics;
 pub mod display_modes;
 pub mod pty;
@@ -4555,6 +4556,18 @@ pub fn ipc_reply_and_wait(ep: EndpointId, reply: IpcMsg) -> IpcMsg {
         }
         process_yield();
     }
+}
+
+/// Reply once, then block until a call arrives or periodic maintenance is due.
+/// Incoming IPC wakes the receiver immediately; the timeout is not a delay
+/// imposed on messages. Preserve the existing reply authority checks.
+pub fn ipc_reply_and_recv_timeout(
+    ep: EndpointId,
+    reply: IpcMsg,
+    timeout_ms: u64,
+) -> Option<IpcMsg> {
+    ipc_reply(reply);
+    ipc_recv_timeout(ep, timeout_ms)
 }
 
 /// Server: send reply, then make a single non-blocking attempt to receive the

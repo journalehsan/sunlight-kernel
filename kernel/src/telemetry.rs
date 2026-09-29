@@ -5,10 +5,11 @@ use crate::memory::pmm::PhysicalMemoryManager;
 use crate::sched::Scheduler;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
+use sunlight_ipc::cpu_accounting::CpuCounters;
 
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
-/// Version 3: adds PhysicalMemoryAccountingSnapshotV1 after the core page.
-pub const TELEMETRY_VERSION: u32 = 3;
+/// Version 4: append CPU counters and task group IDs; preserve v3 offsets.
+pub const TELEMETRY_VERSION: u32 = 4;
 pub const MAX_PROCESSES: usize = 64;
 pub const MAX_CORES: usize = 64;
 
@@ -80,6 +81,9 @@ pub struct TelemetryPage {
     pub mem_acct_version: u32,
     pub _mem_acct_pad: u32,
     pub mem_acct: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1,
+    /// Version 4: independently measured CPU capacity, idle, and activity.
+    pub cpu_counters: [CpuCounters; MAX_CORES],
+    pub task_groups: [u32; MAX_PROCESSES],
 }
 
 const ZERO_PROC: ProcessStat = ProcessStat {
@@ -104,13 +108,15 @@ const ZERO_CORE: CoreStat = CoreStat {
     context_switches: 0,
 };
 
-const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 8192);
+const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 16384);
 
 static NET_RX_BYTES: AtomicU64 = AtomicU64::new(0);
 static NET_TX_BYTES: AtomicU64 = AtomicU64::new(0);
 
 #[link_section = ".telemetry"]
 pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
+    cpu_counters: [CpuCounters::ZERO; MAX_CORES],
+    task_groups: [0; MAX_PROCESSES],
     magic: TELEMETRY_MAGIC,
     version: TELEMETRY_VERSION,
     sequence: 0,
@@ -190,6 +196,7 @@ pub fn record_net_tx(bytes: u64) {
 
 #[derive(Clone)]
 pub struct ProcSnap {
+    pub tgid: u32,
     pub pid: u32,
     pub ppid: u32,
     pub state: u8,
@@ -202,6 +209,7 @@ pub struct ProcSnap {
 
 #[derive(Clone, Copy, Default)]
 pub struct CoreSnap {
+    pub counters: CpuCounters,
     pub core_id: u8,
     pub local_timer_ticks: u64,
     pub context_switches: u64,
@@ -249,7 +257,7 @@ pub fn capture_telemetry_snapshot(
     let net_rx = NET_RX_BYTES.load(Ordering::Relaxed);
     let net_tx = NET_TX_BYTES.load(Ordering::Relaxed);
 
-    let cpu_count = unsafe { TELEMETRY.cpu_count.max(1) };
+    let cpu_count = sched.online_cores.clamp(1, MAX_CORES) as u8;
     let gpu_count = unsafe { TELEMETRY.gpu_count };
 
     let mut procs = Vec::new();
@@ -257,11 +265,8 @@ pub fn capture_telemetry_snapshot(
     let mut active_user_task_count = 0u32;
     let mut active_service_count = 0u32;
     for idx in 0..sched.processes.len() {
-        if procs.len() >= MAX_PROCESSES {
-            break;
-        }
         let proc = &sched.processes[idx];
-        let runtime = sched.effective_runtime_ns(idx);
+        let runtime = sched.effective_runtime_at(idx, sample_now);
         let proc_state = match proc.state {
             crate::process::ProcessState::Ready => 0,
             crate::process::ProcessState::Running => 1,
@@ -280,7 +285,11 @@ pub fn capture_telemetry_snapshot(
             // is the same pool (honest: no process-name attribution required).
             active_user_task_count = active_user_task_count.saturating_add(1);
         }
+        if proc_state == 7 || procs.len() >= MAX_PROCESSES {
+            continue;
+        }
         procs.push(ProcSnap {
+            tgid: proc.linux_tgid.unwrap_or(proc.pid) as u32,
             pid: proc.pid as u32,
             ppid: proc.ppid as u32,
             state: proc_state,
@@ -312,6 +321,8 @@ pub fn capture_telemetry_snapshot(
     let mut ticks_per_core = [0u64; MAX_CORES];
     for c in 0..online {
         let mut cs = CoreSnap {
+            counters: crate::sched::accounting::snapshot(c)
+                .unwrap_or_else(|| unsafe { TELEMETRY.cpu_counters[c] }),
             core_id: c as u8,
             local_timer_ticks: 0,
             context_switches: 0,
@@ -345,6 +356,14 @@ pub fn capture_telemetry_snapshot(
                 }
             }
             ticks_per_core[c] = core.timer_ticks;
+        }
+        cs.counters.switches = cs.context_switches;
+        cs.counters.timer_irqs = cs.local_timer_ticks;
+        #[cfg(feature = "cpu_accounting_diag")]
+        {
+            cs.counters.schedules = sched.cpu_events[c][0];
+            cs.counters.wakeups = sched.cpu_events[c][1];
+            cs.counters.ipc_wakeups = sched.cpu_events[c][2];
         }
         cores.push(cs);
     }
@@ -394,9 +413,7 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
     TELEMETRY.net_rx_bytes = snap.net_rx_bytes;
     TELEMETRY.net_tx_bytes = snap.net_tx_bytes;
 
-    if TELEMETRY.cpu_count == 0 {
-        TELEMETRY.cpu_count = snap.cpu_count.max(1);
-    }
+    TELEMETRY.cpu_count = snap.cpu_count.max(1);
     TELEMETRY.gpu_count = snap.gpu_count;
 
     let hhdm_opt = crate::HHDM_REQ.response();
@@ -412,6 +429,7 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
         entry.state = ps.state;
         entry.name = ps.name;
         entry.cpu_ticks = ps.cpu_ticks;
+        TELEMETRY.task_groups[count] = ps.tgid;
 
         entry.mem_pages = if ps.is_finished_or_cleanup {
             0
@@ -449,6 +467,7 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
         let cs = &snap.cores[c];
         let entry = &mut TELEMETRY.cores[c];
         entry.core_id = cs.core_id;
+        TELEMETRY.cpu_counters[c] = cs.counters;
         entry.local_timer_ticks = cs.local_timer_ticks;
         entry.context_switches = cs.context_switches;
         entry.current_pid = cs.current_pid;
@@ -478,4 +497,97 @@ pub unsafe fn update_telemetry(
 ) {
     let snap = capture_telemetry_snapshot(sched, pmm);
     commit_telemetry_snapshot(&snap);
+}
+
+/// Opt-in, bounded five-second reports, outside scheduler/PMM locks. Rates
+/// derive from counter deltas, never from the number of log records emitted.
+#[cfg(feature = "cpu_accounting_diag")]
+pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
+    use sunlight_ipc::cpu_accounting::{rate, usage_bp};
+    static mut PREV: [CpuCounters; MAX_CORES] = [CpuCounters::ZERO; MAX_CORES];
+    static mut PIDS: [u32; MAX_PROCESSES] = [0; MAX_PROCESSES];
+    static mut RUNTIME: [u64; MAX_PROCESSES] = [0; MAX_PROCESSES];
+    static mut LAST: u64 = 0;
+    static mut REPORTS: u32 = 0;
+    // Single writer: BSP timer only, interrupt-disabled. No other call sites.
+    unsafe {
+        let dt = snap.sample_time_ns.saturating_sub(LAST);
+        if dt < 5_000_000_000 || REPORTS >= 120 {
+            return;
+        }
+        let baseline = LAST == 0;
+        let (mut capacity, mut busy, mut idle, mut switches, mut wakes, mut schedules) =
+            (0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
+        for (i, core) in snap.cores.iter().enumerate() {
+            let c = core.counters;
+            let p = PREV[i];
+            let elapsed = c.elapsed_ns.saturating_sub(p.elapsed_ns);
+            let b = c.busy_ns.saturating_sub(p.busy_ns);
+            let d = c.idle_ns.saturating_sub(p.idle_ns);
+            capacity = capacity.saturating_add(elapsed);
+            busy = busy.saturating_add(b);
+            idle = idle.saturating_add(d);
+            switches = switches.saturating_add(c.switches.saturating_sub(p.switches));
+            wakes = wakes.saturating_add(c.wakeups.saturating_sub(p.wakeups));
+            schedules = schedules.saturating_add(c.schedules.saturating_sub(p.schedules));
+            if !baseline {
+                crate::serial_println!("[CPU-AUDIT] core={} pid={} elapsed_ns={} busy_ns={} idle_ns={} busy_bp={} cs_s={} sched_s={} wake_s={} ipc_wake_s={} timer_s={} idle_in={} idle_out={}",
+                    i,core.current_pid,elapsed,b,d,usage_bp(b,elapsed),rate(c.switches.saturating_sub(p.switches),dt),
+                    rate(c.schedules.saturating_sub(p.schedules),dt),rate(c.wakeups.saturating_sub(p.wakeups),dt),
+                    rate(c.ipc_wakeups.saturating_sub(p.ipc_wakeups),dt),rate(c.timer_irqs.saturating_sub(p.timer_irqs),dt),
+                    c.idle_entries.saturating_sub(p.idle_entries),c.idle_exits.saturating_sub(p.idle_exits));
+            }
+            PREV[i] = c;
+        }
+        let mut top = [(0usize, 0u64); 5];
+        let mut legacy = 0u64;
+        for (i, p) in snap.procs.iter().enumerate() {
+            let previous = (0..MAX_PROCESSES).find(|j| PIDS[*j] == p.pid);
+            let delta = previous
+                .map(|j| p.cpu_ticks.saturating_sub(RUNTIME[j]))
+                .unwrap_or(0);
+            if p.state != 3 && p.state != 7 {
+                legacy = legacy.saturating_add(delta);
+            }
+            for slot in 0..5 {
+                if delta > top[slot].1 {
+                    for k in (slot + 1..5).rev() {
+                        top[k] = top[k - 1];
+                    }
+                    top[slot] = (i, delta);
+                    break;
+                }
+            }
+        }
+        for (i, p) in snap.procs.iter().enumerate() {
+            PIDS[i] = p.pid;
+            RUNTIME[i] = p.cpu_ticks;
+        }
+        for i in snap.procs.len()..MAX_PROCESSES {
+            PIDS[i] = 0;
+            RUNTIME[i] = 0;
+        }
+        if !baseline {
+            crate::serial_println!("[CPU-AUDIT] system at_ns={} capacity_ns={} busy_ns={} idle_ns={} busy_bp={} idle_bp={} legacy_bp={} cs_s={} wake_s={} sched_s={}",
+                snap.sample_time_ns,capacity,busy,idle,usage_bp(busy,capacity),usage_bp(idle,capacity),
+                usage_bp(legacy,dt.saturating_mul(snap.core_count as u64)),rate(switches,dt),rate(wakes,dt),rate(schedules,dt));
+            for (i, delta) in top {
+                if delta == 0 {
+                    continue;
+                }
+                let p = &snap.procs[i];
+                let n = p.name.iter().position(|b| *b == 0).unwrap_or(p.name.len());
+                crate::serial_println!(
+                    "[CPU-AUDIT] task pid={} name={} state={} runtime_ns={} machine_bp={}",
+                    p.pid,
+                    core::str::from_utf8(&p.name[..n]).unwrap_or("?"),
+                    p.state,
+                    delta,
+                    usage_bp(delta, dt.saturating_mul(snap.core_count as u64))
+                );
+            }
+            REPORTS += 1;
+        }
+        LAST = snap.sample_time_ns;
+    }
 }

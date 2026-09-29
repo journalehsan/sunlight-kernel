@@ -164,7 +164,7 @@ const CORE_COLUMNS: [Column<'static>; CORE_TABLE_COLS] = [
         right_align: true,
     },
     Column {
-        header: "CSw",
+        header: "CSw/s",
         width: 70,
         right_align: true,
     },
@@ -470,7 +470,7 @@ impl TasksApp {
                 &mut self.row_lens[row][2],
             );
             write_pct(
-                (proc.cpu_bp / 100).min(100) as u32,
+                proc.cpu_bp,
                 &mut self.row_bufs[row][3],
                 &mut self.row_lens[row][3],
             );
@@ -492,7 +492,7 @@ impl TasksApp {
             let nice = self.snapshot.cpu_telemetry.cores[i].nice;
             let load_bp = self.snapshot.cpu_telemetry.cores[i].load_bp;
             let local_timer_ticks = self.snapshot.cpu_telemetry.cores[i].local_timer_ticks;
-            let context_switches = self.snapshot.cpu_telemetry.cores[i].context_switches;
+            let context_switches = self.snapshot.cpu_telemetry.cores[i].switches_per_second;
 
             // Look up process name from the process table; the core snapshot
             // is authoritative for state (if current_pid != 0 it IS running).
@@ -569,7 +569,7 @@ impl TasksApp {
             );
 
             write_pct(
-                (load_bp / 100).min(100) as u32,
+                load_bp,
                 &mut self.core_row_bufs[i][5],
                 &mut self.core_row_lens[i][5],
             );
@@ -932,6 +932,12 @@ impl App for TasksApp {
         let mut cpu_detail_len = copy_tail(b"Idle ", &mut cpu_detail);
         cpu_detail_len +=
             write_bp_into(self.snapshot.cpu_idle_bp, &mut cpu_detail[cpu_detail_len..]);
+        cpu_detail_len += copy_tail(b" | ", &mut cpu_detail[cpu_detail_len..]);
+        cpu_detail_len += write_num_into(
+            self.snapshot.cpu_count as u32,
+            &mut cpu_detail[cpu_detail_len..],
+        );
+        cpu_detail_len += copy_tail(b" cores", &mut cpu_detail[cpu_detail_len..]);
         let cpu_detail_str = core::str::from_utf8(&cpu_detail[..cpu_detail_len]).unwrap_or("");
 
         let acct = &self.snapshot.mem_acct;
@@ -1266,12 +1272,8 @@ fn write_u32(value: u32, dst: &mut [u8; CELL_BUF], len: &mut usize) {
     *len = write_num_into(value, dst);
 }
 
-fn write_pct(value: u32, dst: &mut [u8; CELL_BUF], len: &mut usize) {
-    *len = write_num_into(value, dst);
-    if *len < dst.len() {
-        dst[*len] = b'%';
-        *len += 1;
-    }
+fn write_pct(value: u16, dst: &mut [u8; CELL_BUF], len: &mut usize) {
+    *len = write_bp_into(value, dst);
 }
 
 fn write_kib(value: u32, dst: &mut [u8; CELL_BUF], len: &mut usize) {
@@ -1347,24 +1349,20 @@ fn copy_tail(src: &[u8], dst: &mut [u8]) -> usize {
 }
 
 fn write_bp_into(value: u16, dst: &mut [u8]) -> usize {
+    if value > 0 && value < 10 {
+        return copy_tail(b"<0.1%", dst);
+    }
     if dst.len() < 6 {
         return 0;
     }
-    let whole = (value / 100) as u32;
-    let frac = (value % 100) as u32;
-    let mut n = write_num_into(whole, dst);
-    if n + 3 > dst.len() {
-        return n;
+    let mut n = write_num_into((value / 100) as u32, dst);
+    if value % 100 != 0 {
+        dst[n] = b'.';
+        dst[n + 1] = b'0' + ((value % 100) / 10) as u8;
+        n += 2;
     }
-    dst[n] = b'.';
-    dst[n + 1] = b'0' + (frac / 10) as u8;
-    dst[n + 2] = b'0' + (frac % 10) as u8;
-    n += 3;
-    if n < dst.len() {
-        dst[n] = b'%';
-        n += 1;
-    }
-    n
+    dst[n] = b'%';
+    n + 1
 }
 
 fn write_mb_into(kb: u64, dst: &mut [u8]) -> usize {

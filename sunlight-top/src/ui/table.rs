@@ -236,6 +236,10 @@ fn push_dec_into(out: &mut [u8], mut v: u64) -> usize {
 /// Push machine-normalized CPU usage as two decimal places, right-aligned
 /// for the CPU% column. Example: 695 -> " 6.95", 10000 -> "100.00".
 fn push_bp_two_dec(c: &mut Canvas, bp: u16) {
+    if bp > 0 && bp < 10 {
+        c.push_str("  <0.1");
+        return;
+    }
     let bp = bp.min(10000);
     let whole = bp / 100; // 0..100
     let frac = bp % 100; // 0..99

@@ -125,11 +125,15 @@ pub extern "C" fn _start() -> ! {
     };
     debug_log("[USB-MOUSE] tty input router ready\n");
 
+    // The xHCI driver currently exposes polling, not an IRQ wait endpoint.
+    // Use the existing receive deadline to park between empty polls (100 Hz),
+    // matching the HID cadence without burning a core on immediate yields.
+    let poll_wait = sunlight_ipc::endpoint_create();
     loop {
         if let Some(event) = usb_mouse::poll() {
             dispatch(event, tty);
         } else {
-            process_yield();
+            let _ = sunlight_ipc::ipc_recv_timeout(poll_wait, 10);
         }
     }
 }

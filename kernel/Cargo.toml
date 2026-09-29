@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.4528-alpha.2"
+version = "0.2.4545-alpha.2"
+
 
 
 
@@ -588,3 +589,5 @@ memory_accounting_test = []
 # these logs are written while the global scheduler lock is held and block the
 # UART, stalling every core. Enable only for debugging.
 verbose_diag = []
+# Bounded CPU audit reports and wakeup/scheduler event counters.
+cpu_accounting_diag = []

@@ -53,27 +53,19 @@
 //!   MINIMUM_AGED_BURST_SCORE) and a starvation boost in the RR counter system.
 //! - This guarantees forward progress for all ready tasks.
 //!
-//! ### CPU Accounting (for sunlight-top)
-//! Each Process tracks:
-//!   cpu_runtime_ns: u64   // exact accumulated on-CPU time (committed)
-//!   last_start_ns: u64    // when it was last scheduled (monotonic); 0 if not charging
+//! ### CPU accounting
+//! `cpu_runtime_ns` plus the open `cpu_charge_since: Option<u64>` interval
+//! measure execution with the calibrated monotonic TSC (tick fallback).
+//! Checkpointing at an IPC block/yield does not close the execution interval:
+//! only actual descheduling/exit does. Samples include open intervals at one
+//! publication timestamp, irrespective of a pending Ready/Blocked transition.
+//! `last_start_ns` remains a separate clock for the existing burst/churn policy.
 //!
-//! On context switch out (deschedule):
-//!   if prev was actually running:
-//!       delta = now_ns() - prev.last_start_ns
-//!       prev.cpu_runtime_ns += delta
-//!
-//! On context switch in:
-//!   next.last_start_ns = now_ns()
-//!
-//! Effective runtime for sampling (used by telemetry for Running tasks):
-//!   if state == Running:
-//!       effective = cpu_runtime_ns + (now_ns() - last_start_ns)
-//!   else:
-//!       effective = cpu_runtime_ns
-//!
-//! The monotonic clock is a calibrated TSC (or tick fallback) providing ns resolution
-//! with very low overhead (rdtsc + mul + shift, no floating point).
+//! `accounting` independently measures each CPU's halt intervals. Interrupt
+//! entry closes idle before kernel work; all idle and exit trampolines use the
+//! same loop. Busy = elapsed capacity - halt time, including interrupt and
+//! scheduler work not attributed to a task. No allocation/floating point.
+//! See `docs/CPU_ACCOUNTING_AUDIT.md` for ABI, normalization, and validation.
 //!
 //! ### SMP Phase 0 → Phase 1 Transition
 //! BSP brings APs online via smp::start_aps(); main.rs then calls
@@ -89,6 +81,7 @@
 //!   the task from ready queues before it stops being current.
 //! - pick_next_* only returns Ready tasks (or falls back safely).
 
+pub mod accounting;
 use crate::arch::x86_64::interrupts::now_ns;
 use crate::process::{Process, ProcessState, QueueTier};
 use crate::serial_println;
@@ -297,7 +290,7 @@ pub struct CoreState {
     pub current_ticks: u64,
     /// Total timer IRQ ticks handled on this core.
     pub timer_ticks: u64,
-    /// Number of times a different task was switched onto this core.
+    /// Lifetime context transitions, including task/idle; excludes same-task selection.
     pub context_switches: u64,
     /// Number of successful work-steal batches performed by this core.
     pub steal_count: u64,
@@ -350,6 +343,8 @@ pub static CORE_STATES: [spin::Mutex<CoreState>; MAX_CORES] =
 // ─── Scheduler ───────────────────────────────────────────────────────────────
 
 pub struct Scheduler {
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub cpu_events: [[u64; 3]; MAX_CORES],
     pub processes: Vec<Process>,
 
     /// Per-core scheduling state. Only indices 0..online_cores are active.
@@ -367,6 +362,8 @@ pub struct Scheduler {
 impl Scheduler {
     pub const fn new() -> Self {
         Self {
+            #[cfg(feature = "cpu_accounting_diag")]
+            cpu_events: [[0; 3]; MAX_CORES],
             processes: Vec::new(),
             cores: [const { CoreState::new() }; MAX_CORES],
             online_cores: 1,
@@ -401,10 +398,12 @@ impl Scheduler {
     fn increment_context_switches(&mut self, cpu_id: usize) {
         match SCHEDULER_MODE {
             SchedulerMode::RoundRobin => {
-                CORE_STATES[cpu_id].lock().context_switches += 1;
+                let mut core = CORE_STATES[cpu_id].lock();
+                core.context_switches = core.context_switches.saturating_add(1);
             }
             SchedulerMode::Bore => {
-                self.cores[cpu_id].context_switches += 1;
+                self.cores[cpu_id].context_switches =
+                    self.cores[cpu_id].context_switches.saturating_add(1);
             }
         }
     }
@@ -836,8 +835,9 @@ impl Scheduler {
 
     // ── CPU accounting ───────────────────────────────────────────────────────
 
-    /// Stop charging runtime to the currently running process on this CPU and
-    /// accumulate the elapsed delta. Returns bytes charged (0 if none).
+    /// Checkpoint runtime of the currently running process on this CPU. Returns burst nanoseconds (0 if none).
+    /// The execution clock remains open until the actual context switch;
+    /// last_start_ns retains the original churn-policy semantics.
     pub fn account_current_runtime(&mut self) -> u64 {
         let cpu_id = current_cpu_id();
         let current = match self.core_current_task(cpu_id) {
@@ -852,9 +852,14 @@ impl Scheduler {
         let mut delta: u64 = 0;
         if p.last_start_ns != 0 {
             delta = now.saturating_sub(p.last_start_ns);
-            p.cpu_runtime_ns = p.cpu_runtime_ns.saturating_add(delta);
         }
         p.last_start_ns = 0;
+        sunlight_ipc::cpu_accounting::checkpoint(
+            &mut p.cpu_runtime_ns,
+            &mut p.cpu_charge_since,
+            now,
+            false,
+        );
         delta
     }
 
@@ -881,23 +886,27 @@ impl Scheduler {
         if idx >= self.processes.len() {
             return;
         }
-        self.processes[idx].last_start_ns = now_ns();
+        let now = now_ns();
+        self.processes[idx].last_start_ns = now;
+        self.processes[idx].cpu_charge_since = Some(now);
     }
 
-    /// Compute effective runtime including uncommitted time for a Running task.
-    #[inline]
-    pub fn effective_runtime_ns(&self, idx: usize) -> u64 {
-        if idx >= self.processes.len() {
+    /// Snapshot all task clocks at the publication timestamp under SCHEDULER.
+    pub fn effective_runtime_at(&self, idx: usize, now: u64) -> u64 {
+        let Some(p) = self.processes.get(idx) else {
             return 0;
-        }
-        let p = &self.processes[idx];
-        if p.state == ProcessState::Running && p.last_start_ns != 0 {
-            let now = now_ns();
-            p.cpu_runtime_ns
-                .saturating_add(now.saturating_sub(p.last_start_ns))
-        } else {
-            p.cpu_runtime_ns
-        }
+        };
+        sunlight_ipc::cpu_accounting::runtime_at(p.cpu_runtime_ns, p.cpu_charge_since, now)
+    }
+
+    fn stop_execution_clock(&mut self, idx: usize) {
+        let p = &mut self.processes[idx];
+        sunlight_ipc::cpu_accounting::checkpoint(
+            &mut p.cpu_runtime_ns,
+            &mut p.cpu_charge_since,
+            now_ns(),
+            true,
+        );
     }
 
     // ── State management ─────────────────────────────────────────────────────
@@ -1401,6 +1410,10 @@ impl Scheduler {
     /// and the kernel RSP saved by the naked interrupt entry stub. Returns the
     /// RSP of the next process to resume (0 = stay on current context).
     pub fn schedule_tick(&mut self, cpu_id: usize, saved_rsp: u64) -> u64 {
+        #[cfg(feature = "cpu_accounting_diag")]
+        {
+            self.cpu_events[cpu_id][0] = self.cpu_events[cpu_id][0].saturating_add(1);
+        }
         // AP cores stay idle until the BSP has finished boot and seeded the run
         // queues. Without this, an AP timer tick during boot would dispatch a
         // not-yet-seeded task (and contend with the BSP's PMM-heavy boot).
@@ -1449,6 +1462,7 @@ impl Scheduler {
         }
 
         self.account_and_apply_churn_penalty();
+        self.stop_execution_clock(current);
 
         // Save interrupted context.
         self.processes[current].context_rsp = saved_rsp;
@@ -1525,6 +1539,7 @@ impl Scheduler {
                 return 0;
             }
 
+            self.increment_context_switches(cpu_id); // task -> idle
             let idle_rsp = self.core_idle_context_rsp(cpu_id);
             if idle_rsp != 0 {
                 unsafe {
@@ -1620,6 +1635,19 @@ impl Scheduler {
             .any(|p| p.pid == pid && p.state == ProcessState::BlockedOnIpc)
     }
 
+    pub(crate) fn record_wakeup(&mut self, ipc: bool) {
+        #[cfg(feature = "cpu_accounting_diag")]
+        {
+            let c = &mut self.cpu_events[current_cpu_id()];
+            c[1] = c[1].saturating_add(1);
+            if ipc {
+                c[2] = c[2].saturating_add(1);
+            }
+        }
+        #[cfg(not(feature = "cpu_accounting_diag"))]
+        let _ = ipc;
+    }
+
     pub fn wake_pid(&mut self, pid: usize) {
         let idx = match self.processes.iter().position(|p| p.pid == pid) {
             Some(i) => i,
@@ -1633,6 +1661,7 @@ impl Scheduler {
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
+            self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
             self.remove_from_ready_queues(idx);
             if let Some(cpu_id) = self.live_owner_core(idx) {
@@ -1663,6 +1692,7 @@ impl Scheduler {
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
+            self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
             self.remove_from_ready_queues(idx);
             if let Some(cpu_id) = self.live_owner_core(idx) {
@@ -1695,6 +1725,7 @@ impl Scheduler {
             if let Some(state) = self.processes[idx].linux_state_mut() {
                 state.futex_wait = None;
             }
+            self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
             self.remove_from_ready_queues(idx);
             if let Some(cpu) = self.live_owner_core(idx) {
@@ -1805,6 +1836,7 @@ impl Scheduler {
             state.eventfd_wait = None;
             state.pipe_wait = None;
         }
+        self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
         self.processes[idx].state = ProcessState::Ready;
         self.remove_from_ready_queues(idx);
         if let Some(cpu_id) = self.live_owner_core(idx) {
@@ -1826,6 +1858,7 @@ impl Scheduler {
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
+            self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
             self.remove_from_ready_queues(idx);
             if let Some(cpu_id) = self.live_owner_core(idx) {
@@ -1856,6 +1889,7 @@ impl Scheduler {
                 if let Some(state) = self.processes[idx].linux_state_mut() {
                     state.poll_wake_tick = None;
                 }
+                self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
                 self.processes[idx].state = ProcessState::Ready;
                 self.processes[idx].block_start_tick = self.global_tick;
                 self.remove_from_ready_queues(idx);
@@ -3098,11 +3132,8 @@ fn pop_ready_excluding_current(
 
 /// Per-core idle loop target for synthetic kernel interrupt frames.
 #[no_mangle]
-extern "C" fn core_idle_entry() -> ! {
-    loop {
-        x86_64::instructions::interrupts::enable();
-        x86_64::instructions::hlt();
-    }
+pub(crate) extern "C" fn core_idle_entry() -> ! {
+    accounting::idle_loop()
 }
 
 /// Build a saved interrupt frame that `iretq`s into [`core_idle_entry`] on a
@@ -3300,6 +3331,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     );
 
     sched.account_current_runtime();
+    sched.stop_execution_clock(cur);
+    sched.increment_context_switches(cpu_id); // exiting task -> idle
     let is_borrower = sched.processes[cur].native_thread;
     {
         let process = &mut sched.processes[cur];

@@ -344,8 +344,5 @@ unsafe extern "C" fn ap_entry_rust(info: &limine::mp::MpInfo) -> ! {
     // ── Step 8+9: Enable interrupts + idle loop ───────────────────────────────
     // The scheduler will preempt us via LAPIC timer ticks and migrate tasks
     // from other cores or from its own run queue once init_cores() is called.
-    x86_64::instructions::interrupts::enable();
-    loop {
-        x86_64::instructions::hlt();
-    }
+    crate::sched::accounting::idle_loop()
 }

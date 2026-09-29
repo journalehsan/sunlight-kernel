@@ -1784,7 +1784,7 @@ fn process_exit(code: i32) -> ! {
         if kstack_top != 0 {
             core::arch::asm!("mov rsp, {}", in(reg) kstack_top);
         }
-        core::arch::asm!("sti", "2:", "hlt", "jmp 2b", options(noreturn),);
+        core::arch::asm!("jmp {idle}", idle = sym crate::sched::core_idle_entry, options(noreturn));
     }
 }
 

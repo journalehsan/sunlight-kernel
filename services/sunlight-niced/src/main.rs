@@ -53,7 +53,7 @@ mod telemetry;
 mod watchdog;
 
 use sunlight_ipc::{
-    endpoint_create, get_time_utc, ipc_reply_and_try_recv, nameserver_register, IpcMsg,
+    endpoint_create, get_time_utc, ipc_reply_and_recv_timeout, nameserver_register, IpcMsg,
 };
 
 use config::load_defaults;
@@ -117,15 +117,13 @@ pub extern "C" fn _start() -> ! {
             }
         }
 
-        // Non-blocking IPC poll so the 1Hz monitor loop keeps making progress
-        // even when no watchdog client is currently calling in.
-        match ipc_reply_and_try_recv(ep, reply) {
+        // Block between messages, with a deadline for the 1 Hz maintenance pass.
+        match ipc_reply_and_recv_timeout(ep, reply, 1000) {
             Some(msg) => {
                 reply = watchdog::handle_message(&mut table, &msg, now);
             }
             None => {
                 reply = IpcMsg::empty();
-                sunlight_ipc::process_yield();
             }
         }
     }

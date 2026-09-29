@@ -24,8 +24,8 @@ use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use sunlight_ipc::{
     ipc_call, ipc_call_timeout,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    monotonic_millis, nameserver_lookup, process_yield, shm_create, shm_free, shm_map,
-    CapabilityToken, IpcMsg, SgpMsg,
+    monotonic_millis, nameserver_lookup, shm_create, shm_free, shm_map, CapabilityToken, IpcMsg,
+    SgpMsg,
 };
 
 use crate::event::{Event, WindowEvent};
@@ -140,11 +140,14 @@ fn decode_key_event_word(key_word: u64) -> Option<Event> {
     ))
 }
 
-/// Yield until `started_ms + budget_ms` (or return immediately if already past).
-fn idle_wait_remaining(started_ms: u64, budget_ms: u64) {
-    let deadline = started_ms.saturating_add(budget_ms);
-    while monotonic_millis() < deadline {
-        process_yield();
+/// Park until the existing poll deadline. This private endpoint does not
+/// consume display replies or change the input polling cadence.
+fn idle_wait_remaining(wait_ep: sunlight_ipc::EndpointId, started_ms: u64, budget_ms: u64) {
+    let remaining = started_ms
+        .saturating_add(budget_ms)
+        .saturating_sub(monotonic_millis());
+    if remaining != 0 {
+        let _ = sunlight_ipc::ipc_recv_timeout(wait_ep, remaining);
     }
 }
 
@@ -307,6 +310,7 @@ pub struct Window {
     buffer_stride_pixels: u32,
     surface_generation: u64,
     display_ep: CapabilityToken,
+    idle_wait_ep: sunlight_ipc::EndpointId,
     shm_cap: CapabilityToken,
     launch_trace: LaunchTrace,
 
@@ -450,6 +454,7 @@ impl Window {
             buffer_stride_pixels,
             surface_generation: 1,
             display_ep,
+            idle_wait_ep: sunlight_ipc::endpoint_create(),
             shm_cap,
             launch_trace: trace,
             client_x: 0,
@@ -499,7 +504,7 @@ impl Window {
     ///
     /// Display always replies when it dequeues the request, so waiting without
     /// a short client deadline is correct. Idle `Event::Tick` cadence is
-    /// implemented with a post-reply yield wait when the snapshot is empty.
+    /// implemented with a post-reply timed block when the snapshot is empty.
     pub fn poll_event_timeout(&mut self, timeout_ms: u64) -> Event {
         if let Some(event) = self.pending_event.take() {
             return event;
@@ -519,7 +524,7 @@ impl Window {
                 ),
         );
         if reply.label != SgpMsg::REPLY {
-            idle_wait_remaining(poll_started, idle_ms);
+            idle_wait_remaining(self.idle_wait_ep, poll_started, idle_ms);
             return Event::Tick;
         }
 
@@ -527,20 +532,20 @@ impl Window {
             self.event_counters.wrong_window_replies =
                 self.event_counters.wrong_window_replies.wrapping_add(1);
             self.window_valid = false;
-            idle_wait_remaining(poll_started, idle_ms);
+            idle_wait_remaining(self.idle_wait_ep, poll_started, idle_ms);
             return Event::Tick;
         }
         self.window_valid = true;
 
         if reply.words[3] & SgpMsg::EVENT_FLAG_RESIZED != 0 {
             let Some(resized) = decode_resize_surface_reply(&reply) else {
-                idle_wait_remaining(poll_started, idle_ms);
+                idle_wait_remaining(self.idle_wait_ep, poll_started, idle_ms);
                 return Event::Tick;
             };
             let Ok(mapped) = shm_map(resized.cap) else {
                 // Keep the old valid pointer and generation. The compositor
                 // will repeat its current generation on the next poll.
-                idle_wait_remaining(poll_started, idle_ms);
+                idle_wait_remaining(self.idle_wait_ep, poll_started, idle_ms);
                 return Event::Tick;
             };
 
@@ -688,7 +693,7 @@ impl Window {
 
         // Empty snapshot: wait out the idle budget so the app loop does not
         // spin at full CPU (44k+ EVENT_POLLs per session were observed).
-        idle_wait_remaining(poll_started, idle_ms);
+        idle_wait_remaining(self.idle_wait_ep, poll_started, idle_ms);
         Event::Tick
     }
 
@@ -1032,6 +1037,7 @@ impl Drop for Window {
         // Client-side SHM cleanup still happens even if the display server is
         // already gone or the process is exiting.
         let _ = shm_free(self.shm_cap);
+        let _ = sunlight_ipc::endpoint_destroy(self.idle_wait_ep);
     }
 }
 

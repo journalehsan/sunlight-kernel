@@ -92,6 +92,8 @@ pub struct CoreSnapshot {
     pub local_timer_ticks: u64,
     /// Number of task switches performed on this core since boot.
     pub context_switches: u64,
+    /// Actual task/idle context transitions per second over the sample.
+    pub switches_per_second: u64,
 }
 
 impl CoreSnapshot {
@@ -114,8 +116,7 @@ impl CoreSnapshot {
 /// Fixed-capacity per-core telemetry table indexed by logical core ID.
 ///
 /// [`CpuTelemetry::iter`] yields only the *populated* entries (`..self.count`).
-/// In the current uniprocessor kernel `count` is always 1 and `cores[0]`
-/// carries the aggregate system load.
+/// Each populated entry carries independent halt-based runtime accounting.
 #[derive(Clone, Copy)]
 pub struct CpuTelemetry {
     /// Snapshot for each online logical core, ordered by `core_id`.

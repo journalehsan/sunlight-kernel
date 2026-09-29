@@ -469,8 +469,12 @@ pub extern "C" fn _start() -> ! {
             serial_println!(
                 "[WISEOWL-DB] persistent /state unavailable; identity startup suspended"
             );
+            // Startup is intentionally suspended until restart with persistent
+            // storage. No endpoint is published and no authority is bypassed.
+            // Park on a private receive instead of permanently yielding Ready.
+            let suspended = endpoint_create();
             loop {
-                process_yield();
+                let _ = ipc_recv(suspended);
             }
         }
         Err(error) => {

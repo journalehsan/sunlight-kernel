@@ -826,10 +826,9 @@ impl App for WelcomeApp {
         }
         self.auto_tick();
         match event {
-            Event::Tick => {
-                self.auto_tick();
-                true
-            }
+            // Normal pages are static. Only the explicit automation mode
+            // changes pages on a timer; input handlers request their own paint.
+            Event::Tick => self.auto_drive,
             Event::MouseMove { x, y } => {
                 self.hit_test_buttons(Point::new(x, y), false, false);
                 true

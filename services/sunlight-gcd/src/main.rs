@@ -48,7 +48,7 @@ mod shim;
 mod telemetry;
 
 use sunlight_ipc::{
-    endpoint_create, get_time_utc, ipc_reply_and_try_recv, nameserver_register, IpcMsg,
+    endpoint_create, get_time_utc, ipc_reply_and_recv_timeout, nameserver_register, IpcMsg,
 };
 use sunlight_tty::proc::SIGKILL;
 
@@ -109,13 +109,12 @@ pub extern "C" fn _start() -> ! {
             }
         }
 
-        match ipc_reply_and_try_recv(ep, reply) {
+        match ipc_reply_and_recv_timeout(ep, reply, 1000) {
             Some(msg) => {
                 reply = handle_message(&mut reaper, &shim, tel.as_ref(), &msg, now);
             }
             None => {
                 reply = IpcMsg::empty();
-                sunlight_ipc::process_yield();
             }
         }
     }

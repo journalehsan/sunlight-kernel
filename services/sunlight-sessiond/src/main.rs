@@ -13,8 +13,8 @@ use config_ops::{
 };
 use heapless::Vec;
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_reply_and_try_recv, kill,
-    monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
+    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_reply_and_recv_timeout, kill,
+    monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive,
     session_consume_auth_grant, session_query_process, validate_session_caller,
     wiseowl_set_active_session_authority, wiseowl_validate_delegated_caller, IpcMsg, MezzoMsg,
     ServiceCapability, SessionAction, SessionComponentRole, SessionComponentState,
@@ -1531,9 +1531,8 @@ pub extern "C" fn _start() -> ! {
     loop {
         supervise(&mut state);
         sync_wiseowl_session_authority(&mut state);
-        let Some(message) = ipc_reply_and_try_recv(endpoint, reply) else {
+        let Some(message) = ipc_reply_and_recv_timeout(endpoint, reply, 50) else {
             reply = IpcMsg::empty();
-            process_yield();
             continue;
         };
         reply = match message.label {

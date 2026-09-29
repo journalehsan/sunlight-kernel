@@ -3,7 +3,7 @@
 
 use mezzo::LockSession;
 use sunlight_ipc::{
-    consume_lock_auth_grant, endpoint_create, ipc_call_timeout, ipc_reply_and_try_recv,
+    consume_lock_auth_grant, endpoint_create, ipc_call_timeout, ipc_reply_and_recv_timeout,
     monotonic_millis, nameserver_lookup_timeout, nameserver_register, process_is_alive,
     process_yield, validate_lock_caller, validate_session_caller, CapabilityToken, IpcMsg,
     LockState, MezzoMsg, SgpMsg, LOCK_CALLER_AUTHENTICATED_TTY, LOCK_CALLER_TTY_SERVICE,
@@ -225,9 +225,8 @@ pub extern "C" fn _start() -> ! {
             }
         }
 
-        let Some(message) = ipc_reply_and_try_recv(endpoint, reply) else {
+        let Some(message) = ipc_reply_and_recv_timeout(endpoint, reply, 50) else {
             reply = IpcMsg::empty();
-            process_yield();
             continue;
         };
         reply = match message.label {

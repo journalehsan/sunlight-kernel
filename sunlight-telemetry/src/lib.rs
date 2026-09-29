@@ -1,6 +1,7 @@
 #![no_std]
 
 mod topology;
+pub use sunlight_ipc::cpu_accounting::CpuCounters;
 pub use topology::{CoreSnapshot, CpuTelemetry, TaskStats, TopologyInfo, MAX_CORES};
 
 use sunlight_ipc::{ipc_call, map_telemetry, nameserver_lookup, IpcMsg, TzMsg};
@@ -194,9 +195,12 @@ pub struct TelemetryPage {
     pub mem_acct_version: u32,
     pub _mem_acct_pad: u32,
     pub mem_acct: MemoryAccountingSnapshot,
+    /// Version 4: independently measured CPU capacity, idle, and activity.
+    pub cpu_counters: [CpuCounters; MAX_CORES],
+    pub task_groups: [u32; MAX_PROCESSES],
 }
 
-const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 8192);
+const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 16384);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ProcessState {
@@ -214,6 +218,10 @@ impl Default for ProcessState {
 
 #[derive(Clone, Copy, Default)]
 pub struct ProcessSnapshot {
+    /// Kernel thread group ID; native single-thread tasks use their PID.
+    pub tgid: u32,
+    /// Measured task delta before process-group aggregation and rounding.
+    pub runtime_delta_ns: u64,
     pub pid: u32,
     pub ppid: u32,
     pub state: ProcessState,
@@ -262,6 +270,10 @@ impl ProcessSnapshot {
 
 #[derive(Clone, Copy)]
 pub struct SystemSnapshot {
+    pub sample_time_ns: u64,
+    pub cpu_capacity_ns: u64,
+    pub accounting_version: u32,
+    pub cpu_counters: [CpuCounters; MAX_CORES],
     pub sequence: u32,
     pub uptime_secs: u64,
     pub total_ram_kb: u64,
@@ -296,6 +308,10 @@ pub struct SystemSnapshot {
 impl Default for SystemSnapshot {
     fn default() -> Self {
         Self {
+            sample_time_ns: 0,
+            cpu_capacity_ns: 0,
+            accounting_version: 0,
+            cpu_counters: [CpuCounters::ZERO; MAX_CORES],
             sequence: 0,
             uptime_secs: 0,
             total_ram_kb: 0,
@@ -327,7 +343,7 @@ pub struct Telemetry {
     last_sample_time_ns: u64,
     last_runtime_by_pid: [u64; MAX_PROCESSES],
     last_pids: [u32; MAX_PROCESSES],
-    last_ticks: [u64; MAX_PROCESSES],
+    last_generations: [u32; MAX_PROCESSES],
     last_snapshot: SystemSnapshot,
 }
 
@@ -349,13 +365,14 @@ impl Telemetry {
             last_sample_time_ns: 0,
             last_runtime_by_pid: [0; MAX_PROCESSES],
             last_pids: [0; MAX_PROCESSES],
-            last_ticks: [0; MAX_PROCESSES],
+            last_generations: [0; MAX_PROCESSES],
             last_snapshot: SystemSnapshot::default(),
         })
     }
 
     pub fn poll(&mut self) -> bool {
-        loop {
+        // A preempted writer must not turn the reader into an unbounded spin.
+        for _ in 0..3 {
             let seq1 = unsafe { vread(core::ptr::addr_of!((*self.page_ptr).sequence)) };
             if seq1 & 1 == 1 {
                 core::hint::spin_loop();
@@ -366,19 +383,23 @@ impl Telemetry {
                 return false;
             }
 
+            core::sync::atomic::fence(core::sync::atomic::Ordering::Acquire);
             let mut snap = self.read_page();
+            core::sync::atomic::fence(core::sync::atomic::Ordering::Acquire);
             let seq2 = unsafe { vread(core::ptr::addr_of!((*self.page_ptr).sequence)) };
             if seq2 != seq1 {
                 continue;
             }
 
             self.compute_cpu_usage(&mut snap);
+            aggregate_thread_groups(&mut snap);
             self.fill_local_time(&mut snap);
 
             self.last_seq = seq2;
             self.last_snapshot = snap;
             return true;
         }
+        false
     }
 
     pub fn snapshot(&self) -> &SystemSnapshot {
@@ -388,6 +409,11 @@ impl Telemetry {
     fn read_page(&self) -> SystemSnapshot {
         let mut snap = SystemSnapshot::default();
         let page = unsafe { &*self.page_ptr };
+        snap.sample_time_ns = unsafe { vread(core::ptr::addr_of!(page.sample_time_ns)) };
+        snap.accounting_version = unsafe { vread(core::ptr::addr_of!(page.version)) };
+        if snap.accounting_version >= 4 {
+            snap.cpu_counters = unsafe { vread(core::ptr::addr_of!(page.cpu_counters)) };
+        }
 
         unsafe {
             snap.sequence = vread(core::ptr::addr_of!(page.sequence));
@@ -452,12 +478,18 @@ impl Telemetry {
             ts.tally(raw.state);
 
             snap.procs[i] = ProcessSnapshot {
+                runtime_delta_ns: 0,
+                tgid: if snap.accounting_version >= 4 {
+                    unsafe { vread(core::ptr::addr_of!(page.task_groups[i])) }
+                } else {
+                    raw.pid
+                },
                 pid: raw.pid,
                 ppid: raw.ppid,
                 state: match raw.state {
                     1 => ProcessState::Running,
-                    2 => ProcessState::Blocked,
-                    3 => ProcessState::Finished,
+                    2 | 4 | 5 | 6 => ProcessState::Blocked,
+                    3 | 7 => ProcessState::Finished,
                     _ => ProcessState::Ready,
                 },
                 name: raw.name,
@@ -495,146 +527,69 @@ impl Telemetry {
     }
 
     fn compute_cpu_usage(&mut self, snap: &mut SystemSnapshot) {
-        let cur_sample = unsafe { vread(core::ptr::addr_of!((*self.page_ptr).sample_time_ns)) };
-        let interval_ns: u64 =
-            if self.last_sample_time_ns != 0 && cur_sample > self.last_sample_time_ns {
-                cur_sample.saturating_sub(self.last_sample_time_ns)
-            } else {
-                0
-            };
-
-        let cpu_count = if snap.cpu_count > 0 {
-            snap.cpu_count as u64
-        } else {
-            1
-        };
-        let capacity_delta_ns: u64 = interval_ns.saturating_mul(cpu_count);
-
-        let mut used_delta_ns: u64 = 0;
-        let mut proc_deltas = [0u64; MAX_PROCESSES];
-        let mut next_pids = [0u32; MAX_PROCESSES];
-        let mut next_runtimes = [0u64; MAX_PROCESSES];
-
-        for i in 0..snap.proc_count {
-            let pid = snap.procs[i].pid;
-            let cur_runtime = snap.procs[i].cpu_ticks;
-
-            let mut found = false;
-            for j in 0..MAX_PROCESSES {
-                if self.last_pids[j] == pid {
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                for j in 0..MAX_PROCESSES {
-                    if self.last_pids[j] == pid {
-                        found = true;
-                        break;
-                    }
-                }
-            }
-
-            let delta = if found {
-                let mut prev_runtime = 0u64;
-                for j in 0..MAX_PROCESSES {
-                    if self.last_pids[j] == pid {
-                        prev_runtime = self.last_runtime_by_pid[j];
-                        break;
-                    }
-                }
-                if prev_runtime == 0 {
-                    for j in 0..MAX_PROCESSES {
-                        if self.last_pids[j] == pid {
-                            prev_runtime = self.last_ticks[j];
-                            break;
-                        }
-                    }
-                }
-                cur_runtime.saturating_sub(prev_runtime)
-            } else {
-                0
-            };
-            proc_deltas[i] = delta;
-            used_delta_ns = used_delta_ns.saturating_add(delta);
-
-            next_pids[i] = pid;
-            next_runtimes[i] = cur_runtime;
+        use sunlight_ipc::cpu_accounting::{rate, usage_bp};
+        let dt = snap.sample_time_ns.saturating_sub(self.last_sample_time_ns);
+        let valid = self.last_sample_time_ns != 0
+            && dt != 0
+            && snap.cpu_count == self.last_snapshot.cpu_count;
+        let capacity = dt.saturating_mul(snap.cpu_count.max(1) as u64);
+        snap.cpu_capacity_ns = if valid { capacity } else { 0 };
+        let mut next_pids = [0; MAX_PROCESSES];
+        let mut next_runtimes = [0; MAX_PROCESSES];
+        let mut next_generations = [0; MAX_PROCESSES];
+        let mut task_total = 0u64;
+        for (i, p) in snap.procs[..snap.proc_count].iter_mut().enumerate() {
+            let prev = (0..MAX_PROCESSES)
+                .find(|j| self.last_pids[*j] == p.pid && self.last_generations[*j] == p.generation);
+            // Unknown/new tasks establish a baseline, never charge lifetime
+            // runtime into one interval. System totals are independent of rows.
+            let delta = prev
+                .map(|j| p.cpu_ticks.saturating_sub(self.last_runtime_by_pid[j]))
+                .unwrap_or(0);
+            p.runtime_delta_ns = if valid { delta } else { 0 };
+            p.cpu_bp = usage_bp(p.runtime_delta_ns, snap.cpu_capacity_ns);
+            task_total = task_total.saturating_add(delta);
+            next_pids[i] = p.pid;
+            next_runtimes[i] = p.cpu_ticks;
+            next_generations[i] = p.generation;
         }
-
-        let mut used_bp: u32 = 0;
-        let mut idle_bp: u32 = 10000;
-
-        if interval_ns > 0 && capacity_delta_ns > 0 {
-            used_bp = ((used_delta_ns as u128) * 10000u128 / (capacity_delta_ns as u128)) as u32;
-            used_bp = used_bp.min(10000);
-            idle_bp = 10000u32.saturating_sub(used_bp);
-        } else if interval_ns == 0 {
-            used_bp = self.last_snapshot.cpu_used_bp as u32;
-            idle_bp = self.last_snapshot.cpu_idle_bp as u32;
-        }
-
-        if used_bp + idle_bp > 10000 {
-            idle_bp = 10000 - used_bp;
-        }
-
-        snap.cpu_used_bp = used_bp as u16;
-        snap.cpu_idle_bp = idle_bp as u16;
-
-        // Per-core load: in the uniprocessor kernel all work runs on core 0,
-        // so core 0 mirrors the aggregate.  When SMP is added the kernel
-        // telemetry page will expose per-core counters and this loop will
-        // distribute load_bp across each CoreSnapshot individually.
+        let mut busy = 0u64;
+        let mut measured_capacity = 0u64;
         for i in 0..snap.cpu_telemetry.count {
-            snap.cpu_telemetry.cores[i].load_bp = if i == 0 {
-                snap.cpu_used_bp
+            let c = snap.cpu_counters[i];
+            let p = self.last_snapshot.cpu_counters[i];
+            let elapsed = c.elapsed_ns.saturating_sub(p.elapsed_ns);
+            let b = c.busy_ns.saturating_sub(p.busy_ns);
+            let core = &mut snap.cpu_telemetry.cores[i];
+            core.load_bp = if valid && snap.accounting_version >= 4 {
+                usage_bp(b, elapsed)
             } else {
-                // APs are online but kernel counters not yet per-core.
                 0
             };
+            core.switches_per_second = if valid {
+                rate(
+                    core.context_switches
+                        .saturating_sub(self.last_snapshot.cpu_telemetry.cores[i].context_switches),
+                    dt,
+                )
+            } else {
+                0
+            };
+            busy = busy.saturating_add(b);
+            measured_capacity = measured_capacity.saturating_add(elapsed);
         }
-
-        if capacity_delta_ns > 0 {
-            for i in 0..snap.proc_count {
-                let bp =
-                    ((proc_deltas[i] as u128) * 10000u128 / (capacity_delta_ns as u128)) as u32;
-                snap.procs[i].cpu_bp = bp.min(10000) as u16;
-            }
+        snap.cpu_used_bp = if !valid {
+            0
+        } else if snap.accounting_version >= 4 {
+            usage_bp(busy, measured_capacity)
         } else {
-            for i in 0..snap.proc_count {
-                snap.procs[i].cpu_bp = 0;
-            }
-        }
-
-        self.last_sample_time_ns = if cur_sample != 0 {
-            cur_sample
-        } else {
-            self.last_sample_time_ns
+            usage_bp(task_total, capacity)
         };
-
-        for j in 0..MAX_PROCESSES {
-            let lp = self.last_pids[j];
-            if lp != 0 {
-                let mut still_present = false;
-                for k in 0..snap.proc_count {
-                    if snap.procs[k].pid == lp {
-                        still_present = true;
-                        break;
-                    }
-                }
-                if !still_present {
-                    self.last_pids[j] = 0;
-                    self.last_runtime_by_pid[j] = 0;
-                    self.last_ticks[j] = 0;
-                }
-            }
-        }
-
+        snap.cpu_idle_bp = 10_000 - snap.cpu_used_bp;
         self.last_pids = next_pids;
         self.last_runtime_by_pid = next_runtimes;
-        for i in 0..snap.proc_count {
-            self.last_ticks[i] = next_runtimes[i];
-        }
+        self.last_generations = next_generations;
+        self.last_sample_time_ns = snap.sample_time_ns;
     }
 
     fn fill_local_time(&self, snap: &mut SystemSnapshot) {
@@ -668,6 +623,234 @@ impl Telemetry {
 }
 
 #[inline(always)]
+/// Public rows represent processes, aggregating Linux threads after deltas
+/// have been calculated with task identities. Shared address-space memory is
+/// counted once (maximum thread measurement), not summed once per thread.
+fn aggregate_thread_groups(snap: &mut SystemSnapshot) {
+    let mut count = 0;
+    for i in 0..snap.proc_count {
+        let mut p = snap.procs[i];
+        if p.tgid == 0 {
+            p.tgid = p.pid;
+        }
+        if let Some(j) = (0..count).find(|j| snap.procs[*j].tgid == p.tgid) {
+            let group = &mut snap.procs[j];
+            group.runtime_delta_ns = group.runtime_delta_ns.saturating_add(p.runtime_delta_ns);
+            group.cpu_bp = sunlight_ipc::cpu_accounting::usage_bp(
+                group.runtime_delta_ns,
+                snap.cpu_capacity_ns,
+            );
+            group.cpu_ticks = group.cpu_ticks.saturating_add(p.cpu_ticks);
+            group.mem_kb = group.mem_kb.max(p.mem_kb);
+            if p.state == ProcessState::Running {
+                group.state = ProcessState::Running;
+            }
+        } else {
+            p.pid = p.tgid;
+            snap.procs[count] = p;
+            count += 1;
+        }
+    }
+    snap.proc_count = count;
+}
+
 unsafe fn vread<T: Copy>(ptr: *const T) -> T {
     unsafe { core::ptr::read_volatile(ptr) }
+}
+
+#[cfg(test)]
+mod cpu_tests {
+    use super::*;
+    const SECOND: u64 = 1_000_000_000;
+    fn reader() -> Telemetry {
+        Telemetry {
+            page_ptr: core::ptr::null(),
+            last_seq: 0,
+            last_sample_time_ns: 0,
+            last_runtime_by_pid: [0; MAX_PROCESSES],
+            last_pids: [0; MAX_PROCESSES],
+            last_generations: [0; MAX_PROCESSES],
+            last_snapshot: SystemSnapshot::default(),
+        }
+    }
+    fn sample(time: u64, busy_cores: usize) -> SystemSnapshot {
+        let mut s = SystemSnapshot::default();
+        s.accounting_version = 4;
+        s.cpu_count = 4;
+        s.sample_time_ns = time;
+        s.cpu_telemetry.count = 4;
+        for i in 0..4 {
+            s.cpu_counters[i] = CpuCounters {
+                elapsed_ns: time,
+                busy_ns: if i < busy_cores { time } else { 0 },
+                idle_ns: if i < busy_cores { 0 } else { time },
+                ..CpuCounters::ZERO
+            };
+        }
+        s
+    }
+    fn accept(r: &mut Telemetry, s: &mut SystemSnapshot) {
+        r.compute_cpu_usage(s);
+        r.last_snapshot = *s;
+    }
+    fn task(s: &mut SystemSnapshot, pid: u32, runtime: u64) {
+        let i = s.proc_count;
+        s.procs[i].pid = pid;
+        s.procs[i].tgid = pid;
+        s.procs[i].generation = 1;
+        s.procs[i].cpu_ticks = runtime;
+        s.proc_count += 1;
+    }
+    #[test]
+    fn idle_one_two_four_busy_cores() {
+        for busy in [0, 1, 2, 4] {
+            let mut r = reader();
+            let mut a = sample(SECOND, busy);
+            let mut b = sample(2 * SECOND, busy);
+            if busy != 0 {
+                task(&mut a, 1, SECOND);
+                task(&mut b, 1, 2 * SECOND);
+            }
+            accept(&mut r, &mut a);
+            accept(&mut r, &mut b);
+            assert_eq!(b.cpu_used_bp, busy as u16 * 2500);
+            assert_eq!(b.cpu_idle_bp, 10_000 - busy as u16 * 2500);
+            if busy != 0 {
+                assert_eq!(b.procs[0].cpu_bp, 2500);
+            }
+            for i in 0..4 {
+                assert_eq!(
+                    b.cpu_telemetry.cores[i].load_bp,
+                    if i < busy { 10_000 } else { 0 }
+                );
+            }
+        }
+    }
+    #[test]
+    fn sleeping_and_frequently_scheduled_short_tasks() {
+        let mut r = reader();
+        let mut a = sample(SECOND, 0);
+        let mut b = sample(2 * SECOND, 0);
+        task(&mut a, 1, 0);
+        task(&mut b, 1, 1_000_000);
+        b.cpu_telemetry.cores[0].context_switches = 1_000_000;
+        accept(&mut r, &mut a);
+        accept(&mut r, &mut b);
+        assert_eq!(b.procs[0].cpu_bp, 2); // 0.025% machine capacity
+        assert_eq!(b.cpu_telemetry.cores[0].switches_per_second, 1_000_000);
+    }
+    #[test]
+    fn exit_and_table_truncation_do_not_remove_system_runtime() {
+        let mut r = reader();
+        let mut a = sample(SECOND, 1);
+        let mut b = sample(2 * SECOND, 1);
+        task(&mut a, 1, SECOND); // exits before b; no process rows remain
+        accept(&mut r, &mut a);
+        accept(&mut r, &mut b);
+        assert_eq!(b.cpu_used_bp, 2500);
+        assert_eq!(b.cpu_idle_bp, 7500);
+    }
+    #[test]
+    fn reused_pid_and_new_tasks_establish_baseline() {
+        let mut r = reader();
+        let mut a = sample(SECOND, 1);
+        let mut b = sample(2 * SECOND, 1);
+        task(&mut a, 1, SECOND);
+        task(&mut b, 1, 10 * SECOND);
+        b.procs[0].generation = 2;
+        task(&mut b, 2, 10 * SECOND);
+        accept(&mut r, &mut a);
+        accept(&mut r, &mut b);
+        assert_eq!(b.procs[0].cpu_bp, 0);
+        assert_eq!(b.procs[1].cpu_bp, 0);
+        assert_eq!(b.cpu_used_bp, 2500);
+    }
+    #[test]
+    fn repeated_samples_conserve_capacity_without_drift() {
+        let mut r = reader();
+        for n in 1..1000 {
+            let mut s = sample(SECOND * n + SECOND * 1_000_000_000, 2);
+            accept(&mut r, &mut s);
+            assert_eq!(s.cpu_used_bp + s.cpu_idle_bp, 10_000);
+            if n > 1 {
+                assert_eq!(s.cpu_used_bp, 5000);
+            }
+        }
+    }
+    #[test]
+    fn duplicate_time_and_cpu_count_change_rebaseline() {
+        let mut r = reader();
+        let mut s = sample(SECOND, 1);
+        accept(&mut r, &mut s);
+        accept(&mut r, &mut s);
+        assert_eq!(s.cpu_used_bp, 0);
+        s.sample_time_ns += SECOND;
+        s.cpu_count = 2;
+        accept(&mut r, &mut s);
+        assert_eq!(s.cpu_used_bp, 0);
+    }
+    #[test]
+    fn thread_groups_sum_cpu_once_and_share_memory() {
+        let mut r = reader();
+        let mut a = sample(SECOND, 2);
+        let mut b = sample(2 * SECOND, 2);
+        for s in [&mut a, &mut b] {
+            task(s, 1, s.sample_time_ns);
+            task(s, 2, s.sample_time_ns);
+            s.procs[1].tgid = 1;
+            s.procs[0].mem_kb = 128;
+            s.procs[1].mem_kb = 128;
+        }
+        accept(&mut r, &mut a);
+        accept(&mut r, &mut b);
+        aggregate_thread_groups(&mut b);
+        assert_eq!(b.proc_count, 1);
+        assert_eq!(b.procs[0].cpu_bp, 5000);
+        assert_eq!(b.procs[0].mem_kb, 128);
+    }
+    #[test]
+    fn v4_layout_is_append_only_and_fits_mapping() {
+        assert_eq!(core::mem::size_of::<ProcessStat>(), 60);
+        assert_eq!(core::mem::size_of::<RawCoreStat>(), 32);
+        assert!(
+            core::mem::offset_of!(TelemetryPage, cpu_counters)
+                > core::mem::offset_of!(TelemetryPage, mem_acct)
+        );
+        assert_eq!(core::mem::offset_of!(TelemetryPage, cpu_counters), 6752);
+        assert_eq!(core::mem::size_of::<TelemetryPage>(), 12128);
+    }
+
+    #[test]
+    fn raw_reaped_rows_are_excluded_and_blocked_states_preserved() {
+        // The shared page is all integer fields: zero is a valid fixture.
+        let mut page: TelemetryPage = unsafe { core::mem::zeroed() };
+        page.version = 4;
+        page.cpu_count = 4;
+        page.sample_time_ns = 123_456;
+        page.proc_count = 4;
+        for (i, state) in [7, 4, 5, 6].into_iter().enumerate() {
+            page.procs[i].pid = i as u32 + 1;
+            page.procs[i].state = state;
+        }
+        let mut r = reader();
+        r.page_ptr = &page;
+        let s = r.read_page();
+        assert_eq!(s.sample_time_ns, 123_456);
+        assert_eq!(s.proc_count, 3);
+        for p in &s.procs[..3] {
+            assert!(p.pid != 1);
+            assert!(p.state == ProcessState::Blocked);
+        }
+    }
+
+    #[test]
+    fn preempted_writer_does_not_spin_reader_or_replace_sample() {
+        let mut page: TelemetryPage = unsafe { core::mem::zeroed() };
+        page.sequence = 3;
+        let mut r = reader();
+        r.page_ptr = &page;
+        r.last_snapshot.sample_time_ns = 42;
+        assert!(!r.poll());
+        assert_eq!(r.snapshot().sample_time_ns, 42);
+    }
 }

@@ -5,6 +5,8 @@
 *.o
 *.elf
 *.bin
+__pycache__/
+*.pyc
 
 # Version manager state (generated)
 .version_state.json

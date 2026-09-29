@@ -34,7 +34,7 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 static BUMP: BumpAllocator = BumpAllocator;
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_reply_and_try_recv, monotonic_millis,
+    debug_log, endpoint_create, ipc_call, ipc_reply_and_recv_timeout, monotonic_millis,
     nameserver_lookup, nameserver_register, process_is_alive, CapabilityToken, IpcMsg,
     SpawnRequest,
 };
@@ -1961,21 +1961,20 @@ fn _start() -> ! {
     #[cfg(feature = "identity-phase-c-test")]
     let mut identity_phase_c_gate = IdentityPhaseCGate::new();
 
-    // Main control loop. Non-blocking receive lets boot autostart keep
-    // progressing while dependencies register.
+    // Incoming calls wake immediately; a 50 ms deadline drives dependency
+    // startup and exit supervision without a permanently runnable poll loop.
     let mut reply = IpcMsg::empty();
     loop {
         poll_service_exits(&mut services, spawn_cap);
         autostart_services(&mut services, &mut startup, spawn_cap);
         #[cfg(feature = "identity-phase-c-test")]
         identity_phase_c_gate.poll(&mut services, spawn_cap);
-        match ipc_reply_and_try_recv(ep, reply) {
+        match ipc_reply_and_recv_timeout(ep, reply, 50) {
             Some(msg) => {
                 reply = handle_control_message(&msg, &mut services, spawn_cap);
             }
             None => {
                 reply = IpcMsg::empty();
-                sunlight_ipc::process_yield();
             }
         }
     }

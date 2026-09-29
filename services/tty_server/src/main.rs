@@ -2369,7 +2369,13 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                     }
                 }
             }
-            process_yield();
+            // Input IPC wakes immediately. A short deadline keeps foreground
+            // output draining and clock/session maintenance responsive while
+            // avoiding the measured receive/yield storm on an idle desktop.
+            if let Some(m) = sunlight_ipc::ipc_recv_timeout(ep, 10) {
+                msg = m;
+                break;
+            }
         }
     }
 }

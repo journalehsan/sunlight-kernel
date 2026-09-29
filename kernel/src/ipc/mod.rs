@@ -716,6 +716,7 @@ fn wake_terminal(sched: &mut Scheduler, idx: usize) {
     if sched.processes[idx].state != ProcessState::BlockedOnIpc {
         return;
     }
+    sched.record_wakeup(true);
     sched.processes[idx].state = ProcessState::Ready;
     sched.remove_from_ready_queues(idx);
     if let Some(cpu_id) = sched.live_owner_core(idx) {
