@@ -13,16 +13,19 @@ always copied from the backend hardware-consumption clock; the UI timer does
 not advance time. Visualization is one replaceable fixed-size latest frame,
 not an event queue.
 
-The file picker returns a path to the controller. An accepted Open synchronously
-publishes `Loading` and increments the backend source generation, preventing a
-second path from racing the worker. Controller refreshes reject snapshots whose
-generation does not match the current source. The queue panel contains only the
-active path (or the empty-state row); it is not a playlist engine.
+Selecting a playlist entry or choosing a file opens and starts it. The bundled
+sample loads paused at startup. Previous and Next wrap through the playlist;
+Repeat restarts the current track at end of stream. A second click during an
+in-progress load of the same path keeps the existing request. If the worker is
+handling another command, the controller retains the latest requested track or
+seek and retries it on refresh. An accepted Open synchronously publishes
+`Loading` and increments the source generation. Controller refreshes reject
+snapshots from the previous source. The timeline previews a drag and waits for
+the worker's seek acknowledgement before resuming the hardware position clock.
 
 On window close, the app is dropped after the event loop. Controller drop then
 drops `MediaPlayer`, which requests worker shutdown, flushes application audio,
-and releases decoder/source storage. Previous, Next, Repeat, and Options remain
-visible but disabled until a real playlist/settings layer owns them.
+and releases decoder/source storage.
 
 ## The Living Sunlight sample
 

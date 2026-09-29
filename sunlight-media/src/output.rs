@@ -4,6 +4,7 @@ use crate::error::{MediaError, MediaErrorKind};
 
 pub const PERIOD_FRAMES: usize = sunlight_audio::hda::PERIOD_FRAME_COUNT;
 pub const STARTUP_PERIODS: usize = 5;
+const OUTPUT_PROGRESS_TIMEOUT_MS: u64 = 1_500;
 
 /// Collect decoder output into hardware-sized writes. A short write is only
 /// allowed at end of stream, where audiod pads the final DMA period.
@@ -145,10 +146,16 @@ impl SunlightAudioSink {
         let mut gained = [0u8; sunlight_ipc::SHM_PAGE];
         gained[..pcm.len()].copy_from_slice(pcm);
         sunlight_audio::pcm::apply_gain_s16le(&mut gained[..pcm.len()], self.volume);
+        let deadline = started_ms.saturating_add(OUTPUT_PROGRESS_TIMEOUT_MS);
         let status = loop {
             match self.client.submit_pcm_chunk(&gained[..pcm.len()]) {
                 Ok(status) => break status,
-                Err(sunlight_audiod::AudioClientError::Overflow) => sunlight_ipc::process_yield(),
+                Err(sunlight_audiod::AudioClientError::Overflow) => {
+                    if sunlight_ipc::monotonic_millis() >= deadline {
+                        return Err(MediaError::new(MediaErrorKind::AudioOutput, 9));
+                    }
+                    sunlight_ipc::process_yield();
+                }
                 Err(error) => {
                     return Err(MediaError::new(
                         MediaErrorKind::AudioOutput,
@@ -192,6 +199,9 @@ impl SunlightAudioSink {
             let consumed = self.consumed_session_frames()?;
             if self.submitted_frames.saturating_sub(consumed) <= 8 * PERIOD_FRAMES as u64 {
                 return Ok(self.timeline_frames.saturating_add(consumed));
+            }
+            if sunlight_ipc::monotonic_millis() >= deadline {
+                return Err(MediaError::new(MediaErrorKind::AudioOutput, 9));
             }
             sunlight_ipc::process_yield();
         }
@@ -242,6 +252,7 @@ impl AudioSink for SunlightAudioSink {
         if !self.started {
             self.submit_startup()?;
         }
+        let deadline = sunlight_ipc::monotonic_millis().saturating_add(OUTPUT_PROGRESS_TIMEOUT_MS);
         loop {
             let consumed = self.consumed_session_frames()?;
             if consumed >= self.submitted_frames {
@@ -255,6 +266,9 @@ impl AudioSink for SunlightAudioSink {
                 self.started = false;
                 self.reset_timing();
                 return Ok(self.timeline_frames);
+            }
+            if sunlight_ipc::monotonic_millis() >= deadline {
+                return Err(MediaError::new(MediaErrorKind::AudioOutput, 9));
             }
             sunlight_ipc::process_yield();
         }

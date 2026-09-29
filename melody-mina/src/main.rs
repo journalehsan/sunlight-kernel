@@ -345,6 +345,7 @@ struct MelodyMinaApp {
     track_title: [u8; 128],
     track_title_len: usize,
     has_active_source: bool,
+    repeat_one: bool,
     seek_committed_on_release: bool,
 }
 
@@ -389,9 +390,10 @@ impl MelodyMinaApp {
             track_title: [0; 128],
             track_title_len: 0,
             has_active_source: false,
+            repeat_one: false,
             seek_committed_on_release: false,
         };
-        app.load_media_path(BUILTIN_SAMPLE_PATH);
+        app.load_media_path_with_autoplay(BUILTIN_SAMPLE_PATH, false);
         log_media_heap("before");
         app
     }
@@ -493,6 +495,10 @@ impl MelodyMinaApp {
     }
 
     fn load_media_path(&mut self, path: &str) {
+        self.load_media_path_with_autoplay(path, true);
+    }
+
+    fn load_media_path_with_autoplay(&mut self, path: &str, auto_play: bool) {
         if let Some(index) = self.playlist.iter().position(|entry| entry.path == path) {
             self.selected_playlist = index;
             self.playlist_scroll.ensure_visible(
@@ -506,7 +512,12 @@ impl MelodyMinaApp {
             .filter(|entry| entry.path == path)
             .map(|entry| entry.display_title.clone());
         self.set_track_title(title.as_deref().unwrap_or(path));
-        match self.media.open(path) {
+        let opened = if auto_play {
+            self.media.open(path)
+        } else {
+            self.media.open_paused(path)
+        };
+        match opened {
             Ok(()) => {
                 self.has_active_source = true;
                 self.status = "Loading audio...";
@@ -580,6 +591,11 @@ impl MelodyMinaApp {
         let previous_state = self.last_media_state;
         let state_changed = now_playing.playback_state != self.last_media_state;
         self.last_media_state = now_playing.playback_state;
+        if state_changed && now_playing.playback_state == PlaybackState::Ended && self.repeat_one {
+            if let Err(error) = self.media.play_pause() {
+                self.status = error.user_message();
+            }
+        }
         if state_changed && now_playing.playback_state == PlaybackState::Playing {
             self.playback_seen = true;
             log_media_heap("during");
@@ -654,6 +670,8 @@ impl MelodyMinaApp {
             ButtonState::Disabled
         } else if self.pressed_control == Some(index) {
             ButtonState::Pressed
+        } else if index == 6 && self.repeat_one {
+            ButtonState::Pressed
         } else if self.hovered_control == Some(index) {
             ButtonState::Hovered
         } else {
@@ -668,9 +686,8 @@ impl MelodyMinaApp {
             1 => true,
             2 => controls.stop,
             4 => controls.play_pause,
-            3 | 5 => controls.open && self.playlist.len() > 1,
-            // Repeat remains visible, but this phase does not own repeat state.
-            6 => false,
+            3 | 5 => self.has_active_source && !self.playlist.is_empty(),
+            6 => controls.play_pause,
             _ => false,
         }
     }
@@ -834,11 +851,10 @@ impl MelodyMinaApp {
     }
 
     fn draw_transport(&self, canvas: &mut Canvas, theme: &Theme) {
-        let now_playing = self.media.view();
         let symbols = [
             UiSymbol::Stop,
             UiSymbol::PreviousTrack,
-            if now_playing.shows_pause() {
+            if self.media.shows_pause() {
                 UiSymbol::Pause
             } else {
                 UiSymbol::Play
@@ -896,6 +912,14 @@ impl MelodyMinaApp {
             }
             5 => {
                 self.navigate_playlist(1);
+            }
+            6 => {
+                self.repeat_one = !self.repeat_one;
+                self.status = if self.repeat_one {
+                    "Repeat on"
+                } else {
+                    "Repeat off"
+                };
             }
             _ => return false,
         }
@@ -1100,8 +1124,9 @@ impl App for MelodyMinaApp {
                 }
                 timeline_changed || volume_changed
             }
-            Event::MouseUp { .. } => {
+            Event::MouseUp { x, y, .. } => {
                 let timeline_changed = if self.media.interaction().seek_drag_active {
+                    let _ = self.timeline.update(Event::MouseMove { x, y });
                     let changed = self.timeline.update(event);
                     match self.media.commit_seek(self.timeline.value) {
                         Ok(()) => self.status = "Seeking...",
@@ -1114,6 +1139,9 @@ impl App for MelodyMinaApp {
                     false
                 };
                 let was_volume_dragging = self.volume.dragging;
+                if was_volume_dragging {
+                    let _ = self.volume.update(Event::MouseMove { x, y });
+                }
                 let volume_changed = self.volume.update(event);
                 if was_volume_dragging {
                     match self.media.set_volume(self.volume.value) {
@@ -1221,6 +1249,9 @@ impl App for MelodyMinaApp {
     }
 
     fn poll_timeout_ms(&self) -> u64 {
+        if self.media.has_pending_action() {
+            return FRAME_MS_FOCUSED;
+        }
         match self.media.view().playback_state {
             PlaybackState::Playing if self.window_focused => FRAME_MS_FOCUSED,
             PlaybackState::Playing | PlaybackState::Loading => FRAME_MS_UNFOCUSED,

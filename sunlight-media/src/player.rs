@@ -52,6 +52,8 @@ pub struct MediaSnapshot {
     pub generation: u64,
     pub state: PlaybackState,
     pub position: MediaTime,
+    /// Increments after the worker finishes an explicit seek.
+    pub seek_epoch: u64,
     pub stream: Option<AudioStreamInfo>,
     pub volume: u8,
     pub error: Option<MediaError>,
@@ -71,13 +73,12 @@ struct Shared {
     error: AtomicU8,
     error_detail: AtomicU64,
     position_ms: AtomicU64,
+    seek_epoch: AtomicU64,
     duration_ms: AtomicU64,
     duration_known: AtomicBool,
     rate_hz: AtomicU64,
     channels: AtomicU8,
     seekable: AtomicBool,
-    #[cfg(target_os = "none")]
-    audio_stopped_for_open: AtomicBool,
     seek_ms: AtomicU64,
     volume: AtomicU8,
     path_locked: AtomicBool,
@@ -102,13 +103,12 @@ impl Shared {
             error: AtomicU8::new(MediaErrorKind::None as u8),
             error_detail: AtomicU64::new(0),
             position_ms: AtomicU64::new(0),
+            seek_epoch: AtomicU64::new(0),
             duration_ms: AtomicU64::new(0),
             duration_known: AtomicBool::new(false),
             rate_hz: AtomicU64::new(0),
             channels: AtomicU8::new(0),
             seekable: AtomicBool::new(false),
-            #[cfg(target_os = "none")]
-            audio_stopped_for_open: AtomicBool::new(false),
             seek_ms: AtomicU64::new(0),
             volume: AtomicU8::new(68),
             path_locked: AtomicBool::new(false),
@@ -203,7 +203,15 @@ impl MediaPlayer {
         self.shared.as_deref().expect("media shared state")
     }
 
+    pub fn command_pending(&self) -> bool {
+        self.shared().command.load(Ordering::Acquire) != COMMAND_NONE
+    }
+
     fn command(&self, command: u8) -> Result<(), MediaError> {
+        #[cfg(target_os = "none")]
+        if self._worker.is_none() {
+            return Err(MediaError::new(MediaErrorKind::Worker, 1));
+        }
         let shared = self.shared();
         if shared
             .command_locked
@@ -223,6 +231,9 @@ impl MediaPlayer {
 
     pub fn snapshot(&self) -> MediaSnapshot {
         let shared = self.shared();
+        // Observe the acknowledgement before the position it publishes.
+        let seek_epoch = shared.seek_epoch.load(Ordering::Acquire);
+        let position_ms = shared.position_ms.load(Ordering::Acquire);
         let rate_hz = shared.rate_hz.load(Ordering::Acquire) as u32;
         let channels = shared.channels.load(Ordering::Acquire);
         let stream = (rate_hz != 0 && channels != 0).then(|| AudioStreamInfo {
@@ -251,7 +262,8 @@ impl MediaPlayer {
         MediaSnapshot {
             generation: shared.generation.load(Ordering::Acquire),
             state: PlaybackState::from_u8(shared.state.load(Ordering::Acquire)),
-            position: MediaTime::from_millis(shared.position_ms.load(Ordering::Acquire)),
+            position: MediaTime::from_millis(position_ms),
+            seek_epoch,
             stream,
             volume: shared.volume.load(Ordering::Acquire).min(100),
             error: (kind != MediaErrorKind::None)
@@ -261,6 +273,10 @@ impl MediaPlayer {
     }
 
     pub fn open(&mut self, path: &str) -> Result<(), MediaError> {
+        #[cfg(target_os = "none")]
+        if self._worker.is_none() {
+            return Err(MediaError::new(MediaErrorKind::Worker, 1));
+        }
         if path.is_empty() || path.len() > MAX_PATH_BYTES || path.as_bytes().contains(&0) {
             return Err(MediaError::new(MediaErrorKind::FileOpen, 1));
         }
@@ -310,16 +326,6 @@ impl MediaPlayer {
         shared
             .state
             .store(PlaybackState::Loading as u8, Ordering::Release);
-        #[cfg(target_os = "none")]
-        {
-            // Stop the application stream before publishing the replacement
-            // command. This retracts PCM already queued in audiod/HDA while
-            // the worker is reading and probing the new source.
-            let stopped = sunlight_audiod::AudioClient::new().stop_stream().is_ok();
-            shared
-                .audio_stopped_for_open
-                .store(stopped, Ordering::Release);
-        }
         shared.path_locked.store(false, Ordering::Release);
         shared.command.store(COMMAND_OPEN, Ordering::Release);
         shared.command_locked.store(false, Ordering::Release);
@@ -339,6 +345,10 @@ impl MediaPlayer {
     }
 
     pub fn seek(&mut self, position: MediaTime) -> Result<(), MediaError> {
+        #[cfg(target_os = "none")]
+        if self._worker.is_none() {
+            return Err(MediaError::new(MediaErrorKind::Worker, 1));
+        }
         let shared = self.shared();
         if shared
             .command_locked
@@ -456,12 +466,16 @@ fn run_worker(shared: &Shared) {
     );
     let mut packetizer = PcmPacketizer::new();
     loop {
-        let command = shared.command.swap(COMMAND_NONE, Ordering::AcqRel);
+        // Keep the slot occupied through command completion. Clearing it at
+        // dispatch let Open race an in-flight Play/Seek and observe the old
+        // source's state after publishing the new generation.
+        let command = shared.command.load(Ordering::Acquire);
         if command != COMMAND_NONE {
             if command == COMMAND_SHUTDOWN {
                 if let Some(output) = sink.as_mut() {
                     let _ = output.flush();
                 }
+                shared.command.store(COMMAND_NONE, Ordering::Release);
                 if idle_endpoint.0 != u64::MAX {
                     sunlight_ipc::endpoint_destroy(idle_endpoint);
                 }
@@ -486,6 +500,7 @@ fn run_worker(shared: &Shared) {
                     resampler.reset();
                 }
             }
+            shared.command.store(COMMAND_NONE, Ordering::Release);
         }
         if PlaybackState::from_u8(shared.state.load(Ordering::Acquire)) != PlaybackState::Playing {
             if idle_endpoint.0 == u64::MAX {
@@ -616,10 +631,11 @@ fn handle_command(
 ) -> Result<(), MediaError> {
     match command {
         COMMAND_OPEN => {
-            if !shared.audio_stopped_for_open.swap(false, Ordering::AcqRel) {
-                if let Some(output) = sink.as_mut() {
-                    output.flush()?;
-                }
+            // Only the playback worker owns the stream clock. Stopping it in
+            // open() could reset audiod while this worker was pacing a write,
+            // leaving the writer waiting forever for frames that were erased.
+            if let Some(output) = sink.as_mut() {
+                output.flush()?;
             }
             *loaded = None;
             *sink = None;
@@ -730,6 +746,7 @@ fn handle_command(
             shared
                 .position_ms
                 .store(actual.as_millis(), Ordering::Release);
+            shared.seek_epoch.fetch_add(1, Ordering::AcqRel);
             let next = transition(state, PlaybackAction::SeekComplete { resume })?;
             shared.state.store(next as u8, Ordering::Release);
             Ok(())

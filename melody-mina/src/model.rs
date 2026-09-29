@@ -202,6 +202,7 @@ mod tests {
             generation: 1,
             state,
             position: MediaTime::from_millis(position_ms),
+            seek_epoch: 0,
             stream: Some(AudioStreamInfo {
                 sample_rate_hz: 48_000,
                 channels: 2,
