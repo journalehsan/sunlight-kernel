@@ -100,6 +100,10 @@ use sunlight_ui::{
     set_client_cursor, App, Canvas, Color, CursorShape, Event, EventPollCounters, Point, Rect,
     Theme, Window, WindowConfig,
 };
+mod wallpaper_buffer;
+mod wallpaper_worker;
+use wallpaper_buffer::Wallpaper;
+
 use sunlight_wallpaper::{is_supported_wallpaper, load_desktop_config, DesktopConfig};
 
 // ---------------------------------------------------------------------------
@@ -1107,7 +1111,7 @@ static mut KV_CAP_CACHE: CapabilityToken = CapabilityToken::INVALID;
 /// Cap for desktop wallpaper file reads (SIMG v2 compressed). Peak decode RAM
 /// is separate (~decoded ARGB); shell heap is 16 MiB for that path.
 const WALLPAPER_MAX_BYTES: usize = 8 * 1024 * 1024;
-const DESKTOP_CONFIG_POLL_INTERVAL_MS: u64 = 5_000;
+
 const SHELL_DIAGNOSTIC_INTERVAL_MS: u64 = 30_000;
 
 // ---------------------------------------------------------------------------
@@ -1626,10 +1630,9 @@ impl PanelCivilTime {
 }
 
 struct VortexShell {
-    wallpaper: Option<RgbaImage>,
+    wallpaper: Option<Wallpaper>,
     wallpaper_config: DesktopConfig,
     wallpaper_error: bool,
-    wallpaper_last_reload_ms: u64,
     display_ep: CapabilityToken,
     desktop_paths: DesktopPaths,
     desktop_icons: Vec<DesktopIcon>,
@@ -1828,11 +1831,22 @@ struct VortexShell {
 impl VortexShell {
     fn new(display_ep: CapabilityToken) -> Self {
         let wallpaper_config = load_desktop_config();
-        let (wallpaper, wallpaper_error) = load_wallpaper_from_config(&wallpaper_config);
+        let wallpaper_worker_started = wallpaper_worker::start();
+        let (wallpaper, wallpaper_error) = if wallpaper_worker_started {
+            (None, false)
+        } else {
+            // Startup-only fallback if a native thread cannot be created.
+            let (decoded, error) = load_wallpaper_from_config(&wallpaper_config);
+            let wallpaper = decoded.and_then(|image| Wallpaper::prepare(
+                &image.pixels, image.width, image.height, image.width, image.height, None));
+            (wallpaper, error)
+        };
         let icon_overrides = load_desktop_icon_overrides();
         let desktop_paths = resolve_desktop_paths();
         ensure_directory(&desktop_paths.desktop_dir);
-        if wallpaper.is_some() {
+        if wallpaper_worker_started {
+            debug_log("[VORTEX] wallpaper preparation scheduled\n");
+        } else if wallpaper.is_some() {
             debug_log("[VORTEX] wallpaper loaded\n");
         } else if wallpaper_config.wallpaper.is_empty() {
             debug_log("[VORTEX] solid desktop color (no wallpaper image)\n");
@@ -1860,7 +1874,6 @@ impl VortexShell {
             wallpaper,
             wallpaper_config,
             wallpaper_error,
-            wallpaper_last_reload_ms: monotonic_millis(),
             display_ep,
             desktop_paths,
             desktop_icons: Vec::new(),
@@ -2020,30 +2033,23 @@ impl VortexShell {
         shell
     }
 
-    fn maybe_reload_wallpaper(&mut self, now: u64, width: u32, height: u32) {
-        let res_changed = self.screen_w != width || self.screen_h != height;
-        if !res_changed
-            && now.saturating_sub(self.wallpaper_last_reload_ms) < DESKTOP_CONFIG_POLL_INTERVAL_MS
-        {
-            return;
-        }
-        let next_overrides = load_desktop_icon_overrides();
-        if next_overrides != self.icon_overrides {
-            self.icon_overrides = next_overrides;
-            for entry in &mut self.running_apps {
-                entry.icon = None;
+    fn maybe_reload_wallpaper(&mut self, _now: u64, width: u32, height: u32) {
+        if let Some(mut prepared) = wallpaper_worker::take(width, height) {
+            let started = monotonic_millis();
+            core::mem::swap(&mut self.wallpaper, &mut prepared.image);
+            core::mem::swap(&mut self.wallpaper_config, &mut prepared.config);
+            self.wallpaper_error = prepared.error;
+            if self.icon_overrides != prepared.overrides {
+                core::mem::swap(&mut self.icon_overrides, &mut prepared.overrides);
+                for entry in &mut self.running_apps {
+                    entry.icon = None;
+                }
+            }
+            wallpaper_worker::retire(prepared);
+            if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() {
+                debug_log(&alloc::format!("[WALLPAPER] swap_ms={}\n", monotonic_millis() - started));
             }
         }
-        let next = load_desktop_config();
-        if next == self.wallpaper_config {
-            self.wallpaper_last_reload_ms = now;
-            return;
-        }
-        let (wallpaper, wallpaper_error) = load_wallpaper_from_config(&next);
-        self.wallpaper = wallpaper;
-        self.wallpaper_error = wallpaper_error;
-        self.wallpaper_config = next;
-        self.wallpaper_last_reload_ms = now;
     }
 
     fn refresh_status(&mut self) -> bool {
@@ -5714,6 +5720,7 @@ pub(crate) fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<RgbaIma
     if cfg.wallpaper.is_empty() {
         return (None, false);
     }
+    let load_started = monotonic_millis();
     let Some(bytes) = read_file_bytes(cfg.wallpaper.as_bytes(), WALLPAPER_MAX_BYTES) else {
         debug_log("[VORTEX] wallpaper config path unreadable\n");
         return (None, true);
@@ -5728,7 +5735,12 @@ pub(crate) fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<RgbaIma
     // SIMG v2 (preferred) or legacy TGA type-2 / historical TGA-bytes `.simg`.
     // Peak RAM ≈ compressed file Vec + decoded ARGB (can exceed 8 MiB for
     // full-resolution wallpapers — shell heap is 16 MiB for this reason).
-    match decode_simg(&bytes) {
+    let decode_started = monotonic_millis();
+    let decoded = decode_simg(&bytes);
+    if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() {
+        debug_log(&alloc::format!("[WALLPAPER] read_ms={} decode_ms={}\n", decode_started - load_started, monotonic_millis() - decode_started));
+    }
+    match decoded {
         Ok(img) => {
             if img.width == 0 || img.height == 0 {
                 debug_log("[VORTEX] wallpaper decode empty dimensions\n");
@@ -5755,7 +5767,7 @@ fn read_file_bytes(path: &[u8], limit: usize) -> Option<Vec<u8>> {
         let _ = libc::close(fd);
         return None;
     }
-    let mut buf = [0u8; 128];
+    let mut buf = [0u8; 4096];
     loop {
         let n = match libc::read(fd, &mut buf) {
             Ok(n) => n,
@@ -8216,12 +8228,31 @@ impl App for VortexShell {
         self.screen_h = ch;
 
         // ── Wallpaper ────────────────────────────────────────────────────────
-        // Opaque solid underlay. FALLBACK_BG alone looks gray when wallpaper
-        // decode failed (historically 8 MiB heap OOM on full SIMG assets).
-        canvas.fill_rect(Rect::new(0, 0, cw, ch), Color(FALLBACK_BG | 0xFF00_0000));
+        // Prepared wallpaper is opaque and covers the whole canvas: avoid a
+        // redundant full-frame clear before copying it.
         if let Some(ref wp) = self.wallpaper {
             // Cover blit forces A=0xFF so glass/compositor never shows a gray hole.
-            canvas.draw_rgba_cover(wp);
+            if wp.width == cw && wp.height == ch {
+                for (dst, src) in canvas.pixels.chunks_mut(canvas.stride as usize)
+                    .take(ch as usize)
+                    .zip(wp.pixels().chunks(cw as usize))
+                {
+                    dst[..cw as usize].copy_from_slice(src);
+                }
+            } else {
+                // Resolution changed while a new prepared frame is pending.
+                let pixels = wp.pixels();
+                for y in 0..ch as usize {
+                    let sy = y * wp.height as usize / ch as usize;
+                    for x in 0..cw as usize {
+                        let sx = x * wp.width as usize / cw as usize;
+                        canvas.pixels[y * canvas.stride as usize + x] =
+                            pixels[sy * wp.width as usize + sx];
+                    }
+                }
+            }
+        } else {
+            canvas.fill_rect(Rect::new(0, 0, cw, ch), Color(FALLBACK_BG | 0xFF00_0000));
         }
 
         let desktop_rect = desktop_area(cw, ch, self.top_panel_presentation);
@@ -9480,7 +9511,7 @@ impl App for VortexShell {
             Event::Tick => {
                 if self.start_menu.refresh_identity(monotonic_millis()) { return true; }
                 let now = monotonic_millis();
-                let mut dirty = self.advance_calendar_load();
+                let mut dirty = self.advance_calendar_load() || wallpaper_worker::pending();
                 #[cfg(feature = "stress")]
                 self.run_stress_cycle();
                 if self.sync_app_registry(now, false) {

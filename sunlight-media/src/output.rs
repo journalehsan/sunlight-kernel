@@ -77,6 +77,8 @@ pub struct SunlightAudioSink {
     last_submit_finished_ms: Option<u64>,
     submit_max_ms: u64,
     producer_gap_max_ms: u64,
+    low_water_events: u64,
+    buffer_was_low: bool,
 }
 
 impl SunlightAudioSink {
@@ -106,6 +108,8 @@ impl SunlightAudioSink {
             last_submit_finished_ms: None,
             submit_max_ms: 0,
             producer_gap_max_ms: 0,
+            low_water_events: 0,
+            buffer_was_low: false,
         })
     }
 
@@ -170,6 +174,11 @@ impl SunlightAudioSink {
             .submit_max_ms
             .max(finished_ms.saturating_sub(started_ms));
         self.submitted_frames = self.submitted_frames.saturating_add((pcm.len() / 4) as u64);
+        let low = status.buffered_frames < (2 * PERIOD_FRAMES) as u32;
+        if self.started && low && !self.buffer_was_low {
+            self.low_water_events = self.low_water_events.saturating_add(1);
+        }
+        self.buffer_was_low = low;
         if self.submitted_frames >= self.next_progress_log_frames {
             log_playback_progress(
                 self.submitted_frames,
@@ -181,6 +190,7 @@ impl SunlightAudioSink {
                 finished_ms.saturating_sub(playback_started_ms),
                 self.submit_max_ms,
                 self.producer_gap_max_ms,
+                self.low_water_events,
             );
             self.submit_max_ms = 0;
             self.producer_gap_max_ms = 0;
@@ -313,6 +323,7 @@ fn log_playback_progress(
     elapsed_ms: u64,
     submit_max_ms: u64,
     producer_gap_max_ms: u64,
+    low_water_events: u64,
 ) {
     use core::fmt::Write;
 
@@ -356,8 +367,8 @@ fn log_playback_progress(
     line.len = 0;
     let _ = write!(
         line,
-        "[MEDIA][timing] elapsed_ms={} submit_max_ms={} producer_gap_max_ms={}",
-        elapsed_ms, submit_max_ms, producer_gap_max_ms,
+        "[MEDIA][timing] elapsed_ms={} submit_max_ms={} producer_gap_max_ms={} low_water_events={}",
+        elapsed_ms, submit_max_ms, producer_gap_max_ms, low_water_events,
     );
     if let Ok(message) = core::str::from_utf8(&line.bytes[..line.len]) {
         sunlight_ipc::debug_log(message);
@@ -365,7 +376,7 @@ fn log_playback_progress(
 }
 
 #[cfg(not(target_os = "none"))]
-fn log_playback_progress(_: u64, _: u64, _: u32, _: u32, _: u64, _: usize, _: u64, _: u64, _: u64) {
+fn log_playback_progress(_: u64, _: u64, _: u32, _: u32, _: u64, _: usize, _: u64, _: u64, _: u64, _: u64) {
 }
 
 fn status_error_detail(error: sunlight_audiod::AudioClientError) -> u32 {

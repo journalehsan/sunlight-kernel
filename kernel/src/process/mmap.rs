@@ -291,9 +291,9 @@ fn map_anonymous_kind(
     let (page_count, span) = checked_page_layout(length).map_err(|_| MmapError::InvalidAddress)?;
 
     // Determine the address to map at. For anonymous mappings without a
-    // fixed address we hand out fresh VA ranges from a per-process bump
-    // cursor; returning a fixed base for every call made successive mmaps
-    // alias the same range and corrupted userspace allocators (e.g. musl
+    // fixed address we hand out fresh VA ranges from the address-space owner's
+    // bump cursor, shared with native and Linux borrowers. Independent cursors
+    // alias the same range and corrupt userspace allocators (e.g. musl
     // mallocng), which then page-faulted on the first free().
     let fixed = flags & (MAP_FIXED | MAP_FIXED_NOREPLACE) != 0;
     let noreplace = flags & MAP_FIXED_NOREPLACE != 0;
@@ -311,7 +311,7 @@ fn map_anonymous_kind(
             return Err(MmapError::InvalidAddress);
         }
         Some(
-            DeferredCursor::new(sched.current_shared_process().mmap_next, MMAP_REGION_BASE, span)
+            DeferredCursor::new(sched.current_memory_owner().mmap_next, MMAP_REGION_BASE, span)
                 .map_err(|_| MmapError::InvalidAddress)?,
         )
     };
@@ -336,7 +336,7 @@ fn map_anonymous_kind(
             .map_err(|_| MmapError::PermissionDenied)?;
 
     // Map all the pages
-    let pid = sched.current_shared_process().pid;
+    let pid = sched.current_memory_owner().pid;
     let hhdm_offset = crate::HHDM_REQ
         .response()
         .map(|response| VirtAddr::new(response.offset))
@@ -570,7 +570,7 @@ fn map_anonymous_kind(
         );
     }
     if let Some(cursor) = deferred_cursor {
-        cursor.commit(&mut sched.current_shared_process_mut().mmap_next);
+        cursor.commit(&mut sched.current_memory_owner_mut().mmap_next);
     }
 
     Ok(map_addr)
@@ -831,7 +831,7 @@ pub fn sys_munmap(
             }
 
             crate::memory::swap::untrack_range(
-                sched.current_shared_process().pid,
+                sched.current_memory_owner().pid,
                 chunk_start,
                 chunk_start + chunk_pages * 4096,
             );

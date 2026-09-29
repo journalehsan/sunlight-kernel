@@ -1140,3 +1140,34 @@ mod tests {
         );
     }
 }
+
+/// Add a cached native system sound to an already master-gained music period.
+/// Saturating addition prevents wraparound; neither input allocates or blocks.
+pub fn mix_system_pcm(output: &mut [u8], sound: &[u8], gain: u8) {
+    for (dst, src) in output.chunks_exact_mut(2).zip(sound.chunks_exact(2)) {
+        let music = i16::from_le_bytes([dst[0], dst[1]]) as i32;
+        let effect = i16::from_le_bytes([src[0], src[1]]) as i32 * gain.min(100) as i32 / 100;
+        dst.copy_from_slice(&((music + effect).clamp(i16::MIN as i32, i16::MAX as i32) as i16).to_le_bytes());
+    }
+}
+
+#[cfg(test)]
+mod mixing_tests {
+    use super::*;
+    #[test]
+    fn mixes_without_replacing_music_and_preserves_tail() {
+        let mut music = [1000i16.to_le_bytes(), 2000i16.to_le_bytes()].concat();
+        mix_system_pcm(&mut music, &1000i16.to_le_bytes(), 50);
+        assert_eq!(music, [1500i16.to_le_bytes(), 2000i16.to_le_bytes()].concat());
+    }
+    #[test]
+    fn clips_both_polarities_and_mute_preserves_music() {
+        for sample in [30000i16, -30000] {
+            let mut output = sample.to_le_bytes();
+            mix_system_pcm(&mut output, &sample.to_le_bytes(), 0);
+            assert_eq!(i16::from_le_bytes(output), sample);
+            mix_system_pcm(&mut output, &sample.to_le_bytes(), 100);
+            assert_eq!(i16::from_le_bytes(output), if sample > 0 { i16::MAX } else { i16::MIN });
+        }
+    }
+}

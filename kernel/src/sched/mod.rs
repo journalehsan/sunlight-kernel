@@ -1602,6 +1602,28 @@ impl Scheduler {
         &mut self.processes[shared]
     }
 
+    // Mapping placement/accounting belongs to the address space, including
+    // native borrowers whose file-descriptor tables intentionally stay private.
+    fn current_memory_owner_index(&self) -> usize {
+        let current = self.current_process_index().unwrap_or(0);
+        let identity = self.processes[current].address_space.identity();
+        self.processes
+            .iter()
+            .position(|process| {
+                process.owns_address_space && process.address_space.identity() == identity
+            })
+            .unwrap_or(current)
+    }
+
+    pub fn current_memory_owner(&self) -> &Process {
+        &self.processes[self.current_memory_owner_index()]
+    }
+
+    pub fn current_memory_owner_mut(&mut self) -> &mut Process {
+        let owner = self.current_memory_owner_index();
+        &mut self.processes[owner]
+    }
+
     // ── Wake / unblock ───────────────────────────────────────────────────────
 
     /// Return the PID of the process currently running on this CPU (0 if none).
@@ -2500,6 +2522,20 @@ impl Scheduler {
     // ── Diagnostics ──────────────────────────────────────────────────────────
 
     pub fn diagnostic_report(&self) {
+        if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() {
+            let caps = crate::capability::CAP_BROKER.lock();
+            for (ep, owner) in caps.debug_endpoints() {
+                if let Some(process) = self.processes.iter().find(|p| p.pid == owner) {
+                    let name = process.name_str();
+                    if name.contains("audio") || name.contains("media") || name.contains("display") || name.contains("melody") {
+                        let (depth, callers) = crate::ipc::with_shard(ep, |bus| {
+                            (bus.pending_count(ep), bus.pending_callers_count(ep))
+                        });
+                        serial_println!("[IPC-AUDIO] name={} owner={} ep={} depth={} callers={}", name, owner, ep, depth, callers);
+                    }
+                }
+            }
+        }
         let ipc = crate::ipc::diagnostic_snapshot();
         let caps = crate::capability::diagnostic_snapshot();
         crate::memory::security::diagnostic_report();

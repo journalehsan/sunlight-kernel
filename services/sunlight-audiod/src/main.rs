@@ -58,7 +58,7 @@ struct ServiceState {
     system_settings: SystemSoundSettings,
     system_queue: SystemSoundQueue,
     active_system_sound: Option<ActiveSystemSound>,
-    bad_asset_mask: u16,
+    sound_assets: [Option<&'static [u8]>; sunlight_audio::SYSTEM_SOUND_COUNT],
     tone_frames_left: u32,
     tone_phase: u32,
     tone_hz: u32,
@@ -68,6 +68,8 @@ struct ServiceState {
     status_diag_count: u8,
     pcm_diag_count: u8,
     last_pump_ms: Option<u64>,
+    late_ticks: u64,
+    next_timing_log_ms: u64,
     pump_gap_max_ms: u64,
     last_starvation_log_ms: u64,
     last_logged_underruns: u32,
@@ -77,7 +79,6 @@ struct ActiveSystemSound {
     request: QueuedSystemSound,
     pcm: &'static [u8],
     offset: usize,
-    submitted: bool,
 }
 
 impl ServiceState {
@@ -127,6 +128,17 @@ impl ServiceState {
                 );
             }
         }
+        let mut sound_assets = [None; sunlight_audio::SYSTEM_SOUND_COUNT];
+        for sound in sunlight_audio::SystemSound::ALL {
+            match system_assets::resolve(sound) {
+                Ok(wav) => sound_assets[sound.index()] = Some(wav.pcm),
+                Err(_) => serial_println!(
+                    "[AUDIOD] invalid system sound id={} name={}",
+                    sound as u16,
+                    system_assets::asset_for(sound).canonical_name
+                ),
+            }
+        }
         Self {
             volume,
             device,
@@ -140,7 +152,7 @@ impl ServiceState {
             system_settings,
             system_queue: SystemSoundQueue::new(),
             active_system_sound: None,
-            bad_asset_mask: 0,
+            sound_assets,
             tone_frames_left: 0,
             tone_phase: 0,
             tone_hz: DEFAULT_TONE_HZ,
@@ -150,6 +162,8 @@ impl ServiceState {
             status_diag_count: 0,
             pcm_diag_count: 0,
             last_pump_ms: None,
+            late_ticks: 0,
+            next_timing_log_ms: 0,
             pump_gap_max_ms: 0,
             last_starvation_log_ms: 0,
             last_logged_underruns: 0,
@@ -232,7 +246,11 @@ impl ServiceState {
     fn pump(&mut self) {
         let now = monotonic_millis();
         if let Some(previous) = self.last_pump_ms.replace(now) {
-            self.pump_gap_max_ms = self.pump_gap_max_ms.max(now.saturating_sub(previous));
+            let gap = now.saturating_sub(previous);
+            self.pump_gap_max_ms = self.pump_gap_max_ms.max(gap);
+            if gap > PERIOD_FRAME_COUNT as u64 * 1000 / NATIVE_RATE_HZ as u64 {
+                self.late_ticks = self.late_ticks.saturating_add(1);
+            }
         }
         // Catch up all free descriptors before sleeping or handling another
         // IPC request. Bound the burst so producers still get serviced.
@@ -240,6 +258,16 @@ impl ServiceState {
             if !self.pump_period() {
                 break;
             }
+        }
+        if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() && now >= self.next_timing_log_ms {
+            serial_println!(
+                "[AUDIOD][timing] late_ticks={} max_gap_ms={} queue_frames={} sound_queue={}",
+                self.late_ticks,
+                self.pump_gap_max_ms,
+                self.queue.len() / 4,
+                self.system_queue.len()
+            );
+            self.next_timing_log_ms = now.saturating_add(1000);
         }
         let underruns = self.stream_underruns();
         if self.queue_owner.is_some()
@@ -296,65 +324,38 @@ impl ServiceState {
                     false
                 }
             }
-        } else if let Some(active) = self.active_system_sound.as_mut() {
-            let end = active
-                .offset
-                .saturating_add(ENGINE_PERIOD_BYTES)
-                .min(active.pcm.len());
-            let gain = effective_system_gain(vol, self.system_settings.volume);
-            match dev.fill_pcm(&active.pcm[active.offset..end], gain) {
-                Ok(true) => {
-                    self.stream_progress
-                        .clear_period(dev.last_submitted_period());
-                    if !active.submitted {
-                        serial_println!(
-                            "[AUDIOD] system-sound pcm submitted id={} gain={}",
-                            active.request.sound as u16,
-                            gain
-                        );
-                        active.submitted = true;
-                    }
-                    active.offset = end;
-                    if active.offset >= active.pcm.len() {
-                        let sound = active.request.sound;
-                        serial_println!(
-                            "[AUDIOD] system-sound complete id={} name={}",
-                            sound as u16,
-                            sound.label()
-                        );
-                        self.active_system_sound = None;
-                    }
-                    true
-                }
-                Ok(false) => false,
-                Err(_) => {
-                    serial_println!("[AUDIOD] system-sound submit failed");
-                    self.active_system_sound = None;
-                    false
-                }
+        } else if self.active_system_sound.is_some() || !self.queue.is_empty() {
+            // Both inputs advance in the same DMA period. Never consume either
+            // input until hardware accepted it, and tag only music frames.
+            let music_bytes = self.queue.peek_into(&mut tmp);
+            sunlight_audio::pcm::apply_gain_s16le(&mut tmp[..music_bytes], vol);
+            let mut sound_bytes = 0;
+            if let Some(active) = self.active_system_sound.as_ref() {
+                sound_bytes = (active.pcm.len() - active.offset).min(ENGINE_PERIOD_BYTES);
+                sunlight_audiod::mix_system_pcm(
+                    &mut tmp,
+                    &active.pcm[active.offset..active.offset + sound_bytes],
+                    effective_system_gain(vol, self.system_settings.volume),
+                );
             }
-        } else if !self.queue.is_empty() {
-            // Do not remove producer data until a hardware period is free.
-            // `fill_pcm` can legitimately return false while the ring is full;
-            // popping first used to discard that entire PCM period.
-            let n = self.queue.peek_into(&mut tmp);
-            if n == 0 {
-                return false;
-            }
-            match dev.fill_pcm(&tmp[..n], vol) {
+            match dev.fill_pcm(&tmp[..music_bytes.max(sound_bytes)], 100) {
                 Ok(true) => {
                     let period = dev.last_submitted_period();
+                    self.stream_progress.clear_period(period);
                     if let Some(owner) = self.queue_owner {
-                        self.stream_progress.tag_period(period, owner, n / 4);
+                        self.stream_progress.tag_period(period, owner, music_bytes / 4);
                     }
-                    self.queue.consume(n);
+                    self.queue.consume(music_bytes);
+                    if let Some(active) = self.active_system_sound.as_mut() {
+                        active.offset += sound_bytes;
+                        if active.offset == active.pcm.len() {
+                            self.active_system_sound = None;
+                        }
+                    }
                     true
                 }
                 Ok(false) => false,
-                Err(_) => {
-                    self.queue.clear();
-                    false
-                }
+                Err(_) => false,
             }
         } else if self.queue_owner.is_some() {
             // The media producer may deliver its next period shortly. Keep
@@ -388,7 +389,7 @@ impl ServiceState {
     }
 
     fn persist_if_dirty(&mut self) {
-        if !self.persist_dirty {
+        if !self.persist_dirty || self.queue_owner.is_some() || self.active_system_sound.is_some() {
             return;
         }
         let mut persisted = self.volume.snapshot();
@@ -401,35 +402,13 @@ impl ServiceState {
 
     fn activate_next_system_sound(&mut self) {
         while let Some(request) = self.system_queue.pop() {
-            match system_assets::resolve(request.sound) {
-                Ok(wav) => {
-                    serial_println!(
-                        "[AUDIOD] system-sound started id={} name={} theme={} frames={}",
-                        request.sound as u16,
-                        request.sound.label(),
-                        system_assets::THEME_NAME,
-                        wav.pcm.len() / 4
-                    );
-                    self.active_system_sound = Some(ActiveSystemSound {
-                        request,
-                        pcm: wav.pcm,
-                        offset: 0,
-                        submitted: false,
-                    });
-                    return;
-                }
-                Err(_) => {
-                    let bit = 1u16 << request.sound.index();
-                    if self.bad_asset_mask & bit == 0 {
-                        let asset = system_assets::asset_for(request.sound);
-                        serial_println!(
-                            "[AUDIOD] system-sound asset invalid id={} name={}",
-                            request.sound as u16,
-                            asset.canonical_name
-                        );
-                        self.bad_asset_mask |= bit;
-                    }
-                }
+            if let Some(pcm) = self.sound_assets[request.sound.index()] {
+                self.active_system_sound = Some(ActiveSystemSound {
+                    request,
+                    pcm,
+                    offset: 0,
+                });
+                return;
             }
         }
     }
@@ -481,6 +460,7 @@ pub extern "C" fn _start() -> ! {
 
     loop {
         state.pump();
+        state.persist_if_dirty();
         match ipc_recv_timeout(ep, ENGINE_WAIT_MS) {
             Some(msg) => {
                 let status_diag = IPC_DIAGNOSTICS
@@ -533,7 +513,7 @@ pub extern "C" fn _start() -> ! {
                         reply.word_count.saturating_mul(8)
                     );
                 }
-                state.persist_if_dirty();
+
             }
             None => {}
         }
