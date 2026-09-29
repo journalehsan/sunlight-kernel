@@ -4,7 +4,7 @@
 //! without owning physical frames or duplicating SHM accounting.
 
 pub const PAGE_SIZE: u64 = 4096;
-pub const MAX_REGIONS_PER_ADDRESS_SPACE: usize = 128;
+pub const MAX_REGIONS_PER_ADDRESS_SPACE: usize = 256;
 pub const MAX_PENDING_REGION_INSERTIONS: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -280,10 +280,18 @@ impl RegionLedger {
         if self.pending_len == MAX_PENDING_REGION_INSERTIONS {
             return Err(LedgerError::TooManyPending);
         }
-        // Capacity is reserved pessimistically. A later merge may return the
-        // slot, but publication never depends on that optimization succeeding.
+        // A contiguous compatible range commits by extending an existing
+        // record, so it needs no new slot even when the ledger is full. Keep
+        // the pessimistic reservation when another insertion is pending.
         if self.len + self.pending_len >= MAX_REGIONS_PER_ADDRESS_SPACE {
-            return Err(LedgerError::CapacityExhausted);
+            let can_merge = self.pending_len == 0
+                && self.records[..self.len].iter().any(|committed| {
+                    (committed.end == region.start || region.end == committed.start)
+                        && committed.compatible_for_merge(region)
+                });
+            if !can_merge {
+                return Err(LedgerError::CapacityExhausted);
+            }
         }
         let nonce = self.next_nonce;
         self.next_nonce = self.next_nonce.checked_add(1).unwrap_or(1);

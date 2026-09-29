@@ -5,17 +5,36 @@ use x86_64::{
     VirtAddr,
 };
 
-pub const HEAP_START: VirtAddr = VirtAddr::new_truncate(0xFFFF_FFFF_9000_0000);
+const MIN_HEAP_START: u64 = 0xFFFF_FFFF_9000_0000;
+const HEAP_ALIGNMENT: u64 = 2 * 1024 * 1024;
 pub const HEAP_SIZE: usize = 8 * 1024 * 1024; // 8 MiB
 pub const HEAP_PAGES: usize = HEAP_SIZE / Size4KiB::SIZE as usize;
+
+extern "C" {
+    static __kernel_end: u8;
+}
+
+pub fn heap_start() -> VirtAddr {
+    let kernel_end = core::ptr::addr_of!(__kernel_end) as u64;
+    let after_image = kernel_end
+        .checked_add(HEAP_ALIGNMENT - 1)
+        .expect("kernel image address overflow")
+        & !(HEAP_ALIGNMENT - 1);
+    let start = after_image.max(MIN_HEAP_START);
+    start
+        .checked_add(HEAP_SIZE as u64)
+        .expect("kernel heap address overflow");
+    VirtAddr::new(start)
+}
 
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 pub fn init_heap(vmm: &mut VirtualMemoryManager, pmm: &mut PhysicalMemoryManager) {
     use super::accounting::PhysicalMemoryClass;
+    let start = heap_start();
     for i in 0..HEAP_PAGES {
-        let page = Page::from_start_address(HEAP_START + i as u64 * Size4KiB::SIZE).unwrap();
+        let page = Page::from_start_address(start + i as u64 * Size4KiB::SIZE).unwrap();
         let frame = pmm
             .alloc_frame_class(PhysicalMemoryClass::KernelHeap)
             .expect("heap allocation failed");
@@ -32,7 +51,7 @@ pub fn init_heap(vmm: &mut VirtualMemoryManager, pmm: &mut PhysicalMemoryManager
 
     // SAFETY: all heap pages are mapped with correct permissions.
     unsafe {
-        ALLOCATOR.lock().init(HEAP_START.as_mut_ptr(), HEAP_SIZE);
+        ALLOCATOR.lock().init(start.as_mut_ptr(), HEAP_SIZE);
     }
 }
 

@@ -1762,9 +1762,9 @@ impl Scheduler {
                 && self.processes[idx]
                     .linux_state()
                     .is_some_and(|state| state.poll_wake_tick.is_some())
-                && self.processes[self.shared_process_index(idx)].fd_table.get(0).is_some_and(|entry| {
-                    entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab
-                });
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_tty_stdin_tab(tab);
             if waiting_on_tab {
                 self.wake_linux_poll_index(idx);
             }

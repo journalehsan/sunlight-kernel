@@ -538,7 +538,7 @@ pub extern "C" fn _start() -> ! {
     serial_println!(
         "[HEAP] Initializing {} MiB kernel heap at {:#x}...",
         heap::HEAP_SIZE / (1024 * 1024),
-        heap::HEAP_START.as_u64()
+        heap::heap_start().as_u64()
     );
     splash.set_status("Initializing kernel heap");
     splash.log("[HEAP] Initializing...");
@@ -4090,9 +4090,17 @@ fn build_yazi_sequence(command: &[u8]) -> [u8; 12288] {
     }
     append_injected_delay(&mut s, &mut len, 256);
     append_injected_command(&mut s, &mut len, command);
-    append_injected_delay(&mut s, &mut len, 1024);
     if command.ends_with(b"baseline") {
+        append_injected_delay(&mut s, &mut len, 1024);
         append_injected_command(&mut s, &mut len, command);
+    } else {
+        append_injected_delay(&mut s, &mut len, 512);
+        // Exercise Yazi's raw stdin path after its first screen has rendered.
+        // The 0xE0 prefix is consumed by sunlight-kbd; the keycode is routed
+        // through tty_server as a single ESC [ B sequence.
+        for scancode in [0xE0, 0x50, 0xE0, 0xD0] {
+            append_injected_scancode(&mut s, &mut len, scancode);
+        }
     }
     s
 }

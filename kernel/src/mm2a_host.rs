@@ -230,6 +230,26 @@ mod tests {
     }
 
     #[test]
+    fn full_ledger_allows_adjacent_compatible_mapping() {
+        let mut ledger = RegionLedger::new();
+        for index in 0..MAX_REGIONS_PER_ADDRESS_SPACE {
+            let start = 0x1000 + index as u64 * 0x2000;
+            insert(&mut ledger, anonymous(start, start + 0x1000));
+        }
+
+        let last_start = 0x1000 + (MAX_REGIONS_PER_ADDRESS_SPACE as u64 - 1) * 0x2000;
+        insert(
+            &mut ledger,
+            anonymous(last_start + 0x1000, last_start + 0x2000),
+        );
+        assert_eq!(ledger.len(), MAX_REGIONS_PER_ADDRESS_SPACE);
+        assert_eq!(
+            ledger.record_at(ledger.len() - 1),
+            Some(anonymous(last_start, last_start + 0x2000))
+        );
+    }
+
+    #[test]
     fn rollback_removal_is_exact() {
         let mut ledger = RegionLedger::new();
         let region = anonymous(0x1000, 0x2000);

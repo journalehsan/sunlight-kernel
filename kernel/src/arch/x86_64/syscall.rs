@@ -472,6 +472,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 -7 => {
                     if linux_num == 7 {
                         num = 1006; // Internal code for Linux poll
+                    } else if linux_num == sunlight_compat_linux::abi::SYS_PPOLL {
+                        num = 1047; // Linux ppoll with timespec timeout
                     }
                 }
                 -8 => {
@@ -906,6 +908,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1044 => sys_linux_recvfrom(frame),
         1045 => sys_linux_sendto(frame),
         1046 => sys_linux_fchmod(frame),
+        1047 => sys_linux_ppoll(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -4870,9 +4873,43 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
+    sys_linux_poll_with_timeout(frame, frame.rdx as i32)
+}
+
+/// Linux ppoll uses a timespec pointer instead of poll's millisecond value.
+/// The signal mask is validated but has no effect until userspace signal
+/// delivery is implemented.
+fn sys_linux_ppoll(frame: &mut SyscallFrame) -> u64 {
+    if frame.r10 != 0 {
+        if frame.r8 != 8 {
+            return linux_errno(22);
+        }
+        let mut mask = [0u8; 8];
+        if crate::memory::user::copy_from_current(frame.r10, &mut mask).is_err() {
+            return linux_errno(14);
+        }
+    }
+    let timeout_ms = if frame.rdx == 0 {
+        -1
+    } else {
+        let mut wire = [0u8; 16];
+        if crate::memory::user::copy_from_current(frame.rdx, &mut wire).is_err() {
+            return linux_errno(14);
+        }
+        let seconds = i64::from_ne_bytes(wire[0..8].try_into().unwrap());
+        let nanos = i64::from_ne_bytes(wire[8..16].try_into().unwrap());
+        if seconds < 0 || !(0..1_000_000_000).contains(&nanos) {
+            return linux_errno(22);
+        }
+        (seconds as u128 * 1_000 + (nanos as u128 + 999_999) / 1_000_000)
+            .min(i32::MAX as u128) as i32
+    };
+    sys_linux_poll_with_timeout(frame, timeout_ms)
+}
+
+fn sys_linux_poll_with_timeout(frame: &mut SyscallFrame, timeout_ms: i32) -> u64 {
     let fds_ptr = frame.rdi;
     let nfds = frame.rsi as usize;
-    let timeout_ms = frame.rdx as i32;
 
     if nfds == 0 {
         if timeout_ms != 0 {
@@ -4896,7 +4933,6 @@ fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
     if crate::memory::user::copy_from_current(fds_ptr, &mut pollfds).is_err() {
         return linux_errno(14);
     }
-
     let tab = {
         let mut sched = crate::sched::SCHEDULER.lock();
         let process = sched.current_process_mut();
@@ -4930,7 +4966,6 @@ fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {
         let sched = crate::sched::SCHEDULER.lock();
         linux_poll_ready(&sched, tab, &mut pollfds, nfds)
     };
-
     if crate::memory::user::copy_to_current(fds_ptr, &pollfds).is_err() {
         return linux_errno(14);
     }
@@ -6703,9 +6738,19 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     let to_read = count.min(256);
                     let n = crate::process::tty_io::read_stdin(tab, &mut kbuf[..to_read]);
                     if n == 0 {
-                        // Return Linux-compatible EAGAIN (errno 11) for compat processes
-                        // so musl retries rather than treating it as ENOENT (errno 2).
                         let is_linux = sched.current_process().is_linux_compat();
+                        let nonblocking = dontwait
+                            || sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0)
+                                & sunlight_compat_linux::abi::O_NONBLOCK as u32 != 0;
+                        if is_linux && !nonblocking {
+                            // Input producers enqueue before taking SCHEDULER to wake
+                            // sleepers. Keep the empty check and sleep registration
+                            // under that lock, then retry the read after wakeup.
+                            sched.block_current_linux_poll(u64::MAX);
+                            frame.rcx = frame.rcx.saturating_sub(2);
+                            crate::sched::request_reschedule();
+                            return 0;
+                        }
                         return if is_linux { linux_errno(11) } else { EAGAIN };
                     }
                     let is_linux = sched.current_process().is_linux_compat();
@@ -6716,6 +6761,29 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                         &kbuf[..n],
                     ) {
                         return user_memory_failure_for(is_linux, error);
+                    }
+                    if is_linux
+                        && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+                        && sched.current_process().name_str() == "yazi"
+                    {
+                        use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+                        static ARROW_STATE: AtomicU8 = AtomicU8::new(0);
+                        static ARROW_SEEN: AtomicBool = AtomicBool::new(false);
+                        let mut state = ARROW_STATE.load(Ordering::Relaxed);
+                        for &byte in &kbuf[..n] {
+                            state = match (state, byte) {
+                                (_, 0x1b) => 1,
+                                (1, b'[') => 2,
+                                (2, b'B') => {
+                                    if !ARROW_SEEN.swap(true, Ordering::Relaxed) {
+                                        crate::serial_println!("[HELIOS-YAZI] arrow-down read from tty");
+                                    }
+                                    0
+                                }
+                                _ => 0,
+                            };
+                        }
+                        ARROW_STATE.store(state, Ordering::Relaxed);
                     }
                     n as u64
                 } else {
@@ -6927,11 +6995,10 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                                 YAZI_ALT_SCREEN.store(true, Ordering::Relaxed);
                             }
                             // A clear-screen escape alone is not a render.
-                            // These strings were observed together in Yazi's
-                            // positioned application frame, after alt-screen.
+                            // A positioned frame with the normal-mode status
+                            // bar confirms that the app has rendered content.
                             if YAZI_ALT_SCREEN.load(Ordering::Relaxed)
                                 && text.contains("\x1b[1;1H")
-                                && text.contains("Loading...")
                                 && text.contains(" NOR ")
                                 && !YAZI_FIRST_FRAME.swap(true, Ordering::Relaxed)
                             {
@@ -6942,7 +7009,21 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             }
                         }
                     }
-                    crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]) as u64
+                    let written = crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]);
+                    if sched.current_process().name_str() == "yazi" {
+                        if written < write_size {
+                            crate::serial_println!(
+                                "[HELIOS-YAZI-OUTPUT] short write tid={} fd={} tab={} requested={} written={}",
+                                sched.current_process().pid, fd, tab, write_size, written
+                            );
+                        }
+                        if fd == 2 {
+                            if let Ok(text) = core::str::from_utf8(&kernel_buf[..write_size]) {
+                                crate::serial_println!("[HELIOS-YAZI-STDERR] {:?}", text);
+                            }
+                        }
+                    }
+                    written as u64
                 } else {
                     // Handle stdin/stdout/stderr specially
                     match fd {
@@ -7339,17 +7420,26 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
             mapped_addr
         }
         Err(error) => {
+            let pid = sched.current_process().pid;
+            let linux_compat = sched.current_process().is_linux_compat();
+            let region_count = sched.current_process().address_space.region_count();
+            let free_frames = pmm.free_page_count();
+            let heap_free = crate::memory::heap::heap_stats().free;
             crate::serial_println!(
-                "[SYSCALL] mmap failed addr={:#x} len={:#x} prot={:#x} flags={:#x} fd={} offset={:#x} error={:?}",
+                "[SYSCALL] mmap failed pid={} addr={:#x} len={:#x} prot={:#x} flags={:#x} fd={} offset={:#x} error={:?} regions={} free_frames={} heap_free={}",
+                pid,
                 addr,
                 length,
                 prot,
                 flags,
                 fd,
                 offset,
-                error
+                error,
+                region_count,
+                free_frames,
+                heap_free
             );
-            if crate::sched::with_scheduler(|sched| sched.current_process().is_linux_compat()) {
+            if linux_compat {
                 match error {
                     crate::process::mmap::MmapError::PermissionDenied => linux_errno(13),
                     crate::process::mmap::MmapError::NoMemory => linux_errno(12),

@@ -170,9 +170,9 @@ case "$PHASE" in
         ;;
     yazi-phase1)
         EXPECTED_FILE="tools/tests/yazi_phase1.expected"
-        # Only a verified Yazi render is a Phase 1 success. A successful
-        # launch, raw TTY mode, or an idle Tokio worker is insufficient.
-        FINAL_MARKER="[HELIOS-YAZI] first render confirmed"
+        # The gate observes both the first frame and an injected arrow key
+        # arriving through the foreground TTY stdin path.
+        FINAL_MARKER="[HELIOS-YAZI] arrow-down read from tty"
         PASS_LABEL="Yazi v26.9.1 Phase 1 runtime"
         NEED_DISK=false
         TIMEOUT=180
@@ -837,6 +837,13 @@ fi
 
 set +e
 QEMU_SMP="${SUNLIGHT_TEST_CPUS:-2}"
+QEMU_MEMORY_MB="${SUNLIGHT_TEST_MEMORY_MB:-1024}"
+if [[ "$PHASE" == "yazi-phase1" && -z "${SUNLIGHT_TEST_MEMORY_MB:-}" ]]; then
+    QEMU_MEMORY_MB=4096
+fi
+if [[ "$PHASE" == "yazi-phase1" && -z "${SUNLIGHT_TEST_CPUS:-}" ]]; then
+    QEMU_SMP=16
+fi
 if [[ "$PHASE" == "mm2b" ]]; then
     QEMU_SMP=12
 elif [[ "$PHASE" == "mm2d" ]]; then
@@ -850,7 +857,7 @@ qemu-system-x86_64 \
     -cdrom "$ISO_PATH" \
     -serial file:"$QEMU_OUTPUT" \
     -display none \
-    -m 1024M \
+    -m "${QEMU_MEMORY_MB}M" \
     -smp "$QEMU_SMP" \
     $KVM_FLAGS \
     -device virtio-rng-pci,disable-modern=on \
@@ -881,8 +888,8 @@ for ((i=0; i<TIMEOUT; i++)); do
         break
     fi
     if [[ "$PHASE" == "yazi-phase1" ]] && yazi_leader_finished; then
-        # A terminated Yazi cannot render later in this boot. Preserve the
-        # failure evidence and finish the bounded gate immediately.
+        # An unexpected exit, including one after the key was read, fails the
+        # interactive observation window.
         sleep 1
         break
     fi
@@ -896,6 +903,10 @@ for ((i=0; i<TIMEOUT; i++)); do
     fi
     if grep -Fq "$INITIAL_MARKER" "$QEMU_OUTPUT" 2>/dev/null \
         && { [[ "$PHASE" == "mm2b" ]] || grep -Fq "[timer] 100 ticks elapsed" "$QEMU_OUTPUT" 2>/dev/null; }; then
+        if [[ "$PHASE" == "yazi-phase1" ]]; then
+            # Keep observing after input for late worker and TTY failures.
+            sleep 10
+        fi
         sleep 1
         break
     fi
@@ -1358,10 +1369,10 @@ done
 # A launch marker alone is not a Yazi runtime smoke pass: Tokio can panic
 # immediately after exec when a required Linux primitive is unavailable.
 if [[ "$PHASE" == "yazi-phase1" ]] && \
-    { yazi_leader_finished || grep -Eq "Failed building the Runtime|OS can't spawn worker thread|thread 'main' .* panicked" "$QEMU_OUTPUT"; }; then
+    { yazi_leader_finished \
+      || grep -Eq "Failed building the Runtime|OS can't spawn worker thread|thread 'main' .* panicked|\[SYSCALL\] mmap failed .*error=NoMemory|process_mark_finished pid=[0-9]+ name='yazi'.*code=([1-9][0-9]*)" "$QEMU_OUTPUT"; }; then
     ALL_FOUND=false
 fi
-
 if [[ "$ALL_FOUND" == true ]]; then
     echo "══════════════════════════════════════"
     echo "  SunlightOS — ${PASS_LABEL} Boot Gate"

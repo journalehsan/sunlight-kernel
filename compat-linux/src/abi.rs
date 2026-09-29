@@ -148,6 +148,7 @@ pub const SYS_UNLINKAT: u64 = 263;
 pub const SYS_RENAMEAT: u64 = 264;
 pub const SYS_READLINKAT: u64 = 267;
 pub const SYS_FACCESSAT: u64 = 269;
+pub const SYS_PPOLL: u64 = 271;
 pub const SYS_EPOLL_PWAIT: u64 = 281;
 pub const SYS_EVENTFD2: u64 = 290;
 pub const SYS_EPOLL_CREATE1: u64 = 291;

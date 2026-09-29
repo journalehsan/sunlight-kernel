@@ -453,6 +453,12 @@ impl FdTable {
         })
     }
 
+    pub fn contains_tty_stdin_tab(&self, tab: usize) -> bool {
+        self.entries.iter().flatten().any(|entry| {
+            entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab
+        })
+    }
+
     pub fn contains_pipe_ring(&self, ring: u32) -> bool {
         self.entries.iter().flatten().any(|entry| {
             let handle = entry.handle;
