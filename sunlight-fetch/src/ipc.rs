@@ -584,6 +584,8 @@ mod sunlight {
     // TLS daemon error codes (word[0] in a TLS_ERROR reply).
     const TLS_ERR_SESSIONS_FULL: u64 = 3;
     const TLS_ERR_CERT_EXPIRED: u64 = 5;
+    const TLS_ERR_CONNECT: u64 = 14;
+    const TLS_ERR_SEND_HANDSHAKE: u64 = 31;
 
     // One shared page per plaintext transfer to/from the daemon.
     const TLS_SHM_PAGE: usize = 4096;
@@ -852,6 +854,16 @@ mod sunlight {
                     FetchError::TlsHandshakeFailed(String::from("TLS sessions full on daemon"))
                 }
                 TLS_ERR_CERT_EXPIRED => FetchError::TlsCertExpired,
+                TLS_ERR_CONNECT => FetchError::ConnectionFailed {
+                    host: String::from(host),
+                    port,
+                    reason: String::from("TCP connection failed or closed before TLS handshake"),
+                },
+                TLS_ERR_SEND_HANDSHAKE => FetchError::ConnectionFailed {
+                    host: String::from(host),
+                    port,
+                    reason: String::from("network send failed during TLS handshake"),
+                },
                 _ => FetchError::TlsHandshakeFailed(format!("daemon error code {code}")),
             });
         }

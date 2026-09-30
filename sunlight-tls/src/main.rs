@@ -151,6 +151,7 @@ mod sunlightos_impl {
     const NET_STATUS_WOULD_BLOCK: u64 = 1;
     const NET_READY_READ: u64 = 1 << 1;
     const NET_READY_WRITE: u64 = 1 << 2;
+    const NET_READY_TERMINAL: u64 = (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6);
 
     const SHM_PAGE: usize = 4096; // one shared page per plaintext/cert transfer
     const OUT_SCRATCH: usize = 18 * 1024; // > max TLS record (16 KiB + overhead)
@@ -328,22 +329,34 @@ mod sunlightos_impl {
                 .word(1, ip_packed)
                 .word(2, port as u64),
         );
-        reply.label == NET_CONNECT
-            && reply.words[0] != 0
-            && net_wait_ready(socket_id, 20_000, NET_READY_WRITE)
+        if reply.label != NET_CONNECT || reply.words[0] == 0 {
+            serial_println!(
+                "[SUNLIGHT-TLS] connect failed: label={:#x} status={}",
+                reply.label,
+                reply.words[1]
+            );
+            return false;
+        }
+        net_wait_ready(socket_id, 20_000, NET_READY_WRITE)
     }
 
     fn net_send_all(socket_id: u64, data: &[u8]) -> bool {
         let cap = match net_cap() {
             Some(c) => c,
-            None => return false,
+            None => {
+                serial_println!("[SUNLIGHT-TLS] send failed: net service unavailable");
+                return false;
+            }
         };
         let mut off = 0usize;
         while off < data.len() {
             let clen = (data.len() - off).min(SHM_PAGE);
             let (ptr, tok) = match shm_alloc() {
                 Ok(p) => p,
-                Err(_) => return false,
+                Err(_) => {
+                    serial_println!("[SUNLIGHT-TLS] send failed: shm_alloc");
+                    return false;
+                }
             };
             unsafe {
                 core::ptr::copy_nonoverlapping(data[off..].as_ptr(), ptr, clen);
@@ -355,13 +368,24 @@ mod sunlightos_impl {
             let reply = ipc_call(cap, msg);
             let _ = shm_free(tok);
             let sent = reply.words[0] as usize;
+            if reply.label != NET_SEND_SHM {
+                serial_println!("[SUNLIGHT-TLS] send failed: reply label={:#x}", reply.label);
+                return false;
+            }
             if reply.words[1] == NET_STATUS_WOULD_BLOCK {
                 if !net_wait_ready(socket_id, 8_000, NET_READY_WRITE) {
                     return false;
                 }
                 continue;
             }
-            if sent == 0 {
+            if reply.words[1] != NET_STATUS_OK || sent == 0 || sent > clen {
+                serial_println!(
+                    "[SUNLIGHT-TLS] send failed: status={} sent={} requested={} offset={}",
+                    reply.words[1],
+                    sent,
+                    clen,
+                    off
+                );
                 return false;
             }
             off += sent;
@@ -432,7 +456,28 @@ mod sunlightos_impl {
             timeout_ms.saturating_add(100),
         );
         let _ = shm_free(tok);
-        matches!(reply, Ok(reply) if reply.words[0] == NET_STATUS_OK)
+        match reply {
+            Ok(reply)
+                if reply.label == NET_WAIT
+                    && reply.words[0] == NET_STATUS_OK
+                    && reply.words[1] == socket_id
+                    && reply.words[2] & interest != 0
+                    && reply.words[2] & NET_READY_TERMINAL == 0 =>
+            {
+                true
+            }
+            Ok(reply) => {
+                serial_println!(
+                    "[SUNLIGHT-TLS] wait failed: label={:#x} status={} socket={:#x} ready={:#x} interest={:#x}",
+                    reply.label, reply.words[0], reply.words[1], reply.words[2], interest
+                );
+                false
+            }
+            Err(e) => {
+                serial_println!("[SUNLIGHT-TLS] wait failed: ipc={:?}", e);
+                false
+            }
+        }
     }
 
     // ── trust store ─────────────────────────────────────────────────────────────

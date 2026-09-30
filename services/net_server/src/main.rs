@@ -329,7 +329,9 @@ fn refresh_upstream_from_resolved(chain: &mut sunlight_net::ResolverChain) {
     // Prefer first listed server via GET_SERVER(0)
     let r = ipc_call(cap, IpcMsg::with_label(ResolvedMsg::GET_SERVER).word(0, 0));
     if r.label == ResolvedMsg::REPLY && r.word_count >= 1 {
-        let addr = unpack_ipv4(r.words[0]);
+        // resolved uses sunlight_ipc's network-order address encoding; the
+        // local NetOp helpers below use low-byte-first encoding.
+        let addr = sunlight_ipc::unpack_ipv4(r.words[0]);
         if addr != [0, 0, 0, 0] {
             chain.upstream = addr;
             debug_log("[DNS] upstream refreshed from resolved");
@@ -338,7 +340,7 @@ fn refresh_upstream_from_resolved(chain: &mut sunlight_net::ResolverChain) {
         // Fallback: GET_CONFIG gives first in w1
         let r2 = ipc_call(cap, IpcMsg::with_label(ResolvedMsg::GET_CONFIG));
         if r2.label == ResolvedMsg::REPLY && r2.word_count >= 2 {
-            let addr = unpack_ipv4(r2.words[1]);
+            let addr = sunlight_ipc::unpack_ipv4(r2.words[1]);
             if addr != [0, 0, 0, 0] {
                 chain.upstream = addr;
                 debug_log("[DNS] upstream from resolved GET_CONFIG");
