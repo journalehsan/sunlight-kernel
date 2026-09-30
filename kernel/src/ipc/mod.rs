@@ -31,7 +31,8 @@ pub mod SpawnMsg {
     pub const SPAWN_AUTHENTICATED: u64 = 4;
 }
 
-/// Sharded IPC bus instances for lock-free parallelism.
+/// Mutex-protected endpoint shards. Scheduler-mediated calls still take the
+/// global scheduler lock; sharding does not make this path lock-free.
 pub static IPC_BUS_SHARDS: [spin::Mutex<IpcBusShard>; NUM_SHARDS] = [
     spin::Mutex::new(IpcBusShard::new()),
     spin::Mutex::new(IpcBusShard::new()),
@@ -199,7 +200,7 @@ impl EndpointQueue {
     }
 }
 
-/// Per-shard IPC bus with O(1) endpoint lookup.
+/// Per-shard IPC bus with O(log n) endpoint lookup.
 pub struct IpcBusShard {
     queues: BTreeMap<u32, EndpointQueue>,
     reply_waiters: BTreeMap<u32, VecDeque<IpcCallId>>,
@@ -659,8 +660,15 @@ fn finish_call(sched: &mut Scheduler, idx: usize, outcome: IpcCallOutcome) {
         }
         sched.processes[idx].ipc_deadline = None;
         sched.processes[idx].ipc_call_outcome = Some(outcome);
-        if let Some(target) = target {
-            remove_deferred_target(sched, target);
+        // Successful delivery has already consumed the server's exclusive
+        // reply target (take for an ordinary reply, remove for a deferred
+        // reply). Only externally terminated calls need to search all servers
+        // for a retained deferred target. Keep this scan off the success path
+        // while holding the global scheduler lock.
+        if !matches!(outcome, IpcCallOutcome::ReplyDelivered(_)) {
+            if let Some(target) = target {
+                remove_deferred_target(sched, target);
+            }
         }
         wake_terminal(sched, idx);
     }
@@ -762,14 +770,6 @@ pub fn handle_ipc_call(
             return Err(IpcError::InvalidArgument);
         }
     }
-    let fastpath_eligible = caps.check(target_cap, CapabilityRights::SEND).is_ok()
-        && sched.is_blocked_on_recv(target_owner)
-        && msg.word_count <= message::IPC_REG_WORDS as u32;
-
-    if fastpath_eligible {
-        // FASTPATH: will bypass scheduler in Phase 4. For now this falls through.
-    }
-
     let global_tick = sched.global_tick;
     if sched.processes[idx].pending_call.is_none() {
         let deadline = sched.processes[idx].ipc_next_deadline_tick.take();

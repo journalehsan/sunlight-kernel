@@ -1142,6 +1142,21 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     }
 
     let mut sched = crate::sched::SCHEDULER.lock();
+    // Completion belongs to this caller, not to the continued existence of
+    // the destination capability. The slow handler already consumes terminal
+    // outcomes before validating SEND. Do the same here, before taking either
+    // the broker or queue lock, including when the peer has since exited.
+    if let Some(idx) = sched.current_process_index() {
+        if let Some(result) = crate::ipc::take_terminal_result(&mut sched, idx) {
+            return match result {
+                Ok(reply) => {
+                    reply.to_registers(frame);
+                    0
+                }
+                Err(error) => error as u64,
+            };
+        }
+    }
     let mut caps = crate::capability::CAP_BROKER.lock();
     let sender_pid = sched.current_process().pid;
 

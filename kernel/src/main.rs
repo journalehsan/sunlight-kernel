@@ -3821,6 +3821,74 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let depth_after = crate::ipc::diagnostic_snapshot().current_queue_depth;
         smp_stress_ok &= depth_after == depth_before;
 
+        // Successful replies consume their exclusive target before finishing
+        // the call. Cancellation/peer closure must still remove retained
+        // deferred targets, even though successful delivery skips that scan.
+        let mut deferred_lifecycle_ok = true;
+        for mode in 0..3 {
+            let endpoint = 900 + mode;
+            let generation = 9_000 + mode as u64;
+            sched.processes[server_idx].ipc_reply_target = None;
+            install_call(&mut sched, caller_idx, generation, endpoint, u64::MAX);
+            let received = crate::ipc::with_shard(endpoint, |bus| {
+                crate::ipc::handle_ipc_recv(server_pid, endpoint, &mut sched, bus).is_ok()
+            });
+            let token = crate::ipc::defer_current_reply(server_pid, &mut sched);
+            deferred_lifecycle_ok &= received && token.is_ok();
+            if let Ok(token) = token {
+                deferred_lifecycle_ok &= crate::ipc::deferred_reply_is_live(server_pid, token, &sched);
+                crate::ipc::with_shard(endpoint, |bus| match mode {
+                    0 => {
+                        deferred_lifecycle_ok &= crate::ipc::complete_deferred_reply(
+                            server_pid,
+                            token,
+                            IpcMsg::with_label(generation),
+                            &mut sched,
+                            bus,
+                        )
+                        .is_ok();
+                    }
+                    1 => {
+                        deferred_lifecycle_ok &=
+                            crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus).is_ok();
+                    }
+                    _ => {
+                        let calls = bus.remove_endpoint(endpoint);
+                        crate::ipc::finish_peer_closed_calls(endpoint, calls, &mut sched);
+                    }
+                });
+                deferred_lifecycle_ok &= !crate::ipc::deferred_reply_is_live(server_pid, token, &sched)
+                    && sched.processes[server_idx].deferred_reply_targets.is_empty();
+                let result = crate::ipc::take_terminal_result(&mut sched, caller_idx);
+                deferred_lifecycle_ok &= match mode {
+                    0 => matches!(result, Some(Ok(reply)) if reply.label == generation),
+                    1 => matches!(result, Some(Err(crate::ipc::IpcError::Cancelled))),
+                    _ => matches!(result, Some(Err(crate::ipc::IpcError::PeerClosed))),
+                };
+                deferred_lifecycle_ok &=
+                    crate::ipc::take_terminal_result(&mut sched, caller_idx).is_none();
+                deferred_lifecycle_ok &= crate::ipc::with_shard(endpoint, |bus| {
+                    crate::ipc::complete_deferred_reply(
+                        server_pid,
+                        token,
+                        IpcMsg::empty(),
+                        &mut sched,
+                        bus,
+                    )
+                    .is_err()
+                });
+            }
+            sched.remove_from_ready_queues(caller_idx);
+            crate::ipc::with_shard(endpoint, |bus| {
+                bus.remove_endpoint(endpoint);
+            });
+        }
+        if deferred_lifecycle_ok {
+            serial_println!("[SEC]  IPC deferred reply lifecycle: OK");
+        } else {
+            serial_println!("[SEC]  IPC deferred reply lifecycle: UNEXPECTED");
+        }
+
         sched.processes[caller_idx].pending_call = None;
         sched.processes[caller_idx].state = ProcessState::Ready;
         sched.remove_from_ready_queues(caller_idx);

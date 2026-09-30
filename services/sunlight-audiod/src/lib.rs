@@ -10,6 +10,8 @@ extern crate alloc;
 
 use core::cell::Cell;
 
+mod reply_buffer;
+
 use sunlight_audio::{
     hda::ENGINE_PERIOD_COUNT,
     parse_persisted, volume_icon, AudioDeviceState, AudioFormat, MasterVolume, OutputDeviceKind,
@@ -228,6 +230,46 @@ impl StreamProgressTracker {
     }
 }
 
+/// Owns one local mapping. The peer's independent mapping keeps the backing
+/// alive if a timed-out request is still reading when we release our view.
+struct SharedPcmPage {
+    ptr: *mut u8,
+    token: sunlight_ipc::CapabilityToken,
+    written: usize,
+}
+
+impl SharedPcmPage {
+    fn allocate() -> Result<Self, AudioClientError> {
+        let (ptr, token) = shm_alloc().map_err(|_| AudioClientError::Transport)?;
+        Ok(Self {
+            ptr,
+            token,
+            written: 0,
+        })
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        assert!(bytes.len() <= SHM_PAGE);
+        // SAFETY: allocation owns a full writable SHM page. Reuse happens
+        // only after audiod's acknowledgement, after it has copied/unmapped.
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), self.ptr, bytes.len());
+            if bytes.len() < self.written {
+                core::ptr::write_bytes(self.ptr.add(bytes.len()), 0, self.written - bytes.len());
+            }
+        }
+        self.written = bytes.len();
+    }
+}
+
+impl Drop for SharedPcmPage {
+    fn drop(&mut self) {
+        let _ = shm_free(self.token);
+    }
+}
+
+/// Keep this client on its creating thread: cached SHM views are tracked by
+/// the kernel's calling task, even when native threads share an address space.
 pub struct AudioClient {
     /// Cache the registered service capability for hot PCM/status calls. A
     /// fresh nameserver lookup per 1024-frame submission can transiently time
@@ -235,6 +277,7 @@ pub struct AudioClient {
     capability: Cell<Option<sunlight_ipc::CapabilityToken>>,
     stream_id: Cell<Option<u64>>,
     status_diag_count: Cell<u8>,
+    pcm_page: reply_buffer::ReplyBuffer<SharedPcmPage>,
 }
 
 impl AudioClient {
@@ -243,6 +286,7 @@ impl AudioClient {
             capability: Cell::new(None),
             stream_id: Cell::new(None),
             status_diag_count: Cell::new(0),
+            pcm_page: reply_buffer::ReplyBuffer::new(),
         }
     }
 
@@ -370,18 +414,18 @@ impl AudioClient {
         if bytes.is_empty() || bytes.len() > SHM_PAGE || bytes.len() % 4 != 0 {
             return Err(AudioClientError::InvalidFormat);
         }
-        let (ptr, token) = shm_alloc().map_err(|_| AudioClientError::Transport)?;
-        unsafe {
-            core::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
-        }
-        let result = self.call(
-            IpcMsg::with_label(AudiodMsg::SUBMIT_PCM)
-                .word(0, bytes.len() as u64)
-                .with_cap(0, token),
-        );
-        let _ = shm_free(token);
-        let reply = result?;
-        self.decode_stream_reply(&reply)
+        self.pcm_page.request(SharedPcmPage::allocate, |page| {
+            page.write(bytes);
+            let reply = self.call(
+                IpcMsg::with_label(AudiodMsg::SUBMIT_PCM)
+                    .word(0, bytes.len() as u64)
+                    .with_cap(0, page.token),
+            )?;
+            // audiod copies into its private queue and unmaps before replying.
+            // Any failure (including timeout or malformed reply) retires the
+            // page, preventing the next submission from racing a late reader.
+            self.decode_stream_reply(&reply)
+        })
     }
 
     /// Stop and flush the shared output stream, returning the hardware frame
@@ -879,6 +923,22 @@ pub fn sound_settings_page_id() -> &'static [u8] {
 mod tests {
     use super::*;
     use sunlight_audio::MasterVolume;
+
+    #[test]
+    fn reused_pcm_page_clears_the_previous_payload_tail() {
+        let mut bytes = [0u8; SHM_PAGE];
+        // Exercise the actual write routine with host backing; suppress Drop
+        // because this test page has no native SHM mapping to release.
+        let mut page = core::mem::ManuallyDrop::new(SharedPcmPage {
+            ptr: bytes.as_mut_ptr(),
+            token: sunlight_ipc::CapabilityToken::INVALID,
+            written: 0,
+        });
+        page.write(&[7; SHM_PAGE]);
+        page.write(&[9; 4]);
+        assert_eq!(&bytes[..4], &[9; 4]);
+        assert!(bytes[4..].iter().all(|byte| *byte == 0));
+    }
 
     #[test]
     fn ipc_backpressure_preserves_retryable_audio_error() {
