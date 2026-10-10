@@ -571,8 +571,8 @@ impl FileDialogState {
             self.status = String::from("Enter a file name");
             return None;
         }
-        if name.contains('/') {
-            self.status = String::from("File name cannot contain /");
+        if name == "." || name == ".." || name.contains('/') || name.chars().any(char::is_control) {
+            self.status = String::from("Enter a valid file name without /");
             return None;
         }
         if let Some(default_ext) = self.default_extension.as_ref() {
@@ -591,7 +591,14 @@ impl FileDialogState {
             self.status = String::from("File extension is not allowed");
             return None;
         }
-        let full = self.current_dir.join(name.as_str())?;
+        let Some(full) = self.current_dir.join(name.as_str()) else {
+            self.status = String::from("File path is too long");
+            return None;
+        };
+        if libc::stat(full.as_str().as_bytes()).is_ok_and(|stat| stat.file_type == FT_DIR) {
+            self.status = String::from("A folder already has this name");
+            return None;
+        }
         if self.overwrite_confirm && libc::stat(full.as_str().as_bytes()).is_ok() {
             if !self.pending_overwrite_confirm {
                 self.pending_overwrite_confirm = true;

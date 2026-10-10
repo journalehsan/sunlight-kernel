@@ -742,6 +742,14 @@ impl Window {
         let _ = self.display_call(IpcMsg::with_label(SgpMsg::CLOSE_WINDOW).word(0, self.win_id));
     }
 
+    /// Permit bounded owner cleanup when the compositor closes this window.
+    /// The app still exits on close; a stuck owner is killed after the grace.
+    pub fn set_close_grace(&self, milliseconds: u64) -> bool {
+        matches!(ipc_call_timeout(self.display_ep, IpcMsg::with_label(SgpMsg::SET_CLOSE_GRACE)
+            .word(0, self.win_id).word(1, milliseconds), WINDOW_IPC_TIMEOUT_MS),
+            Ok(reply) if reply.label == SgpMsg::REPLY && reply.words[0] != 0)
+    }
+
     /// Send a `CONFIGURE_WINDOW` message to update window type, state, and border
     /// flags after the window has been created.
     ///

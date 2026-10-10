@@ -118,6 +118,8 @@ Notes:
 - `OpenFile` allows folder navigation, returns a selected file path, and keeps folders navigable even when file filters are active.
 - `OpenFolder` returns the selected folder, or the current folder when no subfolder is selected.
 - `SaveFile` shows a filename input, supports `suggested_name`, and appends `default_extension` when the entered name has no extension.
+- `SaveFile` uses an existing `initial_dir`; apps create their default save folder before requesting the dialog. Voice Recorder creates `Musics` under `HOME` (or private `/tmp/voice-recorder-<uid>` storage in the absence of a usable home) for live RAMFS sessions.
+- `SaveFile` rejects `.` / `..`, separators, control characters, paths that are too long, and names belonging to existing folders, with a visible status message.
 - Existing paths are never silently accepted when `overwrite_confirm` is enabled; the user must press `Save` again after the overwrite warning appears.
 - The shared host currently shows lightweight details for the selected row instead of a heavy live preview.
 

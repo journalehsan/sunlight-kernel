@@ -103,6 +103,7 @@ members = [
     "sunlight-api-lab",
     "golden-fish",
     "melody-mina",
+    "sunlight-voice-recorder",
     "chronos-core",
     "sunlight-chronos",
     "sunlight-silicon-echoes",

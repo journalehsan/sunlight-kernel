@@ -893,6 +893,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/sunlight-files" | "/usr/bin/sunlight-files" => Ok(crate::SUNLIGHT_FILES_ELF_BYTES),
         // light-lens: native graphical image viewer.
         "/bin/light-lens" | "/usr/bin/light-lens" => Ok(crate::LIGHT_LENS_ELF_BYTES),
+        "/bin/voice-recorder" | "/usr/bin/voice-recorder" => Ok(crate::VOICE_RECORDER_ELF_BYTES),
         // melody-mina: UI-only native music-player frontend.
         "/bin/melody-mina" | "/usr/bin/melody-mina" => Ok(crate::MELODY_MINA_ELF_BYTES),
         // sunlight-edit: native graphical text editor.

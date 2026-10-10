@@ -943,6 +943,24 @@ fn run_phase30_tests(state: &mut State) {
         return;
     }
 
+    // Exercise the native syscalls as well as IPC: clients use ENOENT from
+    // stat to decide whether to create their first-run RAMFS directories.
+    let probe = b"/tmp/.native-stat-mkdir-test";
+    if !matches!(
+        sunlight_libc::stat(probe),
+        Err(sunlight_libc::sys::Errno::NoEntry)
+    ) {
+        debug_log("[VFS]  Native missing stat errno FAILED");
+        return;
+    }
+    if sunlight_libc::mkdir(probe, 0o700).is_err()
+        || !sunlight_libc::stat(probe).is_ok_and(|s| s.file_type == sunlight_libc::FT_DIR)
+    {
+        debug_log("[VFS]  Native stat/mkdir RAMFS FAILED");
+        return;
+    }
+    debug_log("[VFS]  Native stat/mkdir RAMFS OK");
+
     let stat = handle_request(state, path_msg(VfsMsg::STAT, "/etc/sunlight/session.toml"));
     if stat.label == VfsMsg::REPLY
         && stat.words[1] > 0

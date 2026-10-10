@@ -10,19 +10,231 @@ extern crate alloc;
 
 use core::cell::Cell;
 
+pub mod capture;
 mod reply_buffer;
 
 use sunlight_audio::{
-    hda::ENGINE_PERIOD_COUNT,
-    parse_persisted, volume_icon, AudioDeviceState, AudioFormat, MasterVolume, OutputDeviceKind,
-    PersistedAudio, SystemSound, SystemSoundSettings, VolumeIconKind, DEFAULT_SYSTEM_SOUNDS_VOLUME,
-    DEFAULT_VOLUME, MAX_PCM_BYTES, SYSTEM_SOUND_COUNT, SYSTEM_SOUND_PROTOCOL_VERSION,
+    hda::ENGINE_PERIOD_COUNT, parse_persisted, volume_icon, AudioDeviceState, AudioFormat,
+    MasterVolume, OutputDeviceKind, PersistedAudio, SystemSound, SystemSoundSettings,
+    VolumeIconKind, DEFAULT_SYSTEM_SOUNDS_VOLUME, DEFAULT_VOLUME, MAX_PCM_BYTES,
+    SYSTEM_SOUND_COUNT, SYSTEM_SOUND_PROTOCOL_VERSION,
 };
 use sunlight_ipc::{
     debug_log, ipc_call_timeout, nameserver_lookup_timeout, shm_alloc, shm_free,
     unpack_audio_status, unpack_audio_stream_status, AudioStatus, AudioStreamStatus, AudiodMsg,
     IpcMsg, SHM_PAGE,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CaptureStatus {
+    pub state: capture::CaptureState,
+    pub rate_hz: u32,
+    pub channels: u8,
+    pub bits: u8,
+    pub completed_buffers: u64,
+    pub dropped_buffers: u64,
+    pub peak: u16,
+    pub queued_buffers: u8,
+    pub bytes_read: usize,
+}
+
+fn decode_capture_status(reply: &IpcMsg) -> Result<CaptureStatus, AudioClientError> {
+    if reply.label == AudiodMsg::ERROR {
+        return Err(decode_error(reply));
+    }
+    if reply.label != AudiodMsg::REPLY || reply.word_count != 4 {
+        return Err(AudioClientError::Transport);
+    }
+    let packed = reply.words[0];
+    if packed >> 32 != 0 {
+        return Err(AudioClientError::Transport);
+    }
+    let state = match packed & 0xff {
+        0 => capture::CaptureState::Closed,
+        1 => capture::CaptureState::Open,
+        2 => capture::CaptureState::Running,
+        _ => return Err(AudioClientError::Transport),
+    };
+    if reply.words[3] != 0 && reply.words[3] != capture::CAPTURE_PERIOD_BYTES as u64 {
+        return Err(AudioClientError::Transport);
+    }
+    Ok(CaptureStatus {
+        state,
+        rate_hz: 48_000,
+        channels: 2,
+        bits: 16,
+        completed_buffers: reply.words[1],
+        dropped_buffers: reply.words[2],
+        peak: (packed >> 8) as u16,
+        queued_buffers: (packed >> 24) as u8,
+        bytes_read: reply.words[3] as usize,
+    })
+}
+
+#[cfg(test)]
+mod capture_protocol_tests {
+    use super::*;
+    #[test]
+    fn capture_reply_fits_register_ipc_and_rejects_malformed_shape() {
+        let reply = IpcMsg::with_label(AudiodMsg::REPLY)
+            .word(0, 2 | (32768 << 8) | (3 << 24))
+            .word(1, 12)
+            .word(2, 1)
+            .word(3, 4096);
+        let status = decode_capture_status(&reply).unwrap();
+        assert_eq!(status.state, capture::CaptureState::Running);
+        assert_eq!(status.peak, 32768);
+        assert_eq!(status.queued_buffers, 3);
+        assert_eq!(status.bytes_read, 4096);
+        assert!(decode_capture_status(&IpcMsg::with_label(AudiodMsg::REPLY)).is_err());
+        assert!(decode_capture_status(&reply.word(3, 512)).is_err());
+    }
+}
+
+/// The separate nameserver endpoint requires `ServiceCapability::Microphone`.
+/// A normal playback `AudioClient` cannot resolve it.
+pub struct CaptureClient {
+    capability: Cell<Option<sunlight_ipc::CapabilityToken>>,
+    page: Option<SharedPcmPage>,
+    opened: bool,
+}
+
+impl CaptureClient {
+    pub const fn new() -> Self {
+        Self {
+            capability: Cell::new(None),
+            page: None,
+            opened: false,
+        }
+    }
+
+    fn call(&self, msg: IpcMsg) -> Result<IpcMsg, AudioClientError> {
+        let cap = match self.capability.get() {
+            Some(cap) => cap,
+            None => {
+                let cap = nameserver_lookup_timeout("audiod.capture", LOOKUP_TIMEOUT_MS)
+                    .ok_or(AudioClientError::ServiceUnavailable)?;
+                self.capability.set(Some(cap));
+                cap
+            }
+        };
+        ipc_call_timeout(cap, msg, REQUEST_TIMEOUT_MS).map_err(map_ipc_error)
+    }
+
+    pub fn input_available(&self) -> Result<bool, AudioClientError> {
+        let reply = self.call(IpcMsg::with_label(AudiodMsg::INPUT_DEVICE))?;
+        if reply.label != AudiodMsg::REPLY || reply.word_count != 2 {
+            return Err(AudioClientError::Transport);
+        }
+        Ok(reply.words[0] == 1)
+    }
+
+    pub fn open(&mut self) -> Result<CaptureStatus, AudioClientError> {
+        self.open_format(48_000, 2, 16)
+    }
+
+    pub fn open_format(
+        &mut self,
+        rate_hz: u32,
+        channels: u8,
+        bits: u8,
+    ) -> Result<CaptureStatus, AudioClientError> {
+        self.open_mode(
+            rate_hz as u64 | ((channels as u64) << 32) | ((bits as u64) << 40),
+            false,
+        )
+    }
+
+    pub fn open_monitor(&mut self) -> Result<CaptureStatus, AudioClientError> {
+        self.open_mode(capture::CAPTURE_FORMAT_WORD, true)
+    }
+
+    fn open_mode(
+        &mut self,
+        format: u64,
+        monitor_only: bool,
+    ) -> Result<CaptureStatus, AudioClientError> {
+        if self.opened {
+            return Err(AudioClientError::BadRequest);
+        }
+        let status = decode_capture_status(
+            &self.call(
+                IpcMsg::with_label(AudiodMsg::CAPTURE_OPEN)
+                    .word(0, format)
+                    .word(1, monitor_only as u64),
+            )?,
+        )?;
+        self.opened = true;
+        Ok(status)
+    }
+
+    pub fn start(&self) -> Result<CaptureStatus, AudioClientError> {
+        decode_capture_status(&self.call(IpcMsg::with_label(AudiodMsg::CAPTURE_START))?)
+    }
+
+    pub fn status(&self) -> Result<CaptureStatus, AudioClientError> {
+        decode_capture_status(&self.call(IpcMsg::with_label(AudiodMsg::CAPTURE_STATUS))?)
+    }
+
+    pub fn read(&mut self, dst: &mut [u8]) -> Result<CaptureStatus, AudioClientError> {
+        if dst.len() < capture::CAPTURE_PERIOD_BYTES {
+            return Err(AudioClientError::BadRequest);
+        }
+        if self.page.is_none() {
+            self.page = Some(SharedPcmPage::allocate()?);
+        }
+        let token = self.page.as_ref().unwrap().token;
+        let reply = match self.call(IpcMsg::with_label(AudiodMsg::CAPTURE_READ).with_cap(0, token))
+        {
+            Ok(reply) => reply,
+            Err(error) => {
+                self.page = None;
+                return Err(error);
+            }
+        };
+        let status = match decode_capture_status(&reply) {
+            Ok(status) => status,
+            Err(error) => {
+                self.page = None;
+                return Err(error);
+            }
+        };
+        if status.bytes_read > capture::CAPTURE_PERIOD_BYTES {
+            self.page = None;
+            return Err(AudioClientError::Transport);
+        }
+        if status.bytes_read != 0 {
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    self.page.as_ref().unwrap().ptr,
+                    dst.as_mut_ptr(),
+                    status.bytes_read,
+                );
+            }
+        }
+        Ok(status)
+    }
+
+    pub fn stop(&self) -> Result<CaptureStatus, AudioClientError> {
+        decode_capture_status(&self.call(IpcMsg::with_label(AudiodMsg::CAPTURE_STOP))?)
+    }
+
+    pub fn close(&mut self) -> Result<CaptureStatus, AudioClientError> {
+        let status =
+            decode_capture_status(&self.call(IpcMsg::with_label(AudiodMsg::CAPTURE_CLOSE))?)?;
+        self.opened = false;
+        self.page = None;
+        Ok(status)
+    }
+}
+
+impl Drop for CaptureClient {
+    fn drop(&mut self) {
+        if self.opened {
+            let _ = self.close();
+        }
+    }
+}
 
 #[cfg(test)]
 #[path = "system_assets.rs"]
@@ -556,9 +768,7 @@ impl AudioClient {
 
 fn ipc_status_error_diagnostic(error: sunlight_ipc::IpcCallError) -> &'static str {
     match error {
-        sunlight_ipc::IpcCallError::Timeout => {
-            "[AUDIOD-CLIENT][status] transport=timeout\n"
-        }
+        sunlight_ipc::IpcCallError::Timeout => "[AUDIOD-CLIENT][status] transport=timeout\n",
         sunlight_ipc::IpcCallError::InvalidCapability => {
             "[AUDIOD-CLIENT][status] transport=invalid-capability\n"
         }
@@ -568,18 +778,10 @@ fn ipc_status_error_diagnostic(error: sunlight_ipc::IpcCallError) -> &'static st
         sunlight_ipc::IpcCallError::InvalidArgument => {
             "[AUDIOD-CLIENT][status] transport=invalid-argument\n"
         }
-        sunlight_ipc::IpcCallError::QueueFull => {
-            "[AUDIOD-CLIENT][status] transport=queue-full\n"
-        }
-        sunlight_ipc::IpcCallError::Cancelled => {
-            "[AUDIOD-CLIENT][status] transport=cancelled\n"
-        }
-        sunlight_ipc::IpcCallError::PeerClosed => {
-            "[AUDIOD-CLIENT][status] transport=peer-closed\n"
-        }
-        sunlight_ipc::IpcCallError::Unknown(_) => {
-            "[AUDIOD-CLIENT][status] transport=unknown\n"
-        }
+        sunlight_ipc::IpcCallError::QueueFull => "[AUDIOD-CLIENT][status] transport=queue-full\n",
+        sunlight_ipc::IpcCallError::Cancelled => "[AUDIOD-CLIENT][status] transport=cancelled\n",
+        sunlight_ipc::IpcCallError::PeerClosed => "[AUDIOD-CLIENT][status] transport=peer-closed\n",
+        sunlight_ipc::IpcCallError::Unknown(_) => "[AUDIOD-CLIENT][status] transport=unknown\n",
     }
 }
 
@@ -1207,7 +1409,9 @@ pub fn mix_system_pcm(output: &mut [u8], sound: &[u8], gain: u8) {
     for (dst, src) in output.chunks_exact_mut(2).zip(sound.chunks_exact(2)) {
         let music = i16::from_le_bytes([dst[0], dst[1]]) as i32;
         let effect = i16::from_le_bytes([src[0], src[1]]) as i32 * gain.min(100) as i32 / 100;
-        dst.copy_from_slice(&((music + effect).clamp(i16::MIN as i32, i16::MAX as i32) as i16).to_le_bytes());
+        dst.copy_from_slice(
+            &((music + effect).clamp(i16::MIN as i32, i16::MAX as i32) as i16).to_le_bytes(),
+        );
     }
 }
 
@@ -1218,7 +1422,10 @@ mod mixing_tests {
     fn mixes_without_replacing_music_and_preserves_tail() {
         let mut music = [1000i16.to_le_bytes(), 2000i16.to_le_bytes()].concat();
         mix_system_pcm(&mut music, &1000i16.to_le_bytes(), 50);
-        assert_eq!(music, [1500i16.to_le_bytes(), 2000i16.to_le_bytes()].concat());
+        assert_eq!(
+            music,
+            [1500i16.to_le_bytes(), 2000i16.to_le_bytes()].concat()
+        );
     }
     #[test]
     fn clips_both_polarities_and_mute_preserves_music() {
@@ -1227,7 +1434,10 @@ mod mixing_tests {
             mix_system_pcm(&mut output, &sample.to_le_bytes(), 0);
             assert_eq!(i16::from_le_bytes(output), sample);
             mix_system_pcm(&mut output, &sample.to_le_bytes(), 100);
-            assert_eq!(i16::from_le_bytes(output), if sample > 0 { i16::MAX } else { i16::MIN });
+            assert_eq!(
+                i16::from_le_bytes(output),
+                if sample > 0 { i16::MAX } else { i16::MIN }
+            );
         }
     }
 }

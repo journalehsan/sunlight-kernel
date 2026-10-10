@@ -35,63 +35,82 @@ pub(crate) struct WavDiagnostics {
     pub total_frames: u64,
 }
 
-pub struct WavPcmDecoder<'a> {
-    source: &'a [u8],
+/// Random access source shared by the slice and native streaming WAV decoders.
+/// Reads are bounded by the caller's buffer, independent of media duration.
+pub trait WavSource {
+    fn len(&self) -> usize;
+    fn read_at(&mut self, offset: usize, output: &mut [u8]) -> Result<(), MediaError>;
+}
+
+impl WavSource for &[u8] {
+    fn len(&self) -> usize {
+        <[u8]>::len(self)
+    }
+    fn read_at(&mut self, offset: usize, output: &mut [u8]) -> Result<(), MediaError> {
+        let end = offset
+            .checked_add(output.len())
+            .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 32))?;
+        let bytes = self
+            .get(offset..end)
+            .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 32))?;
+        output.copy_from_slice(bytes);
+        Ok(())
+    }
+}
+
+pub type WavPcmDecoder<'a> = WavDecoder<&'a [u8]>;
+
+pub struct WavDecoder<S: WavSource> {
+    source: S,
     layout: WavLayout,
     frame_position: u64,
 }
 
-impl<'a> WavPcmDecoder<'a> {
-    pub fn open(source: &'a [u8]) -> Result<Self, MediaError> {
-        let layout = probe_wav(source)?;
+impl<S: WavSource> WavDecoder<S> {
+    pub fn open(mut source: S) -> Result<Self, MediaError> {
+        let layout = probe_wav_reader(&mut source)?;
         Ok(Self {
             source,
             layout,
             frame_position: 0,
         })
     }
+    #[cfg(target_os = "none")]
+    pub(crate) fn diagnostics(&self) -> WavDiagnostics {
+        WavDiagnostics {
+            data_offset: self.layout.data_offset,
+            data_bytes: self.layout.data_len,
+            total_frames: (self.layout.data_len / (self.layout.info.channels as usize * 2)) as u64,
+        }
+    }
 }
 
-impl AudioDecoder for WavPcmDecoder<'_> {
+impl<S: WavSource> AudioDecoder for WavDecoder<S> {
     fn stream_info(&self) -> AudioStreamInfo {
         self.layout.info
     }
-
     fn decode(&mut self, output: &mut [i16]) -> Result<DecodeChunk, MediaError> {
         let channels = self.layout.info.channels as usize;
         if output.len() < channels {
             return Err(MediaError::new(MediaErrorKind::Decode, 2));
         }
-        let capacity = output.len() - output.len() % channels;
-        let remaining_frames =
-            (self.layout.data_len / (channels * 2)).saturating_sub(self.frame_position as usize);
-        let frames = remaining_frames.min(capacity / channels);
-        let start = self
-            .layout
-            .data_offset
-            .checked_add(self.frame_position as usize * channels * 2)
-            .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 30))?;
-        let bytes = frames
-            .checked_mul(channels)
-            .and_then(|samples| samples.checked_mul(2))
-            .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 31))?;
-        let input = self
-            .source
-            .get(start..start + bytes)
-            .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 32))?;
-        for (sample, bytes) in output[..frames * channels]
-            .iter_mut()
-            .zip(input.chunks_exact(2))
-        {
-            *sample = i16::from_le_bytes([bytes[0], bytes[1]]);
+        let remaining = self.layout.data_len / (channels * 2) - self.frame_position as usize;
+        let frames = remaining.min(output.len() / channels);
+        let mut scratch = [0u8; 4096];
+        let start = self.layout.data_offset + self.frame_position as usize * channels * 2;
+        for (index, samples) in output[..frames * channels].chunks_mut(2048).enumerate() {
+            let bytes = &mut scratch[..samples.len() * 2];
+            self.source.read_at(start + index * 4096, bytes)?;
+            for (sample, bytes) in samples.iter_mut().zip(bytes.chunks_exact(2)) {
+                *sample = i16::from_le_bytes([bytes[0], bytes[1]]);
+            }
         }
-        self.frame_position = self.frame_position.saturating_add(frames as u64);
+        self.frame_position += frames as u64;
         Ok(DecodeChunk {
             frames,
             end_of_stream: self.frame_position as usize >= self.layout.data_len / (channels * 2),
         })
     }
-
     fn seek(&mut self, position: MediaTime) -> Result<MediaTime, MediaError> {
         let target = position
             .frames_at(self.layout.info.sample_rate_hz)
@@ -101,6 +120,62 @@ impl AudioDecoder for WavPcmDecoder<'_> {
             target,
             self.layout.info.sample_rate_hz,
         ))
+    }
+}
+
+#[cfg(target_os = "none")]
+pub(crate) struct NativeWavSource {
+    fd: sunlight_libc::Fd,
+    size: usize,
+}
+
+#[cfg(target_os = "none")]
+impl NativeWavSource {
+    pub(crate) fn open(path: &[u8]) -> Result<Self, MediaError> {
+        let fd =
+            sunlight_libc::open(path).map_err(|_| MediaError::new(MediaErrorKind::FileOpen, 3))?;
+        let size = match sunlight_libc::lseek(fd, 0, sunlight_libc::SEEK_END) {
+            Ok(n) if n <= u32::MAX as u64 + 8 => n as usize,
+            _ => {
+                let _ = sunlight_libc::close(fd);
+                return Err(MediaError::new(MediaErrorKind::FileRead, 1));
+            }
+        };
+        Ok(Self { fd, size })
+    }
+}
+
+#[cfg(target_os = "none")]
+impl WavSource for NativeWavSource {
+    fn len(&self) -> usize {
+        self.size
+    }
+    fn read_at(&mut self, offset: usize, output: &mut [u8]) -> Result<(), MediaError> {
+        if offset
+            .checked_add(output.len())
+            .is_none_or(|end| end > self.size)
+        {
+            return Err(MediaError::new(MediaErrorKind::FileRead, 4));
+        }
+        sunlight_libc::lseek(self.fd, offset as i64, sunlight_libc::SEEK_SET)
+            .map_err(|_| MediaError::new(MediaErrorKind::FileRead, 2))?;
+        let mut position = 0;
+        while position < output.len() {
+            let count = sunlight_libc::read(self.fd, &mut output[position..])
+                .map_err(|_| MediaError::new(MediaErrorKind::FileRead, 3))?;
+            if count == 0 {
+                return Err(MediaError::new(MediaErrorKind::FileRead, 4));
+            }
+            position += count;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "none")]
+impl Drop for NativeWavSource {
+    fn drop(&mut self) {
+        let _ = sunlight_libc::close(self.fd);
     }
 }
 
@@ -178,14 +253,20 @@ impl AudioDecoder for ProbeDecoder<'_> {
     }
 }
 
-fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
+fn probe_wav(mut source: &[u8]) -> Result<WavLayout, MediaError> {
+    probe_wav_reader(&mut source)
+}
+
+fn probe_wav_reader(source: &mut impl WavSource) -> Result<WavLayout, MediaError> {
     if source.len() < 12 {
         return Err(MediaError::new(MediaErrorKind::MalformedMedia, 10));
     }
-    if source.get(..4) != Some(b"RIFF") || source.get(8..12) != Some(b"WAVE") {
+    let mut root = [0u8; 12];
+    source.read_at(0, &mut root)?;
+    if &root[..4] != b"RIFF" || &root[8..12] != b"WAVE" {
         return Err(MediaError::new(MediaErrorKind::UnsupportedContainer, 11));
     }
-    let riff_size = u32::from_le_bytes(source[4..8].try_into().unwrap()) as usize;
+    let riff_size = u32::from_le_bytes(root[4..8].try_into().unwrap()) as usize;
     let riff_end = 8usize
         .checked_add(riff_size)
         .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 12))?;
@@ -199,9 +280,11 @@ fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
         let header_end = cursor
             .checked_add(8)
             .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 14))?;
-        let header = source
-            .get(cursor..header_end)
-            .ok_or_else(|| MediaError::new(MediaErrorKind::MalformedMedia, 15))?;
+        if header_end > riff_end {
+            return Err(MediaError::new(MediaErrorKind::MalformedMedia, 15));
+        }
+        let mut header = [0u8; 8];
+        source.read_at(cursor, &mut header)?;
         let len = u32::from_le_bytes(header[4..8].try_into().unwrap()) as usize;
         let payload_end = header_end
             .checked_add(len)
@@ -212,9 +295,11 @@ fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
         if payload_end > riff_end || padded_end > riff_end {
             return Err(MediaError::new(MediaErrorKind::MalformedMedia, 18));
         }
-        let payload = &source[header_end..payload_end];
         match &header[..4] {
             b"fmt " => {
+                let mut format_bytes = [0u8; 40];
+                let payload = &mut format_bytes[..len.min(40)];
+                source.read_at(header_end, payload)?;
                 if payload.len() < 16 || format.is_some() {
                     return Err(MediaError::new(MediaErrorKind::MalformedMedia, 19));
                 }
@@ -232,7 +317,7 @@ fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
                     }
                     let extension_len =
                         u16::from_le_bytes(payload[16..18].try_into().unwrap()) as usize;
-                    if extension_len < 22 || extension_len > payload.len() - 18 {
+                    if extension_len < 22 || extension_len > len - 18 {
                         return Err(MediaError::new(MediaErrorKind::MalformedMedia, 19));
                     }
                     let mask = u32::from_le_bytes(payload[20..24].try_into().unwrap());
@@ -265,7 +350,7 @@ fn probe_wav(source: &[u8]) -> Result<WavLayout, MediaError> {
                 if data.is_some() {
                     return Err(MediaError::new(MediaErrorKind::MalformedMedia, 23));
                 }
-                data = Some((header_end, payload.len()));
+                data = Some((header_end, len));
             }
             _ => {}
         }
@@ -491,6 +576,73 @@ fn single_ogg_stream_frames(source: &[u8]) -> Result<u64, MediaError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn long_wav_decodes_and_seeks_without_reading_the_whole_source() {
+        use alloc::rc::Rc;
+        use core::cell::Cell;
+        struct SparseWav {
+            header: [u8; 44],
+            size: usize,
+            largest: Rc<Cell<usize>>,
+            reads: Rc<Cell<usize>>,
+        }
+        impl WavSource for SparseWav {
+            fn len(&self) -> usize {
+                self.size
+            }
+            fn read_at(&mut self, offset: usize, dst: &mut [u8]) -> Result<(), MediaError> {
+                assert!(offset + dst.len() <= self.size);
+                self.largest.set(self.largest.get().max(dst.len()));
+                self.reads.set(self.reads.get() + dst.len());
+                for (i, b) in dst.iter_mut().enumerate() {
+                    *b = if offset + i < 44 {
+                        self.header[offset + i]
+                    } else {
+                        if (offset + i - 44) % 2 == 0 {
+                            42
+                        } else {
+                            0
+                        }
+                    };
+                }
+                Ok(())
+            }
+        }
+        let data = 180u32 * 48000 * 4;
+        let mut h = [0u8; 44];
+        h[..4].copy_from_slice(b"RIFF");
+        h[4..8].copy_from_slice(&(data + 36).to_le_bytes());
+        h[8..16].copy_from_slice(b"WAVEfmt ");
+        h[16..20].copy_from_slice(&16u32.to_le_bytes());
+        h[20..22].copy_from_slice(&1u16.to_le_bytes());
+        h[22..24].copy_from_slice(&2u16.to_le_bytes());
+        h[24..28].copy_from_slice(&48000u32.to_le_bytes());
+        h[28..32].copy_from_slice(&192000u32.to_le_bytes());
+        h[32..34].copy_from_slice(&4u16.to_le_bytes());
+        h[34..36].copy_from_slice(&16u16.to_le_bytes());
+        h[36..40].copy_from_slice(b"data");
+        h[40..44].copy_from_slice(&data.to_le_bytes());
+        let largest = Rc::new(Cell::new(0));
+        let reads = Rc::new(Cell::new(0));
+        let mut decoder = WavDecoder::open(SparseWav {
+            header: h,
+            size: data as usize + 44,
+            largest: largest.clone(),
+            reads: reads.clone(),
+        })
+        .unwrap();
+        assert_eq!(decoder.stream_info().duration.unwrap().as_millis(), 180000);
+        assert!(reads.get() < 100);
+        let mut output = [0i16; 2048];
+        assert_eq!(decoder.decode(&mut output).unwrap().frames, 1024);
+        assert!(output.iter().all(|s| *s == 42));
+        decoder.seek(MediaTime::from_millis(179990)).unwrap();
+        let end = decoder.decode(&mut output).unwrap();
+        assert_eq!(end.frames, 480);
+        assert!(end.end_of_stream);
+        assert_eq!(largest.get(), 4096);
+        assert!(reads.get() < 8192);
+    }
 
     static TEST_OGG: &[u8] = include_bytes!("../../assets/sounds/melody-mina-test-48k-stereo.ogg");
     static TEST_WAV: &[u8] =

@@ -10,7 +10,9 @@ use core::{
 
 #[cfg(target_os = "none")]
 use crate::{
-    decoder::{AudioDecoder, ProbeDecoder, MAX_COMPRESSED_BYTES},
+    decoder::{
+        AudioDecoder, NativeWavSource, ProbeDecoder, WavDecoder, WavSource, MAX_COMPRESSED_BYTES,
+    },
     output::{AudioSink, PcmPacketizer, SunlightAudioSink},
     resampler::LinearResampler,
     state::{transition, PlaybackAction},
@@ -28,6 +30,7 @@ const COMMAND_PLAY: u8 = 2;
 const COMMAND_PAUSE: u8 = 3;
 const COMMAND_STOP: u8 = 4;
 const COMMAND_SEEK: u8 = 5;
+const COMMAND_CLOSE: u8 = 7;
 #[cfg(target_os = "none")]
 const COMMAND_SHUTDOWN: u8 = 6;
 
@@ -344,6 +347,11 @@ impl MediaPlayer {
         self.command(COMMAND_STOP)
     }
 
+    /// Release the loaded source and audio handle after discarding a document.
+    pub fn close(&mut self) -> Result<(), MediaError> {
+        self.command(COMMAND_CLOSE)
+    }
+
     pub fn seek(&mut self, position: MediaTime) -> Result<(), MediaError> {
         #[cfg(target_os = "none")]
         if self._worker.is_none() {
@@ -415,30 +423,82 @@ impl Drop for MediaPlayer {
     }
 }
 
-/// Owns compressed storage and a decoder borrowing that stable allocation.
-/// `decoder` is declared first so it is dropped before `source`.
+/// Buffered compressed sources retain their original bound; PCM WAV sources
+/// use a file descriptor and the same decoder, resampler, and audiod sink.
 #[cfg(target_os = "none")]
 struct LoadedMedia {
-    decoder: ProbeDecoder<'static>,
-    source: Box<[u8]>,
+    decoder: LoadedDecoder,
+    _source: Option<Box<[u8]>>,
     info: AudioStreamInfo,
 }
 
 #[cfg(target_os = "none")]
+enum LoadedDecoder {
+    Buffered(ProbeDecoder<'static>),
+    Wav(WavDecoder<NativeWavSource>),
+}
+
+#[cfg(target_os = "none")]
+impl AudioDecoder for LoadedDecoder {
+    fn stream_info(&self) -> AudioStreamInfo {
+        match self {
+            Self::Buffered(d) => d.stream_info(),
+            Self::Wav(d) => d.stream_info(),
+        }
+    }
+    fn decode(&mut self, output: &mut [i16]) -> Result<crate::decoder::DecodeChunk, MediaError> {
+        match self {
+            Self::Buffered(d) => d.decode(output),
+            Self::Wav(d) => d.decode(output),
+        }
+    }
+    fn seek(&mut self, position: MediaTime) -> Result<MediaTime, MediaError> {
+        match self {
+            Self::Buffered(d) => d.seek(position),
+            Self::Wav(d) => d.seek(position),
+        }
+    }
+}
+
+#[cfg(target_os = "none")]
+impl LoadedDecoder {
+    fn wav_diagnostics(&self) -> Option<crate::decoder::WavDiagnostics> {
+        match self {
+            Self::Buffered(d) => d.wav_diagnostics(),
+            Self::Wav(d) => Some(d.diagnostics()),
+        }
+    }
+}
+
+#[cfg(target_os = "none")]
 impl LoadedMedia {
-    fn new(source: Box<[u8]>) -> Result<Self, MediaError> {
+    fn open(path: &[u8; sunlight_libc::MAX_PATH]) -> Result<Self, MediaError> {
+        let len = path
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(path.len());
+        let mut file = NativeWavSource::open(&path[..len])?;
+        let mut magic = [0u8; 4];
+        file.read_at(0, &mut magic)?;
+        if &magic == b"RIFF" {
+            let decoder = WavDecoder::open(file)?;
+            let info = decoder.stream_info();
+            return Ok(Self {
+                decoder: LoadedDecoder::Wav(decoder),
+                _source: None,
+                info,
+            });
+        }
+        drop(file);
+        let source = read_source(path)?;
         let slice = unsafe { core::slice::from_raw_parts(source.as_ptr(), source.len()) };
         let decoder = ProbeDecoder::open(slice)?;
         let info = decoder.stream_info();
         Ok(Self {
-            decoder,
-            source,
+            decoder: LoadedDecoder::Buffered(decoder),
+            _source: Some(source),
             info,
         })
-    }
-
-    fn source_len(&self) -> usize {
-        self.source.len()
     }
 }
 
@@ -630,6 +690,22 @@ fn handle_command(
     sink: &mut Option<SunlightAudioSink>,
 ) -> Result<(), MediaError> {
     match command {
+        COMMAND_CLOSE => {
+            if let Some(output) = sink.as_mut() {
+                output.flush()?;
+            }
+            *loaded = None;
+            *sink = None;
+            shared.clear_error();
+            shared.clear_visualization();
+            shared.position_ms.store(0, Ordering::Release);
+            shared.rate_hz.store(0, Ordering::Release);
+            shared.channels.store(0, Ordering::Release);
+            shared
+                .state
+                .store(PlaybackState::Idle as u8, Ordering::Release);
+            Ok(())
+        }
         COMMAND_OPEN => {
             // Only the playback worker owns the stream clock. Stopping it in
             // open() could reset audiod while this worker was pacing a write,
@@ -648,11 +724,9 @@ fn handle_command(
             let loading = transition(current, PlaybackAction::BeginOpen)?;
             shared.state.store(loading as u8, Ordering::Release);
             let path = copy_path(shared)?;
-            let source = read_source(&path)?;
-            let media = LoadedMedia::new(source)?;
+            let media = LoadedMedia::open(&path)?;
             validate_output_contract(media.info)?;
             log_opened_media(&media);
-            let _bounded_bytes = media.source_len();
             let output = SunlightAudioSink::open(shared.volume.load(Ordering::Acquire))?;
             log_output_contract(media.info);
             shared.publish_stream(media.info);

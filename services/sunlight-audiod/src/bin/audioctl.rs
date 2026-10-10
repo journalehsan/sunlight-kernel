@@ -5,8 +5,10 @@
 
 use core::fmt::Write;
 use sunlight_audio::SystemSound;
-use sunlight_audiod::{AudioClient, AudioClientError, DEFAULT_TONE_HZ, DEFAULT_TONE_MS};
-use sunlight_ipc::ProcessExit;
+use sunlight_audiod::{
+    AudioClient, AudioClientError, CaptureClient, DEFAULT_TONE_HZ, DEFAULT_TONE_MS,
+};
+use sunlight_ipc::{monotonic_millis, process_yield, ProcessExit};
 
 const MAX_ARGS: usize = 16;
 
@@ -138,6 +140,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
                 1
             }
         },
+        "capture" => capture_diagnostic(),
         "system-on" => match client.set_system_sounds_enabled(true) {
             Ok(_) => {
                 println!("system sounds enabled");
@@ -194,7 +197,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         },
         _ => {
             println!(
-                "Usage: audioctl <status|volume|mute|unmute|test|system-on|system-off|system-volume|preview>"
+                "Usage: audioctl <status|volume|mute|unmute|test|capture|system-on|system-off|system-volume|preview>"
             );
             println!("  audioctl status");
             println!("  audioctl volume");
@@ -202,6 +205,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             println!("  audioctl mute");
             println!("  audioctl unmute");
             println!("  audioctl test");
+            println!("  audioctl capture");
             println!("  audioctl system-on");
             println!("  audioctl system-off");
             println!("  audioctl system-volume 60");
@@ -210,6 +214,87 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         }
     };
     ProcessExit::exit(code);
+}
+
+fn capture_diagnostic() -> i32 {
+    let mut capture = CaptureClient::new();
+    let opened = match capture.open() {
+        Ok(status) => status,
+        Err(error) => {
+            println!("capture: open failed: {:?}", error);
+            return 1;
+        }
+    };
+    println!(
+        "capture: {} Hz, {}-bit, {} channels, S16LE",
+        opened.rate_hz, opened.bits, opened.channels
+    );
+    if let Err(error) = capture.start() {
+        println!("capture: start failed: {:?}", error);
+        let _ = capture.close();
+        return 1;
+    }
+    sunlight_ipc::debug_log("[CAPTURE] diagnostic started");
+    let mut pcm = [0u8; 4096];
+    let mut min = i16::MAX;
+    let mut max = i16::MIN;
+    let mut frames = 0u64;
+    let start = monotonic_millis();
+    let mut final_status = opened;
+    let mut observed_peak = 0u16;
+    while monotonic_millis().saturating_sub(start) < 3_000 {
+        match capture.read(&mut pcm) {
+            Ok(status) => {
+                if status.bytes_read != 0 {
+                    for pair in pcm[..status.bytes_read].chunks_exact(2) {
+                        let sample = i16::from_le_bytes([pair[0], pair[1]]);
+                        min = min.min(sample);
+                        max = max.max(sample);
+                    }
+                    frames += status.bytes_read as u64 / 4;
+                }
+                final_status = status;
+                observed_peak = observed_peak.max(status.peak);
+            }
+            Err(error) => {
+                println!("capture: read failed: {:?}", error);
+                let _ = capture.stop();
+                let _ = capture.close();
+                return 1;
+            }
+        }
+        process_yield();
+    }
+    let _ = capture.stop();
+    let _ = capture.close();
+    println!(
+        "capture: frames={} completions={} dropped_buffers={} dropped_frames={} min={} max={} peak={}",
+        frames,
+        final_status.completed_buffers,
+        final_status.dropped_buffers,
+        final_status.dropped_buffers.saturating_mul(1024),
+        if frames == 0 { 0 } else { min },
+        if frames == 0 { 0 } else { max },
+        observed_peak
+    );
+    let mut log = heapless::String::<256>::new();
+    let _ = write!(
+        &mut log,
+        "[CAPTURE] frames={} completions={} dropped_buffers={} dropped_frames={} min={} max={} peak={}",
+        frames,
+        final_status.completed_buffers,
+        final_status.dropped_buffers,
+        final_status.dropped_buffers.saturating_mul(1024),
+        if frames == 0 { 0 } else { min },
+        if frames == 0 { 0 } else { max },
+        observed_peak
+    );
+    sunlight_ipc::debug_log(&log);
+    if frames == 0 || (min == 0 && max == 0) {
+        1
+    } else {
+        0
+    }
 }
 
 fn parse_system_sound(name: &str) -> Option<SystemSound> {

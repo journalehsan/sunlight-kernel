@@ -362,6 +362,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package melody-mina --release
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-voice-recorder --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-edit --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
@@ -638,7 +639,7 @@ if [ "$USE_AUDIO" = true ]; then
     QEMU_CMD+=(
         -audiodev "pa,id=snd0"
         -device intel-hda
-        -device "hda-output,audiodev=snd0"
+        -device "hda-micro,audiodev=snd0"
     )
     echo -e "${BLUE}Audio:${NC}   intel-hda"
 fi

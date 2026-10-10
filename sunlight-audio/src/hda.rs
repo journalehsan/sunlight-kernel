@@ -11,13 +11,14 @@ use crate::{
 use sunlight_ipc::{dma_alloc, hda_info, map_mmio, monotonic_millis, process_yield};
 
 const PAGE: usize = 4096;
-// Twelve 1024-frame descriptors provide 256 ms of DMA address space. The
-// audiod grant allows sixteen pages, including the descriptor/control page.
+// Twelve 1024-frame descriptors per direction provide 256 ms of DMA address
+// space each. The audiod grant allows 32 pages for both rings and control.
 const PERIODS: usize = 12;
 pub const ENGINE_PERIOD_COUNT: usize = PERIODS;
 const PERIOD_BYTES: usize = PAGE;
 const RING_BYTES: usize = PERIODS * PERIOD_BYTES;
-const DMA_PAGES: usize = 1 + PERIODS; // page 0 = CORB/RIRB/BDL, pages 1.. = PCM
+const DMA_PAGES: usize = 1 + PERIODS * 2; // control, playback, capture
+const PLAYBACK_DMA_PAGES: usize = 1 + PERIODS;
 const BDL_ALIGN: usize = 128;
 const CORB_ENTRIES: usize = 256;
 const RIRB_ENTRIES: usize = 256;
@@ -60,13 +61,16 @@ const PARAM_SUBORD: u32 = 0x04;
 const PARAM_FNGROUP: u32 = 0x05;
 const PARAM_WIDGET_CAP: u32 = 0x09;
 const PARAM_PIN_CAP: u32 = 0x0c;
+const PARAM_AMP_IN_CAP: u32 = 0x0d;
 const PARAM_CONN_LIST_LEN: u32 = 0x0e;
 const PARAM_AMP_OUT_CAP: u32 = 0x12;
 
 const WIDGET_AUDIO_OUT: u32 = 0x0;
+const WIDGET_AUDIO_IN: u32 = 0x1;
 const WIDGET_PIN: u32 = 0x4;
 const STREAM_ID: u8 = 1;
 const HDA_FMT_48K_S16_STEREO: u16 = 0x0011;
+const CAPTURE_STREAM_ID: u8 = 2;
 const MAX_WIDGETS: usize = 32;
 const CMD_TIMEOUT_MS: u64 = 50;
 const RESET_TIMEOUT_MS: u64 = 200;
@@ -121,6 +125,7 @@ pub struct HdaPlayback {
     mmio: *mut u8,
     dma: *mut u8,
     dma_phys: u64,
+    input_dma_available: bool,
     bar_phys: u64,
     bar_size: u64,
     vendor_id: u16,
@@ -128,6 +133,13 @@ pub struct HdaPlayback {
     codec: u8,
     dac: u8,
     pin: u8,
+    adc: u8,
+    input_pin: u8,
+    input_stream_base: usize,
+    capture_running: bool,
+    capture_period: usize,
+    capture_buffers: u64,
+    capture_lost_periods: u64,
     stream_base: usize,
     write_period: usize,
     filled_periods: usize,
@@ -158,17 +170,26 @@ impl HdaPlayback {
             return Err(HdaError::BadResource);
         }
         let mmio = map_mmio(info.bar_phys, info.bar_size).ok_or(HdaError::MapFailed)?;
-        let (dma, dma_phys) = dma_alloc(DMA_PAGES).ok_or(HdaError::DmaFailed)?;
+        let (dma, dma_phys, dma_pages) = if let Some((dma, phys)) = dma_alloc(DMA_PAGES) {
+            (dma, phys, DMA_PAGES)
+        } else if let Some((dma, phys)) = dma_alloc(PLAYBACK_DMA_PAGES) {
+            // Keep the established output path usable under contiguous-DMA
+            // pressure; report input unavailable rather than losing sound.
+            (dma, phys, PLAYBACK_DMA_PAGES)
+        } else {
+            return Err(HdaError::DmaFailed);
+        };
         if dma_phys == 0 || (dma_phys & 0xfff) != 0 {
             return Err(HdaError::DmaFailed);
         }
         unsafe {
-            core::ptr::write_bytes(dma, 0, DMA_PAGES * PAGE);
+            core::ptr::write_bytes(dma, 0, dma_pages * PAGE);
         }
         let mut dev = Self {
             mmio,
             dma,
             dma_phys,
+            input_dma_available: dma_pages == DMA_PAGES,
             bar_phys: info.bar_phys,
             bar_size: info.bar_size,
             vendor_id: info.vendor_id,
@@ -176,6 +197,13 @@ impl HdaPlayback {
             codec: 0,
             dac: 0,
             pin: 0,
+            adc: 0,
+            input_pin: 0,
+            input_stream_base: 0,
+            capture_running: false,
+            capture_period: 0,
+            capture_buffers: 0,
+            capture_lost_periods: 0,
             stream_base: 0,
             write_period: 0,
             filled_periods: 0,
@@ -191,7 +219,97 @@ impl HdaPlayback {
         dev.discover_output()?;
         dev.configure_path()?;
         dev.setup_stream()?;
+        dev.discover_input();
         Ok(dev)
+    }
+
+    pub fn input_available(&self) -> bool {
+        self.input_dma_available && self.adc != 0 && self.input_stream_base != 0
+    }
+
+    /// The capture ring is private to audiod. Callers must copy a completed
+    /// period before returning: DMA may reuse it after the next ring lap.
+    pub fn poll_capture(&mut self, mut completed: impl FnMut(&[u8])) {
+        if !self.capture_running {
+            return;
+        }
+        let cursor = unsafe { self.r32(self.input_stream_base + 4) } as usize % RING_BYTES;
+        let period = cursor / PERIOD_BYTES;
+        let advanced = ring_advance_periods(self.capture_period, period, PERIODS);
+        for offset in 0..advanced {
+            let index = (self.capture_period + offset) % PERIODS;
+            let bytes = unsafe {
+                core::slice::from_raw_parts(self.dma.add((1 + PERIODS + index) * PAGE), PAGE)
+            };
+            completed(bytes);
+            self.capture_buffers = self.capture_buffers.saturating_add(1);
+        }
+        self.capture_period = period;
+        let sts = unsafe { self.r8(self.input_stream_base + 3) };
+        if sts & 0x08 != 0 {
+            self.capture_lost_periods = self.capture_lost_periods.saturating_add(1);
+        }
+        if sts != 0 {
+            unsafe {
+                self.w8(self.input_stream_base + 3, sts);
+            }
+        }
+    }
+
+    pub fn capture_buffers(&self) -> u64 {
+        self.capture_buffers
+    }
+    pub fn capture_lost_periods(&self) -> u64 {
+        self.capture_lost_periods
+    }
+
+    pub fn start_capture(&mut self) -> Result<(), HdaError> {
+        if !self.input_available() {
+            return Err(HdaError::NoDevice);
+        }
+        if self.capture_running {
+            return Ok(());
+        }
+        let base = self.input_stream_base;
+        unsafe {
+            self.w32(base, 0);
+            self.w8(base, 1);
+        }
+        if !self.wait_mask_u32(base, 1, 1, RESET_TIMEOUT_MS) {
+            return Err(HdaError::ResetTimeout);
+        }
+        unsafe {
+            self.w8(base, 0);
+        }
+        if !self.wait_mask_u32(base, 1, 0, RESET_TIMEOUT_MS) {
+            return Err(HdaError::ResetTimeout);
+        }
+        unsafe {
+            core::ptr::write_bytes(self.dma.add((1 + PERIODS) * PAGE), 0, RING_BYTES);
+            self.w32(base + 8, RING_BYTES as u32);
+            self.w16(base + 12, (PERIODS - 1) as u16);
+            self.w16(base + 18, HDA_FMT_48K_S16_STEREO);
+            let bdl = self.dma_phys + self.capture_bdl_off() as u64;
+            self.w32(base + 24, bdl as u32);
+            self.w32(base + 28, (bdl >> 32) as u32);
+            self.w32(base, (CAPTURE_STREAM_ID as u32) << 20 | 2);
+        }
+        self.capture_period = (unsafe { self.r32(base + 4) } as usize / PERIOD_BYTES) % PERIODS;
+        self.capture_running = true;
+        Ok(())
+    }
+
+    pub fn stop_capture(&mut self) {
+        if self.capture_running {
+            unsafe {
+                self.w32(
+                    self.input_stream_base,
+                    self.r32(self.input_stream_base) & !2,
+                );
+                self.w8(self.input_stream_base + 3, 0x1c);
+            }
+            self.capture_running = false;
+        }
     }
 
     pub fn capabilities(&self) -> AudioCapabilities {
@@ -616,6 +734,72 @@ impl HdaPlayback {
         Ok(())
     }
 
+    fn discover_input(&mut self) {
+        if !self.input_dma_available {
+            return;
+        }
+        let gcap = unsafe { self.r16(0) };
+        if ((gcap >> 8) & 0xf) == 0 {
+            return;
+        }
+        let sub = match self.verb(1, VERB_GET_PARAM, PARAM_SUBORD) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+        let start = ((sub >> 16) & 0xff) as u8;
+        let count = (sub & 0xff).min(MAX_WIDGETS as u32) as u8;
+        let mut adc = 0;
+        let mut pin = 0;
+        for nid in start..start.saturating_add(count) {
+            if let Ok(cap) = self.verb(nid, VERB_GET_PARAM, PARAM_WIDGET_CAP) {
+                if (cap >> 20) & 0xf == WIDGET_AUDIO_IN {
+                    adc = nid;
+                }
+                if (cap >> 20) & 0xf == WIDGET_PIN {
+                    if self.verb(nid, VERB_GET_PARAM, PARAM_PIN_CAP).unwrap_or(0) & (1 << 5) != 0 {
+                        pin = nid;
+                    }
+                }
+            }
+        }
+        if adc == 0 || pin == 0 {
+            return;
+        }
+        self.adc = adc;
+        self.input_pin = pin;
+        self.input_stream_base = 0x80;
+        let _ = self.verb(adc, VERB_SET_POWER, 0);
+        let _ = self.verb(pin, VERB_SET_POWER, 0);
+        let _ = self.verb(adc, VERB_SET_STREAM_FORMAT, HDA_FMT_48K_S16_STEREO as u32);
+        let _ = self.verb(adc, VERB_SET_CHAN_STREAMID, (CAPTURE_STREAM_ID as u32) << 4);
+        // QEMU's mixer-enabled ADC starts at gain index zero, which is
+        // silence. Its capability offset identifies the 0 dB index.
+        if let Ok(amp_caps) = self.verb(adc, VERB_GET_PARAM, PARAM_AMP_IN_CAP) {
+            let zero_db_gain = amp_zero_db_gain(amp_caps);
+            let _ = self.verb(adc, VERB_SET_AMP_GAIN, 0x7000 | zero_db_gain);
+        }
+        let _ = self.verb(pin, VERB_SET_PIN_WIDGET, 0x20);
+        unsafe {
+            self.w32(self.input_stream_base, 0);
+            self.w8(self.input_stream_base + 3, 0x1c);
+            let bdl = self.dma.add(self.capture_bdl_off()) as *mut BdlEntry;
+            for i in 0..PERIODS {
+                core::ptr::write_volatile(
+                    bdl.add(i),
+                    BdlEntry {
+                        addr: self.dma_phys + ((1 + PERIODS + i) * PAGE) as u64,
+                        length: PAGE as u32,
+                        flags: 1,
+                    },
+                );
+            }
+        }
+    }
+
+    fn capture_bdl_off(&self) -> usize {
+        self.bdl_off() + PERIODS * core::mem::size_of::<BdlEntry>()
+    }
+
     fn install_bdl(&mut self) {
         unsafe {
             let bdl = self.dma.add(self.bdl_off()) as *mut BdlEntry;
@@ -764,6 +948,7 @@ impl HdaPlayback {
 
 impl Drop for HdaPlayback {
     fn drop(&mut self) {
+        self.stop_capture();
         self.stop();
     }
 }
@@ -811,6 +996,7 @@ mod tests {
             mmio: mmio.as_mut_ptr().cast(),
             dma: dma.as_mut_ptr().cast(),
             dma_phys: PAGE as u64,
+            input_dma_available: true,
             bar_phys: 0,
             bar_size: 512,
             vendor_id: 0,
@@ -818,6 +1004,13 @@ mod tests {
             codec: 0,
             dac: 0,
             pin: 0,
+            adc: 0,
+            input_pin: 0,
+            input_stream_base: 0,
+            capture_running: false,
+            capture_period: 0,
+            capture_buffers: 0,
+            capture_lost_periods: 0,
             stream_base: 0x80,
             write_period: 0,
             filled_periods: 0,
@@ -1027,5 +1220,29 @@ mod tests {
     fn output_amp_offset_is_the_zero_db_gain_index() {
         assert_eq!(amp_zero_db_gain(0x8000_4a4a), 0x4a);
         assert_eq!(amp_zero_db_gain(0x8000_3217), 0x17);
+    }
+
+    #[test]
+    fn capture_reports_only_completed_dma_periods() {
+        with_device(|dev| {
+            dev.capture_running = true;
+            dev.input_stream_base = 0x80;
+            let first = unsafe { dev.dma.add((1 + PERIODS) * PAGE) };
+            unsafe {
+                core::ptr::write_bytes(first, 0x5a, PAGE);
+            }
+            unsafe {
+                dev.w32(dev.input_stream_base + 4, (PAGE + 16) as u32);
+            }
+            let mut calls = 0;
+            dev.poll_capture(|bytes| {
+                calls += 1;
+                assert_eq!(bytes[0], 0x5a);
+            });
+            assert_eq!(calls, 1);
+            dev.poll_capture(|_| calls += 1);
+            assert_eq!(calls, 1);
+            assert_eq!(dev.capture_buffers(), 1);
+        });
     }
 }

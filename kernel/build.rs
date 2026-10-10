@@ -652,6 +652,7 @@ fn main() {
             rustflags: service_rustflags,
             args: &["--release"],
         },
+        EmbeddedBinary { package: "sunlight-voice-recorder", output: "voice-recorder", rustflags: service_rustflags, args: &["--release"] },
         EmbeddedBinary {
             package: "melody-mina",
             output: "melody-mina",

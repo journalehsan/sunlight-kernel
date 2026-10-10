@@ -7839,6 +7839,11 @@ pub extern "C" fn _start() -> ! {
             // surface metadata is intentionally not resized or replaced. The
             // compositor clips logical geometry to that validated allocation.
             // -------------------------------------------------------------------
+            SgpMsg::SET_CLOSE_GRACE => {
+                let allowed = state.app_tracker.set_close_grace(msg.badge, msg.words[0], msg.words[1]);
+                let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, u64::from(allowed)));
+            }
+
             SgpMsg::CONFIGURE_WINDOW => {
                 let win_id = msg.words[0];
                 let compositor_width = state.fb_width;

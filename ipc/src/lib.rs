@@ -407,6 +407,8 @@ pub enum ServiceCapability {
     WiseOwlMemoryDb = 24,
     /// Service access to sessiond; operation authority remains sessiond-owned.
     SessionIdentity = 25,
+    /// Permission to resolve the separate audiod microphone endpoint.
+    Microphone = 26,
 }
 
 impl ServiceCapability {
@@ -442,6 +444,7 @@ impl ServiceCapability {
             "session-lock" => Some(Self::SessionLock),
             "wiseowl-memorydb" => Some(Self::WiseOwlMemoryDb),
             "session-identity" => Some(Self::SessionIdentity),
+            "microphone" => Some(Self::Microphone),
             _ => None,
         }
     }
@@ -474,11 +477,12 @@ impl ServiceCapability {
             Self::SessionLock => "session-lock",
             Self::WiseOwlMemoryDb => "wiseowl-memorydb",
             Self::SessionIdentity => "session-identity",
+            Self::Microphone => "microphone",
         }
     }
 }
 
-pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 26] = [
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 27] = [
     ServiceCapability::Network,
     ServiceCapability::Authentication,
     ServiceCapability::Pty,
@@ -505,6 +509,7 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 26] = [
     ServiceCapability::SessionLock,
     ServiceCapability::WiseOwlMemoryDb,
     ServiceCapability::SessionIdentity,
+    ServiceCapability::Microphone,
 ];
 
 pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'static str> + Clone {
@@ -515,13 +520,19 @@ pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'sta
 }
 
 pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
+    if mask & ServiceCapability::Microphone.bit() != 0 && name_key == name_to_u64("audiod.capture")
+    {
+        return true;
+    }
     if mask & ServiceCapability::UserSession.bit() != 0 && matches_user_session_service(name_key) {
         return true;
     }
     if mask & ServiceCapability::Network.bit() != 0 && name_key == name_to_u64("net") {
         return true;
     }
-    if mask & ServiceCapability::SessionIdentity.bit() != 0 && name_key == name_to_u64(SESSION_ENDPOINT) {
+    if mask & ServiceCapability::SessionIdentity.bit() != 0
+        && name_key == name_to_u64(SESSION_ENDPOINT)
+    {
         return true;
     }
     if mask & ServiceCapability::Authentication.bit() != 0 && name_key == name_to_u64("uac") {
@@ -643,6 +654,19 @@ mod service_capability_tests {
     use super::{
         name_to_u64, service_capability_allows_hashed_name, ServiceCapability, SESSION_ENDPOINT,
     };
+
+    #[test]
+    fn microphone_requires_its_own_service_capability() {
+        let endpoint = name_to_u64("audiod.capture");
+        assert!(!service_capability_allows_hashed_name(
+            ServiceCapability::UserSession.bit(),
+            endpoint
+        ));
+        assert!(service_capability_allows_hashed_name(
+            ServiceCapability::Microphone.bit(),
+            endpoint
+        ));
+    }
 
     #[test]
     fn control_plane_capabilities_are_service_specific() {
@@ -1186,6 +1210,9 @@ pub mod sgp {
         pub const LOCK_PRESENTER_READY: u64 = 0xA11A;
         pub const LOCK_LEAVE: u64 = 0xA11B;
         pub const LOCK_STATUS: u64 = 0xA11C;
+        /// Owner-only bounded shutdown grace after its last window is removed.
+        /// words[0]=window id, words[1]=milliseconds (clamped to 6000).
+        pub const SET_CLOSE_GRACE: u64 = 0xA11D;
 
         // Session control — sent by tty_server to coordinate framebuffer ownership.
         // words[0] = 0 (reserved)
@@ -2822,6 +2849,13 @@ pub mod AudiodMsg {
     /// Semantic system sound: w0=protocol version, w1=stable sound ID,
     /// w2 flags (bit 0 = explicit preview, all other bits reserved).
     pub const PLAY_SYSTEM_SOUND: u64 = 0xE023;
+    pub const INPUT_DEVICE: u64 = 0xE030;
+    pub const CAPTURE_OPEN: u64 = 0xE031;
+    pub const CAPTURE_START: u64 = 0xE032;
+    pub const CAPTURE_READ: u64 = 0xE033; // cap0 = caller-owned SHM page
+    pub const CAPTURE_STOP: u64 = 0xE034;
+    pub const CAPTURE_CLOSE: u64 = 0xE035;
+    pub const CAPTURE_STATUS: u64 = 0xE036;
 
     pub const SYSTEM_SOUND_PROTOCOL_VERSION: u64 = 1;
     pub const SYSTEM_SOUND_FLAG_PREVIEW: u64 = 1;

@@ -264,6 +264,7 @@ static ICON_RABBIT_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
 static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
+static ICON_VOICE_RECORDER_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
 static ICON_MELODY_MINA_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
 static MENU_NEW_FOLDER_TGA: &[u8] =
@@ -486,7 +487,8 @@ impl DockTheme {
             | AppId::SiliconEchoes
             | AppId::Welcome
             | AppId::WiseOwl
-            | AppId::MelodyMina => None,
+            | AppId::MelodyMina
+            | AppId::VoiceRecorder => None,
         }
     }
 }
@@ -608,6 +610,7 @@ pub(crate) enum AppId {
     Welcome,
     WiseOwl,
     MelodyMina,
+    VoiceRecorder,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -1991,6 +1994,7 @@ impl VortexShell {
                 DockAppState::new(AppId::Welcome, "Welcome to SunlightOS", AppId::Welcome),
                 DockAppState::new(AppId::WiseOwl, "Wise Owl", AppId::WiseOwl),
                 DockAppState::new(AppId::MelodyMina, "Melody Mina", AppId::MelodyMina),
+                DockAppState::new(AppId::VoiceRecorder, "Sunlight Voice Recorder", AppId::VoiceRecorder),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
@@ -2300,6 +2304,7 @@ impl VortexShell {
             AppId::Welcome => AppStateAppId::Welcome,
             AppId::WiseOwl => AppStateAppId::WiseOwl,
             AppId::MelodyMina => AppStateAppId::MelodyMina,
+            AppId::VoiceRecorder => AppStateAppId::VoiceRecorder,
         }
     }
 
@@ -2338,6 +2343,7 @@ impl VortexShell {
             AppId::Welcome => "/bin/welcome",
             AppId::WiseOwl => "/bin/wiseowl",
             AppId::MelodyMina => "/bin/melody-mina",
+            AppId::VoiceRecorder => "/bin/voice-recorder",
         }
     }
 
@@ -2365,6 +2371,7 @@ impl VortexShell {
             // Melody Mina while the canonical ID and aliases continue to be
             // available to search, runners, and command-line launches.
             AppId::MelodyMina => b"/bin/melody-mina",
+            AppId::VoiceRecorder => b"/bin/voice-recorder",
         }
     }
 
@@ -2388,6 +2395,7 @@ impl VortexShell {
             AppId::Welcome => "app=welcome",
             AppId::WiseOwl => "app=wiseowl",
             AppId::MelodyMina => "app=melody-mina",
+            AppId::VoiceRecorder => "app=voice-recorder",
         }
     }
 
@@ -4014,6 +4022,7 @@ impl VortexShell {
             AppId::Welcome => Some(ICON_GENERIC_APP_TGA),
             AppId::WiseOwl => Some(ICON_GENERIC_APP_TGA),
             AppId::MelodyMina => Some(ICON_MELODY_MINA_TGA),
+            AppId::VoiceRecorder => Some(ICON_VOICE_RECORDER_TGA),
         };
         bytes.and_then(|b| TgaImage::parse(b).ok())
     }

@@ -306,6 +306,7 @@ static LIGHT_LENS_ELF_BYTES: &[u8] =
 // Melody Mina: native responsive music-player frontend (UI-only Phase 1).
 // Melody Mina is a UI client; its reusable playback engine remains linked in
 // the userspace application rather than leaking codec/audio logic here.
+static VOICE_RECORDER_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/voice-recorder");
 static MELODY_MINA_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/melody-mina");
 // Sunlight Edit: native graphical text editor.
@@ -1992,6 +1993,11 @@ fn init_kernel_vfs() {
                 };
                 if vfs.mount_fat(mountpoint, fat).is_ok() {
                     serial_println!("[VFS] FAT volume mounted at {}", mountpoint);
+                    if mountpoint == "/state" {
+                        // This marker directory exists only on the disk mount.
+                        // Apps must not silently fall back to an unbounded RAM file.
+                        let _ = vfs.mkdir("/state/users", 0, 0, 0o755);
+                    }
                 } else {
                     serial_println!("[VFS] {} mount failed", mountpoint);
                 }

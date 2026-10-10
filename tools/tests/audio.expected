@@ -3,7 +3,9 @@
 # a separate manual test: audioctl test
 [HDA] pci
 [HDA] stream started
+[HDA] input detected
 [AUDIOD] registered as 'audiod'
+[AUDIOD] registered as 'audiod.capture'
 [AUDIOD] ready
 [AUDIOD] test-tone started
 [AUDIOD] dma-progress

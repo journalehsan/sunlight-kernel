@@ -1929,6 +1929,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
         tty_generation,
         parent_name,
         parent_cwd,
+        parent_service_restrictions,
     ) = {
         let p = sched.current_process();
         (
@@ -1943,6 +1944,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
             p.tty_generation,
             p.name,
             p.cwd.clone(),
+            p.service_lookup_restrictions,
         )
     };
     let thread_fd = sched.current_shared_process().fd_table.clone_boxed();
@@ -1968,6 +1970,8 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     );
 
     thread.native_thread = true;
+    // Borrower threads retain the parent's endpoint authorization boundary.
+    thread.service_lookup_restrictions = parent_service_restrictions;
     thread.cwd = parent_cwd;
     // Set up the iretq frame: RIP = trampoline, RSP = user_stack_top,
     // then override RDI/RSI so the trampoline receives func and arg.
@@ -2720,8 +2724,14 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn spawn_service_capability(path: &str, uid: u32) -> u64 {
+    if matches!(path, "/bin/voice-recorder" | "/usr/bin/voice-recorder") {
+        return crate::ipc::ServiceCapability::Microphone.bit();
+    }
     if matches!(path, "/bin/sunlight-devices" | "/usr/bin/sunlight-devices") {
         return crate::ipc::ServiceCapability::DeviceControl.bit();
+    }
+    if uid != 0 && matches!(path, "/bin/control-panel" | "/usr/bin/control-panel") {
+        return crate::ipc::ServiceCapability::Microphone.bit();
     }
     if uid != 0 {
         return 0;
@@ -2744,7 +2754,9 @@ fn spawn_service_capability(path: &str, uid: u32) -> u64 {
         "/bin/control-panel" | "/usr/bin/control-panel" => {
             crate::ipc::ServiceCapability::PowerControl.bit()
                 | crate::ipc::ServiceCapability::ThermalControl.bit()
+                | crate::ipc::ServiceCapability::Microphone.bit()
         }
+        "/bin/audioctl" | "/usr/bin/audioctl" => crate::ipc::ServiceCapability::Microphone.bit(),
         "/bin/nicectl" | "/usr/bin/nicectl" => {
             crate::ipc::ServiceCapability::SchedulerControl.bit()
         }
@@ -2777,6 +2789,16 @@ mod spawn_service_capability_tests {
         );
         assert_eq!(spawn_service_capability("/bin/devicectl", 1_000), 0);
         assert_eq!(spawn_service_capability("/bin/rappid-rabbit", 0), 0);
+    }
+
+    #[test]
+    fn sound_panel_gets_microphone_without_administrative_rights() {
+        for uid in [0, 1_000] {
+            assert_eq!(spawn_service_capability("/bin/voice-recorder", uid), ServiceCapability::Microphone.bit());
+        }
+        assert_eq!(spawn_service_capability("/bin/control-panel", 1_000), ServiceCapability::Microphone.bit());
+        assert_eq!(spawn_service_capability("/bin/audioctl", 1_000), 0);
+        assert_eq!(spawn_service_capability("/bin/audioctl", 0), ServiceCapability::Microphone.bit());
     }
 }
 
@@ -6107,6 +6129,7 @@ fn sys_readdir(frame: &mut SyscallFrame, offset: usize) -> u64 {
         return u64::MAX;
     }
 
+    let (uid, gid, _) = current_fs_actor();
     let mut skipped = 0usize;
     let mut records = alloc::vec::Vec::<[u8; RECORD]>::new();
     if records.try_reserve(max_entries).is_err() {
@@ -6117,6 +6140,8 @@ fn sys_readdir(frame: &mut SyscallFrame, offset: usize) -> u64 {
         let Some(vfs) = guard.as_mut() else {
             return u64::MAX;
         };
+        let stat = match vfs.stat(path) { Ok(stat) => stat, Err(_) => return u64::MAX };
+        if !sunlight_fs::permission::check_permission(&stat, &sunlight_fs::permission::Credential { uid, gid }, sunlight_fs::permission::PermCheck::Read) { return ERR_EACCES; }
         if vfs
             .read_dir(path, &mut |entry| {
                 if skipped < offset {
@@ -6171,7 +6196,7 @@ fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
-        Err(_) => return u64::MAX,
+        Err(_) => return ERR_EINVAL,
     };
 
     let stat = {
@@ -6181,7 +6206,7 @@ fn sys_stat_path(frame: &mut SyscallFrame) -> u64 {
         };
         match vfs.stat(path) {
             Ok(s) => s,
-            Err(_) => return u64::MAX,
+            Err(error) => return fs_error_raw(error),
         }
     };
 
@@ -6211,7 +6236,7 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
     };
     let path = match core::str::from_utf8(&path_bytes) {
         Ok(s) => s,
-        Err(_) => return u64::MAX,
+        Err(_) => return ERR_EINVAL,
     };
     let mode = frame.rsi as u16;
 
@@ -6234,7 +6259,11 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
         decision.error
     );
     if !decision.allowed {
-        return u64::MAX;
+        return fs_error_raw(
+            decision
+                .error
+                .unwrap_or(sunlight_fs::FsError::PermissionDenied),
+        );
     }
 
     let mut guard = crate::KERNEL_VFS.lock();
@@ -6243,7 +6272,7 @@ fn sys_mkdir(frame: &mut SyscallFrame) -> u64 {
     };
     match vfs.mkdir(path, uid, gid, sunlight_fs::vfs::mode::S_IFDIR | mode) {
         Ok(()) => 0,
-        Err(_) => u64::MAX,
+        Err(error) => fs_error_raw(error),
     }
 }
 
@@ -9059,7 +9088,7 @@ const USB_MOUSE_MAX_DMA_PAGES: usize = 16;
 const AUDIOD_MMIO_VADDR: u64 = 0x0000_0005_2000_0000;
 const AUDIOD_DMA_VADDR: u64 = 0x0000_0005_3000_0000;
 const AUDIOD_MAX_BAR_SIZE: u64 = 1024 * 1024;
-const AUDIOD_MAX_DMA_PAGES: usize = 16;
+const AUDIOD_MAX_DMA_PAGES: usize = 32;
 
 static XHCI_BAR_PHYS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static XHCI_BAR_SIZE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);

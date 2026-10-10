@@ -14,14 +14,15 @@ use sunlight_audio::{
     PersistedAudio, SystemSoundSettings,
 };
 use sunlight_audiod::{
+    capture::{valid_open_request, CaptureQueue, CaptureState, CAPTURE_PERIOD_BYTES},
     decode_system_sound_request, restore_audio_settings, PcmQueue, QueuedSystemSound,
     StreamProgressTracker, SystemSoundEnqueue, SystemSoundMode, SystemSoundQueue, DEFAULT_TONE_HZ,
     DEFAULT_TONE_MS,
 };
 use sunlight_ipc::{
-    debug_log, endpoint_create, hda_info, ipc_recv_timeout, ipc_reply_result, monotonic_millis,
-    nameserver_register, pack_audio_status, pack_audio_stream_status, shm_free, shm_map,
-    AudioStatus, AudiodMsg, IpcMsg,
+    debug_log, endpoint_create, hda_info, ipc_recv_timeout, ipc_reply_result, ipc_try_recv,
+    monotonic_millis, nameserver_register, pack_audio_status, pack_audio_stream_status, shm_free,
+    shm_map, AudioStatus, AudiodMsg, IpcMsg,
 };
 use sunlight_libc as libc;
 
@@ -48,6 +49,12 @@ macro_rules! serial_println {
 struct ServiceState {
     volume: MasterVolume,
     device: Option<HdaPlayback>,
+    capture: CaptureQueue,
+    capture_state: CaptureState,
+    capture_owner: Option<u64>,
+    capture_monitor_only: bool,
+    capture_last_request_ms: u64,
+    capture_lost_base: u64,
     kind: OutputDeviceKind,
     vendor_id: u16,
     device_id: u16,
@@ -108,6 +115,14 @@ impl ServiceState {
                 } else {
                     let _ = hda.fill_silence_ready();
                     serial_println!("[HDA] stream started {}Hz 16-bit stereo", NATIVE_RATE_HZ);
+                    serial_println!(
+                        "[HDA] input {}",
+                        if hda.input_available() {
+                            "detected"
+                        } else {
+                            "unavailable"
+                        }
+                    );
                     device = Some(hda);
                 }
                 serial_println!(
@@ -142,6 +157,12 @@ impl ServiceState {
         Self {
             volume,
             device,
+            capture: CaptureQueue::new(),
+            capture_state: CaptureState::Closed,
+            capture_owner: None,
+            capture_monitor_only: false,
+            capture_last_request_ms: 0,
+            capture_lost_base: 0,
             kind,
             vendor_id,
             device_id,
@@ -245,6 +266,22 @@ impl ServiceState {
 
     fn pump(&mut self) {
         let now = monotonic_millis();
+        if self.capture_state == CaptureState::Running {
+            if let Some(device) = self.device.as_mut() {
+                let capture = &mut self.capture;
+                if self.capture_monitor_only {
+                    device.poll_capture(|bytes| capture.observe_level(bytes));
+                } else {
+                    device.poll_capture(|bytes| capture.push(bytes));
+                }
+            }
+        }
+        // A dead client cannot hold the microphone indefinitely. Active
+        // readers and the Sound page refresh this lease on each request.
+        if self.capture_owner.is_some() && now.saturating_sub(self.capture_last_request_ms) > 5_000
+        {
+            self.close_capture();
+        }
         if let Some(previous) = self.last_pump_ms.replace(now) {
             let gap = now.saturating_sub(previous);
             self.pump_gap_max_ms = self.pump_gap_max_ms.max(gap);
@@ -259,7 +296,8 @@ impl ServiceState {
                 break;
             }
         }
-        if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() && now >= self.next_timing_log_ms {
+        if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() && now >= self.next_timing_log_ms
+        {
             serial_println!(
                 "[AUDIOD][timing] late_ticks={} max_gap_ms={} queue_frames={} sound_queue={}",
                 self.late_ticks,
@@ -282,6 +320,16 @@ impl ServiceState {
             self.last_logged_underruns = underruns;
             self.pump_gap_max_ms = 0;
         }
+    }
+
+    fn close_capture(&mut self) {
+        if let Some(device) = self.device.as_mut() {
+            device.stop_capture();
+        }
+        self.capture.clear();
+        self.capture_owner = None;
+        self.capture_monitor_only = false;
+        self.capture_state = CaptureState::Closed;
     }
 
     fn pump_period(&mut self) -> bool {
@@ -343,7 +391,8 @@ impl ServiceState {
                     let period = dev.last_submitted_period();
                     self.stream_progress.clear_period(period);
                     if let Some(owner) = self.queue_owner {
-                        self.stream_progress.tag_period(period, owner, music_bytes / 4);
+                        self.stream_progress
+                            .tag_period(period, owner, music_bytes / 4);
                     }
                     self.queue.consume(music_bytes);
                     if let Some(active) = self.active_system_sound.as_mut() {
@@ -437,6 +486,12 @@ pub extern "C" fn _start() -> ! {
     debug_log("[AUDIOD] sunlight-audiod starting");
     let ep = endpoint_create();
     nameserver_register("audiod", ep);
+    let capture_ep = endpoint_create();
+    if nameserver_register("audiod.capture", capture_ep) {
+        debug_log("[AUDIOD] registered as 'audiod.capture'");
+    } else {
+        debug_log("[AUDIOD] capture endpoint registration failed");
+    }
     debug_log("[AUDIOD] registered as 'audiod'");
 
     let mut state = ServiceState::new();
@@ -513,9 +568,14 @@ pub extern "C" fn _start() -> ! {
                         reply.word_count.saturating_mul(8)
                     );
                 }
-
             }
             None => {}
+        }
+        if let Some(msg) = ipc_try_recv(capture_ep) {
+            let reply = handle_capture_msg(&mut state, &msg);
+            if ipc_reply_result(reply).is_err() {
+                debug_log("[AUDIOD] capture reply failed");
+            }
         }
         let now_state = state.state();
         if now_state != state.last_state {
@@ -640,6 +700,125 @@ fn handle_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
             state.active_system_sound = None;
             state.stream_progress.reset();
             pack_audio_stream_status(stopped)
+        }
+        _ => err(AudiodMsg::ERR_BAD_REQUEST),
+    }
+}
+
+fn capture_status(state: &ServiceState) -> IpcMsg {
+    let lost = state
+        .device
+        .as_ref()
+        .map(|d| d.capture_lost_periods())
+        .unwrap_or(0)
+        .saturating_sub(state.capture_lost_base);
+    IpcMsg::with_label(AudiodMsg::REPLY)
+        .word(
+            0,
+            state.capture_state as u64
+                | ((state.capture.peak as u64) << 8)
+                | ((state.capture.len() as u64) << 24),
+        )
+        .word(1, state.capture.received_periods)
+        .word(2, state.capture.dropped_periods.saturating_add(lost))
+        .word(3, 0)
+}
+
+fn handle_capture_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
+    if msg.label == AudiodMsg::INPUT_DEVICE {
+        if msg.word_count != 0 || msg.cap_count != 0 {
+            return err(AudiodMsg::ERR_BAD_REQUEST);
+        }
+        return IpcMsg::with_label(AudiodMsg::REPLY)
+            .word(
+                0,
+                state
+                    .device
+                    .as_ref()
+                    .map(|d| d.input_available())
+                    .unwrap_or(false) as u64,
+            )
+            .word(1, 48_000 | (2 << 32) | (16 << 40));
+    }
+    if msg.label == AudiodMsg::CAPTURE_OPEN {
+        if msg.word_count != 2 || msg.cap_count != 0 || msg.words[1] > 1 {
+            return err(AudiodMsg::ERR_BAD_REQUEST);
+        }
+        if !valid_open_request(msg) {
+            return err(AudiodMsg::ERR_INVALID_FORMAT);
+        }
+        if !state
+            .device
+            .as_ref()
+            .map(|d| d.input_available())
+            .unwrap_or(false)
+        {
+            return err(AudiodMsg::ERR_UNAVAILABLE);
+        }
+        if state.capture_owner.is_some() {
+            return err(AudiodMsg::ERR_OVERFLOW);
+        }
+        state.capture.reset();
+        state.capture_lost_base = state
+            .device
+            .as_ref()
+            .map(|d| d.capture_lost_periods())
+            .unwrap_or(0);
+        state.capture_owner = Some(msg.badge);
+        state.capture_monitor_only = msg.words[1] == 1;
+        state.capture_state = CaptureState::Open;
+        state.capture_last_request_ms = monotonic_millis();
+        return capture_status(state);
+    }
+    if state.capture_owner != Some(msg.badge) {
+        return err(AudiodMsg::ERR_BAD_REQUEST);
+    }
+    state.capture_last_request_ms = monotonic_millis();
+    match msg.label {
+        AudiodMsg::CAPTURE_START if msg.word_count == 0 && msg.cap_count == 0 => {
+            if state.capture_state != CaptureState::Open {
+                return err(AudiodMsg::ERR_BAD_REQUEST);
+            }
+            state.capture.clear();
+            if state.device.as_mut().unwrap().start_capture().is_err() {
+                state.close_capture();
+                return err(AudiodMsg::ERR_DEVICE_FAILED);
+            }
+            state.capture_state = CaptureState::Running;
+            capture_status(state)
+        }
+        AudiodMsg::CAPTURE_STOP if msg.word_count == 0 && msg.cap_count == 0 => {
+            if state.capture_state == CaptureState::Running {
+                state.device.as_mut().unwrap().stop_capture();
+                state.capture_state = CaptureState::Open;
+            }
+            capture_status(state)
+        }
+        AudiodMsg::CAPTURE_CLOSE if msg.word_count == 0 && msg.cap_count == 0 => {
+            state.close_capture();
+            capture_status(state)
+        }
+        AudiodMsg::CAPTURE_STATUS if msg.word_count == 0 && msg.cap_count == 0 => {
+            capture_status(state)
+        }
+        AudiodMsg::CAPTURE_READ if msg.word_count == 0 && msg.cap_count == 1 => {
+            if !sunlight_audiod::capture::can_read(state.capture_state, state.capture_monitor_only) {
+                return err(AudiodMsg::ERR_BAD_REQUEST);
+            }
+            let Ok(ptr) = shm_map(msg.caps[0]) else {
+                return err(AudiodMsg::ERR_BAD_REQUEST);
+            };
+            let dst = unsafe { core::slice::from_raw_parts_mut(ptr, CAPTURE_PERIOD_BYTES) };
+            let available = state.capture.pop_into(dst);
+            let _ = shm_free(msg.caps[0]);
+            capture_status(state).word(
+                3,
+                if available {
+                    CAPTURE_PERIOD_BYTES as u64
+                } else {
+                    0
+                },
+            )
         }
         _ => err(AudiodMsg::ERR_BAD_REQUEST),
     }

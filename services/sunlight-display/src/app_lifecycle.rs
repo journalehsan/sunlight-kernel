@@ -34,6 +34,7 @@ pub struct AppInstance {
     policy: LifecyclePolicy,
     state: AppState,
     last_window_close_time_ms: u64,
+    close_grace_ms: u64,
 }
 
 pub enum AppAction {
@@ -82,6 +83,7 @@ impl AppTracker {
             policy,
             state: AppState::Running,
             last_window_close_time_ms: 0,
+            close_grace_ms: 0,
         };
         app.windows.push(win_id);
 
@@ -103,6 +105,19 @@ impl AppTracker {
         ));
 
         self.apps.push(app);
+    }
+
+    pub fn set_close_grace(&mut self, pid: u64, win_id: u64, milliseconds: u64) -> bool {
+        if let Some(app) = self
+            .apps
+            .iter_mut()
+            .find(|app| app.pid == pid && app.windows.contains(&win_id))
+        {
+            app.close_grace_ms = milliseconds.min(6000);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn update_window_title(&mut self, win_id: u64, app_name: &str) {
@@ -149,6 +164,11 @@ impl AppTracker {
             LifecyclePolicy::ExitOnLastWindowClosed | LifecyclePolicy::BackgroundAllowed => {
                 app.state = AppState::Closing;
                 app.last_window_close_time_ms = now_ms;
+                if app.close_grace_ms != 0 {
+                    // EVENT_POLL reports the removed window to the owner. It
+                    // may release resources before exit; the sweep bounds it.
+                    return AppAction::None;
+                }
                 debug_log(&alloc::format!(
                     "[APP_LIFECYCLE] app_terminate_requested pid={} name={} signal=SIGTERM\n",
                     app.pid,
@@ -193,7 +213,7 @@ impl AppTracker {
             let should_cleanup = match app.state {
                 AppState::Closing => {
                     app.last_window_close_time_ms
-                        .saturating_add(TERMINATE_GRACE_PERIOD_MS)
+                        .saturating_add(app.close_grace_ms.max(TERMINATE_GRACE_PERIOD_MS))
                         <= now_ms
                 }
                 AppState::Running | AppState::Launching => {
@@ -310,6 +330,21 @@ mod tests {
             tracker.apps[0].policy,
             LifecyclePolicy::ExitOnLastWindowClosed
         );
+    }
+
+    #[test]
+    fn graceful_close_is_owner_only_and_bounded() {
+        let mut tracker = AppTracker::new();
+        tracker.register_window(42, 7, "Recorder", false);
+        assert!(!tracker.set_close_grace(43, 7, 6000));
+        assert!(tracker.set_close_grace(42, 7, 99999));
+        assert_eq!(tracker.apps[0].close_grace_ms, 6000);
+        assert!(matches!(
+            tracker.unregister_window(7, 100),
+            super::AppAction::None
+        ));
+        assert_eq!(tracker.apps[0].state, super::AppState::Closing);
+        assert!(!tracker.set_close_grace(42, 7, 100));
     }
 
     #[test]

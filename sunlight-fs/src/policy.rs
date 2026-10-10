@@ -140,6 +140,16 @@ pub fn can_write(
 }
 
 fn user_decision(uid: u32, name: &str, path: &str, uac_approved: bool) -> Decision {
+    // Disk-backed user files. Numeric UID is authoritative; a neighbouring
+    // UID or non-canonical spelling cannot authorize a different subtree.
+    if let Some(rest) = path.strip_prefix("/state/users/") {
+        let owner = rest.split('/').next().unwrap_or("");
+        if owner.parse::<u32>().ok() == Some(uid)
+            && alloc::format!("{}", uid) == owner {
+            return Decision::allow(PolicyReason::AllowedCurrentUserHome);
+        }
+        return Decision::deny(PolicyReason::DeniedOtherUserHome, FsError::PermissionDenied);
+    }
     if path == "/tmp" || is_under(path, "/tmp") {
         return Decision::allow(PolicyReason::AllowedTmp);
     }
@@ -324,6 +334,16 @@ fn is_under(path: &str, prefix: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn disk_user_storage_is_uid_scoped() {
+        let user = Actor::User { uid: 1000, name: "user" };
+        for path in ["/state/users/1000", "/state/users/1000/voice-recorder/session.part"] {
+            assert!(can_write(user, path, FsOperation::Create, None, false).allowed);
+        }
+        for path in ["/state/users", "/state/users/0/file", "/state/users/01000/file", "/state/users/10000/file", "/state/sunlight-kv/file"] {
+            assert!(!can_write(user, path, FsOperation::Create, None, false).allowed);
+        }
+    }
 
     const USER: Actor<'static> = Actor::User {
         uid: 1000,

@@ -100,6 +100,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --r
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package melody-mina --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-voice-recorder --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-edit --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release

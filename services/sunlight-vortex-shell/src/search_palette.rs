@@ -209,6 +209,7 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
         action: SearchAction::LaunchApp(AppId::Welcome),
         category: "System",
     },
+    SearchEntry { app_id: AppId::VoiceRecorder, title: "Voice Recorder", aliases: &["recorder", "sunlight-voice-recorder"], keywords: &["microphone", "record", "audio", "wav"], action: SearchAction::LaunchApp(AppId::VoiceRecorder), category: "Multimedia" },
     SearchEntry {
         app_id: AppId::MelodyMina,
         title: "Melody Mina",
@@ -365,6 +366,7 @@ fn app_id_token(id: AppId) -> &'static str {
         AppId::Welcome => "welcome",
         AppId::WiseOwl => "wiseowl",
         AppId::MelodyMina => "melodymina",
+        AppId::VoiceRecorder => "voicerecorder",
     }
 }
 

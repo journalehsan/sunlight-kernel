@@ -5,7 +5,8 @@ use core::fmt::Write;
 use sun_font::{self, FontRole, TextStyle, Typography};
 use sunlight_audio::SystemSound;
 use sunlight_audiod::{
-    map_page_state, AudioClient, AudioClientError, SoundPageView, DEFAULT_TONE_HZ, DEFAULT_TONE_MS,
+    map_page_state, AudioClient, AudioClientError, CaptureClient, SoundPageView, DEFAULT_TONE_HZ,
+    DEFAULT_TONE_MS,
 };
 use sunlight_ipc::monotonic_millis;
 use sunlight_ui::{
@@ -40,6 +41,9 @@ pub struct SoundPageState {
     status_until_ms: u64,
     next_refresh_ms: u64,
     failures: usize,
+    input_available: bool,
+    input_level: u16,
+    capture: Option<CaptureClient>,
 }
 
 impl SoundPageState {
@@ -63,11 +67,25 @@ impl SoundPageState {
             status_until_ms: 0,
             next_refresh_ms: 0,
             failures: 0,
+            input_available: false,
+            input_level: 0,
+            capture: None,
         }
     }
 
     pub fn refresh(&mut self) -> bool {
         let now = monotonic_millis();
+        if let Some(capture) = self.capture.as_mut() {
+            match capture.status() {
+                Ok(status) => self.input_level = status.peak,
+                Err(_) => {
+                    self.capture = None;
+                    self.input_level = 0;
+                }
+            }
+        } else {
+            self.input_available = CaptureClient::new().input_available().unwrap_or(false);
+        }
         match AudioClient::new().snapshot() {
             Ok(snapshot) => {
                 self.view = map_page_state(Ok(snapshot));
@@ -302,6 +320,76 @@ impl SoundPageState {
                 .draw(canvas, theme);
         }
 
+        let input = input_card_rect(win_w);
+        canvas.fill_material(input, materials.card_glass.with_radius(7).without_border());
+        canvas.stroke_rounded_rect(input, 7, 1, theme.chrome.subtle_border);
+        draw_text(
+            canvas,
+            "Input / Microphone",
+            input.x + 12,
+            input.y + 8,
+            18,
+            FontRole::UiMedium,
+            theme.text,
+        );
+        draw_text(
+            canvas,
+            if self.input_available {
+                "QEMU HD Audio microphone"
+            } else {
+                "No microphone available"
+            },
+            input.x + 12,
+            input.y + 34,
+            17,
+            FontRole::UiRegular,
+            theme.text_dim,
+        );
+        Button::secondary(
+            input_button_rect(win_w),
+            if self.capture.is_some() {
+                "Stop monitoring"
+            } else {
+                "Monitor input"
+            },
+        )
+        .with_font(&Typography::UI_SMALL)
+        .draw(canvas, theme);
+        draw_text(
+            canvas,
+            "Level",
+            input.x + 12,
+            input.y + 79,
+            16,
+            FontRole::UiSmall,
+            theme.text_dim,
+        );
+        let width = (input.w.saturating_sub(90) as u64 * self.input_level as u64 / 32768) as u32;
+        canvas.draw_rect(
+            Rect::new(input.x + 62, input.y + 82, input.w.saturating_sub(78), 8),
+            theme.chrome.subtle_border,
+        );
+        if width > 0 {
+            canvas.draw_rect(
+                Rect::new(
+                    input.x + 62,
+                    input.y + 82,
+                    width.min(input.w.saturating_sub(78)),
+                    8,
+                ),
+                theme.ok,
+            );
+        }
+        draw_text(
+            canvas,
+            "Hardware gain/mute unavailable",
+            input.x + 12,
+            input.y + 102,
+            15,
+            FontRole::UiSmall,
+            theme.text_dim,
+        );
+
         if !self.status.is_empty() {
             let color = if self.view.available && !self.status.as_str().contains("unavailable") {
                 theme.text_dim
@@ -347,6 +435,19 @@ impl SoundPageState {
                 }
                 if test_button_rect(win_w).contains(pt) {
                     self.play_test_sound();
+                    return SoundAction::None;
+                }
+                if input_button_rect(win_w).contains(pt) && self.input_available {
+                    if self.capture.is_some() {
+                        self.capture = None;
+                        self.input_level = 0;
+                    } else {
+                        let mut capture = CaptureClient::new();
+                        match capture.open_monitor().and_then(|_| capture.start()) {
+                            Ok(_) => self.capture = Some(capture),
+                            Err(error) => self.set_status(error_label(error)),
+                        }
+                    }
                     return SoundAction::None;
                 }
                 for (index, sound) in PREVIEW_SOUNDS.iter().copied().enumerate() {
@@ -530,6 +631,9 @@ fn error_label(error: AudioClientError) -> &'static str {
         AudioClientError::Timeout => "Audio service timed out",
         AudioClientError::Unavailable => "No audio output device available",
         AudioClientError::DeviceFailed => "Audio device failed",
+        AudioClientError::Overflow => "Microphone already in use",
+        AudioClientError::InvalidFormat => "Microphone format unsupported",
+        AudioClientError::BadRequest => "Invalid microphone operation",
         _ => "Unable to read audio state",
     }
 }
@@ -544,6 +648,13 @@ fn refresh_rect(win_w: u32, win_h: u32) -> Rect {
 
 fn test_card_rect(win_w: u32) -> Rect {
     Rect::new(14, 436, win_w.saturating_sub(28), 62)
+}
+
+fn input_card_rect(win_w: u32) -> Rect {
+    Rect::new(14, 508, win_w.saturating_sub(28), 124)
+}
+fn input_button_rect(win_w: u32) -> Rect {
+    Rect::new(win_w as i32 - 164, 543, 136, 28)
 }
 
 fn test_button_rect(win_w: u32) -> Rect {

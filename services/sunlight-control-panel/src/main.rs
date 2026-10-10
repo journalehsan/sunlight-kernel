@@ -110,7 +110,7 @@ const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO
 
 // Tall enough to show the complete About SunlightOS details without scrolling.
 const WIN_W: u32 = 500;
-const WIN_H: u32 = 560;
+const WIN_H: u32 = 700;
 const PAGE_HEADER_H: u32 = 44;
 const GRID_SIDE_MARGIN: u32 = 16;
 const GRID_COLUMN_GAP: u32 = 10;

@@ -50,6 +50,7 @@ static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
 static ICON_WELCOME_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
 static ICON_WISEOWL_TGA: &[u8] = include_bytes!("../../../WiseOwl.sunapp/Resources/icon.tga");
+static ICON_VOICE_RECORDER_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
 static ICON_MELODY_MINA_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
 
@@ -68,7 +69,7 @@ fn icon(bytes: &'static [u8]) -> Option<TgaImage> {
     TgaImage::parse(bytes).ok()
 }
 
-const APP_CATALOG_LEN: usize = 18;
+const APP_CATALOG_LEN: usize = 19;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
@@ -138,6 +139,7 @@ pub(crate) struct AppCatalogEntry {
 
 /// Full "All Apps" catalog — launchable apps. Exactly fills a 5-column × 3-row grid.
 static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
+    AppCatalogEntry { id: CatalogId::App(AppId::VoiceRecorder), name: "Voice Recorder", category: "Multimedia", icon_bytes: Some(ICON_VOICE_RECORDER_TGA), available: true },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Terminal),
         name: "Terminal",

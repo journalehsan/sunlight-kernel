@@ -100,6 +100,9 @@ const PENDING_INPUT_MAX: usize = 128;
 const FG_CAPTURE_MAX: usize = 1024;
 const MAX_TABS: usize = 10;
 const DISPLAY_IPC_TIMEOUT_MS: u64 = 100;
+// Keyboard events cannot be reconstructed after an IPC deadline cancels them.
+// Full desktop redraws under TCG routinely exceed the ordinary 100 ms budget.
+const DISPLAY_KEYBOARD_TIMEOUT_MS: u64 = 2000;
 const DISPLAY_ACTIVATION_TIMEOUT_MS: u64 = 2_000;
 const SHELL_IPC_TIMEOUT_MS: u64 = 1_000;
 const SHELL_SLOW_PATH_TIMEOUT_MS: u64 = 5_000;
@@ -274,6 +277,8 @@ fn send_display_request(display_cap: &mut Option<CapabilityToken>, msg: IpcMsg) 
     let requires_activation_ack = msg.label == SgpMsg::SESSION_ACTIVATE;
     let timeout_ms = if requires_activation_ack {
         DISPLAY_ACTIVATION_TIMEOUT_MS
+    } else if msg.label == KbdMsg::KEY_EVENT {
+        DISPLAY_KEYBOARD_TIMEOUT_MS
     } else {
         DISPLAY_IPC_TIMEOUT_MS
     };

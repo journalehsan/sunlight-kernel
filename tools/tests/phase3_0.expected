@@ -9,6 +9,7 @@ timezone: zone=
 [VFS]  Fstat OK
 [VFS]  ENOENT test OK
 [VFS]  Bad handle test OK
+[VFS]  Native stat/mkdir RAMFS OK
 [VFS]  Stat OK
 [SunlightOS] Foundation Complete
 [USB-MOUSE] boot mouse ready

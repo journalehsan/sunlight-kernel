@@ -933,6 +933,12 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file("/tests/join-a", 0, 0, mode::FILE_644, JOIN_A),
     RamEntry::file("/tests/join-b", 0, 0, mode::FILE_644, JOIN_B),
 
+    RamEntry::file("/bin/voice-recorder", 0, 0, mode::FILE_755, b"#!/sunlight/voice-recorder\n"),
+    RamEntry::file("/usr/bin/voice-recorder", 0, 0, mode::FILE_755, b"#!/sunlight/voice-recorder\n"),
+    RamEntry::dir("/Applications/VoiceRecorder.sunapp", 0, 0, mode::DIR_755),
+    RamEntry::dir("/Applications/VoiceRecorder.sunapp/Resources", 0, 0, mode::DIR_755),
+    RamEntry::file("/Applications/VoiceRecorder.sunapp/Manifest.toml", 0, 0, mode::FILE_644, include_bytes!("../../VoiceRecorder.sunapp/Manifest.toml")),
+    RamEntry::file("/Applications/VoiceRecorder.sunapp/Resources/icon.tga", 0, 0, mode::FILE_644, include_bytes!("../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga")),
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),
     RamEntry::dir("/state", 0, 0, mode::DIR_755),
@@ -1709,6 +1715,13 @@ login_timeout_seconds = 30
         0,
         mode::FILE_755,
         b"#!/sunlight/thermalctl\n",
+    ),
+    RamEntry::file(
+        "/bin/audioctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/audioctl\n",
     ),
     RamEntry::file(
         "/bin/nicectl",
@@ -2607,6 +2620,13 @@ StandardOutput=journal\nStandardError=journal\n\n\
         0,
         mode::FILE_755,
         b"#!/sunlight/thermalctl\n",
+    ),
+    RamEntry::file(
+        "/usr/bin/audioctl",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/audioctl\n",
     ),
     RamEntry::file(
         "/usr/bin/fetch",

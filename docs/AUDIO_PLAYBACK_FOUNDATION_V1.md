@@ -5,12 +5,12 @@ resources; `audiod` owns policy and the first hardware backend.
 
 ## Selected initial hardware
 
-QEMU is already configured with Intel HD Audio:
+QEMU is configured with Intel HD Audio:
 
 ```text
 -audiodev pa,id=snd0
 -device intel-hda
--device hda-output,audiodev=snd0
+-device hda-micro,audiodev=snd0
 ```
 
 in `tools/runs.sh`. Automated gates use `-audiodev none` so CI does not
@@ -22,7 +22,7 @@ depend on host speakers.
 | Typical PCI ID | `8086:2668` (QEMU `intel-hda`) |
 | Class | `04:03` (multimedia HD Audio) |
 | BAR0 | MMIO |
-| Codec | QEMU `hda-output` |
+| Codec | QEMU `hda-micro` (output plus microphone; see [capture phase 1](AUDIO_CAPTURE_PHASE1.md)) |
 | PCM | 48 kHz, signed 16-bit, stereo |
 
 AC'97 was not chosen because HDA is already the configured QEMU device.
@@ -390,7 +390,8 @@ cargo test -p sunlight-libc --lib
 
 ## Known limitations
 
-* One output stream. No mixer, capture, or hot-plug policy. Resampling uses
+* One output stream. Capture phase 1 is documented in
+  [AUDIO_CAPTURE_PHASE1.md](AUDIO_CAPTURE_PHASE1.md). No mixer or hot-plug policy. Resampling uses
   linear interpolation; high-fidelity band-limited conversion is not yet
   implemented.
 * Melody Mina accepts only the bounded file formats listed above; support for
@@ -410,4 +411,4 @@ cargo test -p sunlight-libc --lib
 2. Intel HDA IRQ wait + VirtIO Sound / USB Audio backends.
 3. Hardware volume/mute via codec widgets where validated.
 4. Service events so GUIs do not need Tick refresh.
-5. Recording / capture.
+5. Simple Voice Recorder on the phase 1 PCM capture stream.
