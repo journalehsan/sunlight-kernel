@@ -744,6 +744,7 @@ Restart=on-failure
 RestartSec=3
 User=root
 Capability=logging
+Capability=user-session
 StandardOutput=journal
 StandardError=journal
 

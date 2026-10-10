@@ -727,6 +727,7 @@ mod service_capability_tests {
             "tz",
             "timed",
             "audiod",
+            "dialogd",
         ] {
             assert!(
                 service_capability_allows_hashed_name(session, name_to_u64(name)),
