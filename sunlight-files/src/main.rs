@@ -6,8 +6,12 @@ extern crate alloc;
 mod thumbnails;
 
 use alloc::{format, string::String, vec::Vec};
+use core::cell::RefCell;
 use core::cmp::Ordering;
 use sunlight_ui::clipboard;
+use sunlight_ui::font::label::{wrap_label, LabelLayout};
+use sunlight_ui::font::VecText;
+use sunlight_ui::widgets::SegmentedTabs;
 
 use sun_font::{
     draw_text as sf_draw, draw_text_centered as sf_centered, draw_text_right as sf_right,
@@ -33,6 +37,7 @@ use sunlight_ui::{
 // Graphical desktop widgets receive this reference via with_font(); inline text
 // uses the sf_* helpers with FontRole directly.
 static FONT_UI_REG: VecFont = VecFont(FontRole::UiRegular);
+static FONT_UI_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 // ---------------------------------------------------------------------------
 // Embedded place icons (16 px TGA, nearest-neighbour scaled to 32px in widget)
@@ -223,7 +228,7 @@ const SIDEBAR_SECTION_GAP: u32 = 2;
 const COL_HEADER_H: u32 = 26;
 const ROW_H: u32 = 34;
 const GRID_W: u32 = 128;
-const GRID_H: u32 = 112;
+const GRID_H: u32 = 128;
 const ICON_SLOT: u32 = 32; // px — thumbnail / folder icon reserved width
 const TYPE_W: u32 = 120;
 const SIZE_W: u32 = 90;
@@ -1483,6 +1488,8 @@ enum ScrollFocus {
 
 struct FilesApp {
     grid_view: bool,
+    label_cache: RefCell<Vec<CachedLabel>>,
+    filename_tooltip: Option<FilenameTooltip>,
     thumbnails: thumbnails::Thumbnails,
     state: State,
     mime_icons: MimeIconTheme,
@@ -1523,6 +1530,19 @@ struct FilesApp {
     layout: FilesLayout,
 }
 
+struct CachedLabel {
+    name: String,
+    width: u32,
+    lines: usize,
+    layout: LabelLayout,
+}
+
+struct FilenameTooltip {
+    index: usize,
+    lines: Vec<String>,
+    width: u32,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct FilesLayout {
     root: Rect,
@@ -1537,6 +1557,7 @@ struct FilesLayout {
     up: Rect,
     search: Rect,
     breadcrumb: Rect,
+    view_toggle: Rect,
 }
 
 impl FilesApp {
@@ -1547,6 +1568,8 @@ impl FilesApp {
         Self {
             thumbnails: thumbnails::Thumbnails::new(),
             grid_view: true,
+            label_cache: RefCell::new(Vec::new()),
+            filename_tooltip: None,
             state: State::new(),
             mime_icons: MimeIconTheme::load(),
             preview_src_w: 0,
@@ -1624,6 +1647,8 @@ impl FilesApp {
                 .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(SEARCH_H))),
             fixed(16),
             fixed(SEARCH_W),
+            fixed(8),
+            fixed(116),
         ];
         let toolbar_inner = Rect::new(
             toolbar.x + PAD,
@@ -1648,6 +1673,7 @@ impl FilesApp {
             up: toolbar_children[4].bounds(),
             breadcrumb: toolbar_children[6].bounds(),
             search: toolbar_children[8].bounds(),
+            view_toggle: toolbar_children[10].bounds(),
         }
     }
 
@@ -1665,8 +1691,12 @@ impl FilesApp {
             return false;
         }
         self.client_bounds = bounds;
+        self.filename_tooltip = None;
         self.layout_invalidation.invalidate();
-        self.ensure_layout()
+        let changed = self.ensure_layout();
+        self.sync_main_scroll();
+        self.ensure_selected_visible();
+        changed
     }
 
     fn root_layout(&self) -> (Rect, Rect, Rect, Rect) {
@@ -1952,9 +1982,9 @@ impl FilesApp {
             Some(i) => i as isize,
             None => {
                 if delta > 0 {
-                    -1
+                    -delta
                 } else {
-                    count
+                    count - 1 - delta
                 }
             }
         };
@@ -2080,13 +2110,152 @@ impl FilesApp {
     }
 
     fn toggle_view(&mut self) -> bool {
-        self.grid_view = !self.grid_view;
-        self.thumbnails.directory_changed();
-        self.main_scroll.scroll_to_y(0);
+        self.set_grid_view(!self.grid_view)
+    }
+
+    fn set_grid_view(&mut self, grid: bool) -> bool {
+        if self.grid_view == grid {
+            return false;
+        }
+        self.grid_view = grid;
+        self.filename_tooltip = None;
+        // Keep the shared model and thumbnail generation intact. A pending grid
+        // completion can populate the cache in Details without starting new work.
+        self.reset_row_click_state();
+        self.sync_main_scroll();
+        self.ensure_selected_visible();
         true
     }
 
+    fn sync_main_scroll(&mut self) {
+        let main = self.body_layout().1;
+        let region = Self::main_scroll_region(main);
+        self.main_scroll.set_viewport(region.w, region.h);
+        self.main_scroll.content_h = if self.grid_view {
+            self.state.entry_count.div_ceil(Self::grid_columns(main)) as u32 * GRID_H
+        } else {
+            self.state.entry_count as u32 * ROW_H
+        };
+        self.main_scroll.clamp();
+    }
+
+    fn view_toggle(&self) -> SegmentedTabs<'static> {
+        SegmentedTabs::new(
+            self.layout.view_toggle,
+            &["Grid", "Details"],
+            if self.grid_view { 0 } else { 1 },
+        )
+        .with_font(&FONT_UI_SMALL)
+    }
+
+    fn draw_filename(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        name: &str,
+        lines: usize,
+        color: sunlight_ui::theme::Color,
+    ) {
+        let font = VecFont(if lines == 2 {
+            FontRole::UiSmall
+        } else {
+            FontRole::UiRegular
+        });
+        let mut cache = self.label_cache.borrow_mut();
+        let idx = match cache
+            .iter()
+            .position(|c| c.name == name && c.width == rect.w && c.lines == lines)
+        {
+            Some(idx) => idx,
+            None => {
+                if cache.len() >= 128 {
+                    cache.remove(0);
+                }
+                cache.push(CachedLabel {
+                    name: String::from(name),
+                    width: rect.w,
+                    lines,
+                    layout: LabelLayout::new(name, rect.w, lines, &font),
+                });
+                cache.len() - 1
+            }
+        };
+        cache[idx]
+            .layout
+            .draw(canvas, rect, &font, color, lines == 2);
+    }
+
+    fn hover_filename(&mut self, x: i32, y: i32) -> bool {
+        let index = if self.state.view_mode == ViewMode::Directory {
+            self.hit_test_row(
+                self.layout.main,
+                x,
+                y,
+                self.state.entry_count,
+                self.main_scroll.offset_y,
+            )
+        } else {
+            None
+        };
+        if self.filename_tooltip.as_ref().map(|t| t.index) == index {
+            return false;
+        }
+        self.filename_tooltip = index.map(|index| {
+            let max_width = self.client_bounds.w.saturating_sub(32).min(600);
+            let lines = wrap_label(
+                entry_name_str(&self.state.entries[index]),
+                max_width,
+                &FONT_UI_SMALL,
+            );
+            let width = lines
+                .iter()
+                .map(|line| FONT_UI_SMALL.measure_w(line))
+                .max()
+                .unwrap_or(0)
+                .min(max_width);
+            FilenameTooltip {
+                index,
+                lines,
+                width,
+            }
+        });
+        true
+    }
+
+    fn draw_filename_tooltip(&self, canvas: &mut Canvas, theme: &Theme) {
+        let Some(tooltip) = &self.filename_tooltip else {
+            return;
+        };
+        let tile = self.row_rect(self.layout.main, tooltip.index, self.main_scroll.offset_y);
+        let width = (tooltip.width + 16).min(canvas.width);
+        let height =
+            (tooltip.lines.len() as u32 * FONT_UI_SMALL.line_height() + 12).min(canvas.height);
+        let x = tile.x.min(canvas.width.saturating_sub(width) as i32).max(0);
+        let y = tile
+            .bottom()
+            .min(canvas.height.saturating_sub(height) as i32)
+            .max(0);
+        let rect = Rect::new(x, y, width, height);
+        canvas.fill_rounded_rect_with_border(rect, RADIUS, theme.panel_alt, theme.border, 1);
+        let inner = rect.inset(6);
+        if inner.w == 0 || inner.h == 0 {
+            return;
+        }
+        let start = inner.y as usize * canvas.stride as usize + inner.x as usize;
+        let mut clip = Canvas::new(&mut canvas.pixels[start..], canvas.stride, inner.w, inner.h);
+        for (i, line) in tooltip.lines.iter().enumerate() {
+            FONT_UI_SMALL.draw(
+                &mut clip,
+                line,
+                2,
+                (i as u32 * FONT_UI_SMALL.line_height()) as i32,
+                theme.text,
+            );
+        }
+    }
+
     fn refresh_directory(&mut self) -> bool {
+        self.filename_tooltip = None;
         if self.state.view_mode != ViewMode::Directory {
             return false;
         }
@@ -2264,7 +2433,7 @@ impl FilesApp {
             return Rect::new(
                 inner.x + (idx % cols) as i32 * GRID_W as i32,
                 header_bottom + (idx / cols) as i32 * GRID_H as i32 - scroll_y,
-                GRID_W,
+                GRID_W.min(inner.w.saturating_sub(12)),
                 GRID_H,
             );
         }
@@ -2682,6 +2851,9 @@ impl FilesApp {
             false,
             up_disabled,
         );
+        if self.state.view_mode == ViewMode::Directory {
+            self.view_toggle().draw(canvas, theme);
+        }
 
         // ── Breadcrumb bar ─────────────────────────────────────────────────
         canvas.fill_rounded_rect_with_border(breadcrumb, RADIUS, theme.panel, theme.border, 1);
@@ -3166,6 +3338,28 @@ impl FilesApp {
     }
 
     fn draw_directory_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let left = main.x.max(0);
+        let top = main.y.max(0);
+        let right = main.right().min(canvas.width as i32);
+        let bottom = main.bottom().min(canvas.height as i32);
+        if right <= left || bottom <= top {
+            return;
+        }
+        let start = top as usize * canvas.stride as usize + left as usize;
+        let mut clip = Canvas::new(
+            &mut canvas.pixels[start..],
+            canvas.stride,
+            (right - left) as u32,
+            (bottom - top) as u32,
+        );
+        self.draw_directory_main_content(
+            &mut clip,
+            theme,
+            Rect::new(main.x - left, main.y - top, main.w, main.h),
+        );
+    }
+
+    fn draw_directory_main_content(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
         if self.grid_view {
             sf_vcenter(
@@ -3185,13 +3379,10 @@ impl FilesApp {
         }
 
         // ── Column header row ──────────────────────────────────────────────
-        let name_w = inner
-            .w
-            .saturating_sub(TYPE_W + SIZE_W + MOD_W + 12)
-            .max(200);
+        let (name_w, type_w, size_w, mod_w) = Self::details_columns(inner.w);
         let type_x = inner.x + ICON_SLOT as i32 + 6 + name_w as i32;
-        let size_x = type_x + TYPE_W as i32;
-        let mod_x = size_x + SIZE_W as i32;
+        let size_x = type_x + type_w as i32;
+        let mod_x = size_x + size_w as i32;
 
         let header_rect = Rect::new(inner.x, inner.y, inner.w, COL_HEADER_H);
         canvas.fill_rounded_rect(header_rect, RADIUS, theme.panel_alt);
@@ -3207,36 +3398,42 @@ impl FilesApp {
         let name_header_x = inner.x + ICON_SLOT as i32 + 6;
         sf_vcenter(
             canvas,
-            "Name · F6: Icons",
+            "Name",
             name_header_x,
             header_y,
             COL_HEADER_H,
             &TextStyle::new(FontRole::UiSmall, theme.text),
         );
-        sf_vcenter(
-            canvas,
-            "Type",
-            type_x + 8,
-            header_y,
-            COL_HEADER_H,
-            &TextStyle::new(FontRole::UiSmall, theme.text),
-        );
-        sf_vcenter(
-            canvas,
-            "Size",
-            size_x + 8,
-            header_y,
-            COL_HEADER_H,
-            &TextStyle::new(FontRole::UiSmall, theme.text),
-        );
-        sf_vcenter(
-            canvas,
-            "Modified",
-            mod_x + 8,
-            header_y,
-            COL_HEADER_H,
-            &TextStyle::new(FontRole::UiSmall, theme.text),
-        );
+        if type_w > 0 {
+            sf_vcenter(
+                canvas,
+                "Type",
+                type_x + 8,
+                header_y,
+                COL_HEADER_H,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+        }
+        if size_w > 0 {
+            sf_vcenter(
+                canvas,
+                "Size",
+                size_x + 8,
+                header_y,
+                COL_HEADER_H,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+        }
+        if mod_w > 0 {
+            sf_vcenter(
+                canvas,
+                "Modified",
+                mod_x + 8,
+                header_y,
+                COL_HEADER_H,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+        }
 
         // ── Error message ──────────────────────────────────────────────────
         if self.state.error_len != 0 {
@@ -3323,7 +3520,13 @@ impl FilesApp {
                 );
             }
             let entry = self.state.entries[idx];
-            let bounds = Rect::new(tile.x + 28, tile.y + 8, 72, 72);
+            let icon_w = 72.min(tile.w.saturating_sub(8));
+            let bounds = Rect::new(
+                tile.x + (tile.w.saturating_sub(icon_w) / 2) as i32,
+                tile.y + 8,
+                icon_w,
+                72,
+            );
             let path = self.state.current_path.join(entry_name_str(&entry));
             let ready = path.as_ref().and_then(|p| {
                 self.thumbnails
@@ -3351,11 +3554,17 @@ impl FilesApp {
             } else {
                 clipped.draw_ui_symbol_centered(bounds, UiSymbol::File, theme.text_dim);
             }
-            sf_centered(
+            self.draw_filename(
                 &mut clipped,
-                Rect::new(tile.x + 4, tile.y + 84, tile.w - 8, 24),
+                Rect::new(
+                    tile.x + 4,
+                    tile.y + 84,
+                    tile.w.saturating_sub(8),
+                    2 * sf_lh(FontRole::UiSmall),
+                ),
                 entry_name_str(&entry),
-                &TextStyle::new(FontRole::UiSmall, theme.text),
+                2,
+                theme.text,
             );
         }
         if self.state.entry_count == 0 {
@@ -3368,7 +3577,42 @@ impl FilesApp {
         }
     }
 
+    fn details_columns(width: u32) -> (u32, u32, u32, u32) {
+        let modified = if width >= 620 { MOD_W } else { 0 };
+        let kind = if width >= 380 { TYPE_W } else { 0 };
+        let size = if width >= 220 { SIZE_W } else { 0 };
+        (
+            width.saturating_sub(ICON_SLOT + 6 + kind + size + modified + 12),
+            kind,
+            size,
+            modified,
+        )
+    }
+
     fn draw_directory_rows(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let region = Self::main_scroll_region(main);
+        let left = region.x.max(0);
+        let top = region.y.max(0);
+        let right = region.right().min(canvas.width as i32);
+        let bottom = region.bottom().min(canvas.height as i32);
+        if right <= left || bottom <= top {
+            return;
+        }
+        let start = top as usize * canvas.stride as usize + left as usize;
+        let mut clip = Canvas::new(
+            &mut canvas.pixels[start..],
+            canvas.stride,
+            (right - left) as u32,
+            (bottom - top) as u32,
+        );
+        self.draw_directory_rows_clipped(
+            &mut clip,
+            theme,
+            Rect::new(main.x - left, main.y - top, main.w, main.h),
+        );
+    }
+
+    fn draw_directory_rows_clipped(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
         let list_top = inner.y + COL_HEADER_H as i32;
         let list_h = inner.bottom() - list_top;
@@ -3376,13 +3620,10 @@ impl FilesApp {
             return;
         }
 
-        let name_w = inner
-            .w
-            .saturating_sub(TYPE_W + SIZE_W + MOD_W + 12)
-            .max(200);
+        let (name_w, type_w, size_w, mod_w) = Self::details_columns(inner.w);
         let type_x = inner.x + ICON_SLOT as i32 + 6 + name_w as i32;
-        let size_x = type_x + TYPE_W as i32;
-        let mod_x = size_x + SIZE_W as i32;
+        let size_x = type_x + type_w as i32;
+        let mod_x = size_x + size_w as i32;
 
         let entry_count = self.state.entry_count;
         let scroll = self.main_scroll.offset_y;
@@ -3466,12 +3707,17 @@ impl FilesApp {
             } else {
                 theme.text
             };
-            sf_draw(
+            self.draw_filename(
                 canvas,
+                Rect::new(
+                    text_x,
+                    text_y,
+                    name_w.saturating_sub(8),
+                    sf_lh(FontRole::UiRegular),
+                ),
                 entry_name_str(&entry),
-                text_x,
-                text_y,
-                &TextStyle::new(FontRole::UiRegular, name_color),
+                1,
+                name_color,
             );
 
             let type_label = match entry.file_type {
@@ -3479,41 +3725,52 @@ impl FilesApp {
                 FT_FILE => file_type_label(entry.name_bytes(), mime_for_name(entry.name_bytes())),
                 _ => "Other",
             };
-            sf_draw(
-                canvas,
-                type_label,
-                type_x + 8,
-                text_y,
-                &TextStyle::new(FontRole::UiRegular, theme.text_dim),
-            );
-
-            if entry.file_type == FT_DIR {
-                sf_right(
+            if type_w > 0 {
+                self.draw_filename(
                     canvas,
-                    Rect::new(size_x, row_y, SIZE_W, ROW_H),
-                    "--",
-                    &TextStyle::new(FontRole::UiRegular, theme.text_dim),
-                    8,
-                );
-            } else {
-                let mut scratch = [0u8; 16];
-                let len = write_size(entry.size, &mut scratch);
-                let size_text = core::str::from_utf8(&scratch[..len]).unwrap_or("--");
-                sf_right(
-                    canvas,
-                    Rect::new(size_x, row_y, SIZE_W, ROW_H),
-                    size_text,
-                    &TextStyle::new(FontRole::UiRegular, theme.text),
-                    8,
+                    Rect::new(
+                        type_x + 8,
+                        text_y,
+                        type_w.saturating_sub(16),
+                        sf_lh(FontRole::UiRegular),
+                    ),
+                    type_label,
+                    1,
+                    theme.text_dim,
                 );
             }
-            sf_draw(
-                canvas,
-                "--",
-                mod_x + 8,
-                text_y,
-                &TextStyle::new(FontRole::UiRegular, theme.text_dim),
-            );
+
+            if size_w > 0 {
+                if entry.file_type == FT_DIR {
+                    sf_right(
+                        canvas,
+                        Rect::new(size_x, row_y, size_w, ROW_H),
+                        "--",
+                        &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+                        8,
+                    );
+                } else {
+                    let mut scratch = [0u8; 16];
+                    let len = write_size(entry.size, &mut scratch);
+                    let size_text = core::str::from_utf8(&scratch[..len]).unwrap_or("--");
+                    sf_right(
+                        canvas,
+                        Rect::new(size_x, row_y, size_w, ROW_H),
+                        size_text,
+                        &TextStyle::new(FontRole::UiRegular, theme.text),
+                        8,
+                    );
+                }
+            }
+            if mod_w > 0 {
+                sf_draw(
+                    canvas,
+                    "--",
+                    mod_x + 8,
+                    text_y,
+                    &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+                );
+            }
 
             // Subtle row separator
             if idx + 1 < entry_count {
@@ -4111,20 +4368,13 @@ impl App for FilesApp {
             self.sidebar_scroll.clamp();
         }
         {
-            let main_inner = main.inset(PAD);
-            let list_h = main_inner.h.saturating_sub(COL_HEADER_H);
-            self.main_scroll.set_viewport(main_inner.w, list_h);
-            let main_content_h = if self.grid_view {
-                self.state.entry_count.div_ceil(Self::grid_columns(main)) as u32 * GRID_H
-            } else {
-                self.state.entry_count as u32 * ROW_H
-            };
-            self.main_scroll.content_h = main_content_h;
+            self.sync_main_scroll();
 
             // Reset main-list scroll when the directory or view mode changes
             let current_path = self.state.current_path;
             let same_dir = path_matches(current_path.as_str(), self.prev_path.as_str());
             if !same_dir || self.state.view_mode != self.prev_view_mode {
+                self.filename_tooltip = None;
                 self.main_scroll.scroll_to_y(0);
                 self.thumbnails.directory_changed();
                 self.update_preview_for_selection();
@@ -4146,6 +4396,7 @@ impl App for FilesApp {
         // they stay above the clipped content).  We draw them after all
         // content layers so they stay on top.
         self.draw_scrollbars(canvas, theme, sidebar, main);
+        self.draw_filename_tooltip(canvas, theme);
 
         // Overlays draw last so they sit above all other content.
         if let Some(menu) = self.context_menu {
@@ -4157,6 +4408,11 @@ impl App for FilesApp {
     }
 
     fn update(&mut self, event: Event) -> bool {
+        let tooltip_cleared = if !matches!(event, Event::MouseMove { .. } | Event::Tick) {
+            self.filename_tooltip.take().is_some()
+        } else {
+            false
+        };
         let thumbnail_changed = if matches!(event, Event::Tick) {
             self.thumbnails.poll()
         } else {
@@ -4260,12 +4516,13 @@ impl App for FilesApp {
         }
 
         if let Some(redraw) = self.handle_scroll_pointer_event(event) {
-            return redraw;
+            return redraw || tooltip_cleared;
         }
 
         // Track sidebar hover for visual feedback (must be before the click handler
         // since it fires on mouse-move, not click).
         if let Event::MouseMove { x, y } = event {
+            let tooltip_changed = self.hover_filename(x, y);
             let (sidebar_rect, _) = self.body_layout();
             let new_hover =
                 Self::hit_test_sidebar(sidebar_rect, x, y, self.sidebar_scroll.offset_y);
@@ -4273,7 +4530,7 @@ impl App for FilesApp {
                 self.hovered_sidebar = new_hover;
                 return true;
             }
-            return false;
+            return tooltip_changed;
         }
 
         // Right-click opens (or repositions) the context menu. Checked before
@@ -4284,7 +4541,7 @@ impl App for FilesApp {
             }
         }
 
-        match event {
+        let changed = match event {
             Event::Click { x, y } => {
                 debug_log("[FILES] mouse_down x=");
                 log_i32(x);
@@ -4295,6 +4552,11 @@ impl App for FilesApp {
                 let (_toolbar, _body, _details, _) = self.root_layout();
                 let (sidebar, main) = self.body_layout();
                 let (_, _, up, _, _) = self.toolbar_layout();
+                if self.state.view_mode == ViewMode::Directory {
+                    if let Some(mode) = self.view_toggle().hit_test(sunlight_ui::Point::new(x, y)) {
+                        return self.set_grid_view(mode == 0);
+                    }
+                }
                 if up.contains(sunlight_ui::Point::new(x, y)) {
                     debug_log("[FILES] hit_test up_button\n");
                     return self.state.update(Message::NavigateUp);
@@ -4303,11 +4565,15 @@ impl App for FilesApp {
                 // Breadcrumb click in Directory mode
                 if self.state.view_mode == ViewMode::Directory {
                     let (_, _, _, _, breadcrumb) = self.toolbar_layout();
-                    if let Some(target) =
-                        Self::hit_test_breadcrumb(breadcrumb, x, self.state.current_path.as_str())
-                    {
-                        debug_log("[FILES] hit_test breadcrumb\n");
-                        return self.state.navigate_to(target);
+                    if breadcrumb.contains(sunlight_ui::Point::new(x, y)) {
+                        if let Some(target) = Self::hit_test_breadcrumb(
+                            breadcrumb,
+                            x,
+                            self.state.current_path.as_str(),
+                        ) {
+                            debug_log("[FILES] hit_test breadcrumb\n");
+                            return self.state.navigate_to(target);
+                        }
                     }
                 }
                 if let Some(idx) =
@@ -4612,7 +4878,8 @@ impl App for FilesApp {
             } => self.paste_from_clipboard(),
             Event::Tick => thumbnail_changed,
             _ => false,
-        }
+        };
+        changed || tooltip_cleared
     }
 
     fn window_event(&mut self, event: WindowEvent) -> bool {
@@ -5074,6 +5341,341 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn directory_fixture(count: usize) -> FilesApp {
+        let mut app = FilesApp::new();
+        app.state.view_mode = ViewMode::Directory;
+        app.prev_view_mode = ViewMode::Directory;
+        app.state.current_path = PathBuf::from_str("/pictures").unwrap();
+        app.prev_path = app.state.current_path;
+        app.ensure_layout();
+        for i in 0..count {
+            let name = format!("entry_{i}");
+            let mut entry = DirEntry::zeroed();
+            entry.name[..name.len()].copy_from_slice(name.as_bytes());
+            entry.name_len = name.len() as u8;
+            entry.file_type = FT_DIR;
+            app.state.entries.push(entry);
+        }
+        app.state.entry_count = count;
+        app.state.selected_rows = alloc::vec![false; count];
+        app.sync_main_scroll();
+        app
+    }
+
+    fn key(keycode: u8) -> Event {
+        Event::KeyPress {
+            keycode,
+            pressed: true,
+            super_key: false,
+            ctrl: false,
+            alt: false,
+            shift: false,
+        }
+    }
+
+    #[test]
+    fn toolbar_and_f6_switch_shared_model_and_keep_selection_visible() {
+        let mut app = directory_fixture(100);
+        app.state.selected_row = Some(75);
+        app.state.selected_rows[75] = true;
+        app.state.selected_rows[76] = true;
+        let paths = app.selected_paths().unwrap();
+        let entries = app.state.entries.as_ptr();
+        let dir = app.state.current_path;
+        app.last_clicked_row = Some(75);
+        app.last_click_at = 10;
+        let details = app.view_toggle().item_rect(1);
+        assert!(app.update(Event::Click {
+            x: details.x + 5,
+            y: details.y + 5
+        }));
+        assert!(!app.grid_view);
+        assert_eq!(app.last_clicked_row, None);
+        assert!(!app.update(Event::Click {
+            x: details.x + 5,
+            y: details.y + 5
+        }));
+        assert!(app.update(key(0x40)));
+        assert!(app.grid_view);
+        assert_eq!(app.state.entries.as_ptr(), entries);
+        assert_eq!(app.state.current_path.as_str(), dir.as_str());
+        assert_eq!(app.state.selected_row, Some(75));
+        assert_eq!(app.selected_paths().unwrap(), paths);
+        let tile = app.row_rect(app.layout.main, 75, app.main_scroll.offset_y);
+        let region = FilesApp::main_scroll_region(app.layout.main);
+        assert!(tile.y >= region.y && tile.bottom() <= region.bottom());
+        assert!(app.layout.search.right() <= app.layout.view_toggle.x);
+        assert!(app.layout.breadcrumb.right() <= app.layout.search.x);
+    }
+
+    #[test]
+    fn switching_reuses_exact_thumbnail_buffer() {
+        let mut app = directory_fixture(1);
+        app.state.entries[0].file_type = FT_FILE;
+        app.thumbnails.seed_grid(
+            b"/pictures/entry_0",
+            0,
+            thumbnails::Preview {
+                image: alloc::sync::Arc::new(sunlight_ui::image::RgbaImage {
+                    width: 1,
+                    height: 1,
+                    pixels: alloc::vec![0xffff0000],
+                }),
+                width: 1,
+                height: 1,
+                format: 2,
+            },
+        );
+        let image = app
+            .thumbnails
+            .grid_image(b"/pictures/entry_0", 0)
+            .unwrap()
+            .image
+            .clone();
+        app.toggle_view();
+        app.schedule_grid(); // Details never schedules grid work.
+        app.toggle_view();
+        assert!(alloc::sync::Arc::ptr_eq(
+            &image,
+            &app.thumbnails
+                .grid_image(b"/pictures/entry_0", 0)
+                .unwrap()
+                .image
+        ));
+    }
+
+    #[test]
+    fn directional_navigation_changes_with_layout_and_shift_selection_survives() {
+        let mut app = directory_fixture(40);
+        app.update(key(0x50));
+        assert_eq!(app.state.selected_row, Some(0));
+        app.state.select_row(0);
+        let cols = FilesApp::grid_columns(app.layout.main);
+        app.update(key(0x50));
+        assert_eq!(app.state.selected_row, Some(cols));
+        app.update(key(0x4d));
+        assert_eq!(app.state.selected_row, Some(cols + 1));
+        app.toggle_view();
+        app.update(key(0x50));
+        assert_eq!(app.state.selected_row, Some(cols + 2));
+        app.update(key(0x48));
+        assert_eq!(app.state.selected_row, Some(cols + 1));
+        app.shift_down = true;
+        app.handle_directory_click(cols + 4);
+        let selected = app.state.selected_rows.clone();
+        app.toggle_view();
+        assert_eq!(app.state.selected_rows, selected);
+    }
+
+    #[test]
+    fn enter_after_switch_uses_existing_open_handler() {
+        let mut app = directory_fixture(2);
+        // An invalid UTF-8 entry tests dispatch without launching a host process.
+        app.state.entries[1].file_type = FT_FILE;
+        app.state.entries[1].name[0] = 0xff;
+        app.state.entries[1].name_len = 1;
+        app.state.select_row(1);
+        for grid in [false, true] {
+            app.set_grid_view(grid);
+            app.update(key(0x1c));
+            assert_eq!(app.state.selected_row, Some(1));
+            assert_eq!(app.state.error_str(), "Invalid file name");
+        }
+    }
+
+    #[test]
+    fn resize_columns_narrow_cells_and_empty_views() {
+        let mut app = directory_fixture(100);
+        app.state.select_row(75);
+        let wide_cols = FilesApp::grid_columns(app.layout.main);
+        app.set_client_bounds(800, 620);
+        assert!(FilesApp::grid_columns(app.layout.main) < wide_cols);
+        let tile = app.row_rect(app.layout.main, 75, app.main_scroll.offset_y);
+        let region = FilesApp::main_scroll_region(app.layout.main);
+        assert!(tile.y >= region.y && tile.bottom() <= region.bottom());
+        for width in [0, 30, 100, 220, 380, 620, 900] {
+            let main = Rect::new(0, 0, width, 400);
+            let tile = app.row_rect(main, 0, 0);
+            assert!(tile.w <= main.inset(PAD).w);
+            let (name, kind, size, modified) = FilesApp::details_columns(width);
+            assert!(name + kind + size + modified <= width);
+        }
+        let mut empty = directory_fixture(0);
+        let mut pixels = alloc::vec![0; 960*620];
+        let mut canvas = Canvas::new(&mut pixels, 960, 960, 620);
+        for grid in [true, false, true] {
+            empty.set_grid_view(grid);
+            empty.draw_directory_main(&mut canvas, &Theme::sunlight_dark(), empty.layout.main);
+            assert!(!empty.change_row_selection(1));
+        }
+    }
+
+    #[test]
+    fn measured_filename_layout_and_cache_are_bounded() {
+        let app = directory_fixture(1);
+        let font = VecFont(FontRole::UiSmall);
+        assert!(84 + 2 * font.line_height() <= GRID_H);
+        for name in [
+            "a.png",
+            "a_medium_filename.png",
+            "verylongfilenamethathasnospacesandmultipledots.tar.gz",
+            "نام_فایل_بسیار_طولانی.png",
+            "mixed_نام_123.png",
+            "👩🏽‍💻e\u{301}_long_name.png",
+        ] {
+            for width in [0, 1, 24, 80, 120] {
+                let l = LabelLayout::new(name, width, 2, &font);
+                assert!(l.line_count <= 2);
+                assert!(l.widths.iter().all(|w| *w <= width));
+            }
+        }
+        let mut pixels = alloc::vec![0; 100*100];
+        let mut canvas = Canvas::new(&mut pixels, 100, 100, 100);
+        let rect = Rect::new(10, 10, 60, 36);
+        app.draw_filename(
+            &mut canvas,
+            rect,
+            "unchanged.txt",
+            2,
+            sunlight_ui::theme::Color(0xffffffff),
+        );
+        let ptr = app.label_cache.borrow()[0].layout.lines[0].as_ptr();
+        app.draw_filename(
+            &mut canvas,
+            rect,
+            "unchanged.txt",
+            2,
+            sunlight_ui::theme::Color(0xffffffff),
+        );
+        assert_eq!(app.label_cache.borrow()[0].layout.lines[0].as_ptr(), ptr);
+        for i in 0..500 {
+            app.draw_filename(
+                &mut canvas,
+                rect,
+                &format!("filename_{i}"),
+                2,
+                sunlight_ui::theme::Color(0xffffffff),
+            );
+        }
+        assert_eq!(app.label_cache.borrow().len(), 128);
+    }
+
+    #[test]
+    fn mixed_file_rows_and_grid_never_paint_outside_directory_bounds() {
+        let mut app = directory_fixture(6);
+        for (i, name) in [
+            "a.txt",
+            "very_long_image_name_with_underscores_and_extra_words.png",
+            "فارسی_نام_بسیار_طولانی.png",
+            "👩🏽‍💻e\u{301}_filename.jpg",
+            "multiple.dots.archive.tar.gz",
+            "nospacesabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let e = &mut app.state.entries[i];
+            e.name.fill(0);
+            e.name[..name.len()].copy_from_slice(name.as_bytes());
+            e.name_len = name.len() as u8;
+            e.file_type = if i == 0 { FT_DIR } else { FT_FILE };
+            e.size = 1024 * i as u64;
+        }
+        for grid in [true, false] {
+            app.set_grid_view(grid);
+            app.main_scroll.offset_y = 10;
+            let main = Rect::new(20, 20, 90, 160);
+            let mut pixels = alloc::vec![0xff123456; 200 * 200];
+            let mut canvas = Canvas::new(&mut pixels, 200, 200, 200);
+            app.draw_directory_main(&mut canvas, &Theme::sunlight_dark(), main);
+            for y in 0..200 {
+                for x in 0..200 {
+                    if !main.contains(sunlight_ui::Point::new(x, y)) {
+                        assert_eq!(canvas.pixels[(y * 200 + x) as usize], 0xff123456);
+                    }
+                }
+            }
+            app.main_scroll.offset_y = 0;
+            let tile = app.row_rect(app.layout.main, 1, 0);
+            app.hover_filename(tile.x + 10, tile.y + 10);
+            let tooltip = app.filename_tooltip.as_ref().unwrap();
+            assert_eq!(
+                tooltip.lines.concat(),
+                entry_name_str(&app.state.entries[1])
+            );
+            app.filename_tooltip = None;
+        }
+    }
+
+    #[test]
+    #[ignore = "Writes host framebuffer previews; run explicitly for visual review"]
+    fn write_layout_previews() {
+        use std::io::Write;
+        let names = [
+            "Folder",
+            "01_solar_blossom.simg",
+            "my_very_long_image_filename_that_wraps_with_ellipsis.simg",
+            "نام_فایل_بسیار_طولانی.png",
+            "👩🏽‍💻_e\u{301}_photograph.jpg",
+            "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdef.png",
+            "archive.multiple.dots.tar.gz",
+            "short.txt",
+        ];
+        let mut app = directory_fixture(names.len());
+        for (i, name) in names.iter().enumerate() {
+            let e = &mut app.state.entries[i];
+            e.name.fill(0);
+            e.name[..name.len()].copy_from_slice(name.as_bytes());
+            e.name_len = name.len() as u8;
+            e.file_type = if i == 0 { FT_DIR } else { FT_FILE };
+            e.size = (i as u64 + 1) * 1024;
+            if (1..=5).contains(&i) {
+                let asset = std::fs::read(format!(
+                    "{}/../docs/images/Samples/01_solar_blossom.simg",
+                    env!("CARGO_MANIFEST_DIR")
+                ))
+                .unwrap();
+                let image = sunlight_ui::image::simg::decode(&asset).unwrap();
+                let preview = thumbnails::Preview {
+                    image: alloc::sync::Arc::new(sunlight_ui::image::simg::scale_fit(
+                        &image, 128, 128,
+                    )),
+                    width: image.width,
+                    height: image.height,
+                    format: 1,
+                };
+                let path = app.state.current_path.join(name).unwrap();
+                app.thumbnails
+                    .seed_grid(path.as_str().as_bytes(), e.size, preview);
+            }
+        }
+        app.state.select_row(0);
+        let folder = format!(
+            "{}/../target/files-phase12-evidence",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        std::fs::create_dir_all(&folder).unwrap();
+        for (width, height) in [(960, 620), (800, 500)] {
+            app.set_client_bounds(width, height);
+            for grid in [true, false] {
+                app.set_grid_view(grid);
+                let mut pixels = alloc::vec![0; (width*height) as usize];
+                let mut canvas = Canvas::new(&mut pixels, width, width, height);
+                app.view(&mut canvas, &Theme::sunlight_dark());
+                let mode = if grid { "grid" } else { "details" };
+                let mut file =
+                    std::fs::File::create(format!("{folder}/host-{mode}-{width}.ppm")).unwrap();
+                write!(file, "P6\n{width} {height}\n255\n").unwrap();
+                let bytes: Vec<u8> = canvas
+                    .pixels
+                    .iter()
+                    .flat_map(|p| [(*p >> 16) as u8, (*p >> 8) as u8, *p as u8])
+                    .collect();
+                file.write_all(&bytes).unwrap();
+            }
+        }
+    }
 
     #[test]
     fn grid_renders_each_files_own_thumbnail() {

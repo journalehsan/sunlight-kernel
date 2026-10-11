@@ -344,3 +344,146 @@ children because filesystem metadata cannot identify the one changed file.
 Negative-cache eviction can permit another attempt; codec cancellation is
 cooperative through stale-result rejection. These limitations supplement the
 Phase 1 decoder/allocator/lifecycle limits documented above.
+
+
+## Phase 1.2 — Grid / Details toggle and filename layout
+
+The repository audit found a working Phase 1.1 grid, original Details rows,
+shared directory entries/selection/actions, and session-only `grid_view` state.
+F6 and the context menu already switched modes. There was no toolbar toggle.
+Grid text was one centered line; Details drew full names across metadata columns.
+Sunlight UI exposes font metrics through `VecText`, and Files uses `sun-font`.
+Its resolved emoji sequences are not a complete Unicode grapheme segmenter, and
+neither library provides runtime bidi reordering or Persian/Arabic shaping.
+The existing `SegmentedTabs` widget supplies shared toggle geometry and chrome.
+
+The directory toolbar now uses that control with readable **Grid / Details**
+labels and a single highlighted mode. `SegmentedTabs::with_font` lets it use the
+same native vector font as Files; other users retain the bitmap fallback.
+F6 and the context-menu action remain available. Mode changes only update the
+session boolean and scroll geometry; they do not enumerate, sort, refresh,
+rebuild entries, change the path, or recreate the thumbnail provider. Both modes
+continue to use the same ordered entry vector and selection bitset. Indices are
+safe across switching because the vector is neither copied nor reordered. The
+filesystem still exposes no stable inode identity; refresh selection behavior is
+unchanged. Current directory-first/name ordering is retained. The existing search
+field is a presentation placeholder, without an implemented filtering model;
+this phase does not add search/filtering or sortable column headers.
+
+Switching preserves the current pixel offset where possible and ensures the
+selected item is visible after updating content height. Resize recalculates
+columns and likewise keeps selection visible. Double-click tracking resets on a
+mode change so clicks in two different layouts cannot combine accidentally.
+Grid arrows use the current column count; Details Up/Down use one row. Enter,
+Ctrl/Shift click multi-selection, context actions and directory opening continue
+through the existing handlers. With no selection, directional navigation picks
+the first/last entry according to direction. Breadcrumb pointer hit testing now
+checks both axes, preventing a file click below the toolbar from navigating a
+breadcrumb with the same x-coordinate.
+
+`sunlight-ui/font/label.rs` adds a small label helper around `VecText`, without a
+second font renderer. It measures actual font advances, wraps after whitespace,
+underscores, hyphens or dots where practical, and otherwise uses extended Unicode
+grapheme boundaries. The final visible line measures complete prefix-plus-`…`
+candidates. No UTF-8 scalar, combining sequence, emoji ZWJ sequence, skin-tone
+sequence or flag pair is split. If the first grapheme cannot fit, an ellipsis is
+shown; if even the ellipsis cannot fit, the label is empty. Extension preservation
+is not implemented. Each label draws through a bounded framebuffer view so glyph
+ink/overhang cannot escape its rectangle even during partial scrolling. Cached
+line widths avoid measuring again during drawing.
+
+Grid cells are 128x128 with centered 72x72 thumbnail/icon bounds and two reserved
+filename lines beginning at y=84. Short labels remain on the first line. The
+one-column narrow case constrains cell width to the available pane width. The
+existing responsive row/column geometry drives rendering, hit testing, keyboard
+movement and scrolling; no horizontal scroll area is created. Selection bounds
+and cell height do not change when thumbnails arrive. Files keeps at most 128
+cached layouts keyed by filename, available width and line count/font role.
+A filename tooltip wraps the full name with the same measured grapheme breaks;
+it is computed when hover changes and discarded on resize, navigation, mode
+change or other input. Very small windows may physically clip an over-wide
+individual grapheme or an extremely tall tooltip; the source name remains intact.
+
+Details keeps the original 34px rows, MIME icons, type labels and right-aligned
+sizes. Names and type labels use measured single-line ellipsis with hard clipping.
+Columns share one width calculation: Modified appears at pane widths >=620px,
+Type at >=380px and Size at >=220px. Less essential metadata disappears to keep
+Name usable in narrow panes. Modified remains `--` because directory entries
+provide no timestamp. Headers and partially visible rows are clipped to their
+pane/viewport. Hover over an entry in either view to see its full filename.
+
+`sunlight-files/src/thumbnails.rs` is unchanged. Selection Preview, image formats,
+decoding, rendering, cache identities and cache bounds remain unchanged. Switching
+does not advance the directory generation or invalidate the cache: an outstanding
+grid job may complete into the session cache while Details is visible. Details
+never submits new grid requests. Returning to Grid schedules visible misses and
+reuses cached buffers directly. Navigation/refresh retain their existing
+cancellation and invalidation behavior. No kernel source, service or background
+worker was added. Sunlight UI now directly uses `unicode-segmentation` 1.13.3
+with default features disabled; this no_std dependency was already present in the
+workspace lockfile. No shaping engine or new registry package was introduced.
+
+Validation commands (2026-10-11):
+
+- `cargo test -p sunlight-files -p sunlight-ui --target
+  x86_64-unknown-linux-gnu --lib --tests`: **29 Files + 281 UI tests passed**.
+  Existing thumbnail tests remain enabled. New tests cover both mode directions,
+  toolbar/F6 switching, unchanged entry storage/path/multi-selection, selected
+  visibility, exact thumbnail Arc reuse, Grid/Details keyboard strides, Enter
+  dispatch after switching, empty directories, mixed types, resizing/narrow cells,
+  actual font measurements, single/two-line names, ellipsis, Unicode boundaries,
+  complete tooltip text, bounded cache reuse, and pixel clipping with ink overhang,
+  nontrivial framebuffer stride and partially scrolled rows. Host Enter coverage
+  uses an invalid UTF-8 entry to exercise the original handler without launching
+  a host process; successful guest file opening needs graphical acceptance.
+- Native Files release build with the existing userspace linker flags: passed.
+- Normal desktop kernel embedding build (`cargo build -p sunlight-kernel`):
+  passed. No kernel source changes were required.
+
+Known limits: the current primary font does not include Persian glyphs; those
+characters appear as fallback question marks. Missing emoji/combining glyphs also
+retain the current fallback behavior. Runtime RTL/bidi shaping remains absent;
+grapheme-safe boundaries preserve the source name but do not imply correct complex
+script appearance. Sortable headers, timestamp metadata, functional search and
+extension-preserving truncation remain future improvements. Existing Phase 1/1.1
+cache invalidation and resource limitations still apply.
+
+Phase 1.2 visual evidence and acceptance limits:
+
+- A normal desktop ISO containing the updated Files binary booted in QEMU with
+  `-vga virtio`, reached root Desktop login and showed the compositor/Welcome
+  window. A dual-GPU trial showed the old login framebuffer on the captured
+  primary display; the single-GPU trial corrected that capture issue. Desktop
+  keyboard/mouse actions still failed to reliably reach windows, so Files could
+  not be opened through the dock/search path. **Files views, guest file launching,
+  interactive resizing and thumbnail responsiveness were not visually verified
+  in QEMU.** Both test VMs were stopped afterward. No VMware test was performed.
+- The explicitly run ignored `write_layout_previews` host test passed and rendered
+  the actual Files view methods at 960x620 and 800x500, using a synthetic shared
+  entry model and a decoded/scaled shipped SIMG fixture seeded into the thumbnail
+  cache. Host Grid and Details previews were inspected: two-line wrapping and
+  ellipsis fit their cells, thumbnails stayed centered, Details names fit their
+  column, sizes aligned right and metadata adapted to the smaller width.
+  These are host framebuffer previews, **not guest screenshots or a latency test**.
+  The missing Persian glyphs and some combining/emoji fallback are visible.
+- Generated PPM/PNG previews, ISO and guest screenshots/serial logs are under
+  `target/files-phase12-evidence/`, excluded from commits. The host preview command
+  is `cargo test -p sunlight-files --target x86_64-unknown-linux-gnu
+  write_layout_previews -- --ignored`. Before-change Files screenshots are not
+  available. Ordinary tests leave this artifact-writing preview test ignored.
+- `rustfmt --check` for touched Rust files and `git diff --check`: passed.
+  Existing dependency and host-only unused-code warnings remain.
+
+Modified files: `sunlight-files/src/main.rs` (shared view controls/geometry,
+filename layout cache/tooltips, row clipping and focused tests),
+`sunlight-ui/font/label.rs` (measured grapheme-safe labels and tests),
+`sunlight-ui/font/mod.rs` (helper export), `sunlight-ui/widgets/sidebar.rs`
+(optional vector font for the existing segmented control), `sunlight-ui/Cargo.toml`
+and `Cargo.lock` (existing grapheme library as a direct UI dependency), and this
+layout/thumbnail document. Existing thumbnail source and kernel source are unchanged.
+
+Remaining guest acceptance: launch Files in Pictures; select an image, switch
+Grid -> Details -> Grid using both toolbar and F6, confirm selection/preview and
+cached thumbnails; open a file with Enter/double-click after switching; navigate
+folders/breadcrumbs; exercise Ctrl/Shift selection/context actions; resize and
+scroll a mixed directory; inspect narrow Unicode names and the full-name tooltip.

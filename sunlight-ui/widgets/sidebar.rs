@@ -17,6 +17,7 @@ pub struct SegmentedTabs<'a> {
     pub selected: usize,
     pub focused: bool,
     pub hovered: Option<usize>,
+    pub font: Option<&'a dyn crate::font::VecText>,
 }
 
 impl<'a> SegmentedTabs<'a> {
@@ -27,7 +28,13 @@ impl<'a> SegmentedTabs<'a> {
             selected,
             focused: false,
             hovered: None,
+            font: None,
         }
+    }
+
+    pub const fn with_font(mut self, font: &'a dyn crate::font::VecText) -> Self {
+        self.font = Some(font);
+        self
     }
 
     pub fn item_rect(&self, index: usize) -> Rect {
@@ -81,11 +88,19 @@ impl<'a> SegmentedTabs<'a> {
             } else if hovered {
                 canvas.fill_rounded_rect(rect, 5, theme.panel_alt.lighten(10));
             }
-            canvas.draw_text_centered(
-                rect,
-                label,
-                if selected { theme.text } else { theme.text_dim },
-            );
+            let color = if selected { theme.text } else { theme.text_dim };
+            if let Some(font) = self.font {
+                font.draw_vcenter(
+                    canvas,
+                    label,
+                    rect.x + (rect.w.saturating_sub(font.measure_w(label)) / 2) as i32,
+                    rect.y,
+                    rect.h,
+                    color,
+                );
+            } else {
+                canvas.draw_text_centered(rect, label, color);
+            }
         }
     }
 }
