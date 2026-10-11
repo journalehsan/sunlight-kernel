@@ -3,6 +3,8 @@
 
 extern crate alloc;
 
+mod thumbnails;
+
 use alloc::{format, string::String, vec::Vec};
 use core::cmp::Ordering;
 use sunlight_ui::clipboard;
@@ -17,7 +19,7 @@ use sunlight_ipc::{
     monotonic_millis, process_yield, ProcessExit,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
-use sunlight_ui::image::{decode_simg, mime_icon, TgaImage};
+use sunlight_ui::image::{mime_icon, TgaImage};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::{
@@ -220,6 +222,8 @@ const SIDEBAR_HEADER_H: u32 = 22;
 const SIDEBAR_SECTION_GAP: u32 = 2;
 const COL_HEADER_H: u32 = 26;
 const ROW_H: u32 = 34;
+const GRID_W: u32 = 128;
+const GRID_H: u32 = 112;
 const ICON_SLOT: u32 = 32; // px — thumbnail / folder icon reserved width
 const TYPE_W: u32 = 120;
 const SIZE_W: u32 = 90;
@@ -333,6 +337,7 @@ enum ContextMenuItem {
     NewFolder,
     NewTextFile,
     Refresh,
+    ToggleView,
     CopyPath,
     Paste,
     Properties,
@@ -625,6 +630,20 @@ impl PathBuf {
                 i += 1;
             }
             if i > comp_start {
+                match &bytes[comp_start..i] {
+                    b"." => continue,
+                    b".." => {
+                        while written > 1 && self.buf[written - 1] != b'/' {
+                            written -= 1;
+                        }
+                        if written > 1 {
+                            written -= 1;
+                        }
+                        saw_component = written > 1;
+                        continue;
+                    }
+                    _ => {}
+                }
                 if saw_component && written < PATH_LEN {
                     self.buf[written] = b'/';
                     written += 1;
@@ -919,116 +938,6 @@ fn file_type_label(name: &[u8], mime: &[u8]) -> &'static str {
     }
 }
 
-/// Draw a raw TGA type-2 or SIMG v2 byte slice onto `canvas` at `dst`.
-///
-/// Prefer the toolkit TGA blitter (`draw_tga_icon`) so pixels are opaque ARGB
-/// with correct alpha blending — bare `Color(rgb)` has A=0 and paints a gray
-/// hole on alpha-capable surfaces. SIMG v2 is expanded to TGA-32 at load time
-/// so this path stays zero-alloc per frame; a raw SIMG magic buffer still
-/// decodes once as a fallback.
-fn draw_tga_bytes(canvas: &mut Canvas, data: &[u8], dst: Rect) {
-    if data.len() >= 4 && data[0..4] == *b"SIMG" {
-        if let Ok(img) = decode_simg(data) {
-            draw_argb_image(canvas, &img, dst);
-        }
-        return;
-    }
-    // `TgaImage` needs `'static`; preview buffer is a process static.
-    // SAFETY: `data` must be a subslice of `PREVIEW_SRC_BUF` (or other 'static).
-    // Callers only pass the static preview buffer.
-    let static_data: &'static [u8] =
-        unsafe { core::slice::from_raw_parts(data.as_ptr(), data.len()) };
-    if let Ok(img) = TgaImage::parse(static_data) {
-        canvas.draw_tga_icon(&img, dst);
-        return;
-    }
-    // Fallback: manual sample with *opaque* ARGB (legacy / partial TGA).
-    if data.len() < 18 || data[2] != 2 {
-        return;
-    }
-    let bpp = data[16];
-    if bpp != 24 && bpp != 32 {
-        return;
-    }
-    let w = u16::from_le_bytes([data[12], data[13]]) as u32;
-    let h = u16::from_le_bytes([data[14], data[15]]) as u32;
-    if w == 0 || h == 0 {
-        return;
-    }
-    let top_down = (data[17] & 0x20) != 0;
-    let bpp_b = (bpp / 8) as u32;
-    let cm_len = u16::from_le_bytes([data[5], data[6]]) as u32;
-    let cm_entry_bits = data[7] as u32;
-    let cm_bytes = if data[1] != 0 {
-        cm_len * ((cm_entry_bits + 7) / 8)
-    } else {
-        0
-    };
-    let data_off = (18 + data[0] as u32 + cm_bytes) as usize;
-    let needed = data_off + (w * h * bpp_b) as usize;
-    if data.len() < needed {
-        return;
-    }
-
-    let cx0 = dst.x.max(0) as u32;
-    let cy0 = dst.y.max(0) as u32;
-    let cx1 = (dst.right() as u32).min(canvas.width);
-    let cy1 = (dst.bottom() as u32).min(canvas.height);
-    if cx0 >= cx1 || cy0 >= cy1 {
-        return;
-    }
-    let dw = cx1 - cx0;
-    let dh = cy1 - cy0;
-
-    use sunlight_ui::theme::Color;
-    for dy in 0..dh {
-        let src_y_scale = dy * h / dh;
-        let file_row = if top_down {
-            src_y_scale
-        } else {
-            h - 1 - src_y_scale
-        };
-        for dx in 0..dw {
-            let src_x = dx * w / dw;
-            let idx = data_off + (file_row * w + src_x) as usize * bpp_b as usize;
-            if idx + 2 >= data.len() {
-                continue;
-            }
-            let b = data[idx];
-            let g = data[idx + 1];
-            let r = data[idx + 2];
-            let a = if bpp == 32 && idx + 3 < data.len() {
-                data[idx + 3]
-            } else {
-                0xFF
-            };
-            if a == 0 {
-                continue;
-            }
-            // Color::rgb/rgba set the high alpha byte; bare RGB would be A=0
-            // and disappear on alpha-composited windows (gray panel square).
-            let color = if a == 0xFF {
-                Color::rgb(r, g, b)
-            } else {
-                Color::rgba(r, g, b, a)
-            };
-            if a == 0xFF {
-                canvas.put_pixel((cx0 + dx) as i32, (cy0 + dy) as i32, color);
-            } else {
-                // Source-over onto existing panel pixel.
-                let x = (cx0 + dx) as i32;
-                let y = (cy0 + dy) as i32;
-                if x >= 0 && y >= 0 && (x as u32) < canvas.width && (y as u32) < canvas.height {
-                    let idx = y as usize * canvas.stride as usize + x as usize;
-                    if idx < canvas.pixels.len() {
-                        canvas.pixels[idx] = color.blend_over(Color(canvas.pixels[idx])).0;
-                    }
-                }
-            }
-        }
-    }
-}
-
 fn draw_argb_image(canvas: &mut Canvas, img: &sunlight_ui::image::RgbaImage, dst: Rect) {
     use sunlight_ui::theme::Color;
     if img.width == 0 || img.height == 0 {
@@ -1046,9 +955,9 @@ fn draw_argb_image(canvas: &mut Canvas, img: &sunlight_ui::image::RgbaImage, dst
     let w = img.width;
     let h = img.height;
     for dy in 0..dh {
-        let sy = dy * h / dh;
+        let sy = ((cy0 as i32 + dy as i32 - dst.y) as u64 * h as u64 / dst.h as u64) as u32;
         for dx in 0..dw {
-            let sx = dx * w / dw;
+            let sx = ((cx0 as i32 + dx as i32 - dst.x) as u64 * w as u64 / dst.w as u64) as u32;
             let px = img.pixel(sx, sy);
             let a = ((px >> 24) & 0xFF) as u8;
             let r = ((px >> 16) & 0xFF) as u8;
@@ -1085,169 +994,11 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Async image preview (details/preview pane)
-// ---------------------------------------------------------------------------
-//
-// Preview-on-selection is generated OFF the UI thread by a background worker.
-// The UI thread never decodes image data: on selection change it bumps a
-// generation counter and hands the path to the worker; on each Event::Tick it
-// checks a single-slot mailbox. A result is applied only if its generation
-// matches the current selection — stale results are dropped silently. Decode
-// failures flip the slot to Failed so the pane shows a broken-image glyph and
-// never retries the same selection. If the worker cannot be spawned the File
-// Manager keeps working with placeholders only.
-
-// ---------------------------------------------------------------------------
-// Synchronous image preview — no threads, allocation-free drawing.
-//
-// When a supported image file is selected in the directory view, we read it
-// directly into a static source buffer and draw it in the details pane on
-// every frame using the existing draw_tga_bytes helper. No thread is spawned,
-// no atomic mailbox is needed. Compressed files allocate only during loading.
-// ---------------------------------------------------------------------------
-
-/// Maximum source file size we will preview. Files larger than this show
-/// "Preview unavailable" without reading. 8 MiB covers SIMG v2 samples after
-/// expansion to TGA-32 (e.g. 1312×816×4 + header ≈ 4.3 MiB).
-const PREVIEW_SRC_BUF_LEN: usize = 8 * 1024 * 1024;
-
-/// 0 = no preview, 1 = ready (SRC_BUF valid TGA bytes), 2 = failed / unsupported.
-static mut PREVIEW_READY: u8 = 0;
-/// Bytes of valid image data at the start of PREVIEW_SRC_BUF (TGA after expand).
-static mut PREVIEW_SRC_FILLED: usize = 0;
-/// Native dimensions (pre-scale) from the file header.
-static mut PREVIEW_SRC_W: u32 = 0;
-static mut PREVIEW_SRC_H: u32 = 0;
-/// Source format: 0 = TGA, 1 = SIMG v2, 2 = PNG, 3 = JPEG.
-static mut PREVIEW_FORMAT: u8 = 0;
-/// Raw TGA or expanded TGA-32 pixels — BSS, not in the ELF image.
-static mut PREVIEW_SRC_BUF: [u8; PREVIEW_SRC_BUF_LEN] = [0u8; PREVIEW_SRC_BUF_LEN];
+// Text preview remains on the existing bounded path. Images use thumbnails.rs.
 static mut TEXT_PREVIEW_READY: u8 = 0;
 static mut TEXT_PREVIEW_LEN: usize = 0;
 static mut TEXT_PREVIEW_TRUNCATED: u8 = 0;
 static mut TEXT_PREVIEW_BUF: [u8; TEXT_PREVIEW_BUF_LEN] = [0u8; TEXT_PREVIEW_BUF_LEN];
-
-/// Load `path` into PREVIEW_SRC_BUF for the details preview.
-///
-/// - Legacy TGA type-2: stored as-is (zero-alloc draw path).
-/// - SIMG v2: validated, then decoded once and rewritten as top-down TGA-32 so
-///   per-frame draw stays on the existing TGA path (no re-decompress every frame).
-///
-/// Sets PREVIEW_READY to 1 on success, 2 on any failure.
-fn load_preview_sync(path: &[u8]) {
-    unsafe {
-        PREVIEW_READY = 0;
-        PREVIEW_SRC_FILLED = 0;
-        PREVIEW_SRC_W = 0;
-        PREVIEW_SRC_H = 0;
-        PREVIEW_FORMAT = 0;
-    }
-
-    let stat = match libc::stat(path) {
-        Ok(s) => s,
-        Err(_) => {
-            unsafe {
-                PREVIEW_READY = 2;
-            }
-            return;
-        }
-    };
-    let file_size = stat.size as usize;
-    // SIMG v2 header is 36 bytes; TGA needs 18. Reject empty / truncated early.
-    if file_size > PREVIEW_SRC_BUF_LEN || file_size < 4 {
-        unsafe {
-            PREVIEW_READY = 2;
-        }
-        return;
-    }
-
-    let fd = match libc::open(path) {
-        Ok(f) => f,
-        Err(_) => {
-            unsafe {
-                PREVIEW_READY = 2;
-            }
-            return;
-        }
-    };
-
-    let mut total = 0usize;
-    loop {
-        let remaining = file_size - total;
-        if remaining == 0 {
-            break;
-        }
-        let chunk = remaining.min(8192);
-        let n = unsafe { libc::read(fd, &mut PREVIEW_SRC_BUF[total..total + chunk]).unwrap_or(0) };
-        if n == 0 {
-            break;
-        }
-        total += n;
-    }
-    let _ = libc::close(fd);
-
-    unsafe {
-        PREVIEW_SRC_FILLED = total;
-        // Expand compressed formats once so drawing stays allocation-free per frame.
-        let compressed = PREVIEW_SRC_BUF[..total].starts_with(b"SIMG")
-            || PREVIEW_SRC_BUF[..total].starts_with(b"\x89PNG\r\n\x1a\n")
-            || PREVIEW_SRC_BUF[..total].starts_with(b"\xff\xd8\xff");
-        if compressed {
-            PREVIEW_FORMAT = if PREVIEW_SRC_BUF[..total].starts_with(b"SIMG") {
-                1
-            } else if PREVIEW_SRC_BUF[..total].starts_with(b"\x89PNG") {
-                2
-            } else {
-                3
-            };
-            let Ok(decoded) = (|| {
-                let src = &PREVIEW_SRC_BUF[..total];
-                decode_simg(src)
-            })() else {
-                PREVIEW_READY = 2;
-                return;
-            };
-            let pixel_count = decoded.pixel_count();
-            let Some(need) = 18usize.checked_add(pixel_count.checked_mul(4).unwrap_or(usize::MAX))
-            else {
-                PREVIEW_READY = 2;
-                return;
-            };
-            if need > PREVIEW_SRC_BUF_LEN {
-                PREVIEW_READY = 2;
-                return;
-            }
-            PREVIEW_SRC_BUF[0..12].copy_from_slice(&[
-                0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            ]);
-            PREVIEW_SRC_BUF[12..14].copy_from_slice(&(decoded.width as u16).to_le_bytes());
-            PREVIEW_SRC_BUF[14..16].copy_from_slice(&(decoded.height as u16).to_le_bytes());
-            PREVIEW_SRC_BUF[16] = 32;
-            PREVIEW_SRC_BUF[17] = 0x28;
-            let mut off = 18usize;
-            for px in &decoded.pixels {
-                PREVIEW_SRC_BUF[off] = *px as u8;
-                PREVIEW_SRC_BUF[off + 1] = (*px >> 8) as u8;
-                PREVIEW_SRC_BUF[off + 2] = (*px >> 16) as u8;
-                PREVIEW_SRC_BUF[off + 3] = (*px >> 24) as u8;
-                off += 4;
-            }
-            PREVIEW_SRC_FILLED = need;
-            PREVIEW_SRC_W = decoded.width;
-            PREVIEW_SRC_H = decoded.height;
-        } else {
-            let Some((w, h, _)) = tga_header_dims(&PREVIEW_SRC_BUF[..total]) else {
-                PREVIEW_READY = 2;
-                return;
-            };
-            PREVIEW_SRC_W = w;
-            PREVIEW_SRC_H = h;
-        }
-
-        PREVIEW_READY = 1;
-    }
-}
 
 fn clear_text_preview() {
     unsafe {
@@ -1731,6 +1482,8 @@ enum ScrollFocus {
 }
 
 struct FilesApp {
+    grid_view: bool,
+    thumbnails: thumbnails::Thumbnails,
     state: State,
     mime_icons: MimeIconTheme,
     /// Cached source dimensions of the last loaded preview (for metadata display).
@@ -1792,6 +1545,8 @@ impl FilesApp {
         let mut main_scroll = ScrollState::new();
         main_scroll.focused = true;
         Self {
+            thumbnails: thumbnails::Thumbnails::new(),
+            grid_view: true,
             state: State::new(),
             mime_icons: MimeIconTheme::load(),
             preview_src_w: 0,
@@ -2096,9 +1851,7 @@ impl FilesApp {
     fn update_preview_for_selection(&mut self) {
         self.preview_src_w = 0;
         self.preview_src_h = 0;
-        unsafe {
-            PREVIEW_READY = 0;
-        }
+        self.thumbnails.request(None);
         clear_text_preview();
 
         if self.state.view_mode != ViewMode::Directory {
@@ -2121,9 +1874,7 @@ impl FilesApp {
         };
         if let Some(full_path) = self.state.current_path.join(name) {
             if is_image_name(name_bytes) {
-                load_preview_sync(full_path.as_str().as_bytes());
-                self.preview_src_w = unsafe { PREVIEW_SRC_W };
-                self.preview_src_h = unsafe { PREVIEW_SRC_H };
+                self.thumbnails.request(Some(full_path.as_str().as_bytes()));
             } else {
                 load_text_preview_sync(
                     full_path.as_str().as_bytes(),
@@ -2225,8 +1976,16 @@ impl FilesApp {
     /// Ensure the selected row is visible in the main scroll viewport.
     fn ensure_selected_visible(&mut self) {
         if let Some(idx) = self.state.selected_row {
-            let item_y = idx as i32 * ROW_H as i32;
-            if self.main_scroll.ensure_visible(item_y, ROW_H) {
+            let main = self.body_layout().1;
+            let item_y = if self.grid_view {
+                (idx / Self::grid_columns(main)) as i32 * GRID_H as i32
+            } else {
+                idx as i32 * ROW_H as i32
+            };
+            if self
+                .main_scroll
+                .ensure_visible(item_y, if self.grid_view { GRID_H } else { ROW_H })
+            {
                 // scroll state changed — no extra action needed, view() will respect new offset
             }
         }
@@ -2320,11 +2079,20 @@ impl FilesApp {
         true
     }
 
+    fn toggle_view(&mut self) -> bool {
+        self.grid_view = !self.grid_view;
+        self.thumbnails.directory_changed();
+        self.main_scroll.scroll_to_y(0);
+        true
+    }
+
     fn refresh_directory(&mut self) -> bool {
         if self.state.view_mode != ViewMode::Directory {
             return false;
         }
         self.context_menu = None;
+        self.thumbnails
+            .invalidate_directory(self.state.current_path.as_str().as_bytes());
         self.state.load_directory(self.state.current_path);
         self.update_preview_for_selection();
         self.reset_row_click_state();
@@ -2488,9 +2256,18 @@ impl FilesApp {
         None
     }
 
-    fn row_rect(main: Rect, idx: usize, scroll_y: i32) -> Rect {
+    fn row_rect(&self, main: Rect, idx: usize, scroll_y: i32) -> Rect {
         let inner = main.inset(PAD);
         let header_bottom = inner.y + COL_HEADER_H as i32;
+        if self.grid_view {
+            let cols = Self::grid_columns(main);
+            return Rect::new(
+                inner.x + (idx % cols) as i32 * GRID_W as i32,
+                header_bottom + (idx / cols) as i32 * GRID_H as i32 - scroll_y,
+                GRID_W,
+                GRID_H,
+            );
+        }
         Rect::new(
             inner.x,
             header_bottom + (idx as u32 * ROW_H) as i32 - scroll_y,
@@ -2499,10 +2276,20 @@ impl FilesApp {
         )
     }
 
-    fn hit_test_row(main: Rect, x: i32, y: i32, rows: usize, scroll_y: i32) -> Option<usize> {
+    fn hit_test_row(
+        &self,
+        main: Rect,
+        x: i32,
+        y: i32,
+        rows: usize,
+        scroll_y: i32,
+    ) -> Option<usize> {
         let point = sunlight_ui::Point::new(x, y);
+        if !Self::main_scroll_region(main).contains(point) {
+            return None;
+        }
         for idx in 0..rows {
-            if Self::row_rect(main, idx, scroll_y).contains(point) {
+            if self.row_rect(main, idx, scroll_y).contains(point) {
                 return Some(idx);
             }
         }
@@ -2554,6 +2341,7 @@ impl FilesApp {
                 ContextMenuItem::NewFolder,
                 ContextMenuItem::NewTextFile,
                 ContextMenuItem::Refresh,
+                ContextMenuItem::ToggleView,
                 ContextMenuItem::Properties,
             ],
         }
@@ -2567,6 +2355,7 @@ impl FilesApp {
             ContextMenuItem::NewFolder => "New Folder",
             ContextMenuItem::NewTextFile => "New Text File",
             ContextMenuItem::Refresh => "Refresh",
+            ContextMenuItem::ToggleView => "Icons / Details (F6)",
             ContextMenuItem::CopyPath => "Copy Path",
             ContextMenuItem::Paste => "Paste",
             ContextMenuItem::Properties => "Properties",
@@ -2595,7 +2384,7 @@ impl FilesApp {
         // The context menu only applies to the directory listing.
         if self.state.view_mode == ViewMode::Directory {
             let (_, main) = self.body_layout();
-            if let Some(idx) = Self::hit_test_row(
+            if let Some(idx) = self.hit_test_row(
                 main,
                 x,
                 y,
@@ -2688,6 +2477,7 @@ impl FilesApp {
             ContextMenuItem::NewFolder => self.create_item(true),
             ContextMenuItem::NewTextFile => self.create_item(false),
             ContextMenuItem::Refresh => self.refresh_directory(),
+            ContextMenuItem::ToggleView => self.toggle_view(),
             ContextMenuItem::CopyPath => self.copy_selected_path_text(),
             ContextMenuItem::Paste => self.paste_from_clipboard(),
             ContextMenuItem::Properties => {
@@ -3377,6 +3167,22 @@ impl FilesApp {
 
     fn draw_directory_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
         let inner = main.inset(PAD);
+        if self.grid_view {
+            sf_vcenter(
+                canvas,
+                if self.state.error_len != 0 {
+                    self.state.error_str()
+                } else {
+                    "Icons · F6: Details"
+                },
+                inner.x,
+                inner.y,
+                COL_HEADER_H,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            self.draw_directory_grid(canvas, theme, main);
+            return;
+        }
 
         // ── Column header row ──────────────────────────────────────────────
         let name_w = inner
@@ -3401,7 +3207,7 @@ impl FilesApp {
         let name_header_x = inner.x + ICON_SLOT as i32 + 6;
         sf_vcenter(
             canvas,
-            "Name",
+            "Name · F6: Icons",
             name_header_x,
             header_y,
             COL_HEADER_H,
@@ -3446,6 +3252,120 @@ impl FilesApp {
 
         // ── Rows / empty state ─────────────────────────────────────────────
         self.draw_directory_rows(canvas, theme, main);
+    }
+
+    fn grid_columns(main: Rect) -> usize {
+        (main.inset(PAD).w.saturating_sub(12) / GRID_W).max(1) as usize
+    }
+    fn grid_visible(&self) -> core::ops::Range<usize> {
+        let main = self.body_layout().1;
+        let cols = Self::grid_columns(main);
+        let first = self.main_scroll.offset_y.max(0) as usize / GRID_H as usize * cols;
+        let count = (Self::main_scroll_region(main).h as usize / GRID_H as usize + 2) * cols;
+        first.min(self.state.entry_count)..(first + count).min(self.state.entry_count)
+    }
+    fn schedule_grid(&mut self) {
+        // view() synchronizes navigation before this runs. Ticks must not submit
+        // entries from a new directory under the old directory generation.
+        if !self.grid_view
+            || self.state.view_mode != ViewMode::Directory
+            || self.prev_view_mode != self.state.view_mode
+            || !path_matches(self.prev_path.as_str(), self.state.current_path.as_str())
+        {
+            return;
+        }
+        for idx in self.grid_visible() {
+            let main = self.body_layout().1;
+            let tile = self.row_rect(main, idx, self.main_scroll.offset_y);
+            let region = Self::main_scroll_region(main);
+            if tile.bottom() <= region.y || tile.y >= region.bottom() {
+                continue;
+            }
+            let entry = self.state.entries[idx];
+            if entry.file_type == FT_FILE && is_image_name(entry.name_bytes()) {
+                if let Some(path) = self.state.current_path.join(entry_name_str(&entry)) {
+                    self.thumbnails
+                        .request_grid(path.as_str().as_bytes(), entry.size);
+                }
+            }
+        }
+    }
+    fn draw_directory_grid(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let region = Self::main_scroll_region(main);
+        for idx in self.grid_visible() {
+            let tile = self.row_rect(main, idx, self.main_scroll.offset_y);
+            let left = tile.x.max(region.x).max(0);
+            let top = tile.y.max(region.y).max(0);
+            let right = tile.right().min(region.right()).min(canvas.width as i32);
+            let bottom = tile.bottom().min(region.bottom()).min(canvas.height as i32);
+            if right <= left || bottom <= top {
+                continue;
+            }
+            let start = top as usize * canvas.stride as usize + left as usize;
+            let stride = canvas.stride;
+            let mut clipped = Canvas::new(
+                &mut canvas.pixels[start..],
+                stride,
+                (right - left) as u32,
+                (bottom - top) as u32,
+            );
+            let tile = Rect::new(tile.x - left, tile.y - top, tile.w, tile.h);
+            let selected = self.state.selected_rows[idx];
+            if selected {
+                clipped.fill_rounded_rect(
+                    tile.inset(3),
+                    RADIUS,
+                    if self.window_focused {
+                        theme.chrome.selection
+                    } else {
+                        theme.chrome.selection_inactive
+                    },
+                );
+            }
+            let entry = self.state.entries[idx];
+            let bounds = Rect::new(tile.x + 28, tile.y + 8, 72, 72);
+            let path = self.state.current_path.join(entry_name_str(&entry));
+            let ready = path.as_ref().and_then(|p| {
+                self.thumbnails
+                    .grid_image(p.as_str().as_bytes(), entry.size)
+            });
+            if let Some(ready) = ready {
+                let (w, h) = sunlight_ui::image::simg::fit_dimensions(
+                    ready.image.width,
+                    ready.image.height,
+                    bounds.w,
+                    bounds.h,
+                );
+                draw_argb_image(
+                    &mut clipped,
+                    &ready.image,
+                    Rect::new(
+                        bounds.x + (bounds.w - w) as i32 / 2,
+                        bounds.y + (bounds.h - h) as i32 / 2,
+                        w,
+                        h,
+                    ),
+                );
+            } else if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
+                clipped.draw_tga_icon(&icon, bounds);
+            } else {
+                clipped.draw_ui_symbol_centered(bounds, UiSymbol::File, theme.text_dim);
+            }
+            sf_centered(
+                &mut clipped,
+                Rect::new(tile.x + 4, tile.y + 84, tile.w - 8, 24),
+                entry_name_str(&entry),
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+        }
+        if self.state.entry_count == 0 {
+            sf_centered(
+                canvas,
+                region,
+                "This folder is empty",
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+        }
     }
 
     fn draw_directory_rows(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
@@ -3892,7 +3812,7 @@ impl FilesApp {
                 );
             }
 
-            let format_label = match unsafe { PREVIEW_FORMAT } {
+            let format_label = match self.thumbnails.preview.as_ref().map_or(0, |p| p.format) {
                 1 => "SIMG v2",
                 2 => "PNG",
                 3 => "JPEG",
@@ -3912,21 +3832,21 @@ impl FilesApp {
 
         // Preview (right side)
         if is_image_name(name_bytes) {
-            let ready = unsafe { PREVIEW_READY };
             let icon_inset = preview.inset(4);
-            if ready == 1 {
-                let filled = unsafe { PREVIEW_SRC_FILLED };
-                unsafe {
-                    draw_tga_bytes(canvas, &PREVIEW_SRC_BUF[..filled], icon_inset);
-                }
-            } else if ready == 2 {
-                canvas.draw_ui_symbol_centered(icon_inset, UiSymbol::MissingFolder, theme.danger);
-                sf_centered(
-                    canvas,
-                    Rect::new(icon_inset.x, icon_inset.bottom() - 14, icon_inset.w, 14),
-                    "Preview unavailable",
-                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            if let Some(ready) = &self.thumbnails.preview {
+                let (w, h) = sunlight_ui::image::simg::fit_dimensions(
+                    ready.image.width,
+                    ready.image.height,
+                    icon_inset.w,
+                    icon_inset.h,
                 );
+                let dst = Rect::new(
+                    icon_inset.x + (icon_inset.w - w) as i32 / 2,
+                    icon_inset.y + (icon_inset.h - h) as i32 / 2,
+                    w,
+                    h,
+                );
+                draw_argb_image(canvas, &ready.image, dst);
             } else {
                 if let Some(icon) = self.mime_icons.image_generic {
                     let sz = icon_inset.h.min(64);
@@ -4194,7 +4114,11 @@ impl App for FilesApp {
             let main_inner = main.inset(PAD);
             let list_h = main_inner.h.saturating_sub(COL_HEADER_H);
             self.main_scroll.set_viewport(main_inner.w, list_h);
-            let main_content_h = self.state.entry_count as u32 * ROW_H;
+            let main_content_h = if self.grid_view {
+                self.state.entry_count.div_ceil(Self::grid_columns(main)) as u32 * GRID_H
+            } else {
+                self.state.entry_count as u32 * ROW_H
+            };
             self.main_scroll.content_h = main_content_h;
 
             // Reset main-list scroll when the directory or view mode changes
@@ -4202,6 +4126,8 @@ impl App for FilesApp {
             let same_dir = path_matches(current_path.as_str(), self.prev_path.as_str());
             if !same_dir || self.state.view_mode != self.prev_view_mode {
                 self.main_scroll.scroll_to_y(0);
+                self.thumbnails.directory_changed();
+                self.update_preview_for_selection();
             }
             self.main_scroll.clamp();
 
@@ -4209,6 +4135,7 @@ impl App for FilesApp {
             self.prev_view_mode = self.state.view_mode;
         }
 
+        self.schedule_grid();
         self.draw_toolbar(canvas, theme, toolbar);
         self.draw_sidebar(canvas, theme, sidebar);
         self.draw_main(canvas, theme, main);
@@ -4230,6 +4157,20 @@ impl App for FilesApp {
     }
 
     fn update(&mut self, event: Event) -> bool {
+        let thumbnail_changed = if matches!(event, Event::Tick) {
+            self.thumbnails.poll()
+        } else {
+            false
+        };
+        if let Some(preview) = &self.thumbnails.preview {
+            self.preview_src_w = preview.width;
+            self.preview_src_h = preview.height;
+        }
+
+        if matches!(event, Event::Tick) {
+            self.schedule_grid();
+            return thumbnail_changed;
+        }
         if let Event::KeyPress { ctrl, shift, .. } = event {
             self.ctrl_down = ctrl;
             self.shift_down = shift;
@@ -4431,7 +4372,7 @@ impl App for FilesApp {
                     }
                     ViewMode::Network => {}
                     ViewMode::Directory => {
-                        if let Some(idx) = Self::hit_test_row(
+                        if let Some(idx) = self.hit_test_row(
                             main,
                             x,
                             y,
@@ -4464,6 +4405,25 @@ impl App for FilesApp {
             Event::KeyPress {
                 keycode: KEY_LEFT,
                 pressed: true,
+                alt: false,
+                ..
+            } if self.grid_view && self.state.view_mode == ViewMode::Directory => {
+                let changed = self.change_row_selection(-1);
+                self.ensure_selected_visible();
+                changed
+            }
+            Event::KeyPress {
+                keycode: 0x4D,
+                pressed: true,
+                ..
+            } if self.grid_view && self.state.view_mode == ViewMode::Directory => {
+                let changed = self.change_row_selection(1);
+                self.ensure_selected_visible();
+                changed
+            }
+            Event::KeyPress {
+                keycode: KEY_LEFT,
+                pressed: true,
                 ..
             } => {
                 let changed = self.state.update(Message::NavigateUp);
@@ -4482,6 +4442,11 @@ impl App for FilesApp {
                 ctrl: true,
                 ..
             } => self.copy_selected_file_list(true),
+            Event::KeyPress {
+                keycode: 0x40,
+                pressed: true,
+                ..
+            } => self.toggle_view(),
             Event::KeyPress {
                 keycode: 0x3F,
                 pressed: true,
@@ -4531,7 +4496,11 @@ impl App for FilesApp {
                     self.sidebar_scroll
                         .scroll_by(-((SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32))
                 } else {
-                    let changed = self.change_row_selection(-1);
+                    let changed = self.change_row_selection(if self.grid_view {
+                        -(Self::grid_columns(self.body_layout().1) as isize)
+                    } else {
+                        -1
+                    });
                     self.ensure_selected_visible();
                     changed
                 }
@@ -4545,7 +4514,11 @@ impl App for FilesApp {
                     self.sidebar_scroll
                         .scroll_by((SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32)
                 } else {
-                    let changed = self.change_row_selection(1);
+                    let changed = self.change_row_selection(if self.grid_view {
+                        Self::grid_columns(self.body_layout().1) as isize
+                    } else {
+                        1
+                    });
                     self.ensure_selected_visible();
                     changed
                 }
@@ -4559,7 +4532,12 @@ impl App for FilesApp {
                     self.sidebar_scroll.page_up()
                 } else {
                     let mut changed = self.main_scroll.page_up();
-                    let visible = ((self.main_scroll.offset_y as u32) / ROW_H) as usize;
+                    let visible = if self.grid_view {
+                        self.main_scroll.offset_y as usize / GRID_H as usize
+                            * Self::grid_columns(self.body_layout().1)
+                    } else {
+                        self.main_scroll.offset_y as usize / ROW_H as usize
+                    };
                     let target = visible.min(self.state.entry_count.saturating_sub(1));
                     if self.state.entry_count > 0 && self.state.selected_row != Some(target) {
                         changed |= self.select_item(target);
@@ -4577,7 +4555,12 @@ impl App for FilesApp {
                     self.sidebar_scroll.page_down()
                 } else {
                     let mut changed = self.main_scroll.page_down();
-                    let visible = ((self.main_scroll.offset_y as u32) / ROW_H) as usize;
+                    let visible = if self.grid_view {
+                        self.main_scroll.offset_y as usize / GRID_H as usize
+                            * Self::grid_columns(self.body_layout().1)
+                    } else {
+                        self.main_scroll.offset_y as usize / ROW_H as usize
+                    };
                     let target = visible.min(self.state.entry_count.saturating_sub(1));
                     if self.state.entry_count > 0 && self.state.selected_row != Some(target) {
                         changed |= self.select_item(target);
@@ -4627,7 +4610,7 @@ impl App for FilesApp {
                 ctrl: true,
                 ..
             } => self.paste_from_clipboard(),
-            Event::Tick => false,
+            Event::Tick => thumbnail_changed,
             _ => false,
         }
     }
@@ -5091,6 +5074,161 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grid_renders_each_files_own_thumbnail() {
+        let mut app = FilesApp::new();
+        app.state.view_mode = ViewMode::Directory;
+        app.state.current_path = PathBuf::from_str("/pictures").unwrap();
+        let _ = app.set_client_bounds(960, 620);
+        let _ = app.ensure_layout();
+        for (name, color) in [("red.png", 0xffff0000), ("green.png", 0xff00ff00)] {
+            let mut entry = DirEntry::zeroed();
+            entry.name[..name.len()].copy_from_slice(name.as_bytes());
+            entry.name_len = name.len() as u8;
+            entry.file_type = FT_FILE;
+            entry.size = 4;
+            app.state.entries.push(entry);
+            let path = app.state.current_path.join(name).unwrap();
+            app.thumbnails.seed_grid(
+                path.as_str().as_bytes(),
+                4,
+                thumbnails::Preview {
+                    image: alloc::sync::Arc::new(sunlight_ui::image::RgbaImage {
+                        width: 1,
+                        height: 1,
+                        pixels: alloc::vec![color],
+                    }),
+                    width: 1,
+                    height: 1,
+                    format: 2,
+                },
+            );
+        }
+        app.state.entry_count = 2;
+        app.state.selected_rows = alloc::vec![true, false];
+        let mut pixels = alloc::vec![0; 960 * 620];
+        let mut canvas = Canvas::new(&mut pixels, 960, 960, 620);
+        let main = app.body_layout().1;
+        app.draw_directory_grid(&mut canvas, &Theme::sunlight_dark(), main);
+        for (idx, color) in [0xffff0000, 0xff00ff00].into_iter().enumerate() {
+            let tile = app.row_rect(main, idx, 0);
+            assert_eq!(
+                canvas.pixels[(tile.y + 44) as usize * 960 + (tile.x + 64) as usize],
+                color
+            );
+            assert_eq!(
+                app.hit_test_row(main, tile.x + 64, tile.y + 44, 2, 0),
+                Some(idx)
+            );
+        }
+        assert!(app.state.selected_rows[0]);
+    }
+
+    #[test]
+    fn thumbnail_paths_are_lexically_normalized() {
+        assert_eq!(
+            PathBuf::from_str("//pictures/./sub/../image.png")
+                .unwrap()
+                .as_str(),
+            "/pictures/image.png"
+        );
+        assert_eq!(
+            PathBuf::from_str("/../../pictures").unwrap().as_str(),
+            "/pictures"
+        );
+    }
+    #[test]
+    fn grid_geometry_hit_testing_scroll_and_details() {
+        let mut app = FilesApp::new();
+        let main = Rect::new(0, 0, 540, 400);
+        let cols = FilesApp::grid_columns(main);
+        assert!(cols > 1);
+        for idx in 0..1000 {
+            let tile = app.row_rect(main, idx, 0);
+            if FilesApp::main_scroll_region(main)
+                .contains(sunlight_ui::Point::new(tile.x + 10, tile.y + 10))
+            {
+                assert_eq!(
+                    app.hit_test_row(main, tile.x + 10, tile.y + 10, 1000, 0),
+                    Some(idx)
+                );
+            }
+            assert_eq!(tile.w, GRID_W);
+            assert_eq!(tile.h, GRID_H);
+        }
+        let tile = app.row_rect(main, cols * 10, GRID_H as i32 * 10);
+        assert_eq!(
+            app.hit_test_row(main, tile.x + 10, tile.y + 10, 1000, GRID_H as i32 * 10),
+            Some(cols * 10)
+        );
+        assert!(app.hit_test_row(main, 10, 0, 1000, 0).is_none());
+        app.grid_view = false;
+        assert_eq!(app.row_rect(main, 3, 0).h, ROW_H);
+    }
+    #[test]
+    fn grid_viewport_scheduler_ignores_non_images_and_offscreen() {
+        let mut app = FilesApp::new();
+        app.state.view_mode = ViewMode::Directory;
+        app.prev_view_mode = ViewMode::Directory;
+        app.state.current_path = PathBuf::from_str("/pictures").unwrap();
+        app.prev_path = app.state.current_path;
+        let _ = app.set_client_bounds(960, 620);
+        let _ = app.ensure_layout();
+        for i in 0..500 {
+            let name = if i % 2 == 0 {
+                format!("{i}.png")
+            } else {
+                format!("{i}.txt")
+            };
+            let mut entry = DirEntry::zeroed();
+            entry.name[..name.len()].copy_from_slice(name.as_bytes());
+            entry.name_len = name.len() as u8;
+            entry.file_type = FT_FILE;
+            entry.size = 100;
+            app.state.entries.push(entry);
+        }
+        app.state.entry_count = 500;
+        app.state.selected_rows = alloc::vec![false; 500];
+        assert!(app.grid_visible().end < 100);
+        app.main_scroll.offset_y = GRID_H as i32 * 10;
+        assert!(app.grid_visible().start > 0);
+        app.schedule_grid(); // unavailable worker keeps icons, without UI filesystem reads
+        let mut pixels = alloc::vec![0; 960 * 620];
+        let mut canvas = Canvas::new(&mut pixels, 960, 960, 620);
+        app.draw_directory_grid(&mut canvas, &Theme::sunlight_dark(), app.body_layout().1);
+    }
+
+    #[test]
+    fn thumbnail_rendering_preserves_alpha_and_clipped_coordinates() {
+        let image = sunlight_ui::image::RgbaImage {
+            width: 2,
+            height: 1,
+            pixels: alloc::vec![0xffff0000, 0x800000ff],
+        };
+        for (width, height) in [(8, 4), (16, 8), (4, 2)] {
+            let mut pixels = alloc::vec![0xff000000; (width * height) as usize];
+            let mut canvas = Canvas::new(&mut pixels, width, width, height);
+            draw_argb_image(&mut canvas, &image, Rect::new(0, 0, width, height));
+            assert_eq!(canvas.pixels[0], 0xffff0000);
+            assert_eq!(canvas.pixels[(width - 1) as usize], 0xff000080);
+        }
+        let mut pixels = [0xff000000; 4];
+        let mut canvas = Canvas::new(&mut pixels, 4, 4, 1);
+        draw_argb_image(&mut canvas, &image, Rect::new(-4, 0, 8, 1));
+        assert_eq!(canvas.pixels, &[0xff000080; 4]);
+    }
+
+    #[test]
+    fn repeated_empty_files_models_release_preview_state() {
+        for _ in 0..100 {
+            let mut app = FilesApp::new();
+            app.state.view_mode = ViewMode::Directory;
+            app.update_preview_for_selection();
+            assert!(app.thumbnails.preview.is_none());
+            assert_eq!(app.state.entry_count, 0);
+        }
+    }
 
     #[test]
     fn file_selection_builds_shared_clipboard_paths_and_survives_right_click() {

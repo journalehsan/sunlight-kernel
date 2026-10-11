@@ -116,3 +116,17 @@ fn animated_png_is_rejected() {
     apng.extend_from_slice(&RGBA[33..]);
     assert_eq!(decode_image(&apng), Err(ImageError::UnsupportedFormat));
 }
+
+#[test]
+fn conflicting_jpeg_frame_headers_are_rejected() {
+    let original = include_bytes!("fixtures/baseline.jpg");
+    let start = original.windows(2).position(|w| w == [0xff, 0xc0]).unwrap();
+    let length = u16::from_be_bytes([original[start + 2], original[start + 3]]) as usize;
+    let mut frame = original[start..start + 2 + length].to_vec();
+    frame[5..7].copy_from_slice(&1u16.to_be_bytes());
+    frame[7..9].copy_from_slice(&1u16.to_be_bytes());
+    let mut altered = original[..start].to_vec();
+    altered.extend_from_slice(&frame);
+    altered.extend_from_slice(&original[start..]);
+    assert!(sun_img::decode_image(&altered).is_err());
+}

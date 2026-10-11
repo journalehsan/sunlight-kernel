@@ -87,6 +87,11 @@ pub fn decode_jpeg(bytes: &[u8]) -> Result<ImageRgba8, ImageError> {
     let info = decoder.info().ok_or(ImageError::InvalidHeader)?;
     let width = u32::from(info.width);
     let height = u32::from(info.height);
+    // Header inspection sets the caller's allocation budget. A second SOF must
+    // not silently replace those dimensions before entropy decoding allocates.
+    if (width, height) != jpeg_dimensions(bytes)? {
+        return Err(ImageError::InvalidHeader);
+    }
     let len = checked_len(width, height)?;
     let colorspace = decoder
         .get_output_colorspace()
