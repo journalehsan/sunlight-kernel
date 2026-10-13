@@ -133,7 +133,11 @@ impl TtyRunner {
     fn run(&self, line: &str) -> u8 {
         self.command(line);
         self.command("echo $? > /tmp/sshl-status");
-        core::str::from_utf8(&file("/tmp/sshl-status")).unwrap().trim().parse().unwrap()
+        let status = core::str::from_utf8(&file("/tmp/sshl-status")).unwrap().trim().parse().unwrap();
+        // The status-query echo itself succeeds. Restore the observed status
+        // so the next workload can test $? from the original command.
+        self.command(&format!("sshl --probe exit {status}"));
+        status
     }
 }
 impl Drop for TtyRunner {
@@ -190,7 +194,9 @@ impl PtyRunner {
     fn run(&self, line: &str) -> u8 {
         self.send(&format!("{line}\n")); self.prompt();
         self.send("echo $? > /tmp/sshl-status\n"); self.prompt();
-        core::str::from_utf8(&file("/tmp/sshl-status")).unwrap().trim().parse().unwrap()
+        let status = core::str::from_utf8(&file("/tmp/sshl-status")).unwrap().trim().parse().unwrap();
+        self.send(&format!("sshl --probe exit {status}\n")); self.prompt();
+        status
     }
 }
 impl Drop for PtyRunner {
@@ -272,4 +278,154 @@ fn exercise(path: &str, run: &mut dyn FnMut(&str) -> u8) {
     let start = monotonic_millis(); check("sshl --probe pause 200", 0);
     debug_log(&format!("[SSHL-TEST] {path} wait elapsed_ms={} PASS", monotonic_millis()-start));
     debug_log(&format!("[SSHL-TEST] {path} coverage PASS"));
+}
+
+/// Real /bin/sh invocations; stdout is descriptor-backed, with no terminal input.
+pub(super) fn script_suite() -> ! {
+    let fixture = b"#!/bin/sh\nf() { echo \"$0:$#:$1\"; return 7; }\nf \"$1\"\necho status:$?\nfor x in \"$@\"; do echo \"<$x>\"; done\nif false; then echo bad; elif ! false; then echo yes; fi\nready=no; until test \"$ready\" = yes; do ready=yes; done\nwhile true; do for x in one two; do echo $x; break 2; done; done\nvalue=parent; (value=child; cd /tmp; echo $value); echo $value\ncase abc in 'a*') echo bad;; a?c) echo case;; esac\n{ echo group; echo two; } > /tmp/sshl-group\nsshl --probe copy < /tmp/sshl-group | sshl --probe copy\nsshl --probe exit 9 | sshl --probe exit 3\necho final:$?\nexit 23\n";
+    let fd = libc::open_with_flags_mode(
+        b"/tmp/sshl-phase2.sh",
+        libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+        0o644,
+    )
+    .unwrap_or_else(|_| fail("script create"));
+    libc::write_all(fd, fixture).unwrap();
+    libc::close(fd).unwrap();
+    let run = |argv: &[&[u8]], expected: u64, output: &[u8]| {
+        let fd = libc::open_with_flags_mode(
+            b"/tmp/sshl-script-output",
+            libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+            0o644,
+        )
+        .unwrap();
+        let pid = libc::spawn_with_stdio(b"/bin/sh", argv, None, Some(fd), None)
+            .unwrap_or_else(|_| fail("/bin/sh spawn"));
+        libc::close(fd).unwrap();
+        let status = libc::waitpid(pid).unwrap_or_else(|_| fail("script wait"));
+        if status != expected {
+            fail(&format!("script status: {status}, expected {expected}"));
+        }
+        expect("/tmp/sshl-script-output", output);
+    };
+    run(&[b"sh", b"/tmp/sshl-phase2.sh", b"hello world", b""], 23,
+        b"/tmp/sshl-phase2.sh:1:hello world\nstatus:7\n<hello world>\n<>\nyes\none\nchild\nparent\ncase\ngroup\ntwo\nfinal:3\n");
+    debug_log("[SSHL-SCRIPT] file arguments control-flow pipeline PASS");
+    run(
+        &[
+            b"sh",
+            b"-c",
+            b"echo \"$0:$#:$1\"; false || true; exit 9",
+            b"named",
+            b"argument",
+        ],
+        9,
+        b"named:1:argument\n",
+    );
+    run(&[b"sh", b"-c", b"if true; then"], 2, b"");
+    run(&[b"sh", b"-c", b"f() { f; }; f"], 2, b"");
+    run(
+        &[
+            b"sh",
+            b"-c",
+            b"export SCRIPT_EXPORT=changed; sshl --probe exit 0",
+        ],
+        2,
+        b"",
+    );
+    run(
+        &[
+            b"sh",
+            b"-c",
+            b"cd /absent || echo recovered; test bad -eq 2; echo status:$?",
+        ],
+        0,
+        b"recovered\nstatus:2\n",
+    );
+    if libc::spawn(b"/tmp/sshl-phase2.sh", &[b"/tmp/sshl-phase2.sh"], None).is_ok() {
+        fail("unexpected kernel shebang support");
+    }
+    debug_log("[SSHL-SCRIPT] command syntax status PASS");
+    // Warm up and check the parent descriptor allocator and child reaping path.
+    run(
+        &[
+            b"sh",
+            b"-c",
+            b"echo repeat | sshl --probe copy; (x=child); :",
+        ],
+        0,
+        b"repeat\n",
+    );
+    let before = libc::alloc::heap_stats();
+    let fd_before = libc::dup(libc::STDOUT).unwrap();
+    libc::close(fd_before).unwrap();
+    for _ in 0..25 {
+        run(
+            &[
+                b"sh",
+                b"-c",
+                b"echo repeat | sshl --probe copy; (x=child); :",
+            ],
+            0,
+            b"repeat\n",
+        );
+    }
+    let fd_after = libc::dup(libc::STDOUT).unwrap();
+    libc::close(fd_after).unwrap();
+    let after = libc::alloc::heap_stats();
+    if fd_before != fd_after
+        || after.requested_user_bytes > before.requested_user_bytes + 1024
+        || after.failed_allocation_count != before.failed_allocation_count
+    {
+        fail("script repeat resource growth");
+    }
+    // Exercise repeated scopes within one interpreter, including failing opens.
+    let mut context = native_script::context();
+    let mut runtime = native_script::NativeRuntime::new();
+    let before = libc::alloc::heap_stats();
+    let fd_before = libc::dup(libc::STDOUT).unwrap();
+    libc::close(fd_before).unwrap();
+    for _ in 0..100 {
+        let result = sunshell::script::execute(
+            "{ :; } > /tmp/sshl-scope; (x=child); :",
+            &mut context,
+            &mut runtime,
+        );
+        if !matches!(result, Ok(sunshell::script::Flow::Status(0))) {
+            fail("script repeated scope");
+        }
+        if sunshell::script::execute(
+            "{ :; } > /tmp/sshl-scope < /absent/file",
+            &mut context,
+            &mut runtime,
+        )
+        .is_ok()
+        {
+            fail("script failed redirection");
+        }
+    }
+    let after = libc::alloc::heap_stats();
+    let fd_after = libc::dup(libc::STDOUT).unwrap();
+    libc::close(fd_after).unwrap();
+    if fd_before != fd_after
+        || after.requested_user_bytes > before.requested_user_bytes + 1024
+        || after.failed_allocation_count != before.failed_allocation_count
+    {
+        fail("interpreter resource growth");
+    }
+    debug_log("[SSHL-SCRIPT] repeated processes descriptors scopes PASS");
+    {
+        let pty = PtyRunner::new();
+        exercise("script-pty", &mut |line| pty.run(line));
+        let script = "sh -c 'if true; then echo PTY-$1-$2; fi; exit 7' named script-output witness";
+        pty.send(&format!("{script}\n"));
+        let output = pty.prompt();
+        if !output.windows(b"PTY-script-output-witness".len()).any(|s| s == b"PTY-script-output-witness") { fail("PTY script output association"); }
+        if pty.run(script) != 7 { fail("PTY sh -c status"); }
+        pty.send("sshl --probe emit 65536\n");
+        let output = pty.prompt();
+        if output.iter().filter(|b| **b == b'x').count() != 65536 { fail("PTY streamed regression output"); }
+        debug_log("[SSHL-SCRIPT] PTY script and live output PASS");
+    }
+    debug_log("[SSHL-SCRIPT] native gate PASS");
+    libc::exit(0)
 }

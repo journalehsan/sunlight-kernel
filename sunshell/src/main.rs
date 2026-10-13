@@ -7,9 +7,9 @@ mod builtins;
 mod exec;
 #[cfg(feature = "std")]
 mod input;
-mod parser;
-mod expansion;
-mod shellenv;
+#[cfg(feature = "std")]
+mod host_script;
+use sunshell::{parser, expansion, shellenv};
 
 #[cfg(feature = "std")]
 use exec::{execute_expanded, Executor, PosixExecutor};
@@ -133,20 +133,47 @@ fn main() {
     }
 
     let args: Vec<String> = env::args().collect();
-
-    match args.as_slice() {
-        // sshl -c "command args..."
-        [_, flag, cmd] if flag == "-c" => {
-            let code = run_command(cmd, &mut env, &executor).unwrap_or(0);
-            std::process::exit(code);
-        }
-        // interactive
-        [_] => repl(&mut env, &executor),
-        _ => {
-            eprintln!("Usage: sshl [-c command]");
-            std::process::exit(1);
-        }
+    env.pid = std::process::id() as u64;
+    env.arg0 = args[0].clone();
+    for (key, _) in env::vars() {
+        env.export(&key);
     }
+    if args.len() == 1 {
+        repl(&mut env, &executor);
+        return;
+    }
+    use sunshell::script::{Flow, Runtime};
+    let cwd = std::env::current_dir()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    env.pid = std::process::id() as u64;
+    let mut context = sunshell::script::ShellExecutionContext::new(env, cwd);
+    let mut runtime = host_script::HostRuntime;
+    let source = if args[1] == "-c" {
+        if args.len() < 3 {
+            eprintln!("sshl: -c requires a command");
+            std::process::exit(2);
+        }
+        context.env.arg0 = args.get(3).cloned().unwrap_or_else(|| args[0].clone());
+        context.env.positional = args.get(4..).unwrap_or_default().to_vec();
+        Ok(args[2].clone())
+    } else {
+        context.env.arg0 = args[1].clone();
+        context.env.positional = args[2..].to_vec();
+        runtime.source(&args[1], &context)
+    };
+    let result =
+        source.and_then(|source| sunshell::script::execute(&source, &mut context, &mut runtime));
+    let status = match result {
+        Ok(Flow::Status(s) | Flow::Exit(s)) => s,
+        Ok(_) => 2,
+        Err(e) => {
+            eprintln!("sshl: {}", e.message);
+            e.status
+        }
+    };
+    std::process::exit(status);
 }
 
 // ============================================================================
@@ -246,6 +273,7 @@ mod sunlight {
         fg_pid: Option<u64>,
         fg_pids: alloc::vec::Vec<u64>,
         builtin_status: core::cell::Cell<u8>,
+        script_io: Option<[i32; 3]>,
     }
 
     impl Shell {
@@ -270,6 +298,7 @@ mod sunlight {
                 fg_pid: None,
                 fg_pids: alloc::vec::Vec::new(),
                 builtin_status: core::cell::Cell::new(0),
+                script_io: None,
             }
         }
 
@@ -284,6 +313,8 @@ mod sunlight {
                 core::str::from_utf8(&self.username[..self.username_len]).unwrap_or(""),
             );
             self.env.load_defaults(self.uid, &username);
+            self.env.pid = sunlight_libc::getpid();
+            self.env.arg0 = alloc::string::String::from("sshl");
             self.env.set("PWD", &self.cwd);
             // Locale foundation: overlay LANG/LC_* from /etc/locale.conf if present.
             self.load_locale_into_env();
@@ -1240,7 +1271,7 @@ mod sunlight {
             let mut pids = alloc::vec::Vec::with_capacity(commands.len());
             let mut spawn_error = None;
             for (index, command) in commands.iter().enumerate() {
-                let mut io = [None, None, None];
+                let mut io = self.script_io.map_or([None, None, None], |fds| fds.map(|fd| Some(ulibc::Fd(fd as u32))));
                 if index > 0 {
                     io[0] = Some(pipes[index - 1].0);
                 }
@@ -3527,6 +3558,8 @@ mod sunlight {
     #[cfg(feature = "native-tests")]
     mod native_tests { include!("native_tests.rs"); }
 
+    mod native_script { include!("native_script.rs"); }
+
     fn start_from_argv(argc: u64, argv: *const *const u8, envp: *const *const u8) -> ! {
         sunlight_libc::env::init(envp);
 
@@ -3543,6 +3576,11 @@ mod sunlight {
             let args = unsafe { core::slice::from_raw_parts(raw[1], sunlight_libc::crt0::cstr_len(raw[1], 64)) };
             if args == b"--probe" { native_tests::probe(&raw[2..raw_count]); }
             if args == b"--native-tests" { native_tests::suite(); }
+            if args == b"--script-tests" { native_tests::script_suite(); }
+        }
+        if raw_count >= 2 {
+            let argument = unsafe { core::slice::from_raw_parts(raw[1], sunlight_libc::crt0::cstr_len(raw[1], sunlight_libc::MAX_PATH)) };
+            if argument == b"-c" || !argument.starts_with(b"--") { native_script::start(&raw[..raw_count]); }
         }
         let mut shell_id = 0u64;
         let mut pty_session = None;

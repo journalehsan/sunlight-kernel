@@ -1,10 +1,11 @@
 use std::fs::File;
 use std::io;
 use std::process::{Command, ExitStatus, Stdio};
+use sunshell::script::ShellExecutionContext;
 
+use crate::expansion::expand_ast;
 use crate::parser::{AstNode, RedirectMode, Redirection, SimpleCommand};
 use crate::shellenv::ShellEnv;
-use crate::expansion::expand_ast;
 
 #[derive(Debug)]
 pub enum ExecError {
@@ -24,7 +25,12 @@ impl std::fmt::Display for ExecError {
 }
 impl ExecError {
     pub fn status(&self) -> i32 {
-        match self { Self::NotFound(_) => 127, Self::CannotExecute(_) => 126, Self::Expansion(_) => 2, Self::Io(_) => 1 }
+        match self {
+            Self::NotFound(_) => 127,
+            Self::CannotExecute(_) => 126,
+            Self::Expansion(_) => 2,
+            Self::Io(_) => 1,
+        }
     }
 }
 impl From<io::Error> for ExecError {
@@ -58,7 +64,12 @@ enum IoTarget {
 impl IoTarget {
     fn into_stdio(self) -> io::Result<Stdio> {
         Ok(match self {
-            Self::Inherit(_) => Stdio::inherit(),
+            Self::Inherit(fd) => {
+                use std::os::fd::BorrowedFd;
+                Stdio::from(File::from(
+                    unsafe { BorrowedFd::borrow_raw(fd) }.try_clone_to_owned()?,
+                ))
+            }
             Self::File(file) => Stdio::from(file),
         })
     }
@@ -68,7 +79,7 @@ impl IoTarget {
                 use std::os::fd::{BorrowedFd, OwnedFd};
                 let owned: OwnedFd = unsafe { BorrowedFd::borrow_raw(*fd) }.try_clone_to_owned()?;
                 Self::File(File::from(owned))
-            },
+            }
             Self::File(file) => Self::File(file.try_clone()?),
         })
     }
@@ -82,6 +93,12 @@ pub fn execute_ast(node: &AstNode, env: &ShellEnv) -> Result<i32, ExecError> {
 }
 
 pub fn execute_expanded(node: &AstNode<String>) -> Result<i32, ExecError> {
+    execute_in_context(node, None)
+}
+pub fn execute_in_context(
+    node: &AstNode<String>,
+    context: Option<&ShellExecutionContext>,
+) -> Result<i32, ExecError> {
     let commands: Vec<&SimpleCommand<String>> = match node {
         AstNode::Command(command) => vec![command],
         AstNode::Pipeline(commands) => commands.iter().collect(),
@@ -109,7 +126,8 @@ pub fn execute_expanded(node: &AstNode<String>) -> Result<i32, ExecError> {
             abort_pipeline!(io::Error::new(io::ErrorKind::InvalidInput, "empty command"));
         }
         let last = index + 1 == commands.len();
-        let mut io_map = [IoTarget::Inherit(0), IoTarget::Inherit(1), IoTarget::Inherit(2)];
+        let base = context.map_or([0, 1, 2], |c| c.io);
+        let mut io_map = base.map(IoTarget::Inherit);
         if index > 0 {
             io_map[0] = match pipes[index - 1].0.try_clone() {
                 Ok(file) => IoTarget::File(file),
@@ -125,8 +143,12 @@ pub fn execute_expanded(node: &AstNode<String>) -> Result<i32, ExecError> {
         for redirection in &simple.redirections {
             match redirection {
                 Redirection::Open { fd, mode, path } => {
+                    let path = context.map_or_else(
+                        || std::path::PathBuf::from(path),
+                        |c| std::path::Path::new(&c.cwd).join(path),
+                    );
                     let file = match mode {
-                        RedirectMode::Read => match File::open(path) {
+                        RedirectMode::Read => match File::open(&path) {
                             Ok(file) => file,
                             Err(e) => abort_pipeline!(e),
                         },
@@ -134,7 +156,7 @@ pub fn execute_expanded(node: &AstNode<String>) -> Result<i32, ExecError> {
                             .write(true)
                             .create(true)
                             .truncate(true)
-                            .open(path)
+                            .open(&path)
                         {
                             Ok(file) => file,
                             Err(e) => abort_pipeline!(e),
@@ -143,7 +165,7 @@ pub fn execute_expanded(node: &AstNode<String>) -> Result<i32, ExecError> {
                             .write(true)
                             .create(true)
                             .append(true)
-                            .open(path)
+                            .open(&path)
                         {
                             Ok(file) => file,
                             Err(e) => abort_pipeline!(e),
@@ -160,18 +182,41 @@ pub fn execute_expanded(node: &AstNode<String>) -> Result<i32, ExecError> {
             }
         }
         let mut child_cmd = if expanded[0] == "cd" {
-            let mut command = Command::new("sh");
-            command
-                .arg("-c")
-                .arg("cd -- \"$@\"")
-                .arg("sshl-cd")
-                .args(&expanded[1..]);
-            command
+            let base = context
+                .map(|c| std::path::PathBuf::from(&c.cwd))
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            let target = expanded.get(1).map(String::as_str).unwrap_or("/");
+            Command::new(if base.join(target).is_dir() {
+                "/usr/bin/true"
+            } else {
+                "/usr/bin/false"
+            })
         } else {
-            let mut command = Command::new(&expanded[0]);
+            let resolved = context.and_then(|c| {
+                if expanded[0].contains('/') {
+                    return None;
+                }
+                c.env
+                    .get("PATH")
+                    .unwrap_or("/bin:/usr/bin")
+                    .split(':')
+                    .map(|dir| std::path::Path::new(&c.cwd).join(dir).join(&expanded[0]))
+                    .find(|path| path.is_file())
+            });
+            let mut command = Command::new(
+                resolved
+                    .as_deref()
+                    .unwrap_or_else(|| std::path::Path::new(&expanded[0])),
+            );
             command.args(&expanded[1..]);
             command
         };
+        if let Some(context) = context {
+            child_cmd
+                .current_dir(&context.cwd)
+                .env_clear()
+                .envs(context.env.exported());
+        }
         let [stdin, stdout, stderr] = io_map;
         child_cmd.stdin(match stdin.into_stdio() {
             Ok(io) => io,

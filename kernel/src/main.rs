@@ -4000,7 +4000,8 @@ fn setup_key_injection() {
     let phase = option_env!("SUNLIGHT_INJECT_PHASE").unwrap_or("phase3.8");
 
     let sequence: [u8; 12288] = match phase {
-        "shell-phase1.5" => build_shell_phase1_5_sequence(),
+        "shell-phase1.5" => build_shell_phase_sequence(b"sshl --native-tests"),
+        "shell-phase2" => build_shell_phase_sequence(b"sshl --script-tests"),
         "phase3.9" => build_phase3_9_sequence(),
         "wiseowl3.75" => build_wiseowl_phase375_sequence(),
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
@@ -4055,7 +4056,7 @@ fn setup_key_injection() {
 /// Enter through the real login/interactive TTY path, then run the guest
 /// executor and PTY suites. The driver returns to the normal foreground loop.
 #[cfg(feature = "key_inject")]
-fn build_shell_phase1_5_sequence() -> [u8; 12288] {
+fn build_shell_phase_sequence(command: &[u8]) -> [u8; 12288] {
     let mut s = [0u8; 12288];
     let mut len = 0;
     append_injected_delay(&mut s, &mut len, 1536);
@@ -4063,7 +4064,7 @@ fn build_shell_phase1_5_sequence() -> [u8; 12288] {
     append_injected_delay(&mut s, &mut len, 128);
     for code in [0x13, 0x18, 0x18, 0x14, 0x1c] { append_injected_scancode(&mut s, &mut len, code); }
     append_injected_delay(&mut s, &mut len, 256);
-    append_injected_command(&mut s, &mut len, b"sshl --native-tests");
+    append_injected_command(&mut s, &mut len, command);
     s
 }
 

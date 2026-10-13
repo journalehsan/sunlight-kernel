@@ -210,7 +210,7 @@ pub enum FdError {
 }
 
 /// Open file descriptor with associated rights
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileDescriptor {
     pub fd: i32,
     pub handle: FileHandle,
@@ -221,9 +221,28 @@ pub struct FileDescriptor {
     /// Index of the shared open file description. Duplication retains this
     /// index; close-on-exec stays in `flags` on the individual descriptor.
     description: u32,
+    /// True on a consumed snapshot only when backend cleanup is required.
+    pub release_backend: bool,
+}
+
+impl FileDescriptor {
+    pub fn current_offset(&self) -> usize {
+        DESCRIPTIONS.lock()[self.description as usize]
+            .as_ref()
+            .expect("live description")
+            .offset
+    }
+    pub fn set_offset(&mut self, offset: usize) {
+        DESCRIPTIONS.lock()[self.description as usize]
+            .as_mut()
+            .expect("live description")
+            .offset = offset;
+        self.offset = offset;
+    }
 }
 
 struct OpenDescription {
+    offset: usize,
     status: u32,
     refs: usize,
 }
@@ -233,6 +252,7 @@ static DESCRIPTIONS: Mutex<Vec<Option<OpenDescription>>> = Mutex::new(Vec::new()
 fn new_description(flags: u32) -> u32 {
     let mut pool = DESCRIPTIONS.lock();
     let item = OpenDescription {
+        offset: 0,
         status: flags & !0x0008_0000,
         refs: 1,
     };
@@ -252,12 +272,15 @@ fn retain_description(idx: u32) {
         .refs += 1;
 }
 
-fn release_description(idx: u32) {
+fn release_description(idx: u32) -> bool {
     let mut pool = DESCRIPTIONS.lock();
     let item = pool[idx as usize].as_mut().expect("live description");
     item.refs -= 1;
     if item.refs == 0 {
         pool[idx as usize] = None;
+        true
+    } else {
+        false
     }
 }
 
@@ -278,6 +301,7 @@ impl FdTable {
             flags: 0, // O_RDONLY
             offset: 0,
             description: new_description(0),
+            release_backend: true,
         });
         table.entries[1] = Some(FileDescriptor {
             fd: 1,
@@ -286,6 +310,7 @@ impl FdTable {
             flags: 1, // O_WRONLY
             offset: 0,
             description: new_description(1),
+            release_backend: true,
         });
         table.entries[2] = Some(FileDescriptor {
             fd: 2,
@@ -294,6 +319,7 @@ impl FdTable {
             flags: 1, // O_WRONLY
             offset: 0,
             description: new_description(1),
+            release_backend: true,
         });
         table
     }
@@ -314,6 +340,7 @@ impl FdTable {
                 flags: 0,
                 offset: 0,
                 description: new_description(0),
+                release_backend: true,
             });
             table.entries[1] = Some(FileDescriptor {
                 fd: 1,
@@ -322,6 +349,7 @@ impl FdTable {
                 flags: 1,
                 offset: 0,
                 description: new_description(1),
+                release_backend: true,
             });
             table.entries[2] = Some(FileDescriptor {
                 fd: 2,
@@ -330,6 +358,7 @@ impl FdTable {
                 flags: 1,
                 offset: 0,
                 description: new_description(1),
+                release_backend: true,
             });
             table
         }
@@ -382,6 +411,7 @@ impl FdTable {
             flags,
             offset,
             description,
+            release_backend: true,
         });
 
         Ok(fd)
@@ -403,8 +433,9 @@ impl FdTable {
         if fd < 0 || fd >= 256 {
             return Err(FdError::InvalidFd);
         }
-        let entry = self.entries[fd as usize].take().ok_or(FdError::InvalidFd)?;
-        release_description(entry.description);
+        let mut entry = self.entries[fd as usize].take().ok_or(FdError::InvalidFd)?;
+        let last = release_description(entry.description);
+        entry.release_backend = !entry.handle.is_vfs() || last;
         release_eventfd(entry.handle);
         Ok(entry)
     }
@@ -421,10 +452,10 @@ impl FdTable {
                 .map(|descriptor| descriptor.flags & O_CLOEXEC != 0)
                 .unwrap_or(false)
             {
-                handles[idx] = entry.take().map(|descriptor| {
-                    release_description(descriptor.description);
+                handles[idx] = entry.take().and_then(|descriptor| {
+                    let last = release_description(descriptor.description);
                     release_eventfd(descriptor.handle);
-                    descriptor.handle
+                    (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
                 });
             }
         }
@@ -436,10 +467,10 @@ impl FdTable {
     pub fn take_all_handles(&mut self) -> [Option<FileHandle>; 256] {
         let mut handles = [None; 256];
         for (idx, entry) in self.entries.iter_mut().enumerate() {
-            handles[idx] = entry.take().map(|descriptor| {
-                release_description(descriptor.description);
+            handles[idx] = entry.take().and_then(|descriptor| {
+                let last = release_description(descriptor.description);
                 release_eventfd(descriptor.handle);
-                descriptor.handle
+                (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
             });
         }
         handles
@@ -542,7 +573,27 @@ impl FdTable {
             flags,
             offset: 0,
             description: new_description(flags),
+            release_backend: true,
         });
+        Ok(())
+    }
+
+    /// Spawn inherits an existing open description, including VFS lifetime and
+    /// position. `install_at` is for installing a fresh backing object.
+    pub fn install_from(&mut self, fd: i32, source: FileDescriptor) -> Result<(), FdError> {
+        self.install_at(
+            fd,
+            source.handle,
+            source.rights,
+            source.flags & !0x0008_0000,
+        )?;
+        let entry = self.entries[fd as usize]
+            .as_mut()
+            .expect("installed descriptor");
+        retain_description(source.description);
+        release_description(entry.description);
+        entry.description = source.description;
+        entry.offset = source.current_offset();
         Ok(())
     }
 
@@ -622,10 +673,10 @@ impl FdTable {
         let orig = *self.get(old_fd).ok_or(FdError::InvalidFd)?;
 
         const O_CLOEXEC: u32 = 0x0008_0000;
-        let displaced = self.entries[new_fd as usize].take().map(|descriptor| {
+        let displaced = self.entries[new_fd as usize].take().and_then(|descriptor| {
             release_eventfd(descriptor.handle);
-            release_description(descriptor.description);
-            descriptor.handle
+            let last = release_description(descriptor.description);
+            (!descriptor.handle.is_vfs() || last).then_some(descriptor.handle)
         });
         retain_eventfd(orig.handle);
         retain_socket(orig.handle);
@@ -642,6 +693,7 @@ impl FdTable {
             flags,
             offset: orig.offset,
             description: orig.description,
+            release_backend: true,
         });
         Ok((new_fd, displaced))
     }
@@ -694,6 +746,39 @@ mod tests {
     use super::*;
 
     const READ: CapRights = CapRights::new(CapRights::READ);
+
+    #[test]
+    fn spawn_and_dup_share_vfs_position_and_final_close_ownership() {
+        let mut parent = FdTable::new();
+        let fd = parent.open(FileHandle::vfs(101), READ, 0).unwrap();
+        parent.get_mut(fd).unwrap().set_offset(12);
+        let source = *parent.get(fd).unwrap();
+        let mut child = FdTable::new();
+        child.install_from(1, source).unwrap();
+        assert_eq!(child.get(1).unwrap().current_offset(), 12);
+        assert!(!parent.take(fd).unwrap().release_backend);
+        child.get_mut(1).unwrap().set_offset(42);
+        let dup = child.dup(1).unwrap();
+        assert_eq!(child.get(dup).unwrap().current_offset(), 42);
+        assert!(!child.take(1).unwrap().release_backend);
+        assert!(child.take(dup).unwrap().release_backend);
+        parent.take_all_handles();
+        child.take_all_handles();
+    }
+
+    #[test]
+    fn cloexec_and_reaping_release_vfs_only_once() {
+        let mut table = FdTable::new();
+        let fd = table.open(FileHandle::vfs(102), READ, 0x0008_0000).unwrap();
+        let duplicate = table.dup(fd).unwrap();
+        assert_eq!(table.take_cloexec_handles()[fd as usize], None);
+        let handles = table.take_all_handles();
+        assert_eq!(handles[duplicate as usize], Some(FileHandle::vfs(102)));
+        assert_eq!(
+            handles.into_iter().flatten().filter(|h| h.is_vfs()).count(),
+            1
+        );
+    }
 
     #[test]
     fn status_is_shared_by_dup_but_not_independent_open() {

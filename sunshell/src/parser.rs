@@ -5,29 +5,50 @@ use alloc::vec::Vec;
 
 /// Quote provenance is retained until the final expansion stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Quote { Unquoted, Single, Double, Escaped }
+pub enum Quote {
+    Unquoted,
+    Single,
+    Double,
+    Escaped,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WordPart { pub text: String, pub quote: Quote }
+pub struct WordPart {
+    pub text: String,
+    pub quote: Quote,
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Word { pub parts: Vec<WordPart> }
+pub struct Word {
+    pub parts: Vec<WordPart>,
+}
 
 impl Word {
-    fn push(&mut self, ch: char, quote: Quote) {
+    pub(crate) fn push(&mut self, ch: char, quote: Quote) {
         if let Some(part) = self.parts.last_mut().filter(|p| p.quote == quote) {
             part.text.push(ch);
         } else {
-            self.parts.push(WordPart { text: ch.into(), quote });
+            self.parts.push(WordPart {
+                text: ch.into(),
+                quote,
+            });
         }
     }
-    fn quoted_empty(&mut self, quote: Quote) {
-        self.parts.push(WordPart { text: String::new(), quote });
+    pub(crate) fn quoted_empty(&mut self, quote: Quote) {
+        self.parts.push(WordPart {
+            text: String::new(),
+            quote,
+        });
     }
 }
 impl From<&str> for Word {
     fn from(text: &str) -> Self {
-        Self { parts: alloc::vec![WordPart { text: text.into(), quote: Quote::Unquoted }] }
+        Self {
+            parts: alloc::vec![WordPart {
+                text: text.into(),
+                quote: Quote::Unquoted
+            }],
+        }
     }
 }
 
@@ -45,15 +66,8 @@ pub struct SimpleCommand<W = Word> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Redirection<W = Word> {
-    Open {
-        fd: u8,
-        mode: RedirectMode,
-        path: W,
-    },
-    Dup {
-        fd: u8,
-        source: u8,
-    },
+    Open { fd: u8, mode: RedirectMode, path: W },
+    Dup { fd: u8, source: u8 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,63 +83,63 @@ pub struct ParseError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Token {
+pub(crate) enum Token {
     Word(Word),
     Pipe,
+    Separator,
+    And,
+    Or,
+    LeftParen,
+    RightParen,
+    DoubleSemi,
     Redirect(RedirectMode, u8),
     Dup(u8, u8),
 }
 
 pub fn parse_line_checked(line: &str) -> Result<Option<AstNode>, ParseError> {
-    let tokens = lex(line)?;
-    if tokens.is_empty() {
+    use crate::script_parser::CommandKind;
+    let tree = crate::script_parser::parse(line).map_err(|e| ParseError { message: e.message })?;
+    let CommandKind::SequentialList(mut commands) = tree.kind else {
+        unreachable!()
+    };
+    if commands.is_empty() {
         return Ok(None);
     }
-    let mut commands = Vec::new();
-    let mut argv = Vec::new();
-    let mut redirections = Vec::new();
-    let mut it = tokens.into_iter().peekable();
-    while let Some(token) = it.next() {
-        match token {
-            Token::Word(word) => argv.push(word),
-            Token::Pipe => {
-                if argv.is_empty() && redirections.is_empty() {
+    if commands.len() != 1 {
+        return Err(ParseError {
+            message: "interactive command lists require script mode",
+        });
+    }
+    let command = commands.pop().unwrap();
+    let result = match command.kind {
+        CommandKind::SimpleCommand(command) => AstNode::Command(command),
+        CommandKind::Pipeline(stages) => {
+            let mut commands = Vec::new();
+            for stage in stages {
+                let CommandKind::SimpleCommand(command) = stage.kind else {
                     return Err(ParseError {
-                        message: "empty pipeline stage",
-                    });
-                }
-                commands.push(SimpleCommand {
-                    argv: core::mem::take(&mut argv),
-                    redirections: core::mem::take(&mut redirections),
-                });
-            }
-            Token::Redirect(mode, fd) => {
-                let Some(Token::Word(path)) = it.next() else {
-                    return Err(ParseError {
-                        message: "redirection requires a path",
+                        message: "compound pipeline stages require script mode",
                     });
                 };
-                redirections.push(Redirection::Open { fd, mode, path });
+                commands.push(command);
             }
-            Token::Dup(fd, source) => redirections.push(Redirection::Dup { fd, source }),
+            AstNode::Pipeline(commands)
         }
-    }
-    if argv.is_empty() && redirections.is_empty() {
+        _ => {
+            return Err(ParseError {
+                message: "compound commands require script mode",
+            })
+        }
+    };
+    if match &result {
+        AstNode::Command(command) => command.argv.is_empty(),
+        AstNode::Pipeline(commands) => commands.iter().any(|c| c.argv.is_empty()),
+    } {
         return Err(ParseError {
-            message: "empty pipeline stage",
+            message: "redirection-only commands require script mode",
         });
     }
-    commands.push(SimpleCommand { argv, redirections });
-    if commands.iter().any(|c| c.argv.is_empty()) {
-        return Err(ParseError {
-            message: "redirection-only commands are unsupported",
-        });
-    }
-    if commands.len() == 1 {
-        Ok(commands.pop().map(AstNode::Command))
-    } else {
-        Ok(Some(AstNode::Pipeline(commands)))
-    }
+    Ok(Some(result))
 }
 
 /// Compatibility entry point. New callers should use `parse_line_checked` so
@@ -134,80 +148,192 @@ pub fn parse_line(line: &str) -> Option<AstNode> {
     parse_line_checked(line).ok().flatten()
 }
 
-fn lex(line: &str) -> Result<Vec<Token>, ParseError> {
+/// One lexer for interactive commands and scripts. Offsets are UTF-8 byte offsets.
+pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError> {
+    if line.len() > 65536 {
+        return Err(ParseError {
+            message: "source exceeds 64 KiB limit",
+        });
+    }
     let mut out = Vec::new();
     let mut word = Word::default();
-    let mut started = false;
+    let mut start = None;
     let mut quote = None;
-    let mut chars = line.chars().peekable();
-    while let Some(ch) = chars.next() {
+    let mut chars = line.char_indices().peekable();
+    while let Some((pos, ch)) = chars.next() {
+        if out.len() >= 8192 {
+            return Err(ParseError {
+                message: "token limit exceeded",
+            });
+        }
         if let Some(q) = quote {
             if ch == q {
                 quote = None;
             } else if ch == '\\' && q == '"' {
-                match chars.peek().copied() {
-                    Some('$' | '`' | '"' | '\\') => word.push(chars.next().unwrap(), Quote::Escaped),
-                    Some('\n') => { chars.next(); }
+                match chars.peek().map(|(_, c)| *c) {
+                    Some('$' | '`' | '"' | '\\') => {
+                        word.push(chars.next().unwrap().1, Quote::Escaped)
+                    }
+                    Some('\n') => {
+                        chars.next();
+                    }
                     _ => word.push(ch, Quote::Double),
                 }
             } else {
-                word.push(ch, if q == '\'' { Quote::Single } else { Quote::Double });
+                word.push(
+                    ch,
+                    if q == '\'' {
+                        Quote::Single
+                    } else {
+                        Quote::Double
+                    },
+                );
             }
             continue;
         }
         match ch {
             '\'' | '"' => {
+                start.get_or_insert(pos);
                 quote = Some(ch);
-                started = true;
-                word.quoted_empty(if ch == '\'' { Quote::Single } else { Quote::Double });
+                word.quoted_empty(if ch == '\'' {
+                    Quote::Single
+                } else {
+                    Quote::Double
+                });
             }
             '\\' => {
-                let next = chars.next().ok_or(ParseError { message: "trailing escape" })?;
-                if next != '\n' { word.push(next, Quote::Escaped); started = true; }
+                let (_, next) = chars.next().ok_or(ParseError {
+                    message: "trailing escape",
+                })?;
+                if next != '\n' {
+                    start.get_or_insert(pos);
+                    word.push(next, Quote::Escaped);
+                }
             }
-            ' ' | '\t' | '\n' => flush_word(&mut out, &mut word, &mut started),
-            '#' if !started => { while chars.next().is_some_and(|c| c != '\n') {} }
-            '|' => {
-                flush_word(&mut out, &mut word, &mut started);
-                out.push(Token::Pipe);
+            ' ' | '\t' => flush_spanned(&mut out, &mut word, &mut start),
+            '\n' => {
+                flush_spanned(&mut out, &mut word, &mut start);
+                out.push((Token::Separator, pos));
+            }
+            '#' if start.is_none() => {
+                while chars.next().is_some_and(|(_, c)| c != '\n') {}
+                out.push((Token::Separator, pos));
+            }
+            '|' | '&' | ';' => {
+                flush_spanned(&mut out, &mut word, &mut start);
+                let twice = chars.peek().is_some_and(|(_, c)| *c == ch);
+                if twice {
+                    chars.next();
+                }
+                let token = match (ch, twice) {
+                    ('|', false) => Token::Pipe,
+                    ('|', true) => Token::Or,
+                    ('&', true) => Token::And,
+                    (';', false) => Token::Separator,
+                    (';', true) => Token::DoubleSemi,
+                    _ => {
+                        return Err(ParseError {
+                            message: "background execution is unsupported",
+                        })
+                    }
+                };
+                out.push((token, pos));
+            }
+            '(' | ')' => {
+                flush_spanned(&mut out, &mut word, &mut start);
+                out.push((
+                    if ch == '(' {
+                        Token::LeftParen
+                    } else {
+                        Token::RightParen
+                    },
+                    pos,
+                ));
             }
             '>' | '<' => {
-                // An IO number is special only if the entire preceding word is
-                // unquoted digits adjacent to the operator: foo2> is foo2 >.
                 let mut fd = if ch == '<' { 0 } else { 1 };
-                if word.parts.len() == 1 && word.parts[0].quote == Quote::Unquoted
-                    && !word.parts[0].text.is_empty() && word.parts[0].text.bytes().all(|c| c.is_ascii_digit()) {
-                    fd = word.parts[0].text.parse().map_err(|_| ParseError { message: "invalid descriptor" })?;
-                    if fd > 2 { return Err(ParseError { message: "only descriptors 0, 1, and 2 are supported" }); }
-                    word = Word::default(); started = false;
+                if word.parts.len() == 1
+                    && word.parts[0].quote == Quote::Unquoted
+                    && !word.parts[0].text.is_empty()
+                    && word.parts[0].text.bytes().all(|c| c.is_ascii_digit())
+                {
+                    fd = word.parts[0].text.parse().map_err(|_| ParseError {
+                        message: "invalid descriptor",
+                    })?;
+                    word = Word::default();
+                    start = None;
                 }
-                flush_word(&mut out, &mut word, &mut started);
-                if chars.peek() == Some(&'&') {
+                if fd > 2 {
+                    return Err(ParseError {
+                        message: "only descriptors 0, 1, and 2 are supported",
+                    });
+                }
+                flush_spanned(&mut out, &mut word, &mut start);
+                if chars.peek().is_some_and(|(_, c)| *c == '&') {
                     chars.next();
                     let mut number = String::new();
-                    while chars.peek().is_some_and(|c| c.is_ascii_digit()) { number.push(chars.next().unwrap()); }
-                    let source: u8 = number.parse().map_err(|_| ParseError { message: "descriptor duplication requires a descriptor number" })?;
-                    if source > 2 { return Err(ParseError { message: "only descriptors 0, 1, and 2 are supported" }); }
-                    out.push(Token::Dup(fd, source));
-                } else if ch == '>' && chars.peek() == Some(&'>') {
-                    chars.next(); out.push(Token::Redirect(RedirectMode::Append, fd));
+                    while chars.peek().is_some_and(|(_, c)| c.is_ascii_digit()) {
+                        number.push(chars.next().unwrap().1);
+                    }
+                    let source = number.parse::<u8>().map_err(|_| ParseError {
+                        message: "descriptor duplication requires a descriptor number",
+                    })?;
+                    if source > 2 {
+                        return Err(ParseError {
+                            message: "only descriptors 0, 1, and 2 are supported",
+                        });
+                    }
+                    out.push((Token::Dup(fd, source), pos));
+                } else if chars.peek().is_some_and(|(_, c)| *c == ch) {
+                    if ch == '<' {
+                        return Err(ParseError {
+                            message: "here documents are not implemented",
+                        });
+                    }
+                    chars.next();
+                    out.push((Token::Redirect(RedirectMode::Append, fd), pos));
                 } else {
-                    out.push(Token::Redirect(if ch == '<' { RedirectMode::Read } else { RedirectMode::Truncate }, fd));
+                    out.push((
+                        Token::Redirect(
+                            if ch == '<' {
+                                RedirectMode::Read
+                            } else {
+                                RedirectMode::Truncate
+                            },
+                            fd,
+                        ),
+                        pos,
+                    ));
                 }
             }
-            ';' | '&' | '(' | ')' | '`' => return Err(ParseError {
-                message: "command separators, substitutions, background jobs, and grouping are unsupported",
-            }),
-            _ => { word.push(ch, Quote::Unquoted); started = true; }
+            '`' => {
+                return Err(ParseError {
+                    message: "backtick substitution is unsupported",
+                })
+            }
+            _ => {
+                start.get_or_insert(pos);
+                word.push(ch, Quote::Unquoted);
+            }
         }
     }
-    if quote.is_some() { return Err(ParseError { message: "unterminated quote" }); }
-    flush_word(&mut out, &mut word, &mut started);
+    if quote.is_some() {
+        return Err(ParseError {
+            message: "unterminated quote",
+        });
+    }
+    flush_spanned(&mut out, &mut word, &mut start);
+    if out.len() > 8192 {
+        return Err(ParseError {
+            message: "token limit exceeded",
+        });
+    }
     Ok(out)
 }
-
-fn flush_word(out: &mut Vec<Token>, word: &mut Word, started: &mut bool) {
-    if *started { out.push(Token::Word(core::mem::take(word))); *started = false; }
+fn flush_spanned(out: &mut Vec<(Token, usize)>, word: &mut Word, start: &mut Option<usize>) {
+    if let Some(pos) = start.take() {
+        out.push((Token::Word(core::mem::take(word)), pos));
+    }
 }
 
 /// Backward-compatible whitespace tokenizer.
@@ -266,11 +392,18 @@ mod io_number_tests {
     #[test]
     fn descriptor_numbers_require_adjacency_and_unquoted_digits() {
         for line in ["echo foo2>out", "echo '2'>out", "echo 2 >out"] {
-            let AstNode::Command(cmd) = parse_line_checked(line).unwrap().unwrap() else { panic!() };
+            let AstNode::Command(cmd) = parse_line_checked(line).unwrap().unwrap() else {
+                panic!()
+            };
             assert_eq!(cmd.argv.len(), 2, "{line}");
-            assert!(matches!(cmd.redirections[0], Redirection::Open { fd: 1, .. }));
+            assert!(matches!(
+                cmd.redirections[0],
+                Redirection::Open { fd: 1, .. }
+            ));
         }
-        let AstNode::Command(cmd) = parse_line_checked("echo 1>out 2>&1").unwrap().unwrap() else { panic!() };
+        let AstNode::Command(cmd) = parse_line_checked("echo 1>out 2>&1").unwrap().unwrap() else {
+            panic!()
+        };
         assert_eq!(cmd.argv.len(), 1);
         assert!(parse_line_checked("echo 2>&12").is_err());
         assert!(parse_line_checked("echo 9>out").is_err());

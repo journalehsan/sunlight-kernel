@@ -2736,9 +2736,15 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // An explicitly numbered shell path creates a sibling TTY tab. Prefer it
     // over the parent's attachment; ordinary children still inherit the
     // current tab exactly as before.
-    child.tty_tab = crate::process::spawn::shell_id_from_path(path_str)
-        .map(|id| id as u8)
-        .or(parent_tty_tab);
+    child.tty_tab = if path_str.strip_prefix("/bin/sshl").is_some_and(|suffix| !suffix.is_empty()) {
+        crate::process::spawn::shell_id_from_path(path_str)
+            .map(|id| id as u8)
+            .or(parent_tty_tab)
+    } else {
+        // Unnumbered shell aliases are ordinary descendants. In particular,
+        // sh -c must retain the invoking PTY's stdio association.
+        parent_tty_tab
+    };
     child.tty_generation = if child.tty_tab == parent_tty_tab {
         parent_tty_generation
     } else {
@@ -2818,7 +2824,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             // description. Parent closure then correctly drives pipe EOF.
             let _ = child
                 .fd_table
-                .install_at(fd as i32, entry.handle, entry.rights, entry.flags);
+                .install_from(fd as i32, entry);
         }
     }
 
@@ -4752,7 +4758,7 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
     let (vfs_handle, skip) = {
         let sched = crate::sched::SCHEDULER.lock();
         match sched.current_shared_process().fd_table.get(fd) {
-            Some(entry) if entry.handle.is_vfs() => (entry.handle.vfs_handle(), entry.offset),
+            Some(entry) if entry.handle.is_vfs() => (entry.handle.vfs_handle(), entry.current_offset()),
             Some(_) => return linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64),
             None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
         }
@@ -4845,7 +4851,7 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
     }
     let mut sched = crate::sched::SCHEDULER.lock();
     if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
-        entry.offset = skip + consumed;
+        entry.set_offset(skip + consumed);
     }
     packed.len() as u64
 }
@@ -4961,7 +4967,7 @@ fn sys_linux_readlinkat(frame: &mut SyscallFrame) -> u64 {
 fn abandon_process_fds(sched: &mut crate::sched::Scheduler, fds: [i32; 2]) {
     for fd in fds {
         if let Ok(entry) = sched.current_shared_process_mut().fd_table.take(fd) {
-            close_file_handle(entry.handle);
+            if entry.release_backend { close_file_handle(entry.handle); }
         }
     }
 }
@@ -6763,7 +6769,10 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
     let handle = {
         let mut sched = crate::sched::SCHEDULER.lock();
         match sched.current_shared_process_mut().fd_table.take(fd) {
-            Ok(entry) => entry.handle,
+            Ok(entry) => {
+                if !entry.release_backend { return 0; }
+                entry.handle
+            },
             Err(_) => return ERR_EBADF,
         }
     };
@@ -6906,14 +6915,14 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     let vfs_handle = sunlight_fs::vfs::FileHandle(fd_entry.handle.vfs_handle());
                     let mut kernel_buf = [0u8; 4096];
                     let to_read = count.min(4096);
-                    if fd_entry.offset.checked_add(to_read).is_none() {
+                    if fd_entry.current_offset().checked_add(to_read).is_none() {
                         return ERR_EINVAL;
                     }
                     let read = {
                         let mut guard = crate::KERNEL_VFS.lock();
                         match guard.as_mut() {
                             Some(vfs) => {
-                                vfs.read(vfs_handle, fd_entry.offset, &mut kernel_buf[..to_read])
+                                vfs.read(vfs_handle, fd_entry.current_offset(), &mut kernel_buf[..to_read])
                             }
                             None => return ERR_EIO,
                         }
@@ -6931,7 +6940,7 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             }
                             if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
                                 // The overflow preflight above covers `n <= to_read`.
-                                entry.offset += n;
+                                entry.set_offset(fd_entry.current_offset() + n);
                             }
                             n as u64
                         }
@@ -7147,7 +7156,7 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                                         Err(_) => return u64::MAX,
                                     }
                                 } else {
-                                    fd_entry.offset
+                                    fd_entry.current_offset()
                                 };
                                 if offset.checked_add(write_size).is_none() {
                                     return u64::MAX;
@@ -7161,7 +7170,7 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     match written {
                         Ok((offset, n)) => {
                             if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
-                                entry.offset = offset + n;
+                                entry.set_offset(offset + n);
                             }
                             n as u64
                         }
@@ -7235,7 +7244,14 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             }
                         }
                     }
-                    written as u64
+                    if written == 0 {
+                        // A full TTY ring is transient backpressure, not a
+                        // successful zero-byte write. libc retries EAGAIN and
+                        // lets the terminal consumer drain the bounded ring.
+                        if is_linux { linux_errno(11) } else { EAGAIN }
+                    } else {
+                        written as u64
+                    }
                 } else {
                     // Handle stdin/stdout/stderr specially
                     match fd {
@@ -7291,7 +7307,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
     // Copy the two values we need before releasing the borrow.
     let is_linux = sched.current_process().is_linux_compat();
     let (current_offset, vfs_handle) = match sched.current_shared_process().fd_table.get(fd) {
-        Some(e) if e.handle.is_vfs() => (e.offset, e.handle.vfs_handle()),
+        Some(e) if e.handle.is_vfs() => (e.current_offset(), e.handle.vfs_handle()),
         Some(_) => {
             return if is_linux {
                 linux_errno(sunlight_compat_linux::abi::ESPIPE as u64)
@@ -7319,7 +7335,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
             } // EINVAL
             let new_off = offset as usize;
             if let Some(e) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
-                e.offset = new_off;
+                e.set_offset(new_off);
             }
             new_off as u64
         }
@@ -7328,7 +7344,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
             Some(v) if v >= 0 => {
                 let new_off = v as usize;
                 if let Some(e) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
-                    e.offset = new_off;
+                    e.set_offset(new_off);
                 }
                 new_off as u64
             }
@@ -7361,7 +7377,7 @@ fn sys_lseek(frame: &mut SyscallFrame) -> u64 {
                     let new_off = v as usize;
                     let mut sched2 = crate::sched::SCHEDULER.lock();
                     if let Some(e) = sched2.current_shared_process_mut().fd_table.get_mut(fd) {
-                        e.offset = new_off;
+                        e.set_offset(new_off);
                     }
                     new_off as u64
                 }
