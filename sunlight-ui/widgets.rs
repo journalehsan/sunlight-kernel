@@ -14,6 +14,7 @@ pub mod panel;
 pub mod pro_app;
 pub mod rich_document;
 pub mod search_palette;
+pub mod section;
 pub mod sidebar;
 pub mod sidebar_item;
 pub mod slider;
@@ -54,7 +55,7 @@ pub use document_canvas::{
     DocumentCanvasPresentation, DocumentFontFamily, DocumentNodeId, DocumentRectStyle,
     DocumentScene, DocumentStrokeStyle, DocumentTextStyle, PaintOrder, RasterImage,
     RenderInteraction, RenderObject, RenderObjectId, RenderObjectKind, RichTextFonts, ScenePatch,
-    ScenePatchOperation, TextEditState, TextLineLayout,
+    ScenePatchOperation, ScrollView, ScrollbarGeometry, TextEditState, TextLineLayout,
 };
 pub use document_editor::{DocumentEditor, FormattingState};
 pub use drive_card::{DriveCard, DriveCardLayout, DriveCardState};
@@ -76,6 +77,7 @@ pub use search_palette::{
     SearchPaletteLayout, SearchPalettePanel, SearchResultRow, SearchResultState, SearchResultView,
     SEARCH_FIELD_CAP, SEARCH_PAGE_DOT_CAP, SEARCH_PAGE_ROWS,
 };
+pub use section::{Section, SectionState};
 pub use sidebar::{ArticleListItem, MetricBar, SegmentedTabs, UnitToggle, WidgetCard};
 pub use sidebar_item::{SidebarGroupHeader, SidebarItem, SidebarState};
 pub use slider::{Slider, SliderOrientation};

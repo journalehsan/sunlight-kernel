@@ -1179,24 +1179,20 @@ fn draw_line_clipped(
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum DocumentCanvasMode {
     #[default]
     Editable,
     ReadOnly,
 }
 
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum DocumentCanvasPresentation {
     Browser,
     Writer,
     #[default]
     Preview,
 }
-
 
 #[derive(Clone, Copy)]
 pub struct DocumentTextStyle<'a> {
@@ -2464,6 +2460,82 @@ fn draw_raster_image(canvas: &mut Canvas, clipped: Rect, destination: Rect, imag
                     | (((source_green * alpha + destination_green * inverse_alpha) >> 8) << 8)
                     | ((source_blue * alpha + destination_blue * inverse_alpha) >> 8);
         }
+    }
+}
+
+/// Shared vertical-scroll geometry for retained document surfaces.
+///
+/// The layout is expressed only in terms of surface and content height, so it
+/// is identical regardless of how a caller stores pixel data. The returned
+/// thumb always stays inside its track and the re-derived offset never exceeds
+/// the content's maximum scroll.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScrollbarGeometry {
+    /// Full-height track the thumb slides along.
+    pub track: Rect,
+    /// Current thumb rectangle, clamped inside the track.
+    pub thumb: Rect,
+}
+
+pub struct ScrollView;
+
+impl ScrollView {
+    /// Rendered width of the overlay scrollbar.
+    pub const WIDTH: u32 = 8;
+    /// Minimum thumb height so it is never lost on very long documents.
+    pub const MIN_THUMB_H: u32 = 24;
+
+    /// Geometry for a surface whose drawable region is `content`.
+    pub fn geometry(
+        surface_height: u32,
+        content_height: u32,
+        scroll_y: u32,
+        max_scroll_y: u32,
+        content: Rect,
+        width: u32,
+    ) -> ScrollbarGeometry {
+        let track = Rect::new(
+            (content.right() - width as i32).max(content.x),
+            content.y,
+            width,
+            content.h,
+        );
+        if surface_height == 0 || content_height <= surface_height || max_scroll_y == 0 {
+            return ScrollbarGeometry {
+                track,
+                thumb: Rect::new(track.x, track.y, track.w, track.h),
+            };
+        }
+        let thumb_h = ((u64::from(track.h) * u64::from(surface_height)) / u64::from(content_height))
+            .clamp(u64::from(Self::MIN_THUMB_H), u64::from(track.h)) as u32;
+        let travel = track.h.saturating_sub(thumb_h);
+        let max_scroll = u64::from(max_scroll_y.max(1));
+        let scrolled = u64::from(scroll_y.min(max_scroll_y));
+        let offset = ((u64::from(travel) * scrolled) / max_scroll) as u32;
+        ScrollbarGeometry {
+            track,
+            thumb: Rect::new(track.x, track.y + offset as i32, track.w, thumb_h),
+        }
+    }
+
+    /// Scroll offset that places the thumb top at a window-local `track_y`.
+    pub fn scroll_y_for_thumb_top(
+        track: Rect,
+        thumb_h: u32,
+        content_height: u32,
+        surface_height: u32,
+        track_y: i32,
+    ) -> u32 {
+        if content_height <= surface_height {
+            return 0;
+        }
+        let travel = track.h.saturating_sub(thumb_h);
+        if travel == 0 {
+            return 0;
+        }
+        let max_scroll = content_height.saturating_sub(surface_height);
+        let relative = (track_y - track.y).clamp(0, travel as i32) as u32;
+        ((u64::from(max_scroll) * u64::from(relative)) / u64::from(travel)) as u32
     }
 }
 

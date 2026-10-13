@@ -18,6 +18,8 @@ pub enum DocRequest {
     Open { path: PathBuf },
     /// Query the number of pages in an open document.
     PageCount { handle: u64 },
+    /// Query a page's unscaled point dimensions, for fit-mode zoom.
+    PageInfo { handle: u64, page: u32 },
     /// Render one page at the specified pixels-per-point scale.
     RenderPage { handle: u64, page: u32, scale: f32 },
     /// Extract text from one page.
@@ -33,6 +35,8 @@ pub enum DocResponse {
     Opened { handle: u64 },
     /// Total page count.
     PageCount { count: u32 },
+    /// Unscaled page dimensions in typographic points.
+    PageDimensions { width_pt: f32, height_pt: f32 },
     /// Top-down BGRA8 pixels, with `data.len() == stride * height`.
     RenderedPage {
         width: u32,
@@ -59,6 +63,7 @@ mod tests {
                 path: "sample.pdf".into(),
             },
             DocRequest::PageCount { handle: 1 },
+            DocRequest::PageInfo { handle: 1, page: 0 },
             DocRequest::RenderPage {
                 handle: 2,
                 page: 3,
@@ -81,6 +86,10 @@ mod tests {
         let responses = [
             DocResponse::Opened { handle: 1 },
             DocResponse::PageCount { count: 2 },
+            DocResponse::PageDimensions {
+                width_pt: 595.276,
+                height_pt: 841.89,
+            },
             DocResponse::RenderedPage {
                 width: 1,
                 height: 1,

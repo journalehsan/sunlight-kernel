@@ -104,6 +104,13 @@ impl DocService {
             DocRequest::PageCount { handle } => DocResponse::PageCount {
                 count: self.lookup(owner, handle)?.page_count(),
             },
+            DocRequest::PageInfo { handle, page } => {
+                let info = self.lookup(owner, handle)?.page_info(page)?;
+                DocResponse::PageDimensions {
+                    width_pt: info.width_pt,
+                    height_pt: info.height_pt,
+                }
+            }
             DocRequest::RenderPage {
                 handle,
                 page,

@@ -219,6 +219,11 @@ mod native_smoke {
         initial: Option<(usize, usize)>,
     }
     impl Navigation {
+        /// Drive one discrete action per settled frame.
+        ///
+        /// Each action's assertion runs on the *next* call, once the worker has
+        /// settled, so the native gate proves the new button/dropdown/slider
+        /// surfaces work in the real window rather than merely compiling.
         pub fn advance(
             &mut self,
             app: &mut sunlight_docview::ui::DocumentApp,
@@ -230,46 +235,130 @@ mod native_smoke {
                 app.cache_metrics().0 > 0 && app.cache_metrics().1 > 0,
                 "native viewer has no rendered bitmap"
             );
-            let expected_page = match self.step {
-                0..=5 => self.step as u32,
-                6..=10 => (10 - self.step) as u32,
-                _ => 0,
-            };
-            anyhow::ensure!(
-                app.displayed_page() == (expected_page, 6),
-                "native viewer displayed the wrong PDF page"
-            );
             if self.initial.is_none() {
                 self.initial = Some(app.cache_metrics());
+                anyhow::ensure!(
+                    app.displayed_page().1 == 6,
+                    "native PDF fixture must have six pages"
+                );
             }
-            anyhow::ensure!(app.cache_metrics().0 <= 5, "native page cache is unbounded");
-            if self.step == 12 || self.step == 13 {
-                let (width, height) = if self.step == 12 {
-                    (1000, 800)
-                } else {
-                    (800, 700)
-                };
+            if self.step > 0 {
+                self.verify(app)?;
+            }
+            let click = |rect: sunlight_ui::Rect| Event::Click {
+                x: rect.x + (rect.w as i32 / 2),
+                y: rect.y + (rect.h as i32 / 2),
+            };
+            let slider = app.slider_rect();
+            if let Some((width, height)) = (match self.step {
+                28 => Some((1000, 800)),
+                29 => Some((800, 700)),
+                _ => None,
+            }) {
                 self.step += 1;
                 app.window_event(sunlight_ui::WindowEvent::Resized { width, height });
                 return Ok(false);
             }
-            let event = match self.step {
-                0..=4 => Event::key_press(0x4d, true, false, false, false, false),
-                5..=9 => Event::key_press(0x4b, true, false, false, false, false),
-                10 => Event::Key('+'),
-                11 => Event::Key('-'),
-                _ => {
-                    anyhow::ensure!(
-                        app.cache_metrics() == self.initial.context("initial cache missing")?,
-                        "native cache grew between pages"
-                    );
-                    return Ok(true);
-                }
+            let Some(event) = (match self.step {
+                0..=4 => Some(Event::key_press(0x4d, true, false, false, false, false)),
+                5..=9 => Some(Event::key_press(0x4b, true, false, false, false, false)),
+                10 => Some(Event::Key('+')),
+                11 => Some(Event::Key('-')),
+                12 => Some(click(app.prev_rect())),
+                13..=17 => Some(click(app.next_rect())),
+                18 => Some(click(app.next_rect())),
+                19 => Some(click(app.minus_rect())),
+                20 => Some(click(app.plus_rect())),
+                21 => Some(click(app.dropdown_rect())),
+                22 => Some(Event::Click {
+                    x: app.dropdown_item_rect(6).x + 4,
+                    y: app.dropdown_item_rect(6).y + app.dropdown_item_rect(6).h as i32 / 2,
+                }),
+                23 => Some(Event::Click {
+                    x: slider.x,
+                    y: slider.y + slider.h as i32 / 2,
+                }),
+                24 => Some(Event::Click {
+                    x: slider.right() - 1,
+                    y: slider.y + slider.h as i32 / 2,
+                }),
+                25 => Some(click(app.prev_rect())),
+                26 => Some(click(app.dropdown_rect())),
+                27 => Some(Event::Click {
+                    x: app.dropdown_item_rect(1).x + 4,
+                    y: app.dropdown_item_rect(1).y + app.dropdown_item_rect(1).h as i32 / 2,
+                }),
+                _ => None,
+            }) else {
+                return Ok(true);
             };
             self.step += 1;
             app.update(event);
             Ok(false)
         }
+
+        /// Assert the outcome of the action that produced the settled frame.
+        fn verify(&self, app: &sunlight_docview::ui::DocumentApp) -> anyhow::Result<()> {
+            let action = self.step - 1;
+            let (page, count) = app.displayed_page();
+            anyhow::ensure!(count == 6, "native viewer page count changed");
+            let (mode, percent, _) = app.zoom_state();
+            let fixed_in_range = matches!(mode, sunlight_docview::zoom::ZoomMode::Fixed(_))
+                && (70..=200).contains(&percent);
+            let action = action as u32;
+            match action {
+                // Keyboard forward then backward over every page.
+                0..=4 => anyhow::ensure!(
+                    page == action + 1,
+                    "native keyboard navigation skipped a page"
+                ),
+                5..=9 => anyhow::ensure!(
+                    page == 9 - action,
+                    "native keyboard navigation skipped a page"
+                ),
+                10 | 11 => {}
+                // Previous is disabled on the first page.
+                12 => anyhow::ensure!(page == 0, "Previous was enabled on the first page"),
+                // Next walks 2..=6, then is disabled on the last page.
+                13..=17 => anyhow::ensure!(page == action - 12, "Next button skipped a page"),
+                18 => anyhow::ensure!(page == 5, "Next was enabled on the last page"),
+                19 | 20 => anyhow::ensure!(fixed_in_range, "zoom step left the slider range"),
+                // Dropdown opens, then the 6th entry (125%) is chosen.
+                21 => {}
+                22 => anyhow::ensure!(percent == 125, "dropdown preset was not applied"),
+                23 => anyhow::ensure!(
+                    fixed_in_range && percent == 70,
+                    "slider click did not select the minimum"
+                ),
+                24 => anyhow::ensure!(
+                    fixed_in_range && percent == 200,
+                    "slider click did not select the maximum"
+                ),
+                // Custom zoom must survive a page change.
+                25 => anyhow::ensure!(
+                    page == 4 && fixed_in_range && percent == 200,
+                    "custom zoom did not persist across navigation"
+                ),
+                // Dropdown opens, then Fit Width is chosen.
+                26 => {}
+                27 => anyhow::ensure!(
+                    matches!(mode, sunlight_docview::zoom::ZoomMode::FitWidth),
+                    "Fit Width preset was not applied"
+                ),
+                // Window resize must re-resolve the fit zoom, in range.
+                28 | 29 => anyhow::ensure!(
+                    matches!(mode, sunlight_docview::zoom::ZoomMode::FitWidth)
+                        && (70..=200).contains(&percent),
+                    "resize did not keep a valid fit zoom"
+                ),
+                _ => {}
+            }
+            anyhow::ensure!(app.cache_metrics().0 <= 5, "native page cache is unbounded");
+            anyhow::ensure!(
+                app.cache_metrics().1 <= sunlight_docview::viewer::CACHE_BUDGET_BYTES,
+                "native page cache exceeded its byte budget"
+            );
+            Ok(())
+        }
     }
-    use anyhow::Context;
 }

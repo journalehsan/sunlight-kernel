@@ -4,3 +4,4 @@ extern crate alloc;
 #[cfg(feature = "std")]
 pub mod ui;
 pub mod viewer;
+pub mod zoom;
