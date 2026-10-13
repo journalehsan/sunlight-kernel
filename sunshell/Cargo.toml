@@ -1,6 +1,7 @@
 [package]
 name    = "sunshell"
-version = "0.2.4714-alpha.2"
+version = "0.2.4743-alpha.2"
+
 
 
 
@@ -574,7 +575,7 @@ path = "src/main.rs"
 
 [dependencies]
 sunlight-ipc = { path = "../ipc", optional = true }
-sunlight-libc = { path = "../sunlight-libc", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["global-alloc", "dynamic-heap"] }
 sunlight-uac = { path = "../services/sunlight-uac", optional = true }
 sunlight-tz = { path = "../sunlight-tz" }
 sunlight-locale = { path = "../sunlight-locale" }
@@ -584,3 +585,5 @@ libm = "0.2"
 default = ["sunlight"]
 std = []
 sunlight = ["sunlight-ipc", "sunlight-libc", "sunlight-uac"]
+# Private deterministic workloads for tools/test.sh shell-phase1.5.
+native-tests = ["sunlight"]

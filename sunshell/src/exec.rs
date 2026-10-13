@@ -4,18 +4,27 @@ use std::process::{Command, ExitStatus, Stdio};
 
 use crate::parser::{AstNode, RedirectMode, Redirection, SimpleCommand};
 use crate::shellenv::ShellEnv;
+use crate::expansion::expand_ast;
 
 #[derive(Debug)]
 pub enum ExecError {
     NotFound(String),
     Io(io::Error),
+    CannotExecute(io::Error),
+    Expansion(&'static str),
 }
 impl std::fmt::Display for ExecError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotFound(cmd) => write!(f, "{cmd}: command not found"),
-            Self::Io(e) => write!(f, "{e}"),
+            Self::Io(e) | Self::CannotExecute(e) => write!(f, "{e}"),
+            Self::Expansion(e) => write!(f, "{e}"),
         }
+    }
+}
+impl ExecError {
+    pub fn status(&self) -> i32 {
+        match self { Self::NotFound(_) => 127, Self::CannotExecute(_) => 126, Self::Expansion(_) => 2, Self::Io(_) => 1 }
     }
 }
 impl From<io::Error> for ExecError {
@@ -43,19 +52,23 @@ impl Executor for PosixExecutor {
 }
 
 enum IoTarget {
-    Inherit,
+    Inherit(i32),
     File(File),
 }
 impl IoTarget {
     fn into_stdio(self) -> io::Result<Stdio> {
         Ok(match self {
-            Self::Inherit => Stdio::inherit(),
+            Self::Inherit(_) => Stdio::inherit(),
             Self::File(file) => Stdio::from(file),
         })
     }
     fn duplicate(&self) -> io::Result<Self> {
         Ok(match self {
-            Self::Inherit => Self::Inherit,
+            Self::Inherit(fd) => {
+                use std::os::fd::{BorrowedFd, OwnedFd};
+                let owned: OwnedFd = unsafe { BorrowedFd::borrow_raw(*fd) }.try_clone_to_owned()?;
+                Self::File(File::from(owned))
+            },
             Self::File(file) => Self::File(file.try_clone()?),
         })
     }
@@ -64,7 +77,12 @@ impl IoTarget {
 /// Execute a parsed command tree. Every stage is started before any stage is
 /// waited on, so kernel pipe capacity never forces the shell to buffer output.
 pub fn execute_ast(node: &AstNode, env: &ShellEnv) -> Result<i32, ExecError> {
-    let commands: Vec<&SimpleCommand> = match node {
+    let expanded = expand_ast(node, env).map_err(|e| ExecError::Expansion(e.0))?;
+    execute_expanded(&expanded)
+}
+
+pub fn execute_expanded(node: &AstNode<String>) -> Result<i32, ExecError> {
+    let commands: Vec<&SimpleCommand<String>> = match node {
         AstNode::Command(command) => vec![command],
         AstNode::Pipeline(commands) => commands.iter().collect(),
     };
@@ -86,19 +104,12 @@ pub fn execute_ast(node: &AstNode, env: &ShellEnv) -> Result<i32, ExecError> {
         }};
     }
     for (index, simple) in commands.iter().enumerate() {
-        let expanded: Vec<String> = simple
-            .argv
-            .iter()
-            .map(|arg| env.expand_token(arg))
-            .collect();
+        let expanded = &simple.argv;
         if expanded.is_empty() {
-            return Err(ExecError::Io(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "empty command",
-            )));
+            abort_pipeline!(io::Error::new(io::ErrorKind::InvalidInput, "empty command"));
         }
         let last = index + 1 == commands.len();
-        let mut io_map = [IoTarget::Inherit, IoTarget::Inherit, IoTarget::Inherit];
+        let mut io_map = [IoTarget::Inherit(0), IoTarget::Inherit(1), IoTarget::Inherit(2)];
         if index > 0 {
             io_map[0] = match pipes[index - 1].0.try_clone() {
                 Ok(file) => IoTarget::File(file),
@@ -189,7 +200,7 @@ pub fn execute_ast(node: &AstNode, env: &ShellEnv) -> Result<i32, ExecError> {
                 return if e.kind() == io::ErrorKind::NotFound {
                     Err(ExecError::NotFound(expanded[0].clone()))
                 } else {
-                    Err(ExecError::Io(e))
+                    Err(ExecError::CannotExecute(e))
                 };
             }
         }

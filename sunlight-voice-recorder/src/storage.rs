@@ -203,6 +203,7 @@ pub mod native {
             Errno::NotDir => 20,
             Errno::BadFd => 9,
             Errno::Failed => 5,
+            Errno::BrokenPipe => 32,
         })
     }
     impl File for NativeFile {

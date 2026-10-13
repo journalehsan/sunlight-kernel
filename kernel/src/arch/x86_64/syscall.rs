@@ -4344,7 +4344,9 @@ fn wait_pipe_io(frame: &mut SyscallFrame, sched: &mut crate::sched::Scheduler,
     }
     frame.rcx = frame.rcx.saturating_sub(2);
     crate::sched::request_reschedule();
-    0
+    // The return value is written to RAX by syscall entry assembly. The
+    // rewound instruction must re-enter with its original syscall number.
+    frame.rax
 }
 
 /// The socketpair endpoints use the existing pipe rings for stream I/O.

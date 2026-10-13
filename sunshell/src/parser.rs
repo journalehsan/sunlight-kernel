@@ -3,24 +3,52 @@ extern crate alloc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
+/// Quote provenance is retained until the final expansion stage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Quote { Unquoted, Single, Double, Escaped }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AstNode {
-    Command(SimpleCommand),
-    Pipeline(Vec<SimpleCommand>),
+pub struct WordPart { pub text: String, pub quote: Quote }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Word { pub parts: Vec<WordPart> }
+
+impl Word {
+    fn push(&mut self, ch: char, quote: Quote) {
+        if let Some(part) = self.parts.last_mut().filter(|p| p.quote == quote) {
+            part.text.push(ch);
+        } else {
+            self.parts.push(WordPart { text: ch.into(), quote });
+        }
+    }
+    fn quoted_empty(&mut self, quote: Quote) {
+        self.parts.push(WordPart { text: String::new(), quote });
+    }
+}
+impl From<&str> for Word {
+    fn from(text: &str) -> Self {
+        Self { parts: alloc::vec![WordPart { text: text.into(), quote: Quote::Unquoted }] }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SimpleCommand {
-    pub argv: Vec<String>,
-    pub redirections: Vec<Redirection>,
+pub enum AstNode<W = Word> {
+    Command(SimpleCommand<W>),
+    Pipeline(Vec<SimpleCommand<W>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Redirection {
+pub struct SimpleCommand<W = Word> {
+    pub argv: Vec<W>,
+    pub redirections: Vec<Redirection<W>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Redirection<W = Word> {
     Open {
         fd: u8,
         mode: RedirectMode,
-        path: String,
+        path: W,
     },
     Dup {
         fd: u8,
@@ -42,7 +70,7 @@ pub struct ParseError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Token {
-    Word(String),
+    Word(Word),
     Pipe,
     Redirect(RedirectMode, u8),
     Dup(u8, u8),
@@ -108,7 +136,7 @@ pub fn parse_line(line: &str) -> Option<AstNode> {
 
 fn lex(line: &str) -> Result<Vec<Token>, ParseError> {
     let mut out = Vec::new();
-    let mut word = String::new();
+    let mut word = Word::default();
     let mut started = false;
     let mut quote = None;
     let mut chars = line.chars().peekable();
@@ -117,100 +145,69 @@ fn lex(line: &str) -> Result<Vec<Token>, ParseError> {
             if ch == q {
                 quote = None;
             } else if ch == '\\' && q == '"' {
-                word.push(chars.next().ok_or(ParseError {
-                    message: "trailing escape",
-                })?);
+                match chars.peek().copied() {
+                    Some('$' | '`' | '"' | '\\') => word.push(chars.next().unwrap(), Quote::Escaped),
+                    Some('\n') => { chars.next(); }
+                    _ => word.push(ch, Quote::Double),
+                }
             } else {
-                word.push(ch);
+                word.push(ch, if q == '\'' { Quote::Single } else { Quote::Double });
             }
-            started = true;
             continue;
         }
         match ch {
             '\'' | '"' => {
                 quote = Some(ch);
                 started = true;
+                word.quoted_empty(if ch == '\'' { Quote::Single } else { Quote::Double });
             }
             '\\' => {
-                word.push(chars.next().ok_or(ParseError {
-                    message: "trailing escape",
-                })?);
-                started = true;
+                let next = chars.next().ok_or(ParseError { message: "trailing escape" })?;
+                if next != '\n' { word.push(next, Quote::Escaped); started = true; }
             }
-            c if c.is_whitespace() => flush_word(&mut out, &mut word, &mut started),
+            ' ' | '\t' | '\n' => flush_word(&mut out, &mut word, &mut started),
+            '#' if !started => { while chars.next().is_some_and(|c| c != '\n') {} }
             '|' => {
                 flush_word(&mut out, &mut word, &mut started);
                 out.push(Token::Pipe);
             }
-            '>' | '<' | '2' if ch != '2' || chars.peek().is_some_and(|c| *c == '>') => {
+            '>' | '<' => {
+                // An IO number is special only if the entire preceding word is
+                // unquoted digits adjacent to the operator: foo2> is foo2 >.
+                let mut fd = if ch == '<' { 0 } else { 1 };
+                if word.parts.len() == 1 && word.parts[0].quote == Quote::Unquoted
+                    && !word.parts[0].text.is_empty() && word.parts[0].text.bytes().all(|c| c.is_ascii_digit()) {
+                    fd = word.parts[0].text.parse().map_err(|_| ParseError { message: "invalid descriptor" })?;
+                    if fd > 2 { return Err(ParseError { message: "only descriptors 0, 1, and 2 are supported" }); }
+                    word = Word::default(); started = false;
+                }
                 flush_word(&mut out, &mut word, &mut started);
-                let fd = if ch == '2' {
+                if chars.peek() == Some(&'&') {
                     chars.next();
-                    2
-                } else if ch == '<' {
-                    0
+                    let mut number = String::new();
+                    while chars.peek().is_some_and(|c| c.is_ascii_digit()) { number.push(chars.next().unwrap()); }
+                    let source: u8 = number.parse().map_err(|_| ParseError { message: "descriptor duplication requires a descriptor number" })?;
+                    if source > 2 { return Err(ParseError { message: "only descriptors 0, 1, and 2 are supported" }); }
+                    out.push(Token::Dup(fd, source));
+                } else if ch == '>' && chars.peek() == Some(&'>') {
+                    chars.next(); out.push(Token::Redirect(RedirectMode::Append, fd));
                 } else {
-                    1
-                };
-                let op = if ch == '<' { '<' } else { '>' };
-                if op == '>' && chars.peek() == Some(&'>') {
-                    chars.next();
-                    out.push(Token::Redirect(RedirectMode::Append, fd));
-                } else if op == '>' && chars.peek() == Some(&'&') {
-                    chars.next();
-                    let src = chars
-                        .next()
-                        .and_then(|c| c.to_digit(10))
-                        .ok_or(ParseError {
-                            message: "descriptor duplication requires a descriptor number",
-                        })?;
-                    if src > 2 {
-                        return Err(ParseError {
-                            message: "only descriptors 0, 1, and 2 are supported",
-                        });
-                    }
-                    out.push(Token::Dup(fd, src as u8));
-                } else {
-                    out.push(Token::Redirect(
-                        if op == '<' {
-                            RedirectMode::Read
-                        } else {
-                            RedirectMode::Truncate
-                        },
-                        fd,
-                    ));
+                    out.push(Token::Redirect(if ch == '<' { RedirectMode::Read } else { RedirectMode::Truncate }, fd));
                 }
             }
-            '0' | '1' if chars.peek() == Some(&'>') => {
-                return Err(ParseError {
-                    message: "explicit descriptor redirection is supported only for descriptor 2",
-                })
-            }
-            ';' | '&' | '(' | ')' => {
-                return Err(ParseError {
-                    message: "command separators, background jobs, and grouping are unsupported",
-                })
-            }
-            _ => {
-                word.push(ch);
-                started = true;
-            }
+            ';' | '&' | '(' | ')' | '`' => return Err(ParseError {
+                message: "command separators, substitutions, background jobs, and grouping are unsupported",
+            }),
+            _ => { word.push(ch, Quote::Unquoted); started = true; }
         }
     }
-    if quote.is_some() {
-        return Err(ParseError {
-            message: "unterminated quote",
-        });
-    }
+    if quote.is_some() { return Err(ParseError { message: "unterminated quote" }); }
     flush_word(&mut out, &mut word, &mut started);
     Ok(out)
 }
 
-fn flush_word(out: &mut Vec<Token>, word: &mut String, started: &mut bool) {
-    if *started {
-        out.push(Token::Word(core::mem::take(word)));
-        *started = false;
-    }
+fn flush_word(out: &mut Vec<Token>, word: &mut Word, started: &mut bool) {
+    if *started { out.push(Token::Word(core::mem::take(word))); *started = false; }
 }
 
 /// Backward-compatible whitespace tokenizer.
@@ -235,7 +232,8 @@ mod tests {
         else {
             panic!()
         };
-        assert_eq!(parts[0].argv, ["echo", "a|b", "|", "c"]);
+        assert_eq!(parts[0].argv[1].parts[0].quote, Quote::Single);
+        assert_eq!(parts[0].argv[2].parts[0].quote, Quote::Escaped);
     }
     #[test]
     fn redirection_order_is_preserved() {
@@ -259,5 +257,22 @@ mod tests {
         assert!(parse_line_checked("a | | b").is_err());
         assert!(parse_line_checked("echo 'x").is_err());
         assert!(parse_line_checked("echo >").is_err());
+    }
+}
+
+#[cfg(test)]
+mod io_number_tests {
+    use super::*;
+    #[test]
+    fn descriptor_numbers_require_adjacency_and_unquoted_digits() {
+        for line in ["echo foo2>out", "echo '2'>out", "echo 2 >out"] {
+            let AstNode::Command(cmd) = parse_line_checked(line).unwrap().unwrap() else { panic!() };
+            assert_eq!(cmd.argv.len(), 2, "{line}");
+            assert!(matches!(cmd.redirections[0], Redirection::Open { fd: 1, .. }));
+        }
+        let AstNode::Command(cmd) = parse_line_checked("echo 1>out 2>&1").unwrap().unwrap() else { panic!() };
+        assert_eq!(cmd.argv.len(), 1);
+        assert!(parse_line_checked("echo 2>&12").is_err());
+        assert!(parse_line_checked("echo 9>out").is_err());
     }
 }

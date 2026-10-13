@@ -80,6 +80,7 @@ fn error(error: sys::Errno) -> isize {
         sys::Errno::BadFd => 9,
         sys::Errno::IsDir => 21,
         sys::Errno::NotDir => 20,
+        sys::Errno::BrokenPipe => 32,
         sys::Errno::Failed => 5,
     })
 }

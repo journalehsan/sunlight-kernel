@@ -44,6 +44,7 @@ impl ShellEnv {
         self.set("USER", user);
         self.set("HOME", &home);
         self.set("SHELL", "/bin/sshl");
+        self.set("?", "0");
     }
 
     /// Overlay locale variables from a parsed configuration.
@@ -81,18 +82,4 @@ impl ShellEnv {
             .filter(|d| !d.is_empty())
     }
 
-    /// Expand a single token: `$KEY` (or `${KEY}`) becomes its value,
-    /// an unset variable becomes the empty string, anything else passes
-    /// through unchanged.
-    pub fn expand_token(&self, token: &str) -> String {
-        if let Some(rest) = token.strip_prefix('$') {
-            let key = rest
-                .strip_prefix('{')
-                .and_then(|k| k.strip_suffix('}'))
-                .unwrap_or(rest);
-            String::from(self.get(key).unwrap_or(""))
-        } else {
-            String::from(token)
-        }
-    }
 }
