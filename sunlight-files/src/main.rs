@@ -4,6 +4,7 @@
 extern crate alloc;
 
 mod thumbnails;
+pub mod preview;
 
 use alloc::{format, string::String, vec::Vec};
 use core::cell::RefCell;
@@ -1903,7 +1904,7 @@ impl FilesApp {
             Err(_) => return,
         };
         if let Some(full_path) = self.state.current_path.join(name) {
-            if is_image_name(name_bytes) {
+            if is_image_name(name_bytes) || preview::pdf::supports(name_bytes) {
                 self.thumbnails.request(Some(full_path.as_str().as_bytes()));
             } else {
                 load_text_preview_sync(
@@ -3479,7 +3480,7 @@ impl FilesApp {
                 continue;
             }
             let entry = self.state.entries[idx];
-            if entry.file_type == FT_FILE && is_image_name(entry.name_bytes()) {
+            if entry.file_type == FT_FILE && (is_image_name(entry.name_bytes()) || preview::pdf::supports(entry.name_bytes())) {
                 if let Some(path) = self.state.current_path.join(entry_name_str(&entry)) {
                     self.thumbnails
                         .request_grid(path.as_str().as_bytes(), entry.size);
@@ -4073,6 +4074,7 @@ impl FilesApp {
                 1 => "SIMG v2",
                 2 => "PNG",
                 3 => "JPEG",
+                5 => "Document",
                 _ => "TGA",
             };
             Self::draw_prop_row(
@@ -4088,7 +4090,7 @@ impl FilesApp {
         }
 
         // Preview (right side)
-        if is_image_name(name_bytes) {
+        if is_image_name(name_bytes) || preview::pdf::supports(name_bytes) {
             let icon_inset = preview.inset(4);
             if let Some(ready) = &self.thumbnails.preview {
                 let (w, h) = sunlight_ui::image::simg::fit_dimensions(
@@ -5189,6 +5191,7 @@ fn opener_label(app: &[u8]) -> &'static str {
     match app {
         b"/bin/light-lens" => "Light Lens",
         b"/bin/sunlight-edit" => "Sunlight Edit",
+        b"/bin/sunlight-docview" => "Document Viewer",
         _ => "Default application",
     }
 }
@@ -5301,6 +5304,32 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
         Some(sunlight_ipc::getpid()),
     );
     env::init(envp);
+    if cfg!(feature = "document-thumbnail-smoke") {
+        let path = b"/tmp/files-thumbnail-fixture.pdf";
+        let result = (|| -> Option<()> {
+            let fd = libc::open_with_flags(path, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC).ok()?;
+            let written = libc::write_all(fd, include_bytes!("../../sunlight-docserv/tests/fixtures/sample.pdf"));
+            let closed = libc::close(fd);
+            if written.is_err() || closed.is_err() { return None; }
+            let mut provider = thumbnails::Thumbnails::new();
+            provider.request(Some(path));
+            let deadline = monotonic_millis().saturating_add(30_000);
+            while monotonic_millis() < deadline {
+                provider.poll();
+                if let Some(preview) = &provider.preview {
+                    if preview.image.width == 128 && preview.image.height == 128
+                        && preview.image.pixels.iter().any(|&p| p & 0xff == 204 && (p >> 16) & 0xff < 30) {
+                        debug_log("[FILES] native PDF thumbnail worker OK\n");
+                        return Some(());
+                    }
+                    return None;
+                }
+                process_yield();
+            }
+            None
+        })();
+        ProcessExit::exit(if result.is_some() { 0 } else { 1 });
+    }
 
     // Open the window first so the compositor can begin displaying the
     // skeleton UI while the app model initialises.

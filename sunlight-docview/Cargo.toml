@@ -1,0 +1,31 @@
+[package]
+name = "sunlight-docview"
+version = "0.2.4676-alpha.2"
+
+
+
+
+
+
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+sunlight-docserv = { path = "../sunlight-docserv", default-features = false }
+sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
+sunlight-ipc = { path = "../ipc" }
+sunlight-dialogs = { path = "../sunlight-dialogs" }
+
+[features]
+default = ["std"]
+std = ["anyhow/std", "serde/std", "sunlight-docserv/std"]
+native-ui-smoke = ["std"]
+
+[[bin]]
+name = "sunlight-docview"
+path = "src/main.rs"
+required-features = ["std"]
+
+[dev-dependencies]
+sunlight-docserv = { path = "../sunlight-docserv", features = ["hayro-host"] }

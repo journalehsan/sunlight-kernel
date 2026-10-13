@@ -437,6 +437,18 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     // Phase 4.5: Check if this is a Linux-compat process and translate syscall
     crate::sched::with_scheduler(|sched| {
         linux_compat = sched.current_process().is_linux_compat();
+        // Native IPC/shared-memory bridge for std userspace engines. A tag
+        // selects the native register ABI and bypasses Linux errno conversion;
+        // capabilities and existing per-syscall permissions still apply.
+        if linux_compat && num & ::sunlight_ipc::NATIVE_SYSCALL_TAG != 0 {
+            let native = num & !::sunlight_ipc::NATIVE_SYSCALL_TAG;
+            num = if matches!(native, 1..=8 | 10..=18 | 21 | 25 | 32 | 33 | 39 | 72 | 86 | 92..=94 | 99) {
+                native
+            } else {
+                u64::MAX
+            };
+            linux_compat = false;
+        }
         if linux_compat {
             // Translate Linux syscall number to SunlightOS number
             let linux_num = num as u64;
@@ -509,6 +521,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 -14 => {
                     if linux_num == 20 {
                         num = 1013; // Internal code for Linux writev
+                    } else if linux_num == sunlight_compat_linux::abi::SYS_READV {
+                        num = 1049;
                     }
                 }
                 -15 => {
@@ -561,6 +575,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                 -21 => {
                     if linux_num == 35 {
                         num = 1019; // Linux nanosleep
+                    } else if linux_num == sunlight_compat_linux::abi::SYS_CLOCK_NANOSLEEP {
+                        num = 1048;
                     }
                 }
                 -22 => {
@@ -909,6 +925,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1045 => sys_linux_sendto(frame),
         1046 => sys_linux_fchmod(frame),
         1047 => sys_linux_ppoll(frame),
+        1048 => sys_linux_clock_nanosleep(frame),
+        1049 => sys_linux_readv(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -5457,6 +5475,25 @@ fn sys_linux_newfstatat(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
+/// Relative CLOCK_REALTIME/CLOCK_MONOTONIC sleeps share the existing blocking
+/// nanosleep implementation. Absolute deadlines are explicitly unsupported.
+fn sys_linux_clock_nanosleep(frame: &mut SyscallFrame) -> u64 {
+    if !matches!(frame.rdi, 0 | 1) || frame.rsi & !1 != 0 {
+        return linux_errno(22);
+    }
+    if frame.rsi == 1 {
+        return linux_errno(95);
+    }
+    let clock = frame.rdi;
+    let flags = frame.rsi;
+    frame.rdi = frame.rdx;
+    frame.rsi = frame.r10;
+    let result = sys_linux_nanosleep(frame);
+    frame.rdi = clock;
+    frame.rsi = flags;
+    result
+}
+
 fn sys_linux_nanosleep(frame: &mut SyscallFrame) -> u64 {
     let req_ptr = frame.rdi;
     let rem_ptr = frame.rsi;
@@ -6002,7 +6039,14 @@ struct LinuxIovec {
 const _: () = assert!(core::mem::size_of::<LinuxIovec>() == sunlight_compat_linux::abi::IOVEC_SIZE);
 
 fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
-    const EAGAIN: u64 = u64::MAX - 1;
+    sys_linux_iov(frame, false)
+}
+
+fn sys_linux_readv(frame: &mut SyscallFrame) -> u64 {
+    sys_linux_iov(frame, true)
+}
+
+fn sys_linux_iov(frame: &mut SyscallFrame, read: bool) -> u64 {
 
     let fd = frame.rdi as i32;
     let iov_ptr = frame.rsi;
@@ -6075,16 +6119,24 @@ fn sys_linux_writev(frame: &mut SyscallFrame) -> u64 {
                 r15: frame.r15,
             };
 
-            let res = sys_write(&mut temp_frame);
-            if res == u64::MAX || res == EAGAIN {
+            let res = if read {
+                sys_read_with_nonblocking(&mut temp_frame, total_written > 0)
+            } else {
+                sys_write(&mut temp_frame)
+            };
+            let linux_result = sunlight_compat_linux::abi::from_native_result(res);
+            if (linux_result as i64) < 0 {
                 return if total_written == 0 {
-                    sunlight_compat_linux::abi::from_native_result(res)
+                    linux_result
                 } else {
                     total_written
                 };
             }
             if res == 0 {
                 return total_written;
+            }
+            if res > chunk {
+                return if total_written == 0 { linux_errno(5) } else { total_written };
             }
 
             total_written = total_written.saturating_add(res);
@@ -8143,6 +8195,7 @@ fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
             if consume_success_log_budget(&SHM_MAP_SUCCESS_LOGS) {
                 crate::serial_println!("[SHM]  map_shared_page: OK");
             }
+            frame.r8 = caps.resolve_shared_region(token).map_or(0, |object| object.size as u64);
             virt.as_u64()
         }
         Err(_) => u64::MAX,

@@ -86,11 +86,6 @@ impl<'a> TabBar<'a> {
         if !self.rect.contains(crate::geom::Point::new(x, y)) {
             return None;
         }
-        for i in 0..self.tabs.len() {
-            if self.tab_rect(i).contains(crate::geom::Point::new(x, y)) {
-                return Some(i);
-            }
-        }
-        None
+        (0..self.tabs.len()).find(|&i| self.tab_rect(i).contains(crate::geom::Point::new(x, y)))
     }
 }

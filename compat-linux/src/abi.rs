@@ -91,6 +91,8 @@ pub const SYS_IOCTL: u64 = 16;
 pub const SYS_PREAD64: u64 = 17;
 pub const SYS_PWRITE64: u64 = 18;
 pub const SYS_WRITEV: u64 = 20;
+/// Scatter/gather input used by musl stdio.
+pub const SYS_READV: u64 = 19;
 pub const SYS_ACCESS: u64 = 21;
 pub const SYS_PIPE: u64 = 22;
 pub const SYS_SCHED_YIELD: u64 = 24;
@@ -137,6 +139,8 @@ pub const SYS_TKILL: u64 = 200;
 pub const SYS_FUTEX: u64 = 202;
 pub const SYS_SET_TID_ADDRESS: u64 = 218;
 pub const SYS_CLOCK_GETTIME: u64 = 228;
+/// Clock-qualified sleep used by current Rust std on musl.
+pub const SYS_CLOCK_NANOSLEEP: u64 = 230;
 pub const SYS_EXIT_GROUP: u64 = 231;
 pub const SYS_EPOLL_WAIT: u64 = 232;
 pub const SYS_EPOLL_CTL: u64 = 233;

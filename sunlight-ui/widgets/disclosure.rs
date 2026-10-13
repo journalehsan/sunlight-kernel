@@ -204,7 +204,7 @@ impl<'a> PropertyGrid<'a> {
         let values_per_line = (width / (value_columns * 7)).max(12) as usize;
         rows.iter().fold(0u32, |height, row| {
             let lines =
-                ((row.value.chars().count() + values_per_line - 1) / values_per_line).max(1) as u32;
+                row.value.chars().count().div_ceil(values_per_line).max(1) as u32;
             height.saturating_add(Self::ROW_HEIGHT.saturating_mul(lines))
         })
     }

@@ -20,40 +20,20 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
-// ── Bump allocator (512 KiB) ──────────────────────────────────────────────────
-
-struct BumpAllocator;
-
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        const SIZE: usize = 512 * 1024;
-        static mut HEAP: [u8; SIZE] = [0u8; SIZE];
-        static mut NEXT: usize = 0;
-        let aligned = (NEXT + layout.align() - 1) & !(layout.align() - 1);
-        let end = aligned + layout.size();
-        if end > SIZE {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-    unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
-}
-
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
+// Reclaiming allocation is supplied by sunlight-libc. Repeated document RPCs
+// must release their temporary decoded buffers after writing the disk cache.
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, process_yield,
-    EndpointId, IpcMsg, ThumbMsg,
+    IpcMsg, ThumbMsg,
 };
 use sunlight_libc::{
     self as libc, env, mkdir_recursive, open_with_flags, read_dir, rename, stat, unlink, write_all,
     DirEntry, Fd, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY,
 };
-use sunlight_ui::image::simg::{decode, encode_tga_type2_bgr24, scale_fit};
+use sunlight_ui::image::simg::{decode, encode_tga_type2_bgr24, scale_fit, RgbaImage};
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -93,9 +73,6 @@ impl PathBuf {
         }
     }
 
-    fn as_bytes(&self) -> &[u8] {
-        &self.bytes[..self.len]
-    }
 }
 
 // ── FNV-1a 64-bit hash → 16-char hex cache key ────────────────────────────────
@@ -191,6 +168,20 @@ fn generate_thumb(src_path: &[u8], home: &[u8], size_flag: u32) {
         return;
     }
 
+    let max_edge = if size_flag == 0 { MAX_NORMAL_EDGE } else { MAX_LARGE_EDGE };
+    let extension = src_path.rsplit(|&b| b == b'.').next().unwrap_or(&[]);
+    let document = [b"pdf".as_slice(), b"ps", b"eps"].iter().any(|ext| extension.eq_ignore_ascii_case(ext));
+    let img = if document {
+        let result = (|| {
+            let path = core::str::from_utf8(src_path).ok()?;
+            let mut client = sunlight_docserv::client::NativeClient::connect().ok()?;
+            let data = sunlight_docserv::thumbnail::generate_with_client(&mut client, path, max_edge).ok()?;
+            let pixels = data.chunks_exact(4).map(|p| u32::from_le_bytes([p[0], p[1], p[2], p[3]])).collect();
+            Some(RgbaImage { width: max_edge, height: max_edge, pixels })
+        })();
+        match result { Some(image) => image, None => { debug_log("[THUMBD] document render failed\n"); return; } }
+    } else {
+    if file_size > 4 * 1024 * 1024 { debug_log("[THUMBD] image source exceeds input budget\n"); return; }
     let fd = match open_with_flags(src_path, O_RDONLY) {
         Ok(f) => f,
         Err(_) => {
@@ -209,17 +200,13 @@ fn generate_thumb(src_path: &[u8], home: &[u8], size_flag: u32) {
     src_data.truncate(n);
 
     // Decode SIMG/TGA/PNG/JPEG.
-    let img = match decode(&src_data) {
+    match decode(&src_data) {
         Ok(i) => i,
         Err(_) => {
             debug_log("[THUMBD] decode failed\n");
             return;
         }
-    };
-    let max_edge = if size_flag == 0 {
-        MAX_NORMAL_EDGE
-    } else {
-        MAX_LARGE_EDGE
+    }
     };
     let thumb = scale_fit(&img, max_edge, max_edge);
     let encoded = encode_tga_type2_bgr24(&thumb);
@@ -477,7 +464,6 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
             ThumbMsg::PATH_END => {
                 if sender != in_flight_pid {
                     path_buf.clear();
-                    in_flight_pid = sender;
                 }
                 let mut tail = [0u8; 24];
                 words_to_bytes(&msg.words, 3, 24, &mut tail);

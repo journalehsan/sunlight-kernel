@@ -1,0 +1,16 @@
+[package]
+name = "bindgen"
+version = "0.69.5"
+
+
+
+edition = "2021"
+license = "BSD-3-Clause"
+description = "Compatibility facade for MuPDF 0.4 on Clang 22"
+
+[dependencies]
+bindgen-current = { package = "bindgen", version = "=0.72.1", default-features = false }
+
+[features]
+default = ["runtime"]
+runtime = ["bindgen-current/runtime"]

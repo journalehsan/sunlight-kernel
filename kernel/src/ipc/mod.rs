@@ -933,6 +933,7 @@ fn registration_identity_matches(process_name: &str, registered_name: u64) -> bo
         }
         name if name == name_hash("dialogd") => "sunlight-dialogd",
         name if name == name_hash("thumbd") => "sunlight-thumbd",
+        name if name == name_hash("docserv") => "sunlight-docserv",
         name if name == name_hash("gcd") || name == name_hash("proc") => "gcd",
         name if name == name_hash("solar") => "solar",
         name if name == name_hash("sunlight-kv") => "sunlight-kv",

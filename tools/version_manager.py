@@ -837,12 +837,12 @@ def calculate_version(
 # ---------------------------------------------------------------------------
 
 def find_cargo_tomls(project_root: str) -> list[str]:
-    """Find all Cargo.toml files (excluding target/ and hidden dirs)."""
+    """Find project manifests, preserving vendored dependency versions."""
     cargo_files = []
     root_path = Path(project_root)
     for cargo_file in root_path.rglob("Cargo.toml"):
         parts = cargo_file.relative_to(root_path).parts
-        if any(part.startswith(".") or part == "target" for part in parts):
+        if any(part.startswith(".") or part in {"target", "vendor"} for part in parts):
             continue
         cargo_files.append(str(cargo_file))
     return cargo_files

@@ -891,6 +891,18 @@ WantedBy=sunlight.target
         }
     }
 
+    #[cfg(feature = "document-service")]
+    {
+        let definition = "[Unit]\nDescription=Document rendering service\nAfter=vfs_server.service\n\n[Service]\nType=simple\nExecStart=/sbin/sunlight-docserv\nRestart=no\nUser=root\nCapability=logging\nCapability=user-session\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=sunlight.target\n";
+        if let Ok(unit) = parse_service_unit(definition.as_bytes()) {
+            let _ = services.add(unit);
+        }
+    }
+    #[cfg(feature = "document-ui-gate")]
+    {
+        let definition = "[Unit]\nDescription=Native document viewer gate\nAfter=sunlight-docserv.service\n\n[Service]\nType=simple\nExecStart=/bin/sunlight-docview\nRestart=no\nUser=root\nCapability=logging\nCapability=user-session\n\n[Install]\nWantedBy=sunlight.target\n";
+        if let Ok(unit) = parse_service_unit(definition.as_bytes()) { let _ = services.add(unit); }
+    }
     (services, sockets)
 }
 
@@ -1339,6 +1351,7 @@ fn dep_unit_to_ready_name(dep: &str) -> &str {
         "net_server" => "net",
         "vfs_server" => "vfs",
         "sunlight-thumbd" => "thumbd",
+        "sunlight-docserv" => "docserv",
         "wiseowl-memorydb" => "wiseowl.memorydb.v1",
         // init-launched compositor; nameserver id is display_server, not the unit stem.
         "sunlight-display" => "display_server",

@@ -292,7 +292,7 @@ impl<'a> StatusBadge<'a> {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Format a u32 into a scratch buffer, returns the filled slice as &str.
-fn fmt_u32<'b>(mut n: u32, buf: &'b mut [u8; 8]) -> &'b str {
+fn fmt_u32(mut n: u32, buf: &mut [u8; 8]) -> &str {
     if n == 0 {
         buf[7] = b'0';
         return core::str::from_utf8(&buf[7..]).unwrap();

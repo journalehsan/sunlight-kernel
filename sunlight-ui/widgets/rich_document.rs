@@ -172,8 +172,7 @@ impl RichDocument {
         Self {
             text: String::from(text),
             runs,
-            paragraph_styles: core::iter::repeat(ParagraphStyle::default())
-                .take(text.bytes().filter(|b| *b == b'\n').count() + 1)
+            paragraph_styles: core::iter::repeat_n(ParagraphStyle::default(), text.bytes().filter(|b| *b == b'\n').count() + 1)
                 .collect(),
         }
     }
@@ -440,7 +439,7 @@ impl RichDocument {
         );
         paragraph_styles.extend_from_slice(&old_paragraph_styles[..start_paragraph]);
         paragraph_styles
-            .extend(core::iter::repeat(inherited_paragraph_style).take(inserted_paragraphs + 1));
+            .extend(core::iter::repeat_n(inherited_paragraph_style, inserted_paragraphs + 1));
         if end_paragraph + 1 < old_paragraph_styles.len() {
             paragraph_styles.extend_from_slice(&old_paragraph_styles[end_paragraph + 1..]);
         }

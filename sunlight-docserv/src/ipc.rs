@@ -1,0 +1,104 @@
+//! Serializable document-service requests and replies. Page indices are zero-based.
+use alloc::{string::String, vec::Vec};
+use serde::{Deserialize, Serialize};
+
+/// Filesystem path: native alloc-only clients use UTF-8 strings. Both forms
+/// serialize as the same string on the wire.
+#[cfg(feature = "std")]
+pub type DocumentPath = std::path::PathBuf;
+/// UTF-8 filesystem path for alloc-only native clients.
+#[cfg(not(feature = "std"))]
+pub type DocumentPath = String;
+use DocumentPath as PathBuf;
+
+/// A request to the named `docserv` endpoint.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub enum DocRequest {
+    /// Open a document by filesystem path.
+    Open { path: PathBuf },
+    /// Query the number of pages in an open document.
+    PageCount { handle: u64 },
+    /// Render one page at the specified pixels-per-point scale.
+    RenderPage { handle: u64, page: u32, scale: f32 },
+    /// Extract text from one page.
+    ExtractText { handle: u64, page: u32 },
+    /// Release the document and its source snapshot.
+    Close { handle: u64 },
+}
+
+/// Result of one document operation.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub enum DocResponse {
+    /// A newly allocated, nonzero document identifier.
+    Opened { handle: u64 },
+    /// Total page count.
+    PageCount { count: u32 },
+    /// Top-down BGRA8 pixels, with `data.len() == stride * height`.
+    RenderedPage {
+        width: u32,
+        height: u32,
+        stride: u32,
+        data: Vec<u8>,
+    },
+    /// Extracted UTF-8 text.
+    Text { content: String },
+    /// Successful operation without a payload.
+    Ok,
+    /// A recoverable request, format, or transport error.
+    Err(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_request_round_trips() -> anyhow::Result<()> {
+        let requests = [
+            DocRequest::Open {
+                path: "sample.pdf".into(),
+            },
+            DocRequest::PageCount { handle: 1 },
+            DocRequest::RenderPage {
+                handle: 2,
+                page: 3,
+                scale: 1.5,
+            },
+            DocRequest::ExtractText { handle: 4, page: 5 },
+            DocRequest::Close { handle: 6 },
+        ];
+        for request in requests {
+            assert_eq!(
+                serde_json::from_slice::<DocRequest>(&serde_json::to_vec(&request)?)?,
+                request
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn every_response_round_trips() -> anyhow::Result<()> {
+        let responses = [
+            DocResponse::Opened { handle: 1 },
+            DocResponse::PageCount { count: 2 },
+            DocResponse::RenderedPage {
+                width: 1,
+                height: 1,
+                stride: 4,
+                data: alloc::vec![1, 2, 3, 255],
+            },
+            DocResponse::Text {
+                content: "Sunlight ☀".into(),
+            },
+            DocResponse::Ok,
+            DocResponse::Err("unknown handle".into()),
+        ];
+        for response in responses {
+            assert_eq!(
+                serde_json::from_slice::<DocResponse>(&serde_json::to_vec(&response)?)?,
+                response
+            );
+        }
+        Ok(())
+    }
+}

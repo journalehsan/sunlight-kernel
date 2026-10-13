@@ -14,6 +14,15 @@ The kernel provides scheduling, IPC, memory management, and capability
 brokering. Everything else — drivers, filesystems, networking, services, and
 apps — lives in user space.
 
+`sunlight-docserv` now prefers Hayro 0.8.0 for PDF rendering on the Linux GNU
+host. **Hayro remains host-only:** the full renderer cannot yet build or render
+natively on SunlightOS, and it is not routed through Helios. The existing PDF
+Reader UI and shared Document Canvas are unchanged. MuPDF 0.4 and its Ghostscript
+adapter are disabled by default and retained under `mupdf-legacy` for reference
+and explicit rollback. Normal OS builds include the viewer UI while leaving the rendering service
+disabled; the legacy guest renderer build additionally requires `DOCSERV_BACKEND=mupdf-legacy`.
+See [document viewer build and verification](docs/document-viewer.md).
+
 SunlightOS exists to prove that a modern system can be small, understandable,
 fast, open, and intelligent without becoming heavy or chaotic. It is not only
 a research artifact: it aims to be a real daily-driver desktop seed with

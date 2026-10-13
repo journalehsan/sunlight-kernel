@@ -1,0 +1,39 @@
+[package]
+name = "sunlight-docserv"
+version = "0.2.4676-alpha.2"
+
+
+
+
+
+
+edition = "2021"
+
+[dependencies]
+mupdf = { version = "0.4", optional = true, default-features = false, features = ["xps", "cbz", "epub", "html"] }
+anyhow = { version = "1", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+sunlight-ipc = { path = "../ipc" }
+
+[features]
+default = ["std", "hayro-host"]
+std = ["anyhow/std", "serde/std"]
+renderer = ["std"]
+# Preferred PDF engine; deliberately limited to the Linux GNU host target.
+hayro-host = ["renderer", "dep:hayro"]
+# Deprecated implementation retained for reference and explicit rollback.
+mupdf-legacy = ["renderer", "dep:mupdf"]
+native-smoke = ["mupdf-legacy"]
+native-postscript-smoke = ["native-smoke"]
+
+[[bin]]
+name = "sunlight-docserv"
+path = "src/main.rs"
+required-features = ["renderer"]
+
+[dev-dependencies]
+serde_json = "1"
+
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
+hayro = { version = "=0.8.0", optional = true, default-features = false, features = ["embed-fonts", "embed-cmaps"] }

@@ -59,11 +59,6 @@ impl<'a> Toolbar<'a> {
     }
 
     pub fn hit_test(&self, x: i32, y: i32) -> Option<usize> {
-        for i in 0..self.items.len() {
-            if self.item_rect(i).contains(crate::geom::Point::new(x, y)) {
-                return Some(i);
-            }
-        }
-        None
+        (0..self.items.len()).find(|&i| self.item_rect(i).contains(crate::geom::Point::new(x, y)))
     }
 }

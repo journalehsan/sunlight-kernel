@@ -2824,6 +2824,15 @@ StandardOutput=journal\nStandardError=journal\n\n\
         b"#!/helios/note\n",
     ),
     // sunlight-thumbd: asynchronous thumbnail daemon.
+    // Keep the canonical /bin paths used by the launcher and service units in
+    // sync with the /usr/bin compatibility aliases.
+    RamEntry::file("/bin/sunlight-docserv", 0, 0, mode::FILE_755, b"#!/helios/sunlight-docserv\n"),
+    RamEntry::file("/usr/bin/sunlight-docserv", 0, 0, mode::FILE_755, b"#!/helios/sunlight-docserv\n"),
+    RamEntry::file("/sbin/sunlight-docserv", 0, 0, mode::FILE_755, b"#!/helios/sunlight-docserv\n"),
+    RamEntry::file("/bin/gs", 0, 0, mode::FILE_755, b"#!/helios/gs\n"),
+    RamEntry::file("/usr/bin/gs", 0, 0, mode::FILE_755, b"#!/helios/gs\n"),
+    RamEntry::file("/bin/sunlight-docview", 0, 0, mode::FILE_755, b"#!/helios/sunlight-docview\n"),
+    RamEntry::file("/usr/bin/sunlight-docview", 0, 0, mode::FILE_755, b"#!/helios/sunlight-docview\n"),
     RamEntry::file(
         "/usr/bin/sunlight-thumbd",
         0,
@@ -3109,6 +3118,18 @@ StandardOutput=journal\nStandardError=journal\n\n\
         "/home/user/Documents/Welcome to SunlightOS.txt",
         1000, 1000, mode::FILE_644,
         include_bytes!("../../assets/documents/Welcome to SunlightOS.txt"),
+    ),
+
+    // PDF reader test document, available in both default Documents folders.
+    RamEntry::file(
+        "/root/Documents/SunlightOS_PDF_Reader_Test.pdf",
+        0, 0, mode::FILE_644,
+        include_bytes!("../../assets/documents/SunlightOS_PDF_Reader_Test.pdf"),
+    ),
+    RamEntry::file(
+        "/home/user/Documents/SunlightOS_PDF_Reader_Test.pdf",
+        1000, 1000, mode::FILE_644,
+        include_bytes!("../../assets/documents/SunlightOS_PDF_Reader_Test.pdf"),
     ),
 
     // ── Why SunlightOS Exists document ──────────────────────────────────────
@@ -3513,6 +3534,26 @@ mod tests {
         // asset bytes; we just sanity-check a few early distinctive words).
         let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
         assert!(text.contains("Welcome to SunlightOS") || text.contains("A bright"));
+    }
+
+    #[test]
+    fn document_tools_have_launcher_paths_in_initramfs() {
+        for path in [
+            "/bin/sunlight-docserv",
+            "/usr/bin/sunlight-docserv",
+            "/sbin/sunlight-docserv",
+            "/bin/sunlight-docview",
+            "/usr/bin/sunlight-docview",
+            "/bin/gs",
+            "/usr/bin/gs",
+        ] {
+            let entry = INITRAMFS
+                .iter()
+                .find(|entry| entry.path == path)
+                .unwrap_or_else(|| panic!("missing document tool path: {path}"));
+            assert!(!entry.is_dir, "document tool path is a directory: {path}");
+            assert_ne!(entry.mode & 0o111, 0, "document tool is not executable: {path}");
+        }
     }
 
     #[test]

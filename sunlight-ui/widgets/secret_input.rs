@@ -3,6 +3,12 @@ pub struct SecretInput {
     bytes: [u8; 128],
     len: usize,
 }
+impl Default for SecretInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SecretInput {
     pub const fn new() -> Self {
         Self {

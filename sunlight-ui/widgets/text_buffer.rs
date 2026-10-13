@@ -33,6 +33,12 @@ fn char_index_to_byte(line: &str, char_idx: usize) -> usize {
         .unwrap_or(line.len())
 }
 
+impl Default for TextBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TextBuffer {
     pub fn new() -> Self {
         Self {
@@ -144,7 +150,7 @@ impl TextBuffer {
 
     /// True when the buffer holds no user-visible text.
     pub fn is_content_empty(&self) -> bool {
-        self.lines.len() <= 1 && self.lines.first().map_or(true, String::is_empty)
+        self.lines.len() <= 1 && self.lines.first().is_none_or(String::is_empty)
     }
 
     pub fn line_count(&self) -> usize {

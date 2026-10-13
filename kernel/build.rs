@@ -19,6 +19,64 @@ fn main() {
     let release_dir = target_dir.join("x86_64-unknown-none").join("release");
     let scratch_target_dir = target_dir.join("embedded-build");
 
+    // The desktop advertises Document Viewer even when no renderer is enabled.
+    // Package its existing UI/client executable independently of MuPDF/Hayro.
+    let viewer_script = workspace_root.join("tools/build_docview.sh");
+    for input in [
+        "tools/build_docview.sh",
+        "tools/stamp_helios_elf.sh",
+        "sunlight-docview",
+        "sunlight-docserv/src/client.rs",
+        "sunlight-docserv/src/ipc.rs",
+        "sunlight-ui",
+        "sunlight-dialogs",
+        "ipc",
+    ] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            workspace_root.join(input).display()
+        );
+    }
+    let viewer_dest = target_dir.join("x86_64-unknown-linux-musl/release/sunlight-docview");
+    // Explicit legacy/UI smoke builds supply their own viewer features. Preserve
+    // that artifact; default builds always refresh the standalone UI/client.
+    if env::var_os("CARGO_FEATURE_DOCUMENT_VIEWER").is_none() {
+        let viewer_status = Command::new("bash")
+            .arg(&viewer_script)
+            .env("CARGO_TARGET_DIR", &scratch_target_dir)
+            .env_remove("DOCVIEW_FEATURES")
+            .current_dir(workspace_root)
+            .status()
+            .expect("failed to invoke document viewer builder");
+        assert!(
+            viewer_status.success(),
+            "failed to build document viewer UI"
+        );
+        let viewer_source =
+            scratch_target_dir.join("x86_64-unknown-linux-musl/release/sunlight-docview");
+        let viewer_bytes = fs::read(&viewer_source).expect("missing built document viewer");
+        assert_helios_elf(&viewer_source, &viewer_bytes);
+        if fs::read(&viewer_dest).ok().as_deref() != Some(viewer_bytes.as_slice()) {
+            fs::create_dir_all(viewer_dest.parent().unwrap())
+                .expect("create viewer artifact directory");
+            fs::copy(&viewer_source, &viewer_dest).expect("copy document viewer artifact");
+        }
+    }
+    let viewer_bytes =
+        fs::read(&viewer_dest).expect("missing document viewer; run bash tools/build_docview.sh");
+    assert_helios_elf(&viewer_dest, &viewer_bytes);
+    println!("cargo:rerun-if-changed={}", viewer_dest.display());
+
+    // Rendering stays opt-in; only explicit legacy builds embed docserv.
+    if env::var_os("CARGO_FEATURE_DOCUMENT_SERVICE").is_some() {
+        let path = target_dir.join("x86_64-unknown-linux-musl/release/sunlight-docserv");
+        println!("cargo:rerun-if-changed={}", path.display());
+        let bytes = fs::read(&path).unwrap_or_else(|err| {
+            panic!("missing legacy renderer {}: {err}; run DOCSERV_BACKEND=mupdf-legacy bash tools/build_docserv.sh", path.display())
+        });
+        assert_helios_elf(&path, &bytes);
+    }
+
     let build_timestamp = build_timestamp();
     println!("cargo:rustc-env=SUNLIGHT_BUILD_TIMESTAMP={build_timestamp}");
     println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
@@ -816,4 +874,14 @@ fn build_package(
             dest_path.display()
         );
     });
+}
+
+fn assert_helios_elf(path: &Path, bytes: &[u8]) {
+    assert!(
+        bytes.starts_with(b"\x7fELF")
+            && bytes.get(7) == Some(&3)
+            && bytes.get(9..15) == Some(b"HLNX01".as_slice()),
+        "{} is not a stamped Helios ELF; rebuild its document executable",
+        path.display()
+    );
 }

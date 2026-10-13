@@ -139,6 +139,12 @@ macro_rules! aliases {
 
 static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
     ApplicationRegistryEntry {
+        canonical_id: "sunlight-docview",
+        display_name: "Document Viewer",
+        aliases: aliases![("en", "docview"), ("en", "document-viewer")],
+        executable: b"/bin/sunlight-docview",
+    },
+    ApplicationRegistryEntry {
         canonical_id: "voice-recorder", display_name: "Sunlight Voice Recorder",
         aliases: aliases![("en", "recorder"), ("en", "sunlight-voice-recorder"), ("fa", "ضبط صدا")],
         executable: b"/bin/voice-recorder",

@@ -431,7 +431,7 @@ impl<'a, const N: usize> TextInput<'a, N> {
         };
         #[cfg(feature = "app")]
         {
-            return crate::clipboard::set_text_from(self.clipboard_source, text).is_ok();
+            crate::clipboard::set_text_from(self.clipboard_source, text).is_ok()
         }
         #[cfg(not(feature = "app"))]
         {

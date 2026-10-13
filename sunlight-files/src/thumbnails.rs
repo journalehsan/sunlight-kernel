@@ -103,6 +103,9 @@ struct Cache {
 }
 impl Cache {
     fn resolve(&mut self, path: &[u8], data: &[u8]) -> Option<Preview> {
+        self.resolve_with(path, data, || generate(data))
+    }
+    fn resolve_with(&mut self, path: &[u8], data: &[u8], generate_preview: impl FnOnce() -> Option<Preview>) -> Option<Preview> {
         let hash = fingerprint(data);
         if let Some(index) = self
             .entries
@@ -117,7 +120,7 @@ impl Cache {
         }
         self.misses += 1;
         self.remove(path);
-        let preview = generate(data);
+        let preview = generate_preview();
         let bytes = preview_bytes(&preview) + path.len() + core::mem::size_of::<Cached>() + 32;
         while !self.entries.is_empty()
             && (self.bytes + bytes + CACHE_ENTRIES * core::mem::size_of::<Cached>() > CACHE_BYTES
@@ -546,7 +549,14 @@ extern "C" fn worker(arg: *mut u8) -> *mut u8 {
                     if request.generation == generation.load(Ordering::Acquire)
                         && grid.as_ref().is_none_or(|g| g.size == data.len() as u64) =>
                 {
-                    cache.resolve(&request.path, &data)
+                    if crate::preview::pdf::supports(&request.path) {
+                        cache.resolve_with(&request.path, &data, || {
+                            let image = crate::preview::pdf::worker_preview(&request.path, EDGE)?;
+                            Some(Preview { image: Arc::new(image), width: EDGE, height: EDGE, format: 5 })
+                        })
+                    } else {
+                        cache.resolve(&request.path, &data)
+                    }
                 }
                 _ => {
                     cache.remove(&request.path);

@@ -933,6 +933,11 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
             Ok(crate::SUNLIGHT_CONTROL_PANEL_ELF_BYTES)
         }
         // sunlight-thumbd: thumbnail daemon for async File Manager previews.
+        #[cfg(feature = "document_service")]
+        "/bin/sunlight-docserv" | "/usr/bin/sunlight-docserv" | "/sbin/sunlight-docserv" => Ok(crate::SUNLIGHT_DOCSERV_ELF_BYTES),
+        "/bin/sunlight-docview" | "/usr/bin/sunlight-docview" => Ok(crate::SUNLIGHT_DOCVIEW_ELF_BYTES),
+        #[cfg(feature = "document_postscript")]
+        "/bin/gs" | "/usr/bin/gs" => Ok(crate::DOCUMENT_GHOSTSCRIPT_ELF_BYTES),
         "/bin/sunlight-thumbd" | "/usr/bin/sunlight-thumbd" | "/sbin/sunlight-thumbd" => {
             Ok(crate::SUNLIGHT_THUMBD_ELF_BYTES)
         }

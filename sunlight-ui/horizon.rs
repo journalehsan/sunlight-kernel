@@ -221,6 +221,7 @@ fn resolve_state(
 }
 
 /// Draw the pin/min/max/close strip including optional divider.
+#[allow(clippy::too_many_arguments)] // Explicit toolkit paint parameters.
 pub fn draw_control_strip(
     canvas: &mut Canvas<'_>,
     layout: &HorizonLayout,
@@ -263,6 +264,7 @@ pub fn draw_control_strip(
 }
 
 /// Draw a single Horizon control into `rect`.
+#[allow(clippy::too_many_arguments)] // Explicit toolkit paint parameters.
 pub fn draw_control(
     canvas: &mut Canvas<'_>,
     rect: Rect,

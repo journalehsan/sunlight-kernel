@@ -99,7 +99,7 @@ impl Slider {
 
     pub fn update(&mut self, event: Event) -> bool {
         match event {
-            Event::MouseDown { x, y, button } if button == 0 => {
+            Event::MouseDown { x, y, button: 0 } => {
                 if self.rect.contains(Point::new(x, y)) {
                     self.active = true;
                     self.dragging = true;
@@ -121,7 +121,7 @@ impl Slider {
                 }
                 changed
             }
-            Event::MouseUp { x, y, button } if button == 0 => {
+            Event::MouseUp { x, y, button: 0 } => {
                 let was_dragging = self.dragging;
                 self.dragging = false;
                 let hovered = self.rect.contains(Point::new(x, y));
@@ -166,7 +166,7 @@ impl Slider {
     }
 
     fn thumb_size(&self) -> u32 {
-        self.rect.w.min(self.rect.h).min(Self::THUMB_SIZE).max(1)
+        self.rect.w.min(self.rect.h).clamp(1, Self::THUMB_SIZE)
     }
 
     fn set_from_pointer(&mut self, x: i32, y: i32) -> bool {

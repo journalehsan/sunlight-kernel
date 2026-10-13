@@ -1,6 +1,12 @@
 [package]
 name = "sunlight-files"
-version = "0.2.4641-alpha.2"
+version = "0.2.4676-alpha.2"
+
+
+
+
+
+
 
 
 
@@ -432,7 +438,12 @@ name = "sunlight-files"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = { version = "1", default-features = false }
+sunlight-docserv = { path = "../sunlight-docserv", default-features = false }
 sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-16m", "file-ops"] }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
+
+[features]
+document-thumbnail-smoke = []

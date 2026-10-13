@@ -16,6 +16,18 @@ pub use display_modes::{
 };
 
 pub const IPC_MAX_WORDS: usize = 8;
+/// Linux-compatible processes use this namespace to invoke native IPC without
+/// colliding with Linux syscall numbers. The kernel keeps native return values.
+pub const NATIVE_SYSCALL_TAG: u64 = 1 << 63;
+
+#[inline(always)]
+const fn native_syscall_number(num: SunlightSyscall) -> u64 {
+    if cfg!(target_os = "linux") {
+        NATIVE_SYSCALL_TAG | num as u64
+    } else {
+        num as u64
+    }
+}
 /// Register IPC currently transports only `words[0..4)` via r8/r9/r10/r12.
 pub const IPC_REGISTER_WORDS: usize = 4;
 pub const IPC_MAX_CAPS: usize = 2;
@@ -416,6 +428,8 @@ impl ServiceCapability {
         1u64 << (self as u8)
     }
 
+    // The service-unit parser uses this optional wire-name lookup API.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(value: &str) -> Option<Self> {
         match value {
             "network" => Some(Self::Network),
@@ -634,6 +648,7 @@ fn matches_user_session_service(name_key: u64) -> bool {
         || name_key == name_to_u64("clipd")
         || name_key == name_to_u64("dialogd")
         || name_key == name_to_u64("thumbd")
+        || name_key == name_to_u64("docserv")
         || name_key == name_to_u64("sunlight-kv")
         || name_key == name_to_u64("sunlight-tls")
         || name_key == name_to_u64("audiod")
@@ -1065,6 +1080,7 @@ pub mod VfsMsg {
 ///   where hex_key = hex(fnv1a_64(path || le64(file_size) || u8(size)))
 ///
 /// Thumb sizes: `SIZE_NORMAL` = 128px, `SIZE_LARGE` = 256px.
+#[allow(non_snake_case)]
 pub mod ThumbMsg {
     /// Non-final path chunk (32 bytes in words[0..3]).
     pub const PATH_CHUNK: u64 = 0x7411;
@@ -1538,11 +1554,7 @@ fn append_u64_dec(out: &mut [u8], pos: &mut usize, mut value: u64) {
 }
 
 fn append_escaped_limited(out: &mut [u8], pos: &mut usize, value: &str) {
-    let mut used = 0usize;
-    for &byte in value.as_bytes() {
-        if used >= NOTIFICATION_FIELD_MAX {
-            break;
-        }
+    for &byte in value.as_bytes().iter().take(NOTIFICATION_FIELD_MAX) {
         match byte {
             b'\\' => append_bytes(out, pos, b"\\\\"),
             b'\n' | b'\r' => append_bytes(out, pos, b"\\n"),
@@ -1550,7 +1562,6 @@ fn append_escaped_limited(out: &mut [u8], pos: &mut usize, value: &str) {
             0x20..=0x7e => append_byte(out, pos, byte),
             _ => append_byte(out, pos, b'?'),
         }
-        used += 1;
     }
 }
 
@@ -3630,8 +3641,9 @@ pub enum NetworkBackendKind {
 
 /// Authoritative VMXNET3 bring-up state shared by the kernel and diagnostics.
 #[repr(u64)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Vmxnet3InitStage {
+    #[default]
     NotProbed = 0,
     PciMatched = 1,
     BarsMapped = 2,
@@ -3685,11 +3697,6 @@ impl Vmxnet3InitStage {
     }
 }
 
-impl Default for Vmxnet3InitStage {
-    fn default() -> Self {
-        Self::NotProbed
-    }
-}
 
 #[repr(u64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4104,7 +4111,7 @@ pub fn pack_key_event(
 ) -> u64 {
     let mut val = keycode as u64;
     val |= (pressed as u64) << 8;
-    let mods = ((shift as u64) << 0)
+    let mods = (shift as u64)
         | ((ctrl as u64) << 1)
         | ((alt as u64) << 2)
         | ((super_key as u64) << 3);
@@ -4156,6 +4163,8 @@ pub enum ShmError {
 }
 
 #[inline(always)]
+// The seven argument registers mirror the native syscall ABI.
+#[allow(clippy::too_many_arguments)]
 unsafe fn raw_syscall(
     num: SunlightSyscall,
     a1: u64,
@@ -4180,7 +4189,7 @@ unsafe fn raw_syscall(
     unsafe {
         core::arch::asm!(
             "syscall",
-            inlateout("rax") num as u64 => ret,
+            inlateout("rax") native_syscall_number(num) => ret,
             inlateout("rdi") a1 => out_rdi,
             inlateout("rsi") a2 => out_rsi,
             inlateout("rdx") a3 => out_rdx,
@@ -4235,7 +4244,7 @@ unsafe fn raw_syscall_ipc(num: SunlightSyscall, object: u64, msg: IpcMsg) -> (u6
     unsafe {
         core::arch::asm!(
             "syscall",
-            inlateout("rax") num as u64 => ret,
+            inlateout("rax") native_syscall_number(num) => ret,
             inlateout("rdi") msg.label => out_rdi,
             inlateout("rsi") object => out_rsi,
             inlateout("rdx") counts => out_rdx,
@@ -4779,11 +4788,11 @@ pub fn name_to_u64(name: &str) -> u64 {
 }
 
 pub fn debug_log(msg: &str) {
-    // Native syscall 99 is Linux sysinfo(2), which writes into its pointer.
-    // Never issue it with a string buffer in hosted builds or host unit tests.
-    #[cfg(not(target_os = "none"))]
+    // Bare-metal and musl guest builds use the native ABI. GNU host tooling
+    // suppresses logging; tagged musl calls cannot collide with Linux sysinfo.
+    #[cfg(not(any(target_os = "none", target_env = "musl")))]
     let _ = msg;
-    #[cfg(target_os = "none")]
+    #[cfg(any(target_os = "none", target_env = "musl"))]
     // SAFETY: DebugLog receives a valid string pointer and bounded length.
     unsafe {
         raw_syscall(
@@ -5534,6 +5543,15 @@ pub fn shm_map(token: CapabilityToken) -> Result<*mut u8, ShmError> {
     Ok(ret as *mut u8)
 }
 
+/// Map a shared region and return its kernel-verified byte capacity.
+pub fn shm_map_sized(token: CapabilityToken) -> Result<(*mut u8, usize), ShmError> {
+    let (ret, msg) = unsafe { raw_syscall(SunlightSyscall::ShmMap, token.0, 0, 0, 0, 0, 0, 0) };
+    if ret == 0 || ret == u64::MAX || ret & (SHM_PAGE as u64 - 1) != 0 {
+        return Err(ShmError::InvalidToken);
+    }
+    Ok((ret as *mut u8, msg.words[0] as usize))
+}
+
 /// Release the newest local mapping of this token. Older views stay mapped;
 /// backing frames are reclaimed only when the final mapping is released.
 pub fn shm_free(token: CapabilityToken) -> Result<(), ShmError> {
@@ -5581,7 +5599,7 @@ unsafe fn raw_syscall_triple(num: SunlightSyscall, a1: u64, a2: u64, a3: u64) ->
     unsafe {
         core::arch::asm!(
             "syscall",
-            inlateout("rax") num as u64 => ret,
+            inlateout("rax") native_syscall_number(num) => ret,
             in("rdi") a1,
             in("rsi") a2,
             inlateout("rdx") a3 => out_rdx,

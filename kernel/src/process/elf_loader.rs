@@ -153,7 +153,13 @@ fn reserve_final_regions(
                 executable |= protection.executable();
             }
         }
-        if !covered || writable && executable {
+        // Valid static toolchain images can leave alignment gaps between
+        // PT_LOAD segments. Those intervals remain unmapped and need no ledger
+        // reservation; rejecting them prevented musl/MuPDF images from loading.
+        if !covered {
+            continue;
+        }
+        if writable && executable {
             while let Some(reservation) = reservations.pop() {
                 process.address_space.cancel_region(reservation);
             }

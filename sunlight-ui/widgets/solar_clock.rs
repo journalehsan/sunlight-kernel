@@ -83,7 +83,7 @@ pub static RAY_UNIT: [(i16, i16); 60] = [
 /// Major markers at 12, 3, 6, 9 (indices 0, 15, 30, 45).
 #[inline]
 pub fn is_major_ray(index: usize) -> bool {
-    index % 15 == 0
+    index.is_multiple_of(15)
 }
 
 /// Caller-owned clock input. Completely replace on NTP/timezone jumps.
@@ -242,7 +242,7 @@ impl SolarClockLayout {
         let cx = bounds.x + bounds.w as i32 / 2;
         let cy = bounds.y + bounds.h as i32 / 2;
 
-        let major_ray_len = (radius / 7).max(4).min(18);
+        let major_ray_len = (radius / 7).clamp(4, 18);
         let minor_ray_len = (major_ray_len * 2 / 3).max(3);
         let ray_band = major_ray_len + 2;
         let ray_inner_r = radius.saturating_sub(ray_band);
@@ -251,7 +251,7 @@ impl SolarClockLayout {
         let hour_track_r = minute_track_r.saturating_sub((radius / 12).max(3));
 
         // Digital HH:MM band in the center.
-        let dig_h = (radius / 4).max(14).min(36);
+        let dig_h = (radius / 4).clamp(14, 36);
         let dig_w = (dig_h * 5 * 3 / 5) + 16; // rough 5 cells
         let dig_w = dig_w.min(radius.saturating_mul(5) / 4);
         let digital = Rect::new(
@@ -455,7 +455,7 @@ fn draw_progress_arc(
     // 60 samples match ray table — reuse unit vectors (no libm ceil/floor).
     // steps = ceil(progress * 60) via integer math on milli-units.
     let milli = (progress * 1000.0) as u32;
-    let steps = ((milli * 60 + 999) / 1000).clamp(1, 60) as usize;
+    let steps = (milli * 60).div_ceil(1000).clamp(1, 60) as usize;
     for i in 0..steps {
         let (dx, dy) = RAY_UNIT[i.min(59)];
         let x = cx + (dx as i32 * radius) / RAY_SCALE;

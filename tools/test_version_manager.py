@@ -16,6 +16,21 @@ import version_manager as vm
 UTC = datetime.UTC
 
 
+class ManifestDiscoveryTests(unittest.TestCase):
+    def test_vendored_adapter_keeps_dependency_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "kernel/Cargo.toml"
+            adapter = root / "vendor/bindgen-compat/Cargo.toml"
+            for path in (project, adapter):
+                path.parent.mkdir(parents=True)
+                path.write_text('[package]\nname = "fixture"\nversion = "0.69.5"\n')
+            for manifest in vm.find_cargo_tomls(temporary):
+                vm.update_cargo_toml(manifest, "0.2.4671-alpha.2")
+            self.assertIn('version = "0.2.4671-alpha.2"', project.read_text())
+            self.assertIn('version = "0.69.5"', adapter.read_text())
+
+
 class TimeIdentityTests(unittest.TestCase):
     def identity(self, date: str, patch: int = 0) -> dict:
         return vm.calculate_time_identity(datetime.date.fromisoformat(date), patch)

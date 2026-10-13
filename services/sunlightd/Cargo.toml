@@ -1,6 +1,12 @@
 [package]
 name = "sunlightd"
-version = "0.2.4641-alpha.2"
+version = "0.2.4676-alpha.2"
+
+
+
+
+
+
 
 
 
@@ -562,6 +568,11 @@ sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [features]
+# Only start docserv when its optional executable is included in the image.
+default = []
+document-service = []
+document-service-gate = ["document-service"]
+document-ui-gate = ["document-service"]
 identity-phase-c-test = []
 
 [lib]

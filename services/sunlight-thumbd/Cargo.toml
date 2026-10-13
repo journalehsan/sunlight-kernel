@@ -1,6 +1,12 @@
 [package]
 name = "sunlight-thumbd"
-version = "0.2.4641-alpha.2"
+version = "0.2.4676-alpha.2"
+
+
+
+
+
+
 
 
 
@@ -402,7 +408,8 @@ edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
-sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap-16m"] }
+sunlight-docserv = { path = "../../sunlight-docserv", default-features = false }
 sunlight-ui = { path = "../../sunlight-ui" }
 
 [[bin]]

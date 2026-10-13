@@ -539,6 +539,7 @@ impl<'a> RibbonGroupSpec<'a> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)] // Preserve the existing toolbar paint API.
     pub fn draw(
         &self,
         canvas: &mut Canvas,

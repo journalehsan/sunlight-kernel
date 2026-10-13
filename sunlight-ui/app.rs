@@ -229,7 +229,8 @@ pub(crate) fn active_client_bounds() -> Option<crate::geom::Rect> {
     (width > 0 && height > 0).then_some(crate::geom::Rect::new(0, 0, width, height))
 }
 
-fn take_close_requested() -> bool {
+/// Consume a close request in an application-owned native event loop.
+pub fn take_close_requested() -> bool {
     CLOSE_REQUESTED.swap(false, Ordering::Relaxed)
 }
 
@@ -790,6 +791,26 @@ impl Window {
     pub fn set_cursor(&self, shape: CursorShape) {
         let packed = self.win_id | ((shape as u64) << 32);
         let _ = self.display_call(IpcMsg::with_label(SgpMsg::SET_CURSOR).word(0, packed));
+    }
+
+    /// Update the compositor title without retaining or leaking a title string.
+    pub fn set_title(&self, title: &str) -> bool {
+        let Ok((ptr, cap)) = shm_create(4096, 0) else { return false; };
+        let bytes = title.as_bytes();
+        let len = bytes.len().min(4095);
+        unsafe {
+            core::ptr::write_bytes(ptr, 0, 4096);
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, len);
+        }
+        let result = self.display_call(IpcMsg::with_label(SgpMsg::CONFIGURE_WINDOW)
+            .word(0, self.win_id).with_cap(0, cap));
+        let _ = shm_free(cap);
+        result
+    }
+
+    /// Bring this application's window to the foreground.
+    pub fn activate(&self) -> bool {
+        self.display_call(IpcMsg::with_label(SgpMsg::ACTIVATE_WINDOW).word(0, self.win_id))
     }
 
     /// Build a `Canvas` wrapping the shared framebuffer.

@@ -85,6 +85,8 @@ members = [
     "sunlight-welcome",
     "sunlight-widget-gallery",
     "sunlight-files",
+    "sunlight-docserv",
+    "sunlight-docview",
     "sunlight-light-lens",
     "sunlight-clipman",
     "sunlight-dialogs",

@@ -377,7 +377,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
     match linux_nr {
         SYS_READ => SUN_READ,
         SYS_WRITE => SUN_WRITE,
-        SYS_WRITEV => SHIM_WRITEV,
+        SYS_WRITEV | SYS_READV => SHIM_WRITEV,
         SYS_OPEN => SUN_OPEN,
         SYS_CLOSE => SUN_CLOSE,
         SYS_SCHED_YIELD => SUN_PROCESS_YIELD,
@@ -442,7 +442,7 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_RENAMEAT => SHIM_RENAMEAT,
         SYS_UNLINK => SUN_UNLINK,
         SYS_UNLINKAT => SHIM_UNLINKAT,
-        SYS_NANOSLEEP => SHIM_NANOSLEEP,
+        SYS_NANOSLEEP | SYS_CLOCK_NANOSLEEP => SHIM_NANOSLEEP,
         SYS_MKDIR | SYS_MKDIRAT => SHIM_MKDIRAT,
         SYS_FCHMOD => SHIM_FCHMOD,
         SYS_ACCESS | SYS_FACCESSAT => SHIM_FACCESSAT,
@@ -497,6 +497,7 @@ pub fn needs_special_handling(linux_nr: u64) -> bool {
             | 14
             | 16
             | 20
+            | 19
             | 60
             | 131
             | 200
@@ -512,6 +513,7 @@ pub fn needs_special_handling(linux_nr: u64) -> bool {
             | 82
             | 264
             | 35
+            | 230
             | 213
             | 291
             | 233
@@ -650,6 +652,10 @@ mod tests {
 
     #[test]
     fn special_handling_is_flagged() {
+        assert_eq!(translate_syscall(abi::SYS_CLOCK_NANOSLEEP), abi::SHIM_NANOSLEEP);
+        assert_eq!(translate_syscall(abi::SYS_READV), abi::SHIM_WRITEV);
+        assert!(needs_special_handling(abi::SYS_READV));
+        assert!(needs_special_handling(abi::SYS_CLOCK_NANOSLEEP));
         assert!(needs_special_handling(12));
         assert!(needs_special_handling(158));
         assert!(needs_special_handling(218));

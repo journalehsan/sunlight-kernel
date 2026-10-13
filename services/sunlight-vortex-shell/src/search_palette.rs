@@ -211,6 +211,14 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
     },
     SearchEntry { app_id: AppId::VoiceRecorder, title: "Voice Recorder", aliases: &["recorder", "sunlight-voice-recorder"], keywords: &["microphone", "record", "audio", "wav"], action: SearchAction::LaunchApp(AppId::VoiceRecorder), category: "Multimedia" },
     SearchEntry {
+        app_id: AppId::DocumentViewer,
+        title: "Document Viewer",
+        aliases: &["pdf", "document", "docview", "sunlight-docview"],
+        keywords: &["pdf", "postscript", "epub", "documents"],
+        action: SearchAction::LaunchApp(AppId::DocumentViewer),
+        category: "Productivity",
+    },
+    SearchEntry {
         app_id: AppId::MelodyMina,
         title: "Melody Mina",
         aliases: &["music", "player", "melody"],
@@ -367,6 +375,7 @@ fn app_id_token(id: AppId) -> &'static str {
         AppId::WiseOwl => "wiseowl",
         AppId::MelodyMina => "melodymina",
         AppId::VoiceRecorder => "voicerecorder",
+        AppId::DocumentViewer => "documentviewer",
     }
 }
 

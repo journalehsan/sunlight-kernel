@@ -9,7 +9,8 @@ echo "[build] Updating version..."
 python3 "$SCRIPT_DIR/version_manager.py" "$PROJECT_ROOT"
 
 # --- Configuration ---
-QEMU_MEMORY="256M"
+# Embedded userspace ELFs plus the bootloader's file buffer exceed 256 MiB.
+QEMU_MEMORY="1024M"
 QEMU_CPUS="2"
 KERNEL_ELF="target/x86_64-unknown-none/debug/sunlight-kernel"
 ISO_PATH="target/sunlightos.iso"
@@ -135,7 +136,23 @@ echo "[build] Building kernel..."
 # Also force sunlightd rebuild so new service units are included.
 touch "$PROJECT_ROOT/kernel/src/main.rs"
 touch "$PROJECT_ROOT/services/sunlightd/src/main.rs"
-cargo build --package sunlight-kernel
+document_kernel_features=()
+if [[ "${SUNLIGHT_DOCUMENT_VIEWER:-0}" == 1 ]]; then
+    bash "$SCRIPT_DIR/build_docserv.sh"
+    document_kernel_features=(--features document_viewer)
+    if [[ -n "${DOCSERV_GS_SOURCE:-}" ]]; then
+        bash "$SCRIPT_DIR/build_docserv_ghostscript.sh"
+    fi
+    if [[ -f "$PROJECT_ROOT/target/docserv-gs" ]]; then
+        document_kernel_features=(--features document_viewer,document_postscript)
+    fi
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --features document-service
+else
+    echo "[build] Document rendering disabled (legacy rollback: SUNLIGHT_DOCUMENT_VIEWER=1 DOCSERV_BACKEND=mupdf-legacy and a musl C/C++ toolchain)"
+    document_kernel_features=(--no-default-features)
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --no-default-features
+fi
+cargo build --package sunlight-kernel "${document_kernel_features[@]}"
 
 # --- Step 3–6: Limine hybrid ISO (legacy BIOS + x86_64 UEFI) ---
 echo "[build] Building hybrid ISO (BIOS + UEFI)..."

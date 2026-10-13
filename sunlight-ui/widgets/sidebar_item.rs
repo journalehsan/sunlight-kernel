@@ -271,7 +271,7 @@ impl<'a> SidebarItem<'a> {
             canvas.hbar(
                 card.x + Self::CARD_RADIUS as i32,
                 card.y,
-                card.w.saturating_sub(2 * Self::CARD_RADIUS) as u32,
+                card.w.saturating_sub(2 * Self::CARD_RADIUS),
                 1,
                 theme.panel_alt.lighten(28),
             );

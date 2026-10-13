@@ -1048,6 +1048,7 @@ fn clip_text_to_width<'a>(font: Option<&dyn VecText>, text: &'a str, max_w: u32)
     &text[..end]
 }
 
+#[allow(clippy::too_many_arguments)] // Font/layout inputs belong to the retained paint API.
 fn draw_rich_line(
     canvas: &mut Canvas,
     fonts: RichTextFonts<'_>,
@@ -1179,29 +1180,23 @@ fn draw_line_clipped(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default)]
 pub enum DocumentCanvasMode {
+    #[default]
     Editable,
     ReadOnly,
 }
 
-impl Default for DocumentCanvasMode {
-    fn default() -> Self {
-        Self::Editable
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default)]
 pub enum DocumentCanvasPresentation {
     Browser,
     Writer,
+    #[default]
     Preview,
 }
 
-impl Default for DocumentCanvasPresentation {
-    fn default() -> Self {
-        Self::Preview
-    }
-}
 
 #[derive(Clone, Copy)]
 pub struct DocumentTextStyle<'a> {
@@ -1776,7 +1771,7 @@ impl<'a> DocumentCanvas<'a> {
                     x,
                     y,
                     text,
-                    url,
+                    url: _,
                     style,
                 } => {
                     let px = content.x + x;
@@ -1789,11 +1784,7 @@ impl<'a> DocumentCanvas<'a> {
                     if visible.is_empty() {
                         continue;
                     }
-                    let color = if url.is_empty() {
-                        style.color
-                    } else {
-                        style.color
-                    };
+                    let color = style.color;
                     draw_text(canvas, style.font, px, py, visible, color);
                     let underline_w = measure_text_width(style.font, visible);
                     let underline_y = py + crate::paint::font::GLYPH_H as i32 + 2;
@@ -2043,9 +2034,7 @@ impl<'a> DocumentCanvas<'a> {
                         }
                     }
                     let text = if value.is_empty() { placeholder } else { value };
-                    let text_color = if value.is_empty() {
-                        Color::rgb(0x77, 0x77, 0x77)
-                    } else if *disabled {
+                    let text_color = if value.is_empty() || *disabled {
                         Color::rgb(0x77, 0x77, 0x77)
                     } else {
                         *color
@@ -2211,7 +2200,7 @@ fn paint_gradient(
 }
 
 fn gradient_direction(angle_deg: i32) -> (i32, i32) {
-    let angle = ((angle_deg % 360) + 360) % 360;
+    let angle = angle_deg.rem_euclid(360);
     // CSS 0deg is upward; scale is 256.
     match angle {
         0 => (0, -256),
@@ -2352,6 +2341,7 @@ fn paint_corner_border(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // Parameters mirror the retained box-shadow primitive.
 fn paint_box_shadow(
     canvas: &mut Canvas,
     clip: Rect,

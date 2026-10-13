@@ -1,6 +1,12 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.4641-alpha.2"
+version = "0.2.4676-alpha.2"
+
+
+
+
+
+
 
 
 
@@ -585,6 +591,12 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+# The optional legacy MuPDF renderer requires a separate musl C/C++ toolchain.
+# Hayro remains host-only; native PDF rendering is not available yet.
+default = []
+document_service = []
+document_viewer = ["document_service"]
+document_postscript = ["document_service"]
 key_inject = []
 launch_trace = []
 # Deterministic PMM allocation failures for the focused MM-2A QEMU gate only.

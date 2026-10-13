@@ -63,7 +63,7 @@ impl TgaImage {
         let cm_len = u16::from_le_bytes([data[5], data[6]]) as u32;
         let cm_entry_bits = data[7] as u32;
         let cm_bytes = if data[1] != 0 {
-            cm_len * ((cm_entry_bits + 7) / 8)
+            cm_len * cm_entry_bits.div_ceil(8)
         } else {
             0
         };

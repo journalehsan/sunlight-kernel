@@ -1,0 +1,19 @@
+[package]
+name = "sunlight-hayro-prototype"
+version = "0.2.4676-alpha.2"
+
+
+
+
+edition = "2021"
+publish = false
+
+# Isolate the feasibility experiment from the production workspace/lockfile.
+[workspace]
+
+[dependencies]
+hayro = { version = "=0.8.0", default-features = false, features = ["embed-fonts", "embed-cmaps"] }
+sunlight-ui = { path = "../../sunlight-ui" }
+
+[profile.release]
+debug = 1

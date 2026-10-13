@@ -23,8 +23,14 @@ impl DialogClient {
 
     #[cfg(target_os = "none")]
     pub fn show(&self, request: &DialogRequest) -> Result<DialogResult, DialogError> {
+        self.show_native(request)
+    }
+
+    /// Show through SunlightOS capability IPC, including from a Helios process.
+    /// Call this only inside SunlightOS; ordinary host clients use `show`.
+    pub fn show_native(&self, request: &DialogRequest) -> Result<DialogResult, DialogError> {
         use sunlight_ipc::{
-            ipc_call, nameserver_lookup, nameserver_lookup_timeout, process_yield, shm_alloc,
+            ipc_call, nameserver_lookup, nameserver_lookup_timeout, shm_alloc,
             shm_free, shm_map, CapabilityToken, IpcMsg, SHM_PAGE,
         };
 
@@ -32,6 +38,7 @@ impl DialogClient {
         let cap = if let Some(cap) = nameserver_lookup("dialogd") {
             cap
         } else {
+            #[cfg(target_os = "none")]
             let _ = sunlight_libc::spawn(b"/sbin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
                 .or_else(|_| {
                     sunlight_libc::spawn(b"/bin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
@@ -42,7 +49,7 @@ impl DialogClient {
                     found = Some(cap);
                     break;
                 }
-                process_yield();
+                sunlight_ipc::process_yield();
             }
             found.ok_or(DialogError::HostUnavailable)?
         };

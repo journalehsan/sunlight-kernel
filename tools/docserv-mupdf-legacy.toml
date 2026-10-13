@@ -1,0 +1,3 @@
+# Only needed for the deprecated MuPDF rollback build on newer Clang.
+[patch.crates-io]
+bindgen = { path = "vendor/bindgen-compat" }

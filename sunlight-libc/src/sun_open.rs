@@ -8,7 +8,7 @@
 //! - Associations will come from app manifests / desktop metadata.
 //! - Per-user and per-type overrides will be supported.
 //! - An "Open With" menu can layer on top of this resolver.
-//! - Image, music, PDF, and browser apps can register handlers later.
+//! - Additional apps can register handlers later.
 
 use sunlight_ipc::launch_trace::{LaunchSource, LaunchTrace};
 
@@ -47,6 +47,11 @@ pub fn app_for_mime(mime: &[u8]) -> Option<&'static [u8]> {
         b"image/x-sunlight-simg" | b"image/x-tga" | b"image/png" | b"image/jpeg" => {
             Some(b"/bin/light-lens")
         }
+        b"application/pdf"
+        | b"application/postscript"
+        | b"application/oxps"
+        | b"application/vnd.comicbook+zip"
+        | b"application/epub+zip" => Some(b"/bin/sunlight-docview"),
         _ => None,
     }
 }
@@ -199,6 +204,11 @@ fn mime_from_extension(ext: &[u8]) -> &'static [u8] {
         b"toml" => b"text/toml",
         b"rs" => b"text/rust",
         b"json" => b"application/json",
+        b"pdf" => b"application/pdf",
+        b"ps" | b"eps" => b"application/postscript",
+        b"xps" => b"application/oxps",
+        b"cbz" => b"application/vnd.comicbook+zip",
+        b"epub" => b"application/epub+zip",
         b"simg" => b"image/x-sunlight-simg",
         b"tga" => b"image/x-tga",
         b"png" => b"image/png",
@@ -240,6 +250,15 @@ fn extension_bytes(path: &[u8], out: &mut [u8; MAX_EXT]) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::mime_from_path;
+
+    #[test]
+    fn pdf_files_resolve_to_document_viewer() {
+        for path in [b"/root/Documents/Test PDF.pdf".as_slice(), b"manual.PDF"] {
+            let mime = mime_from_path(path);
+            assert_eq!(mime, b"application/pdf");
+            assert_eq!(super::app_for_mime(mime), Some(b"/bin/sunlight-docview".as_slice()));
+        }
+    }
 
     #[test]
     fn png_and_jpeg_open_in_light_lens() {

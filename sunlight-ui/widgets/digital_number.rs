@@ -290,9 +290,7 @@ impl DigitalNumberWidget {
                     buf[k + pad] = buf[k];
                 }
             }
-            for k in 0..pad {
-                buf[k] = b'0';
-            }
+            buf[..pad].fill(b'0');
             i = width.min(DIGITAL_VALUE_CAP);
         }
         self.value[..i].copy_from_slice(&buf[..i]);

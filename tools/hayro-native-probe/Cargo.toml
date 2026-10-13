@@ -1,0 +1,35 @@
+[package]
+name = "sunlight-hayro-native-probe"
+version = "0.2.4676-alpha.2"
+
+
+
+edition = "2021"
+publish = false
+
+# Separate resolution prevents changing the host prototype or production graph.
+[workspace]
+resolver = "2"
+
+[dependencies]
+hayro-syntax = { version = "=0.8.0", default-features = false }
+vello_cpu = { version = "=0.3.0", default-features = false, features = ["libm", "u8_pipeline"], optional = true }
+hayro = { version = "=0.8.0", default-features = false, features = ["embed-fonts", "embed-cmaps"], optional = true }
+sunlight-ui = { path = "../../sunlight-ui", optional = true }
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap"], optional = true }
+
+[features]
+default = []
+images = ["hayro-syntax/images"]
+raster = ["dep:vello_cpu", "dep:sunlight-ui"]
+# Intentionally reproduces the full rendering graph's native compile failure.
+full-render = ["dep:hayro"]
+native-entry = ["dep:sunlight-libc"]
+
+[[bin]]
+name = "hayro-parser-native"
+path = "src/native.rs"
+required-features = ["native-entry"]
+
+[profile.release]
+panic = "abort"

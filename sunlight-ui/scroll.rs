@@ -66,6 +66,12 @@ pub struct ScrollState {
     drag_start_offset_y: i32,
 }
 
+impl Default for ScrollState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScrollState {
     pub const fn new() -> Self {
         Self {
@@ -360,7 +366,7 @@ pub fn draw_scrollbar(
         canvas.blend_rect(track, theme.border);
     }
 
-    let radius = (SCROLLBAR_WIDTH / 2).min(3) as u32;
+    let radius = (SCROLLBAR_WIDTH / 2).min(3);
     canvas.fill_rounded_rect(thumb, radius, thumb_color);
 }
 

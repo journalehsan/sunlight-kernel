@@ -265,6 +265,8 @@ static ICON_RABBIT_TGA: &[u8] =
 static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
 static ICON_VOICE_RECORDER_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
+static ICON_DOCUMENT_VIEWER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/mupdf.tga");
 static ICON_MELODY_MINA_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
 static MENU_NEW_FOLDER_TGA: &[u8] =
@@ -488,7 +490,8 @@ impl DockTheme {
             | AppId::Welcome
             | AppId::WiseOwl
             | AppId::MelodyMina
-            | AppId::VoiceRecorder => None,
+            | AppId::VoiceRecorder
+            | AppId::DocumentViewer => None,
         }
     }
 }
@@ -611,6 +614,7 @@ pub(crate) enum AppId {
     WiseOwl,
     MelodyMina,
     VoiceRecorder,
+    DocumentViewer,
 }
 
 /// Pinned bottom-dock apps, left → right after the Start Menu grid button.
@@ -1995,6 +1999,11 @@ impl VortexShell {
                 DockAppState::new(AppId::WiseOwl, "Wise Owl", AppId::WiseOwl),
                 DockAppState::new(AppId::MelodyMina, "Melody Mina", AppId::MelodyMina),
                 DockAppState::new(AppId::VoiceRecorder, "Sunlight Voice Recorder", AppId::VoiceRecorder),
+                DockAppState::new(
+                    AppId::DocumentViewer,
+                    "Document Viewer",
+                    AppId::DocumentViewer,
+                ),
             ],
             app_registry: RunningAppRegistry::new(),
             running_apps: Vec::new(),
@@ -2305,6 +2314,7 @@ impl VortexShell {
             AppId::WiseOwl => AppStateAppId::WiseOwl,
             AppId::MelodyMina => AppStateAppId::MelodyMina,
             AppId::VoiceRecorder => AppStateAppId::VoiceRecorder,
+            AppId::DocumentViewer => AppStateAppId::DocumentViewer,
         }
     }
 
@@ -2344,6 +2354,7 @@ impl VortexShell {
             AppId::WiseOwl => "/bin/wiseowl",
             AppId::MelodyMina => "/bin/melody-mina",
             AppId::VoiceRecorder => "/bin/voice-recorder",
+            AppId::DocumentViewer => "/bin/sunlight-docview",
         }
     }
 
@@ -2372,6 +2383,7 @@ impl VortexShell {
             // available to search, runners, and command-line launches.
             AppId::MelodyMina => b"/bin/melody-mina",
             AppId::VoiceRecorder => b"/bin/voice-recorder",
+            AppId::DocumentViewer => b"/bin/sunlight-docview",
         }
     }
 
@@ -2396,6 +2408,7 @@ impl VortexShell {
             AppId::WiseOwl => "app=wiseowl",
             AppId::MelodyMina => "app=melody-mina",
             AppId::VoiceRecorder => "app=voice-recorder",
+            AppId::DocumentViewer => "app=sunlight-docview",
         }
     }
 
@@ -4023,6 +4036,7 @@ impl VortexShell {
             AppId::WiseOwl => Some(ICON_GENERIC_APP_TGA),
             AppId::MelodyMina => Some(ICON_MELODY_MINA_TGA),
             AppId::VoiceRecorder => Some(ICON_VOICE_RECORDER_TGA),
+            AppId::DocumentViewer => Some(ICON_DOCUMENT_VIEWER_TGA),
         };
         bytes.and_then(|b| TgaImage::parse(b).ok())
     }
@@ -6602,6 +6616,7 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "sunlight-text"
         | "kate" => Some(ICON_TEXT_EDITOR_TGA),
         "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_TGA),
+        "sunlight-docview" | "docview" | "document-viewer" => Some(ICON_DOCUMENT_VIEWER_TGA),
         "melody-mina" | "melody" | "music-player" => Some(ICON_MELODY_MINA_TGA),
         "silicon-echoes" | "silicon" => Some(ICON_SILICON_ECHOES_TGA),
         "rappid-rabbit" | "rabbit" | "internet-web-browser" | "web-browser" => {

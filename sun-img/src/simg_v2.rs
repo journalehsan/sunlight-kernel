@@ -258,6 +258,8 @@ pub fn parse_header(data: &[u8]) -> Result<SimgV2Header, ImageError> {
     })
 }
 
+// Arguments correspond directly to the fixed SIMG header fields.
+#[allow(clippy::too_many_arguments)]
 fn write_header(
     out: &mut [u8; HEADER_SIZE_USIZE],
     width: u32,

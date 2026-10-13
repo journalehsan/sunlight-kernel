@@ -388,12 +388,27 @@ if [ "$BUILD_FIRST" = true ]; then
     "$SCRIPT_DIR/stamp_helios_elf.sh" \
         "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note"
     "$SCRIPT_DIR/stamp_helios_elf.sh" "$PROJECT_ROOT/hello-linux/hello-linux.elf"
+    document_kernel_features=(--no-default-features)
+    if [[ "${SUNLIGHT_DOCUMENT_VIEWER:-0}" == 1 ]]; then
+        bash "$SCRIPT_DIR/build_docserv.sh"
+        document_kernel_features=(--features document_viewer)
+        if [[ -n "${DOCSERV_GS_SOURCE:-}" ]]; then
+            bash "$SCRIPT_DIR/build_docserv_ghostscript.sh"
+        fi
+        if [[ -f "$PROJECT_ROOT/target/docserv-gs" ]]; then
+            document_kernel_features=(--features document_viewer,document_postscript)
+        fi
+        RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --features document-service
+    else
+        echo -e "${YELLOW}Document rendering disabled${NC} (legacy rollback: SUNLIGHT_DOCUMENT_VIEWER=1 DOCSERV_BACKEND=mupdf-legacy and a musl C/C++ toolchain)"
+        RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --no-default-features
+    fi
     # The kernel embeds the freshly built service ELFs with include_bytes!.
     # Force rustc to refresh those bytes even when Cargo misses artifact mtimes.
     # Also force sunlightd rebuild so new service units are baked in.
     touch "$PROJECT_ROOT/kernel/src/main.rs"
     touch "$PROJECT_ROOT/services/sunlightd/src/main.rs"
-    cargo build --package sunlight-kernel
+    cargo build --package sunlight-kernel "${document_kernel_features[@]}"
 
     KERNEL_ELF="$PROJECT_ROOT/target/x86_64-unknown-none/debug/sunlight-kernel"
     LIMINE_DIR="$PROJECT_ROOT/target/limine"

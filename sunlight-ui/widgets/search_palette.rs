@@ -145,13 +145,10 @@ impl<const N: usize> BoundedSearchField<N> {
         match ch {
             '\u{8}' => self.backspace(),
             '\n' | '\r' => false,
-            c if c.is_ascii_graphic() || c == ' ' => {
-                if (c as u32) <= 0x7F {
+            c if (c.is_ascii_graphic() || c == ' ')
+                && (c as u32) <= 0x7F => {
                     self.insert(c as u8)
-                } else {
-                    false
                 }
-            }
             _ => false,
         }
     }
@@ -358,7 +355,7 @@ impl SearchPaletteLayout {
 
     pub fn compute(screen_w: u32, screen_h: u32, visible_rows: usize, page_count: usize) -> Self {
         let panel_w = Self::PANEL_W.min(screen_w.saturating_sub(24)).max(280);
-        let rows = visible_rows.min(SEARCH_PAGE_ROWS).max(1);
+        let rows = visible_rows.clamp(1, SEARCH_PAGE_ROWS);
         let list_h = (rows as u32)
             .saturating_mul(SearchResultRow::HEIGHT)
             .saturating_add(rows.saturating_sub(1) as u32 * 4);
@@ -398,8 +395,8 @@ impl SearchPaletteLayout {
                 + (page_dot_count.saturating_sub(1) as i32) * Self::PAGE_DOT_GAP;
             let mut dot_x = panel.x + (panel.w as i32 - dots_w) / 2;
             let dot_y = list.bottom() + 8;
-            for i in 0..page_dot_count {
-                page_dots[i] = Rect::new(dot_x, dot_y, Self::PAGE_DOT, Self::PAGE_DOT);
+            for dot in page_dots.iter_mut().take(page_dot_count) {
+                *dot = Rect::new(dot_x, dot_y, Self::PAGE_DOT, Self::PAGE_DOT);
                 dot_x += Self::PAGE_DOT as i32 + Self::PAGE_DOT_GAP;
             }
         }
@@ -418,8 +415,8 @@ impl SearchPaletteLayout {
 
         let mut row_rects = [Rect::new(0, 0, 0, 0); SEARCH_PAGE_ROWS];
         let mut y = list.y;
-        for i in 0..rows {
-            row_rects[i] = Rect::new(list.x, y, list.w, SearchResultRow::HEIGHT);
+        for row in row_rects.iter_mut().take(rows) {
+            *row = Rect::new(list.x, y, list.w, SearchResultRow::HEIGHT);
             y += SearchResultRow::HEIGHT as i32 + 4;
         }
 

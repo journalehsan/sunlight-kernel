@@ -193,7 +193,7 @@ pub fn log_phase_now(trace: LaunchTrace, subject: &str, phase: &str, pid: Option
     log_phase(trace, subject, phase, pid, monotonic_millis());
 }
 
-fn split_once<'a>(bytes: &'a [u8], needle: u8) -> Option<(&'a [u8], &'a [u8])> {
+fn split_once(bytes: &[u8], needle: u8) -> Option<(&[u8], &[u8])> {
     let idx = bytes.iter().position(|&b| b == needle)?;
     Some((&bytes[..idx], &bytes[idx + 1..]))
 }

@@ -53,6 +53,8 @@ static ICON_WISEOWL_TGA: &[u8] = include_bytes!("../../../WiseOwl.sunapp/Resourc
 static ICON_VOICE_RECORDER_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
 static ICON_MELODY_MINA_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
+static ICON_DOCUMENT_VIEWER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/mupdf.tga");
 
 static ICON_SEARCH_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
@@ -69,7 +71,7 @@ fn icon(bytes: &'static [u8]) -> Option<TgaImage> {
     TgaImage::parse(bytes).ok()
 }
 
-const APP_CATALOG_LEN: usize = 19;
+const APP_CATALOG_LEN: usize = 20;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
@@ -137,7 +139,7 @@ pub(crate) struct AppCatalogEntry {
     pub(crate) available: bool,
 }
 
-/// Full "All Apps" catalog — launchable apps. Exactly fills a 5-column × 3-row grid.
+/// Full "All Apps" catalog, displayed in a paginated grid.
 static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
     AppCatalogEntry { id: CatalogId::App(AppId::VoiceRecorder), name: "Voice Recorder", category: "Multimedia", icon_bytes: Some(ICON_VOICE_RECORDER_TGA), available: true },
     AppCatalogEntry {
@@ -266,6 +268,13 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         icon_bytes: Some(ICON_MELODY_MINA_TGA),
         available: true,
     },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::DocumentViewer),
+        name: "Document Viewer",
+        category: "Productivity",
+        icon_bytes: Some(ICON_DOCUMENT_VIEWER_TGA),
+        available: true,
+    },
 ];
 
 /// Default pinned apps — only real/working apps. Trivial to extend once
@@ -319,6 +328,13 @@ fn find_app_entry(id: AppId) -> Option<&'static AppCatalogEntry> {
 fn entry_matches(entry: &AppCatalogEntry, query_lower: &str) -> bool {
     contains_ignore_case(entry.name, query_lower)
         || contains_ignore_case(entry.category, query_lower)
+        || crate::search_palette::SEARCH_REGISTRY
+            .iter()
+            .any(|registered| {
+                entry.id == CatalogId::App(registered.app_id)
+                    && registered.aliases.iter().chain(registered.keywords.iter())
+                        .any(|term| contains_ignore_case(term, query_lower))
+            })
 }
 
 fn contains_ignore_case(haystack: &str, needle_lower: &str) -> bool {
@@ -1753,6 +1769,31 @@ mod tests {
         compute_layout, page_count, AppId, StartMenuPage, ALL_APPS_PAGE_CAP, APP_CATALOG_LEN,
         RANDOM_CAP, RECENT_CAP, SMALL_COLS,
     };
+
+    #[test]
+    fn pdf_search_launches_document_viewer() {
+        let layout = compute_layout(1280, 900, "pdf", &[], StartMenuPage::Home, 0);
+        let tile = layout
+            .search_results
+            .get(0)
+            .expect("PDF viewer search result");
+        let mut menu = super::StartMenuState::new();
+        menu.open_menu();
+        for ch in "pdf".chars() {
+            menu.handle_event(super::Event::Key(ch), 1280, 900, &[], 0);
+        }
+        let (_, action) = menu.handle_event(
+            super::Event::Click {
+                x: tile.rect.x + 1,
+                y: tile.rect.y + 1,
+            },
+            1280,
+            900,
+            &[],
+            1,
+        );
+        assert!(matches!(action, super::StartMenuAction::Launch(AppId::DocumentViewer)));
+    }
 
     #[test]
     fn account_footer_resolves_real_metadata_and_launches_current_user_page() {
