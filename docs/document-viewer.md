@@ -2,12 +2,18 @@
 
 ## Backend deprecation status
 
-Hayro 0.8.0 is the preferred PDF renderer and the default `hayro-host` feature
-of `sunlight-docserv`. It currently supports only the Linux GNU host target.
-The full Hayro renderer cannot build or render a PDF natively on SunlightOS;
-parser-only probes do not satisfy that milestone. Hayro is never built as a
-musl/Helios guest renderer. Native rendering work must use the native SunlightOS
-path described in [Phase 2](hayro-native-phase2.md).
+Hayro 0.8.0 is the preferred PDF renderer. `hayro-host` is the default Linux GNU
+verification feature; `hayro-native` renders using SunlightOS native Rust std.
+`bash tools/build_docserv.sh` builds the native Hayro service and native std
+UI/client. Both use native ELFs. The existing Helios viewer remains available
+with `bash tools/build_docview.sh` and can call the same native renderer.
+The [native std implementation and gates](native-std-foundation.md) describe
+the platform subset, lifecycle and validation boundaries.
+
+Native service/std gates pass on two and four CPUs. The native std viewer passes
+six-page navigation, zoom, resize, cache recovery, Files thumbnails and close
+against this service; its production UEFI Run/Open Document dialog gate also
+passes on twelve CPUs. The default 14 host service/viewer tests pass.
 
 The existing PDF Reader UI, Document Canvas, IPC schema and BGRA8 bitmap contract
 are unchanged. Hayro supports PDF page count and rasterization; text extraction
@@ -17,9 +23,7 @@ for PDFs; errors do not silently fall back to MuPDF.
 
 MuPDF and Ghostscript source are retained for reference and rollback, disabled
 by default. Their C/C++ toolchain, libclang and bindgen compatibility patch are
-only needed for an explicit legacy build. **Do not permanently remove MuPDF
-until the full Hayro renderer builds and renders an actual PDF natively on
-SunlightOS.** Unrelated Helios functionality remains unchanged.
+only needed for an explicit legacy build. **MuPDF remains available as an explicit rollback during native std rollout.** Unrelated Helios functionality remains unchanged.
 
 ```sh
 # Preferred host backend and existing PDF Reader UI tests
@@ -34,12 +38,12 @@ cargo --config tools/docserv-mupdf-legacy.toml test -p sunlight-docserv \
 DOCSERV_BACKEND=mupdf-legacy bash tools/build_docserv.sh
 ```
 
-Validation for this deprecation preparation: the 13 host service/viewer tests,
+Historical validation for the deprecation preparation: the 13 host service/viewer tests,
 five legacy MuPDF/Ghostscript tests, five combined-backend preference tests,
 three host Hayro prototype tests, and three parser-probe host tests pass. Native
 alloc-only docserv/viewer libraries check successfully, the default kernel
 builds, and the Phase 3.0 and Helios Note regression boot gates pass. The
-host-only guards reject musl builds and native service startup with Hayro.
+host-only guards reject musl builds and use of `hayro-host` for native startup.
 Docserv's focused clippy check passes; the broader strict clippy command remains
 blocked by existing diagnostics in `sunlight-libc` and `sunlight-audio`.
 Evidence logs are local build artifacts under `target/pdf-deprecation/`.
@@ -56,8 +60,17 @@ Previously the desktop advertised the viewer but the default kernel excluded
 its embedded ELF mapping. Launch then read the RAMFS script placeholder and
 failed with `UnsupportedPersonality`. The viewer now has an unconditional ELF
 mapping; the build validates its Helios stamp before embedding it. MuPDF and
-Ghostscript remain opt-in. Selecting a document requires an available `docserv`;
-Hayro remains host-only, so default guest builds do not render PDFs yet.
+Ghostscript remain opt-in. Selecting a document requires an available `docserv`.
+The default build now embeds both the native std viewer and Hayro service, so a
+plain `bash tools/build.sh` or `./tools/runs.sh --build` renders documents with
+no MuPDF compiler dependency. An image built without the service leaves the
+viewer fully functional except that every open ends in
+`[DOCVIEW] render failed: docserv is unavailable`; set
+`SUNLIGHT_DOCUMENT_VIEWER=0` only to build that smaller image deliberately.
+The `native_document_viewer` kernel feature selects that viewer ELF; the
+unconditional default mapping continues to use the existing Helios executable.
+Both viewer workers use the same IPC protocol. Backend failure now stops the rendering placeholder
+and logs the error to serial.
 
 ```sh
 bash tools/build_docview.sh
@@ -77,7 +90,8 @@ checks, and normal Phase 3.0 boot gate also pass. The normal
 
 The remaining sections describe the retained **legacy** runtime and its gates.
 All guest build commands below require `DOCSERV_BACKEND=mupdf-legacy` in the
-environment. Enabling `SUNLIGHT_DOCUMENT_VIEWER=1` alone no longer selects MuPDF.
+environment. `SUNLIGHT_DOCUMENT_VIEWER=1` selects native Hayro unless
+`DOCSERV_BACKEND=mupdf-legacy` is explicitly supplied.
 
 
 `sunlight-docserv` registers the native `docserv` endpoint and owns document
@@ -149,19 +163,18 @@ Its SHA-256 is
 MuPDF and Ghostscript carry AGPL licenses. Downloads, compiler toolchains,
 converted files, ELFs, and test images belong outside source control.
 
-Normal builds omit the document renderer and viewer so a missing musl C/C++
-toolchain cannot prevent QEMU from launching. To include them, use
-`SUNLIGHT_DOCUMENT_VIEWER=1 bash tools/build.sh` or
-`SUNLIGHT_DOCUMENT_VIEWER=1 ./tools/runs.sh --build` with `DOCSERV_CC/CXX/AR`
-configured. For manual builds, enable kernel `document_viewer` and supervisor
-`document-service` explicitly. Build the static musl executables with
-`bash tools/build_docserv.sh` before building the kernel directly. The kernel
-checks their Helios stamps and tracks them as build inputs.
-`SUNLIGHT_DOCUMENT_VIEWER=1 bash tools/build.sh` builds and packages the viewer with the supplied compiler
-settings. PostScript support is optional: supply `DOCSERV_GS_SOURCE` or an
-already built `target/docserv-gs` to include it. For a minimal build without
-documents, use the default build (or `SUNLIGHT_DOCUMENT_VIEWER=0`), or build both
-the kernel and `sunlightd` with `--no-default-features`.
+By default `bash tools/build.sh` and `./tools/runs.sh --build` build and embed
+the native Hayro service and viewer, which need no musl C/C++ toolchain. To omit
+them for a smaller image, set `SUNLIGHT_DOCUMENT_VIEWER=0`; an image built
+without `docserv` launches the viewer but every open reports `docserv is
+unavailable`. For manual builds, enable kernel `native_document_viewer` and
+supervisor `document-service` explicitly, and build the native service first
+with `bash tools/build_docserv.sh`; the kernel checks the artifacts and tracks
+them as build inputs. PostScript support is optional: supply `DOCSERV_GS_SOURCE`
+or an already built `target/docserv-gs` to include it (requires
+`DOCSERV_BACKEND=mupdf-legacy`). For a minimal build without documents, set
+`SUNLIGHT_DOCUMENT_VIEWER=0`, or build both the kernel and `sunlightd` with
+`--no-default-features`.
 The opener registers document extensions and the `docview`/`document-viewer`
 aliases. Launch a file through `sun-open` or run `sunlight-docview path.pdf`
 inside an active desktop session. Document Viewer is also listed under

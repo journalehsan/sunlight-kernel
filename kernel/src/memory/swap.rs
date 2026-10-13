@@ -50,7 +50,13 @@ pub struct ReclaimDiagnostics {
 static CANDIDATES: Mutex<VecDeque<AnonFrame>> = Mutex::new(VecDeque::new());
 
 pub fn reserve_candidates(additional: usize) -> Result<(), ()> {
-    CANDIDATES.lock().try_reserve(additional).map_err(|_| ())
+    // mmap already knows its complete page count. Avoid geometric growth here:
+    // two large userspace heaps otherwise need the old candidate buffer, a
+    // doubled replacement buffer and the mapping rollback journal at once.
+    CANDIDATES
+        .lock()
+        .try_reserve_exact(additional)
+        .map_err(|_| ())
 }
 
 pub fn track_anon(pid: usize, vaddr: VirtAddr, frame: PhysAddr) {

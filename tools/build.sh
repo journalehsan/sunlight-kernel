@@ -137,18 +137,25 @@ echo "[build] Building kernel..."
 touch "$PROJECT_ROOT/kernel/src/main.rs"
 touch "$PROJECT_ROOT/services/sunlightd/src/main.rs"
 document_kernel_features=()
-if [[ "${SUNLIGHT_DOCUMENT_VIEWER:-0}" == 1 ]]; then
+# The native renderer is part of the default image: without it the viewer
+# launches, creates its window, then fails every open with
+# "[DOCVIEW] render failed: docserv is unavailable". Set
+# SUNLIGHT_DOCUMENT_VIEWER=0 to build a smaller image that omits documents.
+if [[ "${SUNLIGHT_DOCUMENT_VIEWER:-1}" != 0 ]]; then
     bash "$SCRIPT_DIR/build_docserv.sh"
     document_kernel_features=(--features document_viewer)
-    if [[ -n "${DOCSERV_GS_SOURCE:-}" ]]; then
+    if [[ "${DOCSERV_BACKEND:-hayro}" == hayro ]]; then
+        document_kernel_features=(--features native_document_viewer)
+    fi
+    if [[ "${DOCSERV_BACKEND:-hayro}" == mupdf-legacy && -n "${DOCSERV_GS_SOURCE:-}" ]]; then
         bash "$SCRIPT_DIR/build_docserv_ghostscript.sh"
     fi
-    if [[ -f "$PROJECT_ROOT/target/docserv-gs" ]]; then
+    if [[ "${DOCSERV_BACKEND:-hayro}" == mupdf-legacy && -f "$PROJECT_ROOT/target/docserv-gs" ]]; then
         document_kernel_features=(--features document_viewer,document_postscript)
     fi
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --features document-service
 else
-    echo "[build] Document rendering disabled (legacy rollback: SUNLIGHT_DOCUMENT_VIEWER=1 DOCSERV_BACKEND=mupdf-legacy and a musl C/C++ toolchain)"
+    echo "[build] Document rendering disabled (SUNLIGHT_DOCUMENT_VIEWER=0); enabling it for the legacy MuPDF backend also needs DOCSERV_BACKEND=mupdf-legacy and a musl C/C++ toolchain"
     document_kernel_features=(--no-default-features)
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --no-default-features
 fi

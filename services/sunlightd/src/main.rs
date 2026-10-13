@@ -893,7 +893,7 @@ WantedBy=sunlight.target
 
     #[cfg(feature = "document-service")]
     {
-        let definition = "[Unit]\nDescription=Document rendering service\nAfter=vfs_server.service\n\n[Service]\nType=simple\nExecStart=/sbin/sunlight-docserv\nRestart=no\nUser=root\nCapability=logging\nCapability=user-session\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=sunlight.target\n";
+        let definition = "[Unit]\nDescription=Document rendering service\nAfter=vfs_server.service\n\n[Service]\nType=simple\nExecStart=/sbin/sunlight-docserv\nRestart=on-failure\nRestartSec=1\nUser=root\nCapability=logging\nCapability=user-session\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=sunlight.target\n";
         if let Ok(unit) = parse_service_unit(definition.as_bytes()) {
             let _ = services.add(unit);
         }

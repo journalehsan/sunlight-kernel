@@ -21,6 +21,10 @@ pub enum SunlightSyscall {
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
+    NativeFutex = 155,
+    NativeThreadReaped = 156,
+    NativeExitGroup = 157,
+    NativeStdThreadSpawn = 158,
     /// TTY mux (foreground input routing). tty_server pushes keyboard bytes
     /// into a tab's kernel stdin ring; the foreground app reads them via fd0.
     /// rdi=tab, rsi=buf, rdx=len. Returns bytes accepted.
@@ -235,7 +239,13 @@ pub unsafe extern "C" fn syscall_entry() {
         "push rax",
         // Pass pointer to saved frame as first argument
         "mov rdi, rsp",
+        // SYSCALL can interrupt either user stack alignment. Keep the saved
+        // frame in a callee-saved register and establish the SysV call-site
+        // alignment for Rust locals, including 16-byte FXSAVE storage.
+        "mov rbx, rsp",
+        "and rsp, -16",
         "call syscall_dispatch",
+        "mov rsp, rbx",
         // rax now holds the return value. Store it into the rax slot on stack.
         "mov [rsp], rax",
         // Restore all GPRs
@@ -761,7 +771,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         18 => ipc_try_recv(frame),
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
-        22 => thread_spawn(frame),
+        22 => thread_spawn(frame, false),
+        155 => sys_native_futex(frame),
+        156 => sys_native_thread_reaped(frame),
+        157 => sys_native_exit_group(frame.rdi as i32),
+        158 => thread_spawn(frame, true),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
         25 => sys_process_is_alive(frame),
@@ -1907,7 +1921,7 @@ fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
 /// pointer and argument; the kernel reads them and loads them into
 /// RDI/RSI of the new thread's initial context so `thread_trampoline`
 /// receives them as normal C arguments.
-fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
+fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     let current_cpu = crate::sched::current_cpu_id();
     let trampoline = frame.rdi;
     let user_stack_top = frame.rsi;
@@ -1965,7 +1979,12 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
             p.service_lookup_restrictions,
         )
     };
-    let thread_fd = sched.current_shared_process().fd_table.clone_boxed();
+    let shared_owner = sched.current_shared_process().pid;
+    let thread_fd = if shared_descriptors {
+        crate::process::fd_table::FdTable::new_boxed()
+    } else {
+        sched.current_shared_process().fd_table.clone_boxed()
+    };
 
     let new_tid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
 
@@ -1988,6 +2007,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     );
 
     thread.native_thread = true;
+    thread.native_shared_owner = shared_descriptors.then_some(shared_owner);
     // Borrower threads retain the parent's endpoint authorization boundary.
     thread.service_lookup_restrictions = parent_service_restrictions;
     thread.cwd = parent_cwd;
@@ -1995,6 +2015,7 @@ fn thread_spawn(frame: &mut SyscallFrame) -> u64 {
     // then override RDI/RSI so the trampoline receives func and arg.
     thread.init_context(trampoline, user_stack_top);
     thread.set_initial_args(func, arg, 0, 0);
+    unsafe { thread.fx_state.save() };
     thread.fs_base = tls_ptr;
 
     let idx = sched.add_process(thread);
@@ -2030,6 +2051,78 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
         crate::serial_println!("[SYSCALL] DebugLog: invalid UTF-8");
     }
     0
+}
+
+/// Native private-address-space futex. Compare and registration are serialized
+/// with wake and VM mutation. Spurious wakeups are permitted; userspace loops.
+/// WAIT: rdi=u32 pointer, rsi=0, rdx=expected, r10=absolute monotonic ns
+/// (u64::MAX means indefinite). WAKE: rsi=1, rdx=maximum wake count.
+fn sys_native_futex(frame: &SyscallFrame) -> u64 {
+    let address = frame.rdi;
+    if address & 3 != 0 || frame.rsi > 1 {
+        return u64::MAX - 5;
+    }
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let Some(hhdm) = crate::HHDM_REQ.response().map(|r| VirtAddr::new(r.offset)) else {
+        return u64::MAX;
+    };
+    let process = sched.current_process();
+    let value = match crate::memory::user::read_process_atomic_u32(process, hhdm, address) {
+        Ok(value) => value,
+        Err(_) => return u64::MAX - 5,
+    };
+    let identity = process.address_space.identity();
+    if frame.rsi == 1 {
+        return sched.wake_native_futex(identity, address, frame.rdx as usize) as u64;
+    }
+    if value != frame.rdx as u32 {
+        return 1;
+    }
+    let deadline = frame.r10;
+    if deadline != u64::MAX && deadline <= now_ns() {
+        return 2;
+    }
+    let idx = sched.current_process_index().unwrap_or(0);
+    sched.processes[idx].native_futex_wait = Some(address);
+    sched.processes[idx].native_futex_deadline = (deadline != u64::MAX).then_some(deadline);
+    sched.set_state(idx, ProcessState::BlockedOnIo);
+    drop(sched);
+    sched::request_reschedule_after_sysret();
+    0
+}
+
+/// Only report completion once the thread no longer executes on any core.
+/// If its slot has already been reused, the old monotonically increasing TID
+/// is also quiescent. VM identity prevents probing another process's threads.
+fn sys_native_thread_reaped(frame: &SyscallFrame) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    let identity = sched.current_process().address_space.identity();
+    match sched.processes.iter().find(|p| p.pid == frame.rdi as usize) {
+        Some(p) if !p.native_thread || p.address_space.identity() != identity => u64::MAX,
+        Some(p) => u64::from(p.state == ProcessState::Reaped),
+        None => 1,
+    }
+}
+
+fn sys_native_exit_group(code: i32) -> ! {
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let identity = sched.current_process().address_space.identity();
+    let current = sched.current_process().pid;
+    let siblings: alloc::vec::Vec<usize> = sched
+        .processes
+        .iter()
+        .filter(|p| {
+            p.pid != current
+                && p.address_space.identity() == identity
+                && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+        })
+        .map(|p| p.pid)
+        .collect();
+    for pid in siblings {
+        sched.terminate_process_by_pid(pid, code, "native-exit-group");
+    }
+    drop(sched);
+    process_exit(code)
 }
 
 // ---------------------------------------------------------------------------
@@ -2137,6 +2230,7 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
         }
         regs.add(17).write(frame.r11 | 0x200);
     }
+    unsafe { child.fx_state.save() };
     child.fs_base = if flags & sunlight_compat_linux::clone::CLONE_SETTLS != 0 {
         tls
     } else {
@@ -7561,6 +7655,11 @@ fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
     let linux_compat = sched.current_process().is_linux_compat();
     let mut pmm = crate::PMM.lock();
     let result = crate::process::mmap::sys_munmap(addr, length, &mut pmm, &mut sched);
+    if result.is_ok() {
+        let identity = sched.current_process().address_space.identity();
+        let end = addr.saturating_add(length).saturating_add(4095) & !4095;
+        sched.cancel_native_futex_range(identity, addr, end);
+    }
     drop(pmm);
     drop(sched);
 

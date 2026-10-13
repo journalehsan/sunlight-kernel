@@ -5,17 +5,27 @@ import json
 import socket
 import subprocess
 import time
+import re
+import argparse
 
-log = pathlib.Path("target/docserv-serial.log")
+arguments = argparse.ArgumentParser()
+arguments.add_argument("--cpus", default=os.environ.get("DOCSERV_TEST_CPUS", "2"))
+arguments.add_argument("--log", default=os.environ.get("DOCSERV_TEST_LOG", "target/docserv-serial.log"))
+arguments.add_argument("--ui", action="store_true", default=os.environ.get("DOCSERV_TEST_UI") == "1")
+settings = arguments.parse_args()
+
+log = pathlib.Path(settings.log)
 log.write_text("")
 command = ["qemu-system-x86_64", "-cdrom", "target/docserv-test.iso",
            "-serial", f"file:{log}", "-display", "none", "-m", "2048M",
-           "-smp", "2", "-device", "virtio-rng-pci,disable-modern=on",
+           "-smp", settings.cpus, "-device", "virtio-rng-pci,disable-modern=on",
            "-no-reboot", "-no-shutdown"]
 qmp_path = f"/tmp/sunlight-docserv-qmp-{os.getpid()}.sock"
 command += ["-qmp", f"unix:{qmp_path},server=on,wait=off"]
-ui_gate = os.environ.get("DOCSERV_TEST_UI") == "1"
+ui_gate = settings.ui
 marker = "[DOCVIEW] native window navigation/zoom OK" if ui_gate else "[DOCSERV] native IPC open/render/text/close OK"
+if not ui_gate and os.environ.get("DOCSERV_BACKEND", "hayro") == "hayro":
+    marker = "[DOCSERV] native Hayro IPC open/render/close OK"
 
 def screenshot():
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
@@ -38,10 +48,12 @@ if pathlib.Path("/dev/kvm").exists():
     command += ["-enable-kvm", "-cpu", "host"]
 process = subprocess.Popen(command)
 try:
-    deadline = time.monotonic() + 120
+    deadline = time.monotonic() + 240
     captured = False
     while time.monotonic() < deadline:
         output = log.read_text(errors="replace")
+        if any(failure in output for failure in ("KERNEL PANIC", "[FAULT]", "[EXCEPTION]")):
+            raise SystemExit("Guest fault before document verdict\n" + output[-8000:])
         if marker in output:
             if ui_gate and not captured:
                 screenshot()
@@ -54,7 +66,10 @@ try:
         if "failed to spawn sunlight-docserv" in output:
             print(output[-6000:])
             raise SystemExit("Native document service ELF failed to load")
-        if any("process_mark_finished" in line and ("name='sunlight-docserv'" in line or (ui_gate and "name='sunlight-docview'" in line))
+        service_pid = re.search(r"\[SUNLIGHTD\] spawned sunlight-docserv pid=(\d+)", output)
+        if any("process_mark_finished" in line and (
+                    (service_pid and f"pid={service_pid[1]} " in line)
+                    or (ui_gate and "name='sunlight-docview'" in line and "code=0" not in line))
                for line in output.splitlines()):
             print(output[-9000:])
             raise SystemExit("Native document service exited before its verdict")

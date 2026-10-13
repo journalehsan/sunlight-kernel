@@ -933,6 +933,7 @@ impl Scheduler {
         if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID {
             crate::ipc::expire_deadlines(self, self.global_tick);
             self.expire_linux_poll_timeouts();
+            self.expire_native_futex_timeouts();
         }
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             let mut core = CORE_STATES[cpu_id].lock();
@@ -1444,6 +1445,7 @@ impl Scheduler {
                 self.start_charging_runtime(next);
                 unsafe {
                     self.processes[next].address_space.activate();
+                    self.processes[next].fx_state.restore();
                     x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
                 }
                 crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
@@ -1465,6 +1467,7 @@ impl Scheduler {
         self.stop_execution_clock(current);
 
         // Save interrupted context.
+        unsafe { self.processes[current].fx_state.save() };
         self.processes[current].context_rsp = saved_rsp;
         self.processes[current].fs_base =
             unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
@@ -1506,6 +1509,7 @@ impl Scheduler {
 
             unsafe {
                 self.processes[next].address_space.activate();
+                self.processes[next].fx_state.restore();
                 x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
             }
             // Update this core's TSS RSP0 so the next interrupt from ring-3
@@ -1582,10 +1586,10 @@ impl Scheduler {
         &mut self.processes[idx]
     }
 
-    /// The leader owns Linux group-wide resources until all its workers are
-    /// reaped. Native tasks resolve to themselves, preserving native semantics.
+    /// Linux leaders and opt-in native std owners hold group-wide resources
+    /// until all their workers are reaped. Existing native tasks remain private.
     fn shared_process_index(&self, idx: usize) -> usize {
-        let Some(tgid) = self.processes[idx].linux_tgid else {
+        let Some(tgid) = self.processes[idx].linux_tgid.or(self.processes[idx].native_shared_owner) else {
             return idx;
         };
         self.process_index_by_pid(tgid).unwrap_or(idx)
@@ -1600,6 +1604,72 @@ impl Scheduler {
         let idx = self.current_process_index().unwrap_or(0);
         let shared = self.shared_process_index(idx);
         &mut self.processes[shared]
+    }
+
+    pub fn wake_native_futex(
+        &mut self,
+        identity: crate::process::mm2b_state::AddressSpaceIdentity,
+        address: u64,
+        limit: usize,
+    ) -> usize {
+        let mut woken = 0;
+        for idx in 0..self.processes.len() {
+            if woken == limit {
+                break;
+            }
+            if self.processes[idx].state == ProcessState::BlockedOnIo
+                && self.processes[idx].address_space.identity() == identity
+                && self.processes[idx].native_futex_wait == Some(address)
+            {
+                self.wake_native_futex_index(idx);
+                woken += 1;
+            }
+        }
+        woken
+    }
+
+    fn wake_native_futex_index(&mut self, idx: usize) {
+        self.processes[idx].native_futex_wait = None;
+        self.processes[idx].native_futex_deadline = None;
+        self.record_wakeup(false);
+        self.processes[idx].state = ProcessState::Ready;
+        self.remove_from_ready_queues(idx);
+        if let Some(cpu) = self.live_owner_core(idx) {
+            request_reschedule_on(cpu);
+        } else {
+            self.enqueue_ready(idx);
+        }
+    }
+
+    pub fn cancel_native_futex_range(
+        &mut self,
+        identity: crate::process::mm2b_state::AddressSpaceIdentity,
+        start: u64,
+        end: u64,
+    ) {
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state == ProcessState::BlockedOnIo
+                && self.processes[idx].address_space.identity() == identity
+                && self.processes[idx]
+                    .native_futex_wait
+                    .is_some_and(|address| address >= start && address < end)
+            {
+                self.wake_native_futex_index(idx);
+            }
+        }
+    }
+
+    fn expire_native_futex_timeouts(&mut self) {
+        let now = crate::arch::x86_64::interrupts::now_ns();
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state == ProcessState::BlockedOnIo
+                && self.processes[idx]
+                    .native_futex_deadline
+                    .is_some_and(|deadline| deadline <= now)
+            {
+                self.wake_native_futex_index(idx);
+            }
+        }
     }
 
     // Mapping placement/accounting belongs to the address space, including
@@ -2198,6 +2268,7 @@ impl Scheduler {
         self.processes[idx].kernel_stack_top = 0;
         self.processes[idx].context_rsp = 0;
         self.processes[idx].fs_base = 0;
+        self.processes[idx].fx_state = crate::arch::x86_64::cpu::FxState::initial();
         self.processes[idx].exit_cleanup_pending = false;
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
@@ -2509,6 +2580,7 @@ impl Scheduler {
             );
             unsafe {
                 self.processes[idx].address_space.activate();
+                self.processes[idx].fx_state.restore();
             }
             unsafe {
                 context::iretq_to_context(rsp);
@@ -3458,6 +3530,7 @@ pub fn enter_first_process() -> ! {
             let kernel_stack_top = sched.processes[idx].kernel_stack_top;
             unsafe {
                 sched.processes[idx].address_space.activate();
+                sched.processes[idx].fx_state.restore();
             }
             serial_println!(
                 "[SCHED] Entering process {} '{}' at rsp={:#x}",

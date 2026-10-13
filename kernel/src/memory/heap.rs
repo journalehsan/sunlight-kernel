@@ -7,7 +7,10 @@ use x86_64::{
 
 const MIN_HEAP_START: u64 = 0xFFFF_FFFF_9000_0000;
 const HEAP_ALIGNMENT: u64 = 2 * 1024 * 1024;
-pub const HEAP_SIZE: usize = 8 * 1024 * 1024; // 8 MiB
+// Anonymous-page tracking and transactional mmap journals coexist with desktop
+// service state. Native std's renderer and viewer each map a 128 MiB heap; leave
+// room for replacing the tracking buffer and creating workers under that load.
+pub const HEAP_SIZE: usize = 16 * 1024 * 1024; // 16 MiB, bounded at boot
 pub const HEAP_PAGES: usize = HEAP_SIZE / Size4KiB::SIZE as usize;
 
 extern "C" {

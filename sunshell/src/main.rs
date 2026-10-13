@@ -1180,7 +1180,8 @@ mod sunlight {
                     Some(alloc::string::String::from(cmd))
                 } else if matches!(
                     cmd,
-                    "/bin/helios-probe"
+                    "/bin/native-fp-probe"
+                        | "/bin/helios-probe"
                         | "/usr/bin/helios-probe"
                         | "/bin/linux-thread-probe"
                         | "/usr/bin/linux-thread-probe"

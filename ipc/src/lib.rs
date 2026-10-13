@@ -4790,9 +4790,9 @@ pub fn name_to_u64(name: &str) -> u64 {
 pub fn debug_log(msg: &str) {
     // Bare-metal and musl guest builds use the native ABI. GNU host tooling
     // suppresses logging; tagged musl calls cannot collide with Linux sysinfo.
-    #[cfg(not(any(target_os = "none", target_env = "musl")))]
+    #[cfg(not(any(target_os = "none", target_os = "sunlightos", target_env = "musl")))]
     let _ = msg;
-    #[cfg(any(target_os = "none", target_env = "musl"))]
+    #[cfg(any(target_os = "none", target_os = "sunlightos", target_env = "musl"))]
     // SAFETY: DebugLog receives a valid string pointer and bounded length.
     unsafe {
         raw_syscall(

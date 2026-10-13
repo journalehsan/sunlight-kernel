@@ -48,6 +48,8 @@ pub mod sun_exec;
 pub mod sun_open;
 /// Native thread spawning.
 pub mod thread;
+#[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+pub mod std_runtime;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
 pub mod time;
 /// Thread-Local Storage bootstrap: `Tcb` layout + `init_tls()`.

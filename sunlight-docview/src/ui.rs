@@ -82,6 +82,7 @@ pub struct DocumentApp {
     height: u32,
     scene: Option<DocumentScene>,
     status: String,
+    render_failed: bool,
     jump_input: Option<String>,
     scroll_y: u32,
     cache_pages: usize,
@@ -158,6 +159,7 @@ impl DocumentApp {
             height: 700,
             scene: None,
             status: "Opening document…".into(),
+            render_failed: false,
             jump_input: None,
             scroll_y: 0,
             cache_pages: 0,
@@ -178,16 +180,23 @@ impl DocumentApp {
     }
     /// Whether the visible frame is waiting for the latest render intent.
     pub fn is_rendering(&self) -> bool {
-        self.scene
-            .as_ref()
-            .is_none_or(|s| s.document_id != self.generation)
+        !self.render_failed
+            && self
+                .scene
+                .as_ref()
+                .is_none_or(|s| s.document_id != self.generation)
     }
     /// Resident rendered-page count and bytes, for memory-budget verification.
     pub fn cache_metrics(&self) -> (usize, usize) {
         (self.cache_pages, self.cache_bytes)
     }
+    /// Last successfully displayed page and its document's page count.
+    pub fn displayed_page(&self) -> (u32, u32) {
+        (self.shown_page, self.total_pages)
+    }
 
     fn request_render(&mut self) {
+        self.render_failed = false;
         self.generation = self.generation.wrapping_add(1);
         let fit = (self.width as f32 / 800.0).min(self.height as f32 / 700.0);
         self.pending = Some(Intent {
@@ -205,7 +214,8 @@ impl DocumentApp {
                 Ok(()) => {}
                 Err(TrySendError::Full(intent)) => self.pending = Some(intent),
                 Err(TrySendError::Disconnected(_)) => {
-                    self.status = "Document rendering worker stopped".into()
+                    self.render_failed = true;
+                    self.status = "Document rendering worker stopped".into();
                 }
             }
         }
@@ -260,6 +270,8 @@ impl DocumentApp {
                 }
                 Ok(_) => {}
                 Err(error) => {
+                    self.render_failed = true;
+                    sunlight_ipc::debug_log(&format!("[DOCVIEW] render failed: {error}\n"));
                     self.status = error;
                     changed = true;
                 }
@@ -293,7 +305,11 @@ impl App for DocumentApp {
         );
         let mut document = DocumentCanvas::new(rect, &[])
             .with_mode(DocumentCanvasMode::ReadOnly)
-            .with_empty_label("Rendering document…")
+            .with_empty_label(if self.render_failed {
+                "Unable to render document"
+            } else {
+                "Rendering document…"
+            })
             .with_scroll_y(self.scroll_y);
         if let Some(scene) = &self.scene {
             document = document.with_scene(scene);

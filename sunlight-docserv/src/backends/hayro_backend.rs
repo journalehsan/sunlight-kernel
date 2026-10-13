@@ -1,5 +1,4 @@
-//! Preferred PDF renderer, currently supported only on the Linux GNU host.
-//! Native SunlightOS rendering remains blocked by Hayro's std dependencies.
+//! Preferred PDF renderer on Linux GNU and native SunlightOS std.
 use std::{
     io::Read,
     panic::{catch_unwind, AssertUnwindSafe},

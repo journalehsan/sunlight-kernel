@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Hayro remains host-only. Never build/stamp it as a Helios guest renderer.
-if [[ "${DOCSERV_BACKEND:-hayro}" != mupdf-legacy ]]; then
-    echo "Hayro is host-only; native PDF rendering is not available yet." >&2
-    echo "For temporary MuPDF rollback, set DOCSERV_BACKEND=mupdf-legacy." >&2
+# Native Hayro uses real native std, with no musl or Helios stamp.
+if [[ "${DOCSERV_BACKEND:-hayro}" == hayro ]]; then
+    features=hayro-native
+    if [[ -n "${DOCSERV_FEATURES:-}" ]]; then features+=,"$DOCSERV_FEATURES"; fi
+    bash tools/build_native_std.sh build -p sunlight-docserv --no-default-features \
+        --features "$features" --release
+    DOCVIEW_BACKEND=native bash tools/build_docview.sh
+    exit 0
+elif [[ "$DOCSERV_BACKEND" != mupdf-legacy ]]; then
+    echo "unknown DOCSERV_BACKEND: $DOCSERV_BACKEND" >&2
     exit 1
 fi
 

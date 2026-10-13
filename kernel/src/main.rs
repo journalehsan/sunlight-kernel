@@ -240,6 +240,9 @@ static CPUFEAT_ELF_BYTES: &[u8] =
 // hello-linux: static musl Rust binary for Helios Linux-compat smoke test.
 static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-linux.elf");
 static HELIOS_PROBE_ELF_BYTES: &[u8] = include_bytes!("../../target/helios-probes/linux-probe-all");
+#[cfg(feature = "native_std_probe")]
+static NATIVE_FP_PROBE_ELF_BYTES: &[u8] =
+    include_bytes!("../../tools/native-std-probe/target/x86_64-sunlightos/release/native-fp-probe");
 static HELIOS_THREAD_PROBE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/helios-probes/linux-thread-probe");
 static HELIOS_FIONBIO_PROBE_ELF_BYTES: &[u8] =
@@ -342,12 +345,19 @@ static SUNLIGHT_CONTROL_PANEL_ELF_BYTES: &[u8] =
 // Thumbnail daemon: decodes .simg sources and caches 128/256px thumbnails.
 static SUNLIGHT_THUMBD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-thumbd");
-#[cfg(feature = "document_service")]
+#[cfg(all(feature = "document_service", not(feature = "native_document_service")))]
 static SUNLIGHT_DOCSERV_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-linux-musl/release/sunlight-docserv");
+#[cfg(feature = "native_document_service")]
+static SUNLIGHT_DOCSERV_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-docserv");
 // The viewer UI is packaged independently of the optional rendering service.
+#[cfg(not(feature = "native_document_viewer"))]
 static SUNLIGHT_DOCVIEW_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-linux-musl/release/sunlight-docview");
+#[cfg(feature = "native_document_viewer")]
+static SUNLIGHT_DOCVIEW_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-docview");
 #[cfg(feature = "document_postscript")]
 static DOCUMENT_GHOSTSCRIPT_ELF_BYTES: &[u8] = include_bytes!("../../target/docserv-gs");
 static SUNLIGHT_CLIPD_ELF_BYTES: &[u8] =
@@ -4008,6 +4018,7 @@ fn setup_key_injection() {
         "helios-open-largefile-probe" => build_helios_open_largefile_probe_sequence(),
         "helios-note-regression" => build_helios_note_regression_sequence(),
         "document-service" => build_document_service_sequence(),
+        "native-std" => build_native_std_sequence(),
         "helios-static-runtime" => build_helios_static_runtime_sequence(),
         "yazi-baseline" => build_yazi_sequence(b"/bin/yazi-baseline"),
         "yazi-phase1" => build_yazi_sequence(b"/bin/yazi"),
@@ -4080,6 +4091,21 @@ fn build_helios_proven_tier1_sequence() -> [u8; 12288] {
     append_injected_delay(&mut s, &mut len, 1024);
     append_injected_command(&mut s, &mut len, b"/bin/helios-probe");
     s
+}
+
+#[cfg(feature = "key_inject")]
+fn build_native_std_sequence() -> [u8; 12288] {
+    let mut sequence = [0u8; 12288];
+    let mut len = 0;
+    append_injected_delay(&mut sequence, &mut len, 1536);
+    append_injected_scancode(&mut sequence, &mut len, 0x1c);
+    append_injected_delay(&mut sequence, &mut len, 128);
+    for code in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut sequence, &mut len, code);
+    }
+    append_injected_delay(&mut sequence, &mut len, 3072);
+    append_injected_command(&mut sequence, &mut len, b"/bin/native-fp-probe");
+    sequence
 }
 
 #[cfg(feature = "key_inject")]

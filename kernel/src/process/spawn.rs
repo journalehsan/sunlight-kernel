@@ -978,6 +978,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
             Ok(crate::YAZI_BASELINE_ELF_BYTES)
         }
         "/bin/helios-probe" | "/usr/bin/helios-probe" => Ok(crate::HELIOS_PROBE_ELF_BYTES),
+        #[cfg(feature = "native_std_probe")]
+        "/bin/native-fp-probe" => Ok(crate::NATIVE_FP_PROBE_ELF_BYTES),
         "/bin/linux-thread-probe" | "/usr/bin/linux-thread-probe" => {
             Ok(crate::HELIOS_THREAD_PROBE_ELF_BYTES)
         }

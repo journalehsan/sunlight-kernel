@@ -1,4 +1,4 @@
-"""UEFI launch regression: the default viewer opens without a PDF renderer."""
+"""UEFI desktop launch and Open Document dialog, for Helios or native std."""
 import json
 import os
 import pathlib
@@ -97,8 +97,12 @@ with (output / "qemu.log").open("w") as qemu_log:
         assert "name='sunlight-docview' reason=exit" not in text
         assert "UnsupportedPersonality" not in text
         assert "path=/bin/sunlight-docview" in text or "spawn: /bin/sunlight-docview" in text
-        assert "[DOCSERV] ready" not in text, "default image enabled the renderer"
-        print("Document Viewer UEFI launch gate PASSED (renderer disabled)")
+        if os.environ.get("DOCVIEW_BACKEND", "helios") == "native":
+            assert "[FAULT]" not in text and "[EXCEPTION]" not in text
+            print("Native std Document Viewer UEFI launch/Open dialog gate PASSED")
+        else:
+            assert "[DOCSERV] ready" not in text, "default image enabled the renderer"
+            print("Document Viewer UEFI launch gate PASSED (renderer disabled)")
     finally:
         process.terminate()
         try:

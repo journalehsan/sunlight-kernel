@@ -13,7 +13,9 @@ use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 #[cfg(not(feature = "dynamic-heap"))]
 const STATIC_HEAP_SIZE: usize = 256 * 1024;
 #[cfg(feature = "dynamic-heap")]
-const DYNAMIC_HEAP_SIZE: usize = if cfg!(feature = "dynamic-heap-16m") {
+const DYNAMIC_HEAP_SIZE: usize = if cfg!(feature = "dynamic-heap-128m") {
+    128 * 1024 * 1024
+} else if cfg!(feature = "dynamic-heap-16m") {
     // Shell / image viewers: SIMG wallpaper peak ≈ file + decoded ARGB (~10 MiB).
     16 * 1024 * 1024
 } else if cfg!(feature = "dynamic-heap-8m") {
@@ -667,26 +669,26 @@ unsafe fn requested_size(ptr: *mut u8) -> Option<usize> {
 
 // ── C ABI allocator symbols ─────────────────────────────────────────────────
 //
-// Export the C names only on freestanding SunlightOS (`target_os = "none"`).
+// Export the C names only on freestanding SunlightOS (`none` or `sunlightos`).
 // Host-linked unit tests (and any accidental Linux link of this crate) must
 // not interpose glibc `malloc`/`free` — that replaces the process heap with
 // the bounded Sunlight free-list and hangs or OOMs the test harness.
 // `cfg(test)` covers `cargo test -p sunlight-libc` itself.
 
 /// Allocate at least `size` bytes. Returns null on failure or if `size == 0`.
-#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
+#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
 pub unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
     allocate(size, 16)
 }
 
 /// Release a pointer returned by this allocator. `free(NULL)` is a no-op.
-#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
+#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
 pub unsafe extern "C" fn free(ptr: *mut u8) {
     let _ = release(ptr);
 }
 
 /// Allocate a zero-filled array of `count` × `size` bytes.
-#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
+#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
 pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut u8 {
     let Some(total) = count.checked_mul(size) else {
         return ptr::null_mut();
@@ -700,7 +702,7 @@ pub unsafe extern "C" fn calloc(count: usize, size: usize) -> *mut u8 {
 
 /// Resize an allocation while preserving its prefix.  Allocation happens
 /// before the old block is released, so a failure leaves the old block intact.
-#[cfg_attr(all(not(test), target_os = "none"), no_mangle)]
+#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
 pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
     REALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
     if ptr.is_null() {
@@ -726,10 +728,10 @@ pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
 
 /// Enable `extern crate alloc` (Vec, String, Box, …) for binaries that use
 /// the `global-alloc` Cargo feature.
-#[cfg(feature = "global-alloc")]
-struct SunlightAlloc;
+#[cfg(any(feature = "global-alloc", feature = "native-std"))]
+pub(crate) struct SunlightAlloc;
 
-#[cfg(feature = "global-alloc")]
+#[cfg(any(feature = "global-alloc", feature = "native-std"))]
 unsafe impl core::alloc::GlobalAlloc for SunlightAlloc {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         allocate(layout.size(), layout.align())
@@ -768,7 +770,7 @@ unsafe impl core::alloc::GlobalAlloc for SunlightAlloc {
     }
 }
 
-#[cfg(all(feature = "global-alloc", target_os = "none"))]
+#[cfg(all(feature = "global-alloc", any(target_os = "none", target_os = "sunlightos")))]
 #[global_allocator]
 static GLOBAL_ALLOC: SunlightAlloc = SunlightAlloc;
 

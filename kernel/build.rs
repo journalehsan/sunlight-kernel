@@ -37,7 +37,12 @@ fn main() {
             workspace_root.join(input).display()
         );
     }
-    let viewer_dest = target_dir.join("x86_64-unknown-linux-musl/release/sunlight-docview");
+    let native_viewer = env::var_os("CARGO_FEATURE_NATIVE_DOCUMENT_VIEWER").is_some();
+    let viewer_dest = target_dir.join(if native_viewer {
+        "x86_64-sunlightos/release/sunlight-docview"
+    } else {
+        "x86_64-unknown-linux-musl/release/sunlight-docview"
+    });
     // Explicit legacy/UI smoke builds supply their own viewer features. Preserve
     // that artifact; default builds always refresh the standalone UI/client.
     if env::var_os("CARGO_FEATURE_DOCUMENT_VIEWER").is_none() {
@@ -64,17 +69,51 @@ fn main() {
     }
     let viewer_bytes =
         fs::read(&viewer_dest).expect("missing document viewer; run bash tools/build_docview.sh");
-    assert_helios_elf(&viewer_dest, &viewer_bytes);
+    if native_viewer {
+        assert_eq!(&viewer_bytes[..4], b"\x7fELF");
+        assert_eq!(viewer_bytes[7], 0, "native viewer must use ELFOSABI_NONE");
+        assert_ne!(
+            &viewer_bytes[9..15],
+            b"HLNX01",
+            "native viewer must not have a Helios stamp"
+        );
+    } else {
+        assert_helios_elf(&viewer_dest, &viewer_bytes);
+    }
     println!("cargo:rerun-if-changed={}", viewer_dest.display());
 
-    // Rendering stays opt-in; only explicit legacy builds embed docserv.
+    // Renderer artifacts retain their actual native/Helios personality.
     if env::var_os("CARGO_FEATURE_DOCUMENT_SERVICE").is_some() {
-        let path = target_dir.join("x86_64-unknown-linux-musl/release/sunlight-docserv");
+        let native = env::var_os("CARGO_FEATURE_NATIVE_DOCUMENT_SERVICE").is_some();
+        let path = target_dir.join(if native {
+            "x86_64-sunlightos/release/sunlight-docserv"
+        } else {
+            "x86_64-unknown-linux-musl/release/sunlight-docserv"
+        });
         println!("cargo:rerun-if-changed={}", path.display());
         let bytes = fs::read(&path).unwrap_or_else(|err| {
-            panic!("missing legacy renderer {}: {err}; run DOCSERV_BACKEND=mupdf-legacy bash tools/build_docserv.sh", path.display())
+            panic!("missing renderer {}: {err}; run bash tools/build_docserv.sh (or set DOCSERV_BACKEND=mupdf-legacy for the legacy feature)", path.display())
         });
-        assert_helios_elf(&path, &bytes);
+        if native {
+            assert_eq!(&bytes[..4], b"\x7fELF");
+            assert_eq!(bytes[7], 0, "native Hayro must use ELFOSABI_NONE");
+            assert_ne!(
+                &bytes[9..15],
+                b"HLNX01",
+                "native Hayro must not be stamped as Helios"
+            );
+        } else {
+            assert_helios_elf(&path, &bytes);
+        }
+    }
+
+    if env::var_os("CARGO_FEATURE_NATIVE_STD_PROBE").is_some() {
+        println!(
+            "cargo:rerun-if-changed={}",
+            workspace_root
+                .join("tools/native-std-probe/target/x86_64-sunlightos/release/native-fp-probe")
+                .display()
+        );
     }
 
     let build_timestamp = build_timestamp();

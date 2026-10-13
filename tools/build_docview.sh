@@ -9,6 +9,11 @@ cd "$project_root"
 docview_target_dir=${CARGO_TARGET_DIR:-target}
 features=()
 if [[ -n "${DOCVIEW_FEATURES:-}" ]]; then features=(--features "$DOCVIEW_FEATURES"); fi
+if [[ "${DOCVIEW_BACKEND:-helios}" == native ]]; then
+    bash "$script_dir/build_native_std.sh" build -p sunlight-docview --no-default-features \
+        --features native-std --release "${features[@]}"
+    exit 0
+fi
 env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS='-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie' \
     cargo build -p sunlight-docview --no-default-features --features std \
     --release --target x86_64-unknown-linux-musl "${features[@]}"

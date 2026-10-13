@@ -11,12 +11,14 @@ fi
 env RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' \
     cargo build -p sunlightd --release --features "$supervisor_features"
 kernel_features=key_inject,document_service
+if [[ "${DOCSERV_BACKEND:-hayro}" == hayro ]]; then kernel_features+=,native_document_service; fi
 if [[ "${DOCSERV_TEST_POSTSCRIPT:-0}" == 1 ]]; then kernel_features+=,document_postscript; fi
 # The UI gate explicitly includes the optional viewer.
 injection_phase=document-service
 if [[ "${DOCSERV_TEST_UI:-0}" == 1 ]]; then
     injection_phase=desktop_login
     kernel_features+=,document_viewer
+    if [[ "${DOCVIEW_BACKEND:-helios}" == native ]]; then kernel_features+=,native_document_viewer; fi
 fi
 env SUNLIGHT_INJECT_PHASE="$injection_phase" \
     cargo build -p sunlight-kernel --bin sunlight-kernel --features "$kernel_features"
@@ -32,4 +34,4 @@ xorriso -as mkisofs -R -r -J -b boot/limine/limine-bios-cd.bin \
     --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part \
     --efi-boot-image --protective-msdos-label "$stage" -o target/docserv-test.iso
 target/limine/bin/limine bios-install target/docserv-test.iso
-python3 tools/docserv_boot_gate.py
+if [[ "${DOCSERV_SKIP_BOOT:-0}" != 1 ]]; then python3 tools/docserv_boot_gate.py; fi

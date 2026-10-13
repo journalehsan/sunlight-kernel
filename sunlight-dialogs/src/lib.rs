@@ -21,7 +21,7 @@ impl DialogClient {
         Self
     }
 
-    #[cfg(target_os = "none")]
+    #[cfg(any(target_os = "none", target_os = "sunlightos"))]
     pub fn show(&self, request: &DialogRequest) -> Result<DialogResult, DialogError> {
         self.show_native(request)
     }
@@ -38,7 +38,7 @@ impl DialogClient {
         let cap = if let Some(cap) = nameserver_lookup("dialogd") {
             cap
         } else {
-            #[cfg(target_os = "none")]
+            #[cfg(any(target_os = "none", target_os = "sunlightos"))]
             let _ = sunlight_libc::spawn(b"/sbin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
                 .or_else(|_| {
                     sunlight_libc::spawn(b"/bin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
@@ -83,7 +83,7 @@ impl DialogClient {
         decoded
     }
 
-    #[cfg(not(target_os = "none"))]
+    #[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
     pub fn show(&self, _request: &DialogRequest) -> Result<DialogResult, DialogError> {
         Err(DialogError::HostUnavailable)
     }

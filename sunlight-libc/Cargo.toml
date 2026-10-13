@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-libc"
-version = "0.2.4676-alpha.2"
+version = "0.2.4697-alpha.2"
+
 
 
 
@@ -580,5 +581,9 @@ dynamic-heap-8m = ["dynamic-heap"]
 # Larger budget for desktop wallpaper decode (file + ARGB peak > 8 MiB).
 # When both 8m and 16m are enabled, 16m wins in alloc.rs.
 dynamic-heap-16m = ["dynamic-heap"]
+# Bounded renderer heap, including source snapshots and serialized bitmaps.
+dynamic-heap-128m = ["dynamic-heap"]
+# Link the native Rust std platform ABI and startup entry point.
+native-std = ["dynamic-heap"]
 
 [lib]

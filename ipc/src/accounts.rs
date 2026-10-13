@@ -1,6 +1,6 @@
 //! Read-only account presentation and narrowly scoped own-password IPC.
 //! Account data is returned by UAC; session identity comes from sessiond.
-#[cfg(target_os = "none")]
+#[cfg(any(target_os = "none", target_os = "sunlightos"))]
 use crate::nameserver_lookup_timeout;
 use crate::{
     ipc_call_timeout, shm_create, shm_free, CapabilityToken, IpcMsg, SessionMsg, SessionState,
@@ -176,11 +176,11 @@ pub fn text(bytes: &[u8]) -> &str {
 }
 
 fn service(name: &str) -> Option<CapabilityToken> {
-    #[cfg(target_os = "none")]
+    #[cfg(any(target_os = "none", target_os = "sunlightos"))]
     {
         nameserver_lookup_timeout(name, TIMEOUT_MS)
     }
-    #[cfg(not(target_os = "none"))]
+    #[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
     {
         let _ = name;
         None

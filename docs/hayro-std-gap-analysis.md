@@ -1,5 +1,10 @@
 # Native Rust std gaps for Hayro
 
+See [native std implementation](native-std-foundation.md) for the subsequent
+userspace target, FP preservation, pinned std overlay, native Hayro rendering
+and service/viewer gates. The findings below are the historical audit before
+that implementation, including gaps now resolved for the renderer subset.
+
 ## Finding (2026-10-12)
 
 Running the published Hayro 0.8.0 renderer unchanged as a native SunlightOS

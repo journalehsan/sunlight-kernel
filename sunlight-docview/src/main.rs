@@ -2,6 +2,8 @@ use sunlight_ui::{
     app::{take_close_requested, App, Window, WindowConfig, WindowDecoration},
     Theme,
 };
+#[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+extern crate sunlight_libc;
 
 fn main() -> anyhow::Result<()> {
     let document_path = document_argument(std::env::args_os().skip(1));
@@ -77,12 +79,17 @@ fn main() -> anyhow::Result<()> {
 fn document_argument(
     arguments: impl IntoIterator<Item = std::ffi::OsString>,
 ) -> Option<std::ffi::OsString> {
-    use std::os::unix::ffi::OsStrExt;
     let mut path = None;
     for argument in arguments {
-        if let Some(trace) = sunlight_ipc::launch_trace::parse_launch_arg(argument.as_bytes()) {
+        if let Some(trace) =
+            sunlight_ipc::launch_trace::parse_launch_arg(argument.as_encoded_bytes())
+        {
             sunlight_ipc::launch_trace::set_current(trace);
-        } else if !argument.as_bytes().starts_with(b"--sunlight-launch=") && path.is_none() {
+        } else if !argument
+            .as_encoded_bytes()
+            .starts_with(b"--sunlight-launch=")
+            && path.is_none()
+        {
             path = Some(argument);
         }
     }
@@ -197,7 +204,7 @@ mod native_smoke {
         // Test-only direct native spawn avoids unsupported Linux fork.
         unsafe {
             core::arch::asm!("syscall",
-            inlateout("rax") sunlight_ipc::NATIVE_SYSCALL_TAG | 39 => result,
+            inlateout("rax") if cfg!(target_os = "sunlightos") { 39 } else { sunlight_ipc::NATIVE_SYSCALL_TAG | 39 } => result,
             inlateout("rdi") executable.as_ptr() as u64 => _,
             inlateout("rsi") args.as_ptr() as u64 => _,
             inlateout("rdx") u64::MAX => _, lateout("rcx") _, lateout("r11") _);
@@ -219,10 +226,33 @@ mod native_smoke {
             if app.is_rendering() {
                 return Ok(false);
             }
+            anyhow::ensure!(
+                app.cache_metrics().0 > 0 && app.cache_metrics().1 > 0,
+                "native viewer has no rendered bitmap"
+            );
+            let expected_page = match self.step {
+                0..=5 => self.step as u32,
+                6..=10 => (10 - self.step) as u32,
+                _ => 0,
+            };
+            anyhow::ensure!(
+                app.displayed_page() == (expected_page, 6),
+                "native viewer displayed the wrong PDF page"
+            );
             if self.initial.is_none() {
                 self.initial = Some(app.cache_metrics());
             }
             anyhow::ensure!(app.cache_metrics().0 <= 5, "native page cache is unbounded");
+            if self.step == 12 || self.step == 13 {
+                let (width, height) = if self.step == 12 {
+                    (1000, 800)
+                } else {
+                    (800, 700)
+                };
+                self.step += 1;
+                app.window_event(sunlight_ui::WindowEvent::Resized { width, height });
+                return Ok(false);
+            }
             let event = match self.step {
                 0..=4 => Event::key_press(0x4d, true, false, false, false, false),
                 5..=9 => Event::key_press(0x4b, true, false, false, false, false),

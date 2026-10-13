@@ -308,6 +308,25 @@ pub fn validate_process_read(
     validate_pages(process, hhdm, UserRange::new(address, len)?, Access::Read)
 }
 
+/// Read one aligned userspace atomic word through its validated physical
+/// mapping. The caller holds the scheduler lock against VM mutation.
+pub fn read_process_atomic_u32(
+    process: &Process,
+    hhdm: VirtAddr,
+    address: u64,
+) -> Result<u32, UserMemoryError> {
+    if address & 3 != 0 {
+        return Err(UserMemoryError::InvalidAddress);
+    }
+    validate_process_read(process, hhdm, address, 4)?;
+    let page = Page::<Size4KiB>::containing_address(VirtAddr::new(address));
+    let (physical, _) = unsafe { process.address_space.lookup_entry(page, hhdm) }
+        .ok_or(UserMemoryError::Unmapped)?;
+    let pointer = (hhdm.as_u64() + physical.as_u64() + (address & 0xfff))
+        as *const core::sync::atomic::AtomicU32;
+    Ok(unsafe { (*pointer).load(Ordering::Acquire) })
+}
+
 pub fn validate_process_write(
     process: &Process,
     hhdm: VirtAddr,

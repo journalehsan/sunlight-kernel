@@ -147,9 +147,14 @@ pub struct Process {
     pub state: ProcessState,
     pub address_space: AddressSpace,
     pub owns_address_space: bool,
-    /// True only for a borrower created through native syscall 22. Synthetic
+    /// True for a borrower created through native syscalls 22 or 158. Synthetic
     /// MM-0 test borrowers leave this false so runtime diagnostics stay exact.
     pub native_thread: bool,
+    /// Native std compare/wait registration and absolute monotonic deadline.
+    pub native_futex_wait: Option<u64>,
+    pub native_futex_deadline: Option<u64>,
+    /// Opt-in std workers share this owner's descriptor table and cwd.
+    pub native_shared_owner: Option<usize>,
     pub capabilities: Vec<Capability>,
     /// Present while the task may execute. Reaping drops the allocation before
     /// the task slot becomes reusable.
@@ -159,6 +164,7 @@ pub struct Process {
     pub entry_point: u64,
     pub context_rsp: u64,
     pub fs_base: u64,
+    pub fx_state: crate::arch::x86_64::cpu::FxState,
     pub uid: u32,
     pub gid: u32,
     pub nice: i8,
@@ -396,6 +402,9 @@ impl Process {
             address_space,
             owns_address_space: true,
             native_thread: false,
+            native_futex_wait: None,
+            native_futex_deadline: None,
+            native_shared_owner: None,
             capabilities: Vec::new(),
             kernel_stack: Some(kernel_stack),
             kernel_stack_top,
@@ -403,6 +412,7 @@ impl Process {
             entry_point: 0,
             context_rsp: 0,
             fs_base: 0,
+            fx_state: crate::arch::x86_64::cpu::FxState::initial(),
             uid: 0,
             gid: 0,
             nice: 0,
@@ -561,6 +571,9 @@ impl Process {
             address_space,
             owns_address_space: false,
             native_thread: false,
+            native_futex_wait: None,
+            native_futex_deadline: None,
+            native_shared_owner: None,
             capabilities,
             kernel_stack: Some(kernel_stack),
             kernel_stack_top,
@@ -568,6 +581,7 @@ impl Process {
             entry_point: 0,
             context_rsp: 0,
             fs_base: 0,
+            fx_state: crate::arch::x86_64::cpu::FxState::initial(),
             uid,
             gid,
             nice,

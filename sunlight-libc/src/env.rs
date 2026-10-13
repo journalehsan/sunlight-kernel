@@ -12,6 +12,23 @@ pub fn init(envp: *const *const u8) {
     ENVP.store(envp as usize, Ordering::Relaxed);
 }
 
+/// Initial process environment entry for the native std snapshot.
+/// # Safety
+/// Startup must have published the kernel-provided NULL-terminated envp.
+pub unsafe fn entry(index: usize) -> *const u8 {
+    let ptr = ENVP.load(Ordering::Relaxed) as *const *const u8;
+    if ptr.is_null() || index >= 128 {
+        return core::ptr::null();
+    }
+    for offset in 0..=index {
+        let entry = *ptr.add(offset);
+        if entry.is_null() || offset == index {
+            return entry;
+        }
+    }
+    core::ptr::null()
+}
+
 /// Look up a `KEY=VALUE` environment entry by key bytes.
 /// Returns the value bytes (excluding the `=`), or `None`.
 /// Lifetime is `'static` because envp lives for the process lifetime.

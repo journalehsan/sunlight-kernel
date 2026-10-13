@@ -21,7 +21,7 @@ pub struct DocService {
 impl Default for DocService {
     fn default() -> Self {
         let backends: Vec<Box<dyn DocumentBackend>> = vec![
-            #[cfg(all(feature = "hayro-host", target_os = "linux", target_env = "gnu"))]
+            #[cfg(any(feature = "hayro-host", feature = "hayro-native"))]
             Box::new(crate::backends::hayro_backend::HayroBackend),
             #[cfg(feature = "mupdf-legacy")]
             Box::new(crate::backends::mupdf_backend::MuPdfBackend),
@@ -139,7 +139,7 @@ impl DocService {
 pub fn run_native(mut service: DocService) -> Result<()> {
     ensure!(
         !cfg!(feature = "hayro-host"),
-        "Hayro is host-only; native PDF rendering is not available yet"
+        "Hayro is host-only with hayro-host; use tools/build_docserv.sh and hayro-native for the native service"
     );
     let endpoint = endpoint_create();
     ensure!(

@@ -389,18 +389,25 @@ if [ "$BUILD_FIRST" = true ]; then
         "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note"
     "$SCRIPT_DIR/stamp_helios_elf.sh" "$PROJECT_ROOT/hello-linux/hello-linux.elf"
     document_kernel_features=(--no-default-features)
-    if [[ "${SUNLIGHT_DOCUMENT_VIEWER:-0}" == 1 ]]; then
+    # The native renderer is part of the default image: without it the viewer
+    # launches, creates its window, then fails every open with
+    # "[DOCVIEW] render failed: docserv is unavailable". Set
+    # SUNLIGHT_DOCUMENT_VIEWER=0 to build a smaller image that omits documents.
+    if [[ "${SUNLIGHT_DOCUMENT_VIEWER:-1}" != 0 ]]; then
         bash "$SCRIPT_DIR/build_docserv.sh"
         document_kernel_features=(--features document_viewer)
-        if [[ -n "${DOCSERV_GS_SOURCE:-}" ]]; then
+        if [[ "${DOCSERV_BACKEND:-hayro}" == hayro ]]; then
+            document_kernel_features=(--features native_document_viewer)
+        fi
+        if [[ "${DOCSERV_BACKEND:-hayro}" == mupdf-legacy && -n "${DOCSERV_GS_SOURCE:-}" ]]; then
             bash "$SCRIPT_DIR/build_docserv_ghostscript.sh"
         fi
-        if [[ -f "$PROJECT_ROOT/target/docserv-gs" ]]; then
+        if [[ "${DOCSERV_BACKEND:-hayro}" == mupdf-legacy && -f "$PROJECT_ROOT/target/docserv-gs" ]]; then
             document_kernel_features=(--features document_viewer,document_postscript)
         fi
         RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --features document-service
     else
-        echo -e "${YELLOW}Document rendering disabled${NC} (legacy rollback: SUNLIGHT_DOCUMENT_VIEWER=1 DOCSERV_BACKEND=mupdf-legacy and a musl C/C++ toolchain)"
+        echo -e "${YELLOW}Document rendering disabled${NC} (SUNLIGHT_DOCUMENT_VIEWER=0; legacy rollback also sets DOCSERV_BACKEND=mupdf-legacy and a musl C/C++ toolchain)"
         RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --no-default-features
     fi
     # The kernel embeds the freshly built service ELFs with include_bytes!.

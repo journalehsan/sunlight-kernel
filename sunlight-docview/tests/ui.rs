@@ -101,3 +101,30 @@ fn real_pdf_navigates_zooms_resizes_and_closes() -> Result<()> {
     );
     Ok(())
 }
+
+struct UnavailableClient;
+impl DocClient for UnavailableClient {
+    fn request(&mut self, _: DocRequest) -> Result<DocResponse> {
+        anyhow::bail!("docserv is unavailable")
+    }
+}
+
+#[test]
+fn backend_failure_stops_loading() -> Result<()> {
+    let mut app = DocumentApp::new_with_client("missing.pdf".into(), UnavailableClient)?;
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while app.is_rendering() && Instant::now() < deadline {
+        app.update(Event::Tick);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        !app.is_rendering(),
+        "backend failure left the viewer loading"
+    );
+    // Further view intents must also settle when the failed worker has exited.
+    app.update(Event::Key('+'));
+    app.update(Event::Tick);
+    assert!(!app.is_rendering());
+    app.shutdown()?;
+    Ok(())
+}
