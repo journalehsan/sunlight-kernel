@@ -12,6 +12,17 @@ pub const MAX_CACHED_PAGES: usize = 5;
 /// Maximum bytes retained by cached page bitmaps (strict memory bound).
 pub const CACHE_BUDGET_BYTES: usize = 40 * 1024 * 1024;
 
+/// Viewer-local memory contributors, all measured from live state.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ViewerMemorySnapshot {
+    /// Sum of every cached `PageBitmap.data` buffer in `DocViewer.cache`.
+    pub page_cache_bytes: u64,
+    /// Resident pages in `DocViewer.cache`.
+    pub cached_pages: usize,
+    /// Point-dimension records retained per page (small, but counted).
+    pub page_dimension_bytes: u64,
+}
+
 /// Dimensions and pixels borrowed from the render cache.
 pub struct BitmapRef<'a> {
     pub width: u32,
@@ -260,6 +271,18 @@ impl<C: DocClient> DocViewer<C> {
     /// Bytes retained by page bitmaps.
     pub fn cached_bytes(&self) -> usize {
         self.cache.iter().flatten().map(Vec::len).sum()
+    }
+    /// Viewer-local memory contributors, measured from live state.
+    pub fn memory_snapshot(&self) -> ViewerMemorySnapshot {
+        ViewerMemorySnapshot {
+            page_cache_bytes: self.cached_bytes() as u64,
+            cached_pages: self.cached_pages(),
+            // `Vec<Option<(f32,f32)>>` and the per-page dimension triples.
+            page_dimension_bytes: (self.page_pt.capacity()
+                * core::mem::size_of::<Option<(f32, f32)>>()
+                + self.dimensions.capacity() * core::mem::size_of::<Option<(u32, u32, u32)>>())
+                as u64,
+        }
     }
     /// Read a cached bitmap without copying it.
     pub fn bitmap(&self, page: u32) -> Option<BitmapRef<'_>> {

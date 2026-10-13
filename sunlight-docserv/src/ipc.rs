@@ -24,6 +24,8 @@ pub enum DocRequest {
     RenderPage { handle: u64, page: u32, scale: f32 },
     /// Extract text from one page.
     ExtractText { handle: u64, page: u32 },
+    /// Query a point-in-time memory breakdown for the service process.
+    MemoryReport,
     /// Release the document and its source snapshot.
     Close { handle: u64 },
 }
@@ -46,6 +48,22 @@ pub enum DocResponse {
     },
     /// Extracted UTF-8 text.
     Text { content: String },
+    /// Point-in-time service memory accounting (see the field comments).
+    MemoryReport {
+        /// Hayro's internal interpreter/cache size if the API exposes it;
+        /// 0 means "not exposed" (Hayro 0.8.0 has no size query).
+        hayro_store_bytes: u64,
+        /// Live document handles in the registry.
+        handle_count: u32,
+        /// Sum of source snapshot bytes (the `Pdf` ingest buffer) across handles.
+        source_bytes: u64,
+        /// Service-side pending reply buffers awaiting a FETCH (transport).
+        ipc_pending_bytes: u64,
+        /// Statically configured per-endpoint IPC queue capacity, in bytes.
+        ipc_ring_bytes: u64,
+        /// Live bytes in the process allocator if accessible, else 0.
+        heap_estimate_bytes: u64,
+    },
     /// Successful operation without a payload.
     Ok,
     /// A recoverable request, format, or transport error.
@@ -70,6 +88,7 @@ mod tests {
                 scale: 1.5,
             },
             DocRequest::ExtractText { handle: 4, page: 5 },
+            DocRequest::MemoryReport,
             DocRequest::Close { handle: 6 },
         ];
         for request in requests {
@@ -98,6 +117,14 @@ mod tests {
             },
             DocResponse::Text {
                 content: "Sunlight ☀".into(),
+            },
+            DocResponse::MemoryReport {
+                hayro_store_bytes: 0,
+                handle_count: 1,
+                source_bytes: 1024,
+                ipc_pending_bytes: 0,
+                ipc_ring_bytes: 4096,
+                heap_estimate_bytes: 2048,
             },
             DocResponse::Ok,
             DocResponse::Err("unknown handle".into()),

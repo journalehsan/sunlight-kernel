@@ -37,6 +37,7 @@ pub enum UiSymbol {
     NextTrack,
     Repeat,
     MoreHorizontal,
+    Plus,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -160,6 +161,18 @@ const MULTIPLY: [u16; 9] = [
     0b001000100,
     0b010000010,
     0b100000001,
+];
+
+const PLUS: [u16; 9] = [
+    0b000000000,
+    0b000010000,
+    0b000010000,
+    0b000010000,
+    0b011111110,
+    0b000010000,
+    0b000010000,
+    0b000010000,
+    0b000000000,
 ];
 
 const MINUS: [u16; 9] = [
@@ -551,5 +564,6 @@ pub const fn glyph(symbol: UiSymbol) -> UiGlyph {
         UiSymbol::NextTrack => UiGlyph::new(9, 9, 10, &NEXT_TRACK),
         UiSymbol::Repeat => UiGlyph::new(9, 9, 10, &REPEAT),
         UiSymbol::MoreHorizontal => UiGlyph::new(9, 9, 10, &MORE_HORIZONTAL),
+        UiSymbol::Plus => UiGlyph::new(9, 9, 10, &PLUS),
     }
 }

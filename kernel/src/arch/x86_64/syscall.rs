@@ -1062,6 +1062,7 @@ const ERR_EISDIR: u64 = u64::MAX - 6;
 const ERR_ENOTDIR: u64 = u64::MAX - 7;
 const ERR_EIO: u64 = u64::MAX - 8;
 const ERR_ERANGE: u64 = u64::MAX - 9;
+const ERR_EPIPE: u64 = u64::MAX - 10;
 
 fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
     match error {
@@ -2600,7 +2601,7 @@ fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
 /// Syscall: Spawn (39) — posix_spawn-style process creation.
 /// rdi = path pointer (C string)
 /// rsi = argv pointer (array of *const u8, NULL-terminated)
-/// rdx = parent fd to install as the child's stdout, or u64::MAX for none
+/// rdx = stdout fd, r10 = stdin fd, r8 = stderr fd (u64::MAX keeps TTY default)
 /// Returns the child pid, or -1 on error.
 fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // [LAUNCH-TRACE] Point 1: request received
@@ -2611,6 +2612,11 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let path_ptr = frame.rdi;
     let argv_ptr = frame.rsi;
     let stdout_fd = frame.rdx;
+    // The marker keeps the original three-argument spawn ABI safe for callers
+    // that leave the remaining registers unspecified.
+    let has_stdio_extension = frame.r9 == 0x5355_4E53_5444_494F;
+    let stdin_fd = if has_stdio_extension { frame.r10 } else { u64::MAX };
+    let stderr_fd = if has_stdio_extension { frame.r8 } else { u64::MAX };
 
     let path_bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
         Ok(bytes) => bytes,
@@ -2696,13 +2702,20 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let parent_tty_tab = parent.tty_tab;
     let parent_tty_generation = parent.tty_generation;
     let parent_cwd = parent.cwd.clone();
-    let stdout_entry = if stdout_fd != u64::MAX {
-        parent.fd_table.get(stdout_fd as i32).copied()
-    } else {
-        None
-    };
-    if stdout_fd != u64::MAX && stdout_entry.is_none() {
-        return u64::MAX; // caller asked to pass an fd it does not own
+    let stdio_fds = [stdin_fd, stdout_fd, stderr_fd];
+    let stdio_entries = stdio_fds.map(|fd| {
+        if fd == u64::MAX {
+            None
+        } else {
+            parent.fd_table.get(fd as i32).copied()
+        }
+    });
+    if stdio_fds
+        .iter()
+        .zip(stdio_entries.iter())
+        .any(|(fd, entry)| *fd != u64::MAX && entry.is_none())
+    {
+        return u64::MAX;
     }
 
     let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
@@ -2799,13 +2812,14 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         );
     }
 
-    if let Some(entry) = stdout_entry {
-        // The child's stdout becomes the parent-supplied handle (e.g. a pipe
-        // write end). The parent keeps its own copy open, so pipe writer
-        // accounting stays balanced.
-        let _ = child
-            .fd_table
-            .install_at(1, entry.handle, entry.rights, entry.flags);
+    for (fd, entry) in stdio_entries.into_iter().enumerate() {
+        if let Some(entry) = entry {
+            // The child receives a retained reference to the supplied open
+            // description. Parent closure then correctly drives pipe EOF.
+            let _ = child
+                .fd_table
+                .install_at(fd as i32, entry.handle, entry.rights, entry.flags);
+        }
     }
 
     let child_pid = child.pid;
@@ -4318,11 +4332,15 @@ fn trace_yazi_eventfd_io(operation: &str, fd: i32, value: u64) {
     }
 }
 
-fn wait_linux_pipe(frame: &mut SyscallFrame, sched: &mut crate::sched::Scheduler,
-                   ring: u32, writing: bool) -> u64 {
-    sched.block_current_linux_poll(u64::MAX);
-    if let Some(state) = sched.current_process_mut().linux_state_mut() {
-        state.pipe_wait = Some((ring, writing));
+fn wait_pipe_io(frame: &mut SyscallFrame, sched: &mut crate::sched::Scheduler,
+                ring: u32, writing: bool) -> u64 {
+    if sched.current_process().is_linux_compat() {
+        sched.block_current_linux_poll(u64::MAX);
+        if let Some(state) = sched.current_process_mut().linux_state_mut() {
+            state.pipe_wait = Some((ring, writing));
+        }
+    } else {
+        sched.block_current_native_pipe(ring, writing);
     }
     frame.rcx = frame.rcx.saturating_sub(2);
     crate::sched::request_reschedule();
@@ -6871,12 +6889,12 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                         }
                         crate::process::pipe::PipeResult::WouldBlock => {
                             crate::process::epoll::refresh_after_io(fd_entry.handle, sched.current_shared_process());
-                            let table = &sched.current_shared_process().fd_table;
-                            if !sched.current_process().is_linux_compat() || dontwait ||
-                                table.status_flags(fd).unwrap_or(0) & 0x800 != 0 {
-                                if sched.current_process().is_linux_compat() { linux_errno(11) } else { EAGAIN }
+                            let is_linux = sched.current_process().is_linux_compat();
+                            let nonblocking = sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) & 0x800 != 0;
+                            if dontwait || nonblocking {
+                                if is_linux { linux_errno(11) } else { EAGAIN }
                             } else {
-                                wait_linux_pipe(frame, &mut sched, pipe_idx, false)
+                                wait_pipe_io(frame, &mut sched, pipe_idx, false)
                             }
                         }
                         crate::process::pipe::PipeResult::Eof => 0,
@@ -7090,16 +7108,18 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                         }
                         crate::process::pipe::PipeResult::WouldBlock => {
                             crate::process::epoll::refresh_after_io(fd_entry.handle, sched.current_shared_process());
-                            if sched.current_process().is_linux_compat() && !dontwait &&
-                                sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) & 0x800 == 0 {
-                                wait_linux_pipe(frame, &mut sched, pipe_idx, true)
+                            let nonblocking = sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) & 0x800 != 0;
+                            if !dontwait && !nonblocking {
+                                wait_pipe_io(frame, &mut sched, pipe_idx, true)
                             } else if sched.current_process().is_linux_compat() {
                                 linux_errno(11)
                             } else {
                                 EAGAIN
                             }
                         }
-                        crate::process::pipe::PipeResult::BrokenPipe => linux_errno(32),
+                        crate::process::pipe::PipeResult::BrokenPipe => {
+                            if sched.current_process().is_linux_compat() { linux_errno(32) } else { ERR_EPIPE }
+                        }
                         crate::process::pipe::PipeResult::Eof => u64::MAX,
                     }
                 } else if fd_entry.handle.is_vfs() {

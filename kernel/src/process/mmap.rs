@@ -311,8 +311,12 @@ fn map_anonymous_kind(
             return Err(MmapError::InvalidAddress);
         }
         Some(
-            DeferredCursor::new(sched.current_memory_owner().mmap_next, MMAP_REGION_BASE, span)
-                .map_err(|_| MmapError::InvalidAddress)?,
+            DeferredCursor::new(
+                sched.current_memory_owner().mmap_next,
+                MMAP_REGION_BASE,
+                span,
+            )
+            .map_err(|_| MmapError::InvalidAddress)?,
         )
     };
     let map_addr = if fixed {

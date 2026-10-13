@@ -1589,7 +1589,10 @@ impl Scheduler {
     /// Linux leaders and opt-in native std owners hold group-wide resources
     /// until all their workers are reaped. Existing native tasks remain private.
     fn shared_process_index(&self, idx: usize) -> usize {
-        let Some(tgid) = self.processes[idx].linux_tgid.or(self.processes[idx].native_shared_owner) else {
+        let Some(tgid) = self.processes[idx]
+            .linux_tgid
+            .or(self.processes[idx].native_shared_owner)
+        else {
             return idx;
         };
         self.process_index_by_pid(tgid).unwrap_or(idx)
@@ -1847,6 +1850,16 @@ impl Scheduler {
         self.set_state(idx, ProcessState::BlockedOnTimer);
     }
 
+    /// Park a native reader/writer until a pipe transition changes its state.
+    /// Callers hold the scheduler lock from the failed ring operation through
+    /// registration, so a producer cannot notify before the wait is visible.
+    pub fn block_current_native_pipe(&mut self, ring: u32, writing: bool) {
+        let Some(idx) = self.current_process_index() else { return; };
+        self.processes[idx].native_pipe_wait = Some((ring, writing));
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+    }
+
     /// Wake poll waiters attached to the TTY tab which just received input.
     pub fn wake_linux_poll_tty(&mut self, tab: usize) {
         for idx in 0..self.processes.len() {
@@ -1868,18 +1881,26 @@ impl Scheduler {
     /// registration and notification cannot pass each other.
     pub fn wake_linux_eventfd(&mut self, event_idx: u32) {
         for idx in 0..self.processes.len() {
-            let wait = self.processes[idx].linux_state().and_then(|s| s.eventfd_wait);
+            let wait = self.processes[idx]
+                .linux_state()
+                .and_then(|s| s.eventfd_wait);
             let waiting_on_poll = wait.is_none()
-                && self.processes[idx].linux_state().is_some_and(|s| s.poll_wake_tick.is_some())
-                && self.processes[self.shared_process_index(idx)].fd_table.contains_eventfd(event_idx);
+                && self.processes[idx]
+                    .linux_state()
+                    .is_some_and(|s| s.poll_wake_tick.is_some())
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_eventfd(event_idx);
             let should_wake = self.processes[idx].state == ProcessState::BlockedOnTimer
-                && (waiting_on_poll || wait.is_some_and(|(key, value, writing)| {
-                    key == event_idx && if writing {
-                        crate::process::eventfd::can_write(key, value)
-                    } else {
-                        crate::process::eventfd::readiness(key).0
-                    }
-                }));
+                && (waiting_on_poll
+                    || wait.is_some_and(|(key, value, writing)| {
+                        key == event_idx
+                            && if writing {
+                                crate::process::eventfd::can_write(key, value)
+                            } else {
+                                crate::process::eventfd::readiness(key).0
+                            }
+                    }));
             if should_wake {
                 self.wake_linux_poll_index(idx);
             }
@@ -1894,15 +1915,31 @@ impl Scheduler {
                 continue;
             }
             let wait = self.processes[idx].linux_state().and_then(|s| s.pipe_wait);
+            let native_wait = self.processes[idx].native_pipe_wait;
             let poll = wait.is_none()
-                && self.processes[idx].linux_state().is_some_and(|s| s.poll_wake_tick.is_some())
-                && self.processes[self.shared_process_index(idx)].fd_table.contains_pipe_ring(ring);
-            let ready = wait.is_some_and(|(key, writing)| key == ring && if writing {
-                crate::process::pipe::pipe_has_space_or_broken(key)
-            } else {
-                crate::process::pipe::pipe_has_data_or_eof(key)
+                && self.processes[idx]
+                    .linux_state()
+                    .is_some_and(|s| s.poll_wake_tick.is_some())
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_pipe_ring(ring);
+            let ready = wait.is_some_and(|(key, writing)| {
+                key == ring
+                    && if writing {
+                        crate::process::pipe::pipe_has_space_or_broken(key)
+                    } else {
+                        crate::process::pipe::pipe_has_data_or_eof(key)
+                    }
             });
-            if poll || ready {
+            let native_ready = native_wait.is_some_and(|(key, writing)| {
+                key == ring
+                    && if writing {
+                        crate::process::pipe::pipe_has_space_or_broken(key)
+                    } else {
+                        crate::process::pipe::pipe_has_data_or_eof(key)
+                    }
+            });
+            if poll || ready || native_ready {
                 self.wake_linux_poll_index(idx);
             }
         }
@@ -1923,6 +1960,7 @@ impl Scheduler {
     }
 
     fn wake_linux_poll_index(&mut self, idx: usize) {
+        self.processes[idx].native_pipe_wait = None;
         if let Some(state) = self.processes[idx].linux_state_mut() {
             state.poll_wake_tick = None;
             state.eventfd_wait = None;
@@ -2170,7 +2208,10 @@ impl Scheduler {
                 crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
                 self.wake_linux_pipe(handle.pipe_index());
             } else if handle.is_socket() {
-                let (read, write) = crate::process::pipe::socket_close(handle.socket_index(), handle.socket_endpoint());
+                let (read, write) = crate::process::pipe::socket_close(
+                    handle.socket_index(),
+                    handle.socket_endpoint(),
+                );
                 self.wake_linux_pipe(read);
                 self.wake_linux_pipe(write);
             } else if handle.is_epoll() {
@@ -2328,16 +2369,27 @@ impl Scheduler {
         if let Some(state) = self.processes[idx].linux_state_mut() {
             state.tid_address = 0;
         }
-        let Some(hhdm) = crate::HHDM_REQ.response()
-            .map(|resp| x86_64::VirtAddr::new(resp.offset)) else { return; };
+        let Some(hhdm) = crate::HHDM_REQ
+            .response()
+            .map(|resp| x86_64::VirtAddr::new(resp.offset))
+        else {
+            return;
+        };
         let identity = self.processes[idx].address_space.identity();
         if crate::memory::user::copy_to_process_bytes(
-            &self.processes[idx], hhdm, address, &0u32.to_ne_bytes(),
-        ).is_ok() {
+            &self.processes[idx],
+            hhdm,
+            address,
+            &0u32.to_ne_bytes(),
+        )
+        .is_ok()
+        {
             let woken = self.wake_linux_futex(identity, address, 1);
             serial_println!(
                 "[HELIOS-THREAD] clear_child_tid tid={} addr={:#x} woken={}",
-                self.processes[idx].pid, address, woken
+                self.processes[idx].pid,
+                address,
+                woken
             );
         }
     }
@@ -2599,11 +2651,22 @@ impl Scheduler {
             for (ep, owner) in caps.debug_endpoints() {
                 if let Some(process) = self.processes.iter().find(|p| p.pid == owner) {
                     let name = process.name_str();
-                    if name.contains("audio") || name.contains("media") || name.contains("display") || name.contains("melody") {
+                    if name.contains("audio")
+                        || name.contains("media")
+                        || name.contains("display")
+                        || name.contains("melody")
+                    {
                         let (depth, callers) = crate::ipc::with_shard(ep, |bus| {
                             (bus.pending_count(ep), bus.pending_callers_count(ep))
                         });
-                        serial_println!("[IPC-AUDIO] name={} owner={} ep={} depth={} callers={}", name, owner, ep, depth, callers);
+                        serial_println!(
+                            "[IPC-AUDIO] name={} owner={} ep={} depth={} callers={}",
+                            name,
+                            owner,
+                            ep,
+                            depth,
+                            callers
+                        );
                     }
                 }
             }
@@ -3345,7 +3408,8 @@ pub fn request_reschedule_after_sysret() {
     request_reschedule_on(cpu_id);
     unsafe {
         crate::arch::x86_64::lapic::send_fixed_ipi(
-            cpu_id, crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
+            cpu_id,
+            crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
         );
     }
 }
@@ -3427,7 +3491,9 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     }
 
     let my_pid = sched.processes[cur].pid;
-    let is_linux_worker = sched.processes[cur].linux_tgid.is_some_and(|tgid| tgid != my_pid);
+    let is_linux_worker = sched.processes[cur]
+        .linux_tgid
+        .is_some_and(|tgid| tgid != my_pid);
     sched.clear_linux_child_tid(cur);
     let my_name: alloc::string::String = sched.processes[cur].name_str().into();
     serial_println!(

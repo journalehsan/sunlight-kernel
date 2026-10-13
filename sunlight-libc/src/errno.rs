@@ -13,6 +13,7 @@ pub const EIO: i32 = 5;
 pub const E2BIG: i32 = 7;
 pub const EBADF: i32 = 9;
 pub const EAGAIN: i32 = 11;
+pub const EPIPE: i32 = 32;
 pub const ENOMEM: i32 = 12;
 pub const EACCES: i32 = 13;
 pub const EFAULT: i32 = 14;
@@ -33,7 +34,10 @@ pub(crate) fn mark_tls_ready() {
 ///
 /// Returns the per-thread errno cell via `fs:8` when TLS is ready,
 /// or the global fallback before that.
-#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
 pub unsafe extern "C" fn __errno_location() -> *mut i32 {
     if !TLS_READY.load(Ordering::Acquire) {
         return ERRNO_FALLBACK.as_ptr() as *mut i32;
@@ -69,6 +73,7 @@ pub fn set_from_errno(e: Errno) {
         Errno::BadFd => EBADF,
         Errno::IsDir => EISDIR,
         Errno::NotDir => ENOTDIR,
+        Errno::BrokenPipe => EPIPE,
     };
     set_errno(code);
 }

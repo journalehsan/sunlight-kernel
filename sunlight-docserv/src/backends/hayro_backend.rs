@@ -122,4 +122,11 @@ impl DocumentHandle for HayroHandle {
         self.page_info(page)?;
         anyhow::bail!("Hayro text extraction is not implemented")
     }
+
+    fn source_bytes(&self) -> u64 {
+        // Hayro 0.8.0 owns the PDF as `PdfData` (an `Arc<[u8]>`-like buffer) and
+        // exposes it through `Pdf::data().as_ref()`. This is the retained source
+        // snapshot, not decoded page or glyph data.
+        self.0.data().as_ref().len() as u64
+    }
 }

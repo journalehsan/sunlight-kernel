@@ -29,9 +29,11 @@ struct SocketPair {
 static SOCKET_PAIRS: spin::Mutex<Vec<Option<SocketPair>>> = spin::Mutex::new(Vec::new());
 
 pub fn socket_stream(index: u32, endpoint: usize) -> Option<(u32, u32)> {
-    SOCKET_PAIRS.lock().get(index as usize)?.as_ref().map(|pair| {
-        (pair.incoming[endpoint], pair.incoming[1 - endpoint])
-    })
+    SOCKET_PAIRS
+        .lock()
+        .get(index as usize)?
+        .as_ref()
+        .map(|pair| (pair.incoming[endpoint], pair.incoming[1 - endpoint]))
 }
 
 pub fn socket_retain(index: u32, endpoint: usize) {
@@ -42,8 +44,14 @@ pub fn socket_retain(index: u32, endpoint: usize) {
         (pair.incoming[endpoint], pair.incoming[1 - endpoint])
     };
     let mut pool = PIPE_POOL.lock();
-    pool[streams.0 as usize].as_mut().expect("live read ring").add_reader();
-    pool[streams.1 as usize].as_mut().expect("live write ring").add_writer();
+    pool[streams.0 as usize]
+        .as_mut()
+        .expect("live read ring")
+        .add_reader();
+    pool[streams.1 as usize]
+        .as_mut()
+        .expect("live write ring")
+        .add_writer();
 }
 
 pub fn socket_close(index: u32, endpoint: usize) -> (u32, u32) {
@@ -62,13 +70,19 @@ pub fn socket_close(index: u32, endpoint: usize) -> (u32, u32) {
     streams
 }
 
-pub fn create_socketpair(sched: &mut crate::sched::Scheduler, flags: u32) -> Result<(i32, i32), PipeError> {
+pub fn create_socketpair(
+    sched: &mut crate::sched::Scheduler,
+    flags: u32,
+) -> Result<(i32, i32), PipeError> {
     use crate::process::fd_table::{CapRights, FileHandle};
     let first = alloc_pipe();
     let second = alloc_pipe();
     let index = {
         let mut pool = SOCKET_PAIRS.lock();
-        let item = SocketPair { incoming: [first, second], refs: [1, 1] };
+        let item = SocketPair {
+            incoming: [first, second],
+            refs: [1, 1],
+        };
         if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
             *slot = Some(item);
             idx as u32
@@ -197,13 +211,15 @@ pub fn pipe_has_data_or_eof(pool_idx: u32) -> bool {
 
 pub fn pipe_has_space_or_broken(pool_idx: u32) -> bool {
     let pool = PIPE_POOL.lock();
-    pool.get(pool_idx as usize).and_then(Option::as_ref)
+    pool.get(pool_idx as usize)
+        .and_then(Option::as_ref)
         .is_none_or(|pipe| pipe.readers == 0 || pipe.data_len < PIPE_BUFFER_SIZE)
 }
 
 pub fn pipe_state(pool_idx: u32) -> Option<(usize, u32, u32)> {
     let pool = PIPE_POOL.lock();
-    pool.get(pool_idx as usize).and_then(Option::as_ref)
+    pool.get(pool_idx as usize)
+        .and_then(Option::as_ref)
         .map(|pipe| (pipe.data_len, pipe.readers, pipe.writers))
 }
 
@@ -287,7 +303,11 @@ pub fn pipe_close_end(pool_idx: u32, is_write: bool) {
 pub fn pipe_retain_end(pool_idx: u32, is_write: bool) {
     let mut pool = PIPE_POOL.lock();
     if let Some(Some(pipe)) = pool.get_mut(pool_idx as usize) {
-        if is_write { pipe.add_writer(); } else { pipe.add_reader(); }
+        if is_write {
+            pipe.add_writer();
+        } else {
+            pipe.add_reader();
+        }
     }
 }
 

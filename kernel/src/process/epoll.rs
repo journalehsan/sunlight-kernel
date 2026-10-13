@@ -124,9 +124,14 @@ pub fn ctl(
             if instance.interests.len() >= MAX_INTERESTS {
                 return Err(EpollError::NoSpace);
             }
-            instance
-                .interests
-                .insert(target_fd, Interest { events, data, last_ready: 0 });
+            instance.interests.insert(
+                target_fd,
+                Interest {
+                    events,
+                    data,
+                    last_ready: 0,
+                },
+            );
             Ok(())
         }
         EPOLL_CTL_MOD => {
@@ -188,7 +193,11 @@ pub fn collect_ready(
         }
         let Some(entry) = process.fd_table.get(fd) else {
             if trace {
-                crate::serial_println!("[HELIOS-EPOLL-TRACE] fd={} missing events={:#x}", fd, interest.events);
+                crate::serial_println!(
+                    "[HELIOS-EPOLL-TRACE] fd={} missing events={:#x}",
+                    fd,
+                    interest.events
+                );
             }
             // Closed target: surface as ERR|HUP if caller cares about errors.
             if interest.events & (EPOLLERR | EPOLLHUP) != 0 || interest.events & EPOLLIN != 0 {
@@ -206,7 +215,11 @@ pub fn collect_ready(
             let (readable, writable) = fd_ready(fd, handle, process);
             crate::serial_println!(
                 "[HELIOS-EPOLL-TRACE] fd={} handle={:#x} interest={:#x} readable={} writable={}",
-                fd, handle.0, interest.events, readable, writable
+                fd,
+                handle.0,
+                interest.events,
+                readable,
+                writable
             );
         }
 
@@ -244,8 +257,12 @@ pub fn refresh_after_io(handle: FileHandle, process: &crate::process::Process) {
     let mut pool = EPOLL_POOL.lock();
     for instance in pool.iter_mut().filter_map(Option::as_mut) {
         for (&fd, interest) in instance.interests.iter_mut() {
-            if interest.events & EPOLLET == 0 ||
-                !process.fd_table.get(fd).is_some_and(|entry| entry.handle == handle) {
+            if interest.events & EPOLLET == 0
+                || !process
+                    .fd_table
+                    .get(fd)
+                    .is_some_and(|entry| entry.handle == handle)
+            {
                 continue;
             }
             let (readable, writable) = fd_ready(fd, handle, process);
@@ -266,8 +283,12 @@ pub fn fd_ready(fd: i32, handle: FileHandle, process: &crate::process::Process) 
     }
     if handle.is_socket() {
         return super::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
-            .map(|(read, write)| (super::pipe::pipe_has_data_or_eof(read),
-                                    super::pipe::pipe_has_space_or_broken(write)))
+            .map(|(read, write)| {
+                (
+                    super::pipe::pipe_has_data_or_eof(read),
+                    super::pipe::pipe_has_space_or_broken(write),
+                )
+            })
             .unwrap_or((true, true));
     }
     (fd_is_readable(fd, handle, process), fd_is_writable(handle))
@@ -297,8 +318,8 @@ fn fd_is_readable(fd: i32, handle: FileHandle, process: &crate::process::Process
 
 fn fd_is_writable(handle: FileHandle) -> bool {
     if handle.is_pipe() {
-        return handle.pipe_is_write() &&
-            crate::process::pipe::pipe_has_space_or_broken(handle.pipe_index());
+        return handle.pipe_is_write()
+            && crate::process::pipe::pipe_has_space_or_broken(handle.pipe_index());
     }
     if handle.is_tty_stdout() {
         return true;

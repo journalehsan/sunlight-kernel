@@ -137,7 +137,10 @@ pub unsafe fn memchr_bytes(s: *const u8, c: u8, n: usize) -> *const u8 {
 ///
 /// # Safety
 /// See module-level validity rules.
-#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
 pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     memcpy_bytes(dest, src, n);
     dest
@@ -151,7 +154,10 @@ pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut
 ///
 /// # Safety
 /// See module-level validity rules.
-#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
 pub unsafe extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     memmove_bytes(dest, src, n);
     dest
@@ -164,7 +170,10 @@ pub unsafe extern "C" fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mu
 ///
 /// # Safety
 /// See module-level validity rules.
-#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
 pub unsafe extern "C" fn memset(s: *mut u8, c: i32, n: usize) -> *mut u8 {
     // Truncate to the low 8 bits (matches C conversion to `unsigned char`).
     memset_bytes(s, c as u8, n);
@@ -178,7 +187,10 @@ pub unsafe extern "C" fn memset(s: *mut u8, c: i32, n: usize) -> *mut u8 {
 ///
 /// # Safety
 /// See module-level validity rules.
-#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
 pub unsafe extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
     memcmp_bytes(s1, s2, n)
 }
@@ -191,7 +203,10 @@ pub unsafe extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
 ///
 /// # Safety
 /// See module-level validity rules.
-#[cfg_attr(all(not(test), any(target_os = "none", target_os = "sunlightos")), no_mangle)]
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
 pub unsafe extern "C" fn memchr(s: *const u8, c: i32, n: usize) -> *mut u8 {
     memchr_bytes(s, c as u8, n) as *mut u8
 }

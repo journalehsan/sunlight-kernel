@@ -153,6 +153,8 @@ pub struct Process {
     /// Native std compare/wait registration and absolute monotonic deadline.
     pub native_futex_wait: Option<u64>,
     pub native_futex_deadline: Option<u64>,
+    /// Native pipe operation blocked on the ring becoming readable/writable.
+    pub native_pipe_wait: Option<(u32, bool)>,
     /// Opt-in std workers share this owner's descriptor table and cwd.
     pub native_shared_owner: Option<usize>,
     pub capabilities: Vec<Capability>,
@@ -404,6 +406,7 @@ impl Process {
             native_thread: false,
             native_futex_wait: None,
             native_futex_deadline: None,
+            native_pipe_wait: None,
             native_shared_owner: None,
             capabilities: Vec::new(),
             kernel_stack: Some(kernel_stack),
@@ -573,6 +576,7 @@ impl Process {
             native_thread: false,
             native_futex_wait: None,
             native_futex_deadline: None,
+            native_pipe_wait: None,
             native_shared_owner: None,
             capabilities,
             kernel_stack: Some(kernel_stack),

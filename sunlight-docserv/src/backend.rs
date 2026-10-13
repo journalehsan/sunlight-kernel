@@ -39,4 +39,10 @@ pub trait DocumentHandle: Send + Sync {
     fn render_page(&self, page: u32, scale: f32) -> anyhow::Result<PageBitmap>;
     /// Extract a page's text in reading order.
     fn extract_text(&self, page: u32) -> anyhow::Result<String>;
+    /// Retained source bytes for this document, if the backend can report it.
+    ///
+    /// Defaults to 0 for backends that keep no owned source snapshot.
+    fn source_bytes(&self) -> u64 {
+        0
+    }
 }

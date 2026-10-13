@@ -11,12 +11,24 @@ use std::{
 };
 use sunlight_ipc::{endpoint_create, ipc_recv, ipc_reply_and_wait, nameserver_register, IpcMsg};
 
+/// Kernel endpoint queue depth for the docserv endpoint
+/// (`kernel/src/ipc/mod.rs::ENDPOINT_QUEUE_CAPACITY`). Reported so
+/// `MemoryReport` can expose the kernel-side message ring's worst-case size
+/// without a kernel query.
+const IPC_ENDPOINT_QUEUE_CAPACITY: u64 = 64;
+
 /// Backend registry. Handles are private to the authenticated IPC sender badge.
 pub struct DocService {
     handles: HashMap<u64, Box<dyn DocumentHandle>>,
     owners: HashMap<u64, u64>,
     next: AtomicU64,
     backends: Vec<Box<dyn DocumentBackend>>,
+    /// Bytes held by the transport in pending (unfetched) reply buffers.
+    ///
+    /// The transport owns the pending map, so it mirrors the total here before
+    /// each dispatch; `MemoryReport` reads it. Bounded by the transport's
+    /// 128 MiB pending budget.
+    pending_reply_bytes: u64,
 }
 impl Default for DocService {
     fn default() -> Self {
@@ -39,11 +51,17 @@ impl DocService {
             owners: HashMap::new(),
             next: AtomicU64::new(1),
             backends,
+            pending_reply_bytes: 0,
         }
     }
     /// Number of open handles, for lifecycle verification.
     pub fn handle_count(&self) -> usize {
         self.handles.len()
+    }
+
+    /// Record the transport's current pending-reply bytes for `MemoryReport`.
+    pub fn note_pending_reply_bytes(&mut self, bytes: u64) {
+        self.pending_reply_bytes = bytes;
     }
 
     /// Release documents whose authenticated IPC owners have terminated.
@@ -131,6 +149,20 @@ impl DocService {
             DocRequest::ExtractText { handle, page } => DocResponse::Text {
                 content: self.lookup(owner, handle)?.extract_text(page)?,
             },
+            DocRequest::MemoryReport => DocResponse::MemoryReport {
+                // Hayro 0.8.0 exposes no cache/store size query; see the report
+                // docs. Left at 0 = "not exposed" rather than guessed.
+                hayro_store_bytes: 0,
+                handle_count: self.handles.len() as u32,
+                source_bytes: self.handles.values().map(|h| h.source_bytes()).sum(),
+                ipc_pending_bytes: self.pending_reply_bytes as u64,
+                // One docserv endpoint queue of `IPC_ENDPOINT_QUEUE_CAPACITY`
+                // inline `IpcMsg` records. Inline messages carry no payload
+                // here (page data rides caller-owned shared mappings), so this
+                // is the kernel-side ring cost for the service channel.
+                ipc_ring_bytes: IPC_ENDPOINT_QUEUE_CAPACITY * core::mem::size_of::<IpcMsg>() as u64,
+                heap_estimate_bytes: heap_estimate_bytes(),
+            },
             DocRequest::Close { handle } => {
                 self.lookup(owner, handle)?;
                 self.handles.remove(&handle);
@@ -159,6 +191,7 @@ pub fn run_native(mut service: DocService) -> Result<()> {
     loop {
         service.reap_closed_clients(sunlight_ipc::process_is_alive);
         pending.retain(|&owner, _| sunlight_ipc::process_is_alive(owner));
+        service.note_pending_reply_bytes(pending.values().map(Vec::len).sum::<usize>() as u64);
         let reply = match transport(&mut service, &mut pending, message) {
             Ok(reply) => reply,
             Err(error) => {
@@ -209,5 +242,24 @@ fn transport(
             Ok(IpcMsg::with_label(READY).word(0, bytes.len() as u64))
         }
         _ => anyhow::bail!("unknown document IPC operation"),
+    }
+}
+
+/// Live bytes held by the process allocator, when the target exposes that.
+///
+/// The native SunlightOS std build uses `sunlight-libc`'s `System` allocator,
+/// whose `heap_stats()` reports `requested_user_bytes` (live bytes handed to
+/// callers). Other targets (Linux GNU host, `alloc`-only clients) have no such
+/// API, so this returns 0 = "not accessible" rather than a guess. `mallinfo2`
+/// is deliberately not used: the host glibc arena also serves this process's
+/// own standard I/O and would over-report the document work.
+fn heap_estimate_bytes() -> u64 {
+    #[cfg(all(feature = "hayro-native", target_os = "sunlightos"))]
+    {
+        sunlight_libc::alloc::heap_stats().requested_user_bytes as u64
+    }
+    #[cfg(not(all(feature = "hayro-native", target_os = "sunlightos")))]
+    {
+        0
     }
 }

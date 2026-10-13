@@ -270,7 +270,11 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
     }
     assert_eq!(shm_owner.owned_shared.len(), 1);
     assert_eq!(
-        unsafe { (hhdm + shm_first_frame.as_u64()).as_ptr::<u8>().read_volatile() },
+        unsafe {
+            (hhdm + shm_first_frame.as_u64())
+                .as_ptr::<u8>()
+                .read_volatile()
+        },
         0x5A
     );
     crate::serial_println!("[MM-0] temporary SHM views preserve persistent mappings: OK");

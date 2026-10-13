@@ -16,6 +16,8 @@ pub const SYS_READ: u64 = 42;
 pub const SYS_WRITE: u64 = 43;
 pub const SYS_LSEEK: u64 = 44;
 pub const SYS_PIPE: u64 = 47;
+pub const SYS_DUP: u64 = 45;
+pub const SYS_DUP2: u64 = 46;
 pub const SYS_FSTAT: u64 = 48;
 pub const SYS_MMAP: u64 = 50;
 pub const SYS_MUNMAP: u64 = 51;
@@ -66,6 +68,7 @@ pub const EISDIR_RAW: u64 = u64::MAX - 6;
 pub const ENOTDIR_RAW: u64 = u64::MAX - 7;
 pub const EIO_RAW: u64 = u64::MAX - 8;
 pub const ERANGE_RAW: u64 = u64::MAX - 9;
+pub const EPIPE_RAW: u64 = u64::MAX - 10;
 
 /// Largest count that can be represented by the public `ssize_t` result.
 /// Native SunlightOS is currently x86_64, but keep this tied to the Rust ABI
@@ -87,6 +90,7 @@ pub enum Errno {
     BadFd,
     IsDir,
     NotDir,
+    BrokenPipe,
 }
 
 pub fn check(ret: u64) -> Result<u64, Errno> {
@@ -101,6 +105,7 @@ pub fn check(ret: u64) -> Result<u64, Errno> {
         ENOTDIR_RAW => Err(Errno::NotDir),
         EIO_RAW => Err(Errno::Failed),
         ERANGE_RAW => Err(Errno::TooBig),
+        EPIPE_RAW => Err(Errno::BrokenPipe),
         n => Ok(n),
     }
 }
@@ -237,6 +242,7 @@ mod tests {
     fn error_sentinel_is_never_a_successful_count() {
         assert_eq!(check(ERR_RAW), Err(Errno::Failed));
         assert_eq!(check(EAGAIN_RAW), Err(Errno::Again));
+        assert_eq!(check(EPIPE_RAW), Err(Errno::BrokenPipe));
         assert_eq!(check(17), Ok(17));
     }
 

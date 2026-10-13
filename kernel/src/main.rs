@@ -262,9 +262,8 @@ static HELIOS_NOTE_ELF_BYTES: &[u8] =
 static YAZI_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-linux-musl/release/yazi");
 #[cfg(feature = "key_inject")]
-static YAZI_BASELINE_ELF_BYTES: &[u8] = include_bytes!(
-    "../../target/yazi-v26.9.1/yazi-x86_64-unknown-linux-musl/yazi"
-);
+static YAZI_BASELINE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/yazi-v26.9.1/yazi-x86_64-unknown-linux-musl/yazi");
 // GUI Phase 3+: Display compositor (window manager) for the Sunlight Graphics Protocol.
 static SUNLIGHT_DISPLAY_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-display");
@@ -309,7 +308,8 @@ static LIGHT_LENS_ELF_BYTES: &[u8] =
 // Melody Mina: native responsive music-player frontend (UI-only Phase 1).
 // Melody Mina is a UI client; its reusable playback engine remains linked in
 // the userspace application rather than leaking codec/audio logic here.
-static VOICE_RECORDER_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/voice-recorder");
+static VOICE_RECORDER_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/voice-recorder");
 static MELODY_MINA_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/melody-mina");
 // Sunlight Edit: native graphical text editor.
@@ -3860,7 +3860,8 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             let token = crate::ipc::defer_current_reply(server_pid, &mut sched);
             deferred_lifecycle_ok &= received && token.is_ok();
             if let Ok(token) = token {
-                deferred_lifecycle_ok &= crate::ipc::deferred_reply_is_live(server_pid, token, &sched);
+                deferred_lifecycle_ok &=
+                    crate::ipc::deferred_reply_is_live(server_pid, token, &sched);
                 crate::ipc::with_shard(endpoint, |bus| match mode {
                     0 => {
                         deferred_lifecycle_ok &= crate::ipc::complete_deferred_reply(
@@ -3881,8 +3882,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                         crate::ipc::finish_peer_closed_calls(endpoint, calls, &mut sched);
                     }
                 });
-                deferred_lifecycle_ok &= !crate::ipc::deferred_reply_is_live(server_pid, token, &sched)
-                    && sched.processes[server_idx].deferred_reply_targets.is_empty();
+                deferred_lifecycle_ok &=
+                    !crate::ipc::deferred_reply_is_live(server_pid, token, &sched)
+                        && sched.processes[server_idx]
+                            .deferred_reply_targets
+                            .is_empty();
                 let result = crate::ipc::take_terminal_result(&mut sched, caller_idx);
                 deferred_lifecycle_ok &= match mode {
                     0 => matches!(result, Some(Ok(reply)) if reply.label == generation),
@@ -4119,7 +4123,11 @@ fn build_document_service_sequence() -> [u8; 12288] {
         append_injected_scancode(&mut sequence, &mut len, code);
     }
     append_injected_delay(&mut sequence, &mut len, 3072);
-    append_injected_command(&mut sequence, &mut len, b"/bin/sunlight-docserv --self-test");
+    append_injected_command(
+        &mut sequence,
+        &mut len,
+        b"/bin/sunlight-docserv --self-test",
+    );
     sequence
 }
 

@@ -145,8 +145,13 @@ static APPLICATION_REGISTRY: &[ApplicationRegistryEntry] = &[
         executable: b"/bin/sunlight-docview",
     },
     ApplicationRegistryEntry {
-        canonical_id: "voice-recorder", display_name: "Sunlight Voice Recorder",
-        aliases: aliases![("en", "recorder"), ("en", "sunlight-voice-recorder"), ("fa", "ضبط صدا")],
+        canonical_id: "voice-recorder",
+        display_name: "Sunlight Voice Recorder",
+        aliases: aliases![
+            ("en", "recorder"),
+            ("en", "sunlight-voice-recorder"),
+            ("fa", "ضبط صدا")
+        ],
         executable: b"/bin/voice-recorder",
     },
     ApplicationRegistryEntry {

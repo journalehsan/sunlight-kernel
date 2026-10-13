@@ -117,7 +117,8 @@ pub fn exec_into_process(
 
     process.personality = personality;
     process.linux_tgid = process.is_linux_compat().then_some(process.pid);
-    process.linux_sysv_semadj = process.is_linux_compat()
+    process.linux_sysv_semadj = process
+        .is_linux_compat()
         .then_some(crate::process::LinuxSysvSemAdj::default());
     if process.is_linux_compat() {
         crate::serial_println!("[EXEC] Linux ELF detected");
@@ -934,8 +935,12 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         }
         // sunlight-thumbd: thumbnail daemon for async File Manager previews.
         #[cfg(feature = "document_service")]
-        "/bin/sunlight-docserv" | "/usr/bin/sunlight-docserv" | "/sbin/sunlight-docserv" => Ok(crate::SUNLIGHT_DOCSERV_ELF_BYTES),
-        "/bin/sunlight-docview" | "/usr/bin/sunlight-docview" => Ok(crate::SUNLIGHT_DOCVIEW_ELF_BYTES),
+        "/bin/sunlight-docserv" | "/usr/bin/sunlight-docserv" | "/sbin/sunlight-docserv" => {
+            Ok(crate::SUNLIGHT_DOCSERV_ELF_BYTES)
+        }
+        "/bin/sunlight-docview" | "/usr/bin/sunlight-docview" => {
+            Ok(crate::SUNLIGHT_DOCVIEW_ELF_BYTES)
+        }
         #[cfg(feature = "document_postscript")]
         "/bin/gs" | "/usr/bin/gs" => Ok(crate::DOCUMENT_GHOSTSCRIPT_ELF_BYTES),
         "/bin/sunlight-thumbd" | "/usr/bin/sunlight-thumbd" | "/sbin/sunlight-thumbd" => {
@@ -974,9 +979,7 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/hello-linux" | "/usr/bin/hello-linux" => Ok(crate::HELLO_LINUX_ELF_BYTES),
         "/bin/yazi" | "/usr/bin/yazi" => Ok(crate::YAZI_ELF_BYTES),
         #[cfg(feature = "key_inject")]
-        "/bin/yazi-baseline" | "/usr/bin/yazi-baseline" => {
-            Ok(crate::YAZI_BASELINE_ELF_BYTES)
-        }
+        "/bin/yazi-baseline" | "/usr/bin/yazi-baseline" => Ok(crate::YAZI_BASELINE_ELF_BYTES),
         "/bin/helios-probe" | "/usr/bin/helios-probe" => Ok(crate::HELIOS_PROBE_ELF_BYTES),
         #[cfg(feature = "native_std_probe")]
         "/bin/native-fp-probe" => Ok(crate::NATIVE_FP_PROBE_ELF_BYTES),

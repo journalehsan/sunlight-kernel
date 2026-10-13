@@ -40,6 +40,8 @@ pub mod power;
 pub mod secret_store;
 /// Strict, fail-closed configuration loader for the future SSH daemon.
 pub mod ssh_config;
+#[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+pub mod std_runtime;
 /// Freestanding C string primitives (strlen, strnlen, strcmp, strncmp, strchr, strrchr).
 pub mod string;
 /// Canonical user-space app launch resolution and tracing.
@@ -48,8 +50,6 @@ pub mod sun_exec;
 pub mod sun_open;
 /// Native thread spawning.
 pub mod thread;
-#[cfg(all(feature = "native-std", target_os = "sunlightos"))]
-pub mod std_runtime;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
 pub mod time;
 /// Thread-Local Storage bootstrap: `Tcb` layout + `init_tls()`.
@@ -80,6 +80,7 @@ pub const O_TRUNC: u64 = 0x200;
 pub const O_APPEND: u64 = 0x400;
 pub const O_NOFOLLOW: u64 = 0x0002_0000;
 pub const O_CLOEXEC: u64 = 0x0008_0000;
+const SPAWN_STDIO_EXTENSION: u64 = 0x5355_4E53_5444_494F;
 pub const SEEK_SET: i32 = 0;
 pub const SEEK_CUR: i32 = 1;
 pub const SEEK_END: i32 = 2;
@@ -123,6 +124,14 @@ pub fn create(path: &[u8]) -> Result<Fd, Errno> {
 pub fn close(fd: Fd) -> Result<(), Errno> {
     let ret = unsafe { sys::syscall1(sys::SYS_CLOSE, fd.0 as u64) };
     sys::check(ret).map(|_| ())
+}
+
+pub fn dup(fd: Fd) -> Result<Fd, Errno> {
+    checked_fd(unsafe { sys::syscall1(sys::SYS_DUP, fd.0 as u64) })
+}
+
+pub fn dup2(old: Fd, new: Fd) -> Result<Fd, Errno> {
+    checked_fd(unsafe { sys::syscall2(sys::SYS_DUP2, old.0 as u64, new.0 as u64) })
 }
 
 /// Read the process CWD into a caller-owned, kernel-sized path buffer.
@@ -606,6 +615,19 @@ pub fn terminal_winsize() -> Option<sunlight_ipc::TerminalWinsize> {
 /// Spawn a new process running `path` (posix_spawn-style). `stdout` becomes
 /// the child's fd 1 when given (e.g. a pipe write end). Returns the child pid.
 pub fn spawn(path: &[u8], argv: &[&[u8]], stdout: Option<Fd>) -> Result<u64, Errno> {
+    spawn_with_stdio(path, argv, None, stdout, None)
+}
+
+/// Spawn while optionally wiring the child's standard descriptors from
+/// descriptors owned by the caller. Omitted descriptors keep normal TTY
+/// inheritance behavior. Descriptor slots are duplicated into the child.
+pub fn spawn_with_stdio(
+    path: &[u8],
+    argv: &[&[u8]],
+    stdin: Option<Fd>,
+    stdout: Option<Fd>,
+    stderr: Option<Fd>,
+) -> Result<u64, Errno> {
     if argv.len() > MAX_ARGS {
         return Err(Errno::TooBig);
     }
@@ -627,13 +649,18 @@ pub fn spawn(path: &[u8], argv: &[&[u8]], stdout: Option<Fd>) -> Result<u64, Err
         used = end;
     }
 
+    let stdin_arg = stdin.map_or(u64::MAX, |fd| fd.0 as u64);
     let stdout_arg = stdout.map_or(u64::MAX, |fd| fd.0 as u64);
+    let stderr_arg = stderr.map_or(u64::MAX, |fd| fd.0 as u64);
     let ret = unsafe {
-        sys::syscall3(
+        sys::syscall6(
             sys::SYS_SPAWN,
             path_ptr as u64,
             ptrs.as_ptr() as u64,
             stdout_arg,
+            stdin_arg,
+            stderr_arg,
+            SPAWN_STDIO_EXTENSION,
         )
     };
     sys::check(ret)

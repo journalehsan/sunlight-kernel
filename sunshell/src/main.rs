@@ -48,8 +48,14 @@ fn run_command(
     env: &mut crate::shellenv::ShellEnv,
     executor: &dyn Executor,
 ) -> Option<i32> {
-    let Some(ast) = parser::parse_line(line) else {
-        return Some(0);
+    let _ = executor;
+    let ast = match parser::parse_line_checked(line) {
+        Ok(Some(ast)) => ast,
+        Ok(None) => return Some(0),
+        Err(error) => {
+            eprintln!("sshl: syntax error: {}", error.message);
+            return Some(2);
+        }
     };
 
     // For pipelines we always go through execute_ast (expansion + piping).
@@ -65,9 +71,9 @@ fn run_command(
     }
 
     // Single command: expand then try builtins (for parity with sunlight mode and $VAR in echo etc)
-    if let parser::AstNode::Command(ref raw_args) = ast {
-        if !raw_args.is_empty() {
-            let expanded: Vec<String> = raw_args.iter().map(|a| env.expand_token(a)).collect();
+    if let parser::AstNode::Command(ref command) = ast {
+        if command.redirections.is_empty() && !command.argv.is_empty() {
+            let expanded: Vec<String> = command.argv.iter().map(|a| env.expand_token(a)).collect();
             let argv: Vec<&str> = expanded.iter().map(|s| s.as_str()).collect();
             match builtins::run(&argv) {
                 builtins::BuiltinResult::Done(code) => return Some(code),
@@ -84,7 +90,11 @@ fn run_command(
         Ok(code) => Some(code),
         Err(e) => {
             eprintln!("sshl: {e}");
-            Some(127)
+            Some(if matches!(e, exec::ExecError::NotFound(_)) {
+                127
+            } else {
+                1
+            })
         }
     }
 }
@@ -278,6 +288,7 @@ mod sunlight {
         /// shell reports it to tty_server (FG_STARTED) and parks until tty_server
         /// reports the child exited (FG_DONE), instead of blocking on the child.
         fg_pid: Option<u64>,
+        fg_pids: alloc::vec::Vec<u64>,
     }
 
     impl Shell {
@@ -300,6 +311,7 @@ mod sunlight {
                 cwd: alloc::string::String::from("/"),
                 calc: calc::CalcSession::new(),
                 fg_pid: None,
+                fg_pids: alloc::vec::Vec::new(),
             }
         }
 
@@ -528,20 +540,41 @@ mod sunlight {
             if line_str.is_empty() {
                 return ([0; MAX_OUT], 0);
             }
-            let ast = match super::parser::parse_line(line_str) {
-                Some(a) => a,
-                None => return ([0; MAX_OUT], 0),
-            };
-            let (cmd, args_raw) = match &ast {
-                super::parser::AstNode::Command(a) if !a.is_empty() => {
-                    (a[0].clone(), a[1..].to_vec())
+            let ast = match super::parser::parse_line_checked(line_str) {
+                Ok(Some(a)) => a,
+                Ok(None) => return ([0; MAX_OUT], 0),
+                Err(error) => {
+                    let message = alloc::format!("sshl: syntax error: {}\n", error.message);
+                    return copy_out(message.as_bytes());
                 }
-                super::parser::AstNode::Pipeline(_) => {
-                    return copy_out(b"sshl: pipelines not supported in sunlight mode\n");
+            };
+            let mut builtin_redirection = None;
+            let (cmd, args_raw) = match &ast {
+                super::parser::AstNode::Command(command) if !command.argv.is_empty() => {
+                    if !command.redirections.is_empty() {
+                        if is_pipeline_builtin(&command.argv[0]) {
+                            builtin_redirection =
+                                match self.prepare_builtin_redirections(&command.redirections) {
+                                    Ok(setup) => Some(setup),
+                                    Err(message) => return copy_out(message.as_bytes()),
+                                };
+                        } else {
+                            return match self.launch_pipeline(core::slice::from_ref(command)) {
+                                Ok(()) => ([0; MAX_OUT], 0),
+                                Err(message) => copy_out(message.as_bytes()),
+                            };
+                        }
+                    }
+                    (command.argv[0].clone(), command.argv[1..].to_vec())
+                }
+                super::parser::AstNode::Pipeline(commands) => {
+                    return match self.launch_pipeline(commands) {
+                        Ok(()) => ([0; MAX_OUT], 0),
+                        Err(message) => copy_out(message.as_bytes()),
+                    };
                 }
                 _ => return ([0; MAX_OUT], 0),
             };
-
             // Handle passwd specially (needs target user)
             if cmd == "passwd" {
                 let target = args_raw.first().map(|s| s.as_str());
@@ -603,6 +636,27 @@ mod sunlight {
                 debug_log("[TTY]  Output: hello");
             }
 
+            if let Some((output_fd, opened)) = builtin_redirection {
+                if let Some(fd) = output_fd {
+                    let write_result = if unsafe { LONG_OUT_ACTIVE } {
+                        let len = unsafe { LONG_OUT_LEN };
+                        ulibc_write_long_out_to(fd, len)
+                    } else {
+                        sunlight_libc::write_all(fd, out)
+                    };
+                    for fd in opened {
+                        let _ = sunlight_libc::close(fd);
+                    }
+                    long_out_reset();
+                    if write_result.is_err() {
+                        return copy_out(b"sshl: redirection write failed\n");
+                    }
+                    return ([0; MAX_OUT], 0);
+                }
+                for fd in opened {
+                    let _ = sunlight_libc::close(fd);
+                }
+            }
             copy_out(out)
         }
 
@@ -1169,6 +1223,215 @@ mod sunlight {
                 }
             }
             b""
+        }
+
+        fn launch_pipeline(
+            &mut self,
+            commands: &[super::parser::SimpleCommand],
+        ) -> Result<(), alloc::string::String> {
+            use super::parser::{RedirectMode, Redirection};
+            use sunlight_libc as ulibc;
+            let mut pipes = alloc::vec::Vec::new();
+            for _ in 1..commands.len() {
+                match ulibc::pipe() {
+                    Ok(pair) => pipes.push(pair),
+                    Err(_) => {
+                        for (r, w) in pipes {
+                            let _ = ulibc::close(r);
+                            let _ = ulibc::close(w);
+                        }
+                        return Err(alloc::string::String::from(
+                            "sshl: pipe: resource or kernel error\n",
+                        ));
+                    }
+                }
+            }
+            let mut pids = alloc::vec::Vec::with_capacity(commands.len());
+            let mut spawn_error = None;
+            for (index, command) in commands.iter().enumerate() {
+                let mut io = [None, None, None];
+                if index > 0 {
+                    io[0] = Some(pipes[index - 1].0);
+                }
+                if index + 1 < commands.len() {
+                    io[1] = Some(pipes[index].1);
+                }
+                let expanded: alloc::vec::Vec<alloc::string::String> = command
+                    .argv
+                    .iter()
+                    .map(|arg| self.env.expand_token(arg))
+                    .collect();
+                if expanded.is_empty() {
+                    spawn_error = Some(alloc::string::String::from("sshl: empty command\n"));
+                    break;
+                }
+                let mut opened = alloc::vec::Vec::new();
+                for redirection in &command.redirections {
+                    match redirection {
+                        Redirection::Open { fd, mode, path } => {
+                            let expanded_path = self.env.expand_token(path);
+                            let Some(path) = normalize_path(&self.cwd, &expanded_path) else {
+                                spawn_error = Some(alloc::format!(
+                                    "sshl: invalid redirection path: {}\n",
+                                    expanded_path
+                                ));
+                                break;
+                            };
+                            let flags = match mode {
+                                RedirectMode::Read => ulibc::O_RDONLY,
+                                RedirectMode::Truncate => {
+                                    ulibc::O_WRONLY | ulibc::O_CREAT | ulibc::O_TRUNC
+                                }
+                                RedirectMode::Append => {
+                                    ulibc::O_WRONLY | ulibc::O_CREAT | ulibc::O_APPEND
+                                }
+                            };
+                            match ulibc::open_with_flags_mode(path.as_bytes(), flags, 0o644) {
+                                Ok(file) => {
+                                    opened.push(file);
+                                    io[*fd as usize] = Some(file);
+                                }
+                                Err(error) => {
+                                    spawn_error = Some(alloc::format!(
+                                        "sshl: {}: redirection failed ({:?})\n",
+                                        path,
+                                        error
+                                    ));
+                                    break;
+                                }
+                            }
+                        }
+                        Redirection::Dup { fd, source } => {
+                            io[*fd as usize] = io[*source as usize];
+                        }
+                    }
+                }
+                if spawn_error.is_some() {
+                    for fd in opened {
+                        let _ = ulibc::close(fd);
+                    }
+                    break;
+                }
+                let (path, argv): (alloc::string::String, alloc::vec::Vec<&[u8]>) =
+                    if is_pipeline_builtin(&expanded[0]) {
+                        let path = alloc::string::String::from("/bin/sshl");
+                        let mut argv =
+                            alloc::vec![b"sshl".as_slice(), b"--pipeline-builtin".as_slice()];
+                        argv.extend(expanded.iter().map(|s| s.as_bytes()));
+                        (path, argv)
+                    } else {
+                        let command_name = &expanded[0];
+                        let Some(path) = self.resolve_in_path(command_name) else {
+                            spawn_error = Some(alloc::format!(
+                                "sshl: command not found: {}\n",
+                                command_name
+                            ));
+                            for fd in opened {
+                                let _ = ulibc::close(fd);
+                            }
+                            break;
+                        };
+                        let mut args = alloc::vec::Vec::with_capacity(expanded.len());
+                        args.push(command_name.as_bytes());
+                        args.extend(expanded.iter().skip(1).map(|s| s.as_bytes()));
+                        (path, args)
+                    };
+                match ulibc::spawn_with_stdio(path.as_bytes(), &argv, io[0], io[1], io[2]) {
+                    Ok(pid) => pids.push(pid),
+                    Err(error) => {
+                        spawn_error = Some(alloc::format!("sshl: spawn failed ({:?})\n", error))
+                    }
+                }
+                for fd in opened {
+                    let _ = ulibc::close(fd);
+                }
+                if spawn_error.is_some() {
+                    break;
+                }
+            }
+            for (r, w) in pipes {
+                let _ = ulibc::close(r);
+                let _ = ulibc::close(w);
+            }
+            if let Some(error) = spawn_error {
+                for pid in &pids {
+                    let _ = ulibc::kill(*pid, 9);
+                }
+                for pid in pids {
+                    let _ = ulibc::waitpid(pid);
+                }
+                self.env.set("?", "127");
+                return Err(error);
+            }
+            self.fg_pid = pids.last().copied();
+            self.fg_pids = pids;
+            if let Some(pid) = self.fg_pid {
+                debug_log(&alloc::format!("[EXEC] pipeline fg pid={}", pid));
+            }
+            Ok(())
+        }
+
+        fn prepare_builtin_redirections(
+            &self,
+            redirections: &[super::parser::Redirection],
+        ) -> Result<
+            (
+                Option<sunlight_libc::Fd>,
+                alloc::vec::Vec<sunlight_libc::Fd>,
+            ),
+            alloc::string::String,
+        > {
+            use super::parser::{RedirectMode, Redirection};
+            use sunlight_libc as ulibc;
+            // A shell attached to tty_server can have its output delivered by
+            // IPC instead of fd 1. Keep implicit TTY descriptors as None and
+            // only open real files requested by the builtin's redirections.
+            let mut descriptors = [None; 3];
+            let mut opened = alloc::vec::Vec::new();
+            for redirection in redirections {
+                match redirection {
+                    Redirection::Open { fd, mode, path } => {
+                        let expanded_path = self.env.expand_token(path);
+                        let Some(path) = normalize_path(&self.cwd, &expanded_path) else {
+                            for fd in opened {
+                                let _ = ulibc::close(fd);
+                            }
+                            return Err(alloc::format!(
+                                "sshl: invalid redirection path: {}\n",
+                                expanded_path
+                            ));
+                        };
+                        let flags = match mode {
+                            RedirectMode::Read => ulibc::O_RDONLY,
+                            RedirectMode::Truncate => {
+                                ulibc::O_WRONLY | ulibc::O_CREAT | ulibc::O_TRUNC
+                            }
+                            RedirectMode::Append => {
+                                ulibc::O_WRONLY | ulibc::O_CREAT | ulibc::O_APPEND
+                            }
+                        };
+                        match ulibc::open_with_flags_mode(path.as_bytes(), flags, 0o644) {
+                            Ok(fd_value) => {
+                                opened.push(fd_value);
+                                descriptors[*fd as usize] = Some(fd_value);
+                            }
+                            Err(error) => {
+                                for fd in opened {
+                                    let _ = ulibc::close(fd);
+                                }
+                                return Err(alloc::format!(
+                                    "sshl: redirection open failed ({:?})\n",
+                                    error
+                                ));
+                            }
+                        }
+                    }
+                    Redirection::Dup { fd, source } => {
+                        descriptors[*fd as usize] = descriptors[*source as usize];
+                    }
+                }
+            }
+            Ok((descriptors[1], opened))
         }
 
         /// Search the colon-separated $PATH for `cmd`, probing each candidate
@@ -2679,6 +2942,18 @@ mod sunlight {
     static mut LONG_OUT_LEN: usize = 0;
     static mut LONG_OUT_ACTIVE: bool = false;
 
+    fn ulibc_write_long_out(len: usize) -> Result<(), sunlight_libc::Errno> {
+        ulibc_write_long_out_to(sunlight_libc::STDOUT, len)
+    }
+
+    fn ulibc_write_long_out_to(
+        fd: sunlight_libc::Fd,
+        len: usize,
+    ) -> Result<(), sunlight_libc::Errno> {
+        let bytes = unsafe { &LONG_OUT_BUF[..len.min(LONG_OUT_MAX)] };
+        sunlight_libc::write_all(fd, bytes)
+    }
+
     fn long_out_reset() {
         unsafe {
             LONG_OUT_LEN = 0;
@@ -3073,6 +3348,9 @@ mod sunlight {
                         }
                     }
                     shell.fg_pid = None;
+                    for child_pid in shell.fg_pids.drain(..) {
+                        let _ = sunlight_libc::waitpid(child_pid);
+                    }
                     shell.env.set("?", &alloc::format!("{}", code));
                     // Tell terminal to exit app mode, add separator, then show new prompt.
                     send_osc_app_done(service_cap, slave_cap, session_id, generation);
@@ -3161,11 +3439,119 @@ mod sunlight {
         }
     }
 
+    fn is_pipeline_builtin(name: &str) -> bool {
+        matches!(
+            name,
+            "cd" | "z"
+                | "pwd"
+                | "useradd"
+                | "userdel"
+                | "groups"
+                | "chmod"
+                | "chown"
+                | "env"
+                | "export"
+                | "unset"
+                | "sysfetch"
+                | "hostnamectl"
+                | "uptime"
+                | "tzctl"
+                | "localectl"
+                | "help"
+                | "clear"
+                | "exit"
+        )
+    }
+
+    fn run_pipeline_builtin(raw: &[*const u8]) -> ! {
+        use sunlight_libc as ulibc;
+        long_out_reset();
+        let mut shell = Shell::new();
+        shell.uid = ulibc::getuid() as u32;
+        shell.gid = ulibc::getgid() as u32;
+        shell.load_user_by_uid(shell.uid);
+        shell.init_env();
+        let mut cwd = [0u8; ulibc::MAX_PATH];
+        if let Ok(len) = ulibc::getcwd(&mut cwd) {
+            if let Ok(path) = core::str::from_utf8(&cwd[..len]) {
+                shell.cwd = alloc::string::String::from(path);
+            }
+        }
+        if raw.is_empty() {
+            ulibc::exit(127);
+        }
+        let mut owned = alloc::vec::Vec::with_capacity(raw.len());
+        for ptr in raw {
+            let len = unsafe { ulibc::crt0::cstr_len(*ptr, ulibc::MAX_PATH) };
+            let Ok(arg) = core::str::from_utf8(unsafe { core::slice::from_raw_parts(*ptr, len) })
+            else {
+                ulibc::exit(2);
+            };
+            owned.push(alloc::string::String::from(arg));
+        }
+        let name = owned[0].as_str();
+        if !is_pipeline_builtin(name) {
+            ulibc::exit(127);
+        }
+        let args: alloc::vec::Vec<&str> = owned.iter().skip(1).map(|s| s.as_str()).collect();
+        let output: &[u8] = match name {
+            "cd" => shell.cmd_cd(&args),
+            "z" => shell.cmd_z(&args),
+            "pwd" => shell.cmd_pwd(),
+            "useradd" => shell.cmd_useradd(&args),
+            "userdel" => shell.cmd_userdel(&args),
+            "groups" => shell.cmd_groups(&args),
+            "chmod" => shell.cmd_chmod(&args),
+            "chown" => shell.cmd_chown(&args),
+            "env" => shell.cmd_env(),
+            "export" => shell.cmd_export(&args),
+            "unset" => shell.cmd_unset(&args),
+            "sysfetch" => shell.cmd_sysfetch(),
+            "hostnamectl" => shell.cmd_hostnamectl(),
+            "uptime" => shell.cmd_uptime(),
+            "tzctl" => shell.cmd_tzctl(&args),
+            "localectl" => shell.cmd_localectl(&args),
+            "help" => b"Builtins: cd, pwd, useradd, userdel, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, tzctl, localectl, help, clear, exit\n",
+            "clear" => b"\x1b[2J\x1b[H",
+            "exit" => b"",
+            _ => b"",
+        };
+        let is_long = unsafe { LONG_OUT_ACTIVE };
+        let result = if is_long {
+            let len = unsafe { LONG_OUT_LEN };
+            let bytes = unsafe { &LONG_OUT_BUF[..len] };
+            ulibc::write_all(ulibc::STDOUT, bytes)
+        } else {
+            ulibc::write_all(ulibc::STDOUT, output)
+        };
+        let diagnostic = if is_long {
+            let len = unsafe { LONG_OUT_LEN };
+            unsafe { &LONG_OUT_BUF[..len] }
+        } else {
+            output
+        };
+        let failed_builtin =
+            diagnostic.starts_with(name.as_bytes()) && diagnostic.get(name.len()) == Some(&b':');
+        ulibc::exit(if result.is_err() {
+            1
+        } else if failed_builtin {
+            1
+        } else {
+            0
+        });
+    }
+
     fn start_from_argv(argc: u64, argv: *const *const u8, envp: *const *const u8) -> ! {
         sunlight_libc::env::init(envp);
 
-        let mut raw = [core::ptr::null::<u8>(); 8];
+        let mut raw = [core::ptr::null::<u8>(); sunlight_libc::MAX_ARGS + 1];
         let raw_count = unsafe { sunlight_libc::crt0::collect_raw_args(argc, argv, &mut raw) };
+        if raw_count >= 3 {
+            let len = unsafe { sunlight_libc::crt0::cstr_len(raw[1], 64) };
+            if unsafe { core::slice::from_raw_parts(raw[1], len) } == b"--pipeline-builtin" {
+                run_pipeline_builtin(&raw[2..raw_count]);
+            }
+        }
         let mut shell_id = 0u64;
         let mut pty_session = None;
         let mut pty_generation = None;
@@ -3304,9 +3690,24 @@ mod sunlight {
                 // We are the child's parent: reap it to get the real exit code
                 // (tty_server only knows it died, not the code).
                 let mut code = msg.words[0];
-                if let Some(pid) = shell.fg_pid.take() {
-                    if let Ok(Some(c)) = sunlight_libc::try_waitpid(pid) {
-                        code = c;
+                let final_pid = shell.fg_pid.take();
+                let mut final_reaped = false;
+                for child_pid in shell.fg_pids.drain(..) {
+                    let status = match sunlight_libc::try_waitpid(child_pid) {
+                        Ok(Some(status)) => Ok(status),
+                        Ok(None) => sunlight_libc::waitpid(child_pid),
+                        Err(error) => Err(error),
+                    };
+                    if Some(child_pid) == final_pid {
+                        if let Ok(status) = status {
+                            code = status;
+                        }
+                        final_reaped = true;
+                    }
+                }
+                if let Some(pid) = final_pid.filter(|_| !final_reaped) {
+                    if let Ok(status) = sunlight_libc::waitpid(pid) {
+                        code = status;
                     }
                 }
                 shell.env.set("?", &alloc::format!("{}", code));

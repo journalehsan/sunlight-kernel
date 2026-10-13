@@ -109,7 +109,10 @@ pub fn munmap(addr: *mut u8, length: usize) -> Result<(), Errno> {
 // ── C ABI ───────────────────────────────────────────────────────────────────
 // Freestanding only: do not interpose host libc mmap/munmap in unit tests.
 
-#[cfg_attr(any(target_os = "none", target_os = "sunlightos"), export_name = "mmap")]
+#[cfg_attr(
+    any(target_os = "none", target_os = "sunlightos"),
+    export_name = "mmap"
+)]
 pub unsafe extern "C" fn c_mmap(
     addr: *mut u8,
     length: usize,
@@ -228,7 +231,10 @@ mod tests {
     }
 }
 
-#[cfg_attr(any(target_os = "none", target_os = "sunlightos"), export_name = "munmap")]
+#[cfg_attr(
+    any(target_os = "none", target_os = "sunlightos"),
+    export_name = "munmap"
+)]
 pub unsafe extern "C" fn c_munmap(addr: *mut u8, length: usize) -> i32 {
     match munmap(addr, length) {
         Ok(()) => 0,

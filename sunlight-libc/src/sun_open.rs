@@ -256,7 +256,10 @@ mod tests {
         for path in [b"/root/Documents/Test PDF.pdf".as_slice(), b"manual.PDF"] {
             let mime = mime_from_path(path);
             assert_eq!(mime, b"application/pdf");
-            assert_eq!(super::app_for_mime(mime), Some(b"/bin/sunlight-docview".as_slice()));
+            assert_eq!(
+                super::app_for_mime(mime),
+                Some(b"/bin/sunlight-docview".as_slice())
+            );
         }
     }
 

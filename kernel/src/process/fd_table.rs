@@ -1,5 +1,5 @@
-use core::num::NonZeroU32;
 use alloc::vec::Vec;
+use core::num::NonZeroU32;
 use spin::Mutex;
 
 #[cfg(test)]
@@ -232,7 +232,10 @@ static DESCRIPTIONS: Mutex<Vec<Option<OpenDescription>>> = Mutex::new(Vec::new()
 
 fn new_description(flags: u32) -> u32 {
     let mut pool = DESCRIPTIONS.lock();
-    let item = OpenDescription { status: flags & !0x0008_0000, refs: 1 };
+    let item = OpenDescription {
+        status: flags & !0x0008_0000,
+        refs: 1,
+    };
     if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
         *slot = Some(item);
         return idx as u32;
@@ -243,7 +246,10 @@ fn new_description(flags: u32) -> u32 {
 }
 
 fn retain_description(idx: u32) {
-    DESCRIPTIONS.lock()[idx as usize].as_mut().expect("live description").refs += 1;
+    DESCRIPTIONS.lock()[idx as usize]
+        .as_mut()
+        .expect("live description")
+        .refs += 1;
 }
 
 fn release_description(idx: u32) {
@@ -448,23 +454,26 @@ impl FdTable {
     }
 
     pub fn contains_eventfd(&self, idx: u32) -> bool {
-        self.entries.iter().flatten().any(|entry| {
-            entry.handle.is_eventfd() && entry.handle.eventfd_index() == idx
-        })
+        self.entries
+            .iter()
+            .flatten()
+            .any(|entry| entry.handle.is_eventfd() && entry.handle.eventfd_index() == idx)
     }
 
     pub fn contains_tty_stdin_tab(&self, tab: usize) -> bool {
-        self.entries.iter().flatten().any(|entry| {
-            entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab
-        })
+        self.entries
+            .iter()
+            .flatten()
+            .any(|entry| entry.handle.is_tty_stdin() && entry.handle.tty_tab() as usize == tab)
     }
 
     pub fn contains_pipe_ring(&self, ring: u32) -> bool {
         self.entries.iter().flatten().any(|entry| {
             let handle = entry.handle;
             handle.is_pipe() && handle.pipe_index() == ring
-                || handle.is_socket() && super::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
-                    .is_some_and(|(read, write)| read == ring || write == ring)
+                || handle.is_socket()
+                    && super::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
+                        .is_some_and(|(read, write)| read == ring || write == ring)
         })
     }
 
@@ -478,12 +487,19 @@ impl FdTable {
 
     pub fn status_flags(&self, fd: i32) -> Option<u32> {
         let idx = self.get(fd)?.description;
-        DESCRIPTIONS.lock().get(idx as usize)?.as_ref().map(|item| item.status)
+        DESCRIPTIONS
+            .lock()
+            .get(idx as usize)?
+            .as_ref()
+            .map(|item| item.status)
     }
 
     pub fn set_status_flags(&self, fd: i32, flags: u32) -> Result<(), FdError> {
         let idx = self.get(fd).ok_or(FdError::InvalidFd)?.description;
-        DESCRIPTIONS.lock()[idx as usize].as_mut().expect("live description").status = flags & !0x0008_0000;
+        DESCRIPTIONS.lock()[idx as usize]
+            .as_mut()
+            .expect("live description")
+            .status = flags & !0x0008_0000;
         Ok(())
     }
 
@@ -508,9 +524,15 @@ impl FdTable {
             release_eventfd(displaced.handle);
             release_description(displaced.description);
             if displaced.handle.is_pipe() {
-                super::pipe::pipe_close_end(displaced.handle.pipe_index(), displaced.handle.pipe_is_write());
+                super::pipe::pipe_close_end(
+                    displaced.handle.pipe_index(),
+                    displaced.handle.pipe_is_write(),
+                );
             } else if displaced.handle.is_socket() {
-                super::pipe::socket_close(displaced.handle.socket_index(), displaced.handle.socket_endpoint());
+                super::pipe::socket_close(
+                    displaced.handle.socket_index(),
+                    displaced.handle.socket_endpoint(),
+                );
             }
         }
         self.entries[fd as usize] = Some(FileDescriptor {
@@ -549,7 +571,14 @@ impl FdTable {
         if cloexec {
             flags |= O_CLOEXEC;
         }
-        self.open_from(min_fd, orig.handle, orig.rights, flags, orig.offset, Some(orig.description))
+        self.open_from(
+            min_fd,
+            orig.handle,
+            orig.rights,
+            flags,
+            orig.offset,
+            Some(orig.description),
+        )
     }
 
     /// Duplicate `old_fd` onto `new_fd`.
