@@ -1,5 +1,6 @@
 extern crate alloc;
 
+use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
@@ -16,6 +17,7 @@ pub enum Quote {
 pub struct WordPart {
     pub text: String,
     pub quote: Quote,
+    pub substitution: Option<Rc<crate::script_parser::Command>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -25,12 +27,17 @@ pub struct Word {
 
 impl Word {
     pub(crate) fn push(&mut self, ch: char, quote: Quote) {
-        if let Some(part) = self.parts.last_mut().filter(|p| p.quote == quote) {
+        if let Some(part) = self
+            .parts
+            .last_mut()
+            .filter(|p| p.quote == quote && p.substitution.is_none())
+        {
             part.text.push(ch);
         } else {
             self.parts.push(WordPart {
                 text: ch.into(),
                 quote,
+                substitution: None,
             });
         }
     }
@@ -38,6 +45,7 @@ impl Word {
         self.parts.push(WordPart {
             text: String::new(),
             quote,
+            substitution: None,
         });
     }
 }
@@ -46,7 +54,8 @@ impl From<&str> for Word {
         Self {
             parts: alloc::vec![WordPart {
                 text: text.into(),
-                quote: Quote::Unquoted
+                quote: Quote::Unquoted,
+                substitution: None,
             }],
         }
     }
@@ -80,6 +89,8 @@ pub enum RedirectMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
     pub message: &'static str,
+    pub offset: usize,
+    pub incomplete: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,7 +109,11 @@ pub(crate) enum Token {
 
 pub fn parse_line_checked(line: &str) -> Result<Option<AstNode>, ParseError> {
     use crate::script_parser::CommandKind;
-    let tree = crate::script_parser::parse(line).map_err(|e| ParseError { message: e.message })?;
+    let tree = crate::script_parser::parse(line).map_err(|e| ParseError {
+        message: e.message,
+        offset: e.offset,
+        incomplete: e.incomplete,
+    })?;
     let CommandKind::SequentialList(mut commands) = tree.kind else {
         unreachable!()
     };
@@ -108,6 +123,8 @@ pub fn parse_line_checked(line: &str) -> Result<Option<AstNode>, ParseError> {
     if commands.len() != 1 {
         return Err(ParseError {
             message: "interactive command lists require script mode",
+            offset: 0,
+            incomplete: false,
         });
     }
     let command = commands.pop().unwrap();
@@ -119,6 +136,8 @@ pub fn parse_line_checked(line: &str) -> Result<Option<AstNode>, ParseError> {
                 let CommandKind::SimpleCommand(command) = stage.kind else {
                     return Err(ParseError {
                         message: "compound pipeline stages require script mode",
+                        offset: 0,
+                        incomplete: false,
                     });
                 };
                 commands.push(command);
@@ -128,6 +147,8 @@ pub fn parse_line_checked(line: &str) -> Result<Option<AstNode>, ParseError> {
         _ => {
             return Err(ParseError {
                 message: "compound commands require script mode",
+                offset: 0,
+                incomplete: false,
             })
         }
     };
@@ -137,6 +158,8 @@ pub fn parse_line_checked(line: &str) -> Result<Option<AstNode>, ParseError> {
     } {
         return Err(ParseError {
             message: "redirection-only commands require script mode",
+            offset: 0,
+            incomplete: false,
         });
     }
     Ok(Some(result))
@@ -150,9 +173,18 @@ pub fn parse_line(line: &str) -> Option<AstNode> {
 
 /// One lexer for interactive commands and scripts. Offsets are UTF-8 byte offsets.
 pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError> {
-    if line.len() > 65536 {
+    lex_region(line, 0, false).map(|(tokens, _)| tokens)
+}
+fn lex_region(
+    line: &str,
+    depth: usize,
+    substitution: bool,
+) -> Result<(Vec<(Token, usize)>, usize), ParseError> {
+    if line.len() > 65536 || depth > crate::script_parser::MAX_NESTING {
         return Err(ParseError {
-            message: "source exceeds 64 KiB limit",
+            message: "source or substitution nesting limit exceeded",
+            offset: 0,
+            incomplete: false,
         });
     }
     let mut out = Vec::new();
@@ -164,6 +196,8 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
         if out.len() >= 8192 {
             return Err(ParseError {
                 message: "token limit exceeded",
+                offset: pos,
+                incomplete: false,
             });
         }
         if let Some(q) = quote {
@@ -179,6 +213,8 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
                     }
                     _ => word.push(ch, Quote::Double),
                 }
+            } else if q == '"' && ch == '$' && chars.peek().is_some_and(|(_, c)| *c == '(') {
+                read_substitution(line, &mut chars, &mut word, pos, Quote::Double, depth)?;
             } else {
                 word.push(
                     ch,
@@ -192,6 +228,10 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
             continue;
         }
         match ch {
+            '$' if chars.peek().is_some_and(|(_, c)| *c == '(') => {
+                start.get_or_insert(pos);
+                read_substitution(line, &mut chars, &mut word, pos, Quote::Unquoted, depth)?;
+            }
             '\'' | '"' => {
                 start.get_or_insert(pos);
                 quote = Some(ch);
@@ -204,6 +244,8 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
             '\\' => {
                 let (_, next) = chars.next().ok_or(ParseError {
                     message: "trailing escape",
+                    offset: line.len(),
+                    incomplete: true,
                 })?;
                 if next != '\n' {
                     start.get_or_insert(pos);
@@ -234,6 +276,8 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
                     _ => {
                         return Err(ParseError {
                             message: "background execution is unsupported",
+                            offset: pos,
+                            incomplete: false,
                         })
                     }
                 };
@@ -249,6 +293,19 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
                     },
                     pos,
                 ));
+                if ch == ')' && substitution {
+                    match crate::script_parser::substitution_tree(&out, pos + 1) {
+                        Ok(Some(_)) => return Ok((out, pos + 1)),
+                        Ok(None) => {}
+                        Err(e) => {
+                            return Err(ParseError {
+                                message: e.message,
+                                offset: e.offset,
+                                incomplete: e.incomplete,
+                            })
+                        }
+                    }
+                }
             }
             '>' | '<' => {
                 let mut fd = if ch == '<' { 0 } else { 1 };
@@ -259,6 +316,8 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
                 {
                     fd = word.parts[0].text.parse().map_err(|_| ParseError {
                         message: "invalid descriptor",
+                        offset: pos,
+                        incomplete: false,
                     })?;
                     word = Word::default();
                     start = None;
@@ -266,6 +325,8 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
                 if fd > 2 {
                     return Err(ParseError {
                         message: "only descriptors 0, 1, and 2 are supported",
+                        offset: pos,
+                        incomplete: false,
                     });
                 }
                 flush_spanned(&mut out, &mut word, &mut start);
@@ -277,10 +338,14 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
                     }
                     let source = number.parse::<u8>().map_err(|_| ParseError {
                         message: "descriptor duplication requires a descriptor number",
+                        offset: pos,
+                        incomplete: false,
                     })?;
                     if source > 2 {
                         return Err(ParseError {
                             message: "only descriptors 0, 1, and 2 are supported",
+                            offset: pos,
+                            incomplete: false,
                         });
                     }
                     out.push((Token::Dup(fd, source), pos));
@@ -288,6 +353,8 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
                     if ch == '<' {
                         return Err(ParseError {
                             message: "here documents are not implemented",
+                            offset: pos,
+                            incomplete: false,
                         });
                     }
                     chars.next();
@@ -309,6 +376,8 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
             '`' => {
                 return Err(ParseError {
                     message: "backtick substitution is unsupported",
+                    offset: pos,
+                    incomplete: false,
                 })
             }
             _ => {
@@ -320,15 +389,71 @@ pub(crate) fn lex_spanned(line: &str) -> Result<Vec<(Token, usize)>, ParseError>
     if quote.is_some() {
         return Err(ParseError {
             message: "unterminated quote",
+            offset: line.len(),
+            incomplete: true,
         });
     }
     flush_spanned(&mut out, &mut word, &mut start);
     if out.len() > 8192 {
         return Err(ParseError {
             message: "token limit exceeded",
+            offset: 0,
+            incomplete: false,
         });
     }
-    Ok(out)
+    if substitution {
+        return Err(ParseError {
+            message: "unterminated command substitution",
+            offset: line.len(),
+            incomplete: true,
+        });
+    }
+    Ok((out, line.len()))
+}
+fn read_substitution(
+    line: &str,
+    chars: &mut core::iter::Peekable<core::str::CharIndices<'_>>,
+    word: &mut Word,
+    pos: usize,
+    quote: Quote,
+    depth: usize,
+) -> Result<(), ParseError> {
+    chars.next(); // opening parenthesis
+    let begin = pos + 2;
+    if line[begin..].starts_with('(') {
+        return Err(ParseError {
+            message: "arithmetic expansion is unsupported",
+            offset: pos,
+            incomplete: false,
+        });
+    }
+    let (tokens, consumed) = lex_region(&line[begin..], depth + 1, true).map_err(|mut e| {
+        e.offset += begin;
+        e
+    })?;
+    let tree = crate::script_parser::substitution_tree(&tokens, consumed)
+        .map_err(|e| ParseError {
+            message: e.message,
+            offset: begin + e.offset,
+            incomplete: e.incomplete,
+        })?
+        .ok_or(ParseError {
+            message: "unterminated command substitution",
+            offset: begin,
+            incomplete: true,
+        })?;
+    while chars
+        .peek()
+        .is_some_and(|(index, _)| *index < begin + consumed)
+    {
+        chars.next();
+    }
+    word.parts.push(WordPart {
+        text: String::new(),
+        quote,
+        substitution: Some(Rc::new(tree)),
+    });
+    Ok(())
 }
 fn flush_spanned(out: &mut Vec<(Token, usize)>, word: &mut Word, start: &mut Option<usize>) {
     if let Some(pos) = start.take() {

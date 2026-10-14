@@ -1,9 +1,10 @@
 # Shell Phase 2.1: environment delivery boundary
 
-Date: October 14, 2026. This delivery implements Stage A and its focused
-resource/regression work. Stages B–F have not been implemented. Command
-substitution, arithmetic expansion, pathname expansion, and compound pipeline
-stages still produce the existing explicit unsupported-syntax diagnostics.
+Date: October 14, 2026. The current delivery adds Stage B native `$(...)`
+command substitution to Stage A and the Phase 2.1A liveness/reclaim repairs.
+See "Phase 2.1B" at the end for architecture, limits and current validation.
+Arithmetic expansion, pathname expansion and compound pipeline stages remain
+unsupported. Earlier sections retain their historical validation boundaries.
 
 The October 14 independent audit below reproduces the retained pre-repair
 image's intermittent output deadlock and identifies an additional memory-
@@ -1163,3 +1164,233 @@ allowance, and eager allocation under pressure can return ENOMEM earlier.
 Unfiltered host libc and the native TTY-server host panic-handler conflict
 remain outside the claimed host passes. Command substitution remains deferred;
 this change implements only the liveness investigation, repair and regressions.
+
+
+## Phase 2.1B: native POSIX command substitution
+
+October 14, 2026. This section describes the current substitution delivery;
+Stage A/2.1A results above are historical and are not counted as new passes.
+
+### Parser and expansion architecture
+
+`WordPart` carries an optional `Rc<Command>` alongside its quote provenance.
+The shared lexer enters a fresh lexical region after `$(`. At candidate
+unquoted right parentheses it asks the existing recursive-descent grammar
+whether the command list is complete. The grammar distinguishes a substitution
+terminator from a case-pattern terminator, function header or subshell close.
+Quoted/escaped parentheses and comments remain lexical content. Nested
+substitutions recursively enter the same bounded lexer; there is no regular
+expression or parenthesis-depth counter. Parsing rejects malformed contents
+before executing any outer command and translates nested byte offsets back
+into the containing source for line/column diagnostics. `$((` produces the
+separate arithmetic-unsupported diagnostic. Single quotes and escaped dollars
+suppress substitution; double quotes allow it with independently parsed quotes
+inside the nested command list. Multiline content is supported. Backticks and
+here-documents remain unsupported.
+
+`script::expand` invokes `expand_word_with` with a runtime-backed AST callback.
+Captured characters enter the existing atom/IFS/quote-removal machinery directly;
+they are never reparsed for dollars, quotes, backticks or escapes. Unquoted
+output is field-split using the current IFS. Quoted empty results retain an
+empty argument. Assignment values and redirection operands are scalar. Every
+trailing LF is removed after capture; embedded LFs and carriage returns remain.
+Generated wildcard characters remain literal in this phase; literal unquoted
+pathname patterns retain the explicit unsupported diagnostic. This is a
+purposeful pathname-expansion limitation, not a glob implementation. Case
+patterns still honor their actual quote masks.
+
+### Isolation and descriptor capture
+
+Substitution runs the shared `run` interpreter with an isolated context. It
+copies bounded variable values/attributes, positional parameters and cwd once
+for that scope; function bodies share their existing `Rc` ASTs. It does not
+spawn a second shell merely to interpret the substitution. Variables, function
+definitions, positional changes and `cd` stay local, while filesystem effects
+remain observable. Exported values and temporary prefixes reach external
+children through the existing validated native environment/spawn path. Native
+external execution temporarily changes the process cwd for spawn and restores
+it on completion/error. This remains the shell's existing single-threaded
+execution model; no interpreter/collector worker thread is introduced.
+
+`capture::Captures` assigns stack-scoped negative sink handles. Builtin writes
+append through the same bounded collector. Negative handles never cross spawn:
+the platform adapter maps each distinct referenced sink to an anonymous pipe.
+Nested stdout and explicitly redirected stderr can refer to different active
+collectors. Each external pipeline starts all stages first, drops the parent's
+write ends, then polls/drains all captured readers before reaping any child.
+Reads use a 4 KiB stack buffer and handle partial data, EOF, readiness wakeups
+and transient EAGAIN. The existing writer helpers retain partial-write/EPIPE
+handling. Collectors use fixed three-entry readiness arrays rather than
+allocating on every read.
+
+Native syscall 159 exposes only bounded pipe-reader readiness: 1–3 descriptors,
+POLLIN, and timeout 0 or -1. It validates caller-owned readable pipe handles
+and checked writable userspace memory. The readiness check and native waiter
+registration share the producer's scheduler lock. Pipe transitions wake the
+registered task; it rechecks on syscall restart with the original syscall
+number preserved. It uses the existing native park protocol and pipe readiness
+logic without attaching Linux state or altering process personality. Scheduler
+lock work is bounded to the small descriptor set; capture reads/allocations
+occur outside that lock. Host capture uses host poll through the same interpreter.
+
+Stderr follows the inherited descriptor unless an inner redirection remaps it.
+Assignment-only commands establish their redirections before RHS substitutions,
+so `v=$(echo err >&2) 2>file` writes the error to `file`. Regular command arguments
+expand before command redirections, matching the tested dash behavior.
+Assignment-only status is the last substitution's exit status, including failed
+execution and inner redirection; an outer command such as `echo` supplies its
+own status. Nonzero substitution status alone does not abort expansion.
+
+On collector failure, adapters close readers, terminate every directly launched
+pipeline stage and reap them, then return an explicit expansion error. Every
+scope ends/pops its collector on interpreter failure. Redirection scopes and
+capture pipes close through their existing cleanup/owned-descriptor paths.
+There is no wait-before-drain dependency, temporary capture file or silent
+truncation. Spawn credentials/capabilities and trusted executable identity
+remain in the existing authorized native launch path; no security allowlist is
+broadened. The page-reclaim budget and existing PTY/IPC repairs are unchanged.
+
+### Resource policy and compatibility boundaries
+
+| Resource | Limit / policy |
+| --- | --- |
+| Raw output per substitution | 128 KiB, including trailing LF bytes before trimming |
+| Aggregate active captured output | 256 KiB across nested scopes |
+| Runtime substitution nesting | 16 scopes, independent of bounded function/source recursion |
+| Lexical substitution nesting | 32 levels, existing 64 KiB source / 8192 token limits |
+| Final expanded word / variable | Existing 16 KiB byte limit; quoted empty anchors do not consume output bytes |
+| Native process arguments | Existing 15-entry / 1024-byte arena limits still apply |
+| Capture reservation | Fallible Vec reservation, explicit status 2 on allocation/limit failure |
+| Embedded NUL | Reject the entire expansion with status 2; do not discard bytes |
+| Non-UTF-8 output | Reject the entire expansion with status 2 |
+
+Vec capacity can exceed populated bytes due to geometric growth; the byte
+limits bound contents, with collector capacity below twice those limits under
+the current growth policy. Parser AST/context/BTree allocations and existing
+String/builtin formatting are still not fully fallible. This is bounded capture,
+not a claim of complete shell OOM recovery. The tests exercise an existing
+interpreter/context successfully after overflow, NUL and word-limit errors.
+
+A failed inner redirection retains SunlightOS's established status 1; dash uses
+2. The differential harness asserts both exact results and stderr presence as
+one documented difference. Syntax/command-not-found/open diagnostic wording
+is platform-specific; those cases compare stdout/status and stderr presence.
+Stable substitution cases compare stdout, stderr and exit status exactly.
+
+### Validation and retained failures
+
+Final-source shell gates passed once each with 1, 2 and 4 CPUs. Build-plus-boot
+durations were 109.79, 115.28 and 139.93 seconds; no test deadlines were increased.
+The final matrix summary is `target/substitution-final-results.json`, with
+per-phase serial and driver logs under `target/substitution-final-*.log`.
+
+| Check | Current result |
+| --- | --- |
+| Shell host tests | 48 passed: 24 library and 24 binary |
+| Dash differential | 83 matching cases, including 51 substitution cases; 1 explicit redirection-status difference |
+| Spawn environment validator | 3 passed |
+| Independent descriptor harness | 13 passed; host adapters do not establish native I/O behavior |
+| Kernel check | Passed |
+| Final shell-phase2 | 1 CPU PASS; 2 CPUs PASS; 4 CPUs PASS |
+| Dedicated shell-pty-liveness | 1 CPU PASS; 2 CPUs PASS; 4 CPUs PASS |
+| IPC foundation/security/lifecycle | 2 CPUs PASS |
+| SWAP-1 pressure and reclaim | 4 CPUs PASS |
+| Helios I/O and thread startup | 2 CPUs PASS for each |
+| Audio stream/input initialization and test-tone DMA | 2 CPUs PASS; no capture-frame or audible-output claim |
+| Security with allocation rollback injection | 2 CPUs PASS, including injected mmap/SHM rollback and IPC SMP stress |
+
+Host artifacts are `target/substitution-host-tests.log` and the differential
+command uses an extracted dash at `/tmp/sshl-dash-reference/usr/bin/dash`.
+The first one-CPU boot (`target/substitution-smp1.log`) failed the first
+substitution output assertion and logged `Unknown syscall 0`: the initial new
+native readiness handler rewound the syscall instruction but returned zero
+instead of the original syscall number. The focused fix uses the existing
+native pipe restart convention. This failed boot is retained and is not counted
+as a pass. The next one-CPU development boot
+(`target/substitution-smp1-restart.log`) reached the wc/redirection check and
+failed because the test expected `6\n`, while native wc emitted seven spaces
+before `6\n`. Quoted capture preserved those spaces correctly; the test now
+checks the native utility's exact output. A subsequent development one-CPU gate
+passed. Final gates rebuild from the corrected source and run the additional
+compound-error routing/environment probes.
+
+Guest additions verify nested/single/double quoting, trimming and embedded LFs,
+empty output and splitting, functions/control flow/case grammar, cwd/variable
+isolation, assignment/pipeline/nested statuses, missing commands, failed opens,
+grep/wc, stderr and redirection targets. Native capture checks exact 8192-byte
+A–W output through 257-byte producer writes, two active 8192-byte stdout/stderr
+sinks, exactly 131072 trailing LF bytes, a 1 MiB producer with an early 17-byte
+consumer, explicit overflow/NUL/word-limit failures, poll argument validation,
+100 repeated substitutions in one interpreter with heap/descriptor checks,
+and post-error recovery. Host tests additionally verify the aggregate bound
+using three nested 96 KiB LF producers: each remains under the per-capture cap,
+while combined output exceeds 256 KiB and fails without preventing a subsequent
+successful substitution. This aggregate-overflow case has host evidence only.
+PTY tests check direct/nested substitution, an 8192-byte
+pipeline count, assignment status, overflow recovery and subsequent input.
+Existing Stage A environment security, repeated process/scope, full PTY/live
+output workloads remain part of the same gate.
+
+Reproduce the focused checks with:
+
+```sh
+cargo test -p sunshell --no-default-features --features std --target x86_64-unknown-linux-gnu --offline
+cargo build -p sunshell --no-default-features --features std --target x86_64-unknown-linux-gnu --offline
+SSHL_REFERENCE_SHELL=/tmp/sshl-dash-reference/usr/bin/dash python3 tools/test_shell_phase2_host.py
+# Repeat with SUNLIGHT_TEST_CPUS=2 and 4 for both shell gates.
+SUNLIGHT_TEST_CPUS=1 bash tools/test.sh shell-phase2
+SUNLIGHT_TEST_CPUS=1 bash tools/test.sh shell-pty-liveness
+SUNLIGHT_TEST_CPUS=2 bash tools/test.sh phase2.6
+SUNLIGHT_TEST_CPUS=2 bash tools/test.sh phase_sec
+SUNLIGHT_TEST_CPUS=4 bash tools/test.sh swap1
+SUNLIGHT_TEST_CPUS=2 bash tools/test.sh helios-io-probe
+SUNLIGHT_TEST_CPUS=2 bash tools/test.sh helios-thread-probe
+SUNLIGHT_TEST_CPUS=2 bash tools/test.sh audio
+```
+
+Use any locally installed dash for the reference; the `/tmp` path identifies
+this run's extracted Debian dash 0.5.12 reference, not a repository dependency.
+No generated images or serial logs are added to source control. The original
+pre-existing workspace version changes are left intact.
+
+The final matrix contains 12 passing gates. The allocation-injection run
+records `[MM-2A] injected mmap/SHM allocation rollback: OK`, thread/address-space
+lifecycle, capability checks and 64 IPC SMP stress iterations. Dedicated PTY
+gates each verify streams through 1 MiB, partial/backpressured transfers,
+terminal blocking input, EOF and early closure. Audio establishes initialized
+input/output streams and test-tone DMA progress; it does not establish recorded
+capture frames or human-audible output. Kernel check and `git diff --check` pass.
+The unrelated historical Phase 1.5 `sshl6` authorization blocker and unfiltered
+libc-suite gaps are not reclassified as passes by this delivery.
+
+### Changed components
+
+| Component | Files |
+| --- | --- |
+| Shared language/capture | `sunshell/src/parser.rs`, `script_parser.rs`, `expansion.rs`, `script.rs`, new `capture.rs`, `lib.rs` |
+| Platform execution and interactive preparation | `sunshell/src/host_script.rs`, `native_script.rs`, `exec.rs`, `main.rs` |
+| Native pipe readiness / park wakeup | `kernel/src/arch/x86_64/syscall.rs`, `kernel/src/process/mod.rs`, `kernel/src/sched/mod.rs` |
+| Libc ABI | `sunlight-libc/src/lib.rs`, `sunlight-libc/src/sys.rs` |
+| Regression tests | `sunshell/src/native_tests.rs`, `tools/test_shell_phase2_host.py`, `tools/tests/shell_phase2.expected` |
+| Documentation | this report and `docs/shell/phase2-posix-scripting.md` |
+
+### Remaining Stage C and limitations
+
+Compound commands and functions work inside a substitution command list.
+Function/scripting-builtin/compound *pipeline stages* remain the existing Stage C
+transport requirement; this phase supports the existing native simple pipelines.
+Native interactive outer command lists/compound grammar and the host development
+REPL retain their earlier entry-point limitations; scripts and `-c` use the full
+shared interpreter, and native interactive words use execution-aware preparation.
+
+Overflow cancellation covers the directly spawned pipeline children. This phase
+does not implement process-group cancellation of arbitrary grandchildren,
+signal-backed traps, interactive Ctrl-C forwarding during synchronous expansion,
+job control, arithmetic expansion or pathname expansion. PTY input forwarding
+to stdin-reading producers, sustained inherited stderr during synchronous
+interactive expansion and session-disconnect teardown are not established by
+the prompt/recovery tests. Infinite output-free
+commands retain normal shell wait behavior; byte limits are not execution
+timeouts. Those signal/session teardown cases need separate foreground/PTY
+integration gates. Continue with Stage C compound/function pipeline context
+transport and foreground cancellation, then add later expansion stages separately.

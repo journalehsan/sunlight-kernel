@@ -1887,6 +1887,16 @@ impl Scheduler {
         request_park_after_sysret();
     }
 
+    pub fn block_current_native_pipe_poll(&mut self) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        self.processes[idx].native_pipe_poll_wait = true;
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+        request_park_after_sysret();
+    }
+
     /// The failed write and registration are serialized under SCHEDULER.
     pub fn block_current_tty_write(&mut self, tab: usize) {
         let Some(idx) = self.current_process_index() else {
@@ -1993,7 +2003,9 @@ impl Scheduler {
                         crate::process::pipe::pipe_has_data_or_eof(key)
                     }
             });
-            if poll || ready || native_ready {
+            let native_poll = self.processes[idx].native_pipe_poll_wait
+                && self.processes[self.shared_process_index(idx)].fd_table.contains_pipe_ring(ring);
+            if poll || ready || native_ready || native_poll {
                 self.wake_linux_poll_index(idx);
             }
         }
@@ -2015,6 +2027,7 @@ impl Scheduler {
 
     fn wake_linux_poll_index(&mut self, idx: usize) {
         self.processes[idx].native_pipe_wait = None;
+        self.processes[idx].native_pipe_poll_wait = false;
         self.processes[idx].tty_write_wait = None;
         if let Some(state) = self.processes[idx].linux_state_mut() {
             state.poll_wake_tick = None;

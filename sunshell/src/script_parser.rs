@@ -66,8 +66,8 @@ impl SyntaxError {
 pub fn parse(source: &str) -> Result<Command, SyntaxError> {
     let tokens = lex_spanned(source).map_err(|e| SyntaxError {
         message: e.message,
-        offset: source.len(),
-        incomplete: matches!(e.message, "unterminated quote" | "trailing escape"),
+        offset: e.offset,
+        incomplete: e.incomplete,
     })?;
     let mut parser = Parser {
         tokens,
@@ -80,6 +80,32 @@ pub fn parse(source: &str) -> Result<Command, SyntaxError> {
         return Err(parser.error("unexpected token"));
     }
     Ok(tree)
+}
+/// The grammar decides whether a right parenthesis closes the substitution,
+/// a subshell, a function header or a case pattern. Incomplete case arms cause
+/// the lexer to continue; no parenthesis counter is used.
+pub(crate) fn substitution_tree(
+    tokens: &[(Token, usize)],
+    end: usize,
+) -> Result<Option<Command>, SyntaxError> {
+    let mut parser = Parser {
+        tokens: tokens.to_vec(),
+        index: 0,
+        depth: 0,
+        end,
+    };
+    let result = parser.list(&[], true);
+    match result {
+        Ok(tree)
+            if matches!(parser.peek(), Some(Token::RightParen))
+                && parser.index + 1 == tokens.len() =>
+        {
+            Ok(Some(tree))
+        }
+        Ok(_) => Ok(None),
+        Err(e) if e.incomplete => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 struct Parser {
     tokens: Vec<(Token, usize)>,
@@ -431,5 +457,28 @@ mod tests {
             assert!(parse(source).is_err(), "{source}");
         }
         assert!(parse(&"(".repeat(MAX_NESTING + 1)).is_err());
+    }
+    #[test]
+    fn substitution_boundaries_are_decided_by_the_grammar() {
+        for source in [
+            "echo \"$(echo \"$(echo nested)\")\"",
+            "echo $(case x in x) echo ')';; *) :;; esac)",
+            "echo $(f() { echo ')'; }; f)",
+            "echo $( (echo sub); echo end # ) comment\n)",
+            "echo '$(not parsed' \\\\$escaped",
+        ] {
+            assert!(parse(source).is_ok(), "{source}");
+        }
+        let source = "echo first\necho $(echo |)";
+        let error = parse(source).unwrap_err();
+        assert_eq!(error.location(source), (2, 14));
+        assert!(!error.incomplete);
+        assert!(parse("echo $(echo").unwrap_err().incomplete);
+        assert_eq!(
+            parse("echo $((1+2))").unwrap_err().message,
+            "arithmetic expansion is unsupported"
+        );
+        let source = format!("{}true{}", "echo $(".repeat(33), ")".repeat(33));
+        assert!(parse(&source).is_err());
     }
 }

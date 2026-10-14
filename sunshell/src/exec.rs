@@ -106,6 +106,18 @@ pub fn execute_with_environments(
     context: Option<&ShellExecutionContext>,
     environments: Option<&[ShellEnv]>,
 ) -> Result<i32, ExecError> {
+    execute_streaming(node, context, environments, None, || Ok(()))
+}
+
+/// Drain capture endpoints after every stage is started and before waiting.
+/// A collector error cancels and reaps all stages through the same failure path.
+pub fn execute_streaming(
+    node: &AstNode<String>,
+    context: Option<&ShellExecutionContext>,
+    environments: Option<&[ShellEnv]>,
+    io_override: Option<[i32; 3]>,
+    drain: impl FnOnce() -> io::Result<()>,
+) -> Result<i32, ExecError> {
     let commands: Vec<&SimpleCommand<String>> = match node {
         AstNode::Command(command) => vec![command],
         AstNode::Pipeline(commands) => commands.iter().collect(),
@@ -147,7 +159,7 @@ pub fn execute_with_environments(
             abort_pipeline!(io::Error::new(io::ErrorKind::InvalidInput, "empty command"));
         }
         let last = index + 1 == commands.len();
-        let base = context.map_or([0, 1, 2], |c| c.io);
+        let base = io_override.unwrap_or_else(|| context.map_or([0, 1, 2], |c| c.io));
         let mut io_map = base.map(IoTarget::Inherit);
         if index > 0 {
             io_map[0] = match pipes[index - 1].0.try_clone() {
@@ -275,6 +287,15 @@ pub fn execute_with_environments(
     // Close the parent's endpoint copies before waiting, so EOF and EPIPE are
     // driven solely by the process descriptors that actually use each end.
     drop(pipes);
+    if let Err(e) = drain() {
+        for child in &mut children {
+            let _ = child.kill();
+        }
+        for child in &mut children {
+            let _ = child.wait();
+        }
+        return Err(ExecError::Io(e));
+    }
     let mut final_status = 0;
     let child_count = children.len();
     for (index, child) in children.iter_mut().enumerate() {
@@ -287,7 +308,7 @@ pub fn execute_with_environments(
 }
 
 #[cfg(unix)]
-fn create_pipe() -> io::Result<(File, File)> {
+pub(crate) fn create_pipe() -> io::Result<(File, File)> {
     use std::os::fd::FromRawFd;
     unsafe extern "C" {
         fn pipe2(fds: *mut i32, flags: i32) -> i32;

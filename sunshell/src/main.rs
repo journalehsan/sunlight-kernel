@@ -149,7 +149,7 @@ fn main() {
         .into_owned();
     env.pid = std::process::id() as u64;
     let mut context = sunshell::script::ShellExecutionContext::new(env, cwd);
-    let mut runtime = host_script::HostRuntime;
+    let mut runtime = host_script::HostRuntime::default();
     let source = if args[1] == "-c" {
         if args.len() < 3 {
             eprintln!("sshl: -c requires a command");
@@ -527,7 +527,7 @@ mod sunlight {
             }
         }
 
-        fn run_line(&mut self) -> ([u8; MAX_OUT], usize) {
+        fn run_line(&mut self) -> ([u8; MAX_OUT], usize){
             // `= <expr>` evaluates an arithmetic expression in-process and prints
             // the result, e.g. `= 8 * 2` -> 16. Handled before tokenization so
             // the whole remainder of the line is treated as one expression.
@@ -558,14 +558,38 @@ mod sunlight {
                     return copy_out(message.as_bytes());
                 }
             };
+            if matches!(&ast, super::parser::AstNode::Command(command) if sunshell::script::assignment_only(command))
+            {
+                let mut context = sunshell::script::ShellExecutionContext::new(
+                    self.env.clone(),
+                    self.cwd.clone(),
+                );
+                let result = sunshell::script::execute(
+                    line_str,
+                    &mut context,
+                    &mut native_script::NativeRuntime::new(),
+                );
+                self.env = context.env;
+                return match result {
+                    Ok(sunshell::script::Flow::Status(status)) => {
+                        self.env.set("?", &alloc::format!("{status}"));
+                        ([0; MAX_OUT], 0)
+                    }
+                    Err(error) => {
+                        self.env.set("?", &alloc::format!("{}", error.status));
+                        copy_out(alloc::format!("sshl: {}\n", error.message).as_bytes())
+                    }
+                    _ => copy_out(b"sshl: invalid assignment command control flow\n"),
+                };
+            }
             let saved_env = self.env.clone();
             let (ast, temporary_names) = match &ast {
                 super::parser::AstNode::Command(command) => {
-                    let context = sunshell::script::ShellExecutionContext::new(
+                    let mut context = sunshell::script::ShellExecutionContext::new(
                         self.env.clone(),
                         self.cwd.clone(),
                     );
-                    let prepared = match sunshell::script::prepare_arguments(command, &context) {
+                    let prepared = match sunshell::script::prepare_arguments(command, &mut context, &mut native_script::NativeRuntime::new()) {
                         Ok(prepared) => prepared,
                         Err(error) => {
                             self.env.set("?", "2");
@@ -575,18 +599,24 @@ mod sunlight {
                         }
                     };
                     self.env = prepared.env;
-                    // Redirection operands expand in the assignment environment.
-                    let redirects = super::parser::AstNode::Command(super::parser::SimpleCommand {
-                        argv: alloc::vec::Vec::new(),
-                        redirections: command.redirections.clone(),
-                    });
-                    let ast = super::expansion::expand_ast(&redirects, &self.env).map(|node| {
-                        let super::parser::AstNode::Command(mut command) = node else {
-                            unreachable!()
-                        };
-                        command.argv = prepared.command.argv;
-                        super::parser::AstNode::Command(command)
-                    });
+                    // Redirection operands use the same execution-aware expansion.
+                    context.env = self.env.clone();
+                    context.substitution_status = prepared.substitution_status;
+                    let ast = sunshell::script::prepare_redirections(
+                        &command.redirections, &mut context, &mut native_script::NativeRuntime::new(),
+                    ).map(|redirections| super::parser::AstNode::Command(super::parser::SimpleCommand {
+                        argv: prepared.command.argv, redirections,
+                    }));
+                    if let Ok(super::parser::AstNode::Command(command)) = &ast {
+                        if command.argv.is_empty() {
+                            match self.prepare_builtin_redirections(&command.redirections) {
+                                Ok((_, opened)) => { for fd in opened { let _ = sunlight_libc::close(fd); } },
+                                Err(message) => { self.env.set("?", "1"); return copy_out(message.as_bytes()); },
+                            }
+                            self.env.set("?", &alloc::format!("{}", context.substitution_status.unwrap_or(0)));
+                            return ([0; MAX_OUT], 0);
+                        }
+                    }
                     (ast, prepared.temporary_names)
                 }
                 super::parser::AstNode::Pipeline(stages) => {
@@ -594,7 +624,7 @@ mod sunlight {
                         self.env.set("?", "2");
                         return copy_out(b"sshl: pipeline exceeds 16 stages\n");
                     }
-                    let context = sunshell::script::ShellExecutionContext::new(
+                    let mut context = sunshell::script::ShellExecutionContext::new(
                         self.env.clone(),
                         self.cwd.clone(),
                     );
@@ -602,7 +632,7 @@ mod sunlight {
                     let mut environments = alloc::vec::Vec::new();
                     for stage in stages {
                         let prepared =
-                            match sunshell::script::prepare_pipeline_stage(stage, &context) {
+                            match sunshell::script::prepare_pipeline_stage(stage, &mut context, &mut native_script::NativeRuntime::new()) {
                                 Ok(prepared) => prepared,
                                 Err(error) => {
                                     self.env.set("?", "2");
@@ -625,7 +655,7 @@ mod sunlight {
                 Err(error) => {
                     let _ = self.env.restore_variables(&temporary_names, &saved_env);
                     self.env.set("?", "2");
-                    return copy_out(alloc::format!("sshl: {}\n", error.0).as_bytes());
+                    return copy_out(alloc::format!("sshl: {}\n", error.message).as_bytes());
                 }
             };
             let output = self.run_expanded_line(result);

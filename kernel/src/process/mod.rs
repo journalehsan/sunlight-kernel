@@ -155,6 +155,8 @@ pub struct Process {
     pub native_futex_deadline: Option<u64>,
     /// Native pipe operation blocked on the ring becoming readable/writable.
     pub native_pipe_wait: Option<(u32, bool)>,
+    /// Native bounded pipe-readiness set; wakeups recheck the supplied fds.
+    pub native_pipe_poll_wait: bool,
     /// Blocking TTY output waiting for space in this tab's bounded ring.
     pub tty_write_wait: Option<usize>,
     /// Opt-in std workers share this owner's descriptor table and cwd.
@@ -416,6 +418,7 @@ impl Process {
             native_futex_wait: None,
             native_futex_deadline: None,
             native_pipe_wait: None,
+            native_pipe_poll_wait: false,
             tty_write_wait: None,
             native_shared_owner: None,
             capabilities: Vec::new(),
@@ -587,6 +590,7 @@ impl Process {
             native_futex_wait: None,
             native_futex_deadline: None,
             native_pipe_wait: None,
+            native_pipe_poll_wait: false,
             tty_write_wait: None,
             native_shared_owner: None,
             capabilities,

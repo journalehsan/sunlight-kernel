@@ -11,11 +11,13 @@ use sunshell::{
 
 pub(super) struct NativeRuntime {
     shell: Shell,
+    captures: sunshell::capture::Captures,
 }
 impl NativeRuntime {
     pub(super) fn new() -> Self {
         Self {
             shell: Shell::new(),
+            captures: sunshell::capture::Captures::default(),
         }
     }
 }
@@ -26,6 +28,12 @@ fn path(name: &str, context: &ShellExecutionContext) -> Result<String, Error> {
     normalize_path(&context.cwd, name).ok_or_else(|| Error::new(1, "invalid path"))
 }
 impl Runtime for NativeRuntime {
+    fn begin_capture(&mut self) -> Result<i32, Error> {
+        self.captures.begin()
+    }
+    fn end_capture(&mut self, fd: i32) -> Result<Vec<u8>, Error> {
+        self.captures.end(fd)
+    }
     fn external(
         &mut self,
         command: &AstNode<String>,
@@ -35,9 +43,31 @@ impl Runtime for NativeRuntime {
         if stage_environments.is_none() {
             context.env.export_size().map_err(|e| Error::new(2, e))?;
         }
+        let mut mapped = context.io;
+        let mut channels = Vec::new();
+        let mut writers = Vec::new();
+        channels
+            .try_reserve(3)
+            .map_err(|_| Error::fatal("out of memory preparing capture pipes"))?;
+        writers
+            .try_reserve(3)
+            .map_err(|_| Error::fatal("out of memory preparing capture pipes"))?;
+        for fd in &mut mapped {
+            if *fd >= 0 {
+                continue;
+            }
+            if let Some((_, _, writer)) = channels.iter().find(|(sink, _, _)| sink == fd) {
+                *fd = *writer;
+                continue;
+            }
+            let (reader, writer) = libc::pipe().map_err(error)?;
+            channels.push((*fd, OwnedFd(reader), writer.0 as i32));
+            writers.push(OwnedFd(writer));
+            *fd = writer.0 as i32;
+        }
         self.shell.cwd = context.cwd.clone();
         self.shell.env = context.env.clone();
-        self.shell.script_io = Some(context.io);
+        self.shell.script_io = Some(mapped);
         let mut old = [0u8; libc::MAX_PATH];
         let len = libc::getcwd(&mut old)
             .map_err(|e| Error::new(1, format!("getcwd before spawn: {e:?}")))?;
@@ -50,6 +80,8 @@ impl Runtime for NativeRuntime {
         let result = self
             .shell
             .launch_pipeline_environments(commands, stage_environments);
+        drop(writers);
+        let mut capture_error = None;
         let status = if let Err(message) = result {
             let status = self
                 .shell
@@ -63,6 +95,12 @@ impl Runtime for NativeRuntime {
         } else {
             self.shell.fg_pid = None;
             let pids = core::mem::take(&mut self.shell.fg_pids);
+            if let Err(e) = drain(&mut self.captures, channels) {
+                capture_error = Some(e);
+                for pid in &pids {
+                    let _ = libc::kill(*pid, 9);
+                }
+            }
             let mut status = 0;
             for pid in pids {
                 status = libc::waitpid(pid).map(|s| s as i32).unwrap_or(1);
@@ -70,9 +108,16 @@ impl Runtime for NativeRuntime {
             status
         };
         libc::chdir(&old[..len]).map_err(error)?;
+        if let Some(mut e) = capture_error {
+            e.expansion_fatal = true;
+            return Err(e);
+        }
         Ok(status)
     }
     fn write(&mut self, fd: i32, bytes: &[u8]) -> Result<(), Error> {
+        if fd < 0 {
+            return self.captures.append(fd, bytes);
+        }
         libc::write_all(libc::Fd(fd as u32), bytes)
             .map_err(|e| Error::new(1, format!("write fd {fd}: {e:?}")))
     }
@@ -126,6 +171,43 @@ impl Runtime for NativeRuntime {
         let _ = libc::close(fd);
         result
     }
+}
+struct OwnedFd(libc::Fd);
+impl Drop for OwnedFd {
+    fn drop(&mut self) {
+        let _ = libc::close(self.0);
+    }
+}
+fn drain(
+    captures: &mut sunshell::capture::Captures,
+    mut channels: Vec<(i32, OwnedFd, i32)>,
+) -> Result<(), Error> {
+    let mut buffer = [0; 4096];
+    while !channels.is_empty() {
+        let mut fds = [libc::PollFd {
+            fd: -1,
+            events: 1,
+            revents: 0,
+        }; 3];
+        for (slot, (_, reader, _)) in fds.iter_mut().zip(&channels) {
+            slot.fd = reader.0 .0 as i32;
+        }
+        libc::poll(&mut fds[..channels.len()], -1).map_err(error)?;
+        for index in (0..channels.len()).rev() {
+            if fds[index].revents == 0 {
+                continue;
+            }
+            match libc::read(channels[index].1 .0, &mut buffer) {
+                Ok(0) => {
+                    channels.swap_remove(index);
+                }
+                Ok(n) => captures.append(channels[index].0, &buffer[..n])?,
+                Err(libc::Errno::Again) => {}
+                Err(e) => return Err(error(e)),
+            }
+        }
+    }
+    Ok(())
 }
 pub(super) fn context() -> ShellExecutionContext {
     let mut env = sunshell::shellenv::ShellEnv::new();

@@ -16,6 +16,7 @@ pub const SYS_READ: u64 = 42;
 pub const SYS_WRITE: u64 = 43;
 pub const SYS_LSEEK: u64 = 44;
 pub const SYS_PIPE: u64 = 47;
+pub const SYS_POLL: u64 = 159;
 pub const SYS_DUP: u64 = 45;
 pub const SYS_DUP2: u64 = 46;
 pub const SYS_FSTAT: u64 = 48;

@@ -25,6 +25,7 @@ pub enum SunlightSyscall {
     NativeThreadReaped = 156,
     NativeExitGroup = 157,
     NativeStdThreadSpawn = 158,
+    NativePoll = 159,
     /// TTY mux (foreground input routing). tty_server pushes keyboard bytes
     /// into a tab's kernel stdin ring; the foreground app reads them via fd0.
     /// rdi=tab, rsi=buf, rdx=len. Returns bytes accepted.
@@ -777,6 +778,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         156 => sys_native_thread_reaped(frame),
         157 => sys_native_exit_group(frame.rdi as i32),
         158 => thread_spawn(frame, true),
+        159 => sys_native_pipe_poll(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
         25 => sys_process_is_alive(frame),
@@ -5129,6 +5131,58 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
     }
 
     len as u64
+}
+
+/// Native capture readiness for up to three readable pipe descriptors.
+/// Checking readiness and registering the wait share the scheduler lock with
+/// producer notifications. This uses the native park protocol and never
+/// attaches Linux state or changes process personality/capabilities.
+fn sys_native_pipe_poll(frame: &mut SyscallFrame) -> u64 {
+    let count = frame.rsi as usize;
+    let timeout = frame.rdx as i32;
+    if count == 0 || count > 3 || !matches!(timeout, -1 | 0) {
+        return u64::MAX;
+    }
+    let mut storage = [0u8; 24];
+    let fds = &mut storage[..count * 8];
+    if crate::memory::user::copy_from_current(frame.rdi, fds).is_err()
+        || crate::memory::user::copy_to_current(frame.rdi, fds).is_err()
+    {
+        return u64::MAX;
+    }
+    let (ready, blocked) = {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        for record in fds.chunks_exact(8) {
+            let fd = i32::from_ne_bytes(record[..4].try_into().unwrap());
+            let events = i16::from_ne_bytes(record[4..6].try_into().unwrap());
+            if events != 1
+                || sched
+                    .current_shared_process()
+                    .fd_table
+                    .get(fd)
+                    .is_none_or(|entry| !(entry.handle.is_pipe() && !entry.handle.pipe_is_write()))
+            {
+                return u64::MAX;
+            }
+        }
+        let ready = linux_poll_ready(&sched, 0, fds, count);
+        let blocked = ready == 0 && timeout == -1;
+        if blocked {
+            sched.block_current_native_pipe_poll();
+        }
+        (ready, blocked)
+    };
+    if crate::memory::user::copy_to_current(frame.rdi, fds).is_err() {
+        return u64::MAX;
+    }
+    if blocked {
+        frame.rcx = frame.rcx.saturating_sub(2);
+        crate::sched::request_reschedule_after_sysret();
+        // The parked task resumes at SYSCALL itself, so RAX must retain the
+        // native syscall number until readiness is rechecked after wakeup.
+        return frame.rax;
+    }
+    ready
 }
 
 fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {

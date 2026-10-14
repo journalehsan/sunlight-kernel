@@ -1032,6 +1032,134 @@ pub(super) fn script_suite() -> ! {
         0, b"right\nleft\nparent\n");
     environment_transport_suite();
     debug_log("[SSHL-ENV] export assignment isolation transport security PASS");
+    run(&[b"sh", b"-c", b"echo \"$(echo hello)\"; echo \"$(echo \"$(echo nested)\")\"; echo '$(echo literal)'; v=$(printf 'a\\nb\\n\\n'); echo \"<$v>\"; v=$(true); echo \"<$v>\"; set -- $(echo a b); echo $#"],
+        0, b"hello\nnested\n$(echo literal)\n<a\nb>\n<>\n2\n");
+    run(&[b"sh", b"-c", b"f() { NAME=child; cd /tmp; echo \"$NAME\"; return 7; }; NAME=parent; v=$(f); echo \"$?:$v:$NAME\"; pwd; echo \"$(if true; then echo yes; fi)\"; echo \"$(case x in x) echo ')';; *) :;; esac)\""],
+        0, b"7:child:parent\n/\nyes\n)\n");
+    run(&[b"sh", b"-c", b"v=$(false); echo $?; echo \"$(false)\"; echo $?; v=$(sshl --probe exit 9 | sshl --probe exit 3); echo $?; v=$(missing-sshl-substitution); echo $?; v=$(echo bad < /absent/file); echo $?; v=$(exit 17); echo $?"],
+        0, b"1\n\n0\n3\n127\n1\n17\n");
+    run(&[b"sh", b"-c", b"echo \"$(echo hello | grep hello | wc -c)\"; v=$(echo out; echo err >&2) 2> /tmp/sshl-sub-error; echo \"$v\"; cat /tmp/sshl-sub-error; echo out > \"$(echo /tmp/sshl-sub-path)\"; cat /tmp/sshl-sub-path"],
+        0, b"       6\nout\nerr\nout\n");
+    run(&[b"sh", b"-c", b"v=$(sshl --probe pattern 8192 257 | sshl --probe copy); echo \"$v\" > /tmp/sshl-sub-large"], 0, b"");
+    let mut large: Vec<_> = (0..8192).map(|i| b'A' + (i % 23) as u8).collect();
+    large.push(b'\n');
+    expect("/tmp/sshl-sub-large", &large);
+    run(
+        &[
+            b"sh",
+            b"-c",
+            b"v=$(sshl --probe emit 1048576 | sshl --probe take 17); echo \"$v\"",
+        ],
+        0,
+        b"xxxxxxxxxxxxxxxxx\n",
+    );
+    run(&[b"sh", b"-c", b"v=$({ echo \"$(sh -c 'sshl --probe tag 8192 257 Y >&2; sshl --probe tag 8192 257 X')\"; } 2>&1); echo \"$v\" > /tmp/sshl-sub-dual"], 0, b"");
+    let mut dual = alloc::vec![b'Y'; 8192];
+    dual.extend_from_slice(&alloc::vec![b'X'; 8192]);
+    dual.push(b'\n');
+    expect("/tmp/sshl-sub-dual", &dual);
+    run(
+        &[
+            b"sh",
+            b"-c",
+            b"v=$(sshl --probe tag 131072 257 '\n'); echo \"<$v>\"",
+        ],
+        0,
+        b"<>\n",
+    );
+    run(
+        &[
+            b"sh",
+            b"-c",
+            b"v=$(sshl --probe emit 1048576 | sshl --probe copy); echo unreachable",
+        ],
+        2,
+        b"",
+    );
+    run(
+        &[b"sh", b"-c", b"v=$(printf '\\000'); echo unreachable"],
+        2,
+        b"",
+    );
+    run(&[b"sh", b"-c", b"echo $(echo |)"], 2, b"");
+    debug_log("[SSHL-SUB] grammar isolation quoting status stdout stderr PASS");
+    run(&[b"sh", b"-c", b"NAME=parent; export NAME; v=$(sshl --probe env NAME); echo \"$v\"; v=$(NAME=temp sshl --probe env NAME); echo \"$v:$NAME\"; v=$({ echo bad < /absent/file; } 2> /tmp/sshl-sub-diagnostic); echo \"$?:$v\""],
+        0, b"<parent>\n<temp>:parent\n1:\n");
+    if file("/tmp/sshl-sub-diagnostic").is_empty() {
+        fail("substitution error descriptor routing");
+    }
+    debug_log("[SSHL-SUB] exact 8192 dual 16384 capture 131072 overflow early-close PASS");
+    {
+        let (reader, writer) = libc::pipe().unwrap();
+        let mut fds = [libc::PollFd {
+            fd: reader.0 as i32,
+            events: 1,
+            revents: 0,
+        }];
+        if libc::poll(&mut fds, 0) != Ok(0) {
+            fail("native capture poll empty");
+        }
+        if libc::poll(&mut fds, 1).is_ok() || libc::poll(&mut [], 0).is_ok() {
+            fail("native capture poll bounds");
+        }
+        fds[0].fd = writer.0 as i32;
+        if libc::poll(&mut fds, 0).is_ok() {
+            fail("native capture poll writer rejection");
+        }
+        fds[0].fd = -1;
+        if libc::poll(&mut fds, 0).is_ok() {
+            fail("native capture poll invalid descriptor");
+        }
+        fds[0].fd = reader.0 as i32;
+        libc::close(writer).unwrap();
+        if libc::poll(&mut fds, -1) != Ok(1) || fds[0].revents != 1 {
+            fail("native capture poll EOF readiness");
+        }
+        libc::close(reader).unwrap();
+    }
+    {
+        let mut context = native_script::context();
+        let mut runtime = native_script::NativeRuntime::new();
+        let source = "v=$(echo \"$(sshl --probe emit 17 | sshl --probe copy)\"); unset v; :";
+        sunshell::script::execute(source, &mut context, &mut runtime).unwrap();
+        let before = libc::alloc::heap_stats();
+        let fd_before = libc::dup(libc::STDOUT).unwrap();
+        libc::close(fd_before).unwrap();
+        for _ in 0..100 {
+            if !matches!(
+                sunshell::script::execute(source, &mut context, &mut runtime),
+                Ok(sunshell::script::Flow::Status(0))
+            ) {
+                fail("substitution repeat");
+            }
+        }
+        for failure_source in [
+            "v=$(sshl --probe emit 1048576 | sshl --probe copy)",
+            "v=$(printf '\\000')",
+            "v=$(sshl --probe emit 16385)",
+        ] {
+            if sunshell::script::execute(failure_source, &mut context, &mut runtime).is_ok() {
+                fail("substitution resource rejection");
+            }
+            sunshell::script::execute(
+                "v=$(echo recovered); unset v; :",
+                &mut context,
+                &mut runtime,
+            )
+            .unwrap();
+        }
+        sunshell::script::execute(source, &mut context, &mut runtime).unwrap();
+        let fd_after = libc::dup(libc::STDOUT).unwrap();
+        libc::close(fd_after).unwrap();
+        let after = libc::alloc::heap_stats();
+        if fd_before != fd_after
+            || after.requested_user_bytes > before.requested_user_bytes + 1024
+            || after.failed_allocation_count != before.failed_allocation_count
+        {
+            fail("substitution descriptor or heap growth");
+        }
+        debug_log("[SSHL-SUB] repeat=100 descriptors heap cancellation recovery PASS");
+    }
     // Warm up and check the parent descriptor allocator and child reaping path.
     run(
         &[
@@ -1103,6 +1231,33 @@ pub(super) fn script_suite() -> ! {
     {
         let pty = PtyRunner::new();
         exercise("script-pty", &mut |line| pty.run(line));
+        for (line, witness) in [
+            ("echo \"$(echo PTY-substitution)\"", "PTY-substitution"),
+            ("echo \"$(echo \"$(echo PTY-nested)\")\"", "PTY-nested"),
+            (
+                "echo \"$(sshl --probe emit 8192 | sshl --probe count)\"",
+                "8192",
+            ),
+        ] {
+            pty.send(&format!("{line}\n"));
+            let output = pty.prompt();
+            if !output
+                .windows(witness.len())
+                .any(|bytes| bytes == witness.as_bytes())
+            {
+                fail("PTY substitution witness");
+            }
+        }
+        if pty.run("v=$(false)") != 1 {
+            fail("PTY substitution assignment status");
+        }
+        if pty.run("v=$(sshl --probe emit 1048576)") != 2 {
+            fail("PTY substitution overflow");
+        }
+        if pty.run("v=$(echo recovered)") != 0 {
+            fail("PTY substitution recovery/input");
+        }
+        debug_log("[SSHL-SUB] PTY nested large status recovery input PASS");
         for line in ["NAME=Sunlight", "export NAME"] {
             if pty.run(line) != 0 {
                 fail("PTY environment builtin");

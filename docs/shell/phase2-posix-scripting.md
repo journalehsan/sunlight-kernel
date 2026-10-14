@@ -1,6 +1,7 @@
 # Shell Phase 2: POSIX-oriented scripting, first vertical slice
 
-October 14, 2026 update: Phase 2.1 Stage A adds native export transport,
+October 14, 2026 update: Phase 2.1 Stage B adds native `$(...)` command
+substitution. Stage A adds native export transport,
 temporary assignment environments (including simple pipeline stages), and
 bounded environment validation. See [Phase 2.1 environment delivery](phase2-1-expansion-and-environment.md)
 for current-run evidence and outstanding regression boundaries. The original
@@ -209,11 +210,10 @@ IFS is empty). Unquoted positional values are subject to splitting.
 Assignment RHS, declaration assignments to export/readonly, redirection
 operands, and case words use scalar expansion without splitting or pathname
 expansion. Case patterns retain their quote mask. Tilde expansion, `${name:-x}`
-and other parameter operators, `${#name}`, pathname expansion, command
-substitution, backticks, and arithmetic expansion remain unsupported and
-produce explicit errors. Thus the requested arithmetic counter example is
-not supported yet. There is no output capture, truncation, arithmetic overflow
-behavior, or hidden external shell implementation to claim as completed.
+and other parameter operators, `${#name}`, pathname expansion, backticks and
+arithmetic expansion remain unsupported and produce explicit errors. Native
+`$(...)` substitution is implemented in Phase 2.1B; see the linked expansion
+report for bounded capture, isolation, status, tests and limitations.
 Redirection or scalar uses of `"$@"` with multiple parameters are outside this
 slice; the scalar adapter selects the first resulting field.
 
@@ -263,7 +263,7 @@ redirection/I/O errors currently terminate the script with status 1.
 | Expanded arguments / for words | 256 |
 | Native external argv | Existing libc: 15 entries including argv[0], 1024-byte aggregate arena |
 | Native paths | Existing libc: 256-byte C-string buffer; existing shell normalization also limits components |
-| Command-substitution capture | Not implemented; all substitution syntax fails |
+| Command-substitution capture | Phase 2.1B implements bounded native `$(...)`; see the expansion report |
 
 The recursion and syntax limits are deliberate safeguards for constrained
 native stacks. Loops have no arbitrary iteration ceiling. Pipelines stream
@@ -367,11 +367,9 @@ SSH-session execution have not been tested.
 1. Finish stage C: scripting/function/compound
    pipeline children, context transport, options, and interactive continuation
    compatible with foreground/PTY output draining.
-2. Finish stage D: tokenize structured substitutions/arithmetic, implement POSIX
-   parameter operators, checked integer arithmetic, pathname expansion, and
-   command substitution with a bounded spool/capture policy that reports limit
-   errors while draining/terminating/reaping producers. Test expansion order and
-   assignment/substitution status before adding more syntax.
+2. Finish stage D after the Phase 2.1B substitution delivery: implement POSIX
+   parameter operators, checked integer arithmetic and pathname expansion in
+   separate phases; retain native capture and assignment-status regression gates.
 3. Finish stage E: read/printf built-ins, exec descriptor persistence and process
    replacement, full dot/set/export/readonly/unset modes, signal-backed traps,
    timing support, and precise special/regular built-in error rules.

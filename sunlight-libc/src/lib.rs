@@ -554,6 +554,28 @@ pub fn pipe() -> Result<(Fd, Fd), Errno> {
     Ok((Fd(fds[0] as u32), Fd(fds[1] as u32)))
 }
 
+/// Native readiness for 1 to 3 pipe readers. Timeout must be 0 or -1.
+/// A negative timeout parks until a descriptor
+/// becomes ready; the kernel registers the wait under the producer's lock.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PollFd {
+    pub fd: i32,
+    pub events: i16,
+    pub revents: i16,
+}
+pub fn poll(fds: &mut [PollFd], timeout_ms: i32) -> Result<usize, Errno> {
+    let result = unsafe {
+        sys::syscall3(
+            sys::SYS_POLL,
+            fds.as_mut_ptr() as u64,
+            fds.len() as u64,
+            timeout_ms as u64,
+        )
+    };
+    sys::check(result).map(|n| n as usize)
+}
+
 fn checked_fd(ret: u64) -> Result<Fd, Errno> {
     let fd = sys::check(ret)?;
     let fd = u32::try_from(fd).map_err(|_| Errno::Failed)?;

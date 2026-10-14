@@ -14,8 +14,17 @@ struct Atom {
     ch: Option<char>,
     split: bool,
     quoted: bool,
+    substituted: bool,
 }
 type Field = Vec<Atom>;
+fn field_bytes(fields: &[Field]) -> usize {
+    fields
+        .iter()
+        .flatten()
+        .filter_map(|a| a.ch)
+        .map(char::len_utf8)
+        .sum()
+}
 
 pub fn expand_ast(ast: &AstNode, env: &ShellEnv) -> Result<AstNode<String>, ExpansionError> {
     fn command(
@@ -78,7 +87,51 @@ pub fn expand_word(
     Ok(quote_removal(fields))
 }
 
+/// Expand a word while allowing the interpreter to evaluate `$(...)` nodes.
+/// The callback owns process creation/capture; this module only preserves
+/// quote provenance and applies field splitting exactly once.
+pub fn expand_word_with<F>(
+    word: &Word,
+    env: &ShellEnv,
+    split: bool,
+    mut substitute: F,
+) -> Result<Vec<String>, ExpansionError>
+where
+    F: FnMut(&crate::script_parser::Command) -> Result<String, ExpansionError>,
+{
+    let segments = parameter_expansion_with(word, env, &mut substitute)?;
+    let mut fields = Vec::new();
+    for atoms in segments {
+        if split {
+            fields.extend(field_splitting(atoms, env.get("IFS").unwrap_or(" \t\n")));
+        } else {
+            fields.push(atoms);
+        }
+    }
+    let fields = if split {
+        pathname_expansion(fields)?
+    } else {
+        fields
+    };
+    Ok(quote_removal(fields))
+}
+
 fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, ExpansionError> {
+    parameter_expansion_with(word, env, &mut |_| {
+        Err(ExpansionError(
+            "command substitution requires an execution runtime",
+        ))
+    })
+}
+
+fn parameter_expansion_with<F>(
+    word: &Word,
+    env: &ShellEnv,
+    substitute: &mut F,
+) -> Result<Vec<Field>, ExpansionError>
+where
+    F: FnMut(&crate::script_parser::Command) -> Result<String, ExpansionError>,
+{
     let mut fields: Vec<Field> = alloc::vec![Vec::new()];
     let mut only_empty_at = true;
     for part in &word.parts {
@@ -90,8 +143,26 @@ fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, Expans
                 ch: None,
                 split: false,
                 quoted: true,
+                substituted: false,
             });
             only_empty_at = false;
+        }
+        if let Some(command) = &part.substitution {
+            let value = substitute(command)?;
+            if field_bytes(&fields) + value.len() > 16384 {
+                return Err(ExpansionError("expanded word exceeds 16 KiB limit"));
+            }
+            fields
+                .last_mut()
+                .unwrap()
+                .extend(value.chars().map(|ch| Atom {
+                    ch: Some(ch),
+                    split: !quoted,
+                    quoted,
+                    substituted: true,
+                }));
+            only_empty_at = false;
+            continue;
         }
         let mut chars = part.text.chars().peekable();
         while let Some(ch) = chars.next() {
@@ -154,6 +225,7 @@ fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, Expans
                         ch: Some('$'),
                         split: false,
                         quoted,
+                        substituted: false,
                     });
                     only_empty_at = false;
                     continue;
@@ -163,22 +235,24 @@ fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, Expans
                         if i > 0 {
                             fields.push(Vec::new());
                         }
-                        let fields_size_before = fields.iter().map(Vec::len).sum::<usize>();
+                        let fields_size_before = field_bytes(&fields);
                         let atoms = fields.last_mut().unwrap();
                         if quoted {
                             atoms.push(Atom {
                                 ch: None,
                                 split: false,
                                 quoted,
+                                substituted: false,
                             });
                         }
-                        if fields_size_before + value.chars().count() > 16384 {
+                        if fields_size_before + value.len() > 16384 {
                             return Err(ExpansionError("expanded word exceeds 16 KiB limit"));
                         }
                         atoms.extend(value.chars().map(|ch| Atom {
                             ch: Some(ch),
                             split: !quoted,
                             quoted,
+                            substituted: false,
                         }));
                     }
                     if !env.positional.is_empty() {
@@ -205,7 +279,7 @@ fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, Expans
                             .unwrap_or_default(),
                         _ => String::from(env.get(&key).unwrap_or("")),
                     };
-                    if fields.iter().map(Vec::len).sum::<usize>() + value.chars().count() > 16384 {
+                    if field_bytes(&fields) + value.len() > 16384 {
                         return Err(ExpansionError("expanded word exceeds 16 KiB limit"));
                     }
                     fields
@@ -215,6 +289,7 @@ fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, Expans
                             ch: Some(ch),
                             split: !quoted,
                             quoted,
+                            substituted: false,
                         }));
                 }
             } else {
@@ -223,6 +298,7 @@ fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, Expans
                     ch: Some(ch),
                     split: false,
                     quoted,
+                    substituted: false,
                 });
             }
         }
@@ -230,7 +306,7 @@ fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, Expans
     if only_empty_at {
         fields.clear();
     }
-    if fields.iter().map(Vec::len).sum::<usize>() > 16384 {
+    if field_bytes(&fields) > 16384 {
         return Err(ExpansionError("expanded word exceeds 16 KiB limit"));
     }
     Ok(fields)
@@ -282,7 +358,7 @@ fn pathname_expansion(fields: Vec<Field>) -> Result<Vec<Field>, ExpansionError> 
     if fields
         .iter()
         .flatten()
-        .any(|a| !a.quoted && a.ch.is_some_and(|c| matches!(c, '*' | '?' | '[')))
+        .any(|a| !a.quoted && !a.substituted && a.ch.is_some_and(|c| matches!(c, '*' | '?' | '[')))
     {
         return Err(ExpansionError(
             "pathname expansion is unsupported; quote pattern characters",
@@ -419,6 +495,21 @@ mod tests {
 /// Pattern expansion retains quote masks; quoted wildcards remain literal.
 pub fn case_pattern(word: &Word, env: &ShellEnv) -> Result<Vec<(char, bool)>, ExpansionError> {
     Ok(parameter_expansion(word, env)?
+        .into_iter()
+        .flatten()
+        .filter_map(|a| a.ch.map(|c| (c, a.quoted)))
+        .collect())
+}
+
+pub fn case_pattern_with<F>(
+    word: &Word,
+    env: &ShellEnv,
+    mut substitute: F,
+) -> Result<Vec<(char, bool)>, ExpansionError>
+where
+    F: FnMut(&crate::script_parser::Command) -> Result<String, ExpansionError>,
+{
+    Ok(parameter_expansion_with(word, env, &mut substitute)?
         .into_iter()
         .flatten()
         .filter_map(|a| a.ch.map(|c| (c, a.quoted)))

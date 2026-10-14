@@ -8,6 +8,7 @@
 extern crate alloc;
 
 pub mod calc;
+pub mod capture;
 
 pub mod expansion;
 pub mod parser;

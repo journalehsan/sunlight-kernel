@@ -1,6 +1,6 @@
 //! Shared scripting interpreter. Platform runtimes own descriptors and processes.
 use crate::{
-    expansion::{expand_word, valid_name},
+    expansion::{expand_word_with, valid_name, ExpansionError},
     parser::{AstNode, Quote, RedirectMode, Redirection, SimpleCommand, Word},
     script_parser::{self, Command, CommandKind},
     shellenv::ShellEnv,
@@ -29,6 +29,8 @@ pub struct ShellExecutionContext {
     pub call_depth: usize,
     pub source_depth: usize,
     pub interactive: bool,
+    pub substitution_depth: usize,
+    pub substitution_status: Option<i32>,
 }
 impl ShellExecutionContext {
     pub fn new(env: ShellEnv, cwd: String) -> Self {
@@ -42,6 +44,8 @@ impl ShellExecutionContext {
             call_depth: 0,
             source_depth: 0,
             interactive: false,
+            substitution_depth: 0,
+            substitution_status: None,
         }
     }
     fn status(&mut self, status: i32) {
@@ -53,13 +57,22 @@ impl ShellExecutionContext {
 pub struct Error {
     pub status: i32,
     pub message: String,
+    pub expansion_fatal: bool,
+    pub diagnosed: bool,
 }
 impl Error {
     pub fn new(status: i32, message: impl Into<String>) -> Self {
         Self {
             status,
             message: message.into(),
+            expansion_fatal: false,
+            diagnosed: false,
         }
+    }
+    pub fn fatal(message: impl Into<String>) -> Self {
+        let mut error = Self::new(2, message);
+        error.expansion_fatal = true;
+        error
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,8 +83,10 @@ pub enum Flow {
     Return(i32),
     Exit(i32),
 }
-/// No output capture is performed by the interpreter. Writes and pipelines stream.
+/// Platform adapters own capture sinks, streaming descriptors and child lifecycle.
 pub trait Runtime {
+    fn begin_capture(&mut self) -> Result<i32, Error>;
+    fn end_capture(&mut self, fd: i32) -> Result<Vec<u8>, Error>;
     fn external(
         &mut self,
         command: &AstNode<String>,
@@ -100,11 +115,82 @@ pub fn execute(
     })?;
     run(&tree, context, runtime)
 }
-fn expand(word: &Word, context: &ShellExecutionContext, split: bool) -> Result<Vec<String>, Error> {
-    expand_word(word, &context.env, split).map_err(|e| Error::new(2, e.0))
+fn expand(
+    word: &Word,
+    context: &mut ShellExecutionContext,
+    split: bool,
+    runtime: &mut impl Runtime,
+) -> Result<Vec<String>, Error> {
+    let mut failure = None;
+    let mut last_status = None;
+    let result = expand_word_with(word, &context.env, split, |tree| {
+        substitution(tree, context, runtime)
+            .map(|(value, status)| {
+                last_status = Some(status);
+                value
+            })
+            .map_err(|e| {
+                failure = Some(e);
+                ExpansionError("command substitution failed")
+            })
+    });
+    if last_status.is_some() {
+        context.substitution_status = last_status;
+    }
+    result.map_err(|e| failure.unwrap_or_else(|| Error::fatal(e.0)))
 }
-fn scalar(word: &Word, context: &ShellExecutionContext) -> Result<String, Error> {
-    Ok(expand(word, context, false)?
+fn substitution(
+    tree: &Command,
+    context: &ShellExecutionContext,
+    runtime: &mut impl Runtime,
+) -> Result<(String, i32), Error> {
+    if context.substitution_depth >= crate::capture::MAX_CAPTURE_DEPTH {
+        return Err(Error::fatal("substitution nesting exceeds 16 levels"));
+    }
+    let fd = runtime.begin_capture()?;
+    let mut child = context.clone();
+    child.io[1] = fd;
+    child.loop_depth = 0;
+    child.substitution_depth += 1;
+    child.substitution_status = None;
+    let result = run(tree, &mut child, runtime);
+    let bytes = runtime.end_capture(fd)?;
+    let status = match result {
+        Ok(Flow::Status(s) | Flow::Exit(s) | Flow::Return(s)) => s,
+        Ok(_) => {
+            return Err(Error::new(
+                2,
+                "invalid command substitution control transfer",
+            ))
+        }
+        Err(e) => {
+            // Resource failures abort expansion; ordinary child execution errors
+            // are its exit status and preserve already-produced stdout.
+            if e.expansion_fatal {
+                return Err(e);
+            }
+            if !e.diagnosed {
+                runtime.write(context.io[2], format!("sshl: {}\n", e.message).as_bytes())?;
+            }
+            e.status
+        }
+    };
+    if bytes.contains(&0) {
+        return Err(Error::fatal("NUL byte in command substitution output"));
+    }
+    let mut value = String::from_utf8(bytes)
+        .map_err(|_| Error::fatal("command substitution output is not UTF-8"))?;
+    while value.ends_with('\n') {
+        value.pop();
+    }
+    Ok((value, status))
+}
+fn scalar(
+    word: &Word,
+    context: &mut ShellExecutionContext,
+    runtime: &mut impl Runtime,
+) -> Result<String, Error> {
+    Ok(expand(word, context, false, runtime)?
         .into_iter()
         .next()
         .unwrap_or_default())
@@ -121,14 +207,22 @@ fn redirects(
                 context.io[*fd as usize] = context.io[*source as usize];
                 Ok(())
             }
-            Redirection::Open { fd, mode, path } => scalar(path, context)
+            Redirection::Open { fd, mode, path } => scalar(path, context, runtime)
                 .and_then(|path| runtime.open(&path, *mode, context))
                 .map(|handle| {
                     opened.push(handle);
                     context.io[*fd as usize] = handle;
                 }),
         };
-        if let Err(e) = result {
+        if let Err(mut e) = result {
+            if context.substitution_depth > 0 && !e.expansion_fatal && !e.diagnosed {
+                let diagnostic =
+                    runtime.write(context.io[2], format!("sshl: {}\n", e.message).as_bytes());
+                e.diagnosed = true;
+                if let Err(error) = diagnostic {
+                    e = error;
+                }
+            }
             for fd in opened {
                 runtime.close(fd);
             }
@@ -155,7 +249,19 @@ fn run(
             }
         }
     };
-    let result = run_kind(node, context, runtime);
+    let mut result = run_kind(node, context, runtime);
+    if context.substitution_depth > 0 {
+        if let Err(e) = &mut result {
+            if !e.expansion_fatal && !e.diagnosed {
+                let diagnostic =
+                    runtime.write(context.io[2], format!("sshl: {}\n", e.message).as_bytes());
+                e.diagnosed = true;
+                if let Err(error) = diagnostic {
+                    result = Err(error);
+                }
+            }
+        }
+    }
     context.io = saved;
     for fd in opened {
         runtime.close(fd);
@@ -227,7 +333,7 @@ fn run_kind(
                         "function and scripting builtin pipeline stages are not implemented",
                     ));
                 }
-                let prepared = prepare_pipeline_stage(simple, context)?;
+                let prepared = prepare_pipeline_stage(simple, context, runtime)?;
                 let stage = prepared.command;
                 if stage.argv.first().is_none_or(|name| {
                     context.functions.contains_key(name)
@@ -268,7 +374,7 @@ fn run_kind(
             let mut values = Vec::new();
             if let Some(words) = words {
                 for word in words {
-                    values.extend(expand(word, context, true)?);
+                    values.extend(expand(word, context, true, runtime)?);
                     if values.len() > MAX_ARGUMENTS {
                         return Err(Error::new(2, "for word limit exceeded"));
                     }
@@ -328,11 +434,27 @@ fn run_kind(
             result
         }
         CaseCommand { word, arms } => {
-            let value = scalar(word, context)?;
+            let value = scalar(word, context, runtime)?;
             for (patterns, body) in arms {
                 for pattern in patterns {
-                    let pattern = crate::expansion::case_pattern(pattern, &context.env)
-                        .map_err(|e| Error::new(2, e.0))?;
+                    let mut failure = None;
+                    let mut last_status = None;
+                    let pattern =
+                        crate::expansion::case_pattern_with(pattern, &context.env, |tree| {
+                            substitution(tree, context, runtime)
+                                .map(|(value, status)| {
+                                    last_status = Some(status);
+                                    value
+                                })
+                                .map_err(|e| {
+                                    failure = Some(e);
+                                    ExpansionError("substitution failed")
+                                })
+                        })
+                        .map_err(|e| failure.unwrap_or_else(|| Error::fatal(e.0)))?;
+                    if last_status.is_some() {
+                        context.substitution_status = last_status;
+                    }
                     if pattern_matches(&pattern, &value)? {
                         return run(body, context, runtime);
                     }
@@ -364,7 +486,10 @@ fn run_kind(
     }
 }
 fn literal(word: &Word) -> Option<&str> {
-    if word.parts.len() == 1 && word.parts[0].quote == Quote::Unquoted {
+    if word.parts.len() == 1
+        && word.parts[0].quote == Quote::Unquoted
+        && word.parts[0].substitution.is_none()
+    {
         Some(&word.parts[0].text)
     } else {
         None
@@ -385,7 +510,8 @@ fn assignment(word: &Word) -> Option<(String, Word)> {
 }
 fn expanded_simple(
     command: &SimpleCommand,
-    context: &ShellExecutionContext,
+    context: &mut ShellExecutionContext,
+    runtime: &mut impl Runtime,
 ) -> Result<SimpleCommand<String>, Error> {
     let mut argv = Vec::new();
     for word in &command.argv {
@@ -393,7 +519,7 @@ fn expanded_simple(
             .first()
             .is_some_and(|name: &String| matches!(name.as_str(), "export" | "readonly"))
             && assignment(word).is_some();
-        argv.extend(expand(word, context, !declaration)?);
+        argv.extend(expand(word, context, !declaration, runtime)?);
         if argv.len() > MAX_ARGUMENTS {
             return Err(Error::new(2, "argument limit exceeded"));
         }
@@ -408,7 +534,7 @@ fn expanded_simple(
             Redirection::Open { fd, mode, path } => Redirection::Open {
                 fd: *fd,
                 mode: *mode,
-                path: scalar(path, context)?,
+                path: scalar(path, context, runtime)?,
             },
         });
     }
@@ -419,7 +545,30 @@ fn simple(
     context: &mut ShellExecutionContext,
     runtime: &mut impl Runtime,
 ) -> Result<Flow, Error> {
-    let prepared = prepare_arguments(command, context)?;
+    context.substitution_status = None;
+    // POSIX assignment-only commands establish redirects before evaluating
+    // assignment substitutions, so their stderr inherits the command's mapping.
+    if assignment_only(command) {
+        let saved_io = context.io;
+        let opened = match redirects(&command.redirections, context, runtime) {
+            Ok(opened) => opened,
+            Err(e) => {
+                context.io = saved_io;
+                return Err(e);
+            }
+        };
+        let result = prepare_arguments(command, context, runtime).map(|prepared| {
+            context.env = prepared.env;
+            Flow::Status(prepared.substitution_status.unwrap_or(0))
+        });
+        context.io = saved_io;
+        for fd in opened {
+            runtime.close(fd);
+        }
+        return result;
+    }
+    let prepared = prepare_arguments(command, context, runtime)?;
+    context.substitution_status = prepared.substitution_status;
     let saved_env = (!prepared.temporary_names.is_empty()).then(|| context.env.clone());
     context.env = prepared.env;
     let mut expanded = prepared.command;
@@ -433,7 +582,7 @@ fn simple(
             }
         };
         let result = if expanded.argv.is_empty() {
-            Ok(Flow::Status(0))
+            Ok(Flow::Status(context.substitution_status.unwrap_or(0)))
         } else {
             dispatch(&mut expanded, context, runtime)
         };
@@ -465,6 +614,10 @@ fn simple(
     result
 }
 
+pub fn assignment_only(command: &SimpleCommand) -> bool {
+    command.argv.iter().all(|word| assignment(word).is_some())
+}
+
 /// Shared preparation for scripts and the asynchronous native interactive
 /// dispatcher. Arguments expand first; prefix values expand sequentially in
 /// their command environment. The caller restores only temporary prefix names
@@ -473,10 +626,12 @@ pub struct PreparedArguments {
     pub command: SimpleCommand<String>,
     pub env: ShellEnv,
     pub temporary_names: Vec<String>,
+    pub substitution_status: Option<i32>,
 }
 pub fn prepare_arguments(
     command: &SimpleCommand,
-    context: &ShellExecutionContext,
+    context: &mut ShellExecutionContext,
+    runtime: &mut impl Runtime,
 ) -> Result<PreparedArguments, Error> {
     let prefix = command
         .argv
@@ -490,6 +645,7 @@ pub fn prepare_arguments(
             redirections: Vec::new(),
         },
         context,
+        runtime,
     )?;
     let name = expanded.argv.first().map(String::as_str).unwrap_or("");
     let permanent = expanded.argv.is_empty() || is_special(name);
@@ -497,7 +653,7 @@ pub fn prepare_arguments(
     let mut temporary_names = Vec::new();
     for word in &command.argv[..prefix] {
         let (key, value) = assignment(word).unwrap();
-        let value = scalar(&value, &candidate)?;
+        let value = scalar(&value, &mut candidate, runtime)?;
         candidate
             .env
             .assign(&key, &value)
@@ -511,15 +667,17 @@ pub fn prepare_arguments(
         command: expanded,
         env: candidate.env,
         temporary_names,
+        substitution_status: candidate.substitution_status,
     })
 }
 
 /// A pipeline stage gets its own assignment/redirection expansion context.
 pub fn prepare_pipeline_stage(
     command: &SimpleCommand,
-    context: &ShellExecutionContext,
+    context: &mut ShellExecutionContext,
+    runtime: &mut impl Runtime,
 ) -> Result<PreparedArguments, Error> {
-    let mut prepared = prepare_arguments(command, context)?;
+    let mut prepared = prepare_arguments(command, context, runtime)?;
     let mut child = context.clone();
     child.env = prepared.env.clone();
     prepared.command.redirections = expanded_simple(
@@ -527,10 +685,26 @@ pub fn prepare_pipeline_stage(
             argv: Vec::new(),
             redirections: command.redirections.clone(),
         },
-        &child,
+        &mut child,
+        runtime,
     )?
     .redirections;
     Ok(prepared)
+}
+pub fn prepare_redirections(
+    redirections: &[Redirection],
+    context: &mut ShellExecutionContext,
+    runtime: &mut impl Runtime,
+) -> Result<Vec<Redirection<String>>, Error> {
+    Ok(expanded_simple(
+        &SimpleCommand {
+            argv: Vec::new(),
+            redirections: redirections.to_vec(),
+        },
+        context,
+        runtime,
+    )?
+    .redirections)
 }
 pub fn is_special(name: &str) -> bool {
     matches!(

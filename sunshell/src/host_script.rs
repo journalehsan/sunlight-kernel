@@ -11,7 +11,10 @@ use sunshell::{
     script_parser::MAX_SOURCE,
     shellenv::ShellEnv,
 };
-pub struct HostRuntime;
+#[derive(Default)]
+pub struct HostRuntime {
+    captures: sunshell::capture::Captures,
+}
 fn path(path: &str, context: &ShellExecutionContext) -> PathBuf {
     Path::new(&context.cwd).join(path)
 }
@@ -19,6 +22,12 @@ fn io_error(e: std::io::Error) -> Error {
     Error::new(1, e.to_string())
 }
 impl Runtime for HostRuntime {
+    fn begin_capture(&mut self) -> Result<i32, Error> {
+        self.captures.begin()
+    }
+    fn end_capture(&mut self, fd: i32) -> Result<Vec<u8>, Error> {
+        self.captures.end(fd)
+    }
     fn external(
         &mut self,
         command: &AstNode<String>,
@@ -28,7 +37,51 @@ impl Runtime for HostRuntime {
         if stage_environments.is_none() {
             context.env.export_size().map_err(|e| Error::new(2, e))?;
         }
-        match crate::exec::execute_with_environments(command, Some(context), stage_environments) {
+        let mut mapped = context.io;
+        let mut channels = Vec::new();
+        let mut writers = Vec::new();
+        channels
+            .try_reserve(3)
+            .map_err(|_| Error::fatal("out of memory preparing capture pipes"))?;
+        writers
+            .try_reserve(3)
+            .map_err(|_| Error::fatal("out of memory preparing capture pipes"))?;
+        for fd in &mut mapped {
+            if *fd >= 0 {
+                continue;
+            }
+            if let Some((_, _, writer)) = channels.iter().find(|(sink, _, _)| sink == fd) {
+                *fd = *writer;
+                continue;
+            }
+            use std::os::fd::AsRawFd;
+            let (reader, writer) = crate::exec::create_pipe().map_err(io_error)?;
+            let writer_fd = writer.as_raw_fd();
+            channels.push((*fd, reader, writer_fd));
+            writers.push(writer);
+            *fd = writer_fd;
+        }
+        let mut capture_error = None;
+        let result = crate::exec::execute_streaming(
+            command,
+            Some(context),
+            stage_environments,
+            Some(mapped),
+            || {
+                drop(writers);
+                let result = drain(&mut self.captures, channels);
+                if let Err(e) = result {
+                    capture_error = Some(e);
+                    return Err(std::io::Error::other("capture failed"));
+                }
+                Ok(())
+            },
+        );
+        if let Some(mut error) = capture_error {
+            error.expansion_fatal = true;
+            return Err(error);
+        }
+        match result {
             Ok(status) => Ok(status),
             Err(e) => {
                 self.write(context.io[2], format!("sshl: {e}\n").as_bytes())?;
@@ -36,7 +89,11 @@ impl Runtime for HostRuntime {
             }
         }
     }
+
     fn write(&mut self, fd: i32, bytes: &[u8]) -> Result<(), Error> {
+        if fd < 0 {
+            return self.captures.append(fd, bytes);
+        }
         let owned = unsafe { BorrowedFd::borrow_raw(fd) }
             .try_clone_to_owned()
             .map_err(io_error)?;
@@ -89,6 +146,63 @@ impl Runtime for HostRuntime {
     }
 }
 
+/// At most three mapped sinks are active for one external pipeline. Poll
+/// services each ready reader once per pass, including EOF/HUP, without a
+/// wait-before-drain cycle or a thread copying interpreter state.
+fn drain(
+    captures: &mut sunshell::capture::Captures,
+    mut channels: Vec<(i32, File, i32)>,
+) -> Result<(), Error> {
+    use std::os::fd::AsRawFd;
+    #[repr(C)]
+    struct PollFd {
+        fd: i32,
+        events: i16,
+        revents: i16,
+    }
+    unsafe extern "C" {
+        fn poll(fds: *mut PollFd, count: usize, timeout: i32) -> i32;
+    }
+    let mut buffer = [0; 4096];
+    while !channels.is_empty() {
+        let mut fds = [const {
+            PollFd {
+                fd: -1,
+                events: 1,
+                revents: 0,
+            }
+        }; 3];
+        for (slot, (_, reader, _)) in fds.iter_mut().zip(&channels) {
+            slot.fd = reader.as_raw_fd();
+        }
+        if unsafe { poll(fds.as_mut_ptr(), channels.len(), -1) } < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(io_error(error));
+        }
+        for index in (0..channels.len()).rev() {
+            if fds[index].revents == 0 {
+                continue;
+            }
+            match channels[index].1.read(&mut buffer) {
+                Ok(0) => {
+                    channels.swap_remove(index);
+                }
+                Ok(n) => captures.append(channels[index].0, &buffer[..n])?,
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock
+                    ) => {}
+                Err(e) => return Err(io_error(e)),
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,7 +227,7 @@ mod tests {
         env.arg0 = "script.sh".into();
         let mut context = ShellExecutionContext::new(env, "/".into());
         context.io[1] = output.as_raw_fd();
-        let result = execute(source, &mut context, &mut HostRuntime);
+        let result = execute(source, &mut context, &mut HostRuntime::default());
         drop(output);
         let text = std::fs::read_to_string(&path).unwrap();
         std::fs::remove_file(path).unwrap();
@@ -208,11 +322,17 @@ mod tests {
         env.assign("BIG", &"x".repeat(4096)).unwrap();
         env.export("BIG");
         let mut context = ShellExecutionContext::new(env, "/".into());
-        let failure = execute("/usr/bin/true", &mut context, &mut HostRuntime).unwrap_err();
+        let failure =
+            execute("/usr/bin/true", &mut context, &mut HostRuntime::default()).unwrap_err();
         assert_eq!(failure.status, 2);
         assert!(failure.message.contains("environment"));
         assert_eq!(
-            execute("unset BIG; /usr/bin/true", &mut context, &mut HostRuntime).unwrap(),
+            execute(
+                "unset BIG; /usr/bin/true",
+                &mut context,
+                &mut HostRuntime::default()
+            )
+            .unwrap(),
             Flow::Status(0)
         );
     }
@@ -225,7 +345,6 @@ mod tests {
             "echo *.rs",
             "echo ${X:-bad}",
             "f() { :; }; f | cat",
-            "echo $(true)",
             "echo $((1+2))",
         ] {
             assert!(run(script, &[]).0.is_err(), "{script}");
@@ -236,5 +355,90 @@ mod tests {
                 Flow::Status(0)
             );
         }
+    }
+
+    #[test]
+    fn command_substitution_isolation_status_and_no_second_expansion() {
+        let (result, output, context) = run("NAME=parent; f() { NAME=child; cd /tmp; echo '$NAME'; return 7; }; v=$(f); echo \"$?:$v:$NAME\"; pwd; v=$(printf 'a\\nb\\n\\n'); echo \"<$v>\"; echo \"$(echo \"$(echo nested)\")\"", &[]);
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert_eq!(output, "7:$NAME:parent\n/\n<a\nb>\nnested\n");
+        assert_eq!(context.env.get("NAME"), Some("parent"));
+        assert_eq!(context.cwd, "/");
+    }
+
+    #[test]
+    fn command_substitution_failures_release_capture_and_allow_recovery() {
+        let mut context = ShellExecutionContext::new(ShellEnv::new(), "/".into());
+        let mut runtime = HostRuntime::default();
+        for source in [
+            "v=$(head -c 1048576 /dev/zero | cat)",
+            "v=$(printf '\\000')",
+            "v=$(printf '\\377')",
+            "v=$(head -c 16385 /dev/zero | tr '\\000' x)",
+        ] {
+            let error = execute(source, &mut context, &mut runtime).unwrap_err();
+            assert_eq!(error.status, 2, "{source}");
+            assert_eq!(
+                execute("v=$(echo recovered)", &mut context, &mut runtime).unwrap(),
+                Flow::Status(0)
+            );
+            assert_eq!(context.env.get("v"), Some("recovered"));
+        }
+        let mut source = String::from("echo x");
+        for _ in 0..17 {
+            source = format!("echo \"$({source})\"");
+        }
+        assert!(
+            execute(&source, &mut context, &mut runtime)
+                .unwrap_err()
+                .expansion_fatal
+        );
+        assert_eq!(
+            execute("v=$(true)", &mut context, &mut runtime).unwrap(),
+            Flow::Status(0)
+        );
+        let producer = "head -c 98304 /dev/zero | tr '\\000' '\\n'";
+        let mut source = producer.to_string();
+        for _ in 0..2 {
+            source = format!("{producer}; echo \"$({source})\"");
+        }
+        let error = execute(&format!("v=$({source})"), &mut context, &mut runtime).unwrap_err();
+        assert!(error.expansion_fatal && error.message.contains("256 KiB total"));
+        assert_eq!(
+            execute("v=$(echo recovered)", &mut context, &mut runtime).unwrap(),
+            Flow::Status(0)
+        );
+        assert_eq!(context.env.get("v"), Some("recovered"));
+    }
+
+    #[test]
+    fn command_substitution_streams_nested_stdout_and_stderr() {
+        let source = "v=$({ echo \"$(sh -c 'head -c 8192 /dev/zero | tr \"\\000\" y >&2; head -c 8192 /dev/zero | tr \"\\000\" x')\"; } 2>&1); echo \"$v\"";
+        let (result, output, _) = run(source, &[]);
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert_eq!(
+            output,
+            format!("{}{}\n", "y".repeat(8192), "x".repeat(8192))
+        );
+    }
+
+    #[test]
+    fn substitution_errors_follow_active_compound_redirections() {
+        let path = format!("/tmp/sshl-sub-error-{}", std::process::id());
+        let (result, output, _) = run(
+            &format!("v=$({{ echo bad < /no-such-sshl-file; }} 2> {path}); echo \"$?:$v\""),
+            &[],
+        );
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert_eq!(output, "1:\n");
+        assert!(!std::fs::read(&path).unwrap().is_empty());
+        std::fs::remove_file(&path).unwrap();
+        let (result, output, _) = run(
+            "v=$({ echo bad < /no-such-sshl-file; } 2>&1); echo \"$v\"",
+            &[],
+        );
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert!(output.starts_with("sshl: "));
+        assert!(!output.contains("bad\n"));
     }
 }
