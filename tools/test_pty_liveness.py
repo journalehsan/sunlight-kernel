@@ -59,7 +59,13 @@ def failure_snapshot(path, output, cpus):
 def boot(iso, cpus, run, directory, phase, deadline, expected, qmp_snapshot=False, memory_mb=1024):
     stem = directory / f"{phase}-cpu{cpus}-run{run}"
     serial = stem.with_suffix(".serial.log")
-    final = expected[-1].encode()
+    # Expected files are assertion lists, not execution order. Additional
+    # lifecycle markers may follow the terminal-exit marker in the file.
+    final = {
+        "shell-pty-liveness": "[TTY]  exit: sshl --pty-liveness-tests -> 0",
+        "shell-phase2": "[TTY]  exit: sshl --script-tests -> 0",
+        "shell-phase1.5": "[TTY]  exit: sshl --native-tests -> 0",
+    }[phase].encode()
     matched = set()
     streams = []
     last_stream_offset = -1

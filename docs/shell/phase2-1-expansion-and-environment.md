@@ -3,7 +3,9 @@
 Date: October 14, 2026. The current delivery adds Phase 2.1C bounded POSIX
 integer arithmetic to Stage B command substitution, Stage A environments and
 the Phase 2.1A liveness/reclaim repairs. See "Phase 2.1C" at the end for the
-current architecture and validation boundary. Pathname expansion and compound
+current architecture and validation boundary. Phase 2.1C.1 adds native foreground
+scope cancellation; see [the lifecycle contract](../kernel/foreground-session-lifecycle.md)
+and the final update below for its separate validation evidence. Pathname expansion and compound
 pipeline stages remain unsupported. Earlier sections retain their historical
 validation boundaries.
 
@@ -1715,3 +1717,32 @@ foreground tracking, interrupt/hangup notification during synchronous expansion,
 stdin/stderr service while waiting, descendant termination/reaping and focused
 TTY/PTY recovery/resource gates. Compound/function pipeline transport remains
 another separate dependency. Pathname expansion stays deferred.
+# Phase 2.1C.1 foreground lifecycle update (October 14, 2026)
+
+The native scope implementation and current evidence are described in
+[foreground-session-lifecycle.md](../kernel/foreground-session-lifecycle.md).
+The historical Ctrl+C UNSUPPORTED and synchronous-disconnect DEFERRED findings
+later in this document describe the pre-scope implementation. Their replacement
+gates require real interruption of 60-second producers, descendant cancellation,
+scope authority checks and prompt recovery. Native cancellation is narrowly
+defined and is not complete POSIX signal delivery or job control. The legacy
+numbered-shell endpoint lookup remains blocked; UserSession privileges and
+the memory reclaim budget are unchanged.
+
+The scope tracks child and descendant publication under the scheduler lock;
+the PTY broker delivers authenticated interrupts and hangups to the installed
+session controller. Synchronous capture poll/read paths wake on cancellation,
+discard partial expansion output and retain drain-before-wait ordering. Ctrl+C
+preserves the shell and records 130, including a pipeline whose last consumer
+already exited. Disconnect cancels the tree and terminates the controller with
+129. Normal completion cancels remaining descendants and preserves the completed
+command's status. Native cancellation is unmaskable and does not deliver a
+userspace POSIX signal handler.
+
+Host validation passes 55 shell tests, 178 dash comparisons, three environment
+wire tests and 13 descriptor tests. The frozen lifecycle and scripting gates
+pass at 1536 MiB on 1, 2 and 4 CPUs; per-image hashes, final security refinements,
+latency measurements, resource counts and regression boundaries are in the
+lifecycle document. The full allocator-proof harness remains compile-blocked;
+standalone model checks and native injected rollback are separate evidence.
+The 1 GiB combined-image capacity failures are not resolved by these results.

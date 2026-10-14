@@ -78,6 +78,16 @@ pub extern "C" fn _start() -> ! {
 
     sunlight_ipc::debug_log("[TOP] rendering");
 
+    // Paint the first frame immediately.  `Telemetry::poll()` reports whether
+    // a newer publication arrived; it may legitimately be false for the
+    // initial snapshot, which previously left top's alternate screen blank
+    // until a key press or telemetry update occurred.
+    view.render(
+        &mut canvas,
+        telem.snapshot(),
+        MY_PID.load(Ordering::Relaxed),
+    );
+
     loop {
         let mut redraw = false;
 

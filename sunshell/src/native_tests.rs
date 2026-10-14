@@ -148,6 +148,52 @@ pub(super) fn probe(raw: &[*const u8]) -> ! {
             .as_bytes(),
         ),
         Some("exit") => libc::exit(number as u64),
+        Some("scopesignal") => {
+            libc::exit(if libc::kill(number as u64, 9).is_err() {
+                0
+            } else {
+                1
+            });
+        }
+        Some("scopeattack") => {
+            let parent = unsafe { libc::sys::syscall0(34) };
+            libc::exit(
+                if sunlight_ipc::foreground(3, number as u64) == u64::MAX
+                    && libc::kill(parent, 9).is_err()
+                {
+                    0
+                } else {
+                    1
+                },
+            );
+        }
+        Some("pidtree" | "pidorphan") => {
+            let child = libc::spawn(
+                b"/bin/sshl",
+                &[b"sshl", b"--probe", b"pause", b"60000"],
+                None,
+            )
+            .unwrap();
+            let fd = libc::open_with_flags(
+                b"/tmp/sshl-descendant-pid",
+                libc::O_CREAT | libc::O_WRONLY | libc::O_TRUNC,
+            )
+            .unwrap();
+            libc::write_all(fd, format!("{child}\n").as_bytes()).unwrap();
+            libc::close(fd).unwrap();
+            let fd = libc::open_with_flags(
+                b"/tmp/sshl-pty-close-pid",
+                libc::O_CREAT | libc::O_WRONLY | libc::O_TRUNC,
+            )
+            .unwrap();
+            libc::write_all(fd, format!("{}\n", libc::getpid()).as_bytes()).unwrap();
+            libc::close(fd).unwrap();
+            if args[0] == "pidorphan" {
+                libc::exit(0);
+            }
+            libc::waitpid(child).unwrap();
+            Ok(())
+        }
         Some("pause" | "pidpause") => {
             if args[0] == "pidpause" {
                 let fd = libc::open_with_flags(b"/tmp/sshl-pty-close-pid", libc::O_CREAT | libc::O_WRONLY | libc::O_TRUNC).unwrap();
@@ -269,6 +315,33 @@ impl PtyRunner {
         let runner = Self { service, master, control, id, generation, pid, buffer: sunlight_ipc::pty::PtyBuffer::new().unwrap(), session_closed: false };
         runner.prompt();
         runner
+    }
+    fn counts(&self) -> (u64, u64) {
+        let reply = ipc_call_timeout(
+            self.service,
+            IpcMsg::with_label(PtyMsg::GET_FOREGROUND_PROCESS)
+                .word(0, self.id)
+                .word(1, self.generation)
+                .with_cap(0, self.control),
+            2000,
+        )
+        .unwrap();
+        if reply.label != PtyMsg::REPLY || reply.words[3] == u64::MAX {
+            fail("session counters authority");
+        }
+        (reply.words[3] & 0xffff_ffff, reply.words[3] >> 32)
+    }
+    fn wait_counts(&self, expected: (u64, u64)) {
+        let start = monotonic_millis();
+        loop {
+            if self.counts() == expected {
+                return;
+            }
+            if monotonic_millis() - start > 2000 {
+                fail("session process/descriptor baseline");
+            }
+            process_yield();
+        }
     }
     fn prompt(&self) -> Vec<u8> {
         let start = monotonic_millis();
@@ -472,6 +545,7 @@ pub(super) fn pty_liveness_suite() -> ! {
     trace_processes();
     drop(other);
     debug_log("[SSHL-PTY] concurrent sessions delayed consumer PASS");
+    scope_lifecycle();
     interactive_lifecycle();
     foreground_closure(false);
     foreground_closure(true);
@@ -494,8 +568,7 @@ pub(super) fn pty_liveness_suite() -> ! {
     libc::exit(0)
 }
 
-// Lifecycle audit only: Ctrl+C is input data in the current native relay.
-// Bounded probes finish naturally; no substitute kill is used to claim SIGINT.
+// Producers publish a PID witness before blocking; interrupts follow that barrier.
 fn lifecycle_child() -> u64 {
     let start = monotonic_millis();
     loop {
@@ -507,8 +580,146 @@ fn lifecycle_child() -> u64 {
     }
 }
 fn file_if_present(path: &str) -> Vec<u8> {
-    if libc::stat(path.as_bytes()).is_ok() { file(path) } else { Vec::new() }
+    if libc::stat(path.as_bytes()).is_ok() {
+        file(path)
+    } else {
+        Vec::new()
+    }
 }
+fn scope_counts(scope: u64) -> (u64, u64) {
+    let value = sunlight_ipc::foreground(7, scope);
+    if value == u64::MAX {
+        fail("scope counters authority");
+    }
+    (value & 0xffff_ffff, value >> 32)
+}
+fn scope_quiescent(scope: u64) {
+    let start = monotonic_millis();
+    loop {
+        if scope_counts(scope) == (0, 0) {
+            return;
+        }
+        if monotonic_millis() - start > 2000 {
+            fail("scope process/descriptor reclaim deadline");
+        }
+        process_yield();
+    }
+}
+fn scope_lifecycle() {
+    let unrelated = libc::spawn(
+        b"/bin/sshl",
+        &[b"sshl", b"--probe", b"pause", b"60000"],
+        None,
+    )
+    .unwrap();
+    let first = sunlight_ipc::foreground(0, 0);
+    if first == 0 || first == u64::MAX || sunlight_ipc::foreground(0, 0) != u64::MAX {
+        fail("scope begin bound");
+    }
+    let text = format!("{first}");
+    let attacker = libc::spawn(
+        b"/bin/sshl",
+        &[b"sshl", b"--probe", b"scopeattack", text.as_bytes()],
+        None,
+    )
+    .unwrap();
+    if libc::waitpid(attacker).unwrap() != 0 {
+        fail("member controlled owner scope");
+    }
+    scope_quiescent(first);
+    let child = libc::spawn(
+        b"/bin/sshl",
+        &[b"sshl", b"--probe", b"pause", b"60000"],
+        None,
+    )
+    .unwrap();
+    let before = scope_counts(first);
+    if before.0 != 1 || before.1 != 3 {
+        fail("scope member counters");
+    }
+    if sunlight_ipc::foreground_session_cancel(1, 1, 2) {
+        fail("untrusted PTY cancellation");
+    }
+    if sunlight_ipc::foreground(3, first) != 0 || sunlight_ipc::foreground(3, first) != 0 {
+        fail("scope interrupt idempotence");
+    }
+    if libc::waitpid(child).unwrap() != 130 {
+        fail("scope member status");
+    }
+    if libc::spawn(b"/bin/sshl", &[b"sshl", b"--probe", b"exit", b"0"], None).is_ok() {
+        fail("spawn after cancellation");
+    }
+    if !sunlight_ipc::process_is_alive(unrelated) {
+        fail("unrelated process cancelled");
+    }
+    scope_quiescent(first);
+    if sunlight_ipc::foreground(2, first) != 0 {
+        fail("scope completion");
+    }
+    let second = sunlight_ipc::foreground(0, 0);
+    if second == first
+        || sunlight_ipc::foreground(3, first) != u64::MAX
+        || sunlight_ipc::foreground(1, 0) != 0
+    {
+        fail("stale scope accepted");
+    }
+    if sunlight_ipc::foreground(2, second) != 0 {
+        fail("second scope completion");
+    }
+    libc::kill(unrelated, 9).unwrap();
+    libc::waitpid(unrelated).unwrap();
+    for run in 0..32 {
+        let fd_before = libc::dup(libc::STDOUT).unwrap();
+        libc::close(fd_before).unwrap();
+        let scope = sunlight_ipc::foreground(0, 0);
+        if scope_counts(scope) != (0, 0) {
+            fail("scope reuse baseline");
+        }
+        let (read, write) = libc::pipe().unwrap();
+        let child = libc::spawn_with_stdio(
+            b"/bin/sshl",
+            &[
+                b"sshl",
+                b"--probe",
+                if run % 2 == 0 { b"pause" } else { b"exit" },
+                if run % 2 == 0 { b"60000" } else { b"0" },
+            ],
+            None,
+            Some(write),
+            None,
+        )
+        .unwrap();
+        libc::close(write).unwrap();
+        let before = scope_counts(scope);
+        let start = monotonic_millis();
+        sunlight_ipc::foreground(3, scope);
+        let status = libc::waitpid(child).unwrap();
+        if status != 0 && status != 130 {
+            fail("exit/cancel race status");
+        }
+        let mut bytes = [0; 1];
+        if libc::read(read, &mut bytes).is_ok() {
+            fail("cancelled owner read accepted");
+        }
+        scope_quiescent(scope);
+        if libc::spawn(b"/absent/foreground", &[b"missing"], None).is_ok() {
+            fail("spawn failure accepted");
+        }
+        sunlight_ipc::foreground(2, scope);
+        if libc::read(read, &mut bytes).unwrap() != 0 {
+            fail("cancelled writer did not close capture");
+        }
+        libc::close(read).unwrap();
+        let fd_after = libc::dup(libc::STDOUT).unwrap();
+        libc::close(fd_after).unwrap();
+        if fd_before != fd_after {
+            fail("scope parent descriptor accumulation");
+        }
+        debug_log(&format!("[SSHL-LIFECYCLE] scope repeat={run} processes={}->0 descriptors={}->0 parent_fd={} latency_ms={} PASS", before.0, before.1, fd_after.0, monotonic_millis()-start));
+    }
+    debug_log("[SSHL-LIFECYCLE] stale scope authority spawn cancellation isolation PASS");
+}
+
 fn interactive_lifecycle() {
     let pty = PtyRunner::new();
     if pty.run("sshl --probe input-nonblock") != 0 { fail("native nonblocking stdin contract"); }
@@ -531,46 +742,164 @@ fn interactive_lifecycle() {
         fail("foreground stderr forwarding");
     }
     debug_log("[SSHL-LIFECYCLE] foreground stdin stderr prompt PASS");
+    pty.send("sshl --probe pidorphan\n");
+    pty.prompt();
+    let orphan: u64 = core::str::from_utf8(&file("/tmp/sshl-descendant-pid"))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let start = monotonic_millis();
+    while sunlight_ipc::process_is_alive(orphan) {
+        if monotonic_millis() - start > 2000 {
+            fail("completion orphan cleanup");
+        }
+        process_yield();
+    }
+    pty.wait_counts((1, 3));
+    debug_log("[SSHL-LIFECYCLE] parent exit descendant cleanup PASS");
+    let other = PtyRunner::new_for_tab(8);
+    let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
+    other.send("sshl --probe pidpause 60000\n");
+    let other_child = lifecycle_child();
+    pty.wait_counts((1, 3));
+    if pty.run(&format!("sshl --probe scopesignal {other_child}")) != 0
+        || !sunlight_ipc::process_is_alive(other_child)
+    {
+        fail("numeric signal crossed session authority");
+    }
     for (source, kind) in [
-        ("sshl --probe pidpause 600", "foreground"),
-        ("echo \"$(echo \"$(sshl --probe pidpause 600)\")\"", "nested-substitution"),
+        ("sshl --probe pidpause 60000", "foreground"),
+        (
+            "sshl --probe pidpause 60000 | sshl --probe copy | sshl --probe count",
+            "pipeline",
+        ),
+        ("sshl --probe pidtake 4", "blocking-stdin"),
+        (
+            "sshl --probe pidpause 60000 | sshl --probe exit 0",
+            "early-consumer",
+        ),
+        ("sshl --probe pidtree", "descendant"),
+        (
+            "sh -c 'while true; do sshl --probe pidpause 60000; done'",
+            "compound",
+        ),
+        ("sshl --probe pidpattern 1048576 4096", "full-output"),
+        (
+            "echo \"$(echo \"$(sshl --probe pidpause 60000)\")\"",
+            "nested-substitution",
+        ),
     ] {
+        // Prompt delivery precedes scheduler-driven reclamation of the last
+        // recovery command. Synchronize on resources before the next scenario.
+        pty.wait_counts((1, 3));
+        let baseline = pty.counts();
+        if baseline != (1, 3) {
+            fail("scenario baseline");
+        }
         let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
         pty.send(&format!("{source}\n"));
         let child = lifecycle_child();
-        pty.send("\x03");
-        park_ms(100);
-        let survives = sunlight_ipc::process_is_alive(child);
+        if kind == "full-output" {
+            park_ms(100);
+        }
         let start = monotonic_millis();
+        pty.send("\x03\x03");
+        while sunlight_ipc::process_is_alive(child) {
+            if monotonic_millis() - start > 2000 {
+                fail("foreground interrupt deadline");
+            }
+            process_yield();
+        }
+        let elapsed = monotonic_millis() - start;
+        if kind == "descendant" {
+            let descendant: u64 = core::str::from_utf8(&file("/tmp/sshl-descendant-pid"))
+                .unwrap()
+                .trim()
+                .parse()
+                .unwrap();
+            while sunlight_ipc::process_is_alive(descendant) {
+                if monotonic_millis() - start > 2000 {
+                    fail("descendant interrupt deadline");
+                }
+                process_yield();
+            }
+        }
         pty.prompt();
-        if !survives { fail("unexpected Ctrl+C semantics require independent audit"); }
-        if sunlight_ipc::process_is_alive(child) { fail("naturally completed foreground still live"); }
+        if !sunlight_ipc::process_is_alive(pty.pid) {
+            fail("interrupt killed shell");
+        }
+        if !sunlight_ipc::process_is_alive(other_child) {
+            fail("unrelated session foreground cancelled");
+        }
+        pty.send("echo $? > /tmp/sshl-interrupt-status\n");
+        pty.prompt();
+        expect("/tmp/sshl-interrupt-status", b"130\n");
+        pty.wait_counts(baseline);
+        debug_log(&format!(
+            "[SSHL-LIFECYCLE] Ctrl+C {kind} PASS latency_ms={elapsed} processes=1->1 descriptors=3->3"
+        ));
         pty.send("echo recovered\n");
-        if !pty.prompt().windows(9).any(|s| s == b"recovered") { fail("post Ctrl+C prompt"); }
-        debug_log(&format!("[SSHL-LIFECYCLE] Ctrl+C {kind} UNSUPPORTED child survived; natural completion remaining_ms={} prompt recovered", monotonic_millis()-start));
+        if !pty.prompt().windows(9).any(|s| s == b"recovered") {
+            fail("post Ctrl+C prompt");
+        }
     }
+    other.send("\x03");
+    other.prompt();
+    if sunlight_ipc::process_is_alive(other_child) {
+        fail("other session cancellation");
+    }
+    drop(other);
+    debug_log("[SSHL-LIFECYCLE] unrelated session interrupt isolation PASS");
     drop(pty);
-    // Closing while synchronous expansion waits cannot notify its collector.
+    // Session close must stop the synchronous collector and producer.
     let mut pty = PtyRunner::new();
     let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
-    pty.send("echo \"$(sshl --probe pidpause 600)\"\n");
+    pty.send("echo \"$(sshl --probe pidpause 60000)\"\n");
     let child = lifecycle_child();
-    let reply = ipc_call_timeout(pty.service, IpcMsg::with_label(PtyMsg::CLOSE_SESSION)
-        .word(0, pty.id).word(1, pty.generation).with_cap(0, pty.control), 2000).unwrap();
-    if reply.label != PtyMsg::REPLY { fail("substitution disconnect request"); }
-    pty.session_closed = true;
-    park_ms(100);
-    if !sunlight_ipc::process_is_alive(child) || !sunlight_ipc::process_is_alive(pty.pid) {
-        fail("unexpected synchronous disconnect semantics require audit");
+    let reply = ipc_call_timeout(
+        pty.service,
+        IpcMsg::with_label(PtyMsg::CLOSE_SESSION)
+            .word(0, pty.id)
+            .word(1, pty.generation)
+            .with_cap(0, pty.control),
+        2000,
+    )
+    .unwrap();
+    if reply.label != PtyMsg::REPLY {
+        fail("substitution disconnect request");
     }
+    pty.session_closed = true;
     let start = monotonic_millis();
     while sunlight_ipc::process_is_alive(child) || sunlight_ipc::process_is_alive(pty.pid) {
         if monotonic_millis()-start > 2000 { fail("deferred substitution hangup"); }
         park_ms(10);
     }
-    if libc::waitpid(pty.pid).unwrap() != 129 { fail("deferred hangup status"); }
-    debug_log(&format!("[SSHL-LIFECYCLE] synchronous disconnect DEFERRED until natural completion remaining_ms={}", monotonic_millis()-start));
+    if libc::waitpid(pty.pid).unwrap() != 129 {
+        fail("deferred hangup status");
+    }
+    debug_log(&format!(
+        "[SSHL-LIFECYCLE] synchronous disconnect PASS latency_ms={}",
+        monotonic_millis() - start
+    ));
     drop(pty);
+    for _ in 0..8 {
+        let pty = PtyRunner::new();
+        pty.send("exit\n");
+        let start = monotonic_millis();
+        while sunlight_ipc::process_is_alive(pty.pid) {
+            if monotonic_millis() - start > 2000 {
+                fail("normal shell exit deadline");
+            }
+            process_yield();
+        }
+        pty.wait_counts((0, 0));
+        if libc::waitpid(pty.pid).unwrap() != 0 {
+            fail("normal shell exit status");
+        }
+        drop(pty);
+    }
+    debug_log("[SSHL-LIFECYCLE] repeated sessions normal exit PASS");
 }
 
 fn foreground_closure(close_session: bool) {

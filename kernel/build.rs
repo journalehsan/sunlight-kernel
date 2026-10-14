@@ -19,6 +19,30 @@ fn main() {
     let release_dir = target_dir.join("x86_64-unknown-none").join("release");
     let scratch_target_dir = target_dir.join("embedded-build");
 
+    // Yazi is embedded unconditionally; ordinary kernel builds must prepare it
+    // too, rather than relying on a previous Yazi-specific test run.
+    let yazi_script = workspace_root.join("tools/build_yazi.sh");
+    let yazi_path = target_dir.join("x86_64-unknown-linux-musl/release/yazi");
+    let yazi_baseline = target_dir.join("yazi-v26.9.1/yazi-x86_64-unknown-linux-musl/yazi");
+    println!("cargo:rerun-if-changed={}", yazi_script.display());
+    println!("cargo:rerun-if-changed={}", yazi_path.display());
+    let needs_yazi_baseline = env::var_os("CARGO_FEATURE_KEY_INJECT").is_some();
+    if needs_yazi_baseline {
+        println!("cargo:rerun-if-changed={}", yazi_baseline.display());
+    }
+    if !yazi_path.is_file() || (needs_yazi_baseline && !yazi_baseline.is_file()) {
+        println!("cargo:warning=prebuilding embedded binary yazi for kernel");
+        let status = Command::new("bash")
+            .arg(&yazi_script)
+            .current_dir(workspace_root)
+            .status()
+            .expect("failed to invoke Yazi builder");
+        assert!(
+            status.success(),
+            "failed to build embedded Yazi; see tools/build_yazi.sh output above"
+        );
+    }
+
     // The desktop advertises Document Viewer even when no renderer is enabled.
     // Package its existing UI/client executable independently of MuPDF/Hayro.
     let viewer_script = workspace_root.join("tools/build_docview.sh");

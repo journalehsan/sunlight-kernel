@@ -480,7 +480,33 @@ impl Scheduler {
         self.add_process_after_reaping(process)
     }
 
-    pub fn add_process_after_reaping(&mut self, process: Process) -> usize {
+    pub fn add_process_after_reaping(&mut self, mut process: Process) -> usize {
+        process.foreground.incarnation =
+            crate::process::foreground::Foreground::allocate_incarnation().unwrap_or(0);
+        if process.foreground.incarnation == 0 {
+            process.foreground.forced_exit = Some(129);
+        }
+        if let Some(parent) = self.processes.iter().find(|p| p.pid == process.ppid) {
+            process.foreground.parent_generation = parent.foreground.incarnation;
+            process.foreground.session_broker = parent.foreground.session_broker;
+            process.foreground.session = parent.foreground.session;
+            process.foreground.generation = parent.foreground.generation;
+            process.foreground.member = parent.foreground.execution();
+            process.foreground.forced_exit = parent.foreground.forced_exit;
+            if parent.is_exiting() {
+                process.foreground.forced_exit = Some(129);
+            }
+            if parent.foreground.cancel != 0 {
+                process.foreground.forced_exit = Some(if parent.foreground.cancel == 126 {
+                    2
+                } else {
+                    128 + i32::from(parent.foreground.cancel)
+                });
+            }
+        }
+        if process.foreground.incarnation == 0 {
+            process.foreground.forced_exit = Some(129);
+        }
         let created_count = PROCESS_CREATED.fetch_add(1, Ordering::Relaxed);
         let online = self.online_cores;
 
@@ -2584,6 +2610,7 @@ impl Scheduler {
             code
         );
 
+        self.cancel_foreground(idx, 1);
         self.processes[idx].exit_code = code;
         self.processes[idx].state = ProcessState::Finished;
         self.processes[idx].exit_cleanup_pending = true;
@@ -2634,7 +2661,12 @@ impl Scheduler {
         ) {
             return false;
         }
-        let Some(code) = self.processes[idx].signal_state.take_fatal_exit_code() else {
+        let Some(code) = self.processes[idx]
+            .foreground
+            .forced_exit
+            .take()
+            .or_else(|| self.processes[idx].signal_state.take_fatal_exit_code())
+        else {
             return false;
         };
         let pid = self.processes[idx].pid;
@@ -2644,6 +2676,7 @@ impl Scheduler {
             self.processes[idx].name_str(),
             code
         );
+        self.cancel_foreground(idx, 1);
         self.processes[idx].exit_code = code;
         self.processes[idx].state = ProcessState::Finished;
         self.processes[idx].exit_cleanup_pending = true;
@@ -3621,6 +3654,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         return idle_top;
     }
 
+    sched.cancel_foreground(cur, 1);
     let my_pid = sched.processes[cur].pid;
     let is_linux_worker = sched.processes[cur]
         .linux_tgid

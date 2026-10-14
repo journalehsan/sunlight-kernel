@@ -111,6 +111,7 @@ impl PtyOwner {
 
 #[derive(Clone, Copy)]
 struct Authority {
+    generation: u64,
     token: CapabilityToken,
     pid: u64,
 }
@@ -118,15 +119,16 @@ struct Authority {
 impl Authority {
     const fn empty() -> Self {
         Self {
+            generation: 0,
             token: CapabilityToken::INVALID,
             pid: 0,
         }
     }
 
-    fn matches(self, token: CapabilityToken, pid: u64) -> bool {
+    fn matches(self, token: CapabilityToken, caller: PtyCallerCredentials) -> bool {
         self.token != CapabilityToken::INVALID
             && self.token == token
-            && (self.pid == 0 || self.pid == pid)
+            && (self.pid == 0 || (self.pid == caller.pid && self.generation == caller.generation))
     }
 
     fn clear(&mut self) {
@@ -299,7 +301,7 @@ impl PtyServer {
     ) -> Result<usize, u64> {
         let index = self.locate(msg.words[0], msg.words[1])?;
         let session = &self.sessions[index];
-        if !session.authority(role).matches(msg.caps[0], caller.pid) {
+        if !session.authority(role).matches(msg.caps[0], caller) {
             return Err(PtyMsg::ERR_PERMISSION_DENIED);
         }
         Ok(index)
@@ -317,7 +319,10 @@ impl PtyServer {
             .position(|session| !session.live)
             .ok_or(PtyMsg::ERR_NO_SLOTS)?;
         let id = self.sessions[index].id;
-        let generation = self.sessions[index].generation.wrapping_add(1).max(1);
+        let generation = self.sessions[index]
+            .generation
+            .checked_add(1)
+            .ok_or(PtyMsg::ERR_NO_SLOTS)?;
         let master = self.mint_token(id, generation, caller.pid, PtyRole::Master)?;
         let control = self.mint_token(id, generation, caller.pid, PtyRole::Control)?;
         let session = &mut self.sessions[index];
@@ -332,11 +337,13 @@ impl PtyServer {
         session.size = size;
         session.foreground_pid = None;
         session.master = Authority {
+            generation: caller.generation,
             token: master,
             pid: caller.pid,
         };
         session.slave.clear();
         session.control = Authority {
+            generation: caller.generation,
             token: control,
             pid: caller.pid,
         };
@@ -355,10 +362,48 @@ mod tests {
     use super::*;
 
     const CALLER: PtyCallerCredentials = PtyCallerCredentials {
+        generation: 1,
         pid: 42,
         uid: 1000,
         gid: 1000,
     };
+
+    #[test]
+    fn reused_pid_cannot_use_previous_role_authority() {
+        let mut server = PtyServer::new();
+        let (id, generation, master, _) = server.create(CALLER, 0, DEFAULT_WINDOW_SIZE).unwrap();
+        let request = IpcMsg::with_label(PtyMsg::WRITE_MASTER)
+            .word(0, id)
+            .word(1, generation)
+            .word(2, 1)
+            .word(3, 3)
+            .with_cap(0, master);
+        let reused = PtyCallerCredentials {
+            generation: CALLER.generation + 1,
+            ..CALLER
+        };
+        assert_eq!(
+            write_master(&mut server, &request, reused).words[0],
+            PtyMsg::ERR_PERMISSION_DENIED
+        );
+        assert_eq!(server.sessions[id as usize - 1].input.len(), 0);
+        assert_eq!(
+            write_master(&mut server, &request, CALLER).label,
+            PtyMsg::REPLY
+        );
+        assert_eq!(server.sessions[id as usize - 1].input.len(), 0);
+    }
+
+    #[test]
+    fn session_generation_exhaustion_never_wraps_to_stale_handle() {
+        let mut server = PtyServer::new();
+        server.sessions[0].generation = u64::MAX;
+        assert_eq!(
+            server.create(CALLER, 0, DEFAULT_WINDOW_SIZE),
+            Err(PtyMsg::ERR_NO_SLOTS)
+        );
+        assert!(!server.sessions[0].live);
+    }
 
     #[test]
     fn ring_is_bounded_and_preserves_order() {
@@ -440,6 +485,7 @@ mod tests {
             PtyMsg::ERR_BUFFER_FULL
         );
         let stranger = PtyCallerCredentials {
+            generation: 1,
             pid: CALLER.pid + 1,
             ..CALLER
         };
@@ -527,6 +573,7 @@ mod tests {
         let index = id as usize - 1;
         let slave = CapabilityToken(77);
         server.sessions[index].slave = Authority {
+            generation: CALLER.generation,
             token: slave,
             pid: CALLER.pid,
         };
@@ -547,6 +594,7 @@ mod tests {
                 &server,
                 &request,
                 PtyCallerCredentials {
+                    generation: 1,
                     pid: CALLER.pid + 1,
                     ..CALLER
                 }
@@ -638,6 +686,38 @@ pub extern "C" fn _start() -> ! {
     loop {
         complete_write_waiters(&server, &mut waiters);
         let mut reply = handle_message(&mut server, &msg);
+        // Claim a delegated bearer slave after its first authenticated use.
+        // Descendants receive lifecycle membership, not this role authority.
+        if reply.label == PtyMsg::REPLY
+            && matches!(
+                msg.label,
+                PtyMsg::BIND_FOREGROUND_OWNER
+                    | PtyMsg::READ_SLAVE
+                    | PtyMsg::WRITE_SLAVE
+                    | PtyMsg::WRITE_SLAVE_BULK
+                    | PtyMsg::WAIT_SLAVE_WRITABLE
+            )
+        {
+            if let Some(caller) = pty_caller_credentials(msg.badge) {
+                if let Ok(index) = server.locate(msg.words[0], msg.words[1]) {
+                    let authority = &mut server.sessions[index].slave;
+                    if authority.pid == 0 {
+                        authority.pid = caller.pid;
+                        authority.generation = caller.generation;
+                    }
+                }
+            }
+        }
+        if msg.label == PtyMsg::WRITE_MASTER
+            && reply.label == PtyMsg::REPLY
+            && unpack_payload(&msg).contains(&3)
+        {
+            // A cancelled relay must escape a deferred full-buffer wait even
+            // before the master drains output. Authority was checked above.
+            if let Some(wait) = waiters[msg.words[0] as usize - 1].take() {
+                let _ = ipc_complete_deferred_reply(wait.token, IpcMsg::with_label(PtyMsg::REPLY));
+            }
+        }
         let mut deferred = false;
         if msg.label == PtyMsg::WAIT_SLAVE_WRITABLE
             && reply.label == PtyMsg::ERROR
@@ -702,6 +782,23 @@ fn handle_message(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
             }
         }
         PtyMsg::ATTACH_SLAVE => attach_slave(server, msg, caller),
+        PtyMsg::BIND_FOREGROUND_OWNER => {
+            let index = match server.check(msg, caller, PtyRole::Slave) {
+                Ok(index) => index,
+                Err(code) => return error(code),
+            };
+            let session = &server.sessions[index];
+            #[cfg(not(test))]
+            if !sunlight_ipc::foreground_session_bind(
+                caller.pid,
+                caller.generation,
+                session.id,
+                session.generation,
+            ) {
+                return error(PtyMsg::ERR_PERMISSION_DENIED);
+            }
+            ok_identity(session.id, session.generation)
+        }
         PtyMsg::SET_MODE => set_mode(server, msg, caller),
         PtyMsg::SET_WINDOW_SIZE => set_window_size(server, msg, caller),
         PtyMsg::GET_WINDOW_SIZE => get_window_size(server, msg, caller),
@@ -771,6 +868,11 @@ fn attach_slave(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentia
     };
     let session = &mut server.sessions[index];
     session.slave = Authority {
+        generation: if target_pid == 0 {
+            0
+        } else {
+            pty_caller_credentials(target_pid).map_or(0, |p| p.generation)
+        },
         token,
         pid: target_pid,
     };
@@ -868,7 +970,13 @@ fn get_foreground_process(
         Err(code) => return error(code),
     };
     let session = &server.sessions[index];
-    ok_identity(session.id, session.generation).word(2, session.foreground_pid.unwrap_or(0))
+    #[cfg(not(test))]
+    let counts = sunlight_ipc::foreground_session_counts(session.id, session.generation);
+    #[cfg(test)]
+    let counts = 0;
+    ok_identity(session.id, session.generation)
+        .word(2, session.foreground_pid.unwrap_or(0))
+        .word(3, counts)
 }
 
 fn write_master(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
@@ -884,7 +992,15 @@ fn write_master(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentia
     if !session.slave_open {
         return error(PtyMsg::ERR_PEER_CLOSED);
     }
-    let accepted = session.input.push_slice(bytes);
+    // Fixed native VINTR (ETX). The master role and generation were checked
+    // above; the kernel selects only scopes attached to this exact session.
+    let accepted = if bytes.contains(&3) {
+        #[cfg(not(test))]
+        let _ = sunlight_ipc::foreground_session_cancel(session.id, session.generation, 2);
+        bytes.len()
+    } else {
+        session.input.push_slice(bytes)
+    };
     if accepted == 0 && !bytes.is_empty() {
         return error(PtyMsg::ERR_WOULD_BLOCK);
     }
@@ -1035,6 +1151,10 @@ fn close_endpoint(
         Err(code) => return error(code),
     };
     let session = &mut server.sessions[index];
+    if role == PtyRole::Master {
+        #[cfg(not(test))]
+        let _ = sunlight_ipc::foreground_session_cancel(session.id, session.generation, 1);
+    }
     match role {
         PtyRole::Master => session.master_open = false,
         PtyRole::Slave => session.slave_open = false,
@@ -1059,6 +1179,8 @@ fn close_session(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredenti
     let session = &mut server.sessions[index];
     let id = session.id;
     let generation = session.generation;
+    #[cfg(not(test))]
+    let _ = sunlight_ipc::foreground_session_cancel(id, generation, 1);
     let _ = tty_publish_winsize(id, generation, None);
     session.destroy();
     debug_log("[PTY] destroy\n");

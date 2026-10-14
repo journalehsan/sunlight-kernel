@@ -4,6 +4,7 @@ pub mod env;
 pub mod epoll;
 pub mod eventfd;
 pub mod fd_table;
+pub mod foreground;
 pub mod fork;
 pub mod layout;
 pub(crate) mod mm2a_plan;
@@ -142,6 +143,7 @@ pub struct Process {
     pub linux_tgid: Option<usize>,
     /// Only the Linux group owner holds its shared SEM_UNDO context.
     pub linux_sysv_semadj: Option<LinuxSysvSemAdj>,
+    pub foreground: foreground::Foreground,
     pub ppid: usize, // parent pid
     pub name: [u8; 32],
     pub state: ProcessState,
@@ -455,6 +457,7 @@ impl Process {
             next_deferred_reply_token: 0,
             fd_table: fd_table::FdTable::new_boxed(),
             capability_mode: false,
+            foreground: foreground::Foreground::default(),
             signal_state: signal::SignalState::new(),
             trusted_display_service: false,
             trusted_swap_admin_service: false,
@@ -628,6 +631,7 @@ impl Process {
             next_deferred_reply_token: 0,
             fd_table,
             capability_mode: false,
+            foreground: foreground::Foreground::default(),
             signal_state: signal::SignalState::new(),
             trusted_display_service: false,
             trusted_swap_admin_service: false,

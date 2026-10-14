@@ -3314,6 +3314,9 @@ mod sunlight {
     ) -> usize {
         let mut written = 0usize;
         while written < bytes.len() {
+            if matches!(sunlight_ipc::foreground(1, 0), 2 | 126) {
+                return bytes.len();
+            }
             if let Some(buffer) = unsafe { PTY_OUTPUT_BUFFER.as_mut() } {
                 let chunk = buffer.copy_from(&bytes[written..]);
                 let reply = ipc_call(
@@ -3327,7 +3330,12 @@ mod sunlight {
                     ),
                 );
                 if reply.label == PtyMsg::ERROR && reply.words[0] == PtyMsg::ERR_WOULD_BLOCK {
-                    if !pty_wait_writable(service_cap, slave_cap, session_id, generation) { break; }
+                    if !pty_wait_writable(service_cap, slave_cap, session_id, generation) {
+                        if matches!(sunlight_ipc::foreground(1, 0), 2 | 126) {
+                            return bytes.len();
+                        }
+                        break;
+                    }
                     continue;
                 }
                 if reply.label != PtyMsg::REPLY {
@@ -3353,7 +3361,12 @@ mod sunlight {
             msg = msg.word(3, word);
             let reply = ipc_call(service_cap, msg);
             if reply.label == PtyMsg::ERROR && reply.words[0] == PtyMsg::ERR_WOULD_BLOCK {
-                if !pty_wait_writable(service_cap, slave_cap, session_id, generation) { break; }
+                if !pty_wait_writable(service_cap, slave_cap, session_id, generation) {
+                    if matches!(sunlight_ipc::foreground(1, 0), 2 | 126) {
+                        return bytes.len();
+                    }
+                    break;
+                }
                 continue;
             }
             if reply.label != PtyMsg::REPLY {
@@ -3387,6 +3400,9 @@ mod sunlight {
                     .with_cap(0, slave_cap),
             );
             if reply.label != PtyMsg::REPLY {
+                if matches!(sunlight_ipc::foreground(1, 0), 2 | 126) {
+                    return Some(total);
+                }
                 if reply.label != PtyMsg::ERROR || reply.words[0] != PtyMsg::ERR_WOULD_BLOCK {
                     return None;
                 }
@@ -3579,6 +3595,16 @@ mod sunlight {
             PTY_OUTPUT_BUFFER = sunlight_ipc::pty::PtyBuffer::new().ok();
         }
 
+        let binding = ipc_call(
+            service_cap,
+            IpcMsg::with_label(PtyMsg::BIND_FOREGROUND_OWNER)
+                .word(0, session_id)
+                .word(1, generation)
+                .with_cap(0, slave_cap),
+        );
+        if binding.label != PtyMsg::REPLY {
+            sunlight_libc::exit(1);
+        }
         let mut shell = Shell::new();
         shell.load_user_by_uid(uid);
         shell.uid = uid;
@@ -3594,6 +3620,7 @@ mod sunlight {
 
         let shell_tab = shell_id as u32;
         let mut in_buf = [0u8; 64];
+        let mut foreground_scope = 0;
         let mut child_buf = [0u8; PtyMsg::BULK_BYTES];
         // Track what the user is typing so we can extract the app name when it launches.
         let mut cmd_buf = [0u8; 64];
@@ -3654,6 +3681,16 @@ mod sunlight {
                     for child_pid in shell.fg_pids.drain(..).filter(|p| *p != pid) {
                         let _ = sunlight_libc::waitpid(child_pid);
                     }
+                    let cancellation = sunlight_ipc::foreground(1, 0);
+                    let code = match cancellation {
+                        2 => 130,
+                        126 => 2,
+                        _ => code,
+                    };
+                    if foreground_scope != 0 {
+                        let _ = sunlight_ipc::foreground(2, foreground_scope);
+                        foreground_scope = 0;
+                    }
                     shell.env.set("?", &alloc::format!("{}", code));
                     // Tell terminal to exit app mode, add separator, then show new prompt.
                     send_osc_app_done(service_cap, slave_cap, session_id, generation);
@@ -3683,6 +3720,13 @@ mod sunlight {
 
                         let fg_before = shell.fg_pid;
                         long_out_reset();
+                        if is_enter {
+                            let id = sunlight_ipc::foreground(0, 0);
+                            if id == u64::MAX {
+                                sunlight_libc::exit(1);
+                            }
+                            foreground_scope = id;
+                        }
                         let (out, out_len) = shell.handle_byte(byte);
                         pty_write_shell_output(
                             service_cap,
@@ -3693,6 +3737,20 @@ mod sunlight {
                         );
 
                         if is_enter {
+                            if shell.fg_pid.is_none() && foreground_scope != 0 {
+                                let signal = sunlight_ipc::foreground(1, 0);
+                                if signal != 0 {
+                                    shell.env.set(
+                                        "?",
+                                        &alloc::format!(
+                                            "{}",
+                                            if signal == 126 { 2 } else { 128 + signal }
+                                        ),
+                                    );
+                                }
+                                let _ = sunlight_ipc::foreground(2, foreground_scope);
+                                foreground_scope = 0;
+                            }
                             if shell.fg_pid.is_some() && fg_before.is_none() {
                                 #[cfg(feature = "native-tests")]
                                 {

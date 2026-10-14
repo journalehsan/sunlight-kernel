@@ -8,6 +8,8 @@ const HEADER_H: u32 = 52;
 const OUTER_PAD: u32 = 18;
 const NARROW_PAD: u32 = 12;
 const GAP: u32 = 12;
+// List heading, gap, one existing 52px track row, and the card border.
+const MIN_PLAYLIST_H: u32 = 84;
 
 const LARGE_ART_MIN: u32 = 280;
 const LARGE_DETAIL_MIN: u32 = 440;
@@ -25,12 +27,20 @@ pub enum LayoutMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MelodyView {
+    Collection,
+    NowPlaying,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MelodyLayout {
     pub mode: LayoutMode,
     pub root: Rect,
     pub header: Rect,
     pub header_open: Rect,
     pub header_more: Rect,
+    pub navigation: [Rect; 2],
+    pub list_heading: Rect,
     pub album_art: Rect,
     pub metadata: Rect,
     pub playlist: Rect,
@@ -38,7 +48,7 @@ pub struct MelodyLayout {
     pub timeline: Rect,
     pub timeline_slider: Rect,
     pub transport: Rect,
-    pub transport_buttons: [Rect; 5],
+    pub transport_buttons: [Rect; 6],
     pub volume_icon: Rect,
     pub volume_slider: Rect,
 }
@@ -51,6 +61,8 @@ impl MelodyLayout {
             header: Rect::new(0, 0, 0, 0),
             header_open: Rect::new(0, 0, 0, 0),
             header_more: Rect::new(0, 0, 0, 0),
+            navigation: [Rect::new(0, 0, 0, 0); 2],
+            list_heading: Rect::new(0, 0, 0, 0),
             album_art: Rect::new(0, 0, 0, 0),
             metadata: Rect::new(0, 0, 0, 0),
             playlist: Rect::new(0, 0, 0, 0),
@@ -58,13 +70,17 @@ impl MelodyLayout {
             timeline: Rect::new(0, 0, 0, 0),
             timeline_slider: Rect::new(0, 0, 0, 0),
             transport: Rect::new(0, 0, 0, 0),
-            transport_buttons: [Rect::new(0, 0, 0, 0); 5],
+            transport_buttons: [Rect::new(0, 0, 0, 0); 6],
             volume_icon: Rect::new(0, 0, 0, 0),
             volume_slider: Rect::new(0, 0, 0, 0),
         }
     }
 
     pub fn arrange(client: Rect) -> Self {
+        Self::arrange_view(client, MelodyView::NowPlaying)
+    }
+
+    pub fn arrange_view(client: Rect, view: MelodyView) -> Self {
         let constraints = LayoutConstraints::new(client.size());
         let mode = if constraints.available.w >= LARGE_MIN_CLIENT_W {
             LayoutMode::Large
@@ -83,7 +99,11 @@ impl MelodyLayout {
         } else {
             OUTER_PAD
         };
-        let content = body.inset(pad as i32);
+        let mut body_rows = [fixed_height(32.min(body.h / 6)), fill()];
+        let _ = Column::new(body.inset(pad as i32))
+            .with_gap(GAP)
+            .arrange(&mut body_rows);
+        let content = body_rows[1].bounds();
 
         let mut layout = Self {
             mode,
@@ -93,12 +113,24 @@ impl MelodyLayout {
         };
         layout.header_open = centered_square_at_left(header.inset(8), 36);
         layout.header_more = centered_square_at_right(header.inset(8), 36);
+        let mut navigation = [fill(), fill()];
+        let _ = Row::new(body_rows[0].bounds())
+            .with_gap(8)
+            .arrange(&mut navigation);
+        layout.navigation = [navigation[0].bounds(), navigation[1].bounds()];
 
-        match mode {
-            LayoutMode::Large => layout.arrange_large(content),
-            LayoutMode::Medium => layout.arrange_medium(content),
-            LayoutMode::Narrow => layout.arrange_narrow(content),
+        match (view, mode) {
+            (MelodyView::Collection, _) => layout.arrange_collection(content),
+            (_, LayoutMode::Large) => layout.arrange_large(content),
+            (_, LayoutMode::Medium) => layout.arrange_medium(content),
+            (_, LayoutMode::Narrow) => layout.arrange_narrow(content),
         }
+        let mut list_rows = [fixed_height(24.min(layout.playlist.h / 4)), fill()];
+        let _ = Column::new(layout.playlist)
+            .with_gap(4)
+            .arrange(&mut list_rows);
+        layout.list_heading = list_rows[0].bounds();
+        layout.playlist = list_rows[1].bounds();
         layout.arrange_timeline();
         layout.arrange_transport();
         layout
@@ -121,29 +153,61 @@ impl MelodyLayout {
         self.timeline = sections[2].bounds();
         self.transport = sections[3].bounds();
 
-        let art_size = hero.h.min(320).min(hero.w.saturating_sub(GAP));
-        let mut hero_columns = [
-            LayoutBox::new(Rect::default()).with_sizing(Sizing::new(
-                AxisSizing::Fixed(art_size),
-                AxisSizing::Fixed(art_size),
-            )),
-            fill(),
+        // Give the queue two shares and the current song three shares.
+        let mut columns = [
+            LayoutBox::new(Rect::default())
+                .with_sizing(Sizing::new(AxisSizing::Flex(3), AxisSizing::Fill)),
+            LayoutBox::new(Rect::default())
+                .with_sizing(Sizing::new(AxisSizing::Flex(2), AxisSizing::Fill)),
         ];
-        let _ = Row::new(hero).with_gap(GAP).arrange(&mut hero_columns);
-        self.album_art = hero_columns[0].bounds();
-        let details = hero_columns[1].bounds();
-        let metadata_h = 84.min(details.h / 2);
-        let mut detail_rows = [fixed_height(metadata_h), fill()];
-        let _ = Column::new(details).with_gap(GAP).arrange(&mut detail_rows);
-        self.metadata = detail_rows[0].bounds();
-        self.playlist = detail_rows[1].bounds();
+        let _ = Row::new(hero).with_gap(GAP).arrange(&mut columns);
+        let center = columns[0].bounds();
+        self.playlist = columns[1].bounds();
+        let metadata_h = 84.min(center.h / 3);
+        let mut center_rows = [fill(), fixed_height(metadata_h)];
+        let _ = Column::new(center).with_gap(GAP).arrange(&mut center_rows);
+        let album_slot = center_rows[0].bounds();
+        let art_size = album_slot.w.min(album_slot.h).min(320);
+        self.album_art = centered_square(album_slot, art_size);
+        self.metadata = center_rows[1].bounds();
+    }
+
+    fn arrange_collection(&mut self, content: Rect) {
+        let narrow = self.mode == LayoutMode::Narrow;
+        let visual_h = if narrow { 36 } else { 62 }.min(content.h / 7);
+        let timeline_h = if narrow { 32 } else { 42 }.min(content.h / 9);
+        let transport_h = if narrow { 40 } else { 48 }.min(content.h / 8);
+        let intro_h = 76.min(content.h / 5);
+        let mut sections = [
+            fixed_height(intro_h),
+            fill(),
+            fixed_height(visual_h),
+            fixed_height(timeline_h),
+            fixed_height(transport_h),
+        ];
+        let _ = Column::new(content)
+            .with_gap(if narrow { 6 } else { GAP })
+            .arrange(&mut sections);
+        let intro = sections[0].bounds();
+        let mut intro_columns = [square(intro.h.min(intro.w / 4)), fill()];
+        let _ = Row::new(intro).with_gap(GAP).arrange(&mut intro_columns);
+        self.album_art = intro_columns[0].bounds();
+        self.metadata = intro_columns[1].bounds();
+        self.playlist = sections[1].bounds();
+        self.visualizer = sections[2].bounds();
+        self.timeline = sections[3].bounds();
+        self.transport = sections[4].bounds();
     }
 
     fn arrange_medium(&mut self, content: Rect) {
-        let intro_h = 190.min(content.h.saturating_mul(2) / 5);
         let visual_h = 62.min(content.h / 7);
         let timeline_h = 42.min(content.h / 9);
         let transport_h = 48.min(content.h / 8);
+        let intro_h = 190
+            .min(content.h.saturating_mul(2) / 5)
+            .min(content.h.saturating_sub(
+                visual_h + timeline_h + transport_h + GAP * 4 + MIN_PLAYLIST_H,
+            ));
         let mut sections = [
             fixed_height(intro_h),
             LayoutBox::new(Rect::default())
@@ -192,7 +256,8 @@ impl MelodyLayout {
         let art_size = content
             .w
             .min(if compact { 150 } else { 230 })
-            .min(art_budget);
+            .min(art_budget)
+            .min(content.h.saturating_sub(fixed_without_art + MIN_PLAYLIST_H));
         let mut sections = [
             fixed_height(art_size),
             fixed_height(metadata_h),
@@ -235,7 +300,7 @@ impl MelodyLayout {
             38
         }
         .min(self.transport.h);
-        let slider_w = if self.mode == LayoutMode::Narrow {
+        let slider_w: u32 = if self.mode == LayoutMode::Narrow {
             64
         } else {
             104
@@ -253,8 +318,9 @@ impl MelodyLayout {
             square(button),
             square(button),
             square(button),
+            square(button),
             fixed_width(18),
-            fixed_width(slider_w),
+            fixed_width(slider_w.saturating_sub(if self.mode == LayoutMode::Narrow { 8 } else { 14 })),
             LayoutBox::new(Rect::default())
                 .with_sizing(Sizing::new(AxisSizing::Flex(1), AxisSizing::Fill)),
         ];
@@ -262,8 +328,8 @@ impl MelodyLayout {
         for (index, target) in self.transport_buttons.iter_mut().enumerate() {
             *target = center_vertically(row[index + 1].bounds(), button);
         }
-        self.volume_icon = center_vertically(row[6].bounds(), 18);
-        self.volume_slider = center_vertically(row[7].bounds(), 24);
+        self.volume_icon = center_vertically(row[7].bounds(), 18);
+        self.volume_slider = center_vertically(row[8].bounds(), 24);
     }
 }
 
@@ -327,6 +393,15 @@ fn center_vertically(rect: Rect, height: u32) -> Rect {
         rect.y + (rect.h.saturating_sub(actual) / 2) as i32,
         rect.w,
         actual,
+    )
+}
+
+fn centered_square(rect: Rect, size: u32) -> Rect {
+    Rect::new(
+        rect.x + (rect.w.saturating_sub(size) / 2) as i32,
+        rect.y + (rect.h.saturating_sub(size) / 2) as i32,
+        size,
+        size,
     )
 }
 

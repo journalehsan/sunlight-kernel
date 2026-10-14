@@ -80,6 +80,7 @@ pub enum SunlightSyscall {
     IpcDeferredReplyIsLive = 17,
     /// Make one receive attempt without blocking the calling process.
     IpcTryRecv = 18,
+    Foreground = 160,
     ProcessExit = 20,
     ProcessYield = 21,
     ThreadSpawn = 22,
@@ -939,6 +940,8 @@ pub mod PtyMsg {
     /// Slave-authorized readiness wait; deferred while the output ring is full.
     /// No output bytes or shared-page mapping are retained by this operation.
     pub const WAIT_SLAVE_WRITABLE: u64 = 0x7312;
+    /// Claim native session-controller lifecycle using slave role authority.
+    pub const BIND_FOREGROUND_OWNER: u64 = 0x7313;
     pub const BULK_BYTES: usize = 4096;
     pub const REPLY: u64 = 0x73FF;
     pub const ERROR: u64 = 0x73FE;
@@ -4986,6 +4989,7 @@ pub fn secure_entropy_ready() -> bool {
 /// to inspect arbitrary processes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PtyCallerCredentials {
+    pub generation: u64,
     pub pid: u64,
     pub uid: u32,
     pub gid: u32,
@@ -5009,6 +5013,7 @@ pub fn pty_caller_credentials(caller_pid: u64) -> Option<PtyCallerCredentials> {
         return None;
     }
     Some(PtyCallerCredentials {
+        generation: reply.words[1],
         pid: reply.words[0],
         uid: packed as u32,
         gid: (packed >> 32) as u32,
@@ -6234,3 +6239,65 @@ mod audio_protocol_tests {
 }
 
 pub mod accounts;
+
+/// Native caller-owned execution lifecycle. IDs are never reused.
+/// op: 0 begin, 1 cancellation status, 2 end, 3 interrupt owned scope.
+pub fn foreground(op: u64, scope: u64) -> u64 {
+    unsafe { raw_syscall(SunlightSyscall::Foreground, op, scope, 0, 0, 0, 0, 0).0 }
+}
+/// Trusted PTY broker only; caller must validate session role authority first.
+pub fn foreground_session_cancel(session: u64, generation: u64, signal: u64) -> bool {
+    unsafe {
+        raw_syscall(
+            SunlightSyscall::Foreground,
+            4,
+            session,
+            generation,
+            signal,
+            0,
+            0,
+            0,
+        )
+        .0 == 0
+    }
+}
+
+/// Bind the authenticated slave caller without changing legacy byte routing.
+pub fn foreground_session_bind(
+    pid: u64,
+    process_generation: u64,
+    session: u64,
+    generation: u64,
+) -> bool {
+    unsafe {
+        raw_syscall(
+            SunlightSyscall::Foreground,
+            6,
+            pid,
+            session,
+            generation,
+            process_generation,
+            0,
+            0,
+        )
+        .0 == 0
+    }
+}
+
+/// Trusted PTY broker diagnostic: live processes and descriptor references in
+/// one generation-qualified session (low/high 32 bits respectively).
+pub fn foreground_session_counts(session: u64, generation: u64) -> u64 {
+    unsafe {
+        raw_syscall(
+            SunlightSyscall::Foreground,
+            9,
+            session,
+            generation,
+            0,
+            0,
+            0,
+            0,
+        )
+        .0
+    }
+}

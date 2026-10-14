@@ -308,6 +308,10 @@ fn deliver_pending_signals(
 ) -> Option<SignalPostAction> {
     use crate::process::signal::{SigHandler, Signal};
 
+    if let Some(code) = process.foreground.forced_exit.take() {
+        return Some(SignalPostAction::Exit(code));
+    }
+
     // Forced kill first — never blocked, never ignorable.
     if process.signal_state.is_pending(Signal::SIGKILL) {
         process.signal_state.clear_pending(Signal::SIGKILL);
@@ -365,6 +369,15 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
         sched.processes[idx].state,
         crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
     ) {
+        return Err(());
+    }
+
+    let sender = sched.current_process_index().ok_or(())?;
+    let trusted = sched.processes[sender].trusted_pty_service
+        || sched.processes[sender].trusted_tty_session_service
+        || sched.processes[sender].trusted_session_service
+        || sched.processes[sender].trusted_display_service;
+    if !trusted && !sched.can_signal_foreground(sender, idx) {
         return Err(());
     }
 
@@ -751,6 +764,17 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
             }
         }
     });
+    // A forced scope exit wins over an in-flight exit/spawn/block syscall.
+    // Handle it before dispatch so a restarted futex cannot park again.
+    let forced = crate::sched::SCHEDULER
+        .lock()
+        .current_process_mut()
+        .foreground
+        .forced_exit
+        .take();
+    if let Some(code) = forced {
+        process_exit(code);
+    }
     let linux_special = linux_compat && num >= 1000;
 
     let result = match num {
@@ -779,6 +803,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         157 => sys_native_exit_group(frame.rdi as i32),
         158 => thread_spawn(frame, true),
         159 => sys_native_pipe_poll(frame),
+        160 => sys_foreground(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
         25 => sys_process_is_alive(frame),
@@ -2759,6 +2784,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let mut pmm = crate::PMM.lock();
     let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
+    if sched.current_process().foreground.cancel != 0 {
+        return u64::MAX;
+    }
     let parent = sched.current_process();
     let ppid = parent.pid;
     let uid = parent.uid;
@@ -3321,6 +3349,9 @@ fn sys_pty_get_credentials(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     };
     frame.r8 = target.pid as u64;
+    // Threads may share a VM generation. Authenticate this publication,
+    // which remains unique even when a PID or address space is reused.
+    frame.r9 = target.foreground.incarnation;
     target.uid as u64 | ((target.gid as u64) << 32)
 }
 
@@ -3362,9 +3393,141 @@ fn sys_tty_publish_winsize(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
-/// PTY-broker-only controlling-terminal attachment. The generation-qualified
-/// identity is inherited by children and prevents reused PTY slots leaking
-/// geometry across sessions.
+// 160: caller-owned scope begin/status/end/cancel, or trusted PTY delivery.
+fn sys_foreground(frame: &mut SyscallFrame) -> u64 {
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let current = sched.current_process_index().unwrap();
+    let broker = sched.processes[current].foreground.incarnation;
+    if frame.rdi == 9 {
+        if !sched.processes[current].trusted_pty_service || frame.rdx == 0 {
+            return u64::MAX;
+        }
+        let mut live = 0u64;
+        let mut descriptors = 0u64;
+        for p in &sched.processes {
+            if p.foreground.matches_session(broker, frame.rsi, frame.rdx) {
+                if !p.is_exiting() {
+                    live += 1;
+                }
+                descriptors += (0..256).filter(|fd| p.fd_table.get(*fd).is_some()).count() as u64;
+            }
+        }
+        return live | (descriptors << 32);
+    }
+    if frame.rdi == 6 {
+        if !sched.processes[current].trusted_pty_service || frame.r8 == 0 {
+            return u64::MAX;
+        }
+        let Some(index) = sched.process_index_by_pid(frame.rsi as usize) else {
+            return u64::MAX;
+        };
+        if sched.processes[index].is_exiting()
+            || sched.processes[index].foreground.incarnation != frame.r9
+        {
+            return u64::MAX;
+        }
+        let f = &mut sched.processes[index].foreground;
+        if f.session != 0 && !f.matches_session(broker, frame.rdx, frame.r8) {
+            return u64::MAX;
+        }
+        f.session_owner = true;
+        f.session_broker = broker;
+        f.session = frame.rdx;
+        f.generation = frame.r8;
+        return 0;
+    }
+    if frame.rdi == 4 {
+        if !sched.processes[current].trusted_pty_service || !matches!(frame.r8, 1 | 2) {
+            return u64::MAX;
+        }
+        if frame.rdx == 0 {
+            return u64::MAX;
+        }
+        for index in 0..sched.processes.len() {
+            if sched.processes[index]
+                .foreground
+                .matches_session(broker, frame.rsi, frame.rdx)
+                && !sched.processes[index].is_exiting()
+                && sched.processes[index].foreground.session_owner
+                && sched.processes[index].foreground.member == 0
+            {
+                sched.cancel_foreground(index, frame.r8 as u8);
+                if frame.r8 == 1 {
+                    sched.processes[index].foreground.forced_exit = Some(129);
+                    let pid = sched.processes[index].pid;
+                    sched.wake_for_signal(pid);
+                    if let Some(cpu) = sched.live_owner_core(index) {
+                        crate::sched::request_reschedule_on(cpu);
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+    match frame.rdi {
+        0 => {
+            if sched.processes[current].is_linux_compat() {
+                return u64::MAX;
+            }
+            sched.processes[current]
+                .foreground
+                .begin()
+                .unwrap_or(u64::MAX)
+        }
+        1 => u64::from(sched.processes[current].foreground.cancel),
+        5 => sched.processes[current].foreground.owned,
+        // A member may report fatal execution failure only for the scope it
+        // belongs to. No user-provided scope/PID selects this operation.
+        8 => {
+            let scope = sched.processes[current].foreground.execution();
+            if scope == 0 {
+                return u64::MAX;
+            }
+            let Some(owner) = sched
+                .processes
+                .iter()
+                .position(|p| p.foreground.owned == scope && !p.is_exiting())
+            else {
+                return u64::MAX;
+            };
+            sched.cancel_foreground(owner, 126);
+            0
+        }
+        7 => {
+            let scope = sched.processes[current].foreground.owned;
+            if scope == 0 || scope != frame.rsi {
+                return u64::MAX;
+            }
+            let mut live = 0u64;
+            let mut descriptors = 0u64;
+            for p in &sched.processes {
+                if p.foreground.member == scope {
+                    if !p.is_exiting() {
+                        live += 1;
+                    }
+                    descriptors +=
+                        (0..256).filter(|fd| p.fd_table.get(*fd).is_some()).count() as u64;
+                }
+            }
+            live | (descriptors << 32)
+        }
+
+        2 | 3 => {
+            if frame.rsi == 0 || frame.rsi != sched.processes[current].foreground.owned {
+                return u64::MAX;
+            }
+            sched.cancel_foreground(current, if frame.rdi == 3 { 2 } else { 1 });
+            if frame.rdi == 2 {
+                sched.processes[current].foreground.owned = 0;
+                sched.processes[current].foreground.cancel = 0;
+            }
+            0
+        }
+        _ => u64::MAX,
+    }
+}
+
+/// PTY-broker-only generation-qualified geometry attachment.
 fn sys_tty_attach_process(frame: &mut SyscallFrame) -> u64 {
     let sched = crate::sched::SCHEDULER.lock();
     if !sched.current_process().trusted_pty_service {
@@ -5152,6 +5315,9 @@ fn sys_native_pipe_poll(frame: &mut SyscallFrame) -> u64 {
     }
     let (ready, blocked) = {
         let mut sched = crate::sched::SCHEDULER.lock();
+        if sched.current_process().foreground.cancel != 0 {
+            return u64::MAX;
+        }
         for record in fds.chunks_exact(8) {
             let fd = i32::from_ne_bytes(record[..4].try_into().unwrap());
             let events = i16::from_ne_bytes(record[4..6].try_into().unwrap());
@@ -6957,6 +7123,15 @@ fn sys_read(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
+    if crate::sched::SCHEDULER
+        .lock()
+        .current_process()
+        .foreground
+        .cancel
+        != 0
+    {
+        return u64::MAX;
+    }
     const EAGAIN: u64 = u64::MAX - 1;
 
     let fd = frame.rdi as i32;
@@ -7184,6 +7359,15 @@ fn sys_write(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
+    if crate::sched::SCHEDULER
+        .lock()
+        .current_process()
+        .foreground
+        .cancel
+        != 0
+    {
+        return u64::MAX;
+    }
     const EAGAIN: u64 = u64::MAX - 1;
 
     let fd = frame.rdi as i32;

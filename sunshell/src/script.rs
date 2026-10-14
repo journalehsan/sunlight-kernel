@@ -85,6 +85,14 @@ pub enum Flow {
 }
 /// Platform adapters own capture sinks, streaming descriptors and child lifecycle.
 pub trait Runtime {
+    fn begin_execution(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+    fn end_execution(&mut self) {}
+    /// Event-driven runtimes reject execution after foreground cancellation.
+    fn checkpoint(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
     fn begin_capture(&mut self) -> Result<i32, Error>;
     fn end_capture(&mut self, fd: i32) -> Result<Vec<u8>, Error>;
     fn external(
@@ -113,7 +121,10 @@ pub fn execute(
         let (line, column) = e.location(source);
         Error::new(2, format!("{line}:{column}: {}", e.message))
     })?;
-    run(&tree, context, runtime)
+    runtime.begin_execution()?;
+    let result = run(&tree, context, runtime);
+    runtime.end_execution();
+    result
 }
 fn expand(
     word: &Word,
@@ -157,6 +168,7 @@ fn substitution(
     if context.substitution_depth >= crate::capture::MAX_CAPTURE_DEPTH {
         return Err(Error::fatal("substitution nesting exceeds 16 levels"));
     }
+    runtime.checkpoint()?;
     let fd = runtime.begin_capture()?;
     let mut child = context.clone();
     child.io[1] = fd;
@@ -165,6 +177,7 @@ fn substitution(
     child.substitution_status = None;
     let result = run(tree, &mut child, runtime);
     let bytes = runtime.end_capture(fd)?;
+    runtime.checkpoint()?;
     let status = match result {
         Ok(Flow::Status(s) | Flow::Exit(s) | Flow::Return(s)) => s,
         Ok(_) => {
@@ -246,6 +259,7 @@ fn run(
     context: &mut ShellExecutionContext,
     runtime: &mut impl Runtime,
 ) -> Result<Flow, Error> {
+    runtime.checkpoint()?;
     // Function-definition redirects are evaluated at invocation, never definition.
     let saved = context.io;
     let opened = if matches!(node.kind, CommandKind::FunctionDefinition { .. }) {
@@ -1009,4 +1023,107 @@ fn pattern_matches(pattern: &[(char, bool)], value: &str) -> Result<bool, Error>
         p += 1;
     }
     Ok(p == pattern.len())
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct CancelRuntime {
+        captures: crate::capture::Captures,
+        depth: usize,
+        cancel: bool,
+        output: Vec<u8>,
+    }
+    impl Runtime for CancelRuntime {
+        fn checkpoint(&mut self) -> Result<(), Error> {
+            if !self.cancel {
+                return Ok(());
+            }
+            let mut error = Error::new(130, "cancelled");
+            error.expansion_fatal = true;
+            Err(error)
+        }
+        fn begin_capture(&mut self) -> Result<i32, Error> {
+            self.depth += 1;
+            self.captures.begin()
+        }
+        fn end_capture(&mut self, fd: i32) -> Result<Vec<u8>, Error> {
+            self.depth -= 1;
+            self.captures.end(fd)
+        }
+        fn external(
+            &mut self,
+            _: &AstNode<String>,
+            _: &ShellExecutionContext,
+            _: Option<&[ShellEnv]>,
+        ) -> Result<i32, Error> {
+            self.cancel = true;
+            Ok(130)
+        }
+        fn write(&mut self, fd: i32, bytes: &[u8]) -> Result<(), Error> {
+            if fd < 0 {
+                self.captures.append(fd, bytes)
+            } else {
+                self.output.extend_from_slice(bytes);
+                Ok(())
+            }
+        }
+        fn open(
+            &mut self,
+            _: &str,
+            _: RedirectMode,
+            _: &ShellExecutionContext,
+        ) -> Result<i32, Error> {
+            unreachable!()
+        }
+        fn close(&mut self, _: i32) {
+            unreachable!()
+        }
+        fn directory(&mut self, _: &str, _: &ShellExecutionContext) -> Result<String, Error> {
+            unreachable!()
+        }
+        fn source(&mut self, _: &str, _: &ShellExecutionContext) -> Result<String, Error> {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn nested_cancel_discards_partial_capture_and_unwinds_every_sink() {
+        let mut context = ShellExecutionContext::new(ShellEnv::new(), String::from("/"));
+        context.env.set("value", "before");
+        let mut runtime = CancelRuntime::default();
+        let error = execute(
+            "value=$(echo partial; echo \"$(long_running)\"); echo bad",
+            &mut context,
+            &mut runtime,
+        )
+        .unwrap_err();
+        assert_eq!(error.status, 130);
+        assert!(error.expansion_fatal);
+        assert_eq!(runtime.depth, 0);
+        assert!(runtime.output.is_empty());
+        assert_eq!(context.env.get("value"), Some("before"));
+        runtime.cancel = false;
+        assert_eq!(
+            execute("echo recovered", &mut context, &mut runtime).unwrap(),
+            Flow::Status(0)
+        );
+        assert_eq!(runtime.output, b"recovered\n");
+    }
+
+    #[test]
+    fn cancellation_stops_compound_loop_at_execution_checkpoint() {
+        let mut context = ShellExecutionContext::new(ShellEnv::new(), String::from("/"));
+        let mut runtime = CancelRuntime::default();
+        let error = execute(
+            "while true; do long_running; echo bad; done",
+            &mut context,
+            &mut runtime,
+        )
+        .unwrap_err();
+        assert_eq!(error.status, 130);
+        assert!(runtime.output.is_empty());
+    }
 }

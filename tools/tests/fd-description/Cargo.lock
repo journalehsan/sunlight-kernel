@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "fd-description-tests"
-version = "0.2.4781-alpha.2"
+version = "0.2.4871-alpha.2"
 dependencies = [
  "spin",
 ]

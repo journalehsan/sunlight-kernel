@@ -1401,6 +1401,12 @@ impl TerminalApp {
             }
         }
         self.layout = next;
+        // A resize replaces the compositor-owned client surface.  The new
+        // backing store is blank, so the incremental viewport cache must not
+        // suppress repainting cells that were already painted on the old
+        // surface.
+        self.viewport.invalidate(next.content);
+        self.painted_view = None;
         for tab in self.tabs.iter_mut().flatten() {
             let _ = tab.publish_geometry(next.winsize);
         }
@@ -1731,6 +1737,11 @@ impl TerminalApp {
             redraw |= previous_status != tab.status;
             if tab.poll_pty(&mut self.read_buf, &mut self.console_buf, self.debug) {
                 self.last_output_ms = monotonic_millis();
+                // PTY output changes the terminal model independently of the
+                // window/layout identity.  Invalidate the incremental cell
+                // cache so output is repainted even when the compositor has
+                // replaced the client surface during a resize.
+                self.viewport.invalidate(self.layout.content);
                 redraw = true;
             }
         }
@@ -2661,7 +2672,15 @@ impl App for TerminalApp {
                     .active_tab_mut()
                     .map(|tab| tab.app_owns_input())
                     .unwrap_or(false);
-                if !app_input && self.mods.ctrl && (ch == 't' || ch == 'T') {
+                if self.mods.ctrl && matches!(ch, 'c' | 'C' | '\u{3}') {
+                    if let Some(tab) = self.active_tab_mut() {
+                        if let Some(pty) = tab.pty.as_ref() {
+                            pty.write(&[3]);
+                        }
+                        tab.footer.take_line();
+                        dirty = true;
+                    }
+                } else if !app_input && self.mods.ctrl && (ch == 't' || ch == 'T') {
                     dirty |= self.spawn_tab();
                 } else if !app_input && self.mods.ctrl && (ch == 'w' || ch == 'W') {
                     // Plain Ctrl+W never reaches here -- `sunlight-display`

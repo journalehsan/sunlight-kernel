@@ -29,7 +29,7 @@ if [[ "${YAZI_USE_CACHED_ET_EXEC:-0}" == 1 ]]; then
 	exit 0
 fi
 
-for required in cargo git curl unzip sha256sum readelf; do
+for required in cargo git curl unzip sha256sum readelf rg; do
 	command -v "$required" >/dev/null || {
 		echo "missing required tool: $required" >&2
 		exit 1
@@ -62,7 +62,7 @@ if [[ "$actual_commit" != "$YAZI_COMMIT" ]]; then
 	exit 1
 fi
 
-env \
+env -u CARGO_ENCODED_RUSTFLAGS \
 	CARGO_TARGET_DIR="$SOURCE_DIR/target" \
 	CC="$MUSL_CC" \
 	CC_x86_64_unknown_linux_musl="$MUSL_CC" \

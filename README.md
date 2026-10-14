@@ -97,13 +97,20 @@ This is the point where SunlightOS is growing mostly through user-space services
 - **QEMU** (`qemu-system-x86_64`)
 - **xorriso** (for ISO creation)
 - **git**, **make**, **gcc** (for building Limine bootloader)
+- **musl-gcc**, **curl**, **unzip**, **binutils**, **ripgrep** (for embedded Yazi)
 - **parted**, **dosfstools**, **kpartx** (optional, for `disk.sh`)
 
 Install on Debian/Ubuntu:
 ```bash
 sudo apt-get update
-sudo apt-get install -y qemu-system-x86 xorriso git make gcc parted dosfstools
+sudo apt-get install -y qemu-system-x86 xorriso git make gcc parted dosfstools musl-tools curl unzip binutils ripgrep
 ```
+
+On Arch/Manjaro, `sudo pacman -S --needed musl` provides `musl-gcc`.
+Install the Rust musl target with `rustup target add x86_64-unknown-linux-musl`.
+The kernel build automatically builds missing Yazi artifacts from pinned upstream
+sources; the first build requires network access. Later builds reuse the artifacts
+under `target/`.
 
 ## Build Instructions
 

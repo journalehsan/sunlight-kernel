@@ -12,12 +12,21 @@ use sunshell::{
 pub(super) struct NativeRuntime {
     shell: Shell,
     captures: sunshell::capture::Captures,
+    owned_scope: u64,
 }
 impl NativeRuntime {
     pub(super) fn new() -> Self {
         Self {
+            owned_scope: 0,
             shell: Shell::new(),
             captures: sunshell::capture::Captures::default(),
+        }
+    }
+}
+impl Drop for NativeRuntime {
+    fn drop(&mut self) {
+        if self.owned_scope != 0 {
+            let _ = sunlight_ipc::foreground(2, self.owned_scope);
         }
     }
 }
@@ -27,8 +36,43 @@ fn error(e: libc::Errno) -> Error {
 fn path(name: &str, context: &ShellExecutionContext) -> Result<String, Error> {
     normalize_path(&context.cwd, name).ok_or_else(|| Error::new(1, "invalid path"))
 }
+fn checkpoint() -> Result<(), Error> {
+    let signal = sunlight_ipc::foreground(1, 0);
+    if signal == 0 {
+        return Ok(());
+    }
+    let mut e = Error::new(
+        if signal == 126 {
+            2
+        } else {
+            128 + signal as i32
+        },
+        "foreground execution cancelled",
+    );
+    e.expansion_fatal = true;
+    Err(e)
+}
 impl Runtime for NativeRuntime {
+    fn begin_execution(&mut self) -> Result<(), Error> {
+        if self.owned_scope == 0 {
+            let scope = sunlight_ipc::foreground(0, 0);
+            if scope != u64::MAX {
+                self.owned_scope = scope;
+            }
+        }
+        checkpoint()
+    }
+    fn end_execution(&mut self) {
+        if self.owned_scope != 0 {
+            let _ = sunlight_ipc::foreground(2, self.owned_scope);
+            self.owned_scope = 0;
+        }
+    }
+    fn checkpoint(&mut self) -> Result<(), Error> {
+        checkpoint()
+    }
     fn begin_capture(&mut self) -> Result<i32, Error> {
+        self.begin_execution()?;
         self.captures.begin()
     }
     fn end_capture(&mut self, fd: i32) -> Result<Vec<u8>, Error> {
@@ -40,6 +84,7 @@ impl Runtime for NativeRuntime {
         context: &ShellExecutionContext,
         stage_environments: Option<&[ShellEnv]>,
     ) -> Result<i32, Error> {
+        self.begin_execution()?;
         if stage_environments.is_none() {
             context.env.export_size().map_err(|e| Error::new(2, e))?;
         }
@@ -97,9 +142,9 @@ impl Runtime for NativeRuntime {
             let pids = core::mem::take(&mut self.shell.fg_pids);
             if let Err(e) = drain(&mut self.captures, channels) {
                 capture_error = Some(e);
-                for pid in &pids {
-                    let _ = libc::kill(*pid, 9);
-                }
+                // Failure authority is implicit kernel-installed membership;
+                // no PID or caller-selected foreign scope crosses the ABI.
+                let _ = sunlight_ipc::foreground(8, 0);
             }
             let mut status = 0;
             for pid in pids {
@@ -112,6 +157,7 @@ impl Runtime for NativeRuntime {
             e.expansion_fatal = true;
             return Err(e);
         }
+        checkpoint()?;
         Ok(status)
     }
     fn write(&mut self, fd: i32, bytes: &[u8]) -> Result<(), Error> {
@@ -184,6 +230,7 @@ fn drain(
 ) -> Result<(), Error> {
     let mut buffer = [0; 4096];
     while !channels.is_empty() {
+        checkpoint()?;
         let mut fds = [libc::PollFd {
             fd: -1,
             events: 1,
@@ -192,7 +239,9 @@ fn drain(
         for (slot, (_, reader, _)) in fds.iter_mut().zip(&channels) {
             slot.fd = reader.0 .0 as i32;
         }
-        libc::poll(&mut fds[..channels.len()], -1).map_err(error)?;
+        let ready = libc::poll(&mut fds[..channels.len()], -1);
+        checkpoint()?;
+        ready.map_err(error)?;
         for index in (0..channels.len()).rev() {
             if fds[index].revents == 0 {
                 continue;

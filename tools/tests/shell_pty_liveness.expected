@@ -5,9 +5,9 @@
 [SSHL-PTY] sizes repeat=2 integrity PASS
 [SSHL-PTY] concurrent sessions delayed consumer PASS
 [SSHL-LIFECYCLE] foreground stdin stderr prompt PASS
-[SSHL-LIFECYCLE] Ctrl+C foreground UNSUPPORTED
-[SSHL-LIFECYCLE] Ctrl+C nested-substitution UNSUPPORTED
-[SSHL-LIFECYCLE] synchronous disconnect DEFERRED
+[SSHL-LIFECYCLE] Ctrl+C foreground PASS
+[SSHL-LIFECYCLE] Ctrl+C nested-substitution PASS
+[SSHL-LIFECYCLE] synchronous disconnect PASS
 [SSHL-PTY] foreground master closure wakes and exits PASS
 [SSHL-PTY] foreground session closure wakes and exits PASS
 [SSHL-PTY] foreground input closure wakes and exits PASS
@@ -17,3 +17,13 @@
 [SSHL-PTY] broker partial full EOF early closure PASS
 [SSHL-PTY] native gate PASS
 [TTY]  exit: sshl --pty-liveness-tests -> 0
+[SSHL-LIFECYCLE] Ctrl+C pipeline PASS
+[SSHL-LIFECYCLE] Ctrl+C blocking-stdin PASS
+[SSHL-LIFECYCLE] Ctrl+C full-output PASS
+[SSHL-LIFECYCLE] stale scope authority spawn cancellation isolation PASS
+[SSHL-LIFECYCLE] Ctrl+C descendant PASS
+[SSHL-LIFECYCLE] Ctrl+C compound PASS
+[SSHL-LIFECYCLE] unrelated session interrupt isolation PASS
+[SSHL-LIFECYCLE] parent exit descendant cleanup PASS
+[SSHL-LIFECYCLE] repeated sessions normal exit PASS
+[SSHL-LIFECYCLE] Ctrl+C early-consumer PASS
