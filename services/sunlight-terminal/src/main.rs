@@ -541,20 +541,26 @@ impl PtySession {
     /// Release this session through its control authority. Best-effort and idempotent; bounded by
     /// [`CLOSE_TIMEOUT_MS`] so a stuck server can't wedge tab close/teardown
     /// either.
-    fn close(&self) {
+    fn close(&self) -> bool {
         #[cfg(test)]
         {
-            return;
+            return true;
         }
         #[cfg(not(test))]
-        let _ = ipc_call_timeout(
+        match ipc_call_timeout(
             self.service_cap,
             IpcMsg::with_label(PtyMsg::CLOSE_SESSION)
                 .word(0, self.id)
                 .word(1, self.generation)
                 .with_cap(0, self.control),
             CLOSE_TIMEOUT_MS,
-        );
+        ) {
+            Ok(reply) if reply.label == PtyMsg::REPLY => true,
+            _ => {
+                debug_log("[TERM] PTY session close failed\n");
+                false
+            }
+        }
     }
 }
 
@@ -1293,18 +1299,20 @@ impl TerminalTab {
         pty.write(b"\n");
     }
 
-    /// Clean shutdown for this tab: stop the shell if it's still alive, then
-    /// release the PTY session (if either was ever actually created — a
-    /// `Connecting`/`Failed` tab may have neither).
+    /// Close the PTY so the live shell hangs up its foreground children and
+    /// exits. SIGTERM is a bounded fallback when session closure fails or no
+    /// session was created; it must not preempt the ordinary hangup path.
     fn close(&self) {
+        if let Some(pty) = &self.pty {
+            if pty.close() {
+                return;
+            }
+        }
         #[cfg(not(test))]
         if self.status == TabStatus::Running {
             if let Some(pid) = self.shell_pid {
                 let _ = libc::kill(pid, SIGTERM);
             }
-        }
-        if let Some(pty) = &self.pty {
-            pty.close();
         }
     }
 }
@@ -1605,7 +1613,9 @@ impl TerminalApp {
         match step {
             SpawnStep::SetMode(pty)
             | SpawnStep::SpawnShell(pty)
-            | SpawnStep::RegisterForeground(pty, _) => pty.close(),
+            | SpawnStep::RegisterForeground(pty, _) => {
+                pty.close();
+            }
             SpawnStep::RequestPty => {}
         }
         self.mark_pending_failed_id(tab_id);
@@ -1636,7 +1646,9 @@ impl TerminalApp {
                 match pending.step {
                     SpawnStep::SetMode(pty)
                     | SpawnStep::SpawnShell(pty)
-                    | SpawnStep::RegisterForeground(pty, _) => pty.close(),
+                    | SpawnStep::RegisterForeground(pty, _) => {
+                        pty.close();
+                    }
                     SpawnStep::RequestPty => {}
                 }
             } else {
@@ -1766,7 +1778,9 @@ impl TerminalApp {
             match pending.step {
                 SpawnStep::SetMode(pty)
                 | SpawnStep::SpawnShell(pty)
-                | SpawnStep::RegisterForeground(pty, _) => pty.close(),
+                | SpawnStep::RegisterForeground(pty, _) => {
+                    pty.close();
+                }
                 SpawnStep::RequestPty => {}
             }
         }

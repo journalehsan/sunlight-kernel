@@ -162,6 +162,22 @@ pub unsafe fn send_fixed_ipi(cpu_id: usize, vector: u8) {
     wait_for_icr_idle();
 }
 
+/// One nonblocking doorbell attempt. Call with local interrupts disabled so
+/// the two xAPIC ICR writes cannot interleave with another local sender.
+/// A busy ICR leaves the scheduler notification pending for a later flush.
+pub unsafe fn try_send_fixed_ipi(cpu_id: usize, vector: u8) -> bool {
+    assert!(
+        cpu_id < crate::sched::MAX_CORES,
+        "IPI target is out of range"
+    );
+    if lapic_read(LAPIC_ICR_LOW) & (1 << 12) != 0 {
+        return false;
+    }
+    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
+    lapic_write(LAPIC_ICR_LOW, vector as u32);
+    true
+}
+
 /// Send an NMI doorbell to a CPU. MM-2B uses this only to make a published
 /// fixed-vector shootdown mailbox consumable while the target has IF cleared.
 pub unsafe fn send_nmi(cpu_id: usize) {

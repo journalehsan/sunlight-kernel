@@ -7,8 +7,8 @@
 //! - process `write(fd1)` → `stdout` ring → `TtyStdoutPull` syscall → tty_server renders
 //!
 //! Rings are keyed by tab index (the slot the shell/app belongs to). They have
-//! their own lock and never touch the scheduler, so they cannot deadlock against
-//! `sys_read`/`sys_write`.
+//! their own lock. Wakeups run only after ring guards are released, preserving
+//! the scheduler -> ring lock order used by `sys_read`/`sys_write`.
 
 use spin::Mutex;
 use sunlight_ipc::TerminalWinsize;
@@ -172,6 +172,10 @@ pub fn write_stdout(tab: usize, bytes: &[u8]) -> usize {
     n
 }
 
+pub(crate) fn stdout_has_space(tab: usize) -> bool {
+    tab < MAX_TTY_TABS && STDOUT.lock()[tab].len < STDOUT_CAP
+}
+
 /// Drain a tab's stdout ring into `out` (called via `TtyStdoutPull`).
 /// Returns the number of bytes pulled.
 pub fn pull_stdout(tab: usize, out: &mut [u8]) -> usize {
@@ -201,14 +205,26 @@ pub fn has_stdin(tab: usize) -> bool {
     STDIN.lock()[tab].len > 0
 }
 
+/// Read-only bounded diagnostics; no scheduler access while a ring is locked.
+pub(crate) fn diagnostic_occupancy(tab: usize) -> (usize, usize) {
+    if tab >= MAX_TTY_TABS {
+        return (0, 0);
+    }
+    let input = STDIN.lock()[tab].len;
+    let output = STDOUT.lock()[tab].len;
+    (input, output)
+}
+
 /// Drop any buffered bytes for a tab. Called when a new foreground command
 /// starts so stale keystrokes/output from the previous command don't bleed in.
+/// Caller must not hold SCHEDULER; the cleared ring's writers are notified.
 pub fn clear_tab(tab: usize) {
     if tab >= MAX_TTY_TABS {
         return;
     }
     STDIN.lock()[tab].clear();
     STDOUT.lock()[tab].clear();
+    crate::sched::with_scheduler(|sched| sched.wake_tty_writers(tab));
 }
 
 #[cfg(test)]

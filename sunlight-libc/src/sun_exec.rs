@@ -482,6 +482,23 @@ impl<'a> LaunchRequest<'a> {
 }
 
 pub fn launch(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
+    launch_with_environment(request, None)
+}
+
+/// Preserve canonical resolution/display authorization while optionally
+/// replacing only the child's environment. Existing callers inherit normally.
+pub fn launch_with_environment(
+    request: LaunchRequest<'_>,
+    environment: Option<&[u8]>,
+) -> Result<LaunchResult, LaunchError> {
+    if let Some(blob) = environment {
+        sunlight_ipc::spawn_env::validate(blob).map_err(|error| {
+            LaunchError::SpawnFailed(match error {
+                sunlight_ipc::spawn_env::EnvironmentError::TooLarge => Errno::TooBig,
+                _ => Errno::Inval,
+            })
+        })?;
+    }
     let subject_buf = Subject::new(request.command);
     let subject = subject_buf.as_str();
     launch_trace::log_phase_now(request.trace, subject, "request_received", None);
@@ -498,10 +515,10 @@ pub fn launch(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
     }
 
     if is_bundle_path(request.command) {
-        return launch_chronos_bundle(request);
+        return launch_chronos_bundle(request, environment);
     }
     if is_com_path(request.command) || is_mz_path(request.command) {
-        return launch_direct_com(request);
+        return launch_direct_com(request, environment);
     }
 
     let resolved = match resolve(request.command) {
@@ -512,10 +529,13 @@ pub fn launch(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
         }
     };
     if is_bundle_path(resolved.path()) {
-        return launch_chronos_bundle(LaunchRequest {
-            command: resolved.path(),
-            ..request
-        });
+        return launch_chronos_bundle(
+            LaunchRequest {
+                command: resolved.path(),
+                ..request
+            },
+            environment,
+        );
     }
     launch_trace::log_phase_now(request.trace, resolved.subject(), "app_resolved", None);
 
@@ -544,7 +564,7 @@ pub fn launch(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
     }
 
     launch_trace::log_phase_now(request.trace, resolved.subject(), "spawn_entered", None);
-    match libc::spawn(resolved.path(), &argv[..argc], None) {
+    match spawn_environment(resolved.path(), &argv[..argc], environment) {
         Ok(pid) => {
             launch_trace::log_phase_now(
                 request.trace,
@@ -615,7 +635,10 @@ pub fn open_registered_settings_page(
     })
 }
 
-fn launch_chronos_bundle(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
+fn launch_chronos_bundle(
+    request: LaunchRequest<'_>,
+    environment: Option<&[u8]>,
+) -> Result<LaunchResult, LaunchError> {
     let bundle = normalize_bundle_path(request.command)?;
     let bundle = &bundle[..request.command.len()];
     let manifest = read_bundle_manifest(bundle)?;
@@ -654,10 +677,14 @@ fn launch_chronos_bundle(request: LaunchRequest<'_>) -> Result<LaunchResult, Lau
         } else {
             &[]
         },
+        environment,
     )
 }
 
-fn launch_direct_com(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchError> {
+fn launch_direct_com(
+    request: LaunchRequest<'_>,
+    environment: Option<&[u8]>,
+) -> Result<LaunchResult, LaunchError> {
     let program = normalize_existing_path(request.command)?;
     let program = &program[..request.command.len()];
     if request.require_display && sunlight_ipc::nameserver_lookup("display_server").is_none() {
@@ -680,13 +707,25 @@ fn launch_direct_com(request: LaunchRequest<'_>) -> Result<LaunchResult, LaunchE
         args[argc] = argument;
         argc += 1;
     }
-    launch_runtime(request.trace, &args[..argc], &[])
+    launch_runtime(request.trace, &args[..argc], &[], environment)
+}
+
+fn spawn_environment(
+    path: &[u8],
+    argv: &[&[u8]],
+    environment: Option<&[u8]>,
+) -> Result<u64, Errno> {
+    match environment {
+        Some(blob) => libc::spawn_with_stdio_env(path, argv, None, None, None, blob),
+        None => libc::spawn(path, argv, None),
+    }
 }
 
 fn launch_runtime(
     trace: LaunchTrace,
     chronos_args: &[&[u8]],
     extra_args: &[&[u8]],
+    environment: Option<&[u8]>,
 ) -> Result<LaunchResult, LaunchError> {
     let mut trace_arg = [0u8; 64];
     let trace_arg_len = launch_trace::format_launch_arg(trace, &mut trace_arg).unwrap_or(0);
@@ -705,8 +744,8 @@ fn launch_runtime(
         argv[argc] = &trace_arg[..trace_arg_len];
         argc += 1;
     }
-    let pid =
-        libc::spawn(CHRONOS_RUNTIME_PATH, &argv[..argc], None).map_err(LaunchError::SpawnFailed)?;
+    let pid = spawn_environment(CHRONOS_RUNTIME_PATH, &argv[..argc], environment)
+        .map_err(LaunchError::SpawnFailed)?;
     let mut path = [0; MAX_PATH];
     path[..CHRONOS_RUNTIME_PATH.len()].copy_from_slice(CHRONOS_RUNTIME_PATH);
     Ok(LaunchResult {
@@ -1143,6 +1182,20 @@ pub fn next_cli_trace(source: LaunchSource) -> LaunchTrace {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn explicit_environment_validation_precedes_service_access() {
+        use super::*;
+        let trace = LaunchTrace::new(1, LaunchSource::Shell, 1);
+        let request = LaunchRequest::new(trace, LaunchSource::Shell, b"files");
+        assert_eq!(
+            launch_with_environment(request, Some(b"A=x\0A=y\0")),
+            Err(LaunchError::SpawnFailed(Errno::Inval))
+        );
+        assert_eq!(
+            launch_with_environment(request, Some(&[0; sunlight_ipc::spawn_env::MAX_BYTES + 1])),
+            Err(LaunchError::SpawnFailed(Errno::TooBig))
+        );
+    }
     use super::{
         is_bundle_path, is_strict_identifier, join_bundle_program, map_app_id, ControlPanelPage,
         APPLICATION_REGISTRY, CHRONOS_BUNDLE_ARG_COUNT, MAX_ARGS, MAX_PATH, SETTINGS_PAGE_REGISTRY,

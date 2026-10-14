@@ -80,7 +80,7 @@ pub const O_TRUNC: u64 = 0x200;
 pub const O_APPEND: u64 = 0x400;
 pub const O_NOFOLLOW: u64 = 0x0002_0000;
 pub const O_CLOEXEC: u64 = 0x0008_0000;
-const SPAWN_STDIO_EXTENSION: u64 = 0x5355_4E53_5444_494F;
+const SPAWN_STDIO_EXTENSION: u64 = sunlight_ipc::spawn_env::STDIO_EXTENSION;
 pub const SEEK_SET: i32 = 0;
 pub const SEEK_CUR: i32 = 1;
 pub const SEEK_END: i32 = 2;
@@ -628,6 +628,37 @@ pub fn spawn_with_stdio(
     stdout: Option<Fd>,
     stderr: Option<Fd>,
 ) -> Result<u64, Errno> {
+    spawn_impl(path, argv, stdin, stdout, stderr, None)
+}
+
+/// Spawn with a complete replacement environment, leaving the caller's process
+/// environment unchanged. `environment` is a bounded UTF-8 KEY=VALUE\0 blob;
+/// an empty slice supplies an empty environment. Invalid/duplicate names are
+/// rejected before the syscall. Credentials and capabilities remain inherited.
+pub fn spawn_with_stdio_env(
+    path: &[u8],
+    argv: &[&[u8]],
+    stdin: Option<Fd>,
+    stdout: Option<Fd>,
+    stderr: Option<Fd>,
+    environment: &[u8],
+) -> Result<u64, Errno> {
+    use sunlight_ipc::spawn_env::{validate, EnvironmentError};
+    validate(environment).map_err(|e| match e {
+        EnvironmentError::TooLarge => Errno::TooBig,
+        _ => Errno::Inval,
+    })?;
+    spawn_impl(path, argv, stdin, stdout, stderr, Some(environment))
+}
+
+fn spawn_impl(
+    path: &[u8],
+    argv: &[&[u8]],
+    stdin: Option<Fd>,
+    stdout: Option<Fd>,
+    stderr: Option<Fd>,
+    environment: Option<&[u8]>,
+) -> Result<u64, Errno> {
     if argv.len() > MAX_ARGS {
         return Err(Errno::TooBig);
     }
@@ -652,15 +683,28 @@ pub fn spawn_with_stdio(
     let stdin_arg = stdin.map_or(u64::MAX, |fd| fd.0 as u64);
     let stdout_arg = stdout.map_or(u64::MAX, |fd| fd.0 as u64);
     let stderr_arg = stderr.map_or(u64::MAX, |fd| fd.0 as u64);
+    let transport = sunlight_ipc::spawn_env::SpawnEnvironment {
+        argv: ptrs.as_ptr() as u64,
+        bytes: environment.map_or(0, |blob| blob.as_ptr() as u64),
+        len: environment.map_or(0, |blob| blob.len() as u64),
+    };
+    let (arguments, extension) = if environment.is_some() {
+        (
+            &transport as *const _ as u64,
+            sunlight_ipc::spawn_env::ENV_EXTENSION,
+        )
+    } else {
+        (ptrs.as_ptr() as u64, SPAWN_STDIO_EXTENSION)
+    };
     let ret = unsafe {
         sys::syscall6(
             sys::SYS_SPAWN,
             path_ptr as u64,
-            ptrs.as_ptr() as u64,
+            arguments,
             stdout_arg,
             stdin_arg,
             stderr_arg,
-            SPAWN_STDIO_EXTENSION,
+            extension,
         )
     };
     sys::check(ret)
@@ -669,7 +713,9 @@ pub fn spawn_with_stdio(
 /// Non-blocking wait: Ok(Some(code)) once the child exited, Ok(None) while
 /// it is still running, Err for unknown pid.
 pub fn try_waitpid(pid: u64) -> Result<Option<u64>, Errno> {
-    let ret = unsafe { sys::syscall1(sys::SYS_WAITPID, pid) };
+    let ret = unsafe {
+        sys::syscall2(sys::SYS_WAITPID, pid, sunlight_ipc::WAITPID_NOHANG_EXTENSION)
+    };
     match sys::check(ret) {
         Ok(code) => Ok(Some(code)),
         Err(Errno::Again) => Ok(None),
@@ -677,12 +723,15 @@ pub fn try_waitpid(pid: u64) -> Result<Option<u64>, Errno> {
     }
 }
 
-/// Blocking wait built on `try_waitpid` + yield.
+/// Blocking wait using the kernel's parked child wait. Keep this separate from
+/// the nonblocking probe so synchronous executors do not poll a live child.
 pub fn waitpid(pid: u64) -> Result<u64, Errno> {
     loop {
-        match try_waitpid(pid)? {
-            Some(code) => return Ok(code),
-            None => yield_now(),
+        let ret = unsafe { sys::syscall2(sys::SYS_WAITPID, pid, 0) };
+        match sys::check(ret) {
+            Ok(code) => return Ok(code),
+            Err(Errno::Again) => yield_now(),
+            Err(error) => return Err(error),
         }
     }
 }

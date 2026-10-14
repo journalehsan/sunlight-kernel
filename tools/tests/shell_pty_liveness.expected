@@ -1,0 +1,14 @@
+[SIG]  termination-path self-test: OK
+[SSHL-PTY] original 65536 PASS
+[SSHL-PTY] blocking TTY delayed drain PASS
+[SSHL-PTY] nonblocking TTY partial EAGAIN PASS
+[SSHL-PTY] sizes repeat=2 integrity PASS
+[SSHL-PTY] concurrent sessions delayed consumer PASS
+[SSHL-PTY] foreground master closure wakes and exits PASS
+[SSHL-PTY] foreground session closure wakes and exits PASS
+[SSHL-PTY] nonblocking wait pipe integrity EOF PASS
+[SSHL-PTY] concurrent producers slow pipe consumer PASS
+[SSHL-PTY] early close EPIPE legacy blocking wait PASS
+[SSHL-PTY] broker partial full EOF early closure PASS
+[SSHL-PTY] native gate PASS
+[TTY]  exit: sshl --pty-liveness-tests -> 0

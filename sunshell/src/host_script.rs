@@ -9,6 +9,7 @@ use sunshell::{
     parser::{AstNode, RedirectMode},
     script::{Error, Runtime, ShellExecutionContext},
     script_parser::MAX_SOURCE,
+    shellenv::ShellEnv,
 };
 pub struct HostRuntime;
 fn path(path: &str, context: &ShellExecutionContext) -> PathBuf {
@@ -22,8 +23,12 @@ impl Runtime for HostRuntime {
         &mut self,
         command: &AstNode<String>,
         context: &ShellExecutionContext,
+        stage_environments: Option<&[ShellEnv]>,
     ) -> Result<i32, Error> {
-        match crate::exec::execute_in_context(command, Some(context)) {
+        if stage_environments.is_none() {
+            context.env.export_size().map_err(|e| Error::new(2, e))?;
+        }
+        match crate::exec::execute_with_environments(command, Some(context), stage_environments) {
             Ok(status) => Ok(status),
             Err(e) => {
                 self.write(context.io[2], format!("sshl: {e}\n").as_bytes())?;
@@ -159,6 +164,55 @@ mod tests {
         assert!(run("readonly X=one; X=two", &[]).0.is_err());
         assert_eq!(
             run("missing-sshl-command || true", &[]).0.unwrap(),
+            Flow::Status(0)
+        );
+    }
+    #[test]
+    fn environment_handoff_unset_and_special_assignments() {
+        let (result, output, context) = run("NAME=Sunlight; export NAME; sh -c 'echo \"$NAME\"'; NAME=temporary sh -c 'echo \"$NAME\"'; echo \"$NAME\"; LOCAL=hidden; sh -c 'echo \"<$LOCAL>\"'; unset NAME; sh -c 'echo \"<$NAME>\"'; NAME=permanent :; echo \"$NAME\"; NAME=changed export NAME; sh -c 'echo \"$NAME\"'", &[]);
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert_eq!(
+            output,
+            "Sunlight\ntemporary\nSunlight\n<>\n<>\npermanent\nchanged\n"
+        );
+        assert_eq!(context.env.get("NAME"), Some("changed"));
+        assert_eq!(context.env.get("LOCAL"), Some("hidden"));
+    }
+    #[test]
+    fn pipeline_assignments_have_independent_environments() {
+        let (result, output, context) = run("NAME=parent; export NAME; NAME=left sh -c 'echo \"$NAME\"' | NAME=right sh -c 'echo \"$NAME\"; cat'; echo \"$NAME\"", &[]);
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert_eq!(output, "right\nleft\nparent\n");
+        assert_eq!(context.env.get("NAME"), Some("parent"));
+        let too_many = vec!["true"; 17].join(" | ");
+        assert!(run(&too_many, &[])
+            .0
+            .unwrap_err()
+            .message
+            .contains("16 stages"));
+    }
+    #[test]
+    fn temporary_assignments_restore_attributes_and_survive_launch_errors() {
+        let (result, output, context) = run("NAME=local; NAME=temporary missing-sshl-command || :; echo \"$NAME\"; sh -c 'echo \"<$NAME>\"'; NAME=temp readonly OTHER=fixed; echo \"$NAME:$OTHER\"; export UNASSIGNED; sh -c '/usr/bin/printenv UNASSIGNED'; echo $?", &[]);
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert_eq!(output, "local\n<>\ntemp:fixed\n1\n");
+        assert!(context.env.is_readonly("OTHER"));
+        assert_eq!(context.env.get("UNASSIGNED"), None);
+        assert!(run("readonly NAME=locked; NAME=bad sh -c 'echo bad'", &[])
+            .0
+            .is_err());
+    }
+    #[test]
+    fn environment_limit_failure_leaves_context_usable() {
+        let mut env = ShellEnv::new();
+        env.assign("BIG", &"x".repeat(4096)).unwrap();
+        env.export("BIG");
+        let mut context = ShellExecutionContext::new(env, "/".into());
+        let failure = execute("/usr/bin/true", &mut context, &mut HostRuntime).unwrap_err();
+        assert_eq!(failure.status, 2);
+        assert!(failure.message.contains("environment"));
+        assert_eq!(
+            execute("unset BIG; /usr/bin/true", &mut context, &mut HostRuntime).unwrap(),
             Flow::Status(0)
         );
     }

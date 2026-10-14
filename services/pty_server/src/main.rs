@@ -15,7 +15,8 @@ use sunlight_ipc::{
 
 #[cfg(not(test))]
 use sunlight_ipc::{
-    endpoint_create, entropy_u64, ipc_recv, ipc_reply_and_wait, nameserver_register,
+    endpoint_create, entropy_u64, ipc_complete_deferred_reply, ipc_defer_reply,
+    ipc_deferred_reply_is_live, ipc_recv, ipc_reply_and_wait, nameserver_register,
     secure_entropy_ready,
 };
 
@@ -517,6 +518,110 @@ mod tests {
             PtyMsg::ERR_PEER_CLOSED
         );
     }
+
+    #[test]
+    fn slave_readiness_checks_authority_generation_space_and_closure() {
+        let mut server = PtyServer::new();
+        let (id, generation, master, control) =
+            server.create(CALLER, 0, DEFAULT_WINDOW_SIZE).unwrap();
+        let index = id as usize - 1;
+        let slave = CapabilityToken(77);
+        server.sessions[index].slave = Authority {
+            token: slave,
+            pid: CALLER.pid,
+        };
+        let request = IpcMsg::with_label(PtyMsg::WAIT_SLAVE_WRITABLE)
+            .word(0, id)
+            .word(1, generation)
+            .with_cap(0, slave);
+        assert_eq!(
+            slave_writable(&server, &request.with_cap(0, master), CALLER).words[0],
+            PtyMsg::ERR_PERMISSION_DENIED
+        );
+        assert_eq!(
+            slave_writable(&server, &request.with_cap(0, control), CALLER).words[0],
+            PtyMsg::ERR_PERMISSION_DENIED
+        );
+        assert_eq!(
+            slave_writable(
+                &server,
+                &request,
+                PtyCallerCredentials {
+                    pid: CALLER.pid + 1,
+                    ..CALLER
+                }
+            )
+            .words[0],
+            PtyMsg::ERR_PERMISSION_DENIED
+        );
+        assert_eq!(
+            slave_writable(&server, &request.word(1, generation + 1), CALLER).words[0],
+            PtyMsg::ERR_STALE_HANDLE
+        );
+        assert_eq!(
+            slave_writable(&server, &request, CALLER).label,
+            PtyMsg::REPLY
+        );
+        server.sessions[index]
+            .output
+            .push_slice(&[b'x'; BUFFER_CAP]);
+        assert_eq!(
+            slave_writable(&server, &request, CALLER).words[0],
+            PtyMsg::ERR_WOULD_BLOCK
+        );
+        server.sessions[index].output.pop_slice(&mut [0]);
+        assert_eq!(
+            slave_writable(&server, &request, CALLER).label,
+            PtyMsg::REPLY
+        );
+        server.sessions[index].master_open = false;
+        assert_eq!(
+            slave_writable(&server, &request, CALLER).words[0],
+            PtyMsg::ERR_PEER_CLOSED
+        );
+        server.sessions[index].master_open = true;
+        server.sessions[index].slave_open = false;
+        assert_eq!(
+            slave_writable(&server, &request, CALLER).words[0],
+            PtyMsg::ERR_PEER_CLOSED
+        );
+        server.sessions[index].destroy();
+        assert_eq!(
+            slave_writable(&server, &request, CALLER).words[0],
+            PtyMsg::ERR_STALE_HANDLE
+        );
+    }
+}
+
+#[cfg(not(test))]
+#[derive(Clone, Copy)]
+struct WriteWait {
+    request: IpcMsg,
+    token: u64,
+}
+
+/// Only the broker mutates rings and this bounded waiter registry. Checking
+/// readiness and deferring a reply cannot race a master drain or close request.
+#[cfg(not(test))]
+fn complete_write_waiters(server: &PtyServer, waiters: &mut [Option<WriteWait>; MAX_SESSIONS]) {
+    for waiter in waiters.iter_mut() {
+        let Some(wait) = *waiter else {
+            continue;
+        };
+        let reply = if ipc_deferred_reply_is_live(wait.token) {
+            match pty_caller_credentials(wait.request.badge) {
+                Some(caller) => slave_writable(server, &wait.request, caller),
+                None => error(PtyMsg::ERR_PEER_CLOSED),
+            }
+        } else {
+            // Completing also releases the server's stale deferred-reply slot.
+            error(PtyMsg::ERR_PEER_CLOSED)
+        };
+        if reply.label != PtyMsg::ERROR || reply.words[0] != PtyMsg::ERR_WOULD_BLOCK {
+            let _ = ipc_complete_deferred_reply(wait.token, reply);
+            *waiter = None;
+        }
+    }
 }
 
 #[cfg(not(test))]
@@ -528,10 +633,36 @@ pub extern "C" fn _start() -> ! {
     debug_log("[PTY] registered\n");
 
     let mut server = PtyServer::new();
+    let mut waiters = [None; MAX_SESSIONS];
     let mut msg = ipc_recv(endpoint);
     loop {
-        let reply = handle_message(&mut server, &msg);
-        msg = ipc_reply_and_wait(endpoint, reply);
+        complete_write_waiters(&server, &mut waiters);
+        let mut reply = handle_message(&mut server, &msg);
+        let mut deferred = false;
+        if msg.label == PtyMsg::WAIT_SLAVE_WRITABLE
+            && reply.label == PtyMsg::ERROR
+            && reply.words[0] == PtyMsg::ERR_WOULD_BLOCK
+        {
+            // The validated WOULD_BLOCK reply guarantees a live, in-range ID.
+            let slot = &mut waiters[msg.words[0] as usize - 1];
+            if slot.is_some() {
+                reply = error(PtyMsg::ERR_NO_SLOTS);
+            } else if let Ok(token) = ipc_defer_reply() {
+                *slot = Some(WriteWait {
+                    request: msg,
+                    token,
+                });
+                deferred = true;
+            } else {
+                reply = error(PtyMsg::ERR_SERVICE_UNAVAILABLE);
+            }
+        }
+        complete_write_waiters(&server, &mut waiters);
+        msg = if deferred {
+            ipc_recv(endpoint)
+        } else {
+            ipc_reply_and_wait(endpoint, reply)
+        };
     }
 }
 
@@ -581,11 +712,27 @@ fn handle_message(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
         PtyMsg::READ_MASTER => read_master(server, msg, caller),
         PtyMsg::READ_SLAVE => read_slave(server, msg, caller),
         PtyMsg::READ_MASTER_BULK | PtyMsg::WRITE_SLAVE_BULK => transfer_bulk(server, msg, caller),
+        PtyMsg::WAIT_SLAVE_WRITABLE => slave_writable(server, msg, caller),
         PtyMsg::CLOSE_MASTER => close_endpoint(server, msg, caller, PtyRole::Master),
         PtyMsg::CLOSE_SLAVE => close_endpoint(server, msg, caller, PtyRole::Slave),
         PtyMsg::CLOSE_SESSION => close_session(server, msg, caller),
         PtyMsg::GET_STATE => get_state(server, msg, caller),
         _ => error(PtyMsg::ERR_INVALID_PTY),
+    }
+}
+
+fn slave_writable(server: &PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+    let index = match server.check(msg, caller, PtyRole::Slave) {
+        Ok(index) => index,
+        Err(code) => return error(code),
+    };
+    let session = &server.sessions[index];
+    if !session.master_open || !session.slave_open {
+        error(PtyMsg::ERR_PEER_CLOSED)
+    } else if session.output.len() == BUFFER_CAP {
+        error(PtyMsg::ERR_WOULD_BLOCK)
+    } else {
+        ok_identity(session.id, session.generation)
     }
 }
 

@@ -155,6 +155,8 @@ pub struct Process {
     pub native_futex_deadline: Option<u64>,
     /// Native pipe operation blocked on the ring becoming readable/writable.
     pub native_pipe_wait: Option<(u32, bool)>,
+    /// Blocking TTY output waiting for space in this tab's bounded ring.
+    pub tty_write_wait: Option<usize>,
     /// Opt-in std workers share this owner's descriptor table and cwd.
     pub native_shared_owner: Option<usize>,
     pub capabilities: Vec<Capability>,
@@ -336,6 +338,13 @@ pub struct Capability {
 }
 
 impl Process {
+    /// External termination can race an in-flight syscall on another CPU.
+    /// Cleanup remains pending until that CPU safely releases this task.
+    pub(crate) fn is_exiting(&self) -> bool {
+        self.exit_cleanup_pending
+            || matches!(self.state, ProcessState::Finished | ProcessState::Reaped)
+    }
+
     pub fn is_linux_compat(&self) -> bool {
         matches!(self.personality, ProcessPersonality::Linux(_))
     }
@@ -407,6 +416,7 @@ impl Process {
             native_futex_wait: None,
             native_futex_deadline: None,
             native_pipe_wait: None,
+            tty_write_wait: None,
             native_shared_owner: None,
             capabilities: Vec::new(),
             kernel_stack: Some(kernel_stack),
@@ -577,6 +587,7 @@ impl Process {
             native_futex_wait: None,
             native_futex_deadline: None,
             native_pipe_wait: None,
+            tty_write_wait: None,
             native_shared_owner: None,
             capabilities,
             kernel_stack: Some(kernel_stack),

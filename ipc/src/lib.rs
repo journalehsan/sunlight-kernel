@@ -5,6 +5,7 @@ pub mod display_metrics;
 pub mod display_modes;
 pub mod pty;
 pub mod session_completion;
+pub mod spawn_env;
 pub mod swap_policy;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
@@ -19,6 +20,10 @@ pub const IPC_MAX_WORDS: usize = 8;
 /// Linux-compatible processes use this namespace to invoke native IPC without
 /// colliding with Linux syscall numbers. The kernel keeps native return values.
 pub const NATIVE_SYSCALL_TAG: u64 = 1 << 63;
+/// Explicit rsi extension for native WaitPid (32). Only this exact marker
+/// requests a nonblocking probe; legacy one-argument callers may leave rsi
+/// unspecified and must retain the existing parked child wait.
+pub const WAITPID_NOHANG_EXTENSION: u64 = 0x5355_4E57_4E4F_4847;
 
 #[inline(always)]
 const fn native_syscall_number(num: SunlightSyscall) -> u64 {
@@ -931,6 +936,9 @@ pub mod PtyMsg {
     pub const GET_STATE: u64 = 0x730F;
     pub const READ_MASTER_BULK: u64 = 0x7310;
     pub const WRITE_SLAVE_BULK: u64 = 0x7311;
+    /// Slave-authorized readiness wait; deferred while the output ring is full.
+    /// No output bytes or shared-page mapping are retained by this operation.
+    pub const WAIT_SLAVE_WRITABLE: u64 = 0x7312;
     pub const BULK_BYTES: usize = 4096;
     pub const REPLY: u64 = 0x73FF;
     pub const ERROR: u64 = 0x73FE;
@@ -4924,7 +4932,9 @@ pub fn tty_winsize() -> Option<TerminalWinsize> {
 /// while it is still running or is not recognized as a child.
 pub fn try_waitpid(pid: u64) -> Option<u64> {
     // SAFETY: WaitPid takes no user pointers.
-    let (ret, _) = unsafe { raw_syscall(SunlightSyscall::WaitPid, pid, 0, 0, 0, 0, 0, 0) };
+    let (ret, _) = unsafe {
+        raw_syscall(SunlightSyscall::WaitPid, pid, WAITPID_NOHANG_EXTENSION, 0, 0, 0, 0, 0)
+    };
     if ret == u64::MAX || ret == u64::MAX - 1 {
         None
     } else {
@@ -4932,14 +4942,13 @@ pub fn try_waitpid(pid: u64) -> Option<u64> {
     }
 }
 
-/// Blocking child wait built on `try_waitpid` + yield.
+/// Blocking child wait. The kernel parks the caller until the child exits.
 pub fn waitpid(pid: u64) -> u64 {
     loop {
-        if let Some(code) = try_waitpid(pid) {
-            return code;
-        }
-        if !process_is_alive(pid) {
-            return u64::MAX;
+        // SAFETY: scalar child PID; zero preserves the legacy blocking mode.
+        let (ret, _) = unsafe { raw_syscall(SunlightSyscall::WaitPid, pid, 0, 0, 0, 0, 0, 0) };
+        if ret != u64::MAX - 1 {
+            return ret;
         }
         process_yield();
     }

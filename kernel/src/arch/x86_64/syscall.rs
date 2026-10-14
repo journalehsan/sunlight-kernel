@@ -314,8 +314,9 @@ fn deliver_pending_signals(
         return Some(SignalPostAction::Exit(Signal::SIGKILL.default_exit_code()));
     }
 
-    // Catchable signals in priority order (INT, TERM, CHLD).
-    for sig_num in [2u32, 15, 17] {
+    // Include TTY hangup at syscall return: a woken blocking writer may park
+    // again before a timer tick can observe a Running task with pending HUP.
+    for sig_num in [2u32, 15, 1, 17] {
         let Some(sig) = Signal::try_from_u32(sig_num) else {
             continue;
         };
@@ -1025,6 +1026,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     // Deliver pending signals before returning to user space
     let post_signal =
         crate::sched::with_scheduler(|sched| {
+            // An external kill can arrive after dispatch begins. Preserve its
+            // recorded status and pivot off this task's stack before SYSRET.
+            if sched.current_process().is_exiting() {
+                return Some(SignalPostAction::Exit(sched.current_process().exit_code));
+            }
             let dispositions = sched.current_shared_process().signal_state.dispositions();
             deliver_pending_signals(sched.current_process_mut(), &dispositions)
         });
@@ -1032,6 +1038,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         process_exit(code);
     }
 
+    crate::sched::flush_dispatch_notifications();
     result
 }
 
@@ -1702,7 +1709,9 @@ fn ipc_notify_wait(_endpoint_token: u64) -> u64 {
     sched::with_scheduler(|s| {
         // Phase 1 + 4: charge + penalize quick block/yield patterns
         s.account_and_apply_churn_penalty();
-        s.current_process_mut().state = ProcessState::BlockedOnIpc;
+        if let Some(idx) = s.current_process_index() {
+            s.set_state(idx, ProcessState::BlockedOnIpc);
+        }
         s.current_process_mut().block_start_tick = s.global_tick;
     });
     sched::request_reschedule();
@@ -1824,6 +1833,7 @@ fn endpoint_destroy(token: u64) -> u64 {
 fn process_exit(code: i32) -> ! {
     let kstack_top = sched::finish_current_process(code, "exit");
     sched::request_reschedule();
+    sched::flush_dispatch_notifications();
 
     // We currently run on the process's *user* stack (syscall_entry builds
     // its frame there). The timer IRQ that switches away will keep using
@@ -1894,6 +1904,8 @@ fn sys_tty_stdout_pull(frame: &mut SyscallFrame) -> u64 {
     let mut kbuf = [0u8; 4096];
     let n = crate::process::tty_io::pull_stdout(tab, &mut kbuf[..len]);
     if n > 0 {
+        // Notify even if the subsequent user copy fails: space is already free.
+        crate::sched::with_scheduler(|sched| sched.wake_tty_writers(tab));
         if let Err(error) = copy_to_user(frame.rsi, &kbuf[..n]) {
             return error;
         }
@@ -2512,6 +2524,8 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
 /// Syscall: Waitpid (32)
 /// rdi = child pid. Returns the exit code (0..=255) once the child is Finished,
 /// EAGAIN while it is still running, and -1 when no such child exists.
+/// rsi = WAITPID_NOHANG_EXTENSION explicitly opts into a nonblocking probe.
+/// Unrecognized rsi values retain the legacy blocking behavior.
 ///
 /// While the child is still running, the caller is parked in `BlockedOnIpc`
 /// (recording the awaited child in `wait_child`) so it does NOT busy-spin in
@@ -2549,6 +2563,12 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
         return code;
     }
 
+    if frame.rsi == ::sunlight_ipc::WAITPID_NOHANG_EXTENSION {
+        // A foreground relay must remain runnable to drain child stdout.
+        // Do not install a child wait or alter scheduler/IPC state here.
+        return EAGAIN;
+    }
+
     // Child still running: park the caller until the child exits.
     let global_tick = sched.global_tick;
     let cur = sched.current_process_index().unwrap_or(0);
@@ -2557,9 +2577,9 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
     {
         let caller = &mut sched.processes[cur];
         caller.wait_child = Some(pid);
-        caller.state = ProcessState::BlockedOnIpc;
         caller.block_start_tick = global_tick;
     }
+    sched.set_state(cur, ProcessState::BlockedOnIpc);
     sched.remove_from_ready_queues(cur);
     drop(sched);
     crate::sched::request_reschedule();
@@ -2600,7 +2620,7 @@ fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
 
 /// Syscall: Spawn (39) — posix_spawn-style process creation.
 /// rdi = path pointer (C string)
-/// rsi = argv pointer (array of *const u8, NULL-terminated)
+/// rsi = argv pointer, or SpawnEnvironment pointer when r9 = ENV_EXTENSION
 /// rdx = stdout fd, r10 = stdin fd, r8 = stderr fd (u64::MAX keeps TTY default)
 /// Returns the child pid, or -1 on error.
 fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
@@ -2610,13 +2630,62 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let mut trace = crate::launch_trace::LaunchTrace::new(launch_id, now_ns());
 
     let path_ptr = frame.rdi;
-    let argv_ptr = frame.rsi;
+    let mut argv_ptr = frame.rsi;
     let stdout_fd = frame.rdx;
     // The marker keeps the original three-argument spawn ABI safe for callers
     // that leave the remaining registers unspecified.
-    let has_stdio_extension = frame.r9 == 0x5355_4E53_5444_494F;
-    let stdin_fd = if has_stdio_extension { frame.r10 } else { u64::MAX };
-    let stderr_fd = if has_stdio_extension { frame.r8 } else { u64::MAX };
+    let has_env_extension = frame.r9 == ::sunlight_ipc::spawn_env::ENV_EXTENSION;
+    let has_stdio_extension =
+        has_env_extension || frame.r9 == ::sunlight_ipc::spawn_env::STDIO_EXTENSION;
+    let stdin_fd = if has_stdio_extension {
+        frame.r10
+    } else {
+        u64::MAX
+    };
+    let stderr_fd = if has_stdio_extension {
+        frame.r8
+    } else {
+        u64::MAX
+    };
+
+    // Copy and validate untrusted transport before taking scheduler/PMM locks.
+    // Environment data is never consulted for uid/gid, capabilities, service
+    // lookup profiles, or trusted-binary identity.
+    let replacement_env = if has_env_extension {
+        let mut header = [0u8; ::sunlight_ipc::spawn_env::HEADER_BYTES];
+        if let Err(error) = copy_from_user(frame.rsi, &mut header) {
+            return error;
+        }
+        argv_ptr = u64::from_le_bytes(header[0..8].try_into().unwrap());
+        let address = u64::from_le_bytes(header[8..16].try_into().unwrap());
+        let length = u64::from_le_bytes(header[16..24].try_into().unwrap());
+        if length > ::sunlight_ipc::spawn_env::MAX_BYTES as u64 {
+            return ERR_ERANGE;
+        }
+        let mut blob = Vec::new();
+        if blob.try_reserve_exact(length as usize).is_err() {
+            return u64::MAX;
+        }
+        blob.resize(length as usize, 0);
+        if !blob.is_empty() {
+            if let Err(error) = copy_from_user(address, &mut blob) {
+                return error;
+            }
+        }
+        if let Err(error) = ::sunlight_ipc::spawn_env::validate(&blob) {
+            return match error {
+                ::sunlight_ipc::spawn_env::EnvironmentError::TooLarge => ERR_ERANGE,
+                _ => ERR_EINVAL,
+            };
+        }
+        let mut env = crate::process::env::EnvMap::new();
+        for (key, value) in ::sunlight_ipc::spawn_env::entries(&blob) {
+            env.set(key, value);
+        }
+        Some(env)
+    } else {
+        None
+    };
 
     let path_bytes = match read_user_cstr(path_ptr, USER_PATH_MAX) {
         Ok(bytes) => bytes,
@@ -2677,7 +2746,13 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // [LAUNCH-TRACE] Point 3: app resolution finished
     trace.resolve_finished_ns = now_ns();
 
+    let pty_lock_start = if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
+        now_ns()
+    } else {
+        0
+    };
     let mut sched = crate::sched::SCHEDULER.lock();
+    let pty_lock_acquired = if pty_lock_start != 0 { now_ns() } else { 0 };
     sched.reap_finished_processes();
     let mut pmm = crate::PMM.lock();
     let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
@@ -2686,7 +2761,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let ppid = parent.pid;
     let uid = parent.uid;
     let gid = parent.gid;
-    let env = crate::process::env::EnvMap::inherit(&parent.env);
+    let env = replacement_env.unwrap_or_else(|| crate::process::env::EnvMap::inherit(&parent.env));
     let capabilities = parent.capabilities.clone();
     let mut service_lookup_restrictions = parent.service_lookup_restrictions;
     // Embedded control tools need access to their matching control-plane
@@ -2839,6 +2914,15 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
 
     // [LAUNCH-TRACE] Point 7: enqueue_finished (child is runnable)
     trace.enqueue_finished_ns = now_ns();
+    if pty_lock_start != 0 {
+        crate::ipc::trace_pty_operation(
+            &sched,
+            "spawn",
+            pty_lock_acquired.saturating_sub(pty_lock_start),
+            now_ns().saturating_sub(pty_lock_acquired),
+            [0; 5],
+        );
+    }
     trace.emit(
         crate::process::spawn::name_from_path(path_str),
         path_str,
@@ -7245,10 +7329,22 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                         }
                     }
                     if written == 0 {
-                        // A full TTY ring is transient backpressure, not a
-                        // successful zero-byte write. libc retries EAGAIN and
-                        // lets the terminal consumer drain the bounded ring.
-                        if is_linux { linux_errno(11) } else { EAGAIN }
+                        let nonblocking = sched
+                            .current_shared_process()
+                            .fd_table
+                            .status_flags(fd)
+                            .unwrap_or(0) & 0x800 != 0;
+                        if !dontwait && !nonblocking {
+                            sched.block_current_tty_write(tab);
+                            frame.rcx = frame.rcx.saturating_sub(2);
+                            crate::sched::request_reschedule();
+                            // Re-enter the original write, as for native pipes.
+                            frame.rax
+                        } else if is_linux {
+                            linux_errno(11)
+                        } else {
+                            EAGAIN
+                        }
                     } else {
                         written as u64
                     }
@@ -7625,10 +7721,21 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.r8 as i32;
     let offset = frame.r9;
 
+    let pty_lock_start = if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
+        now_ns()
+    } else {
+        0
+    };
     let mut sched = crate::sched::SCHEDULER.lock();
+    let pty_lock_acquired = if pty_lock_start != 0 { now_ns() } else { 0 };
     let mut pmm = crate::PMM.lock();
+    let pty_memory_before = if pty_lock_start != 0 {
+        Some((pmm.free_page_count(), crate::memory::swap::diagnostics()))
+    } else {
+        None
+    };
 
-    match crate::process::mmap::sys_mmap(
+    let result = crate::process::mmap::sys_mmap(
         addr,
         length,
         prot,
@@ -7637,7 +7744,25 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
         offset,
         &mut *pmm,
         &mut *sched,
-    ) {
+    );
+    if pty_lock_start != 0 {
+        let (free, before) = pty_memory_before.unwrap();
+        let after = crate::memory::swap::diagnostics();
+        crate::ipc::trace_pty_operation(
+            &sched,
+            "mmap",
+            pty_lock_acquired.saturating_sub(pty_lock_start),
+            now_ns().saturating_sub(pty_lock_acquired),
+            [
+                free as u64,
+                pmm.free_page_count() as u64,
+                after.candidate_scans.saturating_sub(before.candidate_scans),
+                after.pages_reclaimed.saturating_sub(before.pages_reclaimed),
+                after.watermark_activations.saturating_sub(before.watermark_activations),
+            ],
+        );
+    }
+    match result {
         Ok(mapped_addr) => {
             crate::serial_println!(
                 "[SYSCALL] mmap({:#x}, {:#x}) -> {:#x}",
@@ -8637,6 +8762,12 @@ fn framebuffer_cache_label(flags: PageTableFlags, leaf_pat: bool) -> &'static st
 }
 
 fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
+    if matches!(option_env!("SUNLIGHT_INJECT_PHASE"), Some("shell-phase2" | "shell-pty-liveness")) {
+        let sched = crate::sched::SCHEDULER.lock();
+        if sched.current_process().name_str() == "sshl" {
+            crate::ipc::trace_pty_liveness(&sched);
+        }
+    }
     let Some(hhdm) = crate::HHDM_REQ.response() else {
         return 0;
     };

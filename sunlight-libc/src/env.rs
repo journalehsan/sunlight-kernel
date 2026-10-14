@@ -17,7 +17,7 @@ pub fn init(envp: *const *const u8) {
 /// Startup must have published the kernel-provided NULL-terminated envp.
 pub unsafe fn entry(index: usize) -> *const u8 {
     let ptr = ENVP.load(Ordering::Relaxed) as *const *const u8;
-    if ptr.is_null() || index >= 128 {
+    if ptr.is_null() || index >= sunlight_ipc::spawn_env::MAX_ENTRIES {
         return core::ptr::null();
     }
     for offset in 0..=index {

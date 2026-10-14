@@ -23,6 +23,232 @@ pub const ENDPOINT_QUEUE_CAPACITY: usize = 64;
 pub const DEFERRED_REPLY_CAPACITY: usize = 64;
 const NUM_SHARDS: usize = 16;
 
+#[derive(Clone, Copy, Debug)]
+struct PtyIpcEvent {
+    tick: u64,
+    pid: usize,
+    kind: &'static str,
+    generation: u64,
+    endpoint: u32,
+    label: u64,
+    bytes: u64,
+    depth: usize,
+    owner: u8,
+    memory: [u64; 5],
+}
+
+struct PtyIpcTrace {
+    events: [Option<PtyIpcEvent>; 32],
+    next: usize,
+    slow_operations: [Option<PtyIpcEvent>; 8],
+    slow_next: usize,
+}
+
+static PTY_IPC_TRACE: spin::Mutex<PtyIpcTrace> = spin::Mutex::new(PtyIpcTrace {
+    events: [None; 32],
+    next: 0,
+    slow_operations: [None; 8],
+    slow_next: 0,
+});
+
+fn trace_pty_event(
+    sched: &Scheduler,
+    idx: usize,
+    kind: &'static str,
+    generation: u64,
+    endpoint: u32,
+    msg: IpcMsg,
+    depth: usize,
+) {
+    if option_env!("SUNLIGHT_PTY_TRACE") != Some("1")
+        || !sched.processes[idx].name_str().starts_with("sshl")
+    {
+        return;
+    }
+    let mut trace = PTY_IPC_TRACE.lock();
+    let next = trace.next;
+    let event = PtyIpcEvent {
+        tick: sched.global_tick,
+        pid: sched.processes[idx].pid,
+        kind,
+        generation,
+        endpoint,
+        label: msg.label,
+        bytes: msg.words[2],
+        depth,
+        owner: sched.processes[idx].owning_core,
+        memory: [
+            msg.words[0],
+            msg.words[1],
+            msg.words[3],
+            msg.words[4],
+            msg.words[5],
+        ],
+    };
+    trace.events[next] = Some(event);
+    trace.next = (next + 1) % trace.events.len();
+    if matches!(kind, "mmap" | "spawn") {
+        let slow_next = trace.slow_next;
+        trace.slow_operations[slow_next] = Some(event);
+        trace.slow_next = (slow_next + 1) % trace.slow_operations.len();
+    }
+}
+
+/// Record slow startup syscalls without printing while scheduler locks are held.
+/// For these event kinds generation/bytes are lock-wait/hold microseconds.
+pub(crate) fn trace_pty_operation(
+    sched: &Scheduler,
+    kind: &'static str,
+    wait_ns: u64,
+    hold_ns: u64,
+    memory: [u64; 5],
+) {
+    if wait_ns.saturating_add(hold_ns) < 50_000_000 {
+        return;
+    }
+    if let Some(idx) = sched.current_process_index() {
+        let mut msg = IpcMsg::empty();
+        msg.words[0] = memory[0];
+        msg.words[1] = memory[1];
+        msg.words[2] = hold_ns / 1000;
+        msg.words[3..6].copy_from_slice(&memory[2..5]);
+        trace_pty_event(sched, idx, kind, wait_ns / 1000, 0, msg, 0);
+    }
+}
+
+/// One snapshot at a guest-test failure, never logging on the hot IPC path.
+pub(crate) fn trace_pty_liveness(sched: &Scheduler) {
+    crate::serial_println!("[PTY-DIAG] dispatch_notifications sent/busy={:?}", crate::sched::diagnostic_dispatch_notifications());
+    for cpu in 0..sched.online_cores.min(16) {
+        crate::serial_println!("[PTY-DIAG] cpu={} current_pid={:?}", cpu, sched.diagnostic_current_pid(cpu));
+    }
+    let counters = diagnostic_snapshot();
+    crate::serial_println!(
+        "[PTY-DIAG] enqueued={} dequeued={} depth={} high={} late={} deadlines={}",
+        counters.enqueue_count,
+        counters.dequeue_count,
+        counters.current_queue_depth,
+        counters.high_watermark,
+        counters.late_reply_drop_count,
+        counters.deadline_expired_count
+    );
+    {
+        let trace = PTY_IPC_TRACE.lock();
+        for offset in 0..trace.slow_operations.len() {
+            if let Some(e) =
+                trace.slow_operations[(trace.slow_next + offset) % trace.slow_operations.len()]
+            {
+                crate::serial_println!("[PTY-STARTUP] tick={} pid={} kind={} wait_us={} hold_us={} owner={} free_before={} free_after={} reclaim_scans={} reclaimed={} activations={}", e.tick, e.pid, e.kind, e.generation, e.bytes, e.owner, e.memory[0], e.memory[1], e.memory[2], e.memory[3], e.memory[4]);
+            }
+        }
+        for offset in 0..trace.events.len() {
+            if let Some(e) = trace.events[(trace.next + offset) % trace.events.len()] {
+                crate::serial_println!("[PTY-EVENT] tick={} pid={} kind={} gen={} ep={} label={:#x} bytes={} depth={} owner={}",
+                    e.tick, e.pid, e.kind, e.generation, e.endpoint, e.label, e.bytes, e.depth, e.owner);
+            }
+        }
+    }
+    for (idx, p) in sched
+        .processes
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| {
+            (p.name_str().starts_with("sshl") || p.name_str() == "pty_server")
+                && (!matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+                    || p.exit_cleanup_pending)
+        })
+        .take(16)
+    {
+        let (input, output) =
+            crate::process::tty_io::diagnostic_occupancy(p.tty_tab.unwrap_or(0) as usize);
+        crate::serial_println!(
+            "[PTY-DIAG] pid={} ppid={} name={} state={:?} owner={} queued={} tab={:?} rings={}/{} wait_child={:?} pending={:?} outcome={:?} target={:?} reply_wait={:?} blocked_ticks={} last_run_age={} nice={} burst={} queue_copies={}",
+            p.pid, p.ppid, p.name_str(), p.state, p.owning_core, p.queued_on_core,
+            p.tty_tab, input, output, p.wait_child, p.pending_call, p.ipc_call_outcome,
+            p.ipc_reply_target, p.pending_reply_wait,
+            sched.global_tick.saturating_sub(p.block_start_tick),
+            sched.global_tick.saturating_sub(p.last_run_tick), p.nice, p.burst_score,
+            sched.diagnostic_ready_occurrences(idx)
+        );
+        if let Some(ep) = p.ipc_endpoint {
+            with_shard(ep, |bus| {
+                crate::serial_println!(
+                    "[PTY-DIAG] ep={} depth={} callers={} receiver={:?}",
+                    ep,
+                    bus.pending_count(ep),
+                    bus.pending_callers_count(ep),
+                    bus.waiting_receiver_pid(ep, sched)
+                );
+            });
+        }
+        if let Some((ring, writing)) = p.native_pipe_wait {
+            crate::serial_println!(
+                "[PTY-DIAG] pid={} native_pipe={} writing={} queued/readers/writers={:?}",
+                p.pid,
+                ring,
+                writing,
+                crate::process::pipe::pipe_state(ring)
+            );
+        }
+        if let Some(tab) = p.tty_write_wait {
+            crate::serial_println!("[PTY-DIAG] pid={} tty_write_wait={}", p.pid, tab);
+        }
+    }
+}
+
+/// A single test-only snapshot if the driver cannot reach its own failure path.
+/// Normal streams reset their block/run age; this never logs per request.
+pub(crate) fn trace_pty_stall(sched: &Scheduler) {
+    if option_env!("SUNLIGHT_PTY_TRACE") != Some("1")
+        || option_env!("SUNLIGHT_INJECT_PHASE") != Some("shell-pty-liveness")
+        || !sched.global_tick.is_multiple_of(100)
+    {
+        return;
+    }
+    static REPORTED: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+    // The injected test is the child of the top-level tab-0 shell. Probe
+    // children also inherit tab 0 and newly spawned tasks have last_run_tick=0.
+    let Some(root_shell_pid) = sched
+        .processes
+        .iter()
+        .find(|p| p.ppid == 1 && p.name_str() == "sshl" && p.tty_tab == Some(0))
+        .map(|p| p.pid)
+    else {
+        return;
+    };
+    let stalled = sched.processes.iter().any(|p| {
+        p.name_str() == "sshl"
+            && p.ppid == root_shell_pid
+            && p.tty_tab == Some(0)
+            && match p.state {
+                ProcessState::BlockedOnIpc | ProcessState::BlockedOnTimer => {
+                    sched.global_tick.saturating_sub(p.block_start_tick) >= 500
+                }
+                ProcessState::Ready => {
+                    p.last_run_tick != 0 && sched.global_tick.saturating_sub(p.last_run_tick) >= 500
+                }
+                _ => false,
+            }
+    });
+    if stalled && !REPORTED.swap(true, Ordering::Relaxed) {
+        crate::serial_println!("[PTY-DIAG] driver stalled for 500 ticks; one watchdog snapshot");
+        trace_pty_liveness(sched);
+        for p in sched
+            .processes
+            .iter()
+            .filter(|p| {
+                p.name_str().starts_with("sshl")
+                    && matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+            })
+            .take(16)
+        {
+            crate::serial_println!("[PTY-DIAG] terminal pid={} name={} state={:?} owner={} queued={} cleanup={} exit={}",
+                p.pid, p.name_str(), p.state, p.owning_core, p.queued_on_core,
+                p.exit_cleanup_pending, p.exit_code);
+        }
+    }
+}
+
 #[allow(non_snake_case)]
 pub mod SpawnMsg {
     pub const SPAWN: u64 = 1;
@@ -258,9 +484,12 @@ impl IpcBusShard {
     pub fn block_on_recv(&mut self, endpoint_id: u32, receiver_pid: usize, sched: &mut Scheduler) {
         let global_tick = sched.global_tick;
         if let Some(idx) = sched.processes.iter().position(|p| p.pid == receiver_pid) {
+            if sched.processes[idx].is_exiting() {
+                return;
+            }
             sched.processes[idx].ipc_endpoint = Some(endpoint_id);
             sched.account_and_apply_churn_penalty();
-            sched.processes[idx].state = ProcessState::BlockedOnIpc;
+            sched.set_state(idx, ProcessState::BlockedOnIpc);
             sched.processes[idx].block_start_tick = global_tick;
         }
         if let Some(idx) = sched.processes.iter().position(|p| p.pid == receiver_pid) {
@@ -573,13 +802,14 @@ fn deliver_reply_to_target(
         return Ok(());
     };
 
-    let valid = terminal_transition_allowed(
-        sched.processes[client_idx]
-            .pending_call
-            .map(|pending| pending.generation),
-        sched.processes[client_idx].ipc_call_outcome,
-        target.call.generation,
-    );
+    let valid = !sched.processes[client_idx].is_exiting()
+        && terminal_transition_allowed(
+            sched.processes[client_idx]
+                .pending_call
+                .map(|pending| pending.generation),
+            sched.processes[client_idx].ipc_call_outcome,
+            target.call.generation,
+        );
     if !valid {
         LATE_REPLY_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
         return Ok(());
@@ -600,6 +830,8 @@ fn deliver_reply_to_target(
     }
 
     sched.processes[client_idx].ipc_reply = Some((target.call.generation, reply));
+    trace_pty_event(sched, client_idx, "reply", target.call.generation,
+        target.endpoint_id, reply, bus.pending_count(target.endpoint_id));
     finish_call(
         sched,
         client_idx,
@@ -725,6 +957,8 @@ fn wake_terminal(sched: &mut Scheduler, idx: usize) {
         return;
     }
     sched.record_wakeup(true);
+    trace_pty_event(sched, idx, "wake", sched.processes[idx].ipc_call_generation,
+        sched.processes[idx].ipc_endpoint.unwrap_or(0), IpcMsg::empty(), 0);
     sched.processes[idx].state = ProcessState::Ready;
     sched.remove_from_ready_queues(idx);
     if let Some(cpu_id) = sched.live_owner_core(idx) {
@@ -745,6 +979,12 @@ pub fn handle_ipc_call(
     let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) else {
         return Err(IpcError::InvalidArgument);
     };
+    // SIGKILL may have finished this task while it was entering the syscall
+    // on another CPU. Never enqueue work or replace its terminal state.
+    if sched.processes[idx].is_exiting() {
+        trace_pty_event(sched, idx, "reject_exit", 0, 0, msg, 0);
+        return Err(IpcError::Cancelled);
+    }
     if let Some(result) = take_terminal_result(sched, idx) {
         return result;
     }
@@ -795,11 +1035,12 @@ pub fn handle_ipc_call(
             msg,
             generation,
         });
+        trace_pty_event(sched, idx, "request", generation, endpoint_id, msg, bus.pending_count(endpoint_id));
         sched.processes[idx].ipc_deadline = deadline.map(|deadline| (generation, deadline));
     }
 
     sched.account_and_apply_churn_penalty();
-    sched.processes[idx].state = ProcessState::BlockedOnIpc;
+    sched.set_state(idx, ProcessState::BlockedOnIpc);
     sched.processes[idx].ipc_endpoint = Some(endpoint_id);
     sched.processes[idx].block_start_tick = global_tick;
     sched.remove_from_ready_queues(idx);
@@ -1007,6 +1248,9 @@ pub fn handle_ipc_recv(
     else {
         return Err(IpcError::InvalidArgument);
     };
+    if sched.processes[idx].is_exiting() {
+        return Err(IpcError::Cancelled);
+    }
     if sched.processes[idx].ipc_reply_target.is_some() {
         // A synchronous server must resolve (or attempt) its current reply
         // before receiving another call, otherwise reply identity is ambiguous.
@@ -1074,6 +1318,9 @@ pub fn handle_ipc_try_recv(
     else {
         return Err(IpcError::InvalidArgument);
     };
+    if sched.processes[idx].is_exiting() {
+        return Err(IpcError::Cancelled);
+    }
     if sched.processes[idx].ipc_reply_target.is_some() {
         return Err(IpcError::InvalidArgument);
     }
@@ -1157,6 +1404,7 @@ pub fn deferred_reply_is_live(server_pid: usize, token: u64, sched: &Scheduler) 
     };
     sched.processes.iter().any(|process| {
         process.pid == entry.target.call.pid
+            && !process.is_exiting()
             && process.pending_call.is_some_and(|pending| {
                 pending.endpoint_id == entry.target.endpoint_id
                     && pending.generation == entry.target.call.generation
@@ -1200,6 +1448,12 @@ pub fn handle_ipc_reply_wait(
     sched: &mut Scheduler,
     bus: &mut IpcBus,
 ) -> Result<IpcMsg, IpcError> {
+    let Some(server) = sched.processes.iter().find(|p| p.pid == server_pid) else {
+        return Err(IpcError::InvalidArgument);
+    };
+    if server.is_exiting() {
+        return Err(IpcError::Cancelled);
+    }
     let already_waiting = sched
         .processes
         .iter()

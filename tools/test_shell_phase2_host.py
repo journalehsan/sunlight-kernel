@@ -32,6 +32,15 @@ CASES = [
     ('V="a b"; export CHILD=$V; echo "$CHILD"; readonly LOCK=$V; echo "$LOCK"', []),
     ("{ echo group; echo second; } > compound-output; cat < compound-output | cat > pipeline-output; cat pipeline-output", []),
     ("eval 'echo evaluated'; echo after", []),
+    ('NAME=Sunlight; export NAME; sh -c \'echo "$NAME"\'; NAME=temporary sh -c \'echo "$NAME"\'; echo "$NAME"; unset NAME; sh -c \'echo "<$NAME>"\'', []),
+    ('NAME=local; NAME=temporary sh -c \'echo "$NAME"\'; echo "$NAME"; sh -c \'echo "<$NAME>"\'', []),
+    ('NAME=permanent :; echo "$NAME"; NAME=changed export NAME; sh -c \'echo "$NAME"\'; NAME=modified eval \'NAME=final\'; echo "$NAME"', []),
+    ('export NAME; /usr/bin/printenv NAME; echo $?; NAME=assigned; /usr/bin/printenv NAME; unset NAME; /usr/bin/printenv NAME; echo $?', []),
+    ('readonly NAME=locked; NAME=bad sh -c \'echo bad\'; echo unreachable', []),
+    ('NAME=parent; export NAME; NAME=temp /missing-sshl-command || :; sh -c \'echo "$NAME"\'', []),
+    ('NAME=parent; export NAME; (NAME=child; sh -c \'echo "$NAME"\'); sh -c \'echo "$NAME"\'', []),
+    ('A=one B=$A sh -c \'echo "$A:$B"\'; echo "<$A:$B>"', []),
+    ('NAME=parent; export NAME; NAME=left sh -c \'echo "$NAME"\' | NAME=right sh -c \'echo "$NAME"; cat\'; echo "$NAME"', []),
 ]
 
 def invoke(executable, args, cwd):

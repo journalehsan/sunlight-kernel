@@ -99,10 +99,28 @@ pub fn execute_in_context(
     node: &AstNode<String>,
     context: Option<&ShellExecutionContext>,
 ) -> Result<i32, ExecError> {
+    execute_with_environments(node, context, None)
+}
+pub fn execute_with_environments(
+    node: &AstNode<String>,
+    context: Option<&ShellExecutionContext>,
+    environments: Option<&[ShellEnv]>,
+) -> Result<i32, ExecError> {
     let commands: Vec<&SimpleCommand<String>> = match node {
         AstNode::Command(command) => vec![command],
         AstNode::Pipeline(commands) => commands.iter().collect(),
     };
+    if commands.len() > sunshell::script::MAX_PIPELINE_STAGES {
+        return Err(ExecError::Expansion("pipeline exceeds 16 stages"));
+    }
+    if let Some(envs) = environments {
+        if envs.len() != commands.len() {
+            return Err(ExecError::Expansion("pipeline environment count mismatch"));
+        }
+        for env in envs {
+            env.export_size().map_err(ExecError::Expansion)?;
+        }
+    }
     let mut children: Vec<std::process::Child> = Vec::with_capacity(commands.len());
     let mut pipes = Vec::with_capacity(commands.len().saturating_sub(1));
     for _ in 1..commands.len() {
@@ -121,6 +139,9 @@ pub fn execute_in_context(
         }};
     }
     for (index, simple) in commands.iter().enumerate() {
+        let environment = environments
+            .map(|envs| &envs[index])
+            .or_else(|| context.map(|c| &c.env));
         let expanded = &simple.argv;
         if expanded.is_empty() {
             abort_pipeline!(io::Error::new(io::ErrorKind::InvalidInput, "empty command"));
@@ -196,7 +217,8 @@ pub fn execute_in_context(
                 if expanded[0].contains('/') {
                     return None;
                 }
-                c.env
+                environment
+                    .unwrap_or(&c.env)
                     .get("PATH")
                     .unwrap_or("/bin:/usr/bin")
                     .split(':')
@@ -215,7 +237,7 @@ pub fn execute_in_context(
             child_cmd
                 .current_dir(&context.cwd)
                 .env_clear()
-                .envs(context.env.exported());
+                .envs(environment.unwrap_or(&context.env).exported());
         }
         let [stdin, stdout, stderr] = io_map;
         child_cmd.stdin(match stdin.into_stdio() {

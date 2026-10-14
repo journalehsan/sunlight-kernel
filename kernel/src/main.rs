@@ -3144,6 +3144,53 @@ fn run_termination_path_self_test(hhdm_offset: VirtAddr) {
         ok &= sched.processes[0].owning_core == 0;
         ok &= !matches!(sched.processes[0].state, ProcessState::Reaped);
 
+        // Reproduce kill racing syscall entry while the victim is still owned.
+        // Blocking IPC and late replies must never revive the Finished task.
+        let mut caps = crate::capability::CapabilityBroker::new();
+        let (endpoint, token) = caps.create_endpoint(0xCAFE);
+        let mut bus = crate::ipc::IpcBus::new();
+        ok &= matches!(
+            crate::ipc::handle_ipc_call(
+                0xBEEF,
+                token,
+                crate::ipc::IpcMsg::empty(),
+                &mut caps,
+                &mut sched,
+                &mut bus
+            ),
+            Err(crate::ipc::IpcError::Cancelled)
+        );
+        ok &= bus.pending_count(endpoint) == 0;
+        ok &= sched.processes[0].pending_call.is_none();
+        ok &= matches!(
+            crate::ipc::handle_ipc_recv(0xBEEF, endpoint, &mut sched, &mut bus),
+            Err(crate::ipc::IpcError::Cancelled)
+        );
+        sched.set_state(0, ProcessState::BlockedOnIpc);
+        sched.wake_pid(0xBEEF);
+        ok &= matches!(sched.processes[0].state, ProcessState::Finished);
+        ok &= sched.processes[0].exit_code == Signal::SIGKILL.default_exit_code();
+
+        sched.processes[0].pending_call = Some(crate::process::PendingIpcCall {
+            target_cap: token.0,
+            endpoint_id: endpoint,
+            msg: crate::ipc::IpcMsg::empty(),
+            generation: 1,
+        });
+        sched.processes[0].ipc_reply_target = Some(crate::process::IpcReplyTarget {
+            endpoint_id: endpoint,
+            call: crate::process::IpcCallId {
+                pid: 0xBEEF,
+                generation: 1,
+            },
+        });
+        ok &=
+            crate::ipc::handle_ipc_reply(0xBEEF, crate::ipc::IpcMsg::empty(), &mut sched, &mut bus)
+                .is_ok();
+        ok &= sched.processes[0].ipc_reply.is_none();
+        ok &= sched.processes[0].ipc_call_outcome.is_none();
+        ok &= matches!(sched.processes[0].state, ProcessState::Finished);
+
         // Simulate owner-core deschedule + opportunistic reap (reap frees AS).
         sched.processes[0].owning_core = u8::MAX;
         sched.reap_process_resources(0);
@@ -4002,6 +4049,7 @@ fn setup_key_injection() {
     let sequence: [u8; 12288] = match phase {
         "shell-phase1.5" => build_shell_phase_sequence(b"sshl --native-tests"),
         "shell-phase2" => build_shell_phase_sequence(b"sshl --script-tests"),
+        "shell-pty-liveness" => build_shell_phase_sequence(b"sshl --pty-liveness-tests"),
         "phase3.9" => build_phase3_9_sequence(),
         "wiseowl3.75" => build_wiseowl_phase375_sequence(),
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),

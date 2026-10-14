@@ -1,5 +1,11 @@
 # Shell Phase 2: POSIX-oriented scripting, first vertical slice
 
+October 14, 2026 update: Phase 2.1 Stage A adds native export transport,
+temporary assignment environments (including simple pipeline stages), and
+bounded environment validation. See [Phase 2.1 environment delivery](phase2-1-expansion-and-environment.md)
+for current-run evidence and outstanding regression boundaries. The original
+validation section below records the earlier slice and is not current proof.
+
 This is a tested partial implementation, **not full POSIX compatibility** and
 not completion of all Phase 2 requirements. The boundary is a shared parser and
 control-flow interpreter, descriptor-based noninteractive entry points, and
@@ -144,13 +150,15 @@ No background jobs, here-documents, here-strings, descriptor closing,
 noclobber, arbitrary descriptor numbers, aliases, or job control are provided.
 
 Pipelines support simple stages. Function stages, scripting special built-in
-stages, `test`/`[`/`read` stages, compound stages, and prefix assignments in stages fail with status 2
+stages, `test`/`[`/`read` stages, and compound stages fail with status 2
 before any stage is launched. Native regular built-in children retain the
 Phase 1 execution path. The host executor handles `cd` pipeline isolation with
 a status-only child utility, rather than constructing source for another shell;
 its options/diagnostics are limited. The final stage supplies pipeline status;
 partial launch failure preserves the existing 126/127/failure status and
 kills/reaps already-started stages.
+Simple pipeline prefix assignments now get independent environments, with a
+16-stage limit checked before creating pipes or children.
 
 ## Functions and variable visibility
 
@@ -163,20 +171,23 @@ inside functions remain visible to their caller. Prefix assignments are
 permanent for special built-ins and assignment-only commands; other command
 prefix values are temporary. Restoring prefixes restores only those names,
 so unrelated function changes remain visible. Subshell changes stay isolated.
+If restoration would exceed variable bounds after a function adds values, the
+variable context rolls back to its original snapshot with a resource diagnostic.
 
 Variables carry independent export/readonly attributes. Assigning or unsetting
 readonly values is an error. Host children receive only exported variables
 plus temporary command-prefix assignments through `Command::env_clear/envs`.
 
-Native spawn currently inherits the kernel process environment and exposes no
-userspace argument for a changed export map. The native script adapter rejects
-an external launch with status 2 if its exported map differs from the inherited
-map; it does not silently discard exports. Shell-local assignments and exported
-values consumed by in-process built-ins/functions work. Changing an exported
-PATH or passing prefix environment assignments to an external native command
-therefore remains unsupported. The old interactive export behavior is
-unchanged. An authorized native environment interface is a prerequisite for
-completing stage C.
+Native spawn now accepts an optional bounded replacement environment. Shell
+scripts and native interactive execution serialize only exported values and
+temporary prefixes. The child's PCB and initial SysV envp receive the snapshot;
+the parent PCB/environment remains unchanged. Legacy spawn callers retain
+inheritance. The shared interpreter and native interactive dispatcher share
+argument/assignment preparation, including pipeline stage environments.
+`export NAME` can mark an unset name without creating an empty value; `unset`
+removes both value and export attribute. Child script startup imports exactly
+the supplied environment and does not resurrect unset HOME/PATH defaults.
+Details and security limits are in the Phase 2.1 document.
 
 ## Expansion semantics
 
@@ -213,7 +224,7 @@ slice; the scalar adapter selects the first resulting field.
 | `:` | Supported special | Null command |
 | `.`, `eval` | Partial special | Shared interpreter; dot requires explicit filename/path, no PATH search or operand positional scope |
 | `exit`, `return` | Supported special | Numeric status modulo 256; return only in function/source |
-| `export`, `readonly` | Partial special | Names and assignments; no listing/options; native external export changes rejected |
+| `export`, `readonly` | Partial special | Names and assignments; no listing/options; native export propagation supported |
 | `set`, `shift` | Partial special | `set --` and numeric shift; no shell options or variable listing |
 | `unset` | Partial special | Variables only, no `-f`/`-v` or function removal |
 | `exec` | Rejected | Process replacement/persistent descriptor ownership deferred |
@@ -244,7 +255,10 @@ redirection/I/O errors currently terminate the script with status 1.
 | Function calls | 16 active calls |
 | Source/eval nesting | 16 active levels |
 | Function definitions | 64 per context |
-| Shell variables | 256 names through checked assignment; 16 KiB value |
+| Shell variables | 256 names; 16 KiB value; 64 KiB aggregate; 255-byte names |
+| Export attributes | 256 names; unset exported names need not have a value |
+| Child environment | 128 entries; 4096 bytes/entry including NUL; 16 KiB total |
+| Pipeline | 16 stages; all stage environments checked before pipe creation |
 | Expanded word | 16384 atoms, checked before parameter-value insertion |
 | Expanded arguments / for words | 256 |
 | Native external argv | Existing libc: 15 entries including argv[0], 1024-byte aggregate arena |
@@ -350,7 +364,7 @@ SSH-session execution have not been tested.
 
 ## Remaining work and SSH dependencies
 
-1. Finish stage C: native environment-map handoff, scripting/function/compound
+1. Finish stage C: scripting/function/compound
    pipeline children, context transport, options, and interactive continuation
    compatible with foreground/PTY output draining.
 2. Finish stage D: tokenize structured substitutions/arithmetic, implement POSIX

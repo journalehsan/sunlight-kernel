@@ -16,6 +16,7 @@ use alloc::{
 pub const MAX_CALL_DEPTH: usize = 16;
 pub const MAX_FUNCTIONS: usize = 64;
 pub const MAX_ARGUMENTS: usize = 256;
+pub const MAX_PIPELINE_STAGES: usize = 16;
 #[derive(Clone)]
 pub struct ShellExecutionContext {
     pub cwd: String,
@@ -75,6 +76,7 @@ pub trait Runtime {
         &mut self,
         command: &AstNode<String>,
         context: &ShellExecutionContext,
+        stage_environments: Option<&[ShellEnv]>,
     ) -> Result<i32, Error>;
     fn write(&mut self, fd: i32, bytes: &[u8]) -> Result<(), Error>;
     fn open(
@@ -203,7 +205,11 @@ fn run_kind(
             flow => Ok(flow),
         },
         Pipeline(commands) => {
+            if commands.len() > MAX_PIPELINE_STAGES {
+                return Err(Error::new(2, "pipeline exceeds 16 stages"));
+            }
             let mut expanded = Vec::new();
+            let mut environments = Vec::new();
             for command in commands {
                 let SimpleCommand(simple) = &command.kind else {
                     return Err(Error::new(
@@ -221,13 +227,8 @@ fn run_kind(
                         "function and scripting builtin pipeline stages are not implemented",
                     ));
                 }
-                if simple.argv.first().is_some_and(|w| assignment(w).is_some()) {
-                    return Err(Error::new(
-                        2,
-                        "pipeline prefix assignments are not implemented",
-                    ));
-                }
-                let stage = expanded_simple(simple, context)?;
+                let prepared = prepare_pipeline_stage(simple, context)?;
+                let stage = prepared.command;
                 if stage.argv.first().is_none_or(|name| {
                     context.functions.contains_key(name)
                         || is_special(name)
@@ -239,10 +240,13 @@ fn run_kind(
                     ));
                 }
                 expanded.push(stage);
+                environments.push(prepared.env);
             }
-            Ok(Flow::Status(
-                runtime.external(&AstNode::Pipeline(expanded), context)?,
-            ))
+            Ok(Flow::Status(runtime.external(
+                &AstNode::Pipeline(expanded),
+                context,
+                Some(&environments),
+            )?))
         }
         IfCommand {
             branches,
@@ -415,34 +419,11 @@ fn simple(
     context: &mut ShellExecutionContext,
     runtime: &mut impl Runtime,
 ) -> Result<Flow, Error> {
-    let prefix = command
-        .argv
-        .iter()
-        .take_while(|w| assignment(w).is_some())
-        .count();
-    // Command arguments expand against the original environment, before prefix assignments.
-    let mut expanded = expanded_simple(
-        &SimpleCommand {
-            argv: command.argv[prefix..].to_vec(),
-            redirections: Vec::new(),
-        },
-        context,
-    )?;
-    let name = expanded.argv.first().map(String::as_str).unwrap_or("");
-    let permanent = expanded.argv.is_empty() || is_special(name);
-    let saved_env = (!permanent && prefix != 0).then(|| context.env.clone());
+    let prepared = prepare_arguments(command, context)?;
+    let saved_env = (!prepared.temporary_names.is_empty()).then(|| context.env.clone());
+    context.env = prepared.env;
+    let mut expanded = prepared.command;
     let result = (|| {
-        for word in &command.argv[..prefix] {
-            let (key, value) = assignment(word).unwrap();
-            let value = scalar(&value, context)?;
-            context
-                .env
-                .assign(&key, &value)
-                .map_err(|e| Error::new(2, e))?;
-            if !permanent {
-                context.env.export(&key);
-            }
-        }
         let saved_io = context.io;
         let opened = match redirects(&command.redirections, context, runtime) {
             Ok(fds) => fds,
@@ -476,12 +457,80 @@ fn simple(
         result
     })();
     if let Some(env) = saved_env {
-        for word in &command.argv[..prefix] {
-            let (key, _) = assignment(word).unwrap();
-            context.env.restore_variable(&key, &env);
-        }
+        context
+            .env
+            .restore_variables(&prepared.temporary_names, &env)
+            .map_err(|message| Error::new(2, message))?;
     }
     result
+}
+
+/// Shared preparation for scripts and the asynchronous native interactive
+/// dispatcher. Arguments expand first; prefix values expand sequentially in
+/// their command environment. The caller restores only temporary prefix names
+/// after launching/dispatching, preserving unrelated builtin/function effects.
+pub struct PreparedArguments {
+    pub command: SimpleCommand<String>,
+    pub env: ShellEnv,
+    pub temporary_names: Vec<String>,
+}
+pub fn prepare_arguments(
+    command: &SimpleCommand,
+    context: &ShellExecutionContext,
+) -> Result<PreparedArguments, Error> {
+    let prefix = command
+        .argv
+        .iter()
+        .take_while(|w| assignment(w).is_some())
+        .count();
+    // Command arguments expand against the original environment, before prefix assignments.
+    let expanded = expanded_simple(
+        &SimpleCommand {
+            argv: command.argv[prefix..].to_vec(),
+            redirections: Vec::new(),
+        },
+        context,
+    )?;
+    let name = expanded.argv.first().map(String::as_str).unwrap_or("");
+    let permanent = expanded.argv.is_empty() || is_special(name);
+    let mut candidate = context.clone();
+    let mut temporary_names = Vec::new();
+    for word in &command.argv[..prefix] {
+        let (key, value) = assignment(word).unwrap();
+        let value = scalar(&value, &candidate)?;
+        candidate
+            .env
+            .assign(&key, &value)
+            .map_err(|e| Error::new(2, e))?;
+        if !permanent {
+            candidate.env.export(&key);
+            temporary_names.push(key);
+        }
+    }
+    Ok(PreparedArguments {
+        command: expanded,
+        env: candidate.env,
+        temporary_names,
+    })
+}
+
+/// A pipeline stage gets its own assignment/redirection expansion context.
+pub fn prepare_pipeline_stage(
+    command: &SimpleCommand,
+    context: &ShellExecutionContext,
+) -> Result<PreparedArguments, Error> {
+    let mut prepared = prepare_arguments(command, context)?;
+    let mut child = context.clone();
+    child.env = prepared.env.clone();
+    prepared.command.redirections = expanded_simple(
+        &SimpleCommand {
+            argv: Vec::new(),
+            redirections: command.redirections.clone(),
+        },
+        &child,
+    )?
+    .redirections;
+    Ok(prepared)
 }
 pub fn is_special(name: &str) -> bool {
     matches!(
@@ -595,11 +644,11 @@ fn dispatch(
                             .env
                             .assign(key, value)
                             .map_err(|e| Error::new(2, e))?;
-                    } else if context.env.get(key).is_none() {
+                    } else if context.env.get(key).is_none() && name == "readonly" {
                         context.env.assign(key, "").map_err(|e| Error::new(2, e))?;
                     }
                     if name == "export" {
-                        context.env.export(key);
+                        context.env.mark_export(key).map_err(|e| Error::new(2, e))?;
                     } else {
                         context.env.make_readonly(key);
                     }
@@ -703,7 +752,7 @@ fn dispatch(
             Err(Error::new(2, "this scripting builtin is not implemented"))
         }
         _ => runtime
-            .external(&AstNode::Command(command.clone()), context)
+            .external(&AstNode::Command(command.clone()), context, None)
             .map(Flow::Status),
     }
 }

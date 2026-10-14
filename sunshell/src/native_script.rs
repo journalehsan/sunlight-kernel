@@ -6,17 +6,16 @@ use sunshell::{
     parser::{AstNode, RedirectMode},
     script::{Error, Flow, Runtime, ShellExecutionContext},
     script_parser::MAX_SOURCE,
+    shellenv::ShellEnv,
 };
 
 pub(super) struct NativeRuntime {
     shell: Shell,
-    inherited_env: sunshell::shellenv::ShellEnv,
 }
 impl NativeRuntime {
     pub(super) fn new() -> Self {
         Self {
             shell: Shell::new(),
-            inherited_env: context().env,
         }
     }
 }
@@ -31,12 +30,10 @@ impl Runtime for NativeRuntime {
         &mut self,
         command: &AstNode<String>,
         context: &ShellExecutionContext,
+        stage_environments: Option<&[ShellEnv]>,
     ) -> Result<i32, Error> {
-        if !context.env.exported().eq(self.inherited_env.exported()) {
-            return Err(Error::new(
-                2,
-                "native spawn cannot pass changed shell exports; inherited environment only",
-            ));
+        if stage_environments.is_none() {
+            context.env.export_size().map_err(|e| Error::new(2, e))?;
         }
         self.shell.cwd = context.cwd.clone();
         self.shell.env = context.env.clone();
@@ -50,7 +47,9 @@ impl Runtime for NativeRuntime {
             AstNode::Command(command) => core::slice::from_ref(command),
             AstNode::Pipeline(commands) => commands.as_slice(),
         };
-        let result = self.shell.launch_pipeline(commands);
+        let result = self
+            .shell
+            .launch_pipeline_environments(commands, stage_environments);
         let status = if let Err(message) = result {
             let status = self
                 .shell
@@ -130,13 +129,12 @@ impl Runtime for NativeRuntime {
 }
 pub(super) fn context() -> ShellExecutionContext {
     let mut env = sunshell::shellenv::ShellEnv::new();
-    env.load_defaults(libc::getuid() as u32, "");
-    for i in 0..128 {
+    for i in 0..sunlight_ipc::spawn_env::MAX_ENTRIES {
         let ptr = unsafe { libc::env::entry(i) };
         if ptr.is_null() {
             break;
         }
-        let len = unsafe { libc::crt0::cstr_len(ptr, 16384) };
+        let len = unsafe { libc::crt0::cstr_len(ptr, sunlight_ipc::spawn_env::MAX_ENTRY_BYTES) };
         if let Ok(entry) = core::str::from_utf8(unsafe { core::slice::from_raw_parts(ptr, len) }) {
             if let Some((key, value)) = entry.split_once('=') {
                 if sunshell::expansion::valid_name(key) {

@@ -1,7 +1,9 @@
 [SSHL-SCRIPT] file arguments control-flow pipeline PASS
 [SSHL-SCRIPT] command syntax status PASS
+[SSHL-ENV] export assignment isolation transport security PASS
 [SSHL-SCRIPT] repeated processes descriptors scopes PASS
 [SSHL-TEST] script-pty coverage PASS
+[SSHL-ENV] PTY export temporary assignment unset PASS
 [SSHL-SCRIPT] PTY script and live output PASS
 [SSHL-SCRIPT] native gate PASS
 [TTY]  exit: sshl --script-tests -> 0

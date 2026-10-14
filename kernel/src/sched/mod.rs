@@ -168,6 +168,9 @@ pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
 /// leaving a woken live task `Ready` but not enqueued. Each CPU consumes only
 /// its own bit; cross-core wakeups set the owner CPU's bit.
 static RESCHEDULE_MASK: AtomicU64 = AtomicU64::new(0);
+static DISPATCH_NOTIFICATION_MASK: AtomicU64 = AtomicU64::new(0);
+static DISPATCH_NOTIFICATIONS_SENT: AtomicU64 = AtomicU64::new(0);
+static DISPATCH_NOTIFICATIONS_BUSY: AtomicU64 = AtomicU64::new(0);
 
 /// Diagnostic: track first time sunlightd (pid 6) is picked by scheduler.
 static SUNLIGHTD_FIRST_SCHED: AtomicBool = AtomicBool::new(false);
@@ -604,10 +607,19 @@ impl Scheduler {
         if self.processes[idx].owning_core != u8::MAX {
             return;
         }
+        // The local CPU is already executing the enqueue path (including
+        // transient requeue during a context switch); only a remote idle CPU
+        // needs an interrupt in addition to its published reschedule flag.
+        let notify_idle = self.core_current_task(core_id).is_none()
+            && SCHEDULER_READY.load(Ordering::Acquire)
+            && core_id != current_cpu_id();
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             self.processes[idx].queued_on_core = core_id as u8;
             CORE_STATES[core_id].lock().rr_queue.push_back(idx);
             request_reschedule_on(core_id);
+            if notify_idle {
+                DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(core_id), Ordering::Release);
+            }
             return;
         }
         let tier = self.processes[idx].get_queue_tier();
@@ -617,6 +629,12 @@ impl Scheduler {
             QueueTier::High => core.run_queue_high.push_back(idx),
             QueueTier::Medium => core.run_queue_medium.push_back(idx),
             QueueTier::Low => core.run_queue_low.push_back(idx),
+        }
+        // Publish the queue before requesting dispatch. BORE previously left
+        // a detached consumer on an idle CPU until its next periodic tick.
+        request_reschedule_on(core_id);
+        if notify_idle {
+            DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(core_id), Ordering::Release);
         }
     }
 
@@ -675,6 +693,12 @@ impl Scheduler {
                     .count()
             })
             .sum()
+    }
+
+    pub(crate) fn diagnostic_current_pid(&self, cpu_id: usize) -> Option<usize> {
+        self.core_current_task(cpu_id)
+            .and_then(|idx| self.processes.get(idx))
+            .map(|process| process.pid)
     }
 
     /// Enqueue a freshly created Ready task onto a preferred CPU for its first
@@ -912,7 +936,7 @@ impl Scheduler {
     // ── State management ─────────────────────────────────────────────────────
 
     pub fn set_state(&mut self, idx: usize, new_state: ProcessState) {
-        if idx >= self.processes.len() {
+        if idx >= self.processes.len() || self.processes[idx].is_exiting() {
             return;
         }
         self.processes[idx].state = new_state;
@@ -934,6 +958,7 @@ impl Scheduler {
             crate::ipc::expire_deadlines(self, self.global_tick);
             self.expire_linux_poll_timeouts();
             self.expire_native_futex_timeouts();
+            crate::ipc::trace_pty_stall(self);
         }
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             let mut core = CORE_STATES[cpu_id].lock();
@@ -1778,6 +1803,7 @@ impl Scheduler {
             None => return,
         };
         if self.processes[idx].state == ProcessState::BlockedOnTimer {
+            self.processes[idx].tty_write_wait = None;
             if let Some(state) = self.processes[idx].linux_state_mut() {
                 state.poll_wake_tick = None;
             }
@@ -1858,6 +1884,34 @@ impl Scheduler {
         self.processes[idx].native_pipe_wait = Some((ring, writing));
         self.processes[idx].block_start_tick = self.global_tick;
         self.set_state(idx, ProcessState::BlockedOnTimer);
+        request_park_after_sysret();
+    }
+
+    /// The failed write and registration are serialized under SCHEDULER.
+    pub fn block_current_tty_write(&mut self, tab: usize) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        self.processes[idx].tty_write_wait = Some(tab);
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+        request_park_after_sysret();
+    }
+
+    /// TtyStdoutPull releases the ring guard before acquiring SCHEDULER.
+    /// Thus a drain overlapping registration must observe the registered wait.
+    pub fn wake_tty_writers(&mut self, tab: usize) {
+        if !crate::process::tty_io::stdout_has_space(tab) {
+            return;
+        }
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state == ProcessState::BlockedOnTimer
+                && self.processes[idx].tty_write_wait == Some(tab)
+            {
+                self.processes[idx].tty_write_wait = None;
+                self.wake_linux_poll_index(idx);
+            }
+        }
     }
 
     /// Wake poll waiters attached to the TTY tab which just received input.
@@ -1961,6 +2015,7 @@ impl Scheduler {
 
     fn wake_linux_poll_index(&mut self, idx: usize) {
         self.processes[idx].native_pipe_wait = None;
+        self.processes[idx].tty_write_wait = None;
         if let Some(state) = self.processes[idx].linux_state_mut() {
             state.poll_wake_tick = None;
             state.eventfd_wait = None;
@@ -2016,6 +2071,7 @@ impl Scheduler {
             | ProcessState::BlockedOnTimer
             | ProcessState::BlockedOnIo
             | ProcessState::Suspended => {
+                self.processes[idx].tty_write_wait = None;
                 if let Some(state) = self.processes[idx].linux_state_mut() {
                     state.poll_wake_tick = None;
                 }
@@ -3399,6 +3455,51 @@ pub fn request_reschedule_on(cpu_id: usize) {
 /// Set the reschedule flag for the current CPU.
 pub fn request_reschedule() {
     request_reschedule_on(current_cpu_id());
+}
+
+pub(crate) fn diagnostic_dispatch_notifications() -> (u64, u64) {
+    (
+        DISPATCH_NOTIFICATIONS_SENT.load(Ordering::Relaxed),
+        DISPATCH_NOTIFICATIONS_BUSY.load(Ordering::Relaxed),
+    )
+}
+
+/// Publish an interrupt for a native pipe/TTY syscall retry after SYSRET.
+/// This is atomic-only and safe under SCHEDULER; dispatch flushes after dropping
+/// all guards. The pending interrupt parks the caller before it can replay the
+/// blocked syscall repeatedly while waiting for the periodic timer.
+fn request_park_after_sysret() {
+    let cpu_id = current_cpu_id();
+    request_reschedule_on(cpu_id);
+    DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+}
+
+/// Flush coalesced dispatch notifications after scheduler/ring locks are gone.
+/// Call with interrupts disabled. There is no ICR spin or blocking retry;
+/// pending reschedule flags and periodic timers remain the fallback.
+pub(crate) fn flush_dispatch_notifications() {
+    let mut pending = DISPATCH_NOTIFICATION_MASK.swap(0, Ordering::AcqRel);
+    // Every iteration consumes one bit: at most MAX_CORES attempts, no polling.
+    while pending != 0 {
+        let cpu = pending.trailing_zeros() as usize;
+        let bit = reschedule_bit(cpu);
+        pending &= pending - 1;
+        if unsafe {
+            crate::arch::x86_64::lapic::try_send_fixed_ipi(
+                cpu,
+                crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
+            )
+        } {
+            if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
+                DISPATCH_NOTIFICATIONS_SENT.fetch_add(1, Ordering::Relaxed);
+            }
+        } else {
+            DISPATCH_NOTIFICATION_MASK.fetch_or(bit, Ordering::Release);
+            if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
+                DISPATCH_NOTIFICATIONS_BUSY.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
 }
 
 /// Queue a voluntary context switch for the first ring-3 instruction after
