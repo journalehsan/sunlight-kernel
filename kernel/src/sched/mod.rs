@@ -1831,6 +1831,7 @@ impl Scheduler {
         if self.processes[idx].state == ProcessState::BlockedOnTimer {
             self.processes[idx].tty_write_wait = None;
             self.processes[idx].tty_read_wait = None;
+            self.processes[idx].native_poll_wake_tick = None;
             if let Some(state) = self.processes[idx].linux_state_mut() {
                 state.poll_wake_tick = None;
             }
@@ -1907,7 +1908,9 @@ impl Scheduler {
     /// Callers hold the scheduler lock from the failed ring operation through
     /// registration, so a producer cannot notify before the wait is visible.
     pub fn block_current_native_pipe(&mut self, ring: u32, writing: bool) {
-        let Some(idx) = self.current_process_index() else { return; };
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
         self.processes[idx].native_pipe_wait = Some((ring, writing));
         self.processes[idx].block_start_tick = self.global_tick;
         self.set_state(idx, ProcessState::BlockedOnTimer);
@@ -1915,10 +1918,20 @@ impl Scheduler {
     }
 
     pub fn block_current_native_pipe_poll(&mut self) {
+        self.block_current_native_poll(None, u64::MAX);
+    }
+
+    /// Park a native readiness wait until input/output becomes ready or its
+    /// relative timeout expires. The producer wake paths and this registration
+    /// share the scheduler lock, so an event cannot race the empty check.
+    pub fn block_current_native_poll(&mut self, tty_tab: Option<usize>, timeout_ticks: u64) {
         let Some(idx) = self.current_process_index() else {
             return;
         };
         self.processes[idx].native_pipe_poll_wait = true;
+        self.processes[idx].tty_read_wait = tty_tab;
+        self.processes[idx].native_poll_wake_tick = (timeout_ticks != u64::MAX)
+            .then_some(self.global_tick.saturating_add(timeout_ticks.max(1)));
         self.processes[idx].block_start_tick = self.global_tick;
         self.set_state(idx, ProcessState::BlockedOnTimer);
         request_park_after_sysret();
@@ -2045,7 +2058,9 @@ impl Scheduler {
                     }
             });
             let native_poll = self.processes[idx].native_pipe_poll_wait
-                && self.processes[self.shared_process_index(idx)].fd_table.contains_pipe_ring(ring);
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_pipe_ring(ring);
             if poll || ready || native_ready || native_poll {
                 self.wake_linux_poll_index(idx);
             }
@@ -2060,7 +2075,11 @@ impl Scheduler {
                     .linux_state()
                     .and_then(|state| state.poll_wake_tick)
                     .is_some_and(|deadline| deadline <= now);
-            if expired {
+            let native_expired = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && self.processes[idx]
+                    .native_poll_wake_tick
+                    .is_some_and(|deadline| deadline <= now);
+            if expired || native_expired {
                 self.wake_linux_poll_index(idx);
             }
         }
@@ -2069,6 +2088,7 @@ impl Scheduler {
     fn wake_linux_poll_index(&mut self, idx: usize) {
         self.processes[idx].native_pipe_wait = None;
         self.processes[idx].native_pipe_poll_wait = false;
+        self.processes[idx].native_poll_wake_tick = None;
         self.processes[idx].tty_write_wait = None;
         self.processes[idx].tty_read_wait = None;
         if let Some(state) = self.processes[idx].linux_state_mut() {

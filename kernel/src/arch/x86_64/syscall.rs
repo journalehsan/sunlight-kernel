@@ -5296,14 +5296,15 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
     len as u64
 }
 
-/// Native capture readiness for up to three readable pipe descriptors.
+/// Native capture readiness for up to three readable pipe or TTY descriptors.
 /// Checking readiness and registering the wait share the scheduler lock with
-/// producer notifications. This uses the native park protocol and never
-/// attaches Linux state or changes process personality/capabilities.
+/// producer notifications. A finite timeout is serviced by the same scheduler
+/// timer path as Linux poll, without attaching Linux state or changing process
+/// personality/capabilities.
 fn sys_native_pipe_poll(frame: &mut SyscallFrame) -> u64 {
     let count = frame.rsi as usize;
     let timeout = frame.rdx as i32;
-    if count == 0 || count > 3 || !matches!(timeout, -1 | 0) {
+    if count == 0 || count > 3 || timeout < -1 {
         return u64::MAX;
     }
     let mut storage = [0u8; 24];
@@ -5318,23 +5319,26 @@ fn sys_native_pipe_poll(frame: &mut SyscallFrame) -> u64 {
         if sched.current_process().foreground.cancel != 0 {
             return u64::MAX;
         }
+        let mut tty_tab = None;
         for record in fds.chunks_exact(8) {
             let fd = i32::from_ne_bytes(record[..4].try_into().unwrap());
             let events = i16::from_ne_bytes(record[4..6].try_into().unwrap());
-            if events != 1
-                || sched
-                    .current_shared_process()
-                    .fd_table
-                    .get(fd)
-                    .is_none_or(|entry| !(entry.handle.is_pipe() && !entry.handle.pipe_is_write()))
-            {
+            if events != 1 {
+                return u64::MAX;
+            }
+            let Some(entry) = sched.current_shared_process().fd_table.get(fd) else {
+                return u64::MAX;
+            };
+            if entry.handle.is_tty_stdin() && fd == 0 {
+                tty_tab = Some(entry.handle.tty_tab() as usize);
+            } else if !(entry.handle.is_pipe() && !entry.handle.pipe_is_write()) {
                 return u64::MAX;
             }
         }
-        let ready = linux_poll_ready(&sched, 0, fds, count);
-        let blocked = ready == 0 && timeout == -1;
+        let ready = linux_poll_ready(&sched, tty_tab.unwrap_or(0), fds, count);
+        let blocked = ready == 0 && timeout != 0;
         if blocked {
-            sched.block_current_native_pipe_poll();
+            sched.block_current_native_poll(tty_tab, native_poll_timeout_ticks(timeout));
         }
         (ready, blocked)
     };
@@ -5349,6 +5353,31 @@ fn sys_native_pipe_poll(frame: &mut SyscallFrame) -> u64 {
         return frame.rax;
     }
     ready
+}
+
+fn native_poll_timeout_ticks(timeout_ms: i32) -> u64 {
+    if timeout_ms < 0 {
+        u64::MAX
+    } else {
+        (timeout_ms as u64)
+            .saturating_mul(crate::timekeeping::TICK_HZ)
+            .saturating_add(999)
+            / 1000
+    }
+}
+
+#[cfg(test)]
+mod native_poll_tests {
+    use super::native_poll_timeout_ticks;
+
+    #[test]
+    fn timeout_conversion_rounds_up_without_catch_up_zero() {
+        assert_eq!(native_poll_timeout_ticks(-1), u64::MAX);
+        assert_eq!(native_poll_timeout_ticks(0), 0);
+        assert_eq!(native_poll_timeout_ticks(1), 1);
+        assert_eq!(native_poll_timeout_ticks(10), 1);
+        assert_eq!(native_poll_timeout_ticks(1000), 100);
+    }
 }
 
 fn sys_linux_poll(frame: &mut SyscallFrame) -> u64 {

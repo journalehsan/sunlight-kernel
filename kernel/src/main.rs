@@ -4820,12 +4820,18 @@ fn injected_scancode(byte: u8) -> (u8, bool) {
 #[cfg(feature = "key_inject")]
 fn build_top_sequence() -> [u8; 12288] {
     let mut s = [0u8; 12288];
-    let codes: [u8; 10] = [
-        0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
-        0x14, 0x18, 0x19, 0x1C, // top + Enter
-        0x10, // q
-    ];
-    s[..codes.len()].copy_from_slice(&codes);
+    let mut len = 0;
+    append_injected_delay(&mut s, &mut len, 1536);
+    append_injected_scancode(&mut s, &mut len, 0x1C); // select root
+    append_injected_delay(&mut s, &mut len, 128);
+    for code in [0x13, 0x18, 0x18, 0x14, 0x1C] {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
+    append_injected_delay(&mut s, &mut len, 512);
+    append_injected_command(&mut s, &mut len, b"top");
+    // Leave top idle for more than five sampling deadlines before exiting.
+    append_injected_delay(&mut s, &mut len, 768);
+    append_injected_scancode(&mut s, &mut len, 0x10); // q
     s
 }
 

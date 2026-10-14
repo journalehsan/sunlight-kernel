@@ -83,6 +83,8 @@ pub enum SunlightSyscall {
     Foreground = 160,
     ProcessExit = 20,
     ProcessYield = 21,
+    /// Native readiness wait for pipe and controlling TTY descriptors.
+    NativePoll = 159,
     ThreadSpawn = 22,
     // TTY mux for foreground input routing — see kernel process::tty_io.
     TtyStdinPush = 23,
@@ -5193,6 +5195,42 @@ pub fn monotonic_millis() -> u64 {
     // SAFETY: MonotonicMs takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::MonotonicMs, 0, 0, 0, 0, 0, 0, 0) };
     ret
+}
+
+/// A native poll descriptor. Native callers use the same compact layout as
+/// the kernel readiness ABI; unlike Linux poll this remains capability-bound
+/// to the caller's existing descriptor table.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct NativePollFd {
+    pub fd: i32,
+    pub events: i16,
+    pub revents: i16,
+}
+
+/// Wait for native descriptor readiness or a relative timeout. The kernel
+/// parks the task, so a nonzero timeout does not consume CPU while idle.
+pub fn native_poll(fds: &mut [NativePollFd], timeout_ms: i32) -> Result<usize, ()> {
+    if fds.is_empty() || fds.len() > 3 || timeout_ms < -1 {
+        return Err(());
+    }
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::NativePoll,
+            fds.as_mut_ptr() as u64,
+            fds.len() as u64,
+            timeout_ms as u64,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if ret == u64::MAX {
+        Err(())
+    } else {
+        Ok(ret as usize)
+    }
 }
 
 pub fn hardware_inventory_record(index: usize) -> Option<(HardwareInventoryRecord, usize)> {

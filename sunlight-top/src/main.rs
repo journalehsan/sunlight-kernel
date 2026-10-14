@@ -16,6 +16,8 @@ use ui::ViewState;
 
 pub static MY_PID: AtomicU32 = AtomicU32::new(0);
 
+const REFRESH_INTERVAL_MS: u64 = 1_000;
+
 struct BumpAllocator;
 
 unsafe impl GlobalAlloc for BumpAllocator {
@@ -88,89 +90,126 @@ pub extern "C" fn _start() -> ! {
         MY_PID.load(Ordering::Relaxed),
     );
 
-    loop {
-        let mut redraw = false;
+    let mut next_refresh = sunlight_ipc::monotonic_millis().saturating_add(REFRESH_INTERVAL_MS);
 
-        // SIGWINCH delivery is not available yet, but the PTY winsize cache is
-        // updated immediately. Re-query it on our existing refresh loop so a
-        // running top follows terminal maximize/restore and manual resizes.
-        if let Some((next_cols, next_rows)) = get_terminal_size() {
-            redraw |= view.set_terminal_size(next_cols, next_rows);
+    loop {
+        let now = sunlight_ipc::monotonic_millis();
+        if now >= next_refresh {
+            refresh_view(&mut view, &mut canvas, &mut telem);
+            // Rebase after a late wake instead of issuing a burst of catch-up
+            // renders. The next sample is always one interval from now.
+            next_refresh = now.saturating_add(REFRESH_INTERVAL_MS);
+            continue;
         }
 
-        if let Some(key) = read_key_nonblocking() {
-            match key {
-                b'q' | b'Q' | 0x1b => {
-                    canvas.show_cursor();
-                    canvas.exit_alt_screen();
-                    canvas.flush();
-                    sunlight_ipc::ProcessExit::exit(0);
+        let wait_ms = next_refresh.saturating_sub(now).min(i32::MAX as u64) as i32;
+        match wait_for_key(wait_ms) {
+            Err(()) => {
+                // Foreground cancellation, EOF, or a closed PTY exits through
+                // the same terminal cleanup path as `q`.
+                canvas.show_cursor();
+                canvas.exit_alt_screen();
+                canvas.flush();
+                sunlight_ipc::ProcessExit::exit(0);
+            }
+            Ok(None) => continue,
+            Ok(Some(key)) => {
+                let mut redraw = false;
+                if let Some((next_cols, next_rows)) = get_terminal_size() {
+                    redraw |= view.set_terminal_size(next_cols, next_rows);
                 }
-                b's' | b'S' => {
-                    view.sort = SortKey {
-                        column: SortColumn::Cpu,
-                        descending: true,
-                    };
-                    view.scroll_to_top();
-                    redraw = true;
+
+                match key {
+                    b'q' | b'Q' | 0x03 | 0x1b => {
+                        canvas.show_cursor();
+                        canvas.exit_alt_screen();
+                        canvas.flush();
+                        sunlight_ipc::ProcessExit::exit(0);
+                    }
+                    b's' | b'S' => {
+                        view.sort = SortKey {
+                            column: SortColumn::Cpu,
+                            descending: true,
+                        };
+                        view.scroll_to_top();
+                        redraw = true;
+                    }
+                    b'm' | b'M' => {
+                        view.sort = SortKey {
+                            column: SortColumn::Mem,
+                            descending: true,
+                        };
+                        view.scroll_to_top();
+                        redraw = true;
+                    }
+                    b'p' | b'P' => {
+                        view.sort = SortKey {
+                            column: SortColumn::Pid,
+                            descending: false,
+                        };
+                        view.scroll_to_top();
+                        redraw = true;
+                    }
+                    b'n' | b'N' => {
+                        view.sort = SortKey {
+                            column: SortColumn::Name,
+                            descending: false,
+                        };
+                        view.scroll_to_top();
+                        redraw = true;
+                    }
+                    b'j' | b'J' => {
+                        view.scroll_down(telem.snapshot().proc_count);
+                        redraw = true;
+                    }
+                    b'k' | b'K' => {
+                        view.scroll_up();
+                        redraw = true;
+                    }
+                    b'g' => {
+                        view.scroll_to_top();
+                        redraw = true;
+                    }
+                    b'G' => {
+                        view.scroll_to_bottom(telem.snapshot().proc_count);
+                        redraw = true;
+                    }
+                    _ => {}
                 }
-                b'm' | b'M' => {
-                    view.sort = SortKey {
-                        column: SortColumn::Mem,
-                        descending: true,
-                    };
-                    view.scroll_to_top();
-                    redraw = true;
+
+                if redraw {
+                    view.render(
+                        &mut canvas,
+                        telem.snapshot(),
+                        MY_PID.load(Ordering::Relaxed),
+                    );
                 }
-                b'p' | b'P' => {
-                    view.sort = SortKey {
-                        column: SortColumn::Pid,
-                        descending: false,
-                    };
-                    view.scroll_to_top();
-                    redraw = true;
-                }
-                b'n' | b'N' => {
-                    view.sort = SortKey {
-                        column: SortColumn::Name,
-                        descending: false,
-                    };
-                    view.scroll_to_top();
-                    redraw = true;
-                }
-                b'j' | b'J' => {
-                    view.scroll_down(telem.snapshot().proc_count);
-                    redraw = true;
-                }
-                b'k' | b'K' => {
-                    view.scroll_up();
-                    redraw = true;
-                }
-                b'g' => {
-                    view.scroll_to_top();
-                    redraw = true;
-                }
-                b'G' => {
-                    view.scroll_to_bottom(telem.snapshot().proc_count);
-                    redraw = true;
-                }
-                _ => {}
             }
         }
-
-        if telem.poll() || redraw {
-            view.render(
-                &mut canvas,
-                telem.snapshot(),
-                MY_PID.load(Ordering::Relaxed),
-            );
-        }
-
-        sleep_ms(100);
     }
 }
 
-fn read_key_nonblocking() -> Option<u8> {
+fn refresh_view(view: &mut ViewState, canvas: &mut Canvas, telem: &mut Telemetry) {
+    // SIGWINCH delivery is not available yet, so sample the authoritative
+    // winsize cache at the same cadence as statistics.
+    if let Some((cols, rows)) = get_terminal_size() {
+        view.set_terminal_size(cols, rows);
+    }
+    telem.poll();
+    view.render(canvas, telem.snapshot(), MY_PID.load(Ordering::Relaxed));
+}
+
+fn wait_for_key(timeout_ms: i32) -> Result<Option<u8>, ()> {
+    let mut pollfd = sunlight_ipc::NativePollFd {
+        fd: 0,
+        events: 1,
+        revents: 0,
+    };
+    let ready = sunlight_ipc::native_poll(core::slice::from_mut(&mut pollfd), timeout_ms)?;
+    if ready == 0 {
+        return Ok(None);
+    }
+
     let mut buf = [0u8; 1];
     // SAFETY: read syscall arguments are valid userspace pointers and lengths.
     let ret = unsafe {
@@ -189,33 +228,18 @@ fn read_key_nonblocking() -> Option<u8> {
         out
     };
 
-    if ret == 1 {
-        Some(buf[0])
+    if ret == u64::MAX {
+        Err(())
+    } else if ret == 1 {
+        Ok(Some(buf[0]))
     } else {
-        None
+        Ok(None)
     }
 }
 
 fn get_terminal_size() -> Option<(u16, u16)> {
     let size = sunlight_ipc::tty_winsize()?;
     Some((size.columns, size.rows))
-}
-
-fn sleep_ms(ms: u64) {
-    // No fine-grained sleep syscall yet. Approximate the frame interval with a
-    // light spin, but yield to the scheduler frequently so tty_server (which
-    // renders our output and forwards keystrokes) and the shell get CPU between
-    // frames. Without the yields, top would hold the CPU and keyboard input
-    // would never be processed.
-    let spins = ms.saturating_mul(1000);
-    let mut i: u64 = 0;
-    while i < spins {
-        core::hint::spin_loop();
-        if i & 0xFF == 0 {
-            sunlight_ipc::process_yield();
-        }
-        i += 1;
-    }
 }
 
 fn getpid() -> u32 {

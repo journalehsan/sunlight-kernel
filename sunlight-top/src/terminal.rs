@@ -1,21 +1,28 @@
 pub fn write_stdout(buf: &[u8]) {
-    if buf.is_empty() {
-        return;
-    }
-
-    // SAFETY: passing a valid userspace pointer/len to write(1,...); kernel validates pointer range.
-    unsafe {
-        core::arch::asm!(
-            "syscall",
-            in("rax") 43u64,
-            in("rdi") 1u64,
-            in("rsi") buf.as_ptr() as u64,
-            in("rdx") buf.len() as u64,
-            lateout("rax") _,
-            lateout("rcx") _,
-            lateout("r11") _,
-            options(nostack)
-        );
+    let mut offset = 0usize;
+    while offset < buf.len() {
+        // Native TTY writes may be short because the bounded stdout ring is
+        // drained concurrently. Retry the unwritten suffix so a large top
+        // frame cannot be truncated at the first 4 KiB syscall chunk.
+        let ret = unsafe {
+            let out: u64;
+            core::arch::asm!(
+                "syscall",
+                in("rax") 43u64,
+                in("rdi") 1u64,
+                in("rsi") buf[offset..].as_ptr() as u64,
+                in("rdx") buf.len().saturating_sub(offset).min(4096) as u64,
+                lateout("rax") out,
+                lateout("rcx") _,
+                lateout("r11") _,
+                options(nostack)
+            );
+            out
+        };
+        if ret == u64::MAX || ret == 0 {
+            break;
+        }
+        offset = offset.saturating_add((ret as usize).min(buf.len() - offset));
     }
 }
 
