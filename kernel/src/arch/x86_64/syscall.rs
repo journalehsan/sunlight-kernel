@@ -7099,14 +7099,18 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                         let nonblocking = dontwait
                             || sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0)
                                 & sunlight_compat_linux::abi::O_NONBLOCK as u32 != 0;
-                        if is_linux && !nonblocking {
+                        if !nonblocking {
                             // Input producers enqueue before taking SCHEDULER to wake
                             // sleepers. Keep the empty check and sleep registration
                             // under that lock, then retry the read after wakeup.
-                            sched.block_current_linux_poll(u64::MAX);
+                            if is_linux {
+                                sched.block_current_linux_poll(u64::MAX);
+                            } else {
+                                sched.block_current_tty_read(tab);
+                            }
                             frame.rcx = frame.rcx.saturating_sub(2);
                             crate::sched::request_reschedule();
-                            return 0;
+                            return frame.rax;
                         }
                         return if is_linux { linux_errno(11) } else { EAGAIN };
                     }

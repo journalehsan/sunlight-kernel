@@ -1804,6 +1804,7 @@ impl Scheduler {
         };
         if self.processes[idx].state == ProcessState::BlockedOnTimer {
             self.processes[idx].tty_write_wait = None;
+            self.processes[idx].tty_read_wait = None;
             if let Some(state) = self.processes[idx].linux_state_mut() {
                 state.poll_wake_tick = None;
             }
@@ -1897,6 +1898,17 @@ impl Scheduler {
         request_park_after_sysret();
     }
 
+    /// Serialize the empty input check and waiter registration with input wakes.
+    pub fn block_current_tty_read(&mut self, tab: usize) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        self.processes[idx].tty_read_wait = Some(tab);
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+        request_park_after_sysret();
+    }
+
     /// The failed write and registration are serialized under SCHEDULER.
     pub fn block_current_tty_write(&mut self, tab: usize) {
         let Some(idx) = self.current_process_index() else {
@@ -1919,6 +1931,7 @@ impl Scheduler {
                 && self.processes[idx].tty_write_wait == Some(tab)
             {
                 self.processes[idx].tty_write_wait = None;
+                self.processes[idx].tty_read_wait = None;
                 self.wake_linux_poll_index(idx);
             }
         }
@@ -1927,13 +1940,15 @@ impl Scheduler {
     /// Wake poll waiters attached to the TTY tab which just received input.
     pub fn wake_linux_poll_tty(&mut self, tab: usize) {
         for idx in 0..self.processes.len() {
-            let waiting_on_tab = self.processes[idx].state == ProcessState::BlockedOnTimer
-                && self.processes[idx]
-                    .linux_state()
-                    .is_some_and(|state| state.poll_wake_tick.is_some())
+            let native_wait = self.processes[idx].tty_read_wait == Some(tab);
+            let linux_wait = self.processes[idx]
+                .linux_state()
+                .is_some_and(|state| state.poll_wake_tick.is_some())
                 && self.processes[self.shared_process_index(idx)]
                     .fd_table
                     .contains_tty_stdin_tab(tab);
+            let waiting_on_tab = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && (native_wait || linux_wait);
             if waiting_on_tab {
                 self.wake_linux_poll_index(idx);
             }
@@ -2029,6 +2044,7 @@ impl Scheduler {
         self.processes[idx].native_pipe_wait = None;
         self.processes[idx].native_pipe_poll_wait = false;
         self.processes[idx].tty_write_wait = None;
+        self.processes[idx].tty_read_wait = None;
         if let Some(state) = self.processes[idx].linux_state_mut() {
             state.poll_wake_tick = None;
             state.eventfd_wait = None;
@@ -2085,6 +2101,7 @@ impl Scheduler {
             | ProcessState::BlockedOnIo
             | ProcessState::Suspended => {
                 self.processes[idx].tty_write_wait = None;
+                self.processes[idx].tty_read_wait = None;
                 if let Some(state) = self.processes[idx].linux_state_mut() {
                     state.poll_wake_tick = None;
                 }
