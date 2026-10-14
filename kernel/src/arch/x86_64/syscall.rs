@@ -7748,6 +7748,11 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
     if pty_lock_start != 0 {
         let (free, before) = pty_memory_before.unwrap();
         let after = crate::memory::swap::diagnostics();
+        debug_assert!(
+            after.pages_reclaimed.saturating_sub(before.pages_reclaimed)
+                <= crate::memory::swap::MAX_DIRECT_RECLAIM_PAGES as u64,
+            "mmap exceeded its direct-reclaim budget"
+        );
         crate::ipc::trace_pty_operation(
             &sched,
             "mmap",

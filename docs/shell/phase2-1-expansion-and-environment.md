@@ -5,6 +5,13 @@ resource/regression work. Stages B–F have not been implemented. Command
 substitution, arithmetic expansion, pathname expansion, and compound pipeline
 stages still produce the existing explicit unsupported-syntax diagnostics.
 
+The October 14 independent audit below reproduces the retained pre-repair
+image's intermittent output deadlock and identifies an additional memory-
+pressure stall in the full Stage A pipeline. Allocation-driven reclaim now
+shares a page and elapsed-work budget across the entire locked mapping.
+See "Additional reclaim critical-section repair" and its final validation
+for the current evidence; earlier successful matrices remain historical.
+
 The checkout was clean at the audit. The reported Phase 2 results were rerun;
 the earlier report was not used as proof of current runtime behavior.
 The semantic reference is POSIX.1-2024 Shell Command Language, particularly
@@ -254,13 +261,18 @@ child reaping, and backpressure tests.
 
 ## Phase 2.1A: PTY output liveness and SMP regression
 
-Final status: the repaired image passes three complete boots each with 1, 2
+Committed repair status: the repaired image passes three complete boots each with 1, 2
 and 4 CPUs, including exact 1 KiB–1 MiB content, slow/partial transfers,
 concurrency and closure. Stage A passes all three CPU configurations; relevant
 Helios and audio DMA gates pass. The `sshl6` lookup authorization blocker is
 documented separately and no security policy is weakened. Command substitution
 remains unimplemented. Reproduction and all intermediate failures follow,
 with final results and limitations at the end of this section.
+
+The independent revalidation at the end of this document records an additional
+four-CPU full Stage A pipeline IPC failure, its reclaim critical-section cause,
+and the allocation-budget correction. The earlier focused PTY size matrix
+alone did not clear that broader failure.
 
 The October 14, 2026 investigation reproduced the failure without changing
 the 15-second guest deadline, the 2-second PTY IPC deadline, ring capacities,
@@ -587,7 +599,7 @@ The first complete three-repeat matrix used that copied image and unchanged work
 | IPC crate | 42 library and 9 integration tests passed |
 | PTY broker | 9 passed, including readiness authorization/generation/closure |
 | Graphical terminal host tests | 28 passed |
-| TTY service host tests | 37 passed |
+| TTY library host tests (`sunlight-tty`) | 37 passed |
 | libc partial-write helper tests | 2 passed |
 | Canonical launcher host tests | 9 passed |
 | Harness syntax and source whitespace | `bash -n`, Python compilation and `git diff --check` passed |
@@ -838,3 +850,316 @@ Remaining validation limits:
   stops at its specified I/O/thread/terminal startup milestones.
 - The legacy Phase 1.5 harness needs an authorized numbered-shell endpoint
   handoff or a separately reviewed policy change; security checks remain intact.
+
+### Independent revalidation of commit `45f027ed2`
+
+On October 14, 2026, a new audit found the Phase 2.1A repairs above already
+present in the clean checkout at `45f027ed2`. The audit reviewed the native
+pipe, TTY ring, PTY broker, foreground relay, waitpid, IPC completion, process
+exit and scheduler notification paths before rerunning the gates. The existing
+runtime repair was retained. A subsequent full Stage A IPC failure prompted
+additional bounded failure diagnostics, described below. Command substitution
+remains deferred.
+
+The retained pre-repair ISO was booted three more times with two CPUs.
+`target/pty-liveness-reaudit-baseline/results.json` identifies image SHA-256
+`803e73209bb91c0a068b7b6b89428eb59feb7b841b50448335821ef9106f4446`.
+All three boots explicitly failed their unchanged guest deadlines:
+
+| Run | Outcome | Payload received before the failure | Boot seconds |
+| --- | --- | --- | --- |
+| 1 | FAIL, 1 MiB stream deadline | 102400 / 1048576 bytes | 51.82 |
+| 2 | FAIL, original 64 KiB prompt deadline | 22-byte app-start marker, no payload | 56.84 |
+| 3 | FAIL, 1 MiB stream deadline | 610304 / 1048576 bytes | 62.84 |
+
+Runs 1 and 3 first completed the original 64 KiB probe. The exact 64 KiB
+failure is therefore intermittent; the circular wait reproduced in every
+boot, at different transfer boundaries. In run 2, relay PID 36 (`sshl7`) is
+`BlockedOnIpc`, detached from every CPU/ready queue, with
+`wait_child=Some(37)` and no pending IPC request or reply. Producer PID 37
+is Running on CPU 1, after its first write, with the TTY stdout ring full
+at 8192 bytes. The PTY server is waiting for another request. This is direct
+evidence of the child-exit/output-drain dependency, rather than an inferred
+IPC reply loss. These native actors are single-threaded processes.
+
+The old image predates several current test scenarios and the richer stream
+summary format. Its JSON therefore has missing new markers and empty parsed
+stream summaries. The explicit guest FAIL markers and bounded state snapshots
+above establish the reproductions independently of that format difference.
+Every failed boot remains recorded; no retry replaces it.
+
+A fresh traced two-CPU build passes in
+`target/pty-liveness-reaudit-fresh-cpu2.serial.log`; its copied image is
+`target/pty-liveness-reaudit-traced.iso`. The delayed-drain test observes
+`tty_write_wait=7`, then verifies all 65536 bytes. Its blocking producer
+reports 12 partial writes and zero EAGAIN returns; the nonblocking producer
+reports 12 partial writes and 3865 EAGAIN returns, and also delivers exactly
+65536 bytes. Both foreground closure protocols and the terminal-state
+self-test pass. Dispatch counters record successful notifications with zero
+busy attempts. The traced slow 1 MiB stream finishes in 2790 ms, within its
+unchanged 15000 ms deadline.
+
+Host revalidation passes 43 shell tests, 32 dash comparisons, 13 descriptor
+tests, 42 IPC library and 9 integration tests, 9 broker tests, 28 graphical
+terminal tests, 37 `sunlight-tty` library tests, 2 partial-write helper tests,
+and 9 launcher tests. `cargo check -p sunlight-kernel` also passes. Evidence
+uses `target/pty-liveness-reaudit-*.log`. Dash was extracted from an existing
+local Ubuntu 24.04 image with networking disabled; the comparisons use
+`SSHL_REFERENCE_SHELL="$PWD/target/sshl-reference-dash"` so the path remains
+absolute when the suite executes its cases in temporary directories.
+
+The earlier host table called the 37 tests "TTY service" tests; these are
+actually the `sunlight-tty` library tests. A direct host invocation of
+`cargo test -p sunlight-tty-server` fails to compile its native binary because
+its panic handler conflicts with the host test harness (`E0152`). The native
+service is compiled and exercised by the QEMU gates. This audit does not
+claim a host test pass for that binary or an unfiltered libc-suite pass.
+
+The focused gate was rebuilt again with `SUNLIGHT_PTY_TRACE=0`, then copied
+to `target/pty-liveness-reaudit-untraced.iso`. Its two-CPU build/gate passes.
+The subsequent serial matrix, with one QEMU guest at a time, completes all
+nine boots without IPC event tracing. Image SHA-256:
+`89b1ca9ae5a7448e0ed73907e9fad09da0691310b7e80f9a375d025e879df145`.
+Results and per-boot logs are in `target/pty-liveness-reaudit-matrix/`.
+
+| CPUs | Complete boots | Boot seconds, runs 1 / 2 / 3 | Slow 1 MiB milliseconds, runs 1 / 2 / 3 |
+| --- | --- | --- | --- |
+| 1 | 3/3 PASS | 41.83 / 42.32 / 41.07 | 2590 / 2660 / 2440 |
+| 2 | 3/3 PASS | 43.07 / 43.32 / 43.33 | 2740 / 2690 / 2480 |
+| 4 | 3/3 PASS | 46.08 / 46.34 / 46.32 | 2890 / 2630 / 2640 |
+
+Each boot retains all expected markers and 16 exact-content stream summaries.
+The six requested sizes each pass three normal and three slow/partial checks
+per CPU configuration: 6/6 per size at 1, 2 and 4 CPUs. Across the matrix,
+there are 108 size-loop checks plus 36 additional delayed/nonblocking and
+concurrent-session streams. Every boot also passes concurrent pipe producers,
+EOF, early reader close/EPIPE, both wait helpers, legacy blocking wait,
+broker partial/full/close cases, both foreground closure protocols, and exact
+teardown status/replies. Blocking producers report zero EAGAIN; the dedicated
+nonblocking scenario exercises EAGAIN explicitly. The 15000 ms stream,
+2000 ms IPC/closure and 300-second host deadlines remain unchanged.
+These boots confirm the committed repair and precede the additional
+reclaim-budget correction below.
+
+The broader Stage A gate was rebuilt with tracing disabled. The two-CPU gate
+passes (94.07 seconds including build), and its copied image passes at one CPU
+(75.12 boot seconds). At four CPUs its PTY master read IPC fails during the
+initial 1 MiB three-stage pipeline (52.09 boot seconds), before reaching the
+100 small-pipeline repetitions, PTY environment and live-output checks.
+`target/pty-liveness-reaudit-stage-a-matrix/results.json` retains both copied-
+image outcomes and SHA-256
+`59b806692b6286d622d68c38f91db358ca1a478f7df153881dba95a45767d27c`.
+The failed log ends with foreground child PID 165 and `FAIL pty read timeout`.
+That original error site labeled every `IpcCallError` as a "timeout" and did
+not capture a state snapshot. Thus it establishes neither the transport error
+kind nor its cause; actual deadline expiry was unproven in that log. It is not
+dismissed as host contention or silently replaced by another run.
+
+The test's prompt-read IPC failure now takes the same bounded snapshot as
+the stream-read failure and reports the IPC error, session, generation,
+received byte count and elapsed time. The existing one-shot traced watchdog
+also covers `shell-phase2`. Neither change adds hot-path serial printing,
+changes workload size, alters authorization, nor enlarges a deadline.
+
+Independent rebuilt two-CPU regressions pass: Helios I/O (78.92 seconds),
+Helios thread startup (70.00 seconds), Helios Note startup (65.00 seconds),
+and audio DMA (47.85 seconds); all times include their builds. These results
+are in `target/pty-liveness-reaudit-regressions.json` and corresponding logs.
+The independent Phase 1.5 gate fails (75.31 seconds including build), with
+`sshl6 registered=true alias=true` followed by the driver's denied LOOKUP for
+hash `0x0a994a83b88a6d83`, mask `0x40000`. The exact rejecting check remains
+`mediate_nameserver_lookup` -> `service_capability_allows_hashed_name` ->
+`matches_user_session_service`. No capability or registration check is weakened.
+
+### Additional reclaim critical-section repair
+
+The instrumented four-CPU gate passes, then its copied image completes four
+of five repeated boots. Run 4 reproduces the initial 1 MiB pipeline failure
+with an actual `IpcCallError::Timeout` and a bounded state/event snapshot.
+`target/pty-liveness-reaudit-phase2-diag-matrix/results.json` retains all five
+outcomes (77.88 / 90.14 / 85.63 / 55.84 / 91.64 boot seconds); run 4 is a
+failed result. Image SHA-256:
+`e6a11688263586ec93cef310055ffb2399abfcda725303279eb94f28eb640537`.
+
+The failing command is:
+
+```sh
+sshl --probe emit 1048576 | sshl --probe copy | sshl --probe count > /tmp/sshl-count
+```
+
+Foreground child PID 165 enters its initial 1 MiB heap `mmap`. The snapshot
+records scheduler-lock wait 1 microsecond, hold 2564320 microseconds, 1792
+candidate scans, 1792 reclaimed pages and seven watermark activations.
+Driver PID 35's PTY master read generation 332 is requested at tick 2945;
+its deadline wake occurs at tick 3201, after the same 256-tick interval.
+It then reports `pty read IPC Timeout`, zero received bytes and 2660 ms elapsed.
+The broker is Ready with one queue entry and an intact reply/wait state; the
+relay has no child wait. Pipe producer PID 163 is correctly parked on a full
+4096-byte ring, PID 164 is runnable, and PID 165 subsequently waits for input
+on the empty second pipe. This capture establishes scheduler-lock exclusion
+during synchronous reclaim, rather than a child-exit deadlock, missing reply,
+capability failure, or host-harness stall.
+
+`map_anonymous_kind` called `maybe_reclaim_for_anonymous_allocation` before
+each installed page. Each call restarted the 256-page direct-reclaim
+allowance. Thus the supposedly bounded reclaim activation could repeat
+throughout one mapping while retaining `SCHEDULER` and `PMM`, preventing the
+PTY broker, client and pipe consumers from entering their kernel paths.
+
+Each anonymous mapping transaction now owns one 256-page direct-reclaim
+budget, shared across its allocation loop. Reclaim charges its requested
+allowance before attempting eviction, including unsuccessful attempts, so
+incompressible or stale candidates cannot repeatedly renew the allowance.
+An exhausted budget skips further direct reclaim in that transaction. Frame
+allocation, sanitization, reservation/commit, rollback, ownership, shootdowns,
+watermarks and ZRAM pool policies remain on their existing paths. There is
+no new lock, blocking wait, output buffer, capability exception, or syscall ABI.
+
+When the allocation cannot obtain enough frames after bounded reclaim, the
+existing `ENOMEM` path rolls back rather than publishing a partial mapping.
+This is an intentional per-operation reclaim limit: a large eager allocation
+under pressure can fail instead of doing further eviction in the same locked
+syscall. It is not a maximum mapping-size limit when enough frames are free.
+The change does not establish a worst-case time bound for every mapping,
+compression or shootdown, and does not redesign eager allocation or VM locking.
+
+Traced images assert that each `mmap` reclaims at most 256 pages and retain
+one maximum observed mmap hold record. A single snapshot after the 100
+completed PTY pipeline repetitions prints that record. No per-request serial
+printing is added. The first corrected four-CPU full gate passes in
+`target/pty-liveness-reclaim-fixed-phase2-cpu4.serial.log`. Its initial PID 165
+mapping holds the lock for 171385 microseconds with 256 scans/reclaims and
+one activation. The largest observed hold in that boot is 543121 microseconds,
+also with 256 pages and one activation. These are measurements on this host,
+not worst-case timing guarantees; all deadlines remain unchanged.
+
+The count-only correction's complete Stage A matrix is retained in
+`target/pty-liveness-reclaim-fixed-phase2-matrix/results.json`, SHA-256
+`d0e84587a69c728f00918d68bfdac787066a3fb6e22eb76e3e706dff7500e115`.
+One CPU passes all three boots (67.36 / 75.13 / 74.87 seconds); two CPUs pass
+all three (81.13 / 74.88 / 77.38). Four CPUs pass runs 1 and 2 (86.13 / 84.63),
+but run 3 fails at 78.15 seconds during the small-pipeline repetition loop.
+It reports an actual read IPC timeout after 3240 ms, with the 22-byte app-start
+marker received. PID 342's mmap performed exactly 256 scans/reclaims and one
+activation, but held the scheduler lock for 2482235 microseconds. The count
+bound worked; it did not sufficiently bound synchronous latency. This is an
+8/9 matrix, not a completed SMP validation. The following validation runner
+stopped on that failure instead of continuing or silently retrying.
+
+Allocation-driven reclaim now also shares a 10 ms execution budget across
+the transaction. The reclaimer checks elapsed time before starting each
+candidate; it finishes an in-flight compression/mapping replacement/shootdown
+before releasing its frame or slot. It retains unprocessed candidates in the
+queue. Manual privileged reclaim uses its existing page-count contract.
+No caller deadline is extended, and there is no sleep, polling retry, new lock,
+or release/reacquisition of a partially installed VM transaction.
+
+Elapsed time uses the calibrated local TSC (`interrupts::now_ns`), rather
+than `timekeeping::monotonic_ns`: the latter depends on BSP ticks, which can
+stop while this transaction holds `SCHEDULER` with interrupts disabled.
+The executing transaction cannot migrate, so this duration does not compare
+timestamps from different CPUs. Without calibrated TSC, opportunistic
+allocation reclaim is skipped and allocation/ENOMEM rollback remains usable.
+The 10 ms allowance is a work budget checked between atomic page operations,
+not a promise that a single compression or shootdown cannot exceed it.
+Large eager allocations under pressure may encounter the documented ENOMEM
+boundary sooner; ample-memory mappings retain their size and semantics.
+
+### Validation of the shared page and elapsed-work budgets
+
+The timed-budget four-CPU build/gate passes. Its copied Stage A image then
+passes nine of nine boots under the original deadlines, including the 1 MiB
+three-stage pipeline and 100 small pipelines in every boot. Shell heap usage
+remains 3043 bytes before/after and the descriptor probe remains FD 3.
+Results: `target/pty-liveness-reclaim-timed-phase2-matrix/results.json`.
+Image SHA-256:
+`2a8f6d99c27a538f15b067585d8d52c0b253ede6c358fc7fab19a3186c9213e8`.
+
+| CPUs | Full Stage A boots | Boot seconds, runs 1 / 2 / 3 |
+| --- | --- | --- |
+| 1 | 3/3 PASS | 64.36 / 71.88 / 81.38 |
+| 2 | 3/3 PASS | 87.63 / 81.87 / 81.13 |
+| 4 | 3/3 PASS | 92.13 / 93.38 / 91.38 |
+
+The bounded snapshots retain no mmap hold meeting the 50 ms tracing
+threshold. The sole recorded mmap waited 61734 microseconds for the scheduler
+lock and held it for 883 microseconds, with no reclaim. The recording threshold
+includes combined lock wait/hold, and the maximum-hold slot prevents later
+events from overwriting a long recorded mmap. This is evidence for these
+instrumented workloads, not a global scheduler latency guarantee.
+
+The focused gate was rebuilt with `SUNLIGHT_PTY_TRACE=0`; its two-CPU build/
+gate passes in 77.44 seconds. Its copied image also completes nine of nine
+boots without IPC event tracing. Results and individual serial logs are in
+`target/pty-liveness-reclaim-timed-final-pty-matrix/`. Image SHA-256:
+`7cf75cf01dc4e72aae2a7f579ef0c50d527d4df62904d9b0b18f2185953a5227`.
+
+| CPUs | Focused PTY boots | Boot seconds, runs 1 / 2 / 3 | Slow 1 MiB milliseconds, runs 1 / 2 / 3 |
+| --- | --- | --- | --- |
+| 1 | 3/3 PASS | 49.59 / 43.57 / 44.33 | 3170 / 2790 / 2690 |
+| 2 | 3/3 PASS | 45.58 / 46.58 / 53.07 | 2770 / 2830 / 3350 |
+| 4 | 3/3 PASS | 53.58 / 47.57 / 48.32 | 2820 / 2890 / 2950 |
+
+| Exact output size | 1 CPU | 2 CPUs | 4 CPUs |
+| --- | --- | --- | --- |
+| 1 KiB | 6/6 PASS | 6/6 PASS | 6/6 PASS |
+| 4 KiB | 6/6 PASS | 6/6 PASS | 6/6 PASS |
+| 16 KiB | 6/6 PASS | 6/6 PASS | 6/6 PASS |
+| 64 KiB | 6/6 PASS | 6/6 PASS | 6/6 PASS |
+| 256 KiB | 6/6 PASS | 6/6 PASS | 6/6 PASS |
+| 1 MiB | 6/6 PASS | 6/6 PASS | 6/6 PASS |
+
+Each size has three normal and three slow/257-byte-consumer runs per CPU
+configuration, verified incrementally against the A–W pattern. Every boot
+retains all expected markers and 16 stream summaries: 108 size-loop checks
+and 36 delayed/nonblocking/concurrent-session streams in the matrix. Every
+boot also passes blocking TTY parking, explicit nonblocking partial/EAGAIN
+handling, concurrent pipe producers, pipe EOF and early reader close/EPIPE,
+both nonblocking wait helpers, legacy blocking wait, broker partial/full/EOF/
+close semantics, foreground master/session closure and checked teardown.
+Guest stream deadlines remain 15000 ms, IPC/closure deadlines 2000 ms, and
+host boot deadlines 300 seconds. Failed diagnostic and page-only-budget
+boots remain separate failed results; none was silently retried or excluded.
+
+Independent gates were rebuilt from the timed-budget source with two CPUs
+and tracing disabled. `target/pty-liveness-reclaim-timed-final-results.json`
+retains their explicit outcomes and build-plus-gate durations. Corresponding
+serial and gate logs use `target/pty-liveness-reclaim-timed-final-<phase>`.
+
+| Gate | CPUs | Result | Seconds including build |
+| --- | --- | --- | --- |
+| Security / MM-0 / MM-2A | 2 | PASS | 48.18 |
+| SWAP-1 multi-pool pressure | 2 | PASS | 47.05 |
+| Helios pipe/socket I/O | 2 | PASS | 75.12 |
+| Helios thread startup | 2 | PASS | 65.93 |
+| Helios Note startup | 2 | PASS | 65.04 |
+| Audio stream/capture/test-tone DMA | 2 | PASS | 42.88 |
+| Legacy Phase 1.5 TTY lookup | 2 | FAIL, independent authorization blocker | 70.21 |
+
+The security gate includes injected mmap/SHM allocation rollback, native and
+thread address-space lifecycle, IPC multi-caller queues, timeout cancellation,
+bounded queue reuse, notification coalescing, generation/late-reply races,
+capability lifecycle, REGISTER ownership/identity, and 64 SMP terminal-state
+stress iterations. SWAP-1 verifies exact restored content, RW/NX metadata,
+incompressible-page ownership, corrupted-payload rejection, swapped munmap,
+stale slot generations and exit accounting. Final `cargo check -p
+sunlight-kernel` and `git diff --check` pass.
+
+The Phase 1.5 failure again records `sshl6 registered=true alias=true`, then
+PID 35's rejected LOOKUP for hash `0x0a994a83b88a6d83` with UserSession mask
+`0x40000`. The rejecting check returns `IpcError::InvalidCapability` through
+`mediate_nameserver_lookup` -> `service_capability_allows_hashed_name` ->
+`matches_user_session_service`. This needs a separate authorized endpoint
+handoff or reviewed policy design; registration and capability checks retain
+their existing boundaries. The failed gate is not counted as a pass.
+
+The reproduced PTY execution failures now pass both final repeated matrices.
+This does not establish arbitrary workload scheduling bounds, real-hardware
+performance, GUI interaction latency, or audible/concurrent-audio latency.
+Helios milestones establish the tested I/O and startup behavior, not Note
+editing or clean application exit. Manual privileged reclaim retains its
+existing count-only contract. Atomic page work can exceed the elapsed-work
+allowance, and eager allocation under pressure can return ENOMEM earlier.
+Unfiltered host libc and the native TTY-server host panic-handler conflict
+remain outside the claimed host passes. Command substitution remains deferred;
+this change implements only the liveness investigation, repair and regressions.

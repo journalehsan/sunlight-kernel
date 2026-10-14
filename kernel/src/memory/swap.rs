@@ -20,8 +20,26 @@ const MIN_START_WATERMARK_PAGES: usize = 256;
 const MAX_START_WATERMARK_PAGES: usize = 16 * 1024;
 const MIN_TARGET_WATERMARK_PAGES: usize = 512;
 const MAX_TARGET_WATERMARK_PAGES: usize = 32 * 1024;
-const MAX_DIRECT_RECLAIM_PAGES: usize = 256;
+pub(crate) const MAX_DIRECT_RECLAIM_PAGES: usize = 256;
+// One timer tick of synchronous work, shared by the entire mmap transaction.
+// Check between candidates; a page already being replaced must finish its
+// compression/shootdown before its frame or slot can safely be released.
+const MAX_ALLOCATION_RECLAIM_NS: u64 = 10_000_000;
 const MAX_SCAN_SLOP: usize = 32;
+
+pub(crate) struct DirectReclaimBudget {
+    remaining_pages: usize,
+    deadline_ns: Option<u64>,
+}
+
+impl DirectReclaimBudget {
+    pub(crate) const fn new() -> Self {
+        Self {
+            remaining_pages: MAX_DIRECT_RECLAIM_PAGES,
+            deadline_ns: None,
+        }
+    }
+}
 
 static CANDIDATE_SCANS: AtomicU64 = AtomicU64::new(0);
 static PAGES_RECLAIMED: AtomicU64 = AtomicU64::new(0);
@@ -398,6 +416,19 @@ pub unsafe fn reclaim(
     hhdm_offset: VirtAddr,
     pmm: &mut PhysicalMemoryManager,
 ) -> usize {
+    reclaim_until(max_pages, avoid, sched, hhdm_offset, pmm, None)
+}
+
+/// Same ownership rules as `reclaim`; allocation-driven work also has a
+/// monotonic execution budget, independent of client IPC deadlines.
+unsafe fn reclaim_until(
+    max_pages: usize,
+    avoid: Option<(usize, VirtAddr)>,
+    sched: &mut Scheduler,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+    deadline_ns: Option<u64>,
+) -> usize {
     if max_pages == 0 || zram::policy().is_none() {
         return 0;
     }
@@ -406,7 +437,9 @@ pub unsafe fn reclaim(
         initial_candidates.min(max_pages.saturating_mul(8).saturating_add(MAX_SCAN_SLOP));
     let mut evicted = 0;
     for _ in 0..scan_limit {
-        if evicted >= max_pages {
+        if evicted >= max_pages
+            || deadline_ns.is_some_and(|end| crate::arch::x86_64::interrupts::now_ns() >= end)
+        {
             break;
         }
         let Some(candidate) = CANDIDATES.lock().pop_front() else {
@@ -450,21 +483,50 @@ pub unsafe fn reclaim(
 }
 
 /// Trigger direct reclaim before an anonymous allocation reaches PMM
-/// exhaustion. Returns pages reclaimed in this bounded activation.
-pub fn maybe_reclaim_for_anonymous_allocation(
+/// exhaustion. Charge attempted reclaim to the allocation's shared budget,
+/// including attempts that make no progress. A multi-page mmap must not reset
+/// the direct-reclaim bound for each page while holding SCHEDULER and PMM.
+/// Returns pages reclaimed in this bounded activation.
+pub(crate) fn maybe_reclaim_for_anonymous_allocation(
     sched: &mut Scheduler,
     pmm: &mut PhysicalMemoryManager,
     hhdm_offset: VirtAddr,
     avoid: Option<(usize, VirtAddr)>,
+    budget: &mut DirectReclaimBudget,
 ) -> usize {
+    if budget.remaining_pages == 0 {
+        return 0;
+    }
     let (total, free) = pmm.stats();
     let (start, target) = watermarks(total);
     if free > start || zram::policy().is_none() {
         return 0;
     }
+    // The coarse BSP tick can be frozen by this transaction. Without a
+    // calibrated elapsed-time source, fail allocation normally if necessary
+    // instead of doing opportunistic synchronous work with no time bound.
+    if crate::arch::x86_64::interrupts::tsc_hz() == 0 {
+        budget.remaining_pages = 0;
+        return 0;
+    }
+    // This transaction cannot migrate and runs with interrupts disabled.
+    // Use elapsed local TSC time; the BSP tick clock can stop while we hold
+    // SCHEDULER and therefore cannot bound this critical section.
+    let now = crate::arch::x86_64::interrupts::now_ns();
+    let deadline = *budget
+        .deadline_ns
+        .get_or_insert_with(|| now.saturating_add(MAX_ALLOCATION_RECLAIM_NS));
+    if now >= deadline {
+        return 0;
+    }
     WATERMARK_ACTIVATIONS.fetch_add(1, Ordering::Relaxed);
-    let requested = target.saturating_sub(free).min(MAX_DIRECT_RECLAIM_PAGES);
-    unsafe { reclaim(requested.max(1), avoid, sched, hhdm_offset, pmm) }
+    let requested = target
+        .saturating_sub(free)
+        .max(1)
+        .min(MAX_DIRECT_RECLAIM_PAGES)
+        .min(budget.remaining_pages);
+    budget.remaining_pages -= requested;
+    unsafe { reclaim_until(requested, avoid, sched, hhdm_offset, pmm, Some(deadline)) }
 }
 
 #[cfg(feature = "swap1_test")]

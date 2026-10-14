@@ -42,6 +42,7 @@ struct PtyIpcTrace {
     next: usize,
     slow_operations: [Option<PtyIpcEvent>; 8],
     slow_next: usize,
+    max_mmap_hold: Option<PtyIpcEvent>,
 }
 
 static PTY_IPC_TRACE: spin::Mutex<PtyIpcTrace> = spin::Mutex::new(PtyIpcTrace {
@@ -49,6 +50,7 @@ static PTY_IPC_TRACE: spin::Mutex<PtyIpcTrace> = spin::Mutex::new(PtyIpcTrace {
     next: 0,
     slow_operations: [None; 8],
     slow_next: 0,
+    max_mmap_hold: None,
 });
 
 fn trace_pty_event(
@@ -87,6 +89,9 @@ fn trace_pty_event(
     };
     trace.events[next] = Some(event);
     trace.next = (next + 1) % trace.events.len();
+    if kind == "mmap" && trace.max_mmap_hold.is_none_or(|previous| event.bytes > previous.bytes) {
+        trace.max_mmap_hold = Some(event);
+    }
     if matches!(kind, "mmap" | "spawn") {
         let slow_next = trace.slow_next;
         trace.slow_operations[slow_next] = Some(event);
@@ -134,6 +139,10 @@ pub(crate) fn trace_pty_liveness(sched: &Scheduler) {
     );
     {
         let trace = PTY_IPC_TRACE.lock();
+        if let Some(e) = trace.max_mmap_hold {
+            crate::serial_println!("[PTY-MMAP] tick={} pid={} wait_us={} hold_max_us={} reclaimed={} scans={} activations={}",
+                e.tick, e.pid, e.generation, e.bytes, e.memory[3], e.memory[2], e.memory[4]);
+        }
         for offset in 0..trace.slow_operations.len() {
             if let Some(e) =
                 trace.slow_operations[(trace.slow_next + offset) % trace.slow_operations.len()]
@@ -200,7 +209,10 @@ pub(crate) fn trace_pty_liveness(sched: &Scheduler) {
 /// Normal streams reset their block/run age; this never logs per request.
 pub(crate) fn trace_pty_stall(sched: &Scheduler) {
     if option_env!("SUNLIGHT_PTY_TRACE") != Some("1")
-        || option_env!("SUNLIGHT_INJECT_PHASE") != Some("shell-pty-liveness")
+        || !matches!(
+            option_env!("SUNLIGHT_INJECT_PHASE"),
+            Some("shell-pty-liveness" | "shell-phase2")
+        )
         || !sched.global_tick.is_multiple_of(100)
     {
         return;

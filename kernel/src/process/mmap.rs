@@ -425,6 +425,11 @@ fn map_anonymous_kind(
         }
         return Err(MmapError::NoMemory);
     }
+    // One budget for this entire locked mapping transaction. Reclaiming up to
+    // 256 pages before every installed page could starve IPC for seconds.
+    // If bounded reclaim cannot supply enough frames, normal ENOMEM rollback
+    // preserves the original region rather than publishing a partial mapping.
+    let mut reclaim_budget = crate::memory::swap::DirectReclaimBudget::new();
     for i in 0..page_count {
         let page_vaddr = VirtAddr::new(
             map_addr
@@ -438,6 +443,7 @@ fn map_anonymous_kind(
             pmm,
             hhdm_offset,
             Some((pid, page_vaddr)),
+            &mut reclaim_budget,
         );
         let frame_addr = match pmm.alloc_frame_owned(pid as u32) {
             Some(addr) => addr,

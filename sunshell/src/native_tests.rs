@@ -255,7 +255,13 @@ impl PtyRunner {
         let mut output = Vec::new();
         loop {
             let request = self.buffer.request(PtyMsg::READ_MASTER_BULK, self.id, self.generation, self.master, PtyMsg::BULK_BYTES);
-            let reply = ipc_call_timeout(self.service, request, 2000).unwrap_or_else(|_| fail("pty read timeout"));
+            let reply = ipc_call_timeout(self.service, request, 2000).unwrap_or_else(|error| {
+                trace_processes();
+                fail(&format!(
+                    "pty read IPC {error:?} session={} generation={} bytes={} elapsed_ms={}",
+                    self.id, self.generation, output.len(), monotonic_millis() - start
+                ));
+            });
             if reply.label == PtyMsg::REPLY {
                 let mut buf = [0u8; PtyMsg::BULK_BYTES];
                 let n = self.buffer.copy_to(&mut buf, reply.words[2] as usize);
@@ -939,6 +945,9 @@ fn exercise(path: &str, run: &mut dyn FnMut(&str) -> u8) {
     let fd_after = libc::dup(libc::STDOUT).unwrap(); libc::close(fd_after).unwrap();
     if fd_before != fd_after || after.requested_user_bytes > before.requested_user_bytes + 1024 || after.failed_allocation_count != before.failed_allocation_count { fail("descriptor or shell heap growth"); }
     debug_log(&format!("[SSHL-TEST] {path} repeat=100 elapsed_ms={} heap_before={} heap_after={} fd_before={} fd_after={} PASS", monotonic_millis()-start, before.requested_user_bytes, after.requested_user_bytes, fd_before.0, fd_after.0));
+    if path == "script-pty" {
+        trace_processes();
+    }
     let start = monotonic_millis(); check("sshl --probe pause 200", 0);
     debug_log(&format!("[SSHL-TEST] {path} wait elapsed_ms={} PASS", monotonic_millis()-start));
     debug_log(&format!("[SSHL-TEST] {path} coverage PASS"));
