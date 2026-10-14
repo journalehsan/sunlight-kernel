@@ -474,10 +474,10 @@ mod tests {
         assert_eq!(error.location(source), (2, 14));
         assert!(!error.incomplete);
         assert!(parse("echo $(echo").unwrap_err().incomplete);
-        assert_eq!(
-            parse("echo $((1+2))").unwrap_err().message,
-            "arithmetic expansion is unsupported"
-        );
+        assert!(parse("echo $((1+2))").is_ok());
+        let e = parse("echo x\necho $((1+2)").unwrap_err();
+        assert_eq!(e.location("echo x\necho $((1+2)"), (2, 12));
+        assert!(!e.incomplete);
         let source = format!("{}true{}", "echo $(".repeat(33), ")".repeat(33));
         assert!(parse(&source).is_err());
     }

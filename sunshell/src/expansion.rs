@@ -2,11 +2,21 @@
 extern crate alloc;
 use crate::parser::{AstNode, Quote, Redirection, SimpleCommand, Word};
 use crate::shellenv::ShellEnv;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 #[derive(Debug)]
-pub struct ExpansionError(pub &'static str);
+pub enum ExpansionError {
+    Expansion(&'static str),
+    Arithmetic(&'static str),
+}
+impl ExpansionError {
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::Expansion(message) | Self::Arithmetic(message) => message,
+        }
+    }
+}
 
 // None is a quoted empty anchor; it survives splitting and is removed last.
 #[derive(Clone, Copy)]
@@ -92,12 +102,12 @@ pub fn expand_word(
 /// quote provenance and applies field splitting exactly once.
 pub fn expand_word_with<F>(
     word: &Word,
-    env: &ShellEnv,
+    env: &mut ShellEnv,
     split: bool,
     mut substitute: F,
 ) -> Result<Vec<String>, ExpansionError>
 where
-    F: FnMut(&crate::script_parser::Command) -> Result<String, ExpansionError>,
+    F: FnMut(&crate::script_parser::Command, &ShellEnv) -> Result<String, ExpansionError>,
 {
     let segments = parameter_expansion_with(word, env, &mut substitute)?;
     let mut fields = Vec::new();
@@ -117,8 +127,8 @@ where
 }
 
 fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, ExpansionError> {
-    parameter_expansion_with(word, env, &mut |_| {
-        Err(ExpansionError(
+    parameter_expansion_with(word, &mut env.clone(), &mut |_, _| {
+        Err(ExpansionError::Expansion(
             "command substitution requires an execution runtime",
         ))
     })
@@ -126,11 +136,11 @@ fn parameter_expansion(word: &Word, env: &ShellEnv) -> Result<Vec<Field>, Expans
 
 fn parameter_expansion_with<F>(
     word: &Word,
-    env: &ShellEnv,
+    env: &mut ShellEnv,
     substitute: &mut F,
 ) -> Result<Vec<Field>, ExpansionError>
 where
-    F: FnMut(&crate::script_parser::Command) -> Result<String, ExpansionError>,
+    F: FnMut(&crate::script_parser::Command, &ShellEnv) -> Result<String, ExpansionError>,
 {
     let mut fields: Vec<Field> = alloc::vec![Vec::new()];
     let mut only_empty_at = true;
@@ -147,10 +157,33 @@ where
             });
             only_empty_at = false;
         }
-        if let Some(command) = &part.substitution {
-            let value = substitute(command)?;
+        if part.substitution.is_some() || part.arithmetic.is_some() {
+            let value = if let Some(command) = &part.substitution {
+                substitute(command, env)?
+            } else {
+                let expression = part.arithmetic.as_ref().unwrap();
+                let fields = parameter_expansion_with(expression, env, substitute)?;
+                let mut values = quote_removal(fields);
+                let text = if values.len() <= 1 {
+                    values.pop().unwrap_or_default()
+                } else {
+                    // Arithmetic is scalar: positional fields use the first
+                    // IFS character, as for the reference shell's arithmetic $@.
+                    let separator = env
+                        .get("IFS")
+                        .unwrap_or(" ")
+                        .chars()
+                        .next()
+                        .map(|ch| ch.to_string())
+                        .unwrap_or_default();
+                    values.join(&separator)
+                };
+                crate::arithmetic::evaluate(&text, env)?.to_string()
+            };
             if field_bytes(&fields) + value.len() > 16384 {
-                return Err(ExpansionError("expanded word exceeds 16 KiB limit"));
+                return Err(ExpansionError::Expansion(
+                    "expanded word exceeds 16 KiB limit",
+                ));
             }
             fields
                 .last_mut()
@@ -167,7 +200,9 @@ where
         let mut chars = part.text.chars().peekable();
         while let Some(ch) = chars.next() {
             if expandable && ch == '`' {
-                return Err(ExpansionError("command substitution is unsupported"));
+                return Err(ExpansionError::Expansion(
+                    "command substitution is unsupported",
+                ));
             }
             if expandable && ch == '$' {
                 let mut key = String::new();
@@ -177,7 +212,9 @@ where
                         key.push(chars.next().unwrap());
                     }
                     if chars.next() != Some('}') {
-                        return Err(ExpansionError("unterminated parameter expansion"));
+                        return Err(ExpansionError::Expansion(
+                            "unterminated parameter expansion",
+                        ));
                     }
                     if !valid_name(&key)
                         && !matches!(
@@ -198,7 +235,9 @@ where
                                 | "9"
                         )
                     {
-                        return Err(ExpansionError("parameter operators are unsupported"));
+                        return Err(ExpansionError::Expansion(
+                            "parameter operators are unsupported",
+                        ));
                     }
                 } else if chars
                     .peek()
@@ -217,7 +256,7 @@ where
                     }
                 } else {
                     if chars.peek().is_some_and(|c| matches!(c, '!' | '-' | '(')) {
-                        return Err(ExpansionError(
+                        return Err(ExpansionError::Expansion(
                             "substitutions and shell-option parameters are unsupported",
                         ));
                     }
@@ -246,7 +285,9 @@ where
                             });
                         }
                         if fields_size_before + value.len() > 16384 {
-                            return Err(ExpansionError("expanded word exceeds 16 KiB limit"));
+                            return Err(ExpansionError::Expansion(
+                                "expanded word exceeds 16 KiB limit",
+                            ));
                         }
                         atoms.extend(value.chars().map(|ch| Atom {
                             ch: Some(ch),
@@ -280,7 +321,9 @@ where
                         _ => String::from(env.get(&key).unwrap_or("")),
                     };
                     if field_bytes(&fields) + value.len() > 16384 {
-                        return Err(ExpansionError("expanded word exceeds 16 KiB limit"));
+                        return Err(ExpansionError::Expansion(
+                            "expanded word exceeds 16 KiB limit",
+                        ));
                     }
                     fields
                         .last_mut()
@@ -307,7 +350,9 @@ where
         fields.clear();
     }
     if field_bytes(&fields) > 16384 {
-        return Err(ExpansionError("expanded word exceeds 16 KiB limit"));
+        return Err(ExpansionError::Expansion(
+            "expanded word exceeds 16 KiB limit",
+        ));
     }
     Ok(fields)
 }
@@ -360,7 +405,7 @@ fn pathname_expansion(fields: Vec<Field>) -> Result<Vec<Field>, ExpansionError> 
         .flatten()
         .any(|a| !a.quoted && !a.substituted && a.ch.is_some_and(|c| matches!(c, '*' | '?' | '[')))
     {
-        return Err(ExpansionError(
+        return Err(ExpansionError::Expansion(
             "pathname expansion is unsupported; quote pattern characters",
         ));
     }
@@ -503,11 +548,11 @@ pub fn case_pattern(word: &Word, env: &ShellEnv) -> Result<Vec<(char, bool)>, Ex
 
 pub fn case_pattern_with<F>(
     word: &Word,
-    env: &ShellEnv,
+    env: &mut ShellEnv,
     mut substitute: F,
 ) -> Result<Vec<(char, bool)>, ExpansionError>
 where
-    F: FnMut(&crate::script_parser::Command) -> Result<String, ExpansionError>,
+    F: FnMut(&crate::script_parser::Command, &ShellEnv) -> Result<String, ExpansionError>,
 {
     Ok(parameter_expansion_with(word, env, &mut substitute)?
         .into_iter()

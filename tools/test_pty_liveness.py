@@ -56,7 +56,7 @@ def failure_snapshot(path, output, cpus):
     output.write_text(json.dumps(records, indent=2) + "\n")
 
 
-def boot(iso, cpus, run, directory, phase, deadline, expected, qmp_snapshot=False):
+def boot(iso, cpus, run, directory, phase, deadline, expected, qmp_snapshot=False, memory_mb=1024):
     stem = directory / f"{phase}-cpu{cpus}-run{run}"
     serial = stem.with_suffix(".serial.log")
     final = expected[-1].encode()
@@ -68,7 +68,7 @@ def boot(iso, cpus, run, directory, phase, deadline, expected, qmp_snapshot=Fals
     qmp_directory = tempfile.TemporaryDirectory(prefix="sshl-qmp-")
     qmp_path = Path(qmp_directory.name) / "qmp.sock"
     command = ["qemu-system-x86_64", "-cdrom", str(iso), "-serial", f"file:{serial}",
-               "-display", "none", "-m", "1024M", "-smp", str(cpus),
+               "-display", "none", "-m", f"{memory_mb}M", "-smp", str(cpus),
                "-device", "virtio-rng-pci,disable-modern=on",
                "-device", "qemu-xhci,id=xhci", "-device", "usb-mouse,bus=xhci.0",
                "-no-reboot", "-no-shutdown"]
@@ -127,7 +127,7 @@ def boot(iso, cpus, run, directory, phase, deadline, expected, qmp_snapshot=Fals
                 process.kill()
                 process.wait()
             qmp_directory.cleanup()
-    result = {"cpus": cpus, "run": run, "status": status,
+    result = {"cpus": cpus, "run": run, "status": status, "memory_mb": memory_mb,
               "elapsed_s": round(time.monotonic() - start, 2),
               "deadline_s": deadline, "serial": str(serial),
               "streams": streams,
@@ -141,14 +141,16 @@ def main():
     parser.add_argument("--iso", type=Path, required=True)
     parser.add_argument("--cpus", type=int, nargs="+", default=[1, 2, 4])
     parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument("--memory-mb", type=int, default=1024,
+                        help="Explicit guest RAM; default 1024 MiB")
     parser.add_argument("--deadline", type=int, default=300)
     parser.add_argument("--qmp-snapshot", action="store_true",
                         help="Capture CPU registers/stacks on failure; requires socket permission")
     parser.add_argument("--phase", choices=["shell-pty-liveness", "shell-phase2", "shell-phase1.5"], default="shell-pty-liveness")
     parser.add_argument("--output", type=Path, default=ROOT / "target/pty-liveness-matrix")
     args = parser.parse_args()
-    if args.runs < 1 or args.deadline < 1 or any(cpu < 1 for cpu in args.cpus):
-        parser.error("CPU counts, repetitions and deadlines must be positive")
+    if args.runs < 1 or args.deadline < 1 or args.memory_mb < 1 or any(cpu < 1 for cpu in args.cpus):
+        parser.error("CPU counts, repetitions, deadlines and memory must be positive")
     iso = args.iso.resolve(strict=True)
     args.output.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(iso.read_bytes()).hexdigest()
@@ -162,7 +164,7 @@ def main():
     for cpu in args.cpus:
         for run in range(1, args.runs + 1):
             results.append(boot(iso, cpu, run, args.output, args.phase, args.deadline, expected,
-                                args.qmp_snapshot))
+                                args.qmp_snapshot, args.memory_mb))
             (args.output / "results.json").write_text(json.dumps(
                 {"iso": str(iso), "sha256": digest, "phase": args.phase,
                  "expected": expected, "results": results}, indent=2) + "\n")

@@ -18,6 +18,8 @@ pub struct WordPart {
     pub text: String,
     pub quote: Quote,
     pub substitution: Option<Rc<crate::script_parser::Command>>,
+    pub arithmetic: Option<Rc<Word>>,
+    pub offset: usize,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -30,7 +32,7 @@ impl Word {
         if let Some(part) = self
             .parts
             .last_mut()
-            .filter(|p| p.quote == quote && p.substitution.is_none())
+            .filter(|p| p.quote == quote && p.substitution.is_none() && p.arithmetic.is_none())
         {
             part.text.push(ch);
         } else {
@@ -38,6 +40,8 @@ impl Word {
                 text: ch.into(),
                 quote,
                 substitution: None,
+                arithmetic: None,
+                offset: 0,
             });
         }
     }
@@ -46,6 +50,8 @@ impl Word {
             text: String::new(),
             quote,
             substitution: None,
+            arithmetic: None,
+            offset: 0,
         });
     }
 }
@@ -56,6 +62,8 @@ impl From<&str> for Word {
                 text: text.into(),
                 quote: Quote::Unquoted,
                 substitution: None,
+                arithmetic: None,
+                offset: 0,
             }],
         }
     }
@@ -421,11 +429,8 @@ fn read_substitution(
     chars.next(); // opening parenthesis
     let begin = pos + 2;
     if line[begin..].starts_with('(') {
-        return Err(ParseError {
-            message: "arithmetic expansion is unsupported",
-            offset: pos,
-            incomplete: false,
-        });
+        chars.next(); // second opening parenthesis
+        return read_arithmetic(line, chars, word, pos, quote, depth + 1);
     }
     let (tokens, consumed) = lex_region(&line[begin..], depth + 1, true).map_err(|mut e| {
         e.offset += begin;
@@ -452,8 +457,91 @@ fn read_substitution(
         text: String::new(),
         quote,
         substitution: Some(Rc::new(tree)),
+        arithmetic: None,
+        offset: pos,
     });
     Ok(())
+}
+/// Arithmetic is a structured word containing parameter/substitution nodes.
+/// Parentheses are balanced here; operator syntax is checked after expansion.
+fn read_arithmetic(
+    line: &str,
+    chars: &mut core::iter::Peekable<core::str::CharIndices<'_>>,
+    word: &mut Word,
+    pos: usize,
+    quote: Quote,
+    depth: usize,
+) -> Result<(), ParseError> {
+    let fail = |message, offset, incomplete| ParseError {
+        message,
+        offset,
+        incomplete,
+    };
+    if depth > crate::script_parser::MAX_NESTING {
+        return Err(fail(
+            "arithmetic expansion nesting limit exceeded",
+            pos,
+            false,
+        ));
+    }
+    let mut expression = Word::default();
+    let mut parentheses = 0;
+    while let Some((index, ch)) = chars.next() {
+        if index - pos > crate::arithmetic::MAX_EXPRESSION_BYTES {
+            return Err(fail("arithmetic expression exceeds 16 KiB", index, false));
+        }
+        match ch {
+            '$' if chars.peek().is_some_and(|(_, c)| *c == '(') => {
+                read_substitution(line, chars, &mut expression, index, Quote::Double, depth)?;
+            }
+            '(' => {
+                parentheses += 1;
+                if parentheses > 64 {
+                    return Err(fail(
+                        "arithmetic parentheses exceed 64 levels",
+                        index,
+                        false,
+                    ));
+                }
+                expression.push(ch, Quote::Double);
+            }
+            ')' if parentheses == 0 => {
+                if chars.next().map(|(_, c)| c) != Some(')') {
+                    return Err(fail(
+                        "arithmetic expansion requires closing ))",
+                        index,
+                        false,
+                    ));
+                }
+                word.parts.push(WordPart {
+                    text: String::new(),
+                    quote,
+                    substitution: None,
+                    arithmetic: Some(Rc::new(expression)),
+                    offset: pos,
+                });
+                return Ok(());
+            }
+            ')' => {
+                parentheses -= 1;
+                expression.push(ch, Quote::Double);
+            }
+            '\\' => {
+                let (_, next) = chars
+                    .next()
+                    .ok_or_else(|| fail("trailing arithmetic escape", index, true))?;
+                if next == '\n' {
+                    continue;
+                }
+                if !matches!(next, '$' | '`' | '\\') {
+                    expression.push('\\', Quote::Double);
+                }
+                expression.push(next, Quote::Escaped);
+            }
+            _ => expression.push(ch, Quote::Double),
+        }
+    }
+    Err(fail("unterminated arithmetic expansion", pos, true))
 }
 fn flush_spanned(out: &mut Vec<(Token, usize)>, word: &mut Word, start: &mut Option<usize>) {
     if let Some(pos) = start.take() {

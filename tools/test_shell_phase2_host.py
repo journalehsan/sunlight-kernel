@@ -101,6 +101,71 @@ DIAGNOSTIC_SUBSTITUTIONS = [
     'echo $(case x in x) echo bad;;)',
 ]
 
+ARITHMETIC = [
+    'echo $((2 + 3 * 4))',
+    'echo $(((2 + 3) * 4))',
+    'echo $((10 % 3))',
+    'echo $((8 >> 1))',
+    'echo $((3 < 5))',
+    'echo $((1 && 0))',
+    'echo $((0 || 7))',
+    'echo $((0 ? 10 : 20))',
+    'count=10; echo $((count+5)); value=3; value=$((value*4)); echo "$value"',
+    'echo "$((10/2))"; echo \'$((1+2))\'; echo "\\$((1+2))"',
+    'echo $(( 2 +\n3 ))',
+    'echo $((1+\\\n2))',
+    'echo $((0x10+010+10)); x=-0x10; echo $((x)):$(( $x ))',
+    'unset x; echo $((x)); x=; echo $((x))',
+    'echo $((a=b=3)); echo "$a:$b"; echo $((a+=2)):$a:$((a*4))',
+    'a=1; echo $((1 || (a=9))); echo $((0 && (a=9))); echo "$a"',
+    'echo $((1 || 1/0)); echo $((0 && 1/0)); echo $((1 ? 7 : 1/0))',
+    'echo $((0 ? 1/0 : 9)); echo $((1 ? 0 ? 2 : 3 : 4))',
+    'echo $(( $(echo 2) + $((3*4)) )); echo "$(echo $((5+6)))"',
+    'a=3; echo "$(echo $((a=9)))"; echo "$a"; (echo $((a=8))); echo "$a"',
+    'false; v=$((7)); echo "$?:$v"; v=$(( $(false) + 1 )); echo "$?:$v"',
+    'a=3; echo $((a=4))"$(echo $a)"$a; echo $((a=5))$((a+1))',
+    'f() { echo $((a+=2)); }; a=3; f; echo "$a"',
+    'case 3 in $((1+2))) echo yes;; *) echo bad;; esac',
+    'echo arithmetic > "$((1+2))"; cat 3',
+]
+
+for operator in ['+', '-', '*', '/', '%', '<<', '>>', '<', '<=', '>', '>=', '==', '!=', '&', '^', '|', '&&', '||']:
+    ARITHMETIC.append(f'echo $((9 {operator} 2))')
+for operator in ['+=', '-=', '*=', '/=', '%=', '<<=', '>>=', '&=', '^=', '|=']:
+    ARITHMETIC.append(f'a=9; echo $((a {operator} 2)); echo "$a"')
+for expression in ['+5', '-5', '!0', '!3', '~0', '20-5-3', '20/5/2', '1|2^3&4', '1+2<<2', '2<3==1', '(a=1)+(b=2)']:
+    ARITHMETIC.append(f'echo $(({expression}))')
+ARITHMETIC.append('a=1; export a; sh -c \'echo "$a"\' > "$((a=3))" | cat; cat 3; echo "$a"')
+ARITHMETIC.append('a=1; echo $((a=4)) | cat; echo "$a"; echo left | sh -c \'echo "$1"; cat\' named "$((a+=1))"; echo "$a"')
+ARITHMETIC.extend([
+    'set -- 1 + 2; echo $(( $@ ))',
+    'set -- 2; echo $(( ${@} + 3 ))',
+    'set -- 2 3; IFS=; echo $(( $@ ))',
+    'a=1; echo $((0 && $((a=9)))); echo "$a"',
+    'f() { echo 1; return 7; }; v=$((0 && $(f))); echo "$?:$v"',
+])
+# Defined local safety policy for C overflow and invalid shifts.
+# These are recorded differences, never matching cases.
+ARITHMETIC_DIFFERENCES = [
+    ('echo $((9223372036854775807+1))', b'-9223372036854775808\n'),
+    ('echo $((1<<64))', b'1\n'),
+    ('a=" "; echo $((a))', b'0\n'),
+]
+ARITHMETIC_ERRORS = [
+    'v=$(echo $((1/0))); echo "$?:<$v>"; echo after',
+    'v=$(echo prior; echo $((1/0)); echo bad); echo "$?:$v"',
+    'readonly a=3; v=$(echo $((a=4))); echo "$?:$a"',
+    'echo "$(echo $((1/0)))"; echo $?',
+    'v=$(( $(echo $((1/0))) + 1 )); echo "$?:$v"',
+    'echo $(())', 'echo $(( ))', 'echo $((1,2))',
+    'set -- 2 3; echo $(( $@ ))', 'set -- 1 + 2; IFS=:; echo $(( $@ ))',
+    'a="-+1"; echo $((a))', 'a="++1"; echo $((a))',
+    'echo $((1/0))', 'echo $((1%0))', 'echo $((08))', 'echo $((0xG))',
+    'a=bad; echo $((a))', 'a=1+2; echo $((a))',
+    'readonly a=3; echo $((a=4))', 'echo $((1+))', 'echo $((1=2))',
+    'echo $((1?2))', 'echo $((1 || (2+)))', 'echo $((1+2)',
+]
+
 def invoke(executable, args, cwd):
     return subprocess.run([str(executable), *args], cwd=cwd, capture_output=True, timeout=10)
 
@@ -120,6 +185,21 @@ with tempfile.TemporaryDirectory(prefix="sshl-phase2-") as directory:
         expected = invoke(REFERENCE, ["-c", source, "named"], directory)
         assert (actual.returncode, actual.stdout) == (expected.returncode, expected.stdout), (source, actual, expected)
         assert bool(actual.stderr) == bool(expected.stderr), (source, actual, expected)
+    for source in ARITHMETIC:
+        actual = invoke(SHELL, ["-c", source, "named"], directory)
+        expected = invoke(REFERENCE, ["-c", source, "named"], directory)
+        assert (actual.returncode, actual.stdout, actual.stderr) == (expected.returncode, expected.stdout, expected.stderr), (source, actual, expected)
+    for source in ARITHMETIC_ERRORS:
+        actual = invoke(SHELL, ["-c", source, "named"], directory)
+        expected = invoke(REFERENCE, ["-c", source, "named"], directory)
+        assert (actual.returncode, actual.stdout) == (expected.returncode, expected.stdout), (source, actual, expected)
+        assert actual.stderr and expected.stderr, (source, actual, expected)
+    for source, dash_output in ARITHMETIC_DIFFERENCES:
+        actual = invoke(SHELL, ["-c", source, "named"], directory)
+        expected = invoke(REFERENCE, ["-c", source, "named"], directory)
+        assert (actual.returncode, actual.stdout) == (2, b""), (source, actual)
+        assert actual.stderr, (source, actual)
+        assert (expected.returncode, expected.stdout) == (0, dash_output), (source, expected)
     # Retain the native shell's established redirection-error status (1).
     # POSIX requires a nonzero status; dash chooses 2. Assert both explicitly.
     source = 'v=$(echo bad < /no-such-sshl-substitution-file); echo "$?:$v"'
@@ -138,8 +218,8 @@ with tempfile.TemporaryDirectory(prefix="sshl-phase2-") as directory:
     sourced.write_text('VALUE=sourced\nreturn 7\necho bad\n')
     source = '. ./sourced.sh; echo "$?:$VALUE"'
     assert invoke(SHELL, ["-c", source], directory).stdout == invoke(REFERENCE, ["-c", source], directory).stdout
-    for syntax in ('echo $((1+2))', 'echo *.txt', 'echo ${VALUE:-fallback}'):
+    for syntax in ('echo *.txt', 'echo ${VALUE:-fallback}'):
         assert invoke(SHELL, ["-c", syntax], directory).returncode == 2
     assert invoke(SHELL, ["-c"], directory).returncode == 2
     assert invoke(SHELL, ["missing.sh"], directory).returncode != 0
-print(f"PASS: {len(CASES) + len(SUBSTITUTIONS) + len(DIAGNOSTIC_SUBSTITUTIONS)} dash comparisons ({len(SUBSTITUTIONS) + len(DIAGNOSTIC_SUBSTITUTIONS)} substitution cases), 1 documented redirection-status difference, script arguments, source, unsupported syntax, entry-point errors")
+print(f"PASS: {len(CASES) + len(SUBSTITUTIONS) + len(DIAGNOSTIC_SUBSTITUTIONS) + len(ARITHMETIC) + len(ARITHMETIC_ERRORS)} dash comparisons ({len(SUBSTITUTIONS) + len(DIAGNOSTIC_SUBSTITUTIONS)} substitution cases), {len(ARITHMETIC)+len(ARITHMETIC_ERRORS)} arithmetic cases, {len(ARITHMETIC_DIFFERENCES)} documented arithmetic policy/extension differences, 1 documented redirection-status difference, script arguments, source, unsupported syntax, entry-point errors")

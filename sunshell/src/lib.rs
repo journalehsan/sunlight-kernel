@@ -7,6 +7,7 @@
 
 extern crate alloc;
 
+pub mod arithmetic;
 pub mod calc;
 pub mod capture;
 

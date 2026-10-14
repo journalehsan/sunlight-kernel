@@ -1,9 +1,11 @@
 [SSHL-SCRIPT] file arguments control-flow pipeline PASS
 [SSHL-SCRIPT] command syntax status PASS
+[SSHL-ARITH] precedence variables assignment isolation errors repeat=100 PASS
 [SSHL-ENV] export assignment isolation transport security PASS
 [SSHL-SUB] grammar isolation quoting status stdout stderr PASS
 [SSHL-SUB] exact 8192 dual 16384 capture 131072 overflow early-close PASS
 [SSHL-SUB] repeat=100 descriptors heap cancellation recovery PASS
+[SSHL-ARITH] PTY exact results assignment error recovery PASS
 [SSHL-SUB] PTY nested large status recovery input PASS
 [SSHL-SCRIPT] repeated processes descriptors scopes PASS
 [SSHL-TEST] script-pty coverage PASS

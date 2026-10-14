@@ -4,8 +4,13 @@
 [SSHL-PTY] nonblocking TTY partial EAGAIN PASS
 [SSHL-PTY] sizes repeat=2 integrity PASS
 [SSHL-PTY] concurrent sessions delayed consumer PASS
+[SSHL-LIFECYCLE] foreground stdin stderr prompt PASS
+[SSHL-LIFECYCLE] Ctrl+C foreground UNSUPPORTED
+[SSHL-LIFECYCLE] Ctrl+C nested-substitution UNSUPPORTED
+[SSHL-LIFECYCLE] synchronous disconnect DEFERRED
 [SSHL-PTY] foreground master closure wakes and exits PASS
 [SSHL-PTY] foreground session closure wakes and exits PASS
+[SSHL-PTY] foreground input closure wakes and exits PASS
 [SSHL-PTY] nonblocking wait pipe integrity EOF PASS
 [SSHL-PTY] concurrent producers slow pipe consumer PASS
 [SSHL-PTY] early close EPIPE legacy blocking wait PASS

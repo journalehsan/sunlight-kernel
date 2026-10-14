@@ -1,10 +1,11 @@
 # Shell Phase 2.1: environment delivery boundary
 
-Date: October 14, 2026. The current delivery adds Stage B native `$(...)`
-command substitution to Stage A and the Phase 2.1A liveness/reclaim repairs.
-See "Phase 2.1B" at the end for architecture, limits and current validation.
-Arithmetic expansion, pathname expansion and compound pipeline stages remain
-unsupported. Earlier sections retain their historical validation boundaries.
+Date: October 14, 2026. The current delivery adds Phase 2.1C bounded POSIX
+integer arithmetic to Stage B command substitution, Stage A environments and
+the Phase 2.1A liveness/reclaim repairs. See "Phase 2.1C" at the end for the
+current architecture and validation boundary. Pathname expansion and compound
+pipeline stages remain unsupported. Earlier sections retain their historical
+validation boundaries.
 
 The October 14 independent audit below reproduces the retained pre-repair
 image's intermittent output deadlock and identifies an additional memory-
@@ -1394,3 +1395,323 @@ commands retain normal shell wait behavior; byte limits are not execution
 timeouts. Those signal/session teardown cases need separate foreground/PTY
 integration gates. Continue with Stage C compound/function pipeline context
 transport and foreground cancellation, then add later expansion stages separately.
+
+
+## Phase 2.1C: integer arithmetic and independent lifecycle audit
+
+Date: October 14, 2026. Arithmetic is implemented in the shared interpreter
+and native interactive preparation. Lifecycle validation is a separate test
+section; this slice does not add a signal/process-group architecture. Full
+phase completion remains dependent on real foreground cancellation and
+synchronous-expansion disconnect handling. Do not advance to pathname expansion.
+
+### Grammar, representation and evaluator
+
+The normative reference is POSIX.1-2024 Shell Command Language 2.6.4 and
+Utilities Introduction 1.1.2.1 (Selected ISO C Standard Operators):
+`https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#tag_19_06_04`
+and `https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap01.html`.
+Required operators are implemented; `sizeof`, prefix/postfix `++`/`--` and
+comma are not mandatory shell syntax. Exponentiation is not required either.
+No Bash or external arithmetic interpreter is involved.
+
+`WordPart` retains the existing structured command-substitution node and adds
+an arithmetic-expression `Word` node, with its expansion source byte offset.
+The lexer recognizes `$((` before `$(`, balances ordinary parentheses, and
+recursively parses embedded command/arithmetic expansions. Newlines and escaped
+newlines are accepted. Outer double quotes retain quote provenance; single
+quotes and escaped dollars disable recognition. Inside arithmetic, a double
+quote is an ordinary character, as specified by POSIX. Operator syntax is
+validated after the expression's expansions, so shell syntax cannot be inferred
+by a regular expression or by reinterpreting command output as shell commands.
+Malformed boundaries report source offsets through the existing syntax error
+line/column mechanism. Evaluator diagnostics identify the failing operation or
+policy; they do not yet report individual operator columns after expansion.
+Offsets inside command-substitution subtrees retain the existing subtree-relative
+coordinate system.
+
+`arithmetic.rs` is a streaming precedence parser. It holds one token and bounded
+recursive parser state rather than allocating a separate arithmetic AST. Names
+retain lvalue identity until consumed. Operand evaluation follows deterministic left-to-right parser order; unsequenced
+C side-effect expressions should not be relied upon for portable results.
+Binary operators associate left; assignment
+and conditional operators associate right. Parentheses and unary operators have
+the highest precedence. Inactive logical/conditional branches still undergo
+syntax validation but suppress variable reads, assignments and arithmetic faults.
+This permits `0 && (a=9)` and `1 ? 7 : 1/0` without those effects/errors. Invalid
+syntax or integer literals in skipped branches still fail.
+
+The grammar below uses braces for left-associative repetition. Assignment
+requires a variable lvalue even when syntax is parsed in an inactive branch.
+
+```text
+expression   := assignment
+assignment   := conditional [ assignment-op assignment ]
+conditional  := logical-or [ '?' assignment ':' conditional ]
+logical-or   := logical-and { '||' logical-and }
+logical-and  := bitwise-or { '&&' bitwise-or }
+bitwise-or   := bitwise-xor { '|' bitwise-xor }
+bitwise-xor  := bitwise-and { '^' bitwise-and }
+bitwise-and  := equality { '&' equality }
+equality     := relational { ('==' | '!=') relational }
+relational   := shift { ('<' | '<=' | '>' | '>=') shift }
+shift        := additive { ('<<' | '>>') additive }
+additive     := product { ('+' | '-') product }
+product      := unary { ('*' | '/' | '%') unary }
+unary        := ('+' | '-' | '!' | '~') unary | primary
+primary      := integer | name | '(' assignment ')'
+```
+
+| POSIX arithmetic family | Coverage |
+| --- | --- |
+| Decimal, octal, hexadecimal constants | Implemented; no floating point or suffixes |
+| Parentheses and unary `+ - ! ~` | Implemented |
+| Multiplicative `* / %`, additive `+ -` | Implemented |
+| Shifts `<< >>` | Implemented with checked counts |
+| Relational `< <= > >=`, equality `== !=` | Implemented; Boolean result 0 or 1 |
+| Bitwise `& ^ \|` | Implemented |
+| Logical `&& \|\|` | Implemented with short circuit |
+| Conditional `?:` | Implemented with selected-branch evaluation |
+| Assignment `= *= /= %= += -= <<= >>= &= ^= \|=` | Implemented; variable lvalue required |
+| Optional `++ -- sizeof`, comma, exponentiation | Explicitly rejected |
+| Statements, casts, arrays, pointer operations | Outside this arithmetic subset |
+
+### Integer and variable policy
+
+The representation is signed two's-complement `i64` on the x86_64 target.
+Literal magnitudes must fit `i64`; variable constants can include a leading
+sign and represent `-9223372036854775808`. The minimum value can also be formed
+as `(-9223372036854775807-1)`. A standalone positive magnitude `9223372036854775808`
+is rejected, including beneath unary minus. Surrounding whitespace in variable
+values is accepted; otherwise the entire value must be a decimal/octal/hex
+constant, optionally signed. Unset/null variables resolve to zero. A variable
+containing `bad`, `other_name`, or `1+2` is rejected, never recursively evaluated.
+Whitespace-only values and doubled/mixed signs (`++1`, `-+1`) fail.
+Self/mutual references therefore fail immediately rather than looping.
+
+All additions, subtractions, multiplications and negations are checked. Division
+truncates toward zero and remainder follows the dividend's sign. Division/modulo
+by zero and `MIN / -1` or `MIN % -1` fail. Shift counts must be 0..63; right shift
+is arithmetic, and left shift uses an `i128` intermediate and requires an `i64`
+result. Representable negative left shifts use this defined local policy rather
+than invoking C undefined behavior. Overflow/underflow never wrap silently.
+Invalid syntax/literals, bounds, readonly writes and resource errors produce
+noninteractive expansion failure/status 2 with a diagnostic; interactive users
+can execute a subsequent command. Arithmetic faults are typed separately from
+capture/expansion resource failures. Inside `$(...)` an arithmetic fault stops
+that isolated interpreter, diagnoses through its active stderr mapping, and
+returns child status 2 plus any preceding stdout. The parent can continue:
+`v=$(echo before; echo $((1/0))); echo "$?:$v"` prints `2:before`. Capture
+limits, NUL/UTF-8 rejection and existing global word bounds still abort parent
+expansion. This retains the resource-cancellation behavior of Stage B. Expansion success does not set the status to
+its numeric result: `v=$((7))` succeeds with status 0.
+
+Assignments call `ShellEnv::assign`, preserving export attributes, readonly
+checks, name limits and aggregate variable limits. Arithmetic effects persist in
+the context doing the expansion. Function arithmetic uses the function's existing
+shell context. Subshells, command substitutions and every pipeline stage use
+isolated snapshots. The new pipeline preparation correction keeps both argument
+and redirection arithmetic effects in the stage environment; the native interactive
+simple-command path now retains redirection side effects in its current environment.
+Temporary prefix names still restore through the existing narrow restoration path.
+Evaluation is not transactional: effects already applied before a later arithmetic
+failure are not generally rolled back; existing candidate-environment preparation
+can discard effects on failure before committing its candidate.
+
+### Expansion order and resource/security boundary
+
+Word parts expand in source order. An arithmetic node first expands parameter,
+command-substitution and nested arithmetic nodes without field splitting, then
+interprets the resulting integer expression. Multiple positional fields inside
+arithmetic join with the first IFS character (empty IFS concatenates), matching
+the tested dash behavior; default-IFS `set -- 2 3; echo $(( $@ ))` must fail
+rather than becoming 23, while `set -- 1 + 2` evaluates to 3. Its decimal result participates in
+outer quote-aware splitting and quote removal. Arithmetic results do not trigger
+pathname expansion. Shell metacharacters returned by a substitution are arithmetic
+tokens only, never reparsed as executable shell syntax. Expansion of embedded
+substitutions occurs before arithmetic short circuit: `0 && $((a=9))` still
+updates `a`, and embedded command-substitution status still determines an
+assignment-only command's status. Existing substitution output limits and stdout
+capture/isolated contexts are unchanged.
+
+| Resource | Current bound |
+| --- | --- |
+| Arithmetic source and expanded expression | 16 KiB each |
+| Arithmetic lexer/evaluator nesting | 32 nested expansions, 64 ordinary parentheses/parser recursion levels |
+| Evaluator token advances | 4096 per expression |
+| Whole shell source/tokens | Existing 64 KiB / 8192 |
+| Expanded shell word / variable | Existing 16 KiB |
+| Shell stored environment | Existing 256 names / 64 KiB |
+| Command substitution | Existing 128 KiB per capture / 256 KiB aggregate / 16 runtime levels |
+| Native argv | Existing limits, including 256-byte kernel argument bound |
+
+The evaluator does not allocate tokens or arithmetic trees. AST/Rc/context clones,
+String formatting, expansion atom vectors and BTreeMap insertions remain infallible
+allocations in existing shell paths; bounded arithmetic is not complete OOM recovery.
+Arithmetic changes no spawn ABI, credentials, UserSession policy, nameserver
+allowlist, reclaim budgets or IPC wakeup code. The independently reviewed
+lifecycle repair below adds bounded native TTY read waits; it does not change
+process termination policy or reclaim budgets. Native tests compare
+heap/descriptor state around 100 arithmetic success/failure/recovery iterations;
+that establishes the tested interpreter's bounded behavior, not universal leak freedom.
+
+Ambiguous `$((` forms select arithmetic and do not retry as command substitution
+after arithmetic failure; use `$( (commands) )` for a subshell command substitution.
+The pre-existing shell rejected `$((` forms entirely; ordinary and nested `$(...)`
+remain covered by the complete substitution regression. Host development REPL
+still has its earlier immutable expansion/line-dispatch limitations; host script
+files and `-c` and native interactive sessions are the validation entry points.
+
+### Current verification
+
+Final arithmetic and PTY matrices pass after the positional-field and
+child-local arithmetic-error corrections. Artifact paths begin `target/arithmetic-`. The initial 1 GiB subsystem matrix
+retains three capacity failures: SWAP-1 had only 492 MiB of PMM-tracked RAM
+and selected one pool, while Helios I/O/thread startup exhausted available
+memory before `/bin/sshl0` could spawn. In the Helios I/O image PMM reported
+154/436 MiB free and static RAMFS data was 130168 KiB; the retained Stage B
+image reported 205/470 MiB and 112654 KiB respectively. Concurrent workspace changes added three MP3 assets and their two RAMFS paths
+per file during validation, totalling 17934478 bytes, which accounts for the
+measured 17514 KiB static-file increase. Those music changes are external to
+this arithmetic slice and are preserved; the capacity failures are findings
+for the combined workspace/image. Native production `sshl0` was 560344 bytes versus 542184 in
+that retained Helios image. The current rebuild must not be claimed to pass
+those workloads at 1 GiB. SWAP-1 is rerun at 1280 MiB to satisfy its unchanged
+two-pool precondition; Helios probes are rerun at 1536 MiB to reach their actual
+workloads. No pool policy, workload assertions, timeouts or reclaim budgets
+are weakened. Full 1 GiB production boot capacity with those music additions remains an
+independent image/boot-memory audit dependency. The final arithmetic/PTY
+confirmation uses 1536 MiB, including the original 1/2/4 CPU counts, unchanged
+deadlines, and all runtime assertions. The matrix helper now accepts an explicit
+`--memory-mb` parameter and records it, keeping its old 1024 MiB default. The initial Phase 1.5 TTY attempt also
+failed before shell startup with NoMemory and hit its original 300-second
+deadline; it cannot establish the previously reported lookup failure.
+The initial one-CPU development boot failed at `/bin/sh spawn` because a newly
+added test put a source longer than the 256-byte argument bound into `-c`.
+Long arithmetic fixtures now use script files; the transport bound was preserved.
+A subsequent development one-CPU gate passed, but predates the final pipeline
+and native redirection isolation witnesses. The next development image failed
+on 1, 2 and 4 CPUs because a new redirection fixture tried to create `/3` under
+the filesystem policy; its missing output was a fixture failure. Moving that
+fixture under `/tmp` preserves the policy. The corrected development image passes native arithmetic/isolation on 1, 2 and
+4 CPUs. Final checks also include strict variable-integer and positional-field
+joining corrections; the last field-joining correction is confirmed through a
+fresh shell/PTY matrix. Only the final rebuilt arithmetic/PTY matrix below
+is used as final-source evidence.
+
+Host shell tests pass 53 (26 library + 27 binary). The differential suite passes
+178 output/status comparisons, including 95 arithmetic and 51 substitution cases.
+Stable cases compare stderr too; diagnostic wording cases require stderr presence.
+Three additional explicit policy discrepancies are asserted: dash wraps
+`9223372036854775807+1` to MIN and evaluates `1<<64` as 1 on this host, whereas
+SunlightOS rejects both with status 2. Dash also maps a whitespace-only variable
+value to 0; SunlightOS rejects it as a malformed constant. The existing failed-redirection status
+(1 versus dash 2) remains separately recorded. No full POSIX-compliance claim
+follows from these comparisons. Three spawn environment-validator tests and
+13 independent descriptor tests pass. Kernel check passes.
+
+
+The final source passes six native gates at 1536 MiB, one boot per CPU count.
+Stage A checks actual arithmetic output/status, context isolation, limits and
+100-iteration heap/descriptor stability. PTY gates check interactive arithmetic
+and the supported lifecycle assertions; their PASS does not mean Ctrl+C works.
+
+| Native gate | CPUs | Guest MiB | Result / seconds |
+| --- | --- | --- | --- |
+| Shell Phase 2 | 1 / 2 / 4 | 1536 | PASS / 104.96 / 89.89 / 102.17 |
+| PTY lifecycle | 1 / 2 / 4 | 1536 | PASS / 72.83 / 46.34 / 48.83 |
+| IPC/security/lifecycle Phase 2.6 | 2 | 1024 | PASS / 82.53 |
+| Security + mmap/SHM injected rollback | 2 | 1024 | PASS / 62.05 |
+| SWAP-1 pressure/reclaim | 4 | 1280 | PASS / 34.64 |
+| Helios pipe/socket I/O | 2 | 1536 | PASS / 70.17 |
+| Helios thread startup | 2 | 1536 | PASS / 66.01 |
+| Audio stream/input/test-tone DMA | 2 | 1024 | PASS / 37.33 |
+| Native TTY Phase 1.5 | 2 | 1536 | FAIL / 68.82; numbered-shell lookup policy |
+
+One-CPU shell/PTY times and subsystem times include build; copied-image
+2/4-CPU times measure boot/gate only. Results are retained in
+`target/arithmetic-delivery-results.json`, `target/arithmetic-final-results.json`
+and `target/arithmetic-confirmed-results.json`, with separate serial logs. The
+IPC/security gates exercise 64 terminal-state stress iterations, capability
+boundaries, process lifecycle and memory replacement checks. The rollback image
+also reaches the injected mmap/SHM rollback marker. Subsystem gates were built
+with the same kernel TTY repair before the final shell-only field/error corrections;
+they are not a single immutable image. Audio evidence covers DMA completion,
+not human-audible playback or nonzero recording frames.
+
+The final PTY slow 1 MiB streams finish in 3060 / 2770 / 2790 ms at 1/2/4 CPUs,
+within the unchanged 15000 ms budget; all 16 stream summaries per copied-image
+boot validate byte counts/content. There are no unexpected final transfer stalls.
+This is one complete run per CPU configuration, not a repeated latency bound.
+For reproducibility, build with `SUNLIGHT_TEST_MEMORY_MB=1536` and
+`SUNLIGHT_TEST_CPUS=1` using `bash tools/test.sh shell-phase2` (or
+`shell-pty-liveness`), copy the ISO, then run `tools/test_pty_liveness.py` with
+`--iso <copied-image> --phase <phase> --cpus 2 4 --runs 1 --memory-mb 1536`.
+
+### Independent interactive lifecycle boundary
+
+The initial lifecycle image failed the foreground stdin probe on 1, 2 and 4
+CPUs: native TTY reads returned `EAGAIN` with blocking fd0, and the child exited
+before input. This was a real generic I/O defect, unlike the earlier fixture
+failures. An independent minimal correction adds `Process::tty_read_wait`, parks
+native blocking readers atomically with the empty check, and wakes only live
+blocked waiters when input arrives. The syscall restart preserves the original
+syscall number, following the existing native pipe convention. Nonblocking fd0
+still returns `EAGAIN`. Wait metadata clears on timer/signal/generic I/O wake;
+Finished/Reaped tasks fail the wake's state guard. Changes are limited to
+`kernel/src/arch/x86_64/syscall.rs`, `kernel/src/process/mod.rs` and
+`kernel/src/sched/mod.rs`. No signal forwarding or job-control changes accompany
+this repair.
+
+Focused probes check native `O_NONBLOCK`, a blocking reader still alive before
+input, a nonfatal signal followed by re-parking, exact four-byte input and zero
+status, hangup of a parked reader, and a late input event after death. The
+first repaired development gates pass foreground input/stderr and expose the
+real cancellation/disconnect gaps. Final-source gates add the parked-reader
+hangup and late-wake witnesses.
+
+The dedicated PTY gate includes a foreground command reading four stdin bytes,
+foreground external stdout/stderr, a bounded 600 ms command receiving Ctrl+C,
+a nested substitution receiving Ctrl+C, and disconnect during synchronous capture.
+Ctrl+C probes use the real input byte `0x03`; they never substitute an arbitrary
+PID kill for interrupt delivery. They assert and label the current unsupported
+behavior, not cancellation success. Commands finish naturally before checking
+prompt recovery and absence of live children. Existing asynchronous foreground
+master/session-close probes exercise real hangup, terminated producer/relay state,
+reaping and closed-ring cleanup.
+
+Source inspection identifies the missing integration: both the TTY server and
+PTY relay forward control bytes into stdin; neither converts Ctrl+C into a
+foreground signal. Synchronous `NativeRuntime::external` drains capture/waits
+inside expansion, without servicing PTY input/closure. Signal-default termination
+exists in the kernel, but the foreground ownership/cancellation integration and
+safe propagation across descendants are incomplete. An output-free infinite
+command can therefore prevent prompt recovery or observing synchronous disconnect.
+This is a separate prerequisite; changing kernel signal architecture or killing
+unrelated processes is outside this slice.
+
+Final PTY observations at 1/2/4 CPUs confirm foreground stdin/stderr and prompt
+recovery, real asynchronous master/session hangup (status 129), terminated/reaped
+foreground children, and the parked-reader/late-input non-resurrection checks.
+Ctrl+C leaves the foreground and nested-substitution children alive; after
+100 ms survival checks they take roughly another 500–600 ms to finish naturally.
+Synchronous disconnect likewise waits for natural completion before exit 129.
+These are explicit UNSUPPORTED/DEFERRED results. The native TTY Phase 1.5
+authorization recheck reaches a registered `sshl6` (PID 36), but the harness
+`sshl` (PID 35) is denied nameserver lookup with allowlist mask `0x40000`,
+then fails `TTY shell registration` after 68.82 seconds including build. This
+reproduces the existing endpoint-handoff authorization blocker, rather than the
+earlier startup OOM. TTY foreground input/interrupt/recovery is therefore not
+validated by this harness. UserSession/lookup policy is preserved; an authorized
+endpoint handoff requires a separate correction. Current asynchronous
+closure tests cannot establish synchronous cancellation, arbitrary
+grandchild cleanup, universal no-zombie/no-leak behavior or absence of all blocked
+relay tasks. The existing PTY idle relay still uses `process_yield` rather than a blocking
+broker-readiness notification; a wake-driven idle-CPU bound is not established.
+This slice introduces no production polling loops. New test waits are bounded and park between checks.
+
+The next slice is foreground lifecycle integration: authenticated session-owned
+foreground tracking, interrupt/hangup notification during synchronous expansion,
+stdin/stderr service while waiting, descendant termination/reaping and focused
+TTY/PTY recovery/resource gates. Compound/function pipeline transport remains
+another separate dependency. Pathname expansion stays deferred.

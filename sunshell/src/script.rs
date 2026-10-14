@@ -123,21 +123,31 @@ fn expand(
 ) -> Result<Vec<String>, Error> {
     let mut failure = None;
     let mut last_status = None;
-    let result = expand_word_with(word, &context.env, split, |tree| {
-        substitution(tree, context, runtime)
+    let mut snapshot = context.clone();
+    let result = expand_word_with(word, &mut context.env, split, |tree, env| {
+        snapshot.env = env.clone();
+        substitution(tree, &snapshot, runtime)
             .map(|(value, status)| {
                 last_status = Some(status);
                 value
             })
             .map_err(|e| {
                 failure = Some(e);
-                ExpansionError("command substitution failed")
+                ExpansionError::Expansion("command substitution failed")
             })
     });
     if last_status.is_some() {
         context.substitution_status = last_status;
     }
-    result.map_err(|e| failure.unwrap_or_else(|| Error::fatal(e.0)))
+    result.map_err(|e| failure.unwrap_or_else(|| expansion_error(e)))
+}
+// Arithmetic faults end the interpreter evaluating them. Inside $(...),
+// that is the isolated child; capture/resource failures still abort the parent.
+fn expansion_error(error: ExpansionError) -> Error {
+    match error {
+        ExpansionError::Arithmetic(message) => Error::new(2, message),
+        ExpansionError::Expansion(message) => Error::fatal(message),
+    }
 }
 fn substitution(
     tree: &Command,
@@ -439,19 +449,24 @@ fn run_kind(
                 for pattern in patterns {
                     let mut failure = None;
                     let mut last_status = None;
-                    let pattern =
-                        crate::expansion::case_pattern_with(pattern, &context.env, |tree| {
-                            substitution(tree, context, runtime)
+                    let mut snapshot = context.clone();
+                    let pattern = crate::expansion::case_pattern_with(
+                        pattern,
+                        &mut context.env,
+                        |tree, env| {
+                            snapshot.env = env.clone();
+                            substitution(tree, &snapshot, runtime)
                                 .map(|(value, status)| {
                                     last_status = Some(status);
                                     value
                                 })
                                 .map_err(|e| {
                                     failure = Some(e);
-                                    ExpansionError("substitution failed")
+                                    ExpansionError::Expansion("substitution failed")
                                 })
-                        })
-                        .map_err(|e| failure.unwrap_or_else(|| Error::fatal(e.0)))?;
+                        },
+                    )
+                    .map_err(|e| failure.unwrap_or_else(|| expansion_error(e)))?;
                     if last_status.is_some() {
                         context.substitution_status = last_status;
                     }
@@ -489,6 +504,7 @@ fn literal(word: &Word) -> Option<&str> {
     if word.parts.len() == 1
         && word.parts[0].quote == Quote::Unquoted
         && word.parts[0].substitution.is_none()
+        && word.parts[0].arithmetic.is_none()
     {
         Some(&word.parts[0].text)
     } else {
@@ -677,8 +693,10 @@ pub fn prepare_pipeline_stage(
     context: &mut ShellExecutionContext,
     runtime: &mut impl Runtime,
 ) -> Result<PreparedArguments, Error> {
-    let mut prepared = prepare_arguments(command, context, runtime)?;
-    let mut child = context.clone();
+    // All expansion side effects belong to this stage, including argument words.
+    let mut stage = context.clone();
+    let mut prepared = prepare_arguments(command, &mut stage, runtime)?;
+    let mut child = stage;
     child.env = prepared.env.clone();
     prepared.command.redirections = expanded_simple(
         &SimpleCommand {
@@ -689,6 +707,9 @@ pub fn prepare_pipeline_stage(
         runtime,
     )?
     .redirections;
+    // Redirection arithmetic belongs to this pipeline stage's environment.
+    prepared.env = child.env;
+    prepared.substitution_status = child.substitution_status;
     Ok(prepared)
 }
 pub fn prepare_redirections(

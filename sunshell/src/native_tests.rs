@@ -81,10 +81,15 @@ pub(super) fn probe(raw: &[*const u8]) -> ! {
             debug_log(&format!("[SSHL-PTY] producer pid={} bytes={total} partial={partial} eagain={again}", libc::getpid()));
             Ok(())
         }
-        Some("copy" | "count" | "take") => {
+        Some("copy" | "count" | "take" | "pidtake") => {
+            if args[0] == "pidtake" {
+                let fd = libc::open_with_flags(b"/tmp/sshl-pty-close-pid", libc::O_CREAT | libc::O_WRONLY | libc::O_TRUNC).unwrap();
+                libc::write_all(fd, format!("{}\n", libc::getpid()).as_bytes()).unwrap();
+                libc::close(fd).unwrap();
+            }
             let mut total = 0;
             loop {
-                let requested = if args[0] == "take" { number.saturating_sub(total).min(buf.len()) } else { buf.len() };
+                let requested = if matches!(args[0].as_str(), "take" | "pidtake") { number.saturating_sub(total).min(buf.len()) } else { buf.len() };
                 if requested == 0 { break; }
                 match libc::read(libc::STDIN, &mut buf[..requested]) {
                     Ok(0) => break,
@@ -92,13 +97,23 @@ pub(super) fn probe(raw: &[*const u8]) -> ! {
                         total += n;
                         if args[0] != "count" && libc::write_all(libc::STDOUT, &buf[..n]).is_err() { libc::exit(1); }
                     }
-                    Err(_) => libc::exit(1),
+                    Err(error) => {
+                        debug_log(&format!("[SSHL-TEST] input read error={error:?}"));
+                        libc::exit(1);
+                    }
                 }
             }
             if args[0] == "count" { libc::write_all(libc::STDOUT, format!("{total}\n").as_bytes()) } else { Ok(()) }
         }
         Some("args") => {
             for arg in &args[1..] { if libc::write_all(libc::STDOUT, format!("<{arg}>\n").as_bytes()).is_err() { libc::exit(1); } }
+            Ok(())
+        }
+        Some("input-nonblock") => {
+            libc::sys::check(unsafe { libc::sys::syscall3(49, 0, 4, 0x800) }).unwrap();
+            if libc::read(libc::STDIN, &mut buf[..1]) != Err(libc::Errno::Again) {
+                libc::exit(1);
+            }
             Ok(())
         }
         Some("stdio") => libc::write_all(libc::STDOUT, b"out\n")
@@ -133,7 +148,12 @@ pub(super) fn probe(raw: &[*const u8]) -> ! {
             .as_bytes(),
         ),
         Some("exit") => libc::exit(number as u64),
-        Some("pause") => {
+        Some("pause" | "pidpause") => {
+            if args[0] == "pidpause" {
+                let fd = libc::open_with_flags(b"/tmp/sshl-pty-close-pid", libc::O_CREAT | libc::O_WRONLY | libc::O_TRUNC).unwrap();
+                libc::write_all(fd, format!("{}\n", libc::getpid()).as_bytes()).unwrap();
+                libc::close(fd).unwrap();
+            }
             park_ms(number as u64);
             Ok(())
         }
@@ -452,8 +472,10 @@ pub(super) fn pty_liveness_suite() -> ! {
     trace_processes();
     drop(other);
     debug_log("[SSHL-PTY] concurrent sessions delayed consumer PASS");
+    interactive_lifecycle();
     foreground_closure(false);
     foreground_closure(true);
+    foreground_closure_probe(true, true);
     pipe_liveness();
     broker_closure();
     for run in 0..2 {
@@ -472,10 +494,92 @@ pub(super) fn pty_liveness_suite() -> ! {
     libc::exit(0)
 }
 
+// Lifecycle audit only: Ctrl+C is input data in the current native relay.
+// Bounded probes finish naturally; no substitute kill is used to claim SIGINT.
+fn lifecycle_child() -> u64 {
+    let start = monotonic_millis();
+    loop {
+        if let Ok(text) = core::str::from_utf8(&file_if_present("/tmp/sshl-pty-close-pid")) {
+            if let Ok(pid) = text.trim().parse() { return pid; }
+        }
+        if monotonic_millis() - start > 2000 { fail("lifecycle producer startup"); }
+        park_ms(10);
+    }
+}
+fn file_if_present(path: &str) -> Vec<u8> {
+    if libc::stat(path.as_bytes()).is_ok() { file(path) } else { Vec::new() }
+}
+fn interactive_lifecycle() {
+    let pty = PtyRunner::new();
+    if pty.run("sshl --probe input-nonblock") != 0 { fail("native nonblocking stdin contract"); }
+    let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
+    pty.send("sshl --probe pidtake 4\n");
+    let reader = lifecycle_child();
+    park_ms(100);
+    if !sunlight_ipc::process_is_alive(reader) { fail("blocking stdin exited before input"); }
+    libc::kill(reader, 17).unwrap(); // Nonfatal wake must recheck and park again.
+    park_ms(30);
+    if !sunlight_ipc::process_is_alive(reader) { fail("blocking stdin nonfatal wake"); }
+    pty.send("DATA");
+    let output = pty.prompt();
+    if !output.windows(4).any(|s| s == b"DATA") || sunlight_ipc::process_is_alive(reader) { fail("foreground stdin forwarding"); }
+    pty.send("echo $? > /tmp/sshl-input-status\n"); pty.prompt();
+    expect("/tmp/sshl-input-status", b"0\n");
+    pty.send("sshl --probe stdio\n");
+    let output = pty.prompt();
+    if !output.windows(3).any(|s| s == b"out") || !output.windows(3).any(|s| s == b"err") {
+        fail("foreground stderr forwarding");
+    }
+    debug_log("[SSHL-LIFECYCLE] foreground stdin stderr prompt PASS");
+    for (source, kind) in [
+        ("sshl --probe pidpause 600", "foreground"),
+        ("echo \"$(echo \"$(sshl --probe pidpause 600)\")\"", "nested-substitution"),
+    ] {
+        let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
+        pty.send(&format!("{source}\n"));
+        let child = lifecycle_child();
+        pty.send("\x03");
+        park_ms(100);
+        let survives = sunlight_ipc::process_is_alive(child);
+        let start = monotonic_millis();
+        pty.prompt();
+        if !survives { fail("unexpected Ctrl+C semantics require independent audit"); }
+        if sunlight_ipc::process_is_alive(child) { fail("naturally completed foreground still live"); }
+        pty.send("echo recovered\n");
+        if !pty.prompt().windows(9).any(|s| s == b"recovered") { fail("post Ctrl+C prompt"); }
+        debug_log(&format!("[SSHL-LIFECYCLE] Ctrl+C {kind} UNSUPPORTED child survived; natural completion remaining_ms={} prompt recovered", monotonic_millis()-start));
+    }
+    drop(pty);
+    // Closing while synchronous expansion waits cannot notify its collector.
+    let mut pty = PtyRunner::new();
+    let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
+    pty.send("echo \"$(sshl --probe pidpause 600)\"\n");
+    let child = lifecycle_child();
+    let reply = ipc_call_timeout(pty.service, IpcMsg::with_label(PtyMsg::CLOSE_SESSION)
+        .word(0, pty.id).word(1, pty.generation).with_cap(0, pty.control), 2000).unwrap();
+    if reply.label != PtyMsg::REPLY { fail("substitution disconnect request"); }
+    pty.session_closed = true;
+    park_ms(100);
+    if !sunlight_ipc::process_is_alive(child) || !sunlight_ipc::process_is_alive(pty.pid) {
+        fail("unexpected synchronous disconnect semantics require audit");
+    }
+    let start = monotonic_millis();
+    while sunlight_ipc::process_is_alive(child) || sunlight_ipc::process_is_alive(pty.pid) {
+        if monotonic_millis()-start > 2000 { fail("deferred substitution hangup"); }
+        park_ms(10);
+    }
+    if libc::waitpid(pty.pid).unwrap() != 129 { fail("deferred hangup status"); }
+    debug_log(&format!("[SSHL-LIFECYCLE] synchronous disconnect DEFERRED until natural completion remaining_ms={}", monotonic_millis()-start));
+    drop(pty);
+}
+
 fn foreground_closure(close_session: bool) {
+    foreground_closure_probe(close_session, false);
+}
+fn foreground_closure_probe(close_session: bool, reading: bool) {
     let _ = libc::unlink(b"/tmp/sshl-pty-close-pid");
     let mut pty = PtyRunner::new();
-    pty.send("sshl --probe pidpattern 1048576 4096\n");
+    pty.send(if reading { "sshl --probe pidtake 4\n" } else { "sshl --probe pidpattern 1048576 4096\n" });
     let start = monotonic_millis();
     let child = loop {
         if libc::stat(b"/tmp/sshl-pty-close-pid").is_ok() {
@@ -545,7 +649,15 @@ fn foreground_closure(close_session: bool) {
     if tty_stdout_pull(7, &mut stale) != 0 {
         fail("closed TTY drain bound");
     }
-    debug_log(if close_session {
+    // A later input event must not revive the terminated/reaped native reader.
+    if reading {
+        let _ = tty_stdin_push(7, b"x");
+        park_ms(20);
+        if sunlight_ipc::process_is_alive(child) { fail("input wake resurrected child"); }
+    }
+    debug_log(if reading {
+        "[SSHL-PTY] foreground input closure wakes and exits PASS"
+    } else if close_session {
         "[SSHL-PTY] foreground session closure wakes and exits PASS"
     } else {
         "[SSHL-PTY] foreground master closure wakes and exits PASS"
@@ -972,7 +1084,7 @@ pub(super) fn script_suite() -> ! {
         )
         .unwrap();
         let pid = libc::spawn_with_stdio(b"/bin/sh", argv, None, Some(fd), None)
-            .unwrap_or_else(|_| fail("/bin/sh spawn"));
+            .unwrap_or_else(|e| fail(&format!("/bin/sh spawn {e:?}")));
         libc::close(fd).unwrap();
         let status = libc::waitpid(pid).unwrap_or_else(|_| fail("script wait"));
         if status != expected {
@@ -1030,6 +1142,50 @@ pub(super) fn script_suite() -> ! {
         0, b"<pipeline>\n<>\n");
     run(&[b"sh", b"-c", b"NAME=parent; export NAME; NAME=left sh -c 'echo \"$NAME\"' | NAME=right sh -c 'echo \"$NAME\"; sshl --probe copy'; echo \"$NAME\""],
         0, b"right\nleft\nparent\n");
+    // Use script files for sources beyond the unchanged 256-byte argv bound.
+    let run_arithmetic = |source: &[u8], status: u64, output: &[u8]| {
+        let fd = libc::open_with_flags(b"/tmp/sshl-arithmetic.sh", libc::O_CREAT | libc::O_WRONLY | libc::O_TRUNC).unwrap();
+        libc::write_all(fd, source).unwrap(); libc::close(fd).unwrap();
+        run(&[b"sh", b"/tmp/sshl-arithmetic.sh"], status, output);
+    };
+    run_arithmetic(b"echo $((2+3*4)); echo $(((2+3)*4)); echo $((10%3)); echo $((8>>1)); echo $((3<5)); echo $((1&&0)); echo $((0||7)); echo $((0?10:20)); a=3; echo $((a+=2)):$a; echo \"$(( $(echo 2) + $((3*4)) ))\"; echo \"$(echo $((a=9)))\"; echo $a; v=$(( $(false)+1 )); echo $?:$v",
+        0, b"14\n20\n1\n4\n1\n0\n1\n20\n5:5\n14\n9\n5\n1:1\n");
+    run_arithmetic(b"a=b=; unset a; b=; echo $((a+b)); echo $((a=b=3)); echo $((a*=2)); echo $((a<<=1)); echo $((a>>=2)); echo $((a^=7)); echo $((a&=6)); echo $((a|=1)); echo $((a-=2)); echo $((a/=2)); echo $((a%=2)); echo $((0&&1/0)); echo $((1?7:1/0)); echo $((010+0x10))",
+        0, b"0\n3\n6\n12\n3\n4\n4\n5\n3\n1\n1\n0\n7\n24\n");
+    run(&[b"sh", b"-c", b"a=1; echo $((a=4)) | sshl --probe copy; echo $a; export a; sh -c 'echo $a' > \"/tmp/$((a=3))\" | sshl --probe copy; cat /tmp/3; echo $a"],
+        0, b"4\n1\n3\n1\n");
+    for source in [b"echo $((1/0))".as_slice(), b"echo $((08))", b"echo $((1<<64))", b"echo $((9223372036854775807+1))", b"readonly a=3; echo $((a=4))", b"a=b; b=a; echo $((a))", b"a=\"-+1\"; echo $((a))", b"a=\" \"; echo $((a))"] {
+        run(&[b"sh", b"-c", source], 2, b"");
+    }
+    for source in [
+        format!("echo $(({}1{}))", "(".repeat(65), ")".repeat(65)),
+        format!("echo $(({}1))", " ".repeat(16385)),
+        format!("echo $(({}1))", "1+".repeat(2200)),
+        format!("echo {}1{}", "$((".repeat(33), "))".repeat(33)),
+    ] { run_arithmetic(source.as_bytes(), 2, b""); }
+    run(&[b"sh", b"-c", b"set -- 1 + 2; echo $(( $@ )); set -- 2 3; IFS=; echo $(( $@ ))"], 0, b"3\n23\n");
+    run(&[b"sh", b"-c", b"set -- 2 3; echo $(( $@ ))"], 2, b"");
+    run(&[b"sh", b"-c", b"a=3; readonly a; v=$(echo before; echo $((a=4)); echo bad); echo \"$?:$v:$a\"; v=$(( $(echo $((1/0))) + 1 )); echo \"$?:$v\""], 0, b"2:before:3\n2:1\n");
+    // Resource/recovery checks in one real interpreter, with no external tasks.
+    let mut arithmetic_context = native_script::context();
+    let mut arithmetic_runtime = native_script::NativeRuntime::new();
+    sunshell::script::execute("a=0", &mut arithmetic_context, &mut arithmetic_runtime).unwrap();
+    let before = libc::alloc::heap_stats();
+    let descriptor = libc::dup(libc::STDOUT).unwrap(); libc::close(descriptor).unwrap();
+    for _ in 0..100 {
+        if sunshell::script::execute("v=$((a+=1))", &mut arithmetic_context, &mut arithmetic_runtime).is_err()
+            || sunshell::script::execute("v=$((1/0))", &mut arithmetic_context, &mut arithmetic_runtime).is_ok() {
+            fail("arithmetic repeated evaluation/recovery");
+        }
+    }
+    let after = libc::alloc::heap_stats();
+    let next = libc::dup(libc::STDOUT).unwrap(); libc::close(next).unwrap();
+    if arithmetic_context.env.get("a") != Some("100") || descriptor != next
+        || after.requested_user_bytes > before.requested_user_bytes + 1024
+        || after.failed_allocation_count != before.failed_allocation_count {
+        fail("arithmetic heap descriptor or side-effect growth");
+    }
+    debug_log("[SSHL-ARITH] precedence variables assignment isolation errors repeat=100 PASS");
     environment_transport_suite();
     debug_log("[SSHL-ENV] export assignment isolation transport security PASS");
     run(&[b"sh", b"-c", b"echo \"$(echo hello)\"; echo \"$(echo \"$(echo nested)\")\"; echo '$(echo literal)'; v=$(printf 'a\\nb\\n\\n'); echo \"<$v>\"; v=$(true); echo \"<$v>\"; set -- $(echo a b); echo $#"],
@@ -1231,6 +1387,21 @@ pub(super) fn script_suite() -> ! {
     {
         let pty = PtyRunner::new();
         exercise("script-pty", &mut |line| pty.run(line));
+        pty.send("echo $((2+3*4)):$((0?10:20))\n");
+        let output = pty.prompt();
+        if !output.windows(5).any(|s| s == b"14:20") { fail("PTY arithmetic witness"); }
+        if pty.run("a=$((3*4))") != 0 || pty.run("echo $((1/0))") != 2
+            || pty.run("echo $((a+=1)) > /tmp/sshl-arithmetic") != 0 {
+            fail("PTY arithmetic status/recovery");
+        }
+        expect("/tmp/sshl-arithmetic", b"13\n");
+        if pty.run("echo redirected > \"/tmp/$((a=14))\"") != 0 { fail("PTY redirection arithmetic"); }
+        pty.send("echo $a\n");
+        if !pty.prompt().windows(2).any(|s| s == b"14") { fail("PTY redirection side effect"); }
+        if pty.run("echo $((a=99)) | sshl --probe copy > /tmp/sshl-arithmetic") != 0 { fail("PTY pipeline arithmetic"); }
+        pty.send("echo $a\n");
+        if !pty.prompt().windows(2).any(|s| s == b"14") { fail("PTY pipeline isolation"); }
+        debug_log("[SSHL-ARITH] PTY exact results assignment error recovery PASS");
         for (line, witness) in [
             ("echo \"$(echo PTY-substitution)\"", "PTY-substitution"),
             ("echo \"$(echo \"$(echo PTY-nested)\")\"", "PTY-nested"),

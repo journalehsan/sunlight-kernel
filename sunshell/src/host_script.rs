@@ -345,7 +345,7 @@ mod tests {
             "echo *.rs",
             "echo ${X:-bad}",
             "f() { :; }; f | cat",
-            "echo $((1+2))",
+            "echo $((1/0))",
         ] {
             assert!(run(script, &[]).0.is_err(), "{script}");
         }
@@ -357,6 +357,51 @@ mod tests {
         }
     }
 
+    #[test]
+    fn arithmetic_expansion_order_isolation_and_status() {
+        let (result, output, context) = run(
+            r#"a=3; echo $((a+=2)):$a:$((a*4)); echo "$((2 * (3+4)))"; echo '$((1+2))'; echo "\$((1+2))"; value=$((a*4)); echo "$value"; echo "$(( $(echo 2) + $((3+4)) ))"; echo "$(echo $((a=9)))"; echo $a; (echo $((a=8))); echo $a; false; v=$((7)); echo "$?:$v"; v=$(( $(false) + 1 )); echo "$?:$v"; echo $((0 && (a=99))):$a"#,
+            &[],
+        );
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert_eq!(
+            output,
+            "5:5:20\n14\n$((1+2))\n$((1+2))\n20\n9\n9\n5\n8\n5\n0:7\n1:1\n0:5\n"
+        );
+        assert_eq!(context.env.get("a"), Some("5"));
+    }
+    #[test]
+    fn arithmetic_errors_terminate_only_the_substitution_context() {
+        let (result, output, context) = run("a=3; readonly a; v=$(echo before; echo $((a=4)); echo bad); echo \"$?:$v:$a\"; v=$(( $(echo $((1/0))) + 1 )); echo \"$?:$v\"", &[]);
+        assert_eq!(result.unwrap(), Flow::Status(0));
+        assert_eq!(output, "2:before:3\n2:1\n");
+        assert_eq!(context.env.get("a"), Some("3"));
+    }
+    #[test]
+    fn arithmetic_errors_leave_context_usable() {
+        let mut context = ShellExecutionContext::new(ShellEnv::new(), "/".into());
+        let mut runtime = HostRuntime::default();
+        for source in [
+            "echo $((1/0))",
+            "a=bad; echo $((a))",
+            "readonly LOCK=3; echo $((LOCK=4))",
+            "echo $((1+))",
+            "echo $((1 || (1/0+)))",
+            "echo $((1<<64))",
+        ] {
+            assert_eq!(
+                execute(source, &mut context, &mut runtime)
+                    .unwrap_err()
+                    .status,
+                2,
+                "{source}"
+            );
+            assert_eq!(
+                execute("v=$((2+3)); :", &mut context, &mut runtime).unwrap(),
+                Flow::Status(0)
+            );
+        }
+    }
     #[test]
     fn command_substitution_isolation_status_and_no_second_expansion() {
         let (result, output, context) = run("NAME=parent; f() { NAME=child; cd /tmp; echo '$NAME'; return 7; }; v=$(f); echo \"$?:$v:$NAME\"; pwd; v=$(printf 'a\\nb\\n\\n'); echo \"<$v>\"; echo \"$(echo \"$(echo nested)\")\"", &[]);

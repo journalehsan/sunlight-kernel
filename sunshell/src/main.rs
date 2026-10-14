@@ -60,7 +60,7 @@ fn run_host_command(line: &str, env: &mut crate::shellenv::ShellEnv, executor: &
     };
     let ast = match expansion::expand_ast(&ast, env) {
         Ok(ast) => ast,
-        Err(error) => { eprintln!("sshl: {}", error.0); return Some(2); }
+        Err(error) => { eprintln!("sshl: {}", error.message()); return Some(2); }
     };
     if let parser::AstNode::Command(ref command) = ast {
         if command.redirections.is_empty() {
@@ -607,6 +607,7 @@ mod sunlight {
                     ).map(|redirections| super::parser::AstNode::Command(super::parser::SimpleCommand {
                         argv: prepared.command.argv, redirections,
                     }));
+                    self.env = context.env.clone();
                     if let Ok(super::parser::AstNode::Command(command)) = &ast {
                         if command.argv.is_empty() {
                             match self.prepare_builtin_redirections(&command.redirections) {

@@ -88,7 +88,7 @@ impl IoTarget {
 /// Execute a parsed command tree. Every stage is started before any stage is
 /// waited on, so kernel pipe capacity never forces the shell to buffer output.
 pub fn execute_ast(node: &AstNode, env: &ShellEnv) -> Result<i32, ExecError> {
-    let expanded = expand_ast(node, env).map_err(|e| ExecError::Expansion(e.0))?;
+    let expanded = expand_ast(node, env).map_err(|e| ExecError::Expansion(e.message()))?;
     execute_expanded(&expanded)
 }
 
