@@ -879,6 +879,48 @@ pub static INITRAMFS: &[RamEntry] = &[
         mode::FILE_644,
         include_bytes!("../../assets/sounds/014-SecretGarden-SongFromASecretGarden.mp3"),
     ),
+    RamEntry::file(
+        "/home/user/Music/081-Mantovani-Greensleeves.mp3",
+        1000,
+        1000,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/081-Mantovani-Greensleeves.mp3"),
+    ),
+    RamEntry::file(
+        "/root/Music/081-Mantovani-Greensleeves.mp3",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/081-Mantovani-Greensleeves.mp3"),
+    ),
+    RamEntry::file(
+        "/home/user/Music/095-ClaudeCiari-ElBimbo.mp3",
+        1000,
+        1000,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/095-ClaudeCiari-ElBimbo.mp3"),
+    ),
+    RamEntry::file(
+        "/root/Music/095-ClaudeCiari-ElBimbo.mp3",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/095-ClaudeCiari-ElBimbo.mp3"),
+    ),
+    RamEntry::file(
+        "/home/user/Music/love story (320).mp3",
+        1000,
+        1000,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/love story (320).mp3"),
+    ),
+    RamEntry::file(
+        "/root/Music/love story (320).mp3",
+        0,
+        0,
+        mode::FILE_644,
+        include_bytes!("../../assets/sounds/love story (320).mp3"),
+    ),
     // The Living Sunlight: procedural G-minor chiptune preview. Melody Mina
     // discovers it through the ordinary Music directory scanner.
     RamEntry::file(
@@ -3583,6 +3625,9 @@ mod tests {
         for name in [
             "002-Zamfir-EinsamerHirte.mp3",
             "014-SecretGarden-SongFromASecretGarden.mp3",
+            "081-Mantovani-Greensleeves.mp3",
+            "095-ClaudeCiari-ElBimbo.mp3",
+            "love story (320).mp3",
         ] {
             for home in ["/home/user", "/root"] {
                 let path = alloc::format!("{home}/Music/{name}");
