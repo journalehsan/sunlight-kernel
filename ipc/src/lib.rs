@@ -2887,6 +2887,9 @@ pub mod AudiodMsg {
     pub const CAPTURE_STOP: u64 = 0xE034;
     pub const CAPTURE_CLOSE: u64 = 0xE035;
     pub const CAPTURE_STATUS: u64 = 0xE036;
+    pub const CAPTURE_SET_SOURCE: u64 = 0xE037; // w0 = 0 microphone, 1 line in
+    pub const CAPTURE_SET_GAIN: u64 = 0xE038; // w0 = 0..100
+    pub const CAPTURE_SET_MUTE: u64 = 0xE039; // w0 = 0/1
 
     pub const SYSTEM_SOUND_PROTOCOL_VERSION: u64 = 1;
     pub const SYSTEM_SOUND_FLAG_PREVIEW: u64 = 1;

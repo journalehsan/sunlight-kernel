@@ -8,6 +8,7 @@
 
 use sunlight_audio::{
     effective_system_gain,
+    es1371::Es1371CaptureSource,
     hda::{ENGINE_PERIOD_BYTES, ENGINE_PERIOD_COUNT, PERIOD_FRAME_COUNT},
     pcm::{validate_pcm, AudioBuffer, AudioFormat, MAX_PCM_BYTES, NATIVE_RATE_HZ},
     render_persisted_buf, AudioDeviceState, AudioError, AudioPlayback, MasterVolume,
@@ -444,7 +445,7 @@ impl ServiceState {
             if now >= self.next_es1371_diag_ms {
                 if let Some(regs) = dev.es1371_dma_registers() {
                     serial_println!(
-                        "[AUDIOD][es1371-state] frames={} current_period={} current_frames={} can_submit={} control={:#x} serial={:#x} dac2_size={:#x} dac2_count={:#x} status={:#x} acks={} io_failed={}",
+                        "[AUDIOD][es1371-state] frames={} current_period={} current_frames={} can_submit={} control={:#x} serial={:#x} dac2_size={:#x} dac2_count={:#x} adc_size={:#x} adc_count={:#x} status={:#x} acks={} capture_lost={} io_failed={}",
                         progress.total_frames,
                         progress.current_period,
                         progress.current_period_frames,
@@ -453,8 +454,11 @@ impl ServiceState {
                         regs.serial,
                         regs.size,
                         regs.count,
+                        regs.adc_size,
+                        regs.adc_count,
                         regs.status,
                         regs.acknowledgements,
+                        dev.capture_lost_periods(),
                         regs.io_failed,
                     );
                 }
@@ -915,6 +919,47 @@ fn handle_capture_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
         }
         AudiodMsg::CAPTURE_STATUS if msg.word_count == 0 && msg.cap_count == 0 => {
             capture_status(state)
+        }
+        AudiodMsg::CAPTURE_SET_SOURCE if msg.word_count == 1 && msg.cap_count == 0 => {
+            let source = match msg.words[0] {
+                0 => Es1371CaptureSource::Microphone,
+                1 => Es1371CaptureSource::LineIn,
+                _ => return err(AudiodMsg::ERR_BAD_REQUEST),
+            };
+            match state
+                .device
+                .as_mut()
+                .and_then(|device| device.set_capture_source(source).ok())
+            {
+                Some(()) => capture_status(state),
+                None => err(AudiodMsg::ERR_UNSUPPORTED),
+            }
+        }
+        AudiodMsg::CAPTURE_SET_GAIN if msg.word_count == 1 && msg.cap_count == 0 => {
+            if msg.words[0] > 100 {
+                return err(AudiodMsg::ERR_BAD_REQUEST);
+            }
+            match state
+                .device
+                .as_mut()
+                .and_then(|device| device.set_capture_gain(msg.words[0] as u8).ok())
+            {
+                Some(()) => capture_status(state),
+                None => err(AudiodMsg::ERR_UNSUPPORTED),
+            }
+        }
+        AudiodMsg::CAPTURE_SET_MUTE if msg.word_count == 1 && msg.cap_count == 0 => {
+            if msg.words[0] > 1 {
+                return err(AudiodMsg::ERR_BAD_REQUEST);
+            }
+            match state
+                .device
+                .as_mut()
+                .and_then(|device| device.set_capture_muted(msg.words[0] != 0).ok())
+            {
+                Some(()) => capture_status(state),
+                None => err(AudiodMsg::ERR_UNSUPPORTED),
+            }
         }
         AudiodMsg::CAPTURE_READ if msg.word_count == 0 && msg.cap_count == 1 => {
             if !sunlight_audiod::capture::can_read(state.capture_state, state.capture_monitor_only)

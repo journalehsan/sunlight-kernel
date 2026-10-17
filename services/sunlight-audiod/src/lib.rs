@@ -176,6 +176,27 @@ impl CaptureClient {
         decode_capture_status(&self.call(IpcMsg::with_label(AudiodMsg::CAPTURE_STATUS))?)
     }
 
+    pub fn set_source(&self, line_in: bool) -> Result<CaptureStatus, AudioClientError> {
+        decode_capture_status(
+            &self
+                .call(IpcMsg::with_label(AudiodMsg::CAPTURE_SET_SOURCE).word(0, line_in as u64))?,
+        )
+    }
+
+    pub fn set_gain(&self, gain: u8) -> Result<CaptureStatus, AudioClientError> {
+        decode_capture_status(
+            &self.call(
+                IpcMsg::with_label(AudiodMsg::CAPTURE_SET_GAIN).word(0, gain.min(100) as u64),
+            )?,
+        )
+    }
+
+    pub fn set_muted(&self, muted: bool) -> Result<CaptureStatus, AudioClientError> {
+        decode_capture_status(
+            &self.call(IpcMsg::with_label(AudiodMsg::CAPTURE_SET_MUTE).word(0, muted as u64))?,
+        )
+    }
+
     pub fn read(&mut self, dst: &mut [u8]) -> Result<CaptureStatus, AudioClientError> {
         if dst.len() < capture::CAPTURE_PERIOD_BYTES {
             return Err(AudioClientError::BadRequest);
@@ -790,6 +811,7 @@ fn decode_error(reply: &IpcMsg) -> AudioClientError {
         AudiodMsg::ERR_UNAVAILABLE => AudioClientError::Unavailable,
         AudiodMsg::ERR_BAD_REQUEST => AudioClientError::BadRequest,
         AudiodMsg::ERR_INVALID_FORMAT => AudioClientError::InvalidFormat,
+        AudiodMsg::ERR_UNSUPPORTED => AudioClientError::InvalidFormat,
         AudiodMsg::ERR_OVERFLOW => AudioClientError::Overflow,
         AudiodMsg::ERR_DEVICE_FAILED => AudioClientError::DeviceFailed,
         _ => AudioClientError::Transport,

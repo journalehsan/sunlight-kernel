@@ -3,7 +3,9 @@
 
 use crate::hda::DmaProgress;
 use crate::{
-    es1371::Es1371Playback, hda::HdaPlayback, AudioCapabilities, AudioDeviceState, AudioError,
+    es1371::{Es1371CaptureSource, Es1371Playback},
+    hda::HdaPlayback,
+    AudioCapabilities, AudioDeviceState, AudioError,
 };
 
 pub enum AudioPlayback {
@@ -20,28 +22,75 @@ impl AudioPlayback {
     }
 
     pub fn input_available(&self) -> bool {
-        matches!(self, Self::Hda(device) if device.input_available())
+        match self {
+            Self::Hda(device) => device.input_available(),
+            Self::Es1371(device) => device.input_available(),
+        }
     }
     pub fn poll_capture(&mut self, completed: impl FnMut(&[u8])) {
-        if let Self::Hda(device) = self {
-            device.poll_capture(completed);
+        match self {
+            Self::Hda(device) => device.poll_capture(completed),
+            Self::Es1371(device) => device.poll_capture(completed),
         }
     }
     pub fn capture_lost_periods(&self) -> u64 {
         match self {
             Self::Hda(d) => d.capture_lost_periods(),
-            Self::Es1371(_) => 0,
+            Self::Es1371(d) => d.capture_lost_periods(),
         }
     }
     pub fn start_capture(&mut self) -> Result<(), AudioError> {
         match self {
             Self::Hda(d) => d.start_capture().map_err(Into::into),
-            Self::Es1371(_) => Err(AudioError::UnsupportedFormat),
+            Self::Es1371(d) => d.start_capture().map_err(Into::into),
         }
     }
     pub fn stop_capture(&mut self) {
-        if let Self::Hda(d) = self {
-            d.stop_capture();
+        match self {
+            Self::Hda(d) => d.stop_capture(),
+            Self::Es1371(d) => d.stop_capture(),
+        }
+    }
+
+    pub fn set_capture_source(&mut self, source: Es1371CaptureSource) -> Result<(), AudioError> {
+        match self {
+            Self::Hda(_) => Err(AudioError::UnsupportedFormat),
+            Self::Es1371(d) => d.set_capture_source(source).map_err(Into::into),
+        }
+    }
+
+    pub fn capture_source(&self) -> Option<Es1371CaptureSource> {
+        match self {
+            Self::Hda(_) => None,
+            Self::Es1371(d) => Some(d.capture_source()),
+        }
+    }
+
+    pub fn set_capture_gain(&mut self, gain: u8) -> Result<(), AudioError> {
+        match self {
+            Self::Hda(_) => Err(AudioError::UnsupportedFormat),
+            Self::Es1371(d) => d.set_capture_gain(gain).map_err(Into::into),
+        }
+    }
+
+    pub fn capture_gain(&self) -> Option<u8> {
+        match self {
+            Self::Hda(_) => None,
+            Self::Es1371(d) => Some(d.capture_gain()),
+        }
+    }
+
+    pub fn set_capture_muted(&mut self, muted: bool) -> Result<(), AudioError> {
+        match self {
+            Self::Hda(_) => Err(AudioError::UnsupportedFormat),
+            Self::Es1371(d) => d.set_capture_muted(muted).map_err(Into::into),
+        }
+    }
+
+    pub fn capture_muted(&self) -> Option<bool> {
+        match self {
+            Self::Hda(_) => None,
+            Self::Es1371(d) => Some(d.capture_muted()),
         }
     }
     pub fn state(&self) -> AudioDeviceState {

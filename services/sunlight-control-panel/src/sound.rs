@@ -31,17 +31,22 @@ pub enum SoundAction {
 pub struct SoundPageState {
     view: SoundPageView,
     slider: Slider,
+    input_gain_slider: Slider,
     system_toggle: Checkbox<'static>,
     system_slider: Slider,
     last_sent: Option<u8>,
     last_system_sent: Option<u8>,
     last_drag_ms: u64,
+    last_input_drag_ms: u64,
     last_system_drag_ms: u64,
     status: FixedStr<80>,
     status_until_ms: u64,
     next_refresh_ms: u64,
     failures: usize,
     input_available: bool,
+    input_controls: bool,
+    input_line_in: bool,
+    input_muted: bool,
     input_level: u16,
     capture: Option<CaptureClient>,
 }
@@ -54,6 +59,9 @@ impl SoundPageState {
             slider: Slider::horizontal(Rect::default())
                 .with_range(0, 100)
                 .with_value(view.volume as u32),
+            input_gain_slider: Slider::horizontal(Rect::default())
+                .with_range(0, 100)
+                .with_value(70),
             system_toggle: Checkbox::new(Rect::default(), "Play system sounds")
                 .with_font(&Typography::UI_REGULAR),
             system_slider: Slider::horizontal(Rect::default())
@@ -62,12 +70,16 @@ impl SoundPageState {
             last_sent: None,
             last_system_sent: None,
             last_drag_ms: 0,
+            last_input_drag_ms: 0,
             last_system_drag_ms: 0,
             status: FixedStr::empty(),
             status_until_ms: 0,
             next_refresh_ms: 0,
             failures: 0,
             input_available: false,
+            input_controls: false,
+            input_line_in: false,
+            input_muted: false,
             input_level: 0,
             capture: None,
         }
@@ -89,6 +101,11 @@ impl SoundPageState {
         match AudioClient::new().snapshot() {
             Ok(snapshot) => {
                 self.view = map_page_state(Ok(snapshot));
+                self.input_controls = self.input_available
+                    && matches!(
+                        snapshot.kind,
+                        sunlight_audio::OutputDeviceKind::EnsoniqEs1371
+                    );
                 if !self.slider.dragging {
                     self.slider.set_value(self.view.volume as u32);
                 }
@@ -335,7 +352,11 @@ impl SoundPageState {
         draw_text(
             canvas,
             if self.input_available {
-                "QEMU HD Audio microphone"
+                if self.input_controls {
+                    "ES1371 microphone / line input"
+                } else {
+                    "QEMU HD Audio microphone"
+                }
             } else {
                 "No microphone available"
             },
@@ -359,36 +380,63 @@ impl SoundPageState {
             canvas,
             "Level",
             input.x + 12,
-            input.y + 79,
+            input.y + 106,
             16,
             FontRole::UiSmall,
             theme.text_dim,
         );
         let width = (input.w.saturating_sub(90) as u64 * self.input_level as u64 / 32768) as u32;
         canvas.draw_rect(
-            Rect::new(input.x + 62, input.y + 82, input.w.saturating_sub(78), 8),
+            Rect::new(input.x + 62, input.y + 109, input.w.saturating_sub(78), 8),
             theme.chrome.subtle_border,
         );
         if width > 0 {
             canvas.draw_rect(
                 Rect::new(
                     input.x + 62,
-                    input.y + 82,
+                    input.y + 109,
                     width.min(input.w.saturating_sub(78)),
                     8,
                 ),
                 theme.ok,
             );
         }
-        draw_text(
-            canvas,
-            "Hardware gain/mute unavailable",
-            input.x + 12,
-            input.y + 102,
-            15,
-            FontRole::UiSmall,
-            theme.text_dim,
-        );
+        if self.input_controls {
+            Button::secondary(
+                input_source_rect(),
+                if self.input_line_in {
+                    "Line In"
+                } else {
+                    "Microphone"
+                },
+            )
+            .with_font(&Typography::UI_SMALL)
+            .draw(canvas, theme);
+            let gain = Slider::horizontal(input_gain_rect(win_w))
+                .with_range(0, 100)
+                .with_value(self.input_gain_slider.value);
+            gain.draw(canvas, theme);
+            Button::secondary(
+                input_mute_rect(win_w),
+                if self.input_muted {
+                    "Unmute input"
+                } else {
+                    "Mute input"
+                },
+            )
+            .with_font(&Typography::UI_SMALL)
+            .draw(canvas, theme);
+        } else {
+            draw_text(
+                canvas,
+                "Hardware gain/mute unavailable",
+                input.x + 12,
+                input.y + 102,
+                15,
+                FontRole::UiSmall,
+                theme.text_dim,
+            );
+        }
 
         if !self.status.is_empty() {
             let color = if self.view.available && !self.status.as_str().contains("unavailable") {
@@ -447,6 +495,28 @@ impl SoundPageState {
                             Ok(_) => self.capture = Some(capture),
                             Err(error) => self.set_status(error_label(error)),
                         }
+                    }
+                    return SoundAction::None;
+                }
+                if self.input_controls && input_source_rect().contains(pt) {
+                    if let Some(capture) = self.capture.as_ref() {
+                        match capture.set_source(!self.input_line_in) {
+                            Ok(_) => self.input_line_in = !self.input_line_in,
+                            Err(error) => self.set_status(error_label(error)),
+                        }
+                    } else {
+                        self.set_status("Start monitoring input first");
+                    }
+                    return SoundAction::None;
+                }
+                if self.input_controls && input_mute_rect(win_w).contains(pt) {
+                    if let Some(capture) = self.capture.as_ref() {
+                        match capture.set_muted(!self.input_muted) {
+                            Ok(_) => self.input_muted = !self.input_muted,
+                            Err(error) => self.set_status(error_label(error)),
+                        }
+                    } else {
+                        self.set_status("Start monitoring input first");
                     }
                     return SoundAction::None;
                 }
@@ -520,6 +590,25 @@ impl SoundPageState {
                 self.send_system_volume(value, true);
             } else if self.last_system_sent != Some(value) {
                 self.send_system_volume(value, true);
+            }
+        }
+        self.input_gain_slider.rect = input_gain_rect(win_w);
+        let was_input_dragging = self.input_gain_slider.dragging;
+        if self.input_controls && self.input_gain_slider.update(event) {
+            let now = monotonic_millis();
+            let value = self.input_gain_slider.value as u8;
+            if let Some(capture) = self.capture.as_ref() {
+                if (!self.input_gain_slider.dragging
+                    || now.saturating_sub(self.last_input_drag_ms) >= 30)
+                    && (self.input_gain_slider.dragging || was_input_dragging)
+                {
+                    match capture.set_gain(value) {
+                        Ok(_) => self.last_input_drag_ms = now,
+                        Err(error) => self.set_status(error_label(error)),
+                    }
+                }
+            } else if self.input_gain_slider.dragging || was_input_dragging {
+                self.set_status("Start monitoring input first");
             }
         }
         SoundAction::None
@@ -651,10 +740,22 @@ fn test_card_rect(win_w: u32) -> Rect {
 }
 
 fn input_card_rect(win_w: u32) -> Rect {
-    Rect::new(14, 508, win_w.saturating_sub(28), 124)
+    Rect::new(14, 508, win_w.saturating_sub(28), 154)
 }
 fn input_button_rect(win_w: u32) -> Rect {
     Rect::new(win_w as i32 - 164, 543, 136, 28)
+}
+
+fn input_mute_rect(_win_w: u32) -> Rect {
+    Rect::new(26, 543, 104, 28)
+}
+
+fn input_source_rect() -> Rect {
+    Rect::new(26, 570, 104, 28)
+}
+
+fn input_gain_rect(win_w: u32) -> Rect {
+    Rect::new(148, 572, win_w.saturating_sub(176), 24)
 }
 
 fn test_button_rect(win_w: u32) -> Rect {
