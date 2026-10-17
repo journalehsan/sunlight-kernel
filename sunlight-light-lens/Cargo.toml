@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-light-lens"
-version = "0.2.4976-alpha.2"
+version = "0.2.4990-alpha.2"
+
 
 
 
@@ -189,7 +190,7 @@ path = "src/main.rs"
 
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
-# Bounded decoder scratch space; editing retains only the original pixels.
+# Bounded decoder scratch, retained original and a fallible 4 MiB viewport cache.
 sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-16m"] }
 sun-img = { path = "../sun-img", default-features = false }
 sunlight-dialogs = { path = "../sunlight-dialogs" }

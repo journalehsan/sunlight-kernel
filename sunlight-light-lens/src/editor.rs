@@ -267,6 +267,19 @@ impl Sampler {
         }
         Self { state, lut }
     }
+    /// Geometry, saturation, filters and viewport changes can reuse the LUT.
+    pub fn update(&mut self, state: State) {
+        if [
+            self.state.adjust[0],
+            self.state.adjust[1],
+            self.state.adjust[3],
+        ] == [state.adjust[0], state.adjust[1], state.adjust[3]]
+        {
+            self.state = state;
+        } else {
+            *self = Self::new(state);
+        }
+    }
     fn base(&self, image: &RgbaImage, x: u32, y: u32) -> u32 {
         let (sx, sy) = self.state.source_point(x, y);
         let p = image.pixel(sx, sy);
@@ -427,21 +440,43 @@ impl Viewport {
         };
     }
     pub fn zoom_at(&mut self, area: Rect, size: (u32, u32), cursor: Point, increase: bool) {
-        let old = self.rect(area, size);
-        if old.w == 0 || old.h == 0 {
-            return;
+        let z = if self.fit {
+            Self::fit_zoom(area, size)
+        } else {
+            self.zoom
+        };
+        let zoom = if increase {
+            z.saturating_mul(5) / 4
+        } else {
+            z * 4 / 5
+        };
+        self.zoom_to(area, size, cursor, zoom);
+    }
+    /// Wheel deltas use 120 units per detent. Fractional detents make
+    /// proportionally smaller steps; no animation or periodic zoom work.
+    pub fn wheel_zoom(&mut self, area: Rect, size: (u32, u32), cursor: Point, delta: i16) -> bool {
+        if delta == 0 {
+            return false;
         }
         let z = if self.fit {
             Self::fit_zoom(area, size)
         } else {
             self.zoom
         };
-        self.zoom = if increase {
-            z.saturating_mul(5) / 4
-        } else {
-            z * 4 / 5
+        let scale = libm::powf(1.25, -(delta.clamp(-1200, 1200) as f32) / 120.0);
+        let zoom = ((z as f32 * scale + 0.5) as u32).clamp(10, 16000);
+        if zoom == z && !self.fit {
+            return false;
         }
-        .clamp(10, 16000);
+        self.zoom_to(area, size, cursor, zoom);
+        true
+    }
+    fn zoom_to(&mut self, area: Rect, size: (u32, u32), cursor: Point, zoom: u32) {
+        let old = self.rect(area, size);
+        if old.w == 0 || old.h == 0 {
+            return;
+        }
+        self.zoom = zoom.clamp(10, 16000);
         self.fit = false;
         self.pan = Point::new(0, 0);
         let new = self.rect(area, size);
@@ -483,6 +518,153 @@ pub fn crop_rect(a: Point, b: Point, ratio: usize) -> Rect {
     )
 }
 
+/// Original comparison is letterboxed in the edited display rectangle. This
+/// preserves the viewport without interpreting edited coordinates as source ones.
+pub fn comparison_rect(edited: Rect, original: (u32, u32)) -> Rect {
+    fit_rect(edited, original).unwrap_or(Rect::new(edited.x, edited.y, 0, 0))
+}
+
+pub fn valid_crop(r: Rect, size: (u32, u32)) -> bool {
+    r.w >= size.0.min(4)
+        && r.h >= size.1.min(4)
+        && r.w != 0
+        && r.h != 0
+        && r.x >= 0
+        && r.y >= 0
+        && r.x as u64 + r.w as u64 <= size.0 as u64
+        && r.y as u64 + r.h as u64 <= size.1 as u64
+}
+
+/// Move or resize an existing selection. Edge bits: left=1, right=2,
+/// top=4, bottom=8; 16 moves. Fixed-ratio edges keep the other axis centered.
+pub fn drag_crop(
+    r: Rect,
+    start: Point,
+    end: Point,
+    edges: u8,
+    size: (u32, u32),
+    ratio: usize,
+) -> Rect {
+    if r.w == 0
+        || r.h == 0
+        || r.x < 0
+        || r.y < 0
+        || r.x as u64 + r.w as u64 > size.0 as u64
+        || r.y as u64 + r.h as u64 > size.1 as u64
+    {
+        return r;
+    }
+    let (w, h) = (size.0 as i32, size.1 as i32);
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    if edges == 16 {
+        return Rect::new(
+            (r.x + dx).clamp(0, w - r.w as i32),
+            (r.y + dy).clamp(0, h - r.h as i32),
+            r.w,
+            r.h,
+        );
+    }
+    let mut l = r.x;
+    let mut t = r.y;
+    let mut right = r.right();
+    let mut bottom = r.bottom();
+    let min_w = r.w.min(size.0.min(4)).max(1) as i32;
+    let min_h = r.h.min(size.1.min(4)).max(1) as i32;
+    if edges & 1 != 0 {
+        l = (l + dx).clamp(0, right - min_w);
+    }
+    if edges & 2 != 0 {
+        right = (right + dx).clamp(l + min_w, w);
+    }
+    if edges & 4 != 0 {
+        t = (t + dy).clamp(0, bottom - min_h);
+    }
+    if edges & 8 != 0 {
+        bottom = (bottom + dy).clamp(t + min_h, h);
+    }
+    let (rw, rh) = match ratio {
+        1 => (1, 1),
+        2 => (4, 3),
+        3 => (16, 9),
+        _ => return Rect::new(l, t, (right - l) as u32, (bottom - t) as u32),
+    };
+    let horizontal = edges & 3 != 0;
+    let vertical = edges & 12 != 0;
+    let cx = r.x + r.w as i32 / 2;
+    let cy = r.y + r.h as i32 / 2;
+    let max_w = if horizontal {
+        right - l
+    } else {
+        2 * cx.min(w - cx)
+    };
+    let max_h = if vertical {
+        bottom - t
+    } else {
+        2 * cy.min(h - cy)
+    };
+    let units = (max_w / rw).min(max_h / rh);
+    if units < 1 {
+        return r;
+    }
+    let nw = units * rw;
+    let nh = units * rh;
+    let x = if edges & 1 != 0 {
+        right - nw
+    } else if horizontal {
+        l
+    } else {
+        cx - nw / 2
+    };
+    let y = if edges & 4 != 0 {
+        bottom - nh
+    } else if vertical {
+        t
+    } else {
+        cy - nh / 2
+    };
+    let next = Rect::new(x, y, nw as u32, nh as u32);
+    if valid_crop(next, size) {
+        next
+    } else {
+        r
+    }
+}
+
+/// At most 4096 stratified samples, always taken from edited output pixels.
+/// Transparent pixels do not contribute; partial alpha weights coverage.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Histogram {
+    pub bins: [u32; 256],
+    pub samples: u32,
+}
+impl Histogram {
+    pub fn compute(image: &RgbaImage, state: State) -> Self {
+        let mut out = Self {
+            bins: [0; 256],
+            samples: 0,
+        };
+        let (w, h) = state.size;
+        if w == 0 || h == 0 {
+            return out;
+        }
+        let sampler = Sampler::new(state);
+        let nx = w.min(64);
+        let ny = h.min(64);
+        for gy in 0..ny {
+            let y = ((2 * gy + 1) as u64 * h as u64 / (2 * ny) as u64) as u32;
+            for gx in 0..nx {
+                let x = ((2 * gx + 1) as u64 * w as u64 / (2 * nx) as u64) as u32;
+                let p = sampler.pixel(image, x, y);
+                let l = (77 * ((p >> 16) & 255) + 150 * ((p >> 8) & 255) + 29 * (p & 255)) / 256;
+                out.bins[l as usize] += p >> 24;
+                out.samples += 1;
+            }
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -503,6 +685,137 @@ mod tests {
             .flat_map(|y| (0..s.size.0).map(move |x| (x, y)))
             .map(|(x, y)| sampler.pixel(&i, x, y))
             .collect()
+    }
+    #[test]
+    fn original_comparison_letterboxes_without_reusing_crop_coordinates() {
+        assert_eq!(
+            comparison_rect(Rect::new(-50, 20, 200, 400), (600, 300)),
+            Rect::new(-50, 170, 200, 100)
+        );
+        assert_eq!(
+            comparison_rect(Rect::new(3, 4, 0, 0), (1, 1)),
+            Rect::new(3, 4, 0, 0)
+        );
+    }
+    #[test]
+    fn crop_handles_stay_bounded_and_enforce_ratios() {
+        let r = Rect::new(30, 30, 32, 18);
+        for ratio in 0..=3 {
+            for edges in [1, 2, 4, 8, 5, 6, 9, 10, 16] {
+                for end in [
+                    Point::new(-200, -200),
+                    Point::new(90, 90),
+                    Point::new(1000, 1000),
+                ] {
+                    let next = drag_crop(r, Point::new(40, 40), end, edges, (100, 100), ratio);
+                    assert!(
+                        next.x >= 0 && next.y >= 0 && next.right() <= 100 && next.bottom() <= 100
+                    );
+                    assert!(next.w > 0 && next.h > 0);
+                    // An impossible ratio resize retains the previous selection.
+                    if edges != 16 && next != r && ratio != 0 {
+                        let (rw, rh) = [(1, 1), (1, 1), (4, 3), (16, 9)][ratio];
+                        assert_eq!(next.w * rh, next.h * rw);
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            drag_crop(
+                r,
+                Point::new(0, 0),
+                Point::new(-100, 100),
+                16,
+                (100, 100),
+                0
+            ),
+            Rect::new(0, 82, 32, 18)
+        );
+        assert!(!valid_crop(Rect::new(0, 0, 1, 1), (100, 100)));
+        assert!(valid_crop(Rect::new(0, 0, 1, 1), (1, 1)));
+    }
+    #[test]
+    fn histogram_samples_edited_geometry_effects_and_alpha() {
+        let image = RgbaImage {
+            width: 3,
+            height: 1,
+            pixels: vec![0xff000000, 0x80ffffff, 0x00ffffff],
+        };
+        let mut state = State::new(3, 1);
+        let h = Histogram::compute(&image, state);
+        assert_eq!(h.samples, 3);
+        assert_eq!(h.bins[0], 255);
+        assert_eq!(h.bins[255], 128);
+        assert_eq!(h.bins.iter().sum::<u32>(), 383);
+        state
+            .geometry(Geometry::Crop(Rect::new(0, 0, 1, 1)))
+            .unwrap();
+        state.effect = Effect::Invert;
+        let h = Histogram::compute(&image, state);
+        assert_eq!(h.bins[255], 255);
+        assert_eq!(h.bins[0], 0);
+        state.geometry(Geometry::Resize(2048, 1024)).unwrap();
+        let h = Histogram::compute(&image, state);
+        assert_eq!(h.samples, 4096);
+        assert_eq!(h.bins[255], 4096 * 255);
+    }
+    #[test]
+    fn wheel_fractional_delta_anchor_and_limits() {
+        let area = Rect::new(0, 0, 400, 300);
+        let size = (800, 600);
+        let p = Point::new(210, 160);
+        let mut view = Viewport {
+            fit: false,
+            ..Viewport::default()
+        };
+        let before = image_point(view.rect(area, size), size, p);
+        assert!(view.wheel_zoom(area, size, p, -30));
+        assert!(view.zoom > 1000 && view.zoom < 1250);
+        let after = image_point(view.rect(area, size), size, p);
+        assert!((before.x - after.x).abs() <= 1 && (before.y - after.y).abs() <= 1);
+        assert!(view.wheel_zoom(area, size, p, 30));
+        assert!((view.zoom as i32 - 1000).abs() <= 1);
+        view.zoom = 16000;
+        assert!(!view.wheel_zoom(area, size, p, -120));
+        view.zoom = 10;
+        assert!(!view.wheel_zoom(area, size, p, 120));
+        view.pan = Point::new(500, -500);
+        view.clamp(area, size);
+        assert_eq!(view.pan, Point::new(0, 0));
+    }
+    #[test]
+    fn checkpoints_new_branches_noops_and_history_memory_bound() {
+        let mut e = Editor::new(100, 100);
+        e.geometry(Geometry::Crop(Rect::new(10, 10, 40, 40)))
+            .unwrap();
+        e.geometry(Geometry::RotateRight).unwrap();
+        e.geometry(Geometry::FlipH).unwrap();
+        e.geometry(Geometry::Resize(80, 80)).unwrap();
+        e.mark_saved();
+        let saved = e.state;
+        for _ in 0..4 {
+            e.undo();
+        }
+        for _ in 0..4 {
+            e.redo();
+        }
+        assert_eq!(e.state, saved);
+        assert!(!e.dirty());
+        e.undo();
+        let b = e.state;
+        e.commit(b);
+        assert!(e.can_redo());
+        e.state.adjust[0] = 1;
+        e.commit(b);
+        assert!(!e.can_redo());
+        assert!(e.dirty());
+        for n in 0..100 {
+            let b = e.state;
+            e.state.adjust[1] = n;
+            e.commit(b);
+        }
+        assert_eq!(e.undo_len, HISTORY);
+        assert!(core::mem::size_of::<Editor>() < 64 * 1024);
     }
     #[test]
     fn streaming_export_roundtrips_geometry_adjustments_and_alpha() {

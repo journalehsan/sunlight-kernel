@@ -4,9 +4,12 @@
 extern crate alloc;
 
 mod editing_ui;
+mod export_io;
 use sunlight_light_lens::editor::{self, Editor, Geometry, Sampler, State, Viewport};
 
-use core::cmp::Ordering;
+use core::{cell::RefCell, cmp::Ordering};
+use sunlight_light_lens::preview::PreviewCache;
+use sunlight_ui::{set_client_cursor, CursorShape};
 
 use sun_font::{
     draw_text as sf_draw, draw_text_centered as sf_centered, draw_text_right as sf_right,
@@ -282,9 +285,19 @@ struct LightLensApp {
     crop: Option<Rect>,
     crop_start: Option<Point>,
     crop_ratio: usize,
+    crop_drag: Option<(Rect, Point, u8)>,
+    crop_hover: u8,
+    compare_key: bool,
+    compare_pointer: bool,
+    slider_focus: Option<usize>,
+    slider_click: Option<(usize, Point, u64)>,
+    histogram_open: bool,
+    histogram: Option<(State, editor::Histogram)>,
+    preview_cache: RefCell<PreviewCache>,
     pan_start: Option<Point>,
     slider_drag: Option<(usize, State)>,
     suppress_click: bool,
+    hovered: Option<Rect>,
     side_scroll: i32,
     keep_aspect: bool,
     export: Option<editing_ui::ExportJob>,
@@ -331,9 +344,19 @@ impl LightLensApp {
             crop: None,
             crop_start: None,
             crop_ratio: 0,
+            crop_drag: None,
+            crop_hover: 0,
+            compare_key: false,
+            compare_pointer: false,
+            slider_focus: None,
+            slider_click: None,
+            histogram_open: false,
+            histogram: None,
+            preview_cache: RefCell::new(PreviewCache::default()),
             pan_start: None,
             slider_drag: None,
             suppress_click: false,
+            hovered: None,
             side_scroll: 0,
             keep_aspect: true,
             export: None,
@@ -611,6 +634,13 @@ impl LightLensApp {
         self.pan_start = None;
         self.slider_drag = None;
         self.image = None;
+        self.compare_key = false;
+        self.compare_pointer = false;
+        self.slider_focus = None;
+        self.slider_click = None;
+        self.hovered = None;
+        self.histogram = None;
+        self.preview_cache = RefCell::new(PreviewCache::default());
         self.info = ImageInfo::empty();
         self.load_state = LoadState::Empty;
         self.message.clear();
@@ -876,6 +906,11 @@ impl LightLensApp {
             self.has_next() && self.export.is_none(),
         );
 
+        for r in [back_rect, next_rect] {
+            if self.hovered == Some(r) {
+                canvas.draw_rect(r, theme.accent);
+            }
+        }
         // Preserve the existing toolbar geometry and activate supported tools.
         let tools: [(Option<UiSymbol>, &str); 6] = [
             (Some(UiSymbol::Search), "Zoom +"),
@@ -894,6 +929,7 @@ impl LightLensApp {
                 label,
                 self.editable(),
                 idx == 4 && self.crop_mode,
+                self.hovered == Some(tool_rects[idx]),
             );
         }
 
@@ -938,10 +974,30 @@ impl LightLensApp {
         Self::draw_checkerboard(canvas, content, theme.bg, theme.bg.lighten(7), 18);
         canvas.draw_rect(content, theme.border);
 
+        let compare = self.compare_button();
+        if compare.w > 0 {
+            Self::draw_edit_button(
+                canvas,
+                theme,
+                compare,
+                if self.comparing() {
+                    "Original"
+                } else {
+                    "Before / After"
+                },
+                self.editable(),
+                self.comparing(),
+                self.hovered == Some(compare),
+            );
+        }
         match (self.load_state, self.image.as_ref()) {
             (LoadState::Ready, Some(image)) => {
                 let mut viewport_canvas = canvas.sub_canvas(content);
-                let image_rect = self.image_rect();
+                let image_rect = if self.comparing() {
+                    editor::comparison_rect(self.image_rect(), (image.width, image.height))
+                } else {
+                    self.image_rect()
+                };
                 let local_rect = Rect::new(
                     image_rect.x - content.x,
                     image_rect.y - content.y,
@@ -949,7 +1005,18 @@ impl LightLensApp {
                     image_rect.h,
                 );
                 self.draw_edited_photo(&mut viewport_canvas, image, local_rect);
-                self.draw_crop_overlay(&mut viewport_canvas, local_rect, theme);
+                if self.comparing() && self.compare_button().w == 0 {
+                    sf_draw(
+                        &mut viewport_canvas,
+                        "Original",
+                        6,
+                        4,
+                        &TextStyle::new(FontRole::UiSmall, theme.accent),
+                    );
+                }
+                if !self.comparing() {
+                    self.draw_crop_overlay(&mut viewport_canvas, local_rect, theme);
+                }
             }
             (LoadState::Error, _) => {
                 if let Some(icon) = self.missing_icon {
@@ -1080,6 +1147,8 @@ impl LightLensApp {
             let shown = dst.truncate_to_width(max_w, FontRole::UiRegular);
             self.draw_info_row(canvas, theme, row, label, shown);
         }
+
+        self.draw_histogram(canvas, theme);
 
         // Footer: parent folder location, truncated to fit.
         if !self.current_path.is_empty() {
@@ -1221,6 +1290,9 @@ impl App for LightLensApp {
         let WindowEvent::Resized { width, height } = event;
         self.pan_start = None;
         self.crop_start = None;
+        self.crop_drag = None;
+        self.compare_key = false;
+        self.compare_pointer = false;
         self.finish_slider();
         let changed = self.set_client_bounds(width, height);
         self.viewport
