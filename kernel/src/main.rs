@@ -2319,6 +2319,7 @@ fn try_map_kernel_mmio_range(
 
     let mut mapped_pages = 0u64;
     let mut existing_pages = 0u64;
+    let mut huge_mapping_pages = 0u64;
     for page_idx in 0..page_count {
         let page_offset = page_idx
             .checked_mul(4096)
@@ -2351,12 +2352,8 @@ fn try_map_kernel_mmio_range(
             // that existing HHDM mapping: the mapper correctly rejects it
             // with `ParentEntryHugePage`, which was previously mislabeled as
             // a PMM page-table allocation failure.
-            serial_println!(
-                "[MMIO] HHDM huge mapping already covers virt={:#x} phys={:#x}",
-                virt.as_u64(),
-                phys.as_u64()
-            );
             existing_pages += 1;
+            huge_mapping_pages += 1;
         } else {
             if let Err(error) = vmm.map_page(page, frame, flags, pmm) {
                 let (_, free_after) = pmm.stats();
@@ -2378,10 +2375,11 @@ fn try_map_kernel_mmio_range(
     }
     let (_, free_after) = pmm.stats();
     serial_println!(
-        "[MMIO] complete pages={} new={} existing={} page_table_frames={} free_frames={}",
+        "[MMIO] complete pages={} new={} existing={} huge_mapping={} page_table_frames={} free_frames={}",
         page_count,
         mapped_pages,
         existing_pages,
+        huge_mapping_pages,
         free_before.saturating_sub(free_after),
         free_after
     );
@@ -4110,7 +4108,9 @@ fn build_shell_phase_sequence(command: &[u8]) -> [u8; 12288] {
     append_injected_delay(&mut s, &mut len, 1536);
     append_injected_scancode(&mut s, &mut len, 0x1c);
     append_injected_delay(&mut s, &mut len, 128);
-    for code in [0x13, 0x18, 0x18, 0x14, 0x1c] { append_injected_scancode(&mut s, &mut len, code); }
+    for code in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, code);
+    }
     append_injected_delay(&mut s, &mut len, 256);
     append_injected_command(&mut s, &mut len, command);
     s

@@ -7840,7 +7840,10 @@ pub extern "C" fn _start() -> ! {
             // compositor clips logical geometry to that validated allocation.
             // -------------------------------------------------------------------
             SgpMsg::SET_CLOSE_GRACE => {
-                let allowed = state.app_tracker.set_close_grace(msg.badge, msg.words[0], msg.words[1]);
+                let allowed =
+                    state
+                        .app_tracker
+                        .set_close_grace(msg.badge, msg.words[0], msg.words[1]);
                 let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY).word(0, u64::from(allowed)));
             }
 

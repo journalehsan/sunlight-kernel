@@ -105,7 +105,12 @@ impl Cache {
     fn resolve(&mut self, path: &[u8], data: &[u8]) -> Option<Preview> {
         self.resolve_with(path, data, || generate(data))
     }
-    fn resolve_with(&mut self, path: &[u8], data: &[u8], generate_preview: impl FnOnce() -> Option<Preview>) -> Option<Preview> {
+    fn resolve_with(
+        &mut self,
+        path: &[u8],
+        data: &[u8],
+        generate_preview: impl FnOnce() -> Option<Preview>,
+    ) -> Option<Preview> {
         let hash = fingerprint(data);
         if let Some(index) = self
             .entries
@@ -552,7 +557,12 @@ extern "C" fn worker(arg: *mut u8) -> *mut u8 {
                     if crate::preview::pdf::supports(&request.path) {
                         cache.resolve_with(&request.path, &data, || {
                             let image = crate::preview::pdf::worker_preview(&request.path, EDGE)?;
-                            Some(Preview { image: Arc::new(image), width: EDGE, height: EDGE, format: 5 })
+                            Some(Preview {
+                                image: Arc::new(image),
+                                width: EDGE,
+                                height: EDGE,
+                                format: 5,
+                            })
                         })
                     } else {
                         cache.resolve(&request.path, &data)

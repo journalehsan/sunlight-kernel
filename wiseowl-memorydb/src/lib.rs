@@ -21,20 +21,20 @@ extern crate std;
 extern crate alloc;
 
 pub mod action_receipts;
+pub mod activation;
+pub mod attributes;
 #[cfg(feature = "host")]
 pub mod backup;
-pub mod attributes;
 pub mod caps;
 pub mod census;
 pub mod codec;
 pub mod database;
 pub mod error;
 pub mod health;
-pub mod identity;
-pub mod activation;
-pub mod identity_status;
 #[cfg(all(feature = "host", unix))]
 pub mod host_authority;
+pub mod identity;
+pub mod identity_status;
 pub mod index;
 pub mod insert_wire;
 pub mod native_ipc;

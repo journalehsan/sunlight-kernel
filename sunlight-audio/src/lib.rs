@@ -10,12 +10,15 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod backend;
+pub mod es1371;
 pub mod hda;
 pub mod pcm;
 pub mod system;
 pub mod volume;
 pub mod wav;
 
+pub use backend::AudioPlayback;
 pub use pcm::{
     apply_gain, generate_sine_s16le_stereo, validate_pcm, AudioBuffer, AudioError, AudioFormat,
     PcmValidation, MAX_PCM_BYTES, NATIVE_CHANNELS, NATIVE_RATE_HZ, NATIVE_SAMPLE_BITS,
@@ -79,11 +82,14 @@ pub enum OutputDeviceKind {
     QemuHdAudio = 1,
     HdAudio = 2,
     GenericOutput = 3,
+    EnsoniqEs1371 = 4,
 }
 
 impl OutputDeviceKind {
     pub const fn from_pci(vendor_id: u16, device_id: u16) -> Self {
-        if vendor_id == 0x8086 && matches!(device_id, 0x2668 | 0x293e) {
+        if vendor_id == 0x1274 && device_id == 0x1371 {
+            Self::EnsoniqEs1371
+        } else if vendor_id == 0x8086 && matches!(device_id, 0x2668 | 0x293e) {
             Self::QemuHdAudio
         } else {
             Self::HdAudio
@@ -95,6 +101,7 @@ impl OutputDeviceKind {
             1 => Self::QemuHdAudio,
             2 => Self::HdAudio,
             3 => Self::GenericOutput,
+            4 => Self::EnsoniqEs1371,
             _ => Self::None,
         }
     }
@@ -105,6 +112,7 @@ impl OutputDeviceKind {
             Self::QemuHdAudio => "QEMU HD Audio",
             Self::HdAudio => "HD Audio",
             Self::GenericOutput => "Audio Output",
+            Self::EnsoniqEs1371 => "Ensoniq AudioPCI ES1371",
         }
     }
 }
@@ -147,6 +155,18 @@ impl AudioCapabilities {
     pub const fn qemu_hda(vendor_id: u16, device_id: u16) -> Self {
         Self {
             kind: OutputDeviceKind::QemuHdAudio,
+            vendor_id,
+            device_id,
+            max_channels: NATIVE_CHANNELS,
+            sample_bits: NATIVE_SAMPLE_BITS,
+            native_rate_hz: NATIVE_RATE_HZ,
+            playback: true,
+        }
+    }
+
+    pub const fn es1371(vendor_id: u16, device_id: u16) -> Self {
+        Self {
+            kind: OutputDeviceKind::EnsoniqEs1371,
             vendor_id,
             device_id,
             max_channels: NATIVE_CHANNELS,

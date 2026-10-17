@@ -901,7 +901,9 @@ WantedBy=sunlight.target
     #[cfg(feature = "document-ui-gate")]
     {
         let definition = "[Unit]\nDescription=Native document viewer gate\nAfter=sunlight-docserv.service\n\n[Service]\nType=simple\nExecStart=/bin/sunlight-docview\nRestart=no\nUser=root\nCapability=logging\nCapability=user-session\n\n[Install]\nWantedBy=sunlight.target\n";
-        if let Ok(unit) = parse_service_unit(definition.as_bytes()) { let _ = services.add(unit); }
+        if let Ok(unit) = parse_service_unit(definition.as_bytes()) {
+            let _ = services.add(unit);
+        }
     }
     (services, sockets)
 }
@@ -1813,7 +1815,13 @@ struct IdentityPhaseCGate {
 #[cfg(feature = "identity-phase-c-test")]
 impl IdentityPhaseCGate {
     const fn new() -> Self {
-        Self { step: 0, started_ms: 0, first_pid: 0, duplicate_pid: 0, last_probe_ms: 0 }
+        Self {
+            step: 0,
+            started_ms: 0,
+            first_pid: 0,
+            duplicate_pid: 0,
+            last_probe_ms: 0,
+        }
     }
 
     fn index_memorydb_ready() -> Option<bool> {
@@ -1826,11 +1834,9 @@ impl IdentityPhaseCGate {
 
     fn consumer_ready(endpoint: &str, op: u64, reply_label: u64) -> Option<bool> {
         let cap = nameserver_lookup(endpoint)?;
-        let reply = sunlight_ipc::ipc_call_timeout(
-            cap,
-            IpcMsg::with_label(op).word(0, 0xC1A0_0001),
-            3_000,
-        ).ok()?;
+        let reply =
+            sunlight_ipc::ipc_call_timeout(cap, IpcMsg::with_label(op).word(0, 0xC1A0_0001), 3_000)
+                .ok()?;
         (reply.label == reply_label).then_some(reply.words[0] == 1)
     }
 
@@ -1843,71 +1849,128 @@ impl IdentityPhaseCGate {
     }
 
     fn memory_ram_available() -> bool {
-        let Some(cap) = nameserver_lookup("wiseowl-memoryd") else { return false; };
-        let Ok(reply) = sunlight_ipc::ipc_call_timeout(
-            cap, IpcMsg::with_label(0x4F02), 3_000,
-        ) else { return false; };
+        let Some(cap) = nameserver_lookup("wiseowl-memoryd") else {
+            return false;
+        };
+        let Ok(reply) = sunlight_ipc::ipc_call_timeout(cap, IpcMsg::with_label(0x4F02), 3_000)
+        else {
+            return false;
+        };
         reply.label == 0x4F80 && reply.words[0] == 2 && reply.words[1] != 0
     }
 
     fn poll(&mut self, services: &mut ServiceTable, spawn_cap: CapabilityToken) {
-        let Some(idx) = services.find_by_name("wiseowl-memorydb") else { return; };
+        let Some(idx) = services.find_by_name("wiseowl-memorydb") else {
+            return;
+        };
         match self.step {
             0 => {
                 if nameserver_lookup("wiseowl.memorydb.v1").is_none()
                     || nameserver_lookup("wiseowl.index.v1").is_none()
                     || nameserver_lookup("wiseowl.brain.v1").is_none()
-                    || nameserver_lookup("wiseowl-memoryd").is_none() { return; }
+                    || nameserver_lookup("wiseowl-memoryd").is_none()
+                {
+                    return;
+                }
                 if Self::index_memorydb_ready() != Some(true)
                     || Self::brain_ready() != Some(true)
-                    || Self::memory_ready() != Some(true) { return; }
+                    || Self::memory_ready() != Some(true)
+                {
+                    return;
+                }
                 serial_println!("[WISEOWL-IDENTITY-C] consumers initially active");
-                let Some(first_pid) = services.get(idx).and_then(entry_pid) else { return; };
-                let Some(unit) = services.get(idx).map(|entry| entry.unit.clone()) else { return; };
-                let Some((uid, gid)) = lookup_user_credentials(unit.user.as_str()) else { return; };
-                let duplicate = spawn_named_with_identity(spawn_cap, &unit.exec_start,
-                    "wiseowl-memorydb", uid, gid, unit.capability_mask);
+                let Some(first_pid) = services.get(idx).and_then(entry_pid) else {
+                    return;
+                };
+                let Some(unit) = services.get(idx).map(|entry| entry.unit.clone()) else {
+                    return;
+                };
+                let Some((uid, gid)) = lookup_user_credentials(unit.user.as_str()) else {
+                    return;
+                };
+                let duplicate = spawn_named_with_identity(
+                    spawn_cap,
+                    &unit.exec_start,
+                    "wiseowl-memorydb",
+                    uid,
+                    gid,
+                    unit.capability_mask,
+                );
                 match duplicate {
                     Ok(pid) => {
                         self.first_pid = first_pid;
                         self.duplicate_pid = pid;
                         self.started_ms = monotonic_millis();
                         self.step = 1;
-                        serial_println!("[WISEOWL-IDENTITY-C] duplicate launched first={} second={}", first_pid, pid);
+                        serial_println!(
+                            "[WISEOWL-IDENTITY-C] duplicate launched first={} second={}",
+                            first_pid,
+                            pid
+                        );
                     }
-                    Err(error) => serial_println!("[WISEOWL-IDENTITY-C] duplicate launch failed detail={}", error),
+                    Err(error) => serial_println!(
+                        "[WISEOWL-IDENTITY-C] duplicate launch failed detail={}",
+                        error
+                    ),
                 }
             }
             1 if monotonic_millis().saturating_sub(self.started_ms) >= 2000 => {
                 let _ = libc::kill(self.duplicate_pid as u64, SIGKILL);
-                if matches!(observe_managed_process(self.duplicate_pid), ProcessObservation::Alive) {
+                if matches!(
+                    observe_managed_process(self.duplicate_pid),
+                    ProcessObservation::Alive
+                ) {
                     return;
                 }
-                serial_println!("[WISEOWL-IDENTITY-C] duplicate stopped pid={}", self.duplicate_pid);
+                serial_println!(
+                    "[WISEOWL-IDENTITY-C] duplicate stopped pid={}",
+                    self.duplicate_pid
+                );
                 match stop_service(services, idx, spawn_cap, false) {
-                    StopOutcome::Confirmed { pid, restarted: false } if pid == self.first_pid => {
+                    StopOutcome::Confirmed {
+                        pid,
+                        restarted: false,
+                    } if pid == self.first_pid => {
                         self.step = 2;
-                        serial_println!("[WISEOWL-IDENTITY-C] MemoryDB-only restart old_pid={}", pid);
+                        serial_println!(
+                            "[WISEOWL-IDENTITY-C] MemoryDB-only restart old_pid={}",
+                            pid
+                        );
                     }
                     _ => serial_println!("[WISEOWL-IDENTITY-C] MemoryDB-only restart failed"),
                 }
             }
             2 => {
-                if monotonic_millis().saturating_sub(self.last_probe_ms) < 100 { return; }
+                if monotonic_millis().saturating_sub(self.last_probe_ms) < 100 {
+                    return;
+                }
                 self.last_probe_ms = monotonic_millis();
                 if Self::index_memorydb_ready() != Some(false)
                     || Self::brain_ready() != Some(false)
                     || Self::memory_ready() != Some(false)
-                    || !Self::memory_ram_available() { return; }
-                serial_println!("[WISEOWL-IDENTITY-C] memory RAM session available while durable blocked");
+                    || !Self::memory_ram_available()
+                {
+                    return;
+                }
+                serial_println!(
+                    "[WISEOWL-IDENTITY-C] memory RAM session available while durable blocked"
+                );
                 serial_println!("[WISEOWL-IDENTITY-C] consumers paused while MemoryDB absent");
                 match spawn_service_at(services, idx, spawn_cap) {
-                    Ok(_) => { self.step = 3; self.started_ms = monotonic_millis(); }
-                    Err(error) => serial_println!("[WISEOWL-IDENTITY-C] replacement spawn failed detail={}", error),
+                    Ok(_) => {
+                        self.step = 3;
+                        self.started_ms = monotonic_millis();
+                    }
+                    Err(error) => serial_println!(
+                        "[WISEOWL-IDENTITY-C] replacement spawn failed detail={}",
+                        error
+                    ),
                 }
             }
             3 => {
-                if monotonic_millis().saturating_sub(self.last_probe_ms) < 100 { return; }
+                if monotonic_millis().saturating_sub(self.last_probe_ms) < 100 {
+                    return;
+                }
                 self.last_probe_ms = monotonic_millis();
                 let replacement = services.get(idx).and_then(entry_pid);
                 let index_ready = Self::index_memorydb_ready();
@@ -1915,19 +1978,35 @@ impl IdentityPhaseCGate {
                 let memory_ready = Self::memory_ready();
                 if monotonic_millis().saturating_sub(self.started_ms) >= 3000 {
                     let db_ready = nameserver_lookup("wiseowl.memorydb.v1")
-                        .and_then(|cap| sunlight_ipc::ipc_call_timeout(cap, IpcMsg::with_label(0x4D0F), 1_000).ok())
-                        .map(|reply| reply.words[0]).unwrap_or(2);
-                    serial_println!("[WISEOWL-IDENTITY-C] replacement probe pid={} index={} db={}",
-                        replacement.unwrap_or(0), match index_ready { Some(true) => 1, Some(false) => 0, None => 2 }, db_ready);
+                        .and_then(|cap| {
+                            sunlight_ipc::ipc_call_timeout(cap, IpcMsg::with_label(0x4D0F), 1_000)
+                                .ok()
+                        })
+                        .map(|reply| reply.words[0])
+                        .unwrap_or(2);
+                    serial_println!(
+                        "[WISEOWL-IDENTITY-C] replacement probe pid={} index={} db={}",
+                        replacement.unwrap_or(0),
+                        match index_ready {
+                            Some(true) => 1,
+                            Some(false) => 0,
+                            None => 2,
+                        },
+                        db_ready
+                    );
                     self.started_ms = monotonic_millis();
                 }
                 if replacement.is_some_and(|pid| pid != self.first_pid)
                     && nameserver_lookup("wiseowl.memorydb.v1").is_some()
                     && index_ready == Some(true)
                     && brain_ready == Some(true)
-                    && memory_ready == Some(true) {
-                    serial_println!("[WISEOWL-IDENTITY-C] replacement ready old_pid={} new_pid={}",
-                        self.first_pid, replacement.unwrap_or(0));
+                    && memory_ready == Some(true)
+                {
+                    serial_println!(
+                        "[WISEOWL-IDENTITY-C] replacement ready old_pid={} new_pid={}",
+                        self.first_pid,
+                        replacement.unwrap_or(0)
+                    );
                     self.step = 4;
                 }
             }

@@ -50,7 +50,8 @@ static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
 static ICON_WELCOME_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
 static ICON_WISEOWL_TGA: &[u8] = include_bytes!("../../../WiseOwl.sunapp/Resources/icon.tga");
-static ICON_VOICE_RECORDER_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
+static ICON_VOICE_RECORDER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
 static ICON_MELODY_MINA_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
 static ICON_DOCUMENT_VIEWER_TGA: &[u8] =
@@ -141,7 +142,13 @@ pub(crate) struct AppCatalogEntry {
 
 /// Full "All Apps" catalog, displayed in a paginated grid.
 static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
-    AppCatalogEntry { id: CatalogId::App(AppId::VoiceRecorder), name: "Voice Recorder", category: "Multimedia", icon_bytes: Some(ICON_VOICE_RECORDER_TGA), available: true },
+    AppCatalogEntry {
+        id: CatalogId::App(AppId::VoiceRecorder),
+        name: "Voice Recorder",
+        category: "Multimedia",
+        icon_bytes: Some(ICON_VOICE_RECORDER_TGA),
+        available: true,
+    },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Terminal),
         name: "Terminal",
@@ -332,7 +339,10 @@ fn entry_matches(entry: &AppCatalogEntry, query_lower: &str) -> bool {
             .iter()
             .any(|registered| {
                 entry.id == CatalogId::App(registered.app_id)
-                    && registered.aliases.iter().chain(registered.keywords.iter())
+                    && registered
+                        .aliases
+                        .iter()
+                        .chain(registered.keywords.iter())
                         .any(|term| contains_ignore_case(term, query_lower))
             })
 }
@@ -1033,9 +1043,13 @@ impl StartMenuState {
     pub(crate) fn open_menu(&mut self) {
         self.account = sunlight_ipc::accounts::snapshot().ok();
         #[cfg(not(test))]
-        { self.account_refresh_at = sunlight_ipc::monotonic_millis().saturating_add(5000); }
+        {
+            self.account_refresh_at = sunlight_ipc::monotonic_millis().saturating_add(5000);
+        }
         #[cfg(test)]
-        { self.account_refresh_at = u64::MAX; }
+        {
+            self.account_refresh_at = u64::MAX;
+        }
         self.is_open = true;
         self.search.clear();
         self.search.active = true;
@@ -1047,11 +1061,13 @@ impl StartMenuState {
     }
 
     pub(crate) fn refresh_identity(&mut self, now: u64) -> bool {
-        if !self.is_open || now < self.account_refresh_at { return false; }
-        let old=self.account;
-        self.account=sunlight_ipc::accounts::snapshot().ok();
-        self.account_refresh_at=now.saturating_add(5000);
-        old!=self.account
+        if !self.is_open || now < self.account_refresh_at {
+            return false;
+        }
+        let old = self.account;
+        self.account = sunlight_ipc::accounts::snapshot().ok();
+        self.account_refresh_at = now.saturating_add(5000);
+        old != self.account
     }
 
     pub(crate) fn close(&mut self) {
@@ -1647,7 +1663,13 @@ impl StartMenuState {
         }
         let user = self.account.as_ref().and_then(|s| s.current());
         let avatar = Rect::new(rect.x, rect.y + (rect.h as i32 - 32) / 2, 32, 32);
-        let tint=user.map_or(theme.accent, |u| if u.avatar_id() & 1 == 0 {theme.accent} else {theme.accent.darken(30)});
+        let tint = user.map_or(theme.accent, |u| {
+            if u.avatar_id() & 1 == 0 {
+                theme.accent
+            } else {
+                theme.accent.darken(30)
+            }
+        });
         canvas.fill_rounded_rect(avatar, 16, tint);
         draw_text_centered(
             canvas,
@@ -1792,21 +1814,42 @@ mod tests {
             &[],
             1,
         );
-        assert!(matches!(action, super::StartMenuAction::Launch(AppId::DocumentViewer)));
+        assert!(matches!(
+            action,
+            super::StartMenuAction::Launch(AppId::DocumentViewer)
+        ));
     }
 
     #[test]
     fn account_footer_resolves_real_metadata_and_launches_current_user_page() {
-        let mut menu=super::StartMenuState::new();
-        menu.is_open=true;menu.account_refresh_at=u64::MAX;
-        let mut snapshot=sunlight_ipc::accounts::Snapshot::EMPTY;
-        snapshot.session_id=3;snapshot.current_uid=42;snapshot.user_count=1;snapshot.users[0].uid=42;
-        snapshot.users[0].username[..3].copy_from_slice(b"ada");snapshot.users[0].display_name[..3].copy_from_slice(b"Ada");
-        menu.account=Some(snapshot);
-        assert_eq!(menu.account.as_ref().unwrap().current().unwrap().name(),"Ada");
-        let r=compute_layout(800,600,"",&[],StartMenuPage::Home,0).user_rect;
-        let (_,action)=menu.handle_event(super::Event::Click{x:r.x+1,y:r.y+1},800,600,&[],0);
-        assert!(matches!(action,super::StartMenuAction::UserSettings));assert!(!menu.is_open());
+        let mut menu = super::StartMenuState::new();
+        menu.is_open = true;
+        menu.account_refresh_at = u64::MAX;
+        let mut snapshot = sunlight_ipc::accounts::Snapshot::EMPTY;
+        snapshot.session_id = 3;
+        snapshot.current_uid = 42;
+        snapshot.user_count = 1;
+        snapshot.users[0].uid = 42;
+        snapshot.users[0].username[..3].copy_from_slice(b"ada");
+        snapshot.users[0].display_name[..3].copy_from_slice(b"Ada");
+        menu.account = Some(snapshot);
+        assert_eq!(
+            menu.account.as_ref().unwrap().current().unwrap().name(),
+            "Ada"
+        );
+        let r = compute_layout(800, 600, "", &[], StartMenuPage::Home, 0).user_rect;
+        let (_, action) = menu.handle_event(
+            super::Event::Click {
+                x: r.x + 1,
+                y: r.y + 1,
+            },
+            800,
+            600,
+            &[],
+            0,
+        );
+        assert!(matches!(action, super::StartMenuAction::UserSettings));
+        assert!(!menu.is_open());
     }
 
     #[test]

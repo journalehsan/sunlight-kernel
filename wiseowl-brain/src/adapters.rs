@@ -521,8 +521,12 @@ impl WiseOwlStatusContextSource {
             }
         }
         if let Ok(reply) = ipc_call_timeout(cap, IpcMsg::with_label(GET_IDENTITY_STATUS), TIMEOUT) {
-            out.identity_status = wiseowl_memorydb::identity_status::IdentityStatus::
-                decode_native_words(reply.label, reply.word_count, reply.words);
+            out.identity_status =
+                wiseowl_memorydb::identity_status::IdentityStatus::decode_native_words(
+                    reply.label,
+                    reply.word_count,
+                    reply.words,
+                );
         }
         out.healthy &= out.identity_status.is_some();
         out.degraded = !out.healthy;

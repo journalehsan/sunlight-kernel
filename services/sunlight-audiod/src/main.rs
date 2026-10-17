@@ -8,10 +8,10 @@
 
 use sunlight_audio::{
     effective_system_gain,
-    hda::{HdaPlayback, ENGINE_PERIOD_BYTES, ENGINE_PERIOD_COUNT, PERIOD_FRAME_COUNT},
+    hda::{ENGINE_PERIOD_BYTES, ENGINE_PERIOD_COUNT, PERIOD_FRAME_COUNT},
     pcm::{validate_pcm, AudioBuffer, AudioFormat, MAX_PCM_BYTES, NATIVE_RATE_HZ},
-    render_persisted_buf, AudioDeviceState, AudioError, MasterVolume, OutputDeviceKind,
-    PersistedAudio, SystemSoundSettings,
+    render_persisted_buf, AudioDeviceState, AudioError, AudioPlayback, MasterVolume,
+    OutputDeviceKind, PersistedAudio, SystemSoundSettings,
 };
 use sunlight_audiod::{
     capture::{valid_open_request, CaptureQueue, CaptureState, CAPTURE_PERIOD_BYTES},
@@ -20,9 +20,9 @@ use sunlight_audiod::{
     DEFAULT_TONE_MS,
 };
 use sunlight_ipc::{
-    debug_log, endpoint_create, hda_info, ipc_recv_timeout, ipc_reply_result, ipc_try_recv,
-    monotonic_millis, nameserver_register, pack_audio_status, pack_audio_stream_status, shm_free,
-    shm_map, AudioStatus, AudiodMsg, IpcMsg,
+    debug_log, endpoint_create, es1371_info, es1371_set_state, hda_info, ipc_recv_timeout,
+    ipc_reply_result, ipc_try_recv, monotonic_millis, nameserver_register, pack_audio_status,
+    pack_audio_stream_status, shm_free, shm_map, AudioStatus, AudiodMsg, IpcMsg,
 };
 use sunlight_libc as libc;
 
@@ -35,6 +35,7 @@ const TONE_DEFAULT_FRAMES: u32 = NATIVE_RATE_HZ; // 1 second
 const DMA_FIRST_LOG_FRAMES: u64 = NATIVE_RATE_HZ as u64 / 2;
 const DMA_STEADY_LOG_FRAMES: u64 = NATIVE_RATE_HZ as u64 * 60;
 const IPC_DIAGNOSTICS: bool = option_env!("SUNLIGHT_AUDIO_IPC_DIAGNOSTICS").is_some();
+const OUTPUT_RETRY_MS: u64 = 250;
 
 #[macro_export]
 macro_rules! serial_println {
@@ -48,7 +49,7 @@ macro_rules! serial_println {
 
 struct ServiceState {
     volume: MasterVolume,
-    device: Option<HdaPlayback>,
+    device: Option<AudioPlayback>,
     capture: CaptureQueue,
     capture_state: CaptureState,
     capture_owner: Option<u64>,
@@ -80,6 +81,9 @@ struct ServiceState {
     pump_gap_max_ms: u64,
     last_starvation_log_ms: u64,
     last_logged_underruns: u32,
+    next_output_probe_ms: u64,
+    next_es1371_diag_ms: u64,
+    es1371_diag_count: u8,
 }
 
 struct ActiveSystemSound {
@@ -89,60 +93,117 @@ struct ActiveSystemSound {
 }
 
 impl ServiceState {
-    fn new() -> Self {
-        let (volume, system_settings) = restore_audio_settings(load_config_text().as_deref());
+    fn probe_output() -> (Option<AudioPlayback>, OutputDeviceKind, u16, u16, bool) {
         let mut device = None;
         let mut kind = OutputDeviceKind::None;
         let mut vendor_id = 0;
         let mut device_id = 0;
-        if let Some(info) = hda_info() {
+        let mut retry = true;
+
+        if let Some(info) = es1371_info() {
+            retry = false;
+            vendor_id = info.vendor_id;
+            device_id = info.device_id;
+            kind = OutputDeviceKind::EnsoniqEs1371;
+            match sunlight_audio::es1371::Es1371Playback::open() {
+                Ok(mut es) => {
+                    if let Err(err) = es.start() {
+                        let _ = es1371_set_state(false);
+                        serial_println!(
+                            "[AUDIOD] ES1371 stream start failed stage={} code={}",
+                            err.as_str(),
+                            err as u8
+                        );
+                    } else {
+                        match es.fill_silence_ready() {
+                            Ok(_) if es1371_set_state(true) => {
+                                serial_println!(
+                                    "[ES1371] stream started {}Hz 16-bit stereo irq={}",
+                                    NATIVE_RATE_HZ,
+                                    es.irq()
+                                );
+                                device = Some(AudioPlayback::Es1371(es));
+                            }
+                            Ok(_) => {
+                                es.stop();
+                                serial_println!("[AUDIOD] ES1371 state publication failed");
+                            }
+                            Err(err) => {
+                                let _ = es1371_set_state(false);
+                                serial_println!(
+                                    "[AUDIOD] ES1371 silence priming failed stage={} code={}",
+                                    err.as_str(),
+                                    err as u8
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    let _ = es1371_set_state(false);
+                    serial_println!(
+                        "[AUDIOD] ES1371 init failed stage={} code={}",
+                        err.as_str(),
+                        err as u8
+                    );
+                }
+            }
+        } else if let Some(info) = hda_info() {
+            retry = false;
             vendor_id = info.vendor_id;
             device_id = info.device_id;
             kind = OutputDeviceKind::from_pci(vendor_id, device_id);
         }
-        match HdaPlayback::open() {
-            Ok(mut hda) => {
-                let caps = hda.capabilities();
-                kind = caps.kind;
-                vendor_id = caps.vendor_id;
-                device_id = caps.device_id;
-                if let Err(err) = hda.start() {
+
+        if device.is_none() {
+            match sunlight_audio::hda::HdaPlayback::open() {
+                Ok(mut hda) => {
+                    let caps = hda.capabilities();
+                    kind = caps.kind;
+                    vendor_id = caps.vendor_id;
+                    device_id = caps.device_id;
+                    if let Err(err) = hda.start() {
+                        serial_println!(
+                            "[AUDIOD] stream start failed stage={} code={}",
+                            err.as_str(),
+                            err as u8
+                        );
+                    } else {
+                        let _ = hda.fill_silence_ready();
+                        serial_println!("[HDA] stream started {}Hz 16-bit stereo", NATIVE_RATE_HZ);
+                        serial_println!(
+                            "[HDA] input {}",
+                            if hda.input_available() {
+                                "detected"
+                            } else {
+                                "unavailable"
+                            }
+                        );
+                        device = Some(AudioPlayback::Hda(hda));
+                    }
                     serial_println!(
-                        "[AUDIOD] stream start failed stage={} code={}",
+                        "[AUDIOD] output {} ({:04x}:{:04x})",
+                        kind.as_str(),
+                        vendor_id,
+                        device_id
+                    );
+                }
+                Err(sunlight_audio::hda::HdaError::NoDevice) => {}
+                Err(err) => {
+                    serial_println!(
+                        "[AUDIOD] device init failed stage={} code={}",
                         err.as_str(),
                         err as u8
                     );
-                } else {
-                    let _ = hda.fill_silence_ready();
-                    serial_println!("[HDA] stream started {}Hz 16-bit stereo", NATIVE_RATE_HZ);
-                    serial_println!(
-                        "[HDA] input {}",
-                        if hda.input_available() {
-                            "detected"
-                        } else {
-                            "unavailable"
-                        }
-                    );
-                    device = Some(hda);
                 }
-                serial_println!(
-                    "[AUDIOD] output {} ({:04x}:{:04x})",
-                    kind.as_str(),
-                    vendor_id,
-                    device_id
-                );
-            }
-            Err(sunlight_audio::hda::HdaError::NoDevice) => {
-                serial_println!("[AUDIOD] no output device (unavailable)");
-            }
-            Err(err) => {
-                serial_println!(
-                    "[AUDIOD] device init failed stage={} code={}",
-                    err.as_str(),
-                    err as u8
-                );
             }
         }
+        (device, kind, vendor_id, device_id, retry)
+    }
+
+    fn new() -> Self {
+        let (volume, system_settings) = restore_audio_settings(load_config_text().as_deref());
+        let (device, kind, vendor_id, device_id, retry) = Self::probe_output();
         let mut sound_assets = [None; sunlight_audio::SYSTEM_SOUND_COUNT];
         for sound in sunlight_audio::SystemSound::ALL {
             match system_assets::resolve(sound) {
@@ -188,6 +249,33 @@ impl ServiceState {
             pump_gap_max_ms: 0,
             last_starvation_log_ms: 0,
             last_logged_underruns: 0,
+            next_output_probe_ms: if retry {
+                monotonic_millis().saturating_add(OUTPUT_RETRY_MS)
+            } else {
+                u64::MAX
+            },
+            next_es1371_diag_ms: 0,
+            es1371_diag_count: 0,
+        }
+    }
+
+    fn reprobe_output(&mut self) {
+        if self.device.is_some() || monotonic_millis() < self.next_output_probe_ms {
+            return;
+        }
+        self.next_output_probe_ms = monotonic_millis().saturating_add(OUTPUT_RETRY_MS);
+        let (device, kind, vendor_id, device_id, retry) = Self::probe_output();
+        self.next_output_probe_ms = if retry {
+            monotonic_millis().saturating_add(OUTPUT_RETRY_MS)
+        } else {
+            u64::MAX
+        };
+        if device.is_some() {
+            self.device = device;
+            self.kind = kind;
+            self.vendor_id = vendor_id;
+            self.device_id = device_id;
+            serial_println!("[AUDIOD] output became available: {}", self.kind.as_str());
         }
     }
 
@@ -265,6 +353,7 @@ impl ServiceState {
     }
 
     fn pump(&mut self) {
+        self.reprobe_output();
         let now = monotonic_millis();
         if self.capture_state == CaptureState::Running {
             if let Some(device) = self.device.as_mut() {
@@ -347,6 +436,32 @@ impl ServiceState {
             progress.current_period as usize,
             progress.current_period_frames,
         );
+        // Capture a bounded startup snapshot even when the ring is not full.
+        // This distinguishes a DMA engine that never advances from a queue
+        // or ownership problem without flooding the serial console.
+        if self.es1371_diag_count < 8 {
+            let now = monotonic_millis();
+            if now >= self.next_es1371_diag_ms {
+                if let Some(regs) = dev.es1371_dma_registers() {
+                    serial_println!(
+                        "[AUDIOD][es1371-state] frames={} current_period={} current_frames={} can_submit={} control={:#x} serial={:#x} dac2_size={:#x} dac2_count={:#x} status={:#x} acks={} io_failed={}",
+                        progress.total_frames,
+                        progress.current_period,
+                        progress.current_period_frames,
+                        dev.can_submit_period(),
+                        regs.control,
+                        regs.serial,
+                        regs.size,
+                        regs.count,
+                        regs.status,
+                        regs.acknowledgements,
+                        regs.io_failed,
+                    );
+                }
+                self.es1371_diag_count += 1;
+                self.next_es1371_diag_ms = now.saturating_add(250);
+            }
+        }
         if !dev.can_submit_period() {
             return false;
         }
@@ -802,7 +917,8 @@ fn handle_capture_msg(state: &mut ServiceState, msg: &IpcMsg) -> IpcMsg {
             capture_status(state)
         }
         AudiodMsg::CAPTURE_READ if msg.word_count == 0 && msg.cap_count == 1 => {
-            if !sunlight_audiod::capture::can_read(state.capture_state, state.capture_monitor_only) {
+            if !sunlight_audiod::capture::can_read(state.capture_state, state.capture_monitor_only)
+            {
                 return err(AudiodMsg::ERR_BAD_REQUEST);
             }
             let Ok(ptr) = shm_map(msg.caps[0]) else {

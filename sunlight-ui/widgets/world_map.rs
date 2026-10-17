@@ -337,10 +337,9 @@ pub fn hit_test_markers(map: Rect, p: Point, markers: &[MapMarker]) -> Option<us
         let dx = p.x - mp.x;
         let dy = p.y - mp.y;
         let d2 = dx * dx + dy * dy;
-        if d2 <= r * r
-            && best.map(|(_, bd)| d2 < bd).unwrap_or(true) {
-                best = Some((i, d2));
-            }
+        if d2 <= r * r && best.map(|(_, bd)| d2 < bd).unwrap_or(true) {
+            best = Some((i, d2));
+        }
     }
     best.map(|(i, _)| i)
 }

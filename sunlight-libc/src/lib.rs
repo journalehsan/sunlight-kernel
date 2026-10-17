@@ -736,7 +736,11 @@ fn spawn_impl(
 /// it is still running, Err for unknown pid.
 pub fn try_waitpid(pid: u64) -> Result<Option<u64>, Errno> {
     let ret = unsafe {
-        sys::syscall2(sys::SYS_WAITPID, pid, sunlight_ipc::WAITPID_NOHANG_EXTENSION)
+        sys::syscall2(
+            sys::SYS_WAITPID,
+            pid,
+            sunlight_ipc::WAITPID_NOHANG_EXTENSION,
+        )
     };
     match sys::check(ret) {
         Ok(code) => Ok(Some(code)),

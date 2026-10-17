@@ -800,7 +800,12 @@ impl ControlPanelApp {
                     card_w,
                     GRID_CARD_H,
                 ),
-                Rect::new(start_x, system_y + (GRID_CARD_H as i32 + GRID_ROW_GAP) * 2, card_w, GRID_CARD_H),
+                Rect::new(
+                    start_x,
+                    system_y + (GRID_CARD_H as i32 + GRID_ROW_GAP) * 2,
+                    card_w,
+                    GRID_CARD_H,
+                ),
             ],
         }
     }
@@ -891,20 +896,38 @@ impl ControlPanelApp {
         );
         Self::draw_label(
             canvas,
-            Rect::new(46, header.y + 12, Self::identity_rect(header).x.saturating_sub(54).max(0) as u32, 20),
-            if header.w < 460 { "Settings" } else { "System Preferences" },
+            Rect::new(
+                46,
+                header.y + 12,
+                Self::identity_rect(header).x.saturating_sub(54).max(0) as u32,
+                20,
+            ),
+            if header.w < 460 {
+                "Settings"
+            } else {
+                "System Preferences"
+            },
             theme,
             FontRole::UiTitle,
         );
 
-        self.accounts.draw_identity(canvas, theme, Self::identity_rect(header));
+        self.accounts
+            .draw_identity(canvas, theme, Self::identity_rect(header));
         let grid = self.grid_layout();
         Self::draw_section_heading(canvas, theme, grid.sections[0], "Personalization");
         Self::draw_section_heading(canvas, theme, grid.sections[1], "Devices & connectivity");
         Self::draw_section_heading(canvas, theme, grid.sections[2], "System");
 
         let cards = grid.cards;
-        Self::draw_card(canvas, theme, cards[11], theme.accent, "Users & Groups", "Accounts, passwords, groups", self.icon_session);
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[11],
+            theme.accent,
+            "Users & Groups",
+            "Accounts, passwords, groups",
+            self.icon_session,
+        );
         Self::draw_card(
             canvas,
             theme,
@@ -1008,7 +1031,12 @@ impl ControlPanelApp {
 
     fn identity_rect(header: Rect) -> Rect {
         let width = (header.w / 2).min(206);
-        Rect::new((header.right() - width as i32 - 8).max(0), header.y + 2, width, 40)
+        Rect::new(
+            (header.right() - width as i32 - 8).max(0),
+            header.y + 2,
+            width,
+            40,
+        )
     }
 
     fn update_grid(&mut self, event: Event) -> bool {
@@ -1869,10 +1897,17 @@ impl App for ControlPanelApp {
             request_close();
             return true;
         }
-        if matches!(event, Event::Tick) && matches!(self.page, Page::Grid | Page::UsersGroups) && self.accounts.poll() { return true; }
+        if matches!(event, Event::Tick)
+            && matches!(self.page, Page::Grid | Page::UsersGroups)
+            && self.accounts.poll()
+        {
+            return true;
+        }
         match self.page {
             Page::UsersGroups => {
-                if self.accounts.update(event, self.win_w(), self.win_h()) { self.page = Page::Grid; }
+                if self.accounts.update(event, self.win_w(), self.win_h()) {
+                    self.page = Page::Grid;
+                }
                 !matches!(event, Event::Tick)
             }
             Page::Grid => self.update_grid(event),
@@ -1900,7 +1935,9 @@ impl App for ControlPanelApp {
 
     fn on_ready(&mut self) -> bool {
         self.accounts.activate();
-        if matches!(self.page, Page::UsersGroups | Page::Grid) { return true; }
+        if matches!(self.page, Page::UsersGroups | Page::Grid) {
+            return true;
+        }
         if self.page == Page::Monitor {
             self.refresh_display_modes();
             return true;

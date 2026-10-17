@@ -2,8 +2,8 @@
 //! nameserver endpoint instead of depending on host flock semantics.
 
 use std::fs::{File, OpenOptions};
-use std::path::Path;
 use std::os::fd::AsRawFd;
+use std::path::Path;
 
 pub struct HostWriterAuthority {
     _file: File,

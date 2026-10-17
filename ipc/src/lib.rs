@@ -174,6 +174,12 @@ pub enum SunlightSyscall {
     WiseOwlValidateLifecycleSource = 146,
     /// Locate the first Intel HDA PCI function and return BAR0. Gated to `audiod`.
     HdaInfo = 147,
+    /// Locate an Ensoniq AudioPCI ES1371 I/O BAR. Gated to `audiod`.
+    Es1371Info = 161,
+    /// Read a validated device I/O port. Gated to the owning driver.
+    IoPortRead = 162,
+    /// Write a validated device I/O port. Gated to the owning driver.
+    IoPortWrite = 163,
     /// Paged ReadDir: r10 is the entry offset.
     ReadDirFrom = 148,
     /// Atomic rename that fails if the destination already exists.
@@ -2906,6 +2912,16 @@ pub struct HdaInfo {
     pub device_id: u16,
 }
 
+/// ES1371 I/O BAR grant returned by `es1371_info`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Es1371Info {
+    pub io_port: u16,
+    pub io_size: u32,
+    pub vendor_id: u16,
+    pub device_id: u16,
+    pub irq: u8,
+}
+
 /// Compact GET_STATUS payload (four register words).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AudioStatus {
@@ -3710,7 +3726,6 @@ impl Vmxnet3InitStage {
     }
 }
 
-
 #[repr(u64)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetBackendEvent {
@@ -4124,10 +4139,8 @@ pub fn pack_key_event(
 ) -> u64 {
     let mut val = keycode as u64;
     val |= (pressed as u64) << 8;
-    let mods = (shift as u64)
-        | ((ctrl as u64) << 1)
-        | ((alt as u64) << 2)
-        | ((super_key as u64) << 3);
+    let mods =
+        (shift as u64) | ((ctrl as u64) << 1) | ((alt as u64) << 2) | ((super_key as u64) << 3);
     val |= mods << 16;
     val |= (ascii.unwrap_or(0) as u64) << 24;
     val
@@ -4960,7 +4973,16 @@ pub fn tty_winsize() -> Option<TerminalWinsize> {
 pub fn try_waitpid(pid: u64) -> Option<u64> {
     // SAFETY: WaitPid takes no user pointers.
     let (ret, _) = unsafe {
-        raw_syscall(SunlightSyscall::WaitPid, pid, WAITPID_NOHANG_EXTENSION, 0, 0, 0, 0, 0)
+        raw_syscall(
+            SunlightSyscall::WaitPid,
+            pid,
+            WAITPID_NOHANG_EXTENSION,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
     };
     if ret == u64::MAX || ret == u64::MAX - 1 {
         None
@@ -5649,6 +5671,73 @@ pub fn hda_info() -> Option<HdaInfo> {
         vendor_id: ids as u16,
         device_id: (ids >> 16) as u16,
     })
+}
+
+/// Locate the Ensoniq AudioPCI ES1371 controller. The kernel validates the
+/// PCI I/O BAR and enables only I/O decoding plus bus mastering.
+pub fn es1371_info() -> Option<Es1371Info> {
+    let (port, size, ids) = unsafe { raw_syscall_triple(SunlightSyscall::Es1371Info, 0, 0, 0) };
+    if port == 0 || port == u64::MAX || size == 0 || port > u16::MAX as u64 {
+        return None;
+    }
+    Some(Es1371Info {
+        io_port: port as u16,
+        io_size: size as u32,
+        vendor_id: ids as u16,
+        device_id: (ids >> 16) as u16,
+        irq: (ids >> 32) as u8,
+    })
+}
+
+/// Publish ES1371 backend state to Device Manager after initialization.
+pub fn es1371_set_state(active: bool) -> bool {
+    let (result, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::Es1371Info,
+            if active { 1 } else { 2 },
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    result == 0
+}
+
+/// Read an ES1371 register through the kernel's validated I/O-port grant.
+pub fn io_port_read(port: u16, width: u8) -> Option<u32> {
+    let (value, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::IoPortRead,
+            port as u64,
+            width as u64,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    (value != u64::MAX).then_some(value as u32)
+}
+
+/// Write an ES1371 register through the kernel's validated I/O-port grant.
+pub fn io_port_write(port: u16, width: u8, value: u32) -> bool {
+    let (result, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::IoPortWrite,
+            port as u64,
+            width as u64,
+            value as u64,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    result == 0
 }
 
 /// Map a kernel-granted device BAR. The physical address must match the grant.

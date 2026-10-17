@@ -49,8 +49,13 @@ impl BrainIdentityBinding {
     }
 
     pub fn observe_endpoint_generation(&mut self, generation: Option<u64>) {
-        let Some(generation) = generation else { return; };
-        if self.endpoint_generation.is_some_and(|old| old != generation) {
+        let Some(generation) = generation else {
+            return;
+        };
+        if self
+            .endpoint_generation
+            .is_some_and(|old| old != generation)
+        {
             self.connected = false;
             self.activation_suspended = false;
             self.continuity_generation = None;
@@ -87,7 +92,9 @@ impl BrainIdentityBinding {
             return;
         }
         if self.connected
-            && self.activation_fingerprint.is_some_and(|old| old != status.activation_fingerprint)
+            && self
+                .activation_fingerprint
+                .is_some_and(|old| old != status.activation_fingerprint)
         {
             self.mode = BrainIdentityMode::GenericDegraded;
             self.continuity_generation = None;

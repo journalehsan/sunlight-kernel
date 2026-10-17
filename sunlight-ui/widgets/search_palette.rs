@@ -145,10 +145,7 @@ impl<const N: usize> BoundedSearchField<N> {
         match ch {
             '\u{8}' => self.backspace(),
             '\n' | '\r' => false,
-            c if (c.is_ascii_graphic() || c == ' ')
-                && (c as u32) <= 0x7F => {
-                    self.insert(c as u8)
-                }
+            c if (c.is_ascii_graphic() || c == ' ') && (c as u32) <= 0x7F => self.insert(c as u8),
             _ => false,
         }
     }

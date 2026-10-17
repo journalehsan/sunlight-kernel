@@ -376,7 +376,18 @@ fn log_playback_progress(
 }
 
 #[cfg(not(target_os = "none"))]
-fn log_playback_progress(_: u64, _: u64, _: u32, _: u32, _: u64, _: usize, _: u64, _: u64, _: u64, _: u64) {
+fn log_playback_progress(
+    _: u64,
+    _: u64,
+    _: u32,
+    _: u32,
+    _: u64,
+    _: usize,
+    _: u64,
+    _: u64,
+    _: u64,
+    _: u64,
+) {
 }
 
 fn status_error_detail(error: sunlight_audiod::AudioClientError) -> u32 {

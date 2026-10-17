@@ -6,10 +6,10 @@ mod builtins;
 #[cfg(feature = "std")]
 mod exec;
 #[cfg(feature = "std")]
-mod input;
-#[cfg(feature = "std")]
 mod host_script;
-use sunshell::{parser, expansion, shellenv};
+#[cfg(feature = "std")]
+mod input;
+use sunshell::{expansion, parser, shellenv};
 
 #[cfg(feature = "std")]
 use exec::{execute_expanded, Executor, PosixExecutor};
@@ -44,27 +44,45 @@ mod foreground_tests {
 }
 
 #[cfg(feature = "std")]
-fn run_command(line: &str, env: &mut crate::shellenv::ShellEnv, executor: &dyn Executor) -> Option<i32> {
+fn run_command(
+    line: &str,
+    env: &mut crate::shellenv::ShellEnv,
+    executor: &dyn Executor,
+) -> Option<i32> {
     let code = run_host_command(line, env, executor);
-    if let Some(code) = code { env.set("?", &code.to_string()); }
+    if let Some(code) = code {
+        env.set("?", &code.to_string());
+    }
     code
 }
 
 #[cfg(feature = "std")]
-fn run_host_command(line: &str, env: &mut crate::shellenv::ShellEnv, executor: &dyn Executor) -> Option<i32> {
+fn run_host_command(
+    line: &str,
+    env: &mut crate::shellenv::ShellEnv,
+    executor: &dyn Executor,
+) -> Option<i32> {
     let _ = executor;
     let ast = match parser::parse_line_checked(line) {
         Ok(Some(ast)) => ast,
         Ok(None) => return None,
-        Err(error) => { eprintln!("sshl: syntax error: {}", error.message); return Some(2); }
+        Err(error) => {
+            eprintln!("sshl: syntax error: {}", error.message);
+            return Some(2);
+        }
     };
     let ast = match expansion::expand_ast(&ast, env) {
         Ok(ast) => ast,
-        Err(error) => { eprintln!("sshl: {}", error.message()); return Some(2); }
+        Err(error) => {
+            eprintln!("sshl: {}", error.message());
+            return Some(2);
+        }
     };
     if let parser::AstNode::Command(ref command) = ast {
         if command.redirections.is_empty() {
-            if command.argv.is_empty() { return Some(0); }
+            if command.argv.is_empty() {
+                return Some(0);
+            }
             let argv: Vec<&str> = command.argv.iter().map(String::as_str).collect();
             match builtins::run(&argv) {
                 builtins::BuiltinResult::Done(code) => return Some(code),
@@ -75,7 +93,10 @@ fn run_host_command(line: &str, env: &mut crate::shellenv::ShellEnv, executor: &
     }
     match execute_expanded(&ast) {
         Ok(code) => Some(code),
-        Err(e) => { eprintln!("sshl: {e}"); Some(e.status()) }
+        Err(e) => {
+            eprintln!("sshl: {e}");
+            Some(e.status())
+        }
     }
 }
 
@@ -374,7 +395,14 @@ mod sunlight {
                 self.calc.run_command(expr)
             };
 
-            self.env.set("?", if output.starts_with("calc error:") { "1" } else { "0" });
+            self.env.set(
+                "?",
+                if output.starts_with("calc error:") {
+                    "1"
+                } else {
+                    "0"
+                },
+            );
             if output.len() > MAX_OUT {
                 long_out_replace(output.as_bytes());
                 ([0; MAX_OUT], 0)
@@ -423,7 +451,12 @@ mod sunlight {
                     #[cfg(feature = "native-tests")]
                     {
                         let stats = sunlight_libc::alloc::heap_stats();
-                        debug_log(&alloc::format!("[SSHL-HEAP] pid={} used={} failed={}", sunlight_libc::getpid(), stats.requested_user_bytes, stats.failed_allocation_count));
+                        debug_log(&alloc::format!(
+                            "[SSHL-HEAP] pid={} used={} failed={}",
+                            sunlight_libc::getpid(),
+                            stats.requested_user_bytes,
+                            stats.failed_allocation_count
+                        ));
                     }
                     self.line_len = 0;
                     result
@@ -501,7 +534,14 @@ mod sunlight {
                                 *byte = 0;
                             }
                             self.passwd_buffer_len = 0;
-                            self.env.set("?", if self.builtin_status.get() == 0 { "0" } else { "1" });
+                            self.env.set(
+                                "?",
+                                if self.builtin_status.get() == 0 {
+                                    "0"
+                                } else {
+                                    "1"
+                                },
+                            );
                             return result;
                         }
                         PasswdState::None => {}
@@ -527,7 +567,7 @@ mod sunlight {
             }
         }
 
-        fn run_line(&mut self) -> ([u8; MAX_OUT], usize){
+        fn run_line(&mut self) -> ([u8; MAX_OUT], usize) {
             // `= <expr>` evaluates an arithmetic expression in-process and prints
             // the result, e.g. `= 8 * 2` -> 16. Handled before tokenization so
             // the whole remainder of the line is treated as one expression.
@@ -589,7 +629,11 @@ mod sunlight {
                         self.env.clone(),
                         self.cwd.clone(),
                     );
-                    let prepared = match sunshell::script::prepare_arguments(command, &mut context, &mut native_script::NativeRuntime::new()) {
+                    let prepared = match sunshell::script::prepare_arguments(
+                        command,
+                        &mut context,
+                        &mut native_script::NativeRuntime::new(),
+                    ) {
                         Ok(prepared) => prepared,
                         Err(error) => {
                             self.env.set("?", "2");
@@ -603,18 +647,34 @@ mod sunlight {
                     context.env = self.env.clone();
                     context.substitution_status = prepared.substitution_status;
                     let ast = sunshell::script::prepare_redirections(
-                        &command.redirections, &mut context, &mut native_script::NativeRuntime::new(),
-                    ).map(|redirections| super::parser::AstNode::Command(super::parser::SimpleCommand {
-                        argv: prepared.command.argv, redirections,
-                    }));
+                        &command.redirections,
+                        &mut context,
+                        &mut native_script::NativeRuntime::new(),
+                    )
+                    .map(|redirections| {
+                        super::parser::AstNode::Command(super::parser::SimpleCommand {
+                            argv: prepared.command.argv,
+                            redirections,
+                        })
+                    });
                     self.env = context.env.clone();
                     if let Ok(super::parser::AstNode::Command(command)) = &ast {
                         if command.argv.is_empty() {
                             match self.prepare_builtin_redirections(&command.redirections) {
-                                Ok((_, opened)) => { for fd in opened { let _ = sunlight_libc::close(fd); } },
-                                Err(message) => { self.env.set("?", "1"); return copy_out(message.as_bytes()); },
+                                Ok((_, opened)) => {
+                                    for fd in opened {
+                                        let _ = sunlight_libc::close(fd);
+                                    }
+                                }
+                                Err(message) => {
+                                    self.env.set("?", "1");
+                                    return copy_out(message.as_bytes());
+                                }
                             }
-                            self.env.set("?", &alloc::format!("{}", context.substitution_status.unwrap_or(0)));
+                            self.env.set(
+                                "?",
+                                &alloc::format!("{}", context.substitution_status.unwrap_or(0)),
+                            );
                             return ([0; MAX_OUT], 0);
                         }
                     }
@@ -632,16 +692,19 @@ mod sunlight {
                     let mut commands = alloc::vec::Vec::new();
                     let mut environments = alloc::vec::Vec::new();
                     for stage in stages {
-                        let prepared =
-                            match sunshell::script::prepare_pipeline_stage(stage, &mut context, &mut native_script::NativeRuntime::new()) {
-                                Ok(prepared) => prepared,
-                                Err(error) => {
-                                    self.env.set("?", "2");
-                                    return copy_out(
-                                        alloc::format!("sshl: {}\n", error.message).as_bytes(),
-                                    );
-                                }
-                            };
+                        let prepared = match sunshell::script::prepare_pipeline_stage(
+                            stage,
+                            &mut context,
+                            &mut native_script::NativeRuntime::new(),
+                        ) {
+                            Ok(prepared) => prepared,
+                            Err(error) => {
+                                self.env.set("?", "2");
+                                return copy_out(
+                                    alloc::format!("sshl: {}\n", error.message).as_bytes(),
+                                );
+                            }
+                        };
                         commands.push(prepared.command);
                         environments.push(prepared.env);
                     }
@@ -681,7 +744,10 @@ mod sunlight {
                             builtin_redirection =
                                 match self.prepare_builtin_redirections(&command.redirections) {
                                     Ok(setup) => Some(setup),
-                                    Err(message) => { self.env.set("?", "1"); return copy_out(message.as_bytes()); },
+                                    Err(message) => {
+                                        self.env.set("?", "1");
+                                        return copy_out(message.as_bytes());
+                                    }
                                 };
                         } else {
                             return match self.launch_pipeline(core::slice::from_ref(command)) {
@@ -704,13 +770,19 @@ mod sunlight {
             if cmd == "passwd" {
                 let target = args_raw.first().map(|s| s.as_str());
                 let result = self.cmd_passwd(target);
-                self.env.set("?", if self.builtin_status.get() == 0 { "0" } else { "1" });
+                self.env.set(
+                    "?",
+                    if self.builtin_status.get() == 0 {
+                        "0"
+                    } else {
+                        "1"
+                    },
+                );
                 return result;
             }
 
             // Expand $VAR tokens in arguments
-            let expanded: alloc::vec::Vec<alloc::string::String> =
-                args_raw;
+            let expanded: alloc::vec::Vec<alloc::string::String> = args_raw;
             let cmd = cmd.as_str();
             let args: alloc::vec::Vec<&str> = expanded.iter().map(|s| s.as_str()).collect();
 
@@ -755,7 +827,9 @@ mod sunlight {
 
             let out = out.to_vec();
             let failed_builtin = self.builtin_status.get() != 0;
-            if failed_builtin { self.env.set("?", "1"); }
+            if failed_builtin {
+                self.env.set("?", "1");
+            }
             // Backward compatibility logging for phase 3.6 tests
             let trimmed = trim_newline(&out);
             if trimmed == b"root" {
@@ -1129,7 +1203,9 @@ mod sunlight {
             let target_username = core::str::from_utf8(username).unwrap_or("");
             let new_password_hash = match hash_password(password) {
                 Ok(hash) => hash,
-                Err(_) => return copy_out(self.builtin_failure(b"passwd: failed to hash password\n")),
+                Err(_) => {
+                    return copy_out(self.builtin_failure(b"passwd: failed to hash password\n"))
+                }
             };
             let mut found = false;
 
@@ -2223,7 +2299,11 @@ mod sunlight {
                         req = req.word(wi, w);
                     }
                     let Ok(r) = ipc_call_timeout(tz_cap, req, TZCTL_SET_TIMEOUT_MS) else {
-                        let _ = copy_bytes(out, &mut pos, self.builtin_failure(b"tzctl: timezone service timeout\n"));
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            self.builtin_failure(b"tzctl: timezone service timeout\n"),
+                        );
                         return &out[..pos];
                     };
                     if r.label == TzMsg::REPLY && r.words[0] == 0 {
@@ -2232,11 +2312,16 @@ mod sunlight {
                         out[pos] = b'\n';
                         pos += 1;
                     } else {
-                        let _ = copy_bytes(out, &mut pos, self.builtin_failure(b"tzctl: set failed\n"));
+                        let _ =
+                            copy_bytes(out, &mut pos, self.builtin_failure(b"tzctl: set failed\n"));
                     }
                     return &out[..pos];
                 }
-                let _ = copy_bytes(out, &mut pos, self.builtin_failure(b"tzctl: list | get | set <id>\n"));
+                let _ = copy_bytes(
+                    out,
+                    &mut pos,
+                    self.builtin_failure(b"tzctl: list | get | set <id>\n"),
+                );
                 &out[..pos]
             }
         }
@@ -2321,7 +2406,11 @@ mod sunlight {
                     let gen_bytes = read_file(vfs_cap, "/etc/locale.gen");
                     let avail = sunlight_locale::parse_locale_gen(&gen_bytes);
                     if !sunlight_locale::is_valid_locale(name, &avail) {
-                        let _ = copy_bytes(out, &mut pos, self.builtin_failure(b"localectl: invalid locale '"));
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            self.builtin_failure(b"localectl: invalid locale '"),
+                        );
                         let _ = copy_bytes(out, &mut pos, name.as_bytes());
                         let _ = copy_bytes(out, &mut pos, b"'\n");
                         return &out[..pos];
@@ -2358,7 +2447,11 @@ mod sunlight {
                     let gen_bytes = read_file(vfs_cap, "/etc/locale.gen");
                     let avail = sunlight_locale::parse_locale_gen(&gen_bytes);
                     if !sunlight_locale::is_valid_locale(name, &avail) {
-                        let _ = copy_bytes(out, &mut pos, self.builtin_failure(b"localectl: invalid locale '"));
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            self.builtin_failure(b"localectl: invalid locale '"),
+                        );
                         let _ = copy_bytes(out, &mut pos, name.as_bytes());
                         let _ = copy_bytes(out, &mut pos, b"'\n");
                         return &out[..pos];
@@ -3651,11 +3744,17 @@ mod sunlight {
                         session_id,
                         generation,
                         &child_buf[..pulled],
-                    ) != pulled { pty_hangup(&shell); }
+                    ) != pulled
+                    {
+                        pty_hangup(&shell);
+                    }
                     progress = true;
                 }
                 // Forward keystrokes from terminal (app mode) to the app's stdin.
-                let Some(n) = pty_read(service_cap, slave_cap, session_id, generation, &mut in_buf) else { pty_hangup(&shell); };
+                let Some(n) = pty_read(service_cap, slave_cap, session_id, generation, &mut in_buf)
+                else {
+                    pty_hangup(&shell);
+                };
                 if n > 0 {
                     let _ = tty_stdin_push(shell_tab, &in_buf[..n]);
                     progress = true;
@@ -3700,7 +3799,10 @@ mod sunlight {
                 }
             } else {
                 // Normal mode: receive complete lines from the terminal's footer input.
-                let Some(n) = pty_read(service_cap, slave_cap, session_id, generation, &mut in_buf) else { pty_hangup(&shell); };
+                let Some(n) = pty_read(service_cap, slave_cap, session_id, generation, &mut in_buf)
+                else {
+                    pty_hangup(&shell);
+                };
                 if n > 0 {
                     progress = true;
                     for &byte in &in_buf[..n] {
@@ -3891,7 +3993,14 @@ mod sunlight {
             let bytes = unsafe { &LONG_OUT_BUF[..len] };
             ulibc::write_all(ulibc::STDOUT, bytes)
         } else {
-            ulibc::write_all(if shell.builtin_status.get() != 0 { ulibc::STDERR } else { ulibc::STDOUT }, &output)
+            ulibc::write_all(
+                if shell.builtin_status.get() != 0 {
+                    ulibc::STDERR
+                } else {
+                    ulibc::STDOUT
+                },
+                &output,
+            )
         };
         ulibc::exit(if result.is_err() {
             1
@@ -3903,9 +4012,13 @@ mod sunlight {
     }
 
     #[cfg(feature = "native-tests")]
-    mod native_tests { include!("native_tests.rs"); }
+    mod native_tests {
+        include!("native_tests.rs");
+    }
 
-    mod native_script { include!("native_script.rs"); }
+    mod native_script {
+        include!("native_script.rs");
+    }
 
     fn start_from_argv(argc: u64, argv: *const *const u8, envp: *const *const u8) -> ! {
         sunlight_libc::env::init(envp);
@@ -3920,15 +4033,32 @@ mod sunlight {
         }
         #[cfg(feature = "native-tests")]
         if raw_count >= 2 {
-            let args = unsafe { core::slice::from_raw_parts(raw[1], sunlight_libc::crt0::cstr_len(raw[1], 64)) };
-            if args == b"--probe" { native_tests::probe(&raw[2..raw_count]); }
-            if args == b"--native-tests" { native_tests::suite(); }
-            if args == b"--script-tests" { native_tests::script_suite(); }
-            if args == b"--pty-liveness-tests" { native_tests::pty_liveness_suite(); }
+            let args = unsafe {
+                core::slice::from_raw_parts(raw[1], sunlight_libc::crt0::cstr_len(raw[1], 64))
+            };
+            if args == b"--probe" {
+                native_tests::probe(&raw[2..raw_count]);
+            }
+            if args == b"--native-tests" {
+                native_tests::suite();
+            }
+            if args == b"--script-tests" {
+                native_tests::script_suite();
+            }
+            if args == b"--pty-liveness-tests" {
+                native_tests::pty_liveness_suite();
+            }
         }
         if raw_count >= 2 {
-            let argument = unsafe { core::slice::from_raw_parts(raw[1], sunlight_libc::crt0::cstr_len(raw[1], sunlight_libc::MAX_PATH)) };
-            if argument == b"-c" || !argument.starts_with(b"--") { native_script::start(&raw[..raw_count]); }
+            let argument = unsafe {
+                core::slice::from_raw_parts(
+                    raw[1],
+                    sunlight_libc::crt0::cstr_len(raw[1], sunlight_libc::MAX_PATH),
+                )
+            };
+            if argument == b"-c" || !argument.starts_with(b"--") {
+                native_script::start(&raw[..raw_count]);
+            }
         }
         let mut shell_id = 0u64;
         let mut pty_session = None;
@@ -3988,8 +4118,13 @@ mod sunlight {
         let alias_registered = shell_id != 0 || nameserver_register("sshl", ep);
         #[cfg(feature = "native-tests")]
         if shell_id == 6 {
-            debug_log(&alloc::format!("[SSHL-AUTH] pid={} name={} registered={} alias={}",
-                sunlight_libc::getpid(), name, numbered_registered, alias_registered));
+            debug_log(&alloc::format!(
+                "[SSHL-AUTH] pid={} name={} registered={} alias={}",
+                sunlight_libc::getpid(),
+                name,
+                numbered_registered,
+                alias_registered
+            ));
         }
         if numbered_registered && alias_registered {
             debug_log("[TTY]  sunshell registered as 'sshl'");
@@ -4271,7 +4406,11 @@ mod status_tests {
             ("cd /definitely-missing-sshl-dir", 1),
             ("echo 'broken", 2),
         ] {
-            assert_eq!(run_command(line, &mut env, &executor), Some(status), "{line}");
+            assert_eq!(
+                run_command(line, &mut env, &executor),
+                Some(status),
+                "{line}"
+            );
             assert_eq!(env.get("?"), Some(status.to_string().as_str()));
         }
         assert_eq!(run_command("", &mut env, &executor), None);

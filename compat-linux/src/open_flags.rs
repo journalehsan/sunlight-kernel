@@ -92,10 +92,8 @@ mod tests {
 
     #[test]
     fn open_directory_constraints_remain_visible_in_getfl() {
-        let parsed = parse(
-            abi::O_RDONLY | abi::O_DIRECTORY | abi::O_NOFOLLOW | abi::O_LARGEFILE,
-        )
-        .unwrap();
+        let parsed =
+            parse(abi::O_RDONLY | abi::O_DIRECTORY | abi::O_NOFOLLOW | abi::O_LARGEFILE).unwrap();
         assert!(parsed.directory);
         assert_eq!(
             parsed.status,

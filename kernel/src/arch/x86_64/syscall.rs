@@ -185,6 +185,9 @@ pub enum SunlightSyscall {
     MapMmio = 131,
     DmaAlloc = 132,
     HdaInfo = 147,
+    Es1371Info = 161,
+    IoPortRead = 162,
+    IoPortWrite = 163,
     ReadDirFrom = 148,
     RenameNoReplace = 149,
     FileReserve = 150,
@@ -416,31 +419,38 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
 pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     let mut num = frame.rax;
     let original_linux_num = num;
-    let original_args = [frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9];
+    let original_args = [
+        frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9,
+    ];
     let mut linux_compat = false;
 
     if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") && num == 45 {
         use core::sync::atomic::{AtomicUsize, Ordering};
         static RECV_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
         if RECV_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 24 {
-        let s = crate::sched::SCHEDULER.lock();
-        let fd = frame.rdi as i32;
-        if let Some(entry) = s.current_shared_process().fd_table.get(fd) {
-            let ring = if entry.handle.is_socket() {
-                crate::process::pipe::socket_stream(entry.handle.socket_index(), entry.handle.socket_endpoint())
+            let s = crate::sched::SCHEDULER.lock();
+            let fd = frame.rdi as i32;
+            if let Some(entry) = s.current_shared_process().fd_table.get(fd) {
+                let ring = if entry.handle.is_socket() {
+                    crate::process::pipe::socket_stream(
+                        entry.handle.socket_index(),
+                        entry.handle.socket_endpoint(),
+                    )
                     .map(|(read, _)| read)
-            } else if entry.handle.is_pipe() {
-                Some(entry.handle.pipe_index())
-            } else { None };
-            if let Some(ring) = ring {
-                crate::serial_println!(
+                } else if entry.handle.is_pipe() {
+                    Some(entry.handle.pipe_index())
+                } else {
+                    None
+                };
+                if let Some(ring) = ring {
+                    crate::serial_println!(
                     "[HELIOS-FD-TRACE] recvfrom fd={} socket={} nonblock={} ring={} queued/readers/writers={:?}",
                     fd, entry.handle.is_socket(),
                     s.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) & 0x800 != 0,
                     ring, crate::process::pipe::pipe_state(ring)
                 );
+                }
             }
-        }
         }
     }
 
@@ -454,7 +464,13 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         if TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 64 {
             crate::serial_println!(
                 "[HELIOS-ABI-TRACE] syscall={} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x}",
-                num, frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9
+                num,
+                frame.rdi,
+                frame.rsi,
+                frame.rdx,
+                frame.r10,
+                frame.r8,
+                frame.r9
             );
         }
     }
@@ -467,7 +483,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         // capabilities and existing per-syscall permissions still apply.
         if linux_compat && num & ::sunlight_ipc::NATIVE_SYSCALL_TAG != 0 {
             let native = num & !::sunlight_ipc::NATIVE_SYSCALL_TAG;
-            num = if matches!(native, 1..=8 | 10..=18 | 21 | 25 | 32 | 33 | 39 | 72 | 86 | 92..=94 | 99) {
+            num = if matches!(native, 1..=8 | 10..=18 | 21 | 25 | 32 | 33 | 39 | 72 | 86 | 92..=94 | 99)
+            {
                 native
             } else {
                 u64::MAX
@@ -902,6 +919,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         131 => sys_map_mmio(frame),
         132 => sys_dma_alloc(frame),
         147 => sys_hda_info(frame),
+        161 => sys_es1371_info(frame),
+        162 => sys_io_port_read(frame),
+        163 => sys_io_port_write(frame),
         // Hardware identity + thermal sensors (read-only; gated by process name).
         133 => sys_system_identity(frame),
         134 => sys_thermal_sensors(frame),
@@ -986,22 +1006,35 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         result
     };
 
-    if linux_compat && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+    if linux_compat
+        && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
         && original_linux_num == 91
     {
         let (tid, handle) = sched::with_scheduler(|s| {
             let process = s.current_process();
-            (process.pid, s.current_shared_process().fd_table.get(original_args[0] as i32).map(|fd| fd.handle))
+            (
+                process.pid,
+                s.current_shared_process()
+                    .fd_table
+                    .get(original_args[0] as i32)
+                    .map(|fd| fd.handle),
+            )
         });
-        let path = handle.and_then(|h| h.is_vfs().then_some(h))
+        let path = handle
+            .and_then(|h| h.is_vfs().then_some(h))
             .and_then(|h| vfs_handle_path(sunlight_fs::vfs::FileHandle(h.vfs_handle())).ok());
         crate::serial_println!(
             "[HELIOS-ABI-TRACE] fchmod tid={} fd={} mode={:#x} path={:?} result={:#x}",
-            tid, original_args[0], original_args[1], path, result
+            tid,
+            original_args[0],
+            original_args[1],
+            path,
+            result
         );
     }
 
-    if linux_compat && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+    if linux_compat
+        && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
         && result == linux_errno(22)
     {
         use core::sync::atomic::{AtomicUsize, Ordering};
@@ -1009,14 +1042,41 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         if EINVAL_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 32 {
             crate::serial_println!(
                 "[HELIOS-ABI-TRACE] EINVAL syscall={} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x}",
-                original_linux_num, original_args[0], original_args[1], original_args[2],
-                original_args[3], original_args[4], original_args[5]
+                original_linux_num,
+                original_args[0],
+                original_args[1],
+                original_args[2],
+                original_args[3],
+                original_args[4],
+                original_args[5]
             );
         }
     }
 
-    if linux_compat && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
-        && matches!(original_linux_num, 157 | 302 | 97 | 45 | 44 | 202 | 200 | 16 | 13 | 14 | 7 | 232 | 281 | 53 | 293 | 22 | 32 | 33 | 292 | 72)
+    if linux_compat
+        && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+        && matches!(
+            original_linux_num,
+            157 | 302
+                | 97
+                | 45
+                | 44
+                | 202
+                | 200
+                | 16
+                | 13
+                | 14
+                | 7
+                | 232
+                | 281
+                | 53
+                | 293
+                | 22
+                | 32
+                | 33
+                | 292
+                | 72
+        )
     {
         use core::sync::atomic::{AtomicUsize, Ordering};
         static THREAD_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -1051,16 +1111,15 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     }
 
     // Deliver pending signals before returning to user space
-    let post_signal =
-        crate::sched::with_scheduler(|sched| {
-            // An external kill can arrive after dispatch begins. Preserve its
-            // recorded status and pivot off this task's stack before SYSRET.
-            if sched.current_process().is_exiting() {
-                return Some(SignalPostAction::Exit(sched.current_process().exit_code));
-            }
-            let dispositions = sched.current_shared_process().signal_state.dispositions();
-            deliver_pending_signals(sched.current_process_mut(), &dispositions)
-        });
+    let post_signal = crate::sched::with_scheduler(|sched| {
+        // An external kill can arrive after dispatch begins. Preserve its
+        // recorded status and pivot off this task's stack before SYSRET.
+        if sched.current_process().is_exiting() {
+            return Some(SignalPostAction::Exit(sched.current_process().exit_code));
+        }
+        let dispositions = sched.current_shared_process().signal_state.dispositions();
+        deliver_pending_signals(sched.current_process_mut(), &dispositions)
+    });
     if let Some(SignalPostAction::Exit(code)) = post_signal {
         process_exit(code);
     }
@@ -1533,20 +1592,52 @@ fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
     use ::sunlight_ipc::accounts::{GrantBinding, GrantScope, Operation};
     let sched = crate::sched::SCHEDULER.lock();
     let caller = sched.current_process();
-    if !caller.trusted_auth_broker { return u64::MAX; }
-    let Some(target) = sched.processes.iter().find(|p| p.pid == frame.rdi as usize && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)) else { return u64::MAX; };
-    if !crate::ipc::reply_target_matches_pending_request(target.pid, target.pending_call, caller.ipc_reply_target) { return u64::MAX; }
-    let Some(operation) = Operation::from_raw(frame.rsi) else { return u64::MAX; };
+    if !caller.trusted_auth_broker {
+        return u64::MAX;
+    }
+    let Some(target) = sched.processes.iter().find(|p| {
+        p.pid == frame.rdi as usize
+            && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+    }) else {
+        return u64::MAX;
+    };
+    if !crate::ipc::reply_target_matches_pending_request(
+        target.pid,
+        target.pending_call,
+        caller.ipc_reply_target,
+    ) {
+        return u64::MAX;
+    }
+    let Some(operation) = Operation::from_raw(frame.rsi) else {
+        return u64::MAX;
+    };
     let binding = GrantBinding {
-        pid: target.pid as u64, process_generation: target.address_space.identity().generation,
-        scope: GrantScope { revision: frame.r12, operation, target: frame.rdx as u32, member: (frame.rdx >> 32) as u32, session: frame.r8, session_generation: frame.r9 },
+        pid: target.pid as u64,
+        process_generation: target.address_space.identity().generation,
+        scope: GrantScope {
+            revision: frame.r12,
+            operation,
+            target: frame.rdx as u32,
+            member: (frame.rdx >> 32) as u32,
+            session: frame.r8,
+            session_generation: frame.r9,
+        },
     };
     let now = sched.global_tick;
     drop(sched);
     let mut broker = crate::capability::CAP_BROKER.lock();
     if consume {
-        if broker.consume_account_grant(crate::capability::CapabilityToken(frame.r10), binding, now) { 0 } else { u64::MAX }
-    } else { broker.mint_account_grant(binding, now).map_or(u64::MAX, |t| t.0) }
+        if broker.consume_account_grant(crate::capability::CapabilityToken(frame.r10), binding, now)
+        {
+            0
+        } else {
+            u64::MAX
+        }
+    } else {
+        broker
+            .mint_account_grant(binding, now)
+            .map_or(u64::MAX, |t| t.0)
+    }
 }
 
 fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
@@ -1563,7 +1654,9 @@ fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
             return u64::MAX;
         };
         if !crate::ipc::reply_target_matches_pending_request(
-            target_pid, target.pending_call, caller.ipc_reply_target,
+            target_pid,
+            target.pending_call,
+            caller.ipc_reply_target,
         ) {
             return u64::MAX;
         }
@@ -1950,14 +2043,11 @@ fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
     if frame.rsi != 0 && !sched.current_process().trusted_pty_service {
         return 0;
     }
-    let alive = sched
-        .processes
-        .iter()
-        .any(|p| {
-            p.pid == pid
-                && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
-                && (frame.rsi == 0 || p.foreground.incarnation == frame.rsi)
-        });
+    let alive = sched.processes.iter().any(|p| {
+        p.pid == pid
+            && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+            && (frame.rsi == 0 || p.foreground.incarnation == frame.rsi)
+    });
     alive as u64
 }
 
@@ -2196,27 +2286,36 @@ fn reject_linux_address_space_duplication(operation: &str) -> u64 {
 }
 
 fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
-    use sunlight_compat_linux::clone::{validate_thread_flags, CloneFlagError, CLONE_PARENT_SETTID};
+    use sunlight_compat_linux::clone::{
+        validate_thread_flags, CloneFlagError, CLONE_PARENT_SETTID,
+    };
     let flags = frame.rdi;
     match validate_thread_flags(flags) {
         Ok(()) => {}
         Err(CloneFlagError::InvalidCombination) => return linux_errno(22),
-        Err(CloneFlagError::Unsupported) => return reject_linux_address_space_duplication("clone(process or unsupported flags)"),
+        Err(CloneFlagError::Unsupported) => {
+            return reject_linux_address_space_duplication("clone(process or unsupported flags)")
+        }
     }
     let stack = frame.rsi;
     let parent_tid = frame.rdx;
     let child_tid = frame.r10;
     let tls = frame.r8;
-    if stack < 8 || crate::memory::user::UserAddress::new(stack).is_err()
+    if stack < 8
+        || crate::memory::user::UserAddress::new(stack).is_err()
         || flags & sunlight_compat_linux::clone::CLONE_SETTLS != 0
             && crate::memory::user::UserAddress::new(tls).is_err()
         || flags & sunlight_compat_linux::clone::CLONE_CHILD_CLEARTID != 0
-            && child_tid != 0 && crate::memory::user::UserAddress::new(child_tid).is_err()
+            && child_tid != 0
+            && crate::memory::user::UserAddress::new(child_tid).is_err()
     {
         return linux_errno(14);
     }
     let mut sched = crate::sched::SCHEDULER.lock();
-    let Some(hhdm) = crate::HHDM_REQ.response().map(|resp| VirtAddr::new(resp.offset)) else {
+    let Some(hhdm) = crate::HHDM_REQ
+        .response()
+        .map(|resp| VirtAddr::new(resp.offset))
+    else {
         return linux_errno(12);
     };
     let current = sched.current_process();
@@ -2232,7 +2331,13 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     // The scheduler lock serializes clone against mmap/munmap and FD mutation.
     // Only the group leader owns the VM and shared resources; it remains live
     // until every borrower is reaped, even if the leader exits first.
-    let tid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0).saturating_add(1);
+    let tid = sched
+        .processes
+        .iter()
+        .map(|p| p.pid)
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
     let parent = sched.current_process();
     let mut child = crate::process::Process::new_thread(
         tid,
@@ -2263,7 +2368,9 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
         state.robust_list_len = 0;
         state.altstack = [0, 2, 0];
     }
-    child.signal_state.set_blocked_mask(parent.signal_state.get_blocked_mask());
+    child
+        .signal_state
+        .set_blocked_mask(parent.signal_state.get_blocked_mask());
     child.cpu_mask = parent.cpu_mask;
     child.init_context(frame.rcx, stack);
     // On raw x86-64 clone, RCX is the return RIP and R11 the return RFLAGS.
@@ -2271,10 +2378,12 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     unsafe {
         let regs = child.context_rsp as *mut u64;
         for (index, value) in [
-            frame.r15, frame.r14, frame.r13, frame.r12, frame.rbp,
-            frame.rbx, frame.r11, frame.r10, frame.r9, frame.r8,
-            frame.rdi, frame.rsi, frame.rdx, frame.rcx, 0,
-        ].into_iter().enumerate() {
+            frame.r15, frame.r14, frame.r13, frame.r12, frame.rbp, frame.rbx, frame.r11, frame.r10,
+            frame.r9, frame.r8, frame.rdi, frame.rsi, frame.rdx, frame.rcx, 0,
+        ]
+        .into_iter()
+        .enumerate()
+        {
             regs.add(index).write(value);
         }
         regs.add(17).write(frame.r11 | 0x200);
@@ -2288,15 +2397,25 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     // The prevalidated parent store is done before the child can be runnable.
     if flags & CLONE_PARENT_SETTID != 0 {
         if crate::memory::user::copy_to_process_bytes(
-            parent, hhdm, parent_tid, &(tid as u32).to_ne_bytes(),
-        ).is_err() {
+            parent,
+            hhdm,
+            parent_tid,
+            &(tid as u32).to_ne_bytes(),
+        )
+        .is_err()
+        {
             return linux_errno(14);
         }
     }
     let idx = sched.add_process(child);
     sched.enqueue_ready(idx);
-    crate::serial_println!("[HELIOS-THREAD] clone tgid={} tid={} tls={:#x} stack={:#x}",
-        sched.processes[idx].linux_tgid.unwrap_or(tid), tid, tls, stack);
+    crate::serial_println!(
+        "[HELIOS-THREAD] clone tgid={} tid={} tls={:#x} stack={:#x}",
+        sched.processes[idx].linux_tgid.unwrap_or(tid),
+        tid,
+        tls,
+        stack
+    );
     tid as u64
 }
 
@@ -2315,7 +2434,10 @@ fn sys_linux_futex(frame: &SyscallFrame) -> u64 {
         return linux_errno(22);
     }
     let mut sched = crate::sched::SCHEDULER.lock();
-    let Some(hhdm) = crate::HHDM_REQ.response().map(|resp| VirtAddr::new(resp.offset)) else {
+    let Some(hhdm) = crate::HHDM_REQ
+        .response()
+        .map(|resp| VirtAddr::new(resp.offset))
+    else {
         return linux_errno(12);
     };
     let current = sched.current_process();
@@ -2353,10 +2475,16 @@ fn sys_linux_exit_group(code: i32) -> ! {
     let tgid = sched.current_process().linux_tgid;
     let current_tid = sched.current_process().pid;
     if let Some(tgid) = tgid {
-        let siblings: alloc::vec::Vec<usize> = sched.processes.iter()
-            .filter(|p| p.linux_tgid == Some(tgid) && p.pid != current_tid
-                && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
-            .map(|p| p.pid).collect();
+        let siblings: alloc::vec::Vec<usize> = sched
+            .processes
+            .iter()
+            .filter(|p| {
+                p.linux_tgid == Some(tgid)
+                    && p.pid != current_tid
+                    && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+            })
+            .map(|p| p.pid)
+            .collect();
         for tid in siblings {
             sched.terminate_process_by_pid(tid, code, "linux-exit-group");
         }
@@ -2850,7 +2978,10 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // An explicitly numbered shell path creates a sibling TTY tab. Prefer it
     // over the parent's attachment; ordinary children still inherit the
     // current tab exactly as before.
-    child.tty_tab = if path_str.strip_prefix("/bin/sshl").is_some_and(|suffix| !suffix.is_empty()) {
+    child.tty_tab = if path_str
+        .strip_prefix("/bin/sshl")
+        .is_some_and(|suffix| !suffix.is_empty())
+    {
         crate::process::spawn::shell_id_from_path(path_str)
             .map(|id| id as u8)
             .or(parent_tty_tab)
@@ -2936,9 +3067,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         if let Some(entry) = entry {
             // The child receives a retained reference to the supplied open
             // description. Parent closure then correctly drives pipe EOF.
-            let _ = child
-                .fd_table
-                .install_from(fd as i32, entry);
+            let _ = child.fd_table.install_from(fd as i32, entry);
         }
     }
 
@@ -3049,11 +3178,20 @@ mod spawn_service_capability_tests {
     #[test]
     fn sound_panel_gets_microphone_without_administrative_rights() {
         for uid in [0, 1_000] {
-            assert_eq!(spawn_service_capability("/bin/voice-recorder", uid), ServiceCapability::Microphone.bit());
+            assert_eq!(
+                spawn_service_capability("/bin/voice-recorder", uid),
+                ServiceCapability::Microphone.bit()
+            );
         }
-        assert_eq!(spawn_service_capability("/bin/control-panel", 1_000), ServiceCapability::Microphone.bit());
+        assert_eq!(
+            spawn_service_capability("/bin/control-panel", 1_000),
+            ServiceCapability::Microphone.bit()
+        );
         assert_eq!(spawn_service_capability("/bin/audioctl", 1_000), 0);
-        assert_eq!(spawn_service_capability("/bin/audioctl", 0), ServiceCapability::Microphone.bit());
+        assert_eq!(
+            spawn_service_capability("/bin/audioctl", 0),
+            ServiceCapability::Microphone.bit()
+        );
     }
 }
 
@@ -3832,7 +3970,14 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
     };
     let (wants_read, wants_write, wants_create, wants_exclusive, wants_directory, wants_truncate) =
         if let Some(parsed) = linux_flags {
-            (parsed.read, parsed.write, parsed.create, parsed.exclusive, parsed.directory, parsed.truncate)
+            (
+                parsed.read,
+                parsed.write,
+                parsed.create,
+                parsed.exclusive,
+                parsed.directory,
+                parsed.truncate,
+            )
         } else {
             let accmode = flags & O_ACCMODE;
             let read = accmode == 0 || accmode == 2;
@@ -3843,17 +3988,25 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
             if accmode == 3 || (exclusive && !create) || (truncate && !write) {
                 return ERR_EINVAL;
             }
-            (read, write, create, exclusive, flags & O_DIRECTORY != 0, truncate)
+            (
+                read,
+                write,
+                create,
+                exclusive,
+                flags & O_DIRECTORY != 0,
+                truncate,
+            )
         };
     let trace_yazi_path = path == "/root/.config/yazi/yazi.toml"
         || (path.starts_with("/dev/shm/") && path.contains("yazi-"));
-    if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
-        && trace_yazi_path
-    {
+    if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") && trace_yazi_path {
         let tid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
         crate::serial_println!(
             "[HELIOS-ABI-TRACE] open accepted tid={} path={:?} flags={:#x} mode={:#x}",
-            tid, path, flags, mode
+            tid,
+            path,
+            flags,
+            mode
         );
         if path == "/root/.config/yazi/yazi.toml" {
             YAZI_CONFIG_LOOKUP_SEEN.store(true, core::sync::atomic::Ordering::Relaxed);
@@ -3907,10 +4060,14 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
                 decision.error
             );
             if !decision.allowed {
-                if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+                if is_linux
+                    && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
                     && trace_yazi_path
                 {
-                    crate::serial_println!("[HELIOS-ABI-TRACE] open policy denied path={:?} ret=-EACCES", path);
+                    crate::serial_println!(
+                        "[HELIOS-ABI-TRACE] open policy denied path={:?} ret=-EACCES",
+                        path
+                    );
                 }
                 return ERR_EACCES;
             }
@@ -3960,10 +4117,14 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
             let stat = match existing {
                 Some(stat) => stat,
                 None => {
-                    if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+                    if is_linux
+                        && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
                         && path == "/root/.config/yazi/yazi.toml"
                     {
-                        crate::serial_println!("[HELIOS-ABI-TRACE] open result path={:?} ret=-ENOENT", path);
+                        crate::serial_println!(
+                            "[HELIOS-ABI-TRACE] open result path={:?} ret=-ENOENT",
+                            path
+                        );
                     }
                     return ERR_NOENT;
                 }
@@ -4012,25 +4173,28 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
     let descriptor_flags = linux_flags
         .map(|parsed| parsed.status | if parsed.cloexec { O_CLOEXEC as u32 } else { 0 })
         .unwrap_or(flags as u32);
-    let result = match sched
-        .current_shared_process_mut()
-        .fd_table
-        .open(handle, rights, descriptor_flags)
-    {
-        Ok(fd) => fd as u64,
-        Err(e) => {
-            crate::serial_println!("[HELIOS] open({}) -> fd error {:?}", path, e);
-            drop(sched);
-            if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
-                let _ = vfs.close(vfs_handle);
+    let result =
+        match sched
+            .current_shared_process_mut()
+            .fd_table
+            .open(handle, rights, descriptor_flags)
+        {
+            Ok(fd) => fd as u64,
+            Err(e) => {
+                crate::serial_println!("[HELIOS] open({}) -> fd error {:?}", path, e);
+                drop(sched);
+                if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                    let _ = vfs.close(vfs_handle);
+                }
+                u64::MAX
             }
-            u64::MAX
-        }
-    };
-    if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
-        && trace_yazi_path
-    {
-        crate::serial_println!("[HELIOS-ABI-TRACE] open result path={:?} ret={:#x}", path, result);
+        };
+    if is_linux && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") && trace_yazi_path {
+        crate::serial_println!(
+            "[HELIOS-ABI-TRACE] open result path={:?} ret={:#x}",
+            path,
+            result
+        );
     }
     result
 }
@@ -4232,36 +4396,40 @@ fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
     let sched = crate::sched::SCHEDULER.lock();
     let p = sched.current_process();
     let actor = if p.trusted_auth_broker {
-        sunlight_fs::Actor::Service { name: "sunlight-uac" }
-    } else { match p.name_str() {
-        "sunlight-kv" => sunlight_fs::Actor::Service {
-            name: "sunlight-kv",
-        },
-        "wiseowl-memoryd" => sunlight_fs::Actor::Service {
-            name: "wiseowl-memoryd",
-        },
-        "wiseowl-memorydb" => sunlight_fs::Actor::Service {
-            name: "wiseowl-memorydb",
-        },
-        "wiseowl-indexd" => sunlight_fs::Actor::Service {
-            name: "wiseowl-indexd",
-        },
-        "wiseowl-braind" => sunlight_fs::Actor::Service {
-            name: "wiseowl-braind",
-        },
-        "sunlightd" => sunlight_fs::Actor::Service { name: "sunlightd" },
-        "sunlight-tls" => sunlight_fs::Actor::Service {
-            name: "sunlight-tls",
-        },
+        sunlight_fs::Actor::Service {
+            name: "sunlight-uac",
+        }
+    } else {
+        match p.name_str() {
+            "sunlight-kv" => sunlight_fs::Actor::Service {
+                name: "sunlight-kv",
+            },
+            "wiseowl-memoryd" => sunlight_fs::Actor::Service {
+                name: "wiseowl-memoryd",
+            },
+            "wiseowl-memorydb" => sunlight_fs::Actor::Service {
+                name: "wiseowl-memorydb",
+            },
+            "wiseowl-indexd" => sunlight_fs::Actor::Service {
+                name: "wiseowl-indexd",
+            },
+            "wiseowl-braind" => sunlight_fs::Actor::Service {
+                name: "wiseowl-braind",
+            },
+            "sunlightd" => sunlight_fs::Actor::Service { name: "sunlightd" },
+            "sunlight-tls" => sunlight_fs::Actor::Service {
+                name: "sunlight-tls",
+            },
 
-        "capability-broker" => sunlight_fs::Actor::Service {
-            name: "capability-broker",
-        },
-        _ => sunlight_fs::Actor::User {
-            uid: p.uid,
-            name: username_for_uid(p.uid),
-        },
-    }};
+            "capability-broker" => sunlight_fs::Actor::Service {
+                name: "capability-broker",
+            },
+            _ => sunlight_fs::Actor::User {
+                uid: p.uid,
+                name: username_for_uid(p.uid),
+            },
+        }
+    };
     (p.uid, p.gid, actor)
 }
 
@@ -4459,7 +4627,10 @@ fn close_file_handle(handle: crate::process::fd_table::FileHandle) {
 }
 
 fn sys_linux_eventfd2(frame: &mut SyscallFrame) -> u64 {
-    use crate::process::{eventfd, fd_table::{CapRights, FileHandle}};
+    use crate::process::{
+        eventfd,
+        fd_table::{CapRights, FileHandle},
+    };
     let flags = frame.rsi;
     if flags > u32::MAX as u64 {
         return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
@@ -4481,7 +4652,11 @@ fn sys_linux_eventfd2(frame: &mut SyscallFrame) -> u64 {
                 use core::sync::atomic::{AtomicUsize, Ordering};
                 static EVENTFD_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
                 if EVENTFD_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 8 {
-                    crate::serial_println!("[HELIOS-ABI-TRACE] eventfd2 fd={} flags={:#x}", fd, flags);
+                    crate::serial_println!(
+                        "[HELIOS-ABI-TRACE] eventfd2 fd={} flags={:#x}",
+                        fd,
+                        flags
+                    );
                 }
             }
             fd as u64
@@ -4504,10 +4679,16 @@ fn sys_linux_sched_getaffinity(frame: &mut SyscallFrame) -> u64 {
     }
     let (bytes, copied) = {
         let sched = crate::sched::SCHEDULER.lock();
-        if pid != 0 && !sched.processes.iter().any(|p| {
-            p.pid == pid as usize && !matches!(p.state,
-                crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped)
-        }) {
+        if pid != 0
+            && !sched.processes.iter().any(|p| {
+                p.pid == pid as usize
+                    && !matches!(
+                        p.state,
+                        crate::process::ProcessState::Finished
+                            | crate::process::ProcessState::Reaped
+                    )
+            })
+        {
             return linux_errno(abi::ESRCH as u64);
         }
         match affinity::mask_for_online_cores(sched.online_cores, cpusetsize) {
@@ -4573,8 +4754,13 @@ fn sys_linux_madvise(frame: &mut SyscallFrame) -> u64 {
     linux_errno(abi::ENOSYS as u64)
 }
 
-fn wait_linux_eventfd(frame: &mut SyscallFrame, sched: &mut crate::sched::Scheduler,
-                      idx: u32, value: u64, writing: bool) -> u64 {
+fn wait_linux_eventfd(
+    frame: &mut SyscallFrame,
+    sched: &mut crate::sched::Scheduler,
+    idx: u32,
+    value: u64,
+    writing: bool,
+) -> u64 {
     sched.block_current_linux_poll(u64::MAX);
     if let Some(state) = sched.current_process_mut().linux_state_mut() {
         state.eventfd_wait = Some((idx, value, writing));
@@ -4591,13 +4777,22 @@ fn trace_yazi_eventfd_io(operation: &str, fd: i32, value: u64) {
         use core::sync::atomic::{AtomicUsize, Ordering};
         static TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
         if TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 24 {
-            crate::serial_println!("[HELIOS-EVENTFD-TRACE] {} fd={} value={}", operation, fd, value);
+            crate::serial_println!(
+                "[HELIOS-EVENTFD-TRACE] {} fd={} value={}",
+                operation,
+                fd,
+                value
+            );
         }
     }
 }
 
-fn wait_pipe_io(frame: &mut SyscallFrame, sched: &mut crate::sched::Scheduler,
-                ring: u32, writing: bool) -> u64 {
+fn wait_pipe_io(
+    frame: &mut SyscallFrame,
+    sched: &mut crate::sched::Scheduler,
+    ring: u32,
+    writing: bool,
+) -> u64 {
     if sched.current_process().is_linux_compat() {
         sched.block_current_linux_poll(u64::MAX);
         if let Some(state) = sched.current_process_mut().linux_state_mut() {
@@ -4627,9 +4822,13 @@ fn sys_linux_recvfrom(frame: &mut SyscallFrame) -> u64 {
     if !handle.is_socket() {
         return linux_errno(88); // ENOTSOCK
     }
-    if frame.r10 & !0x40 != 0 { return linux_errno(95); } // unsupported message flags
+    if frame.r10 & !0x40 != 0 {
+        return linux_errno(95);
+    } // unsupported message flags
     if frame.r8 != 0 {
-        if frame.r9 == 0 { return linux_errno(14); }
+        if frame.r9 == 0 {
+            return linux_errno(14);
+        }
         return linux_errno(38); // source address copyout is not in this observed call
     }
     if frame.rdx > isize::MAX as u64 || frame.rdx.checked_add(frame.rsi).is_none() {
@@ -4650,14 +4849,18 @@ fn sys_linux_sendto(frame: &mut SyscallFrame) -> u64 {
         };
         entry.handle
     };
-    if !handle.is_socket() { return linux_errno(88); }
+    if !handle.is_socket() {
+        return linux_errno(88);
+    }
     if frame.r10 & !0x40 != 0 || frame.r8 != 0 || frame.r9 != 0 {
         return linux_errno(95);
     }
     if frame.rdx > isize::MAX as u64 || frame.rdx.checked_add(frame.rsi).is_none() {
         return linux_errno(22);
     }
-    if frame.rdx != 0 && crate::memory::user::validate_current_read(frame.rsi, frame.rdx as usize).is_err() {
+    if frame.rdx != 0
+        && crate::memory::user::validate_current_read(frame.rsi, frame.rdx as usize).is_err()
+    {
         return linux_errno(14);
     }
     sys_write_with_nonblocking(frame, frame.r10 & 0x40 != 0)
@@ -4965,7 +5168,13 @@ fn linux_positional_vfs_io(frame: &mut SyscallFrame, write: bool) -> u64 {
             return linux_errno(sunlight_compat_linux::abi::EFAULT as u64);
         }
     }
-    let append = sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) as u64 & O_APPEND != 0;
+    let append = sched
+        .current_shared_process()
+        .fd_table
+        .status_flags(fd)
+        .unwrap_or(0) as u64
+        & O_APPEND
+        != 0;
     drop(sched);
 
     let mut guard = crate::KERNEL_VFS.lock();
@@ -5016,7 +5225,9 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
     let (vfs_handle, skip) = {
         let sched = crate::sched::SCHEDULER.lock();
         match sched.current_shared_process().fd_table.get(fd) {
-            Some(entry) if entry.handle.is_vfs() => (entry.handle.vfs_handle(), entry.current_offset()),
+            Some(entry) if entry.handle.is_vfs() => {
+                (entry.handle.vfs_handle(), entry.current_offset())
+            }
             Some(_) => return linux_errno(sunlight_compat_linux::abi::ENOTDIR as u64),
             None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
         }
@@ -5030,7 +5241,11 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
         let tid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
         crate::serial_println!(
             "[HELIOS-YAZI-DIRENT] getdents64 tid={} fd={} path={:?} count={} skip={}",
-            tid, fd, dir_path, count, skip
+            tid,
+            fd,
+            dir_path,
+            count,
+            skip
         );
     }
     {
@@ -5225,7 +5440,9 @@ fn sys_linux_readlinkat(frame: &mut SyscallFrame) -> u64 {
 fn abandon_process_fds(sched: &mut crate::sched::Scheduler, fds: [i32; 2]) {
     for fd in fds {
         if let Ok(entry) = sched.current_shared_process_mut().fd_table.take(fd) {
-            if entry.release_backend { close_file_handle(entry.handle); }
+            if entry.release_backend {
+                close_file_handle(entry.handle);
+            }
         }
     }
 }
@@ -5418,8 +5635,8 @@ fn sys_linux_ppoll(frame: &mut SyscallFrame) -> u64 {
         if seconds < 0 || !(0..1_000_000_000).contains(&nanos) {
             return linux_errno(22);
         }
-        (seconds as u128 * 1_000 + (nanos as u128 + 999_999) / 1_000_000)
-            .min(i32::MAX as u128) as i32
+        (seconds as u128 * 1_000 + (nanos as u128 + 999_999) / 1_000_000).min(i32::MAX as u128)
+            as i32
     };
     sys_linux_poll_with_timeout(frame, timeout_ms)
 }
@@ -5529,8 +5746,13 @@ fn linux_poll_ready(
         let (readable, writable) = if fd == 0 && has_input {
             (true, false)
         } else {
-            sched.current_shared_process().fd_table.get(fd)
-                .map(|e| crate::process::epoll::fd_ready(fd, e.handle, sched.current_shared_process()))
+            sched
+                .current_shared_process()
+                .fd_table
+                .get(fd)
+                .map(|e| {
+                    crate::process::epoll::fd_ready(fd, e.handle, sched.current_shared_process())
+                })
                 .unwrap_or((false, false))
         };
         if events & 0x0001 != 0 && readable {
@@ -5637,7 +5859,12 @@ fn sys_linux_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
 
         // Target must exist for ADD/MOD (except we allow ADD only for open fds).
         if op == EPOLL_CTL_ADD || op == EPOLL_CTL_MOD {
-            if sched.current_shared_process().fd_table.get(target_fd).is_none() {
+            if sched
+                .current_shared_process()
+                .fd_table
+                .get(target_fd)
+                .is_none()
+            {
                 return linux_errno(9);
             }
         }
@@ -6030,7 +6257,10 @@ fn sys_linux_rt_sigaction(frame: &mut SyscallFrame) -> u64 {
     };
     if oldact != 0 {
         let action = crate::sched::with_scheduler(|sched| {
-            sched.current_shared_process().signal_state.get_handler(signal)
+            sched
+                .current_shared_process()
+                .signal_state
+                .get_handler(signal)
         });
         let handler = match action.handler {
             crate::process::signal::SigHandler::Default => 0,
@@ -6283,7 +6513,8 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
     let request = frame.rsi;
     let argp = frame.rdx;
 
-    if request == 0x5421 { // FIONBIO applies to the open description, including pipes.
+    if request == 0x5421 {
+        // FIONBIO applies to the open description, including pipes.
         {
             let sched = crate::sched::SCHEDULER.lock();
             if sched.current_shared_process().fd_table.get(fd).is_none() {
@@ -6297,7 +6528,9 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
         let mut sched = crate::sched::SCHEDULER.lock();
         let table = &mut sched.current_shared_process_mut().fd_table;
         let status = table.status_flags(fd).ok_or(());
-        let Ok(status) = status else { return linux_errno(9) };
+        let Ok(status) = status else {
+            return linux_errno(9);
+        };
         let nonblock = sunlight_compat_linux::abi::O_NONBLOCK as u32;
         let before = status;
         let status = if i32::from_ne_bytes(value) != 0 {
@@ -6308,10 +6541,17 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
         if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
             crate::serial_println!(
                 "[HELIOS-FD-TRACE] FIONBIO fd={} value={} status_before={:#x} status_after={:#x}",
-                fd, i32::from_ne_bytes(value), before, status
+                fd,
+                i32::from_ne_bytes(value),
+                before,
+                status
             );
         }
-        return if table.set_status_flags(fd, status).is_ok() { 0 } else { linux_errno(9) };
+        return if table.set_status_flags(fd, status).is_ok() {
+            0
+        } else {
+            linux_errno(9)
+        };
     }
 
     match request {
@@ -6324,8 +6564,7 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
                 if !entry.handle.is_tty_stdin() && !entry.handle.is_tty_stdout() {
                     return linux_errno(25); // ENOTTY
                 }
-                let Some(termios) = sched.current_process().linux_state().map(|s| s.termios)
-                else {
+                let Some(termios) = sched.current_process().linux_state().map(|s| s.termios) else {
                     return linux_errno(38);
                 };
                 termios
@@ -6353,8 +6592,11 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
                 let is_raw = new_termios.c_lflag & ICANON == 0;
                 state.termios = new_termios;
                 if was_raw != is_raw {
-                    crate::serial_println!("[HELIOS] TTY mode → {} (pid={})",
-                        if is_raw { "raw" } else { "cooked" }, process.pid);
+                    crate::serial_println!(
+                        "[HELIOS] TTY mode → {} (pid={})",
+                        if is_raw { "raw" } else { "cooked" },
+                        process.pid
+                    );
                 }
                 return 0;
             }
@@ -6369,8 +6611,16 @@ fn sys_linux_ioctl(frame: &mut SyscallFrame) -> u64 {
             wire[17..36].copy_from_slice(&termios.c_cc[..19]);
             // termios2 reports a numeric baud rate, while the existing
             // default termios stores the B38400 speed selector.
-            let ispeed = if termios.c_ispeed == 15 { 38_400 } else { termios.c_ispeed };
-            let ospeed = if termios.c_ospeed == 15 { 38_400 } else { termios.c_ospeed };
+            let ispeed = if termios.c_ispeed == 15 {
+                38_400
+            } else {
+                termios.c_ispeed
+            };
+            let ospeed = if termios.c_ospeed == 15 {
+                38_400
+            } else {
+                termios.c_ospeed
+            };
             wire[36..40].copy_from_slice(&ispeed.to_ne_bytes());
             wire[40..44].copy_from_slice(&ospeed.to_ne_bytes());
             if crate::memory::user::copy_to_current(argp, &wire).is_err() {
@@ -6509,7 +6759,6 @@ fn sys_linux_readv(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn sys_linux_iov(frame: &mut SyscallFrame, read: bool) -> u64 {
-
     let fd = frame.rdi as i32;
     let iov_ptr = frame.rsi;
     let iovcnt = frame.rdx as usize;
@@ -6598,7 +6847,11 @@ fn sys_linux_iov(frame: &mut SyscallFrame, read: bool) -> u64 {
                 return total_written;
             }
             if res > chunk {
-                return if total_written == 0 { linux_errno(5) } else { total_written };
+                return if total_written == 0 {
+                    linux_errno(5)
+                } else {
+                    total_written
+                };
             }
 
             total_written = total_written.saturating_add(res);
@@ -6654,8 +6907,17 @@ fn sys_readdir(frame: &mut SyscallFrame, offset: usize) -> u64 {
         let Some(vfs) = guard.as_mut() else {
             return u64::MAX;
         };
-        let stat = match vfs.stat(path) { Ok(stat) => stat, Err(_) => return u64::MAX };
-        if !sunlight_fs::permission::check_permission(&stat, &sunlight_fs::permission::Credential { uid, gid }, sunlight_fs::permission::PermCheck::Read) { return ERR_EACCES; }
+        let stat = match vfs.stat(path) {
+            Ok(stat) => stat,
+            Err(_) => return u64::MAX,
+        };
+        if !sunlight_fs::permission::check_permission(
+            &stat,
+            &sunlight_fs::permission::Credential { uid, gid },
+            sunlight_fs::permission::PermCheck::Read,
+        ) {
+            return ERR_EACCES;
+        }
         if vfs
             .read_dir(path, &mut |entry| {
                 if skipped < offset {
@@ -6966,15 +7228,7 @@ fn sys_dir_sync(frame: &mut SyscallFrame) -> u64 {
     let path_buf = resolve_current_path(raw_path);
     let path = path_buf.as_str();
     let (_, _, actor) = current_fs_actor();
-    if !sunlight_fs::can_write(
-        actor,
-        path,
-        sunlight_fs::FsOperation::Write,
-        None,
-        false,
-    )
-    .allowed
-    {
+    if !sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Write, None, false).allowed {
         return ERR_EACCES;
     }
     let mut guard = crate::KERNEL_VFS.lock();
@@ -6995,7 +7249,11 @@ fn sys_linux_fchmod(frame: &mut SyscallFrame) -> u64 {
 
     let handle = {
         let sched = crate::sched::SCHEDULER.lock();
-        match sched.current_shared_process().fd_table.get(frame.rdi as i32) {
+        match sched
+            .current_shared_process()
+            .fd_table
+            .get(frame.rdi as i32)
+        {
             None => return linux_errno(abi::EBADF as u64),
             Some(fd) if fd.handle.is_vfs() => fd.handle.vfs_handle(),
             Some(_) => return linux_errno(abi::EINVAL as u64),
@@ -7079,7 +7337,15 @@ fn sys_chown(frame: &mut SyscallFrame) -> u64 {
     };
     let uid = frame.rsi as u32;
     let gid = frame.rdx as u32;
-    if matches!(path, "/etc/passwd" | "/etc/group" | "/etc/shadow" | "/etc/.shadow-uac-new" | "/etc/.group-uac-new" | "/etc/.passwd-uac-new") {
+    if matches!(
+        path,
+        "/etc/passwd"
+            | "/etc/group"
+            | "/etc/shadow"
+            | "/etc/.shadow-uac-new"
+            | "/etc/.group-uac-new"
+            | "/etc/.passwd-uac-new"
+    ) {
         return u64::MAX;
     }
 
@@ -7112,9 +7378,11 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
         let mut sched = crate::sched::SCHEDULER.lock();
         match sched.current_shared_process_mut().fd_table.take(fd) {
             Ok(entry) => {
-                if !entry.release_backend { return 0; }
+                if !entry.release_backend {
+                    return 0;
+                }
                 entry.handle
-            },
+            }
             Err(_) => return ERR_EBADF,
         }
     };
@@ -7124,7 +7392,8 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
         crate::sched::with_scheduler(|s| s.wake_linux_pipe(handle.pipe_index()));
         0
     } else if handle.is_socket() {
-        let rings = crate::process::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint());
+        let rings =
+            crate::process::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint());
         close_file_handle(handle);
         if let Some((read, write)) = rings {
             crate::sched::with_scheduler(|s| {
@@ -7201,17 +7470,29 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                         return linux_errno(22);
                     }
                     let idx = fd_entry.handle.eventfd_index();
-                    let nonblock = sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) & EFD_NONBLOCK != 0;
+                    let nonblock = sched
+                        .current_shared_process()
+                        .fd_table
+                        .status_flags(fd)
+                        .unwrap_or(0)
+                        & EFD_NONBLOCK
+                        != 0;
                     match eventfd::read(idx) {
                         Ok(value) => {
                             trace_yazi_eventfd_io("read", fd, value);
                             let is_linux = sched.current_process().is_linux_compat();
                             // A read frees capacity even when the later user
                             // copy faults; wake capacity waiters immediately.
-                            crate::process::epoll::refresh_after_io(fd_entry.handle, sched.current_shared_process());
+                            crate::process::epoll::refresh_after_io(
+                                fd_entry.handle,
+                                sched.current_shared_process(),
+                            );
                             sched.wake_linux_eventfd(idx);
                             if let Err(error) = crate::memory::user::copy_to_process_bytes(
-                                sched.current_process(), hhdm, frame.rsi, &value.to_ne_bytes(),
+                                sched.current_process(),
+                                hhdm,
+                                frame.rsi,
+                                &value.to_ne_bytes(),
                             ) {
                                 return user_memory_failure_for(is_linux, error);
                             }
@@ -7225,10 +7506,17 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     }
                 } else if fd_entry.handle.is_pipe() || fd_entry.handle.is_socket() {
                     let pipe_idx = if fd_entry.handle.is_socket() {
-                        let Some((read, _)) = crate::process::pipe::socket_stream(fd_entry.handle.socket_index(), fd_entry.handle.socket_endpoint()) else { return ERR_EBADF };
+                        let Some((read, _)) = crate::process::pipe::socket_stream(
+                            fd_entry.handle.socket_index(),
+                            fd_entry.handle.socket_endpoint(),
+                        ) else {
+                            return ERR_EBADF;
+                        };
                         read
                     } else {
-                        if fd_entry.handle.pipe_is_write() { return ERR_EBADF; }
+                        if fd_entry.handle.pipe_is_write() {
+                            return ERR_EBADF;
+                        }
                         fd_entry.handle.pipe_index()
                     };
                     let mut kernel_buf = [0u8; 4096];
@@ -7236,7 +7524,10 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
 
                     match crate::process::pipe::pipe_read(pipe_idx, &mut kernel_buf[..read_size]) {
                         crate::process::pipe::PipeResult::Ok(n) => {
-                            crate::process::epoll::refresh_after_io(fd_entry.handle, sched.current_shared_process());
+                            crate::process::epoll::refresh_after_io(
+                                fd_entry.handle,
+                                sched.current_shared_process(),
+                            );
                             sched.wake_linux_pipe(pipe_idx);
                             let is_linux = sched.current_process().is_linux_compat();
                             if let Err(error) = crate::memory::user::copy_to_process_bytes(
@@ -7250,11 +7541,24 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             n as u64
                         }
                         crate::process::pipe::PipeResult::WouldBlock => {
-                            crate::process::epoll::refresh_after_io(fd_entry.handle, sched.current_shared_process());
+                            crate::process::epoll::refresh_after_io(
+                                fd_entry.handle,
+                                sched.current_shared_process(),
+                            );
                             let is_linux = sched.current_process().is_linux_compat();
-                            let nonblocking = sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) & 0x800 != 0;
+                            let nonblocking = sched
+                                .current_shared_process()
+                                .fd_table
+                                .status_flags(fd)
+                                .unwrap_or(0)
+                                & 0x800
+                                != 0;
                             if dontwait || nonblocking {
-                                if is_linux { linux_errno(11) } else { EAGAIN }
+                                if is_linux {
+                                    linux_errno(11)
+                                } else {
+                                    EAGAIN
+                                }
                             } else {
                                 wait_pipe_io(frame, &mut sched, pipe_idx, false)
                             }
@@ -7272,9 +7576,11 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     let read = {
                         let mut guard = crate::KERNEL_VFS.lock();
                         match guard.as_mut() {
-                            Some(vfs) => {
-                                vfs.read(vfs_handle, fd_entry.current_offset(), &mut kernel_buf[..to_read])
-                            }
+                            Some(vfs) => vfs.read(
+                                vfs_handle,
+                                fd_entry.current_offset(),
+                                &mut kernel_buf[..to_read],
+                            ),
                             None => return ERR_EIO,
                         }
                     };
@@ -7289,7 +7595,9 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             ) {
                                 return user_memory_failure_for(is_linux, error);
                             }
-                            if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
+                            if let Some(entry) =
+                                sched.current_shared_process_mut().fd_table.get_mut(fd)
+                            {
                                 // The overflow preflight above covers `n <= to_read`.
                                 entry.set_offset(fd_entry.current_offset() + n);
                             }
@@ -7310,8 +7618,13 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     if n == 0 {
                         let is_linux = sched.current_process().is_linux_compat();
                         let nonblocking = dontwait
-                            || sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0)
-                                & sunlight_compat_linux::abi::O_NONBLOCK as u32 != 0;
+                            || sched
+                                .current_shared_process()
+                                .fd_table
+                                .status_flags(fd)
+                                .unwrap_or(0)
+                                & sunlight_compat_linux::abi::O_NONBLOCK as u32
+                                != 0;
                         if !nonblocking {
                             // Input producers enqueue before taking SCHEDULER to wake
                             // sleepers. Keep the empty check and sleep registration
@@ -7350,7 +7663,9 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                                 (1, b'[') => 2,
                                 (2, b'B') => {
                                     if !ARROW_SEEN.swap(true, Ordering::Relaxed) {
-                                        crate::serial_println!("[HELIOS-YAZI] arrow-down read from tty");
+                                        crate::serial_println!(
+                                            "[HELIOS-YAZI] arrow-down read from tty"
+                                        );
                                     }
                                     0
                                 }
@@ -7435,17 +7750,29 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     let mut bytes = [0u8; 8];
                     let is_linux = sched.current_process().is_linux_compat();
                     if let Err(error) = crate::memory::user::copy_from_process_bytes(
-                        sched.current_process(), hhdm, frame.rsi, &mut bytes,
+                        sched.current_process(),
+                        hhdm,
+                        frame.rsi,
+                        &mut bytes,
                     ) {
                         return user_memory_failure_for(is_linux, error);
                     }
                     let value = u64::from_ne_bytes(bytes);
                     let idx = fd_entry.handle.eventfd_index();
-                    let nonblock = sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) & EFD_NONBLOCK != 0;
+                    let nonblock = sched
+                        .current_shared_process()
+                        .fd_table
+                        .status_flags(fd)
+                        .unwrap_or(0)
+                        & EFD_NONBLOCK
+                        != 0;
                     match eventfd::write(idx, value) {
                         Ok(()) => {
                             trace_yazi_eventfd_io("write", fd, value);
-                            crate::process::epoll::refresh_after_io(fd_entry.handle, sched.current_shared_process());
+                            crate::process::epoll::refresh_after_io(
+                                fd_entry.handle,
+                                sched.current_shared_process(),
+                            );
                             sched.wake_linux_eventfd(idx);
                             8
                         }
@@ -7457,10 +7784,17 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     }
                 } else if fd_entry.handle.is_pipe() || fd_entry.handle.is_socket() {
                     let pipe_idx = if fd_entry.handle.is_socket() {
-                        let Some((_, write)) = crate::process::pipe::socket_stream(fd_entry.handle.socket_index(), fd_entry.handle.socket_endpoint()) else { return ERR_EBADF };
+                        let Some((_, write)) = crate::process::pipe::socket_stream(
+                            fd_entry.handle.socket_index(),
+                            fd_entry.handle.socket_endpoint(),
+                        ) else {
+                            return ERR_EBADF;
+                        };
                         write
                     } else {
-                        if !fd_entry.handle.pipe_is_write() { return ERR_EBADF; }
+                        if !fd_entry.handle.pipe_is_write() {
+                            return ERR_EBADF;
+                        }
                         fd_entry.handle.pipe_index()
                     };
                     let write_size = core::cmp::min(count, 4096);
@@ -7477,13 +7811,25 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
 
                     match crate::process::pipe::pipe_write(pipe_idx, &kernel_buf[..write_size]) {
                         crate::process::pipe::PipeResult::Ok(n) => {
-                            crate::process::epoll::refresh_after_io(fd_entry.handle, sched.current_shared_process());
+                            crate::process::epoll::refresh_after_io(
+                                fd_entry.handle,
+                                sched.current_shared_process(),
+                            );
                             sched.wake_linux_pipe(pipe_idx);
                             n as u64
                         }
                         crate::process::pipe::PipeResult::WouldBlock => {
-                            crate::process::epoll::refresh_after_io(fd_entry.handle, sched.current_shared_process());
-                            let nonblocking = sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) & 0x800 != 0;
+                            crate::process::epoll::refresh_after_io(
+                                fd_entry.handle,
+                                sched.current_shared_process(),
+                            );
+                            let nonblocking = sched
+                                .current_shared_process()
+                                .fd_table
+                                .status_flags(fd)
+                                .unwrap_or(0)
+                                & 0x800
+                                != 0;
                             if !dontwait && !nonblocking {
                                 wait_pipe_io(frame, &mut sched, pipe_idx, true)
                             } else if sched.current_process().is_linux_compat() {
@@ -7493,7 +7839,11 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             }
                         }
                         crate::process::pipe::PipeResult::BrokenPipe => {
-                            if sched.current_process().is_linux_compat() { linux_errno(32) } else { ERR_EPIPE }
+                            if sched.current_process().is_linux_compat() {
+                                linux_errno(32)
+                            } else {
+                                ERR_EPIPE
+                            }
                         }
                         crate::process::pipe::PipeResult::Eof => u64::MAX,
                     }
@@ -7514,7 +7864,15 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                         let mut guard = crate::KERNEL_VFS.lock();
                         match guard.as_mut() {
                             Some(vfs) => {
-                                let offset = if sched.current_shared_process().fd_table.status_flags(fd).unwrap_or(0) as u64 & O_APPEND != 0 {
+                                let offset = if sched
+                                    .current_shared_process()
+                                    .fd_table
+                                    .status_flags(fd)
+                                    .unwrap_or(0)
+                                    as u64
+                                    & O_APPEND
+                                    != 0
+                                {
                                     match vfs.fstat_handle(vfs_handle) {
                                         Ok(stat) => stat.size,
                                         Err(_) => return u64::MAX,
@@ -7533,7 +7891,9 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                     };
                     match written {
                         Ok((offset, n)) => {
-                            if let Some(entry) = sched.current_shared_process_mut().fd_table.get_mut(fd) {
+                            if let Some(entry) =
+                                sched.current_shared_process_mut().fd_table.get_mut(fd)
+                            {
                                 entry.set_offset(offset + n);
                             }
                             n as u64
@@ -7590,11 +7950,16 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                                 crate::serial_println!("[HELIOS-YAZI] first render confirmed");
                             }
                             if YAZI_TTY_TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 16 {
-                                crate::serial_println!("[HELIOS-YAZI-TTY] tid={} {:?}", sched.current_process().pid, text);
+                                crate::serial_println!(
+                                    "[HELIOS-YAZI-TTY] tid={} {:?}",
+                                    sched.current_process().pid,
+                                    text
+                                );
                             }
                         }
                     }
-                    let written = crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]);
+                    let written =
+                        crate::process::tty_io::write_stdout(tab, &kernel_buf[..write_size]);
                     if sched.current_process().name_str() == "yazi" {
                         if written < write_size {
                             crate::serial_println!(
@@ -7613,7 +7978,9 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             .current_shared_process()
                             .fd_table
                             .status_flags(fd)
-                            .unwrap_or(0) & 0x800 != 0;
+                            .unwrap_or(0)
+                            & 0x800
+                            != 0;
                         if !dontwait && !nonblocking {
                             sched.block_current_tty_write(tab);
                             frame.rcx = frame.rcx.saturating_sub(2);
@@ -7783,7 +8150,11 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
     let old_fd = frame.rdi as i32;
     let new_fd = frame.rsi as i32;
     let mut sched = crate::sched::SCHEDULER.lock();
-    match sched.current_shared_process_mut().fd_table.dup2(old_fd, new_fd) {
+    match sched
+        .current_shared_process_mut()
+        .fd_table
+        .dup2(old_fd, new_fd)
+    {
         Ok((fd, displaced)) => {
             drop(sched);
             if let Some(handle) = displaced {
@@ -7947,17 +8318,16 @@ fn sys_fcntl(frame: &mut SyscallFrame) -> u64 {
             }
             0
         }
-        F_GETFL => {
-            proc.fd_table.status_flags(fd).unwrap_or(0) as u64
-        }
+        F_GETFL => proc.fd_table.status_flags(fd).unwrap_or(0) as u64,
         F_SETFL => {
             // Access mode and other creation flags are immutable via F_SETFL.
             const STATUS_MASK: u32 = (sunlight_compat_linux::abi::O_APPEND
                 | sunlight_compat_linux::abi::O_NONBLOCK)
                 as u32;
             let current = proc.fd_table.status_flags(fd).unwrap_or(0);
-            let _ = proc.fd_table.set_status_flags(fd,
-                (current & !STATUS_MASK) | (arg as u32 & STATUS_MASK));
+            let _ = proc
+                .fd_table
+                .set_status_flags(fd, (current & !STATUS_MASK) | (arg as u32 & STATUS_MASK));
             0
         }
         F_DUPFD | F_DUPFD_CLOEXEC => {
@@ -8043,7 +8413,9 @@ fn sys_mmap(frame: &mut SyscallFrame) -> u64 {
                 pmm.free_page_count() as u64,
                 after.candidate_scans.saturating_sub(before.candidate_scans),
                 after.pages_reclaimed.saturating_sub(before.pages_reclaimed),
-                after.watermark_activations.saturating_sub(before.watermark_activations),
+                after
+                    .watermark_activations
+                    .saturating_sub(before.watermark_activations),
             ],
         );
     }
@@ -8742,7 +9114,9 @@ fn sys_shm_map(frame: &mut SyscallFrame) -> u64 {
             if consume_success_log_budget(&SHM_MAP_SUCCESS_LOGS) {
                 crate::serial_println!("[SHM]  map_shared_page: OK");
             }
-            frame.r8 = caps.resolve_shared_region(token).map_or(0, |object| object.size as u64);
+            frame.r8 = caps
+                .resolve_shared_region(token)
+                .map_or(0, |object| object.size as u64);
             virt.as_u64()
         }
         Err(_) => u64::MAX,
@@ -9047,7 +9421,10 @@ fn framebuffer_cache_label(flags: PageTableFlags, leaf_pat: bool) -> &'static st
 }
 
 fn sys_map_telemetry(_frame: &mut SyscallFrame) -> u64 {
-    if matches!(option_env!("SUNLIGHT_INJECT_PHASE"), Some("shell-phase2" | "shell-pty-liveness")) {
+    if matches!(
+        option_env!("SUNLIGHT_INJECT_PHASE"),
+        Some("shell-phase2" | "shell-pty-liveness")
+    ) {
         let sched = crate::sched::SCHEDULER.lock();
         if sched.current_process().name_str() == "sshl" {
             crate::ipc::trace_pty_liveness(&sched);
@@ -9695,6 +10072,7 @@ const AUDIOD_MMIO_VADDR: u64 = 0x0000_0005_2000_0000;
 const AUDIOD_DMA_VADDR: u64 = 0x0000_0005_3000_0000;
 const AUDIOD_MAX_BAR_SIZE: u64 = 1024 * 1024;
 const AUDIOD_MAX_DMA_PAGES: usize = 32;
+const ES1371_MAX_IO_SIZE: u32 = 0x1000;
 
 static XHCI_BAR_PHYS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static XHCI_BAR_SIZE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
@@ -9702,6 +10080,9 @@ static HDA_BAR_PHYS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU
 static HDA_BAR_SIZE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static HDA_PCI_IDS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static HDA_PCI_LOC: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static ES1371_IO_BASE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static ES1371_IO_SIZE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static ES1371_PCI_IDS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 #[derive(Clone, Copy)]
 enum DeviceGrant {
@@ -9989,6 +10370,188 @@ fn sys_hda_info(frame: &mut SyscallFrame) -> u64 {
                 frame.r8 = packed_ids;
                 return physical;
             }
+        }
+    }
+    0
+}
+
+/// Locate and claim the Ensoniq AudioPCI ES1371 I/O BAR for audiod.
+///
+/// The BAR probe is bounded and restores the original value. PCI command
+/// bits unrelated to I/O decoding and bus mastering are preserved.
+fn sys_es1371_info(frame: &mut SyscallFrame) -> u64 {
+    if !matches!(current_device_grant(), Some(DeviceGrant::Audiod)) {
+        return u64::MAX;
+    }
+    use sunlight_virtio::pci::{pci_read32, pci_read8, pci_write32};
+
+    let cached_base = ES1371_IO_BASE.load(core::sync::atomic::Ordering::Acquire);
+    if cached_base != 0 {
+        if frame.rdi == 1 || frame.rdi == 2 {
+            for bus in 0u8..8 {
+                for slot in 0u8..32 {
+                    let header = unsafe { pci_read32(bus, slot, 0, 0x0c) };
+                    let functions = if (header >> 16) as u8 & 0x80 != 0 {
+                        8
+                    } else {
+                        1
+                    };
+                    for function in 0..functions {
+                        let ids = unsafe { pci_read32(bus, slot, function, 0x00) };
+                        if (ids & 0xffff) as u16 == 0x1274 && (ids >> 16) as u16 == 0x1371 {
+                            crate::hardware_inventory::update_pci(
+                                bus,
+                                slot,
+                                function,
+                                crate::hardware_inventory::pack_short_name("es1371"),
+                                crate::hardware_inventory::pack_short_name("audiod"),
+                                if frame.rdi == 1 {
+                                    ::sunlight_ipc::HardwareState::Active
+                                } else {
+                                    ::sunlight_ipc::HardwareState::ProbeFailed
+                                },
+                                if frame.rdi == 1 {
+                                    ::sunlight_ipc::HardwareFailureStage::None
+                                } else {
+                                    ::sunlight_ipc::HardwareFailureStage::DeviceInitialization
+                                },
+                                if frame.rdi == 1 { 0 } else { 1 },
+                            );
+                            return 0;
+                        }
+                    }
+                }
+            }
+            return u64::MAX;
+        }
+        frame.rdx = ES1371_IO_SIZE.load(core::sync::atomic::Ordering::Acquire);
+        frame.r8 = ES1371_PCI_IDS.load(core::sync::atomic::Ordering::Acquire);
+        return cached_base;
+    }
+
+    for bus in 0u8..8 {
+        for slot in 0u8..32 {
+            let header = unsafe { pci_read32(bus, slot, 0, 0x0c) };
+            let functions = if (header >> 16) as u8 & 0x80 != 0 {
+                8
+            } else {
+                1
+            };
+            for function in 0..functions {
+                let ids = unsafe { pci_read32(bus, slot, function, 0x00) };
+                if ids == 0xffff_ffff
+                    || (ids & 0xffff) as u16 != 0x1274
+                    || (ids >> 16) as u16 != 0x1371
+                {
+                    continue;
+                }
+                let raw_bar = unsafe { pci_read32(bus, slot, function, 0x10) };
+                if raw_bar & 1 == 0 {
+                    continue;
+                }
+                let command = unsafe { pci_read32(bus, slot, function, 0x04) };
+                unsafe {
+                    pci_write32(bus, slot, function, 0x04, command & !0x5);
+                    pci_write32(bus, slot, function, 0x10, 0xffff_ffff);
+                }
+                let mask = unsafe { pci_read32(bus, slot, function, 0x10) };
+                unsafe {
+                    pci_write32(bus, slot, function, 0x10, raw_bar);
+                    pci_write32(bus, slot, function, 0x04, command | 0x5);
+                }
+                let base = (raw_bar & !0x3) as u64;
+                // The low two bits of an I/O BAR are type flags, not size
+                // address bits. Mask them before applying the PCI sizing rule.
+                let size = (!(mask & !0x3)).wrapping_add(1);
+                if base == 0
+                    || size < 0x40
+                    || size > ES1371_MAX_IO_SIZE
+                    || !size.is_power_of_two()
+                    || (base & (size as u64 - 1)) != 0
+                    || base > u16::MAX as u64
+                    || base + size as u64 > (u16::MAX as u64 + 1)
+                {
+                    continue;
+                }
+                let irq = unsafe { pci_read8(bus, slot, function, 0x3c) };
+                let packed_ids = ids as u64 | ((irq as u64) << 32);
+                ES1371_IO_BASE.store(base, core::sync::atomic::Ordering::Release);
+                ES1371_IO_SIZE.store(size as u64, core::sync::atomic::Ordering::Release);
+                ES1371_PCI_IDS.store(packed_ids, core::sync::atomic::Ordering::Release);
+                crate::hardware_inventory::update_pci(
+                    bus,
+                    slot,
+                    function,
+                    crate::hardware_inventory::pack_short_name("es1371"),
+                    crate::hardware_inventory::pack_short_name("audiod"),
+                    ::sunlight_ipc::HardwareState::Loaded,
+                    ::sunlight_ipc::HardwareFailureStage::None,
+                    0,
+                );
+                crate::serial_println!(
+                    "[ES1371] pci {:04x}:{:04x} @ {}:{}.{} io={:#x} size={:#x} irq={}",
+                    ids as u16,
+                    (ids >> 16) as u16,
+                    bus,
+                    slot,
+                    function,
+                    base,
+                    size,
+                    irq
+                );
+                frame.rdx = size as u64;
+                frame.r8 = packed_ids;
+                return base;
+            }
+        }
+    }
+    0
+}
+
+fn es1371_port_allowed(port: u16, width: u8) -> bool {
+    let base = ES1371_IO_BASE.load(core::sync::atomic::Ordering::Acquire);
+    let size = ES1371_IO_SIZE.load(core::sync::atomic::Ordering::Acquire);
+    matches!(width, 1 | 2 | 4)
+        && base != 0
+        && (port as u64) >= base
+        && (port as u64).saturating_add(width as u64) <= base.saturating_add(size)
+}
+
+fn sys_io_port_read(frame: &mut SyscallFrame) -> u64 {
+    if !matches!(current_device_grant(), Some(DeviceGrant::Audiod))
+        || frame.rdi > u16::MAX as u64
+        || frame.rsi > u8::MAX as u64
+        || !es1371_port_allowed(frame.rdi as u16, frame.rsi as u8)
+    {
+        return u64::MAX;
+    }
+    let port = frame.rdi as u16;
+    let value = unsafe {
+        match frame.rsi as u8 {
+            1 => x86_64::instructions::port::Port::<u8>::new(port).read() as u32,
+            2 => x86_64::instructions::port::Port::<u16>::new(port).read() as u32,
+            4 => x86_64::instructions::port::Port::<u32>::new(port).read(),
+            _ => return u64::MAX,
+        }
+    };
+    value as u64
+}
+
+fn sys_io_port_write(frame: &mut SyscallFrame) -> u64 {
+    if !matches!(current_device_grant(), Some(DeviceGrant::Audiod))
+        || frame.rdi > u16::MAX as u64
+        || frame.rsi > u8::MAX as u64
+        || !es1371_port_allowed(frame.rdi as u16, frame.rsi as u8)
+    {
+        return u64::MAX;
+    }
+    let port = frame.rdi as u16;
+    unsafe {
+        match frame.rsi as u8 {
+            1 => x86_64::instructions::port::Port::<u8>::new(port).write(frame.rdx as u8),
+            2 => x86_64::instructions::port::Port::<u16>::new(port).write(frame.rdx as u16),
+            4 => x86_64::instructions::port::Port::<u32>::new(port).write(frame.rdx as u32),
+            _ => return u64::MAX,
         }
     }
     0

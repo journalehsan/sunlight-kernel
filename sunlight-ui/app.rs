@@ -795,15 +795,20 @@ impl Window {
 
     /// Update the compositor title without retaining or leaking a title string.
     pub fn set_title(&self, title: &str) -> bool {
-        let Ok((ptr, cap)) = shm_create(4096, 0) else { return false; };
+        let Ok((ptr, cap)) = shm_create(4096, 0) else {
+            return false;
+        };
         let bytes = title.as_bytes();
         let len = bytes.len().min(4095);
         unsafe {
             core::ptr::write_bytes(ptr, 0, 4096);
             core::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, len);
         }
-        let result = self.display_call(IpcMsg::with_label(SgpMsg::CONFIGURE_WINDOW)
-            .word(0, self.win_id).with_cap(0, cap));
+        let result = self.display_call(
+            IpcMsg::with_label(SgpMsg::CONFIGURE_WINDOW)
+                .word(0, self.win_id)
+                .with_cap(0, cap),
+        );
         let _ = shm_free(cap);
         result
     }

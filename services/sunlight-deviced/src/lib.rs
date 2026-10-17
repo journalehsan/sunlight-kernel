@@ -356,6 +356,7 @@ pub const fn class_label(class: u8, subclass: u8) -> &'static str {
         (0x01, _) => "Storage",
         (0x02, 0x00) => "Network",
         (0x03, _) => "Display",
+        (0x04, 0x01) => "Audio devices",
         (0x04, _) => "Multimedia",
         (0x06, _) => "Bridge",
         (0x0c, 0x03) => "USB",
@@ -374,6 +375,7 @@ pub const fn device_name(bus: HardwareBus, vendor: u16, device: u16, _class: u8)
         (HardwareBus::Pci, 0x1af4, 0x1050) => "VirtIO GPU",
         (HardwareBus::Pci, 0x15ad, 0x07b0) => "VMware VMXNET3 Ethernet",
         (HardwareBus::Pci, 0x15ad, 0x0405) => "VMware SVGA II",
+        (HardwareBus::Pci, 0x1274, 0x1371) => "Ensoniq AudioPCI ES1371",
         _ => "",
     }
 }
@@ -855,5 +857,14 @@ mod tests {
         assert_eq!(summary.vendor_id(), None);
         assert_eq!(summary.device_id(), None);
         assert_eq!(state_label(summary.state), "unknown");
+    }
+
+    #[test]
+    fn es1371_has_audio_identity_and_class_label() {
+        assert_eq!(
+            device_name(HardwareBus::Pci, 0x1274, 0x1371, 0x04),
+            "Ensoniq AudioPCI ES1371"
+        );
+        assert_eq!(class_label(0x04, 0x01), "Audio devices");
     }
 }

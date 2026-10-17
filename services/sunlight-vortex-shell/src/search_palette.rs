@@ -209,7 +209,14 @@ pub(crate) static SEARCH_REGISTRY: &[SearchEntry] = &[
         action: SearchAction::LaunchApp(AppId::Welcome),
         category: "System",
     },
-    SearchEntry { app_id: AppId::VoiceRecorder, title: "Voice Recorder", aliases: &["recorder", "sunlight-voice-recorder"], keywords: &["microphone", "record", "audio", "wav"], action: SearchAction::LaunchApp(AppId::VoiceRecorder), category: "Multimedia" },
+    SearchEntry {
+        app_id: AppId::VoiceRecorder,
+        title: "Voice Recorder",
+        aliases: &["recorder", "sunlight-voice-recorder"],
+        keywords: &["microphone", "record", "audio", "wav"],
+        action: SearchAction::LaunchApp(AppId::VoiceRecorder),
+        category: "Multimedia",
+    },
     SearchEntry {
         app_id: AppId::DocumentViewer,
         title: "Document Viewer",

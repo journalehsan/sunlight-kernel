@@ -652,7 +652,10 @@ mod tests {
 
     #[test]
     fn special_handling_is_flagged() {
-        assert_eq!(translate_syscall(abi::SYS_CLOCK_NANOSLEEP), abi::SHIM_NANOSLEEP);
+        assert_eq!(
+            translate_syscall(abi::SYS_CLOCK_NANOSLEEP),
+            abi::SHIM_NANOSLEEP
+        );
         assert_eq!(translate_syscall(abi::SYS_READV), abi::SHIM_WRITEV);
         assert!(needs_special_handling(abi::SYS_READV));
         assert!(needs_special_handling(abi::SYS_CLOCK_NANOSLEEP));

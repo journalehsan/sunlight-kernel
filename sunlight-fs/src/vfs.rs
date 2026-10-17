@@ -232,13 +232,22 @@ impl<D: BlockDevice> FatFs<D> {
 
     fn user_metadata(&self, path: &str, mut stat: FileStat) -> FileStat {
         if self.user_storage {
-            if let Some(owner) = path.strip_prefix("/users/").and_then(|p| p.split('/').next()) {
-                if !owner.is_empty() && (owner == "0" || !owner.starts_with('0'))
-                    && owner.bytes().all(|b| b.is_ascii_digit()) {
+            if let Some(owner) = path
+                .strip_prefix("/users/")
+                .and_then(|p| p.split('/').next())
+            {
+                if !owner.is_empty()
+                    && (owner == "0" || !owner.starts_with('0'))
+                    && owner.bytes().all(|b| b.is_ascii_digit())
+                {
                     if let Ok(uid) = owner.parse::<u32>() {
                         stat.uid = uid;
                         stat.gid = uid;
-                        stat.mode = if stat.file_type == FileType::Directory { 0o700 } else { 0o600 };
+                        stat.mode = if stat.file_type == FileType::Directory {
+                            0o700
+                        } else {
+                            0o600
+                        };
                     }
                 }
             }
@@ -407,26 +416,30 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
 
     fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
         let open = self.handle_slot(handle)?;
-        let path = core::str::from_utf8(&open.path[..open.path_len as usize]).map_err(|_| FsError::InvalidPath)?;
-        Ok(self.user_metadata(path, if open.is_dir {
-            FileStat {
-                file_type: FileType::Directory,
-                size: 0,
-                uid: 0,
-                gid: 0,
-                mode: mode::DIR_755,
-                nlinks: 2,
-            }
-        } else {
-            FileStat {
-                file_type: FileType::File,
-                size: open.size as usize,
-                uid: 0,
-                gid: 0,
-                mode: mode::FILE_755,
-                nlinks: 1,
-            }
-        }))
+        let path = core::str::from_utf8(&open.path[..open.path_len as usize])
+            .map_err(|_| FsError::InvalidPath)?;
+        Ok(self.user_metadata(
+            path,
+            if open.is_dir {
+                FileStat {
+                    file_type: FileType::Directory,
+                    size: 0,
+                    uid: 0,
+                    gid: 0,
+                    mode: mode::DIR_755,
+                    nlinks: 2,
+                }
+            } else {
+                FileStat {
+                    file_type: FileType::File,
+                    size: open.size as usize,
+                    uid: 0,
+                    gid: 0,
+                    mode: mode::FILE_755,
+                    nlinks: 1,
+                }
+            },
+        ))
     }
 
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
@@ -435,25 +448,28 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
             .fat
             .stat_path(path.as_bytes())
             .ok_or(FsError::NotFound)?;
-        Ok(self.user_metadata(path, if stat.is_dir {
-            FileStat {
-                file_type: FileType::Directory,
-                size: 0,
-                uid: 0,
-                gid: 0,
-                mode: mode::DIR_755,
-                nlinks: 2,
-            }
-        } else {
-            FileStat {
-                file_type: FileType::File,
-                size: stat.size as usize,
-                uid: 0,
-                gid: 0,
-                mode: mode::FILE_755,
-                nlinks: 1,
-            }
-        }))
+        Ok(self.user_metadata(
+            path,
+            if stat.is_dir {
+                FileStat {
+                    file_type: FileType::Directory,
+                    size: 0,
+                    uid: 0,
+                    gid: 0,
+                    mode: mode::DIR_755,
+                    nlinks: 2,
+                }
+            } else {
+                FileStat {
+                    file_type: FileType::File,
+                    size: stat.size as usize,
+                    uid: 0,
+                    gid: 0,
+                    mode: mode::FILE_755,
+                    nlinks: 1,
+                }
+            },
+        ))
     }
 
     fn mkdir(&mut self, path: &str, _uid: u32, _gid: u32, _mode: u16) -> Result<(), FsError> {
@@ -1346,21 +1362,42 @@ mod tests {
 
     #[test]
     fn state_disk_user_files_have_private_uid_metadata() {
-        let mut image=boot_image();
-        let fat=Fat32::mount(MemDisk::new(&mut image)).unwrap();
-        let mut vfs: Vfs<MemDisk>=Vfs::new();
-        static ROOT: &[RamEntry] = &[RamEntry::dir("/state",0,0,mode::DIR_755)];
-        vfs.mount_ramfs("/",RamFs::new(ROOT)).unwrap();
-        vfs.mount_fat("/state",fat).unwrap();
-        vfs.mkdir("/state/users",0,0,0o755).unwrap();
-        vfs.mkdir("/state/users/1000",1000,1000,0o700).unwrap();
-        let handle=vfs.create_file_exclusive("/state/users/1000/voice.wav",1000,1000,0o600).unwrap();
-        for stat in [vfs.stat("/state/users/1000/voice.wav").unwrap(),vfs.fstat_handle(handle).unwrap()] {
-            assert_eq!(stat.uid,1000); assert_eq!(stat.mode,0o600);
-            assert!(crate::permission::check_permission(&stat,&crate::permission::Credential {uid:1000,gid:1000},crate::permission::PermCheck::Read));
-            assert!(!crate::permission::check_permission(&stat,&crate::permission::Credential {uid:1001,gid:1001},crate::permission::PermCheck::Read));
+        let mut image = boot_image();
+        let fat = Fat32::mount(MemDisk::new(&mut image)).unwrap();
+        let mut vfs: Vfs<MemDisk> = Vfs::new();
+        static ROOT: &[RamEntry] = &[RamEntry::dir("/state", 0, 0, mode::DIR_755)];
+        vfs.mount_ramfs("/", RamFs::new(ROOT)).unwrap();
+        vfs.mount_fat("/state", fat).unwrap();
+        vfs.mkdir("/state/users", 0, 0, 0o755).unwrap();
+        vfs.mkdir("/state/users/1000", 1000, 1000, 0o700).unwrap();
+        let handle = vfs
+            .create_file_exclusive("/state/users/1000/voice.wav", 1000, 1000, 0o600)
+            .unwrap();
+        for stat in [
+            vfs.stat("/state/users/1000/voice.wav").unwrap(),
+            vfs.fstat_handle(handle).unwrap(),
+        ] {
+            assert_eq!(stat.uid, 1000);
+            assert_eq!(stat.mode, 0o600);
+            assert!(crate::permission::check_permission(
+                &stat,
+                &crate::permission::Credential {
+                    uid: 1000,
+                    gid: 1000
+                },
+                crate::permission::PermCheck::Read
+            ));
+            assert!(!crate::permission::check_permission(
+                &stat,
+                &crate::permission::Credential {
+                    uid: 1001,
+                    gid: 1001
+                },
+                crate::permission::PermCheck::Read
+            ));
         }
-        let dir=vfs.stat("/state/users/1000").unwrap(); assert_eq!(dir.mode,0o700);
+        let dir = vfs.stat("/state/users/1000").unwrap();
+        assert_eq!(dir.mode, 0o700);
     }
 
     #[test]

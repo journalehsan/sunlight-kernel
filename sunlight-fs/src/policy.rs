@@ -103,8 +103,20 @@ pub fn can_write(
 
     // The kernel resolves this actor only from the trusted-auth-broker flag.
     // Root GUI clients and generic filesystem capabilities cannot write these.
-    if actor == (Actor::Service { name: "sunlight-uac" })
-        && matches!(path, "/etc/shadow" | "/etc/group" | "/etc/.shadow-uac-new" | "/etc/.group-uac-new" | "/etc/passwd" | "/etc/.passwd-uac-new") {
+    if actor
+        == (Actor::Service {
+            name: "sunlight-uac",
+        })
+        && matches!(
+            path,
+            "/etc/shadow"
+                | "/etc/group"
+                | "/etc/.shadow-uac-new"
+                | "/etc/.group-uac-new"
+                | "/etc/passwd"
+                | "/etc/.passwd-uac-new"
+        )
+    {
         return Decision::allow(PolicyReason::AllowedServiceState);
     }
 
@@ -144,8 +156,7 @@ fn user_decision(uid: u32, name: &str, path: &str, uac_approved: bool) -> Decisi
     // UID or non-canonical spelling cannot authorize a different subtree.
     if let Some(rest) = path.strip_prefix("/state/users/") {
         let owner = rest.split('/').next().unwrap_or("");
-        if owner.parse::<u32>().ok() == Some(uid)
-            && alloc::format!("{}", uid) == owner {
+        if owner.parse::<u32>().ok() == Some(uid) && alloc::format!("{}", uid) == owner {
             return Decision::allow(PolicyReason::AllowedCurrentUserHome);
         }
         return Decision::deny(PolicyReason::DeniedOtherUserHome, FsError::PermissionDenied);
@@ -336,11 +347,23 @@ mod tests {
     use super::*;
     #[test]
     fn disk_user_storage_is_uid_scoped() {
-        let user = Actor::User { uid: 1000, name: "user" };
-        for path in ["/state/users/1000", "/state/users/1000/voice-recorder/session.part"] {
+        let user = Actor::User {
+            uid: 1000,
+            name: "user",
+        };
+        for path in [
+            "/state/users/1000",
+            "/state/users/1000/voice-recorder/session.part",
+        ] {
             assert!(can_write(user, path, FsOperation::Create, None, false).allowed);
         }
-        for path in ["/state/users", "/state/users/0/file", "/state/users/01000/file", "/state/users/10000/file", "/state/sunlight-kv/file"] {
+        for path in [
+            "/state/users",
+            "/state/users/0/file",
+            "/state/users/01000/file",
+            "/state/users/10000/file",
+            "/state/sunlight-kv/file",
+        ] {
             assert!(!can_write(user, path, FsOperation::Create, None, false).allowed);
         }
     }
@@ -460,11 +483,25 @@ mod tests {
     #[test]
     fn only_memorydb_can_write_its_volatile_boot_epoch_marker() {
         assert_eq!(
-            can_write(MEMORYDB, "/tmp/wiseowl-memorydb-boot-epoch", FsOperation::Create, None, false).reason,
+            can_write(
+                MEMORYDB,
+                "/tmp/wiseowl-memorydb-boot-epoch",
+                FsOperation::Create,
+                None,
+                false
+            )
+            .reason,
             PolicyReason::AllowedServiceState
         );
         assert_eq!(
-            can_write(TLS, "/tmp/wiseowl-memorydb-boot-epoch", FsOperation::Create, None, false).reason,
+            can_write(
+                TLS,
+                "/tmp/wiseowl-memorydb-boot-epoch",
+                FsOperation::Create,
+                None,
+                false
+            )
+            .reason,
             PolicyReason::DeniedImmutableRoot
         );
         assert_eq!(
@@ -544,16 +581,42 @@ mod tests {
 #[cfg(test)]
 mod account_policy_tests {
     use super::*;
-    #[test] fn account_storage_is_exclusive_to_trusted_account_service() {
-        let service=Actor::Service{name:"sunlight-uac"};
-        for path in ["/etc/passwd","/etc/shadow","/etc/group","/etc/.shadow-uac-new","/etc/.group-uac-new","/etc/.passwd-uac-new"] {
-            for op in [FsOperation::Create,FsOperation::Write,FsOperation::Delete] {
-                assert!(can_write(service,path,op,None,false).allowed);
-                for actor in [Actor::Unknown,Actor::User{uid:0,name:"root"},Actor::User{uid:42,name:"ada"},Actor::Service{name:"control-panel"},Actor::Service{name:"capability-broker"}] {
-                    assert!(!can_write(actor,path,op,None,true).allowed);
+    #[test]
+    fn account_storage_is_exclusive_to_trusted_account_service() {
+        let service = Actor::Service {
+            name: "sunlight-uac",
+        };
+        for path in [
+            "/etc/passwd",
+            "/etc/shadow",
+            "/etc/group",
+            "/etc/.shadow-uac-new",
+            "/etc/.group-uac-new",
+            "/etc/.passwd-uac-new",
+        ] {
+            for op in [FsOperation::Create, FsOperation::Write, FsOperation::Delete] {
+                assert!(can_write(service, path, op, None, false).allowed);
+                for actor in [
+                    Actor::Unknown,
+                    Actor::User {
+                        uid: 0,
+                        name: "root",
+                    },
+                    Actor::User {
+                        uid: 42,
+                        name: "ada",
+                    },
+                    Actor::Service {
+                        name: "control-panel",
+                    },
+                    Actor::Service {
+                        name: "capability-broker",
+                    },
+                ] {
+                    assert!(!can_write(actor, path, op, None, true).allowed);
                 }
             }
         }
-        assert!(!can_write(service,"/etc/other",FsOperation::Write,None,false).allowed);
+        assert!(!can_write(service, "/etc/other", FsOperation::Write, None, false).allowed);
     }
 }

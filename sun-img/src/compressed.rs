@@ -25,7 +25,9 @@ fn checked_len(width: u32, height: u32) -> Result<usize, ImageError> {
 
 fn check_input(bytes: &[u8]) -> Result<(), ImageError> {
     if bytes.len() > MAX_DECODED_BYTES as usize {
-        return Err(ImageError::DecodeFailed("encoded image exceeds 64 MiB".into()));
+        return Err(ImageError::DecodeFailed(
+            "encoded image exceeds 64 MiB".into(),
+        ));
     }
     Ok(())
 }

@@ -397,7 +397,9 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
 fn open_path(state: &mut State, path: &str) -> IpcMsg {
     // Password material is UAC-private. The legacy daemon's RAMFS is not
     // an authentication database and must never expose its seeded shadow.
-    if path == "/etc/shadow" { return error_reply(FsError::PermissionDenied); }
+    if path == "/etc/shadow" {
+        return error_reply(FsError::PermissionDenied);
+    }
     if path == "/etc/resolv.conf" {
         // Ensure a generated view from resolved (or default). Trusted internal update.
         let _ = ensure_resolv_conf(state);
@@ -500,20 +502,23 @@ fn read_handle(state: &mut State, raw: FileHandle, offset: usize, requested: usi
     let (mount, local) = unpack_handle(raw);
     // Use a larger temp buf so we can take shm path for >48 byte reads (zero-copy grant to caller)
     let mut big_buf = [0u8; 4096];
-    let public_account = open_path_for_handle(state, raw).filter(|p| matches!(*p, "/etc/passwd" | "/etc/group"));
+    let public_account =
+        open_path_for_handle(state, raw).filter(|p| matches!(*p, "/etc/passwd" | "/etc/group"));
     let read_res = if let Some(path) = public_account {
         read_public_account(path, offset, &mut big_buf[..requested])
-    } else { match mount {
-        MOUNT_BOOT => {
-            if let Some(boot) = state.boot.as_mut() {
-                boot.read(local, offset, &mut big_buf[..requested])
-            } else {
-                return error_reply(FsError::BadHandle);
+    } else {
+        match mount {
+            MOUNT_BOOT => {
+                if let Some(boot) = state.boot.as_mut() {
+                    boot.read(local, offset, &mut big_buf[..requested])
+                } else {
+                    return error_reply(FsError::BadHandle);
+                }
             }
+            MOUNT_RAM => state.vfs.read(local, offset, &mut big_buf[..requested]),
+            _ => return error_reply(FsError::BadHandle),
         }
-        MOUNT_RAM => state.vfs.read(local, offset, &mut big_buf[..requested]),
-        _ => return error_reply(FsError::BadHandle),
-    }};
+    };
     match read_res {
         Ok(n) => {
             if n <= READ_REPLY_BYTES {
@@ -570,8 +575,10 @@ fn close_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
 fn stat_path(state: &mut State, path: &str) -> IpcMsg {
     if matches!(path, "/etc/passwd" | "/etc/group") {
         return match sunlight_libc::stat(path.as_bytes()) {
-            Ok(stat)=>ok_reply().word(1,stat.size).word(2,file_type_code(FileType::File)),
-            Err(_)=>error_reply(FsError::Io),
+            Ok(stat) => ok_reply()
+                .word(1, stat.size)
+                .word(2, file_type_code(FileType::File)),
+            Err(_) => error_reply(FsError::Io),
         };
     }
     if path == "/etc/resolv.conf" {
@@ -596,10 +603,19 @@ fn stat_path(state: &mut State, path: &str) -> IpcMsg {
 }
 
 fn fstat_handle(state: &mut State, raw: FileHandle) -> IpcMsg {
-    if let Some(path)=open_path_for_handle(state,raw).filter(|p|matches!(*p,"/etc/passwd"|"/etc/group")) {
+    if let Some(path) =
+        open_path_for_handle(state, raw).filter(|p| matches!(*p, "/etc/passwd" | "/etc/group"))
+    {
         return match sunlight_libc::stat(path.as_bytes()) {
-            Ok(stat)=>stat_reply(sunlight_fs::FileStat { size:stat.size as usize,uid:stat.uid,gid:stat.gid,mode:stat.mode,nlinks:stat.nlinks,file_type:FileType::File }),
-            Err(_)=>error_reply(FsError::Io),
+            Ok(stat) => stat_reply(sunlight_fs::FileStat {
+                size: stat.size as usize,
+                uid: stat.uid,
+                gid: stat.gid,
+                mode: stat.mode,
+                nlinks: stat.nlinks,
+                file_type: FileType::File,
+            }),
+            Err(_) => error_reply(FsError::Io),
         };
     }
     let (mount, local) = unpack_handle(raw);
@@ -728,7 +744,9 @@ fn rename_path(state: &mut State, old: &str, new: &str) -> IpcMsg {
 }
 
 fn read_public_account(path: &str, offset: usize, out: &mut [u8]) -> Result<usize, FsError> {
-    if !matches!(path, "/etc/passwd" | "/etc/group") { return Err(FsError::PermissionDenied); }
+    if !matches!(path, "/etc/passwd" | "/etc/group") {
+        return Err(FsError::PermissionDenied);
+    }
     let fd = sunlight_libc::open(path.as_bytes()).map_err(|_| FsError::Io)?;
     let result = (|| {
         sunlight_libc::lseek(fd, offset as i64, 0).map_err(|_| FsError::Io)?;

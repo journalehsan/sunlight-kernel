@@ -3,8 +3,8 @@
 
 extern crate alloc;
 
-mod thumbnails;
 pub mod preview;
+mod thumbnails;
 
 use alloc::{format, string::String, vec::Vec};
 use core::cell::RefCell;
@@ -3480,7 +3480,9 @@ impl FilesApp {
                 continue;
             }
             let entry = self.state.entries[idx];
-            if entry.file_type == FT_FILE && (is_image_name(entry.name_bytes()) || preview::pdf::supports(entry.name_bytes())) {
+            if entry.file_type == FT_FILE
+                && (is_image_name(entry.name_bytes()) || preview::pdf::supports(entry.name_bytes()))
+            {
                 if let Some(path) = self.state.current_path.join(entry_name_str(&entry)) {
                     self.thumbnails
                         .request_grid(path.as_str().as_bytes(), entry.size);
@@ -5307,18 +5309,30 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
     if cfg!(feature = "document-thumbnail-smoke") {
         let path = b"/tmp/files-thumbnail-fixture.pdf";
         let result = (|| -> Option<()> {
-            let fd = libc::open_with_flags(path, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC).ok()?;
-            let written = libc::write_all(fd, include_bytes!("../../sunlight-docserv/tests/fixtures/sample.pdf"));
+            let fd =
+                libc::open_with_flags(path, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC).ok()?;
+            let written = libc::write_all(
+                fd,
+                include_bytes!("../../sunlight-docserv/tests/fixtures/sample.pdf"),
+            );
             let closed = libc::close(fd);
-            if written.is_err() || closed.is_err() { return None; }
+            if written.is_err() || closed.is_err() {
+                return None;
+            }
             let mut provider = thumbnails::Thumbnails::new();
             provider.request(Some(path));
             let deadline = monotonic_millis().saturating_add(30_000);
             while monotonic_millis() < deadline {
                 provider.poll();
                 if let Some(preview) = &provider.preview {
-                    if preview.image.width == 128 && preview.image.height == 128
-                        && preview.image.pixels.iter().any(|&p| p & 0xff == 204 && (p >> 16) & 0xff < 30) {
+                    if preview.image.width == 128
+                        && preview.image.height == 128
+                        && preview
+                            .image
+                            .pixels
+                            .iter()
+                            .any(|&p| p & 0xff == 204 && (p >> 16) & 0xff < 30)
+                    {
                         debug_log("[FILES] native PDF thumbnail worker OK\n");
                         return Some(());
                     }

@@ -168,7 +168,11 @@ fn current_username() -> Option<heapless::String<32>> {
 
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
-    unsafe { ALLOCATOR.lock().init(core::ptr::addr_of_mut!(HEAP).cast::<u8>(), 4 * 1024 * 1024); }
+    unsafe {
+        ALLOCATOR
+            .lock()
+            .init(core::ptr::addr_of_mut!(HEAP).cast::<u8>(), 4 * 1024 * 1024);
+    }
     let mut storage = [""; MAX_ARGS];
     let count = unsafe { collect_args(argc, argv, &mut storage) };
 

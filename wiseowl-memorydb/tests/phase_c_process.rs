@@ -53,7 +53,10 @@ fn separate_memorydb_processes_contend_and_dead_owner_can_be_replaced() {
         let duplicate = launch(&data, &socket_b).wait_with_output().unwrap();
         assert!(duplicate.status.success());
         assert!(String::from_utf8_lossy(&duplicate.stderr).contains("writer authority unavailable"));
-        assert!(!socket_b.exists(), "rejected process exposed writable readiness");
+        assert!(
+            !socket_b.exists(),
+            "rejected process exposed writable readiness"
+        );
         assert_eq!(local(&data), before, "rejected writer changed LOCAL");
 
         first.0.kill().unwrap();

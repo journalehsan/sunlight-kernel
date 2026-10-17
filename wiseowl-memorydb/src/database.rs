@@ -249,7 +249,9 @@ mod host_store {
         /// Open an existing layout without creating or modifying any files.
         pub fn open_read_only(root: impl AsRef<Path>) -> Result<Self, DbError> {
             let root = root.as_ref().to_path_buf();
-            if !root.is_dir() { return Err(DbError::Io("missing root")); }
+            if !root.is_dir() {
+                return Err(DbError::Io("missing root"));
+            }
             Ok(Self { root })
         }
 
@@ -475,7 +477,8 @@ impl<S: DurableStore> Database<S> {
         self.identity_context.map(|identity| {
             crate::identity_status::IdentityStatus::ready_with_activation(
                 identity,
-                self.activation_fingerprint.unwrap_or_else(|| identity.diagnostic_fingerprint()),
+                self.activation_fingerprint
+                    .unwrap_or_else(|| identity.diagnostic_fingerprint()),
             )
         })
     }

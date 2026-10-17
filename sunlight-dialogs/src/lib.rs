@@ -30,8 +30,8 @@ impl DialogClient {
     /// Call this only inside SunlightOS; ordinary host clients use `show`.
     pub fn show_native(&self, request: &DialogRequest) -> Result<DialogResult, DialogError> {
         use sunlight_ipc::{
-            ipc_call, nameserver_lookup, nameserver_lookup_timeout, shm_alloc,
-            shm_free, shm_map, CapabilityToken, IpcMsg, SHM_PAGE,
+            ipc_call, nameserver_lookup, nameserver_lookup_timeout, shm_alloc, shm_free, shm_map,
+            CapabilityToken, IpcMsg, SHM_PAGE,
         };
 
         validate_request(request)?;

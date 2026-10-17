@@ -96,7 +96,10 @@ impl IdentityStatus {
         }
     }
 
-    pub fn ready_with_activation(identity: LoadedIdentity, activation_fingerprint: [u8; 8]) -> Self {
+    pub fn ready_with_activation(
+        identity: LoadedIdentity,
+        activation_fingerprint: [u8; 8],
+    ) -> Self {
         let mut status = Self::ready(identity);
         status.activation_fingerprint = activation_fingerprint;
         status
@@ -170,7 +173,9 @@ impl IdentityStatus {
             activation_state: bytes[36],
             activation_fingerprint: bytes[40..48].try_into().ok()?,
         };
-        if bytes[37..40] != [0; 3] { return None; }
+        if bytes[37..40] != [0; 3] {
+            return None;
+        }
         out.validate().then_some(out)
     }
 
@@ -189,7 +194,8 @@ impl IdentityStatus {
                 | ((self.activation_state as u64) << 57),
             u64::from_le_bytes(self.fingerprint),
             u64::from_le_bytes(self.activation_fingerprint),
-            ((self.continuity_generation & 0xffff_ffff) << 32) | (self.lineage_sequence & 0xffff_ffff),
+            ((self.continuity_generation & 0xffff_ffff) << 32)
+                | (self.lineage_sequence & 0xffff_ffff),
         ])
     }
 

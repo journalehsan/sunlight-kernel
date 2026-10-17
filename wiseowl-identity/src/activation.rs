@@ -14,12 +14,18 @@ macro_rules! fixed_id {
                 (bytes != [0; 16]).then_some(Self(bytes))
             }
 
-            pub const fn as_bytes(&self) -> &[u8; 16] { &self.0 }
-            pub const fn encode(self) -> [u8; 16] { self.0 }
+            pub const fn as_bytes(&self) -> &[u8; 16] {
+                &self.0
+            }
+            pub const fn encode(self) -> [u8; 16] {
+                self.0
+            }
             pub fn fingerprint(self) -> [u8; 8] {
                 crate::codec::short_hex(&self.0)
             }
-            pub fn generate_with(mut fill: impl FnMut(&mut [u8]) -> Result<(), EntropyError>) -> Result<Self, EntropyError> {
+            pub fn generate_with(
+                mut fill: impl FnMut(&mut [u8]) -> Result<(), EntropyError>,
+            ) -> Result<Self, EntropyError> {
                 let mut bytes = [0; 16];
                 fill(&mut bytes)?;
                 Self::from_bytes(bytes).ok_or(EntropyError)
@@ -32,7 +38,15 @@ macro_rules! fixed_id {
 
         impl fmt::Debug for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}({:02X}{:02X}{:02X}{:02X}…)", stringify!($name), self.0[0], self.0[1], self.0[2], self.0[3])
+                write!(
+                    f,
+                    "{}({:02X}{:02X}{:02X}{:02X}…)",
+                    stringify!($name),
+                    self.0[0],
+                    self.0[1],
+                    self.0[2],
+                    self.0[3]
+                )
             }
         }
     };
@@ -54,6 +68,13 @@ pub enum ActivationState {
 
 impl ActivationState {
     pub fn decode(value: u8) -> Option<Self> {
-        Some(match value { 1 => Self::Dormant, 2 => Self::Activating, 3 => Self::Active, 4 => Self::RecoveringLocal, 5 => Self::Suspended, _ => return None })
+        Some(match value {
+            1 => Self::Dormant,
+            2 => Self::Activating,
+            3 => Self::Active,
+            4 => Self::RecoveringLocal,
+            5 => Self::Suspended,
+            _ => return None,
+        })
     }
 }

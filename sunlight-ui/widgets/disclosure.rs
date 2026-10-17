@@ -203,8 +203,7 @@ impl<'a> PropertyGrid<'a> {
         let value_columns = if width < 300 { 1 } else { 2 };
         let values_per_line = (width / (value_columns * 7)).max(12) as usize;
         rows.iter().fold(0u32, |height, row| {
-            let lines =
-                row.value.chars().count().div_ceil(values_per_line).max(1) as u32;
+            let lines = row.value.chars().count().div_ceil(values_per_line).max(1) as u32;
             height.saturating_add(Self::ROW_HEIGHT.saturating_mul(lines))
         })
     }

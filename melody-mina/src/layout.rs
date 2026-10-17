@@ -203,11 +203,11 @@ impl MelodyLayout {
         let visual_h = 62.min(content.h / 7);
         let timeline_h = 42.min(content.h / 9);
         let transport_h = 48.min(content.h / 8);
-        let intro_h = 190
-            .min(content.h.saturating_mul(2) / 5)
-            .min(content.h.saturating_sub(
-                visual_h + timeline_h + transport_h + GAP * 4 + MIN_PLAYLIST_H,
-            ));
+        let intro_h = 190.min(content.h.saturating_mul(2) / 5).min(
+            content
+                .h
+                .saturating_sub(visual_h + timeline_h + transport_h + GAP * 4 + MIN_PLAYLIST_H),
+        );
         let mut sections = [
             fixed_height(intro_h),
             LayoutBox::new(Rect::default())
@@ -320,7 +320,11 @@ impl MelodyLayout {
             square(button),
             square(button),
             fixed_width(18),
-            fixed_width(slider_w.saturating_sub(if self.mode == LayoutMode::Narrow { 8 } else { 14 })),
+            fixed_width(slider_w.saturating_sub(if self.mode == LayoutMode::Narrow {
+                8
+            } else {
+                14
+            })),
             LayoutBox::new(Rect::default())
                 .with_sizing(Sizing::new(AxisSizing::Flex(1), AxisSizing::Fill)),
         ];

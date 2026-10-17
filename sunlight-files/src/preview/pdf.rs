@@ -15,18 +15,34 @@ pub async fn generate_thumbnail(path: &Path, size: u32) -> anyhow::Result<Vec<u8
 
 /// Whether the source filename belongs to this provider.
 pub fn supports(path: &[u8]) -> bool {
-    let Some(dot) = path.iter().rposition(|&b| b == b'.') else { return false; };
+    let Some(dot) = path.iter().rposition(|&b| b == b'.') else {
+        return false;
+    };
     let extension = &path[dot + 1..];
-    EXTENSIONS.iter().any(|ext| extension.eq_ignore_ascii_case(ext.as_bytes()))
+    EXTENSIONS
+        .iter()
+        .any(|ext| extension.eq_ignore_ascii_case(ext.as_bytes()))
 }
 
 pub(crate) fn worker_preview(path: &[u8], size: u32) -> Option<sunlight_ui::image::RgbaImage> {
-    use core::{future::Future, task::{Context, Poll, Waker}};
+    use core::{
+        future::Future,
+        task::{Context, Poll, Waker},
+    };
     let path = core::str::from_utf8(path).ok()?;
     let mut future = core::pin::pin!(generate_thumbnail(path, size));
     let mut context = Context::from_waker(Waker::noop());
-    let Poll::Ready(result) = future.as_mut().poll(&mut context) else { return None; };
+    let Poll::Ready(result) = future.as_mut().poll(&mut context) else {
+        return None;
+    };
     let data = result.ok()?;
-    let pixels = data.chunks_exact(4).map(|p| u32::from_le_bytes([p[0],p[1],p[2],p[3]])).collect();
-    Some(sunlight_ui::image::RgbaImage { width: size, height: size, pixels })
+    let pixels = data
+        .chunks_exact(4)
+        .map(|p| u32::from_le_bytes([p[0], p[1], p[2], p[3]]))
+        .collect();
+    Some(sunlight_ui::image::RgbaImage {
+        width: size,
+        height: size,
+        pixels,
+    })
 }

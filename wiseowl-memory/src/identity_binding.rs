@@ -23,7 +23,10 @@ impl MemoryIdentityBinding {
     }
 
     pub fn observe_endpoint_generation(&mut self, generation: u64) {
-        if self.endpoint_generation.is_some_and(|old| old != generation) {
+        if self
+            .endpoint_generation
+            .is_some_and(|old| old != generation)
+        {
             self.connected = false;
             self.ready = false;
             self.activation_suspended = false;
@@ -79,7 +82,11 @@ impl MemoryIdentityBinding {
             return false;
         }
         let activation = words[2];
-        if self.connected && self.activation_fingerprint.is_some_and(|old| old != activation) {
+        if self.connected
+            && self
+                .activation_fingerprint
+                .is_some_and(|old| old != activation)
+        {
             self.activation_suspended = true;
             return false;
         }

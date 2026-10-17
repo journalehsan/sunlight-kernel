@@ -6,17 +6,17 @@
 
 #![cfg_attr(not(feature = "host"), no_std)]
 
-pub mod codec;
 pub mod activation;
+pub mod codec;
 pub mod id;
 pub mod lineage;
 pub mod root;
 pub mod validation;
 
+pub use activation::{ActivationId, ActivationState, InstallationId};
 #[cfg(feature = "host")]
 pub use id::fill_host_entropy;
 pub use id::{EntropyError, IdentityId};
-pub use activation::{ActivationId, ActivationState, InstallationId};
 pub use lineage::{
     ContinuityGeneration, GenesisEventKind, LineageEventId, LineageHead, LineageRecord,
     LineageSequence,

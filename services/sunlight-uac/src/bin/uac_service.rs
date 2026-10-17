@@ -15,7 +15,6 @@
 extern crate alloc;
 mod account_service;
 
-
 use linked_list_allocator::LockedHeap;
 use zeroize::Zeroize;
 
@@ -41,8 +40,8 @@ macro_rules! serial_println {
 }
 
 use sunlight_ipc::{
-    endpoint_create, get_time_utc, ipc_recv, ipc_reply_and_wait,
-    nameserver_register, shm_free, shm_map, IpcMsg,
+    endpoint_create, get_time_utc, ipc_recv, ipc_reply_and_wait, nameserver_register, shm_free,
+    shm_map, IpcMsg,
 };
 use sunlight_uac::auth::{
     migrate_shadow_contents, verify_shadow_credentials, AUTH_FAILURE, AUTH_PASSWD_PATH,
@@ -68,7 +67,6 @@ const OP_CHECK_EXEC: u64 = 5;
 const REPLY_OK: u64 = 1;
 /// Reply label for a rejected/unknown request.
 const REPLY_ERR: u64 = 0xff;
-
 
 /// Maximum cached elevated sessions.
 type Sessions = SessionStore<16>;
@@ -100,8 +98,14 @@ fn unpack_str(words: &[u64], start: usize) -> heapless::String<64> {
 // Authentication and account mutations must use the same live backing store.
 fn read_account_bytes(path: &str, out: &mut [u8]) -> Option<usize> {
     let mut bytes = account_service::read(path.as_bytes()).ok()?;
-    if bytes.len() > out.len() { bytes.zeroize(); return None; }
-    let len = bytes.len(); out[..len].copy_from_slice(&bytes); bytes.zeroize(); Some(len)
+    if bytes.len() > out.len() {
+        bytes.zeroize();
+        return None;
+    }
+    let len = bytes.len();
+    out[..len].copy_from_slice(&bytes);
+    bytes.zeroize();
+    Some(len)
 }
 
 fn migrate_development_shadow() {
@@ -210,7 +214,11 @@ fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
     let mut reply = IpcMsg::empty();
 
     match msg.label {
-        sunlight_ipc::accounts::SNAPSHOT | sunlight_ipc::accounts::CHANGE_OWN_PASSWORD | sunlight_ipc::accounts::AUTHORIZE | sunlight_ipc::accounts::MUTATE_GROUP | sunlight_ipc::accounts::UPDATE_OWN_PROFILE => return account_service::handle(msg),
+        sunlight_ipc::accounts::SNAPSHOT
+        | sunlight_ipc::accounts::CHANGE_OWN_PASSWORD
+        | sunlight_ipc::accounts::AUTHORIZE
+        | sunlight_ipc::accounts::MUTATE_GROUP
+        | sunlight_ipc::accounts::UPDATE_OWN_PROFILE => return account_service::handle(msg),
         OP_RUNAS => {
             let caller_uid = msg.words[0] as u32;
             let target_uid = msg.words[1] as u32;

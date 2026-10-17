@@ -178,13 +178,7 @@ struct PlaylistItemViewModel<'a> {
 
 impl<'a> PlaylistView<'a> {
     fn draw(&self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.fill_rounded_rect_with_border(
-            self.rect,
-            10,
-            theme.chrome.card_bg,
-            theme.border,
-            1,
-        );
+        canvas.fill_rounded_rect_with_border(self.rect, 10, theme.chrome.card_bg, theme.border, 1);
         let viewport = self.rect.inset(2);
         if viewport.w == 0 || viewport.h == 0 {
             return;
@@ -219,11 +213,7 @@ impl<'a> PlaylistView<'a> {
                 if item.artwork.is_some() {
                     AlbumArtView::new(cover, item.artwork).draw(&mut clip, theme);
                 } else {
-                    clip.draw_ui_symbol_centered(
-                        cover.inset(8),
-                        UiSymbol::Music,
-                        theme.icon_muted,
-                    );
+                    clip.draw_ui_symbol_centered(cover.inset(8), UiSymbol::Music, theme.icon_muted);
                 }
                 56
             } else if playing {
@@ -684,7 +674,8 @@ impl MelodyMinaApp {
         }
         self.active_queue_pos = Some(position);
         if self.shuffle {
-            self.shuffle_remaining.retain(|candidate| *candidate != position);
+            self.shuffle_remaining
+                .retain(|candidate| *candidate != position);
         }
         self.selected_playlist = index;
         let path = self.playlist[index].path.clone();
@@ -768,26 +759,30 @@ impl MelodyMinaApp {
     }
 
     fn load_media_path(&mut self, path: &str) {
-        let index = self.playlist.iter().position(|entry| entry.path == path).or_else(|| {
-            let format = supported_extension(path)?;
-            let filename = path.rsplit('/').next().unwrap_or(path);
-            let title = filename
-                .rsplit_once('.')
-                .map(|(stem, _)| stem)
-                .filter(|stem| !stem.is_empty())
-                .unwrap_or(filename);
-            self.playlist.push(MediaEntry {
-                path: String::from(path),
-                display_title: String::from(title),
-                artist: None,
-                album: None,
-                duration_ms: None,
-                format,
-                source: MediaSource::UserMusic,
+        let index = self
+            .playlist
+            .iter()
+            .position(|entry| entry.path == path)
+            .or_else(|| {
+                let format = supported_extension(path)?;
+                let filename = path.rsplit('/').next().unwrap_or(path);
+                let title = filename
+                    .rsplit_once('.')
+                    .map(|(stem, _)| stem)
+                    .filter(|stem| !stem.is_empty())
+                    .unwrap_or(filename);
+                self.playlist.push(MediaEntry {
+                    path: String::from(path),
+                    display_title: String::from(title),
+                    artist: None,
+                    album: None,
+                    duration_ms: None,
+                    format,
+                    source: MediaSource::UserMusic,
+                });
+                self.rebuild_collections();
+                Some(self.playlist.len() - 1)
             });
-            self.rebuild_collections();
-            Some(self.playlist.len() - 1)
-        });
         if let Some(index) = index {
             if !self.active_queue.contains(&index) {
                 self.active_queue.clear();
@@ -931,11 +926,7 @@ impl MelodyMinaApp {
     fn move_playlist_selection(&mut self, delta: isize) -> bool {
         let next = match self.selected_list_row() {
             Some(current) => next_playlist_index(current, self.list_len(), delta),
-            None if self.list_len() != 0 => Some(if delta < 0 {
-                self.list_len() - 1
-            } else {
-                0
-            }),
+            None if self.list_len() != 0 => Some(if delta < 0 { self.list_len() - 1 } else { 0 }),
             None => None,
         };
         let Some(next) = next else {
@@ -1131,12 +1122,7 @@ impl MelodyMinaApp {
         } else {
             self.track_title()
         };
-        let title = elide(
-            title_source,
-            FontRole::UiTitle,
-            rect.w,
-            &mut title_buf,
-        );
+        let title = elide(title_source, FontRole::UiTitle, rect.w, &mut title_buf);
         let mut clip = canvas.sub_canvas(rect);
         let local = Rect::new(0, 0, rect.w, rect.h);
         let centered =
@@ -1154,12 +1140,7 @@ impl MelodyMinaApp {
         } else {
             self.track_artist.as_str()
         };
-        let artist = elide(
-            artist_source,
-            FontRole::UiMedium,
-            rect.w,
-            &mut artist_buf,
-        );
+        let artist = elide(artist_source, FontRole::UiMedium, rect.w, &mut artist_buf);
         let artist_style = TextStyle::new(FontRole::UiMedium, theme.accent_hover);
         if centered {
             draw_text_centered(
@@ -1232,7 +1213,11 @@ impl MelodyMinaApp {
                 label,
                 &TextStyle::new(
                     FontRole::UiMedium,
-                    if active { theme.accent_hover } else { theme.text },
+                    if active {
+                        theme.accent_hover
+                    } else {
+                        theme.text
+                    },
                 ),
             );
         }

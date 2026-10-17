@@ -89,7 +89,11 @@ fn trace_pty_event(
     };
     trace.events[next] = Some(event);
     trace.next = (next + 1) % trace.events.len();
-    if kind == "mmap" && trace.max_mmap_hold.is_none_or(|previous| event.bytes > previous.bytes) {
+    if kind == "mmap"
+        && trace
+            .max_mmap_hold
+            .is_none_or(|previous| event.bytes > previous.bytes)
+    {
         trace.max_mmap_hold = Some(event);
     }
     if matches!(kind, "mmap" | "spawn") {
@@ -123,9 +127,16 @@ pub(crate) fn trace_pty_operation(
 
 /// One snapshot at a guest-test failure, never logging on the hot IPC path.
 pub(crate) fn trace_pty_liveness(sched: &Scheduler) {
-    crate::serial_println!("[PTY-DIAG] dispatch_notifications sent/busy={:?}", crate::sched::diagnostic_dispatch_notifications());
+    crate::serial_println!(
+        "[PTY-DIAG] dispatch_notifications sent/busy={:?}",
+        crate::sched::diagnostic_dispatch_notifications()
+    );
     for cpu in 0..sched.online_cores.min(16) {
-        crate::serial_println!("[PTY-DIAG] cpu={} current_pid={:?}", cpu, sched.diagnostic_current_pid(cpu));
+        crate::serial_println!(
+            "[PTY-DIAG] cpu={} current_pid={:?}",
+            cpu,
+            sched.diagnostic_current_pid(cpu)
+        );
     }
     let counters = diagnostic_snapshot();
     crate::serial_println!(
@@ -842,8 +853,15 @@ fn deliver_reply_to_target(
     }
 
     sched.processes[client_idx].ipc_reply = Some((target.call.generation, reply));
-    trace_pty_event(sched, client_idx, "reply", target.call.generation,
-        target.endpoint_id, reply, bus.pending_count(target.endpoint_id));
+    trace_pty_event(
+        sched,
+        client_idx,
+        "reply",
+        target.call.generation,
+        target.endpoint_id,
+        reply,
+        bus.pending_count(target.endpoint_id),
+    );
     finish_call(
         sched,
         client_idx,
@@ -969,8 +987,15 @@ fn wake_terminal(sched: &mut Scheduler, idx: usize) {
         return;
     }
     sched.record_wakeup(true);
-    trace_pty_event(sched, idx, "wake", sched.processes[idx].ipc_call_generation,
-        sched.processes[idx].ipc_endpoint.unwrap_or(0), IpcMsg::empty(), 0);
+    trace_pty_event(
+        sched,
+        idx,
+        "wake",
+        sched.processes[idx].ipc_call_generation,
+        sched.processes[idx].ipc_endpoint.unwrap_or(0),
+        IpcMsg::empty(),
+        0,
+    );
     sched.processes[idx].state = ProcessState::Ready;
     sched.remove_from_ready_queues(idx);
     if let Some(cpu_id) = sched.live_owner_core(idx) {
@@ -1047,7 +1072,15 @@ pub fn handle_ipc_call(
             msg,
             generation,
         });
-        trace_pty_event(sched, idx, "request", generation, endpoint_id, msg, bus.pending_count(endpoint_id));
+        trace_pty_event(
+            sched,
+            idx,
+            "request",
+            generation,
+            endpoint_id,
+            msg,
+            bus.pending_count(endpoint_id),
+        );
         sched.processes[idx].ipc_deadline = deadline.map(|deadline| (generation, deadline));
     }
 

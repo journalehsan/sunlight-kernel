@@ -147,7 +147,11 @@ impl<B: IndexMemoryDb> IndexerService<B> {
         self.identity_ready = false;
         IndexStats::sat_add(&mut self.stats.memorydb_connection_attempts, 1);
         let endpoint_gen = self.backend_endpoint_generation();
-        if endpoint_gen != 0 && self.identity_endpoint_generation.is_some_and(|old| old != endpoint_gen) {
+        if endpoint_gen != 0
+            && self
+                .identity_endpoint_generation
+                .is_some_and(|old| old != endpoint_gen)
+        {
             self.activation_suspended = false;
         }
         match self.backend.health() {
@@ -854,13 +858,24 @@ mod tests {
 
         svc.backend.inner_mut().bind_activation(*b"ACTIV002");
         svc.refresh_memorydb_health();
-        assert!(!svc.identity_ready, "same endpoint activation change must pause durable work");
-        svc.backend.inner_mut().bind_activation(identity.diagnostic_fingerprint());
+        assert!(
+            !svc.identity_ready,
+            "same endpoint activation change must pause durable work"
+        );
+        svc.backend
+            .inner_mut()
+            .bind_activation(identity.diagnostic_fingerprint());
         svc.refresh_memorydb_health();
-        assert!(!svc.identity_ready, "same endpoint cannot clear the activation alarm");
+        assert!(
+            !svc.identity_ready,
+            "same endpoint cannot clear the activation alarm"
+        );
         svc.backend.set_endpoint_generation(3);
         svc.refresh_memorydb_health();
-        assert!(svc.identity_ready, "new endpoint generation can revalidate activation");
+        assert!(
+            svc.identity_ready,
+            "new endpoint generation can revalidate activation"
+        );
 
         let other_dir = tempfile::tempdir().unwrap();
         let mut other_storage =

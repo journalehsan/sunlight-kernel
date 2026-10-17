@@ -3213,7 +3213,10 @@ mod tests {
     #[test]
     fn chmod_rejects_immutable_static_entry() {
         let mut fs = RamFs::new(TEST_ENTRIES);
-        assert_eq!(fs.chmod("/etc/motd", mode::FILE_600), Err(FsError::ReadOnlyFilesystem));
+        assert_eq!(
+            fs.chmod("/etc/motd", mode::FILE_600),
+            Err(FsError::ReadOnlyFilesystem)
+        );
         assert_eq!(fs.stat("/etc/motd").unwrap().mode, mode::FILE_644);
     }
 
@@ -3594,7 +3597,11 @@ mod tests {
                 .find(|entry| entry.path == path)
                 .unwrap_or_else(|| panic!("missing document tool path: {path}"));
             assert!(!entry.is_dir, "document tool path is a directory: {path}");
-            assert_ne!(entry.mode & 0o111, 0, "document tool is not executable: {path}");
+            assert_ne!(
+                entry.mode & 0o111,
+                0,
+                "document tool is not executable: {path}"
+            );
         }
     }
 

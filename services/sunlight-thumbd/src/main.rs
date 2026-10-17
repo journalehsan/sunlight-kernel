@@ -72,7 +72,6 @@ impl PathBuf {
             }
         }
     }
-
 }
 
 // ── FNV-1a 64-bit hash → 16-char hex cache key ────────────────────────────────
@@ -168,45 +167,69 @@ fn generate_thumb(src_path: &[u8], home: &[u8], size_flag: u32) {
         return;
     }
 
-    let max_edge = if size_flag == 0 { MAX_NORMAL_EDGE } else { MAX_LARGE_EDGE };
+    let max_edge = if size_flag == 0 {
+        MAX_NORMAL_EDGE
+    } else {
+        MAX_LARGE_EDGE
+    };
     let extension = src_path.rsplit(|&b| b == b'.').next().unwrap_or(&[]);
-    let document = [b"pdf".as_slice(), b"ps", b"eps"].iter().any(|ext| extension.eq_ignore_ascii_case(ext));
+    let document = [b"pdf".as_slice(), b"ps", b"eps"]
+        .iter()
+        .any(|ext| extension.eq_ignore_ascii_case(ext));
     let img = if document {
         let result = (|| {
             let path = core::str::from_utf8(src_path).ok()?;
             let mut client = sunlight_docserv::client::NativeClient::connect().ok()?;
-            let data = sunlight_docserv::thumbnail::generate_with_client(&mut client, path, max_edge).ok()?;
-            let pixels = data.chunks_exact(4).map(|p| u32::from_le_bytes([p[0], p[1], p[2], p[3]])).collect();
-            Some(RgbaImage { width: max_edge, height: max_edge, pixels })
+            let data =
+                sunlight_docserv::thumbnail::generate_with_client(&mut client, path, max_edge)
+                    .ok()?;
+            let pixels = data
+                .chunks_exact(4)
+                .map(|p| u32::from_le_bytes([p[0], p[1], p[2], p[3]]))
+                .collect();
+            Some(RgbaImage {
+                width: max_edge,
+                height: max_edge,
+                pixels,
+            })
         })();
-        match result { Some(image) => image, None => { debug_log("[THUMBD] document render failed\n"); return; } }
+        match result {
+            Some(image) => image,
+            None => {
+                debug_log("[THUMBD] document render failed\n");
+                return;
+            }
+        }
     } else {
-    if file_size > 4 * 1024 * 1024 { debug_log("[THUMBD] image source exceeds input budget\n"); return; }
-    let fd = match open_with_flags(src_path, O_RDONLY) {
-        Ok(f) => f,
-        Err(_) => {
-            debug_log("[THUMBD] open failed\n");
+        if file_size > 4 * 1024 * 1024 {
+            debug_log("[THUMBD] image source exceeds input budget\n");
             return;
         }
-    };
-    let mut src_data: Vec<u8> = Vec::with_capacity(file_size as usize);
-    src_data.resize(file_size as usize, 0u8);
-    let n = libc::read(fd, &mut src_data).unwrap_or(0);
-    let _ = libc::close(fd);
-    if n < 18 {
-        debug_log("[THUMBD] short read\n");
-        return;
-    }
-    src_data.truncate(n);
+        let fd = match open_with_flags(src_path, O_RDONLY) {
+            Ok(f) => f,
+            Err(_) => {
+                debug_log("[THUMBD] open failed\n");
+                return;
+            }
+        };
+        let mut src_data: Vec<u8> = Vec::with_capacity(file_size as usize);
+        src_data.resize(file_size as usize, 0u8);
+        let n = libc::read(fd, &mut src_data).unwrap_or(0);
+        let _ = libc::close(fd);
+        if n < 18 {
+            debug_log("[THUMBD] short read\n");
+            return;
+        }
+        src_data.truncate(n);
 
-    // Decode SIMG/TGA/PNG/JPEG.
-    match decode(&src_data) {
-        Ok(i) => i,
-        Err(_) => {
-            debug_log("[THUMBD] decode failed\n");
-            return;
+        // Decode SIMG/TGA/PNG/JPEG.
+        match decode(&src_data) {
+            Ok(i) => i,
+            Err(_) => {
+                debug_log("[THUMBD] decode failed\n");
+                return;
+            }
         }
-    }
     };
     let thumb = scale_fit(&img, max_edge, max_edge);
     let encoded = encode_tga_type2_bgr24(&thumb);

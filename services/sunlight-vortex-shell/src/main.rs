@@ -264,7 +264,8 @@ static ICON_RABBIT_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
 static ICON_SILICON_ECHOES_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
-static ICON_VOICE_RECORDER_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
+static ICON_VOICE_RECORDER_TGA: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
 static ICON_DOCUMENT_VIEWER_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/apps/48/mupdf.tga");
 static ICON_MELODY_MINA_TGA: &[u8] =
@@ -1844,8 +1845,16 @@ impl VortexShell {
         } else {
             // Startup-only fallback if a native thread cannot be created.
             let (decoded, error) = load_wallpaper_from_config(&wallpaper_config);
-            let wallpaper = decoded.and_then(|image| Wallpaper::prepare(
-                &image.pixels, image.width, image.height, image.width, image.height, None));
+            let wallpaper = decoded.and_then(|image| {
+                Wallpaper::prepare(
+                    &image.pixels,
+                    image.width,
+                    image.height,
+                    image.width,
+                    image.height,
+                    None,
+                )
+            });
             (wallpaper, error)
         };
         let icon_overrides = load_desktop_icon_overrides();
@@ -1998,7 +2007,11 @@ impl VortexShell {
                 DockAppState::new(AppId::Welcome, "Welcome to SunlightOS", AppId::Welcome),
                 DockAppState::new(AppId::WiseOwl, "Wise Owl", AppId::WiseOwl),
                 DockAppState::new(AppId::MelodyMina, "Melody Mina", AppId::MelodyMina),
-                DockAppState::new(AppId::VoiceRecorder, "Sunlight Voice Recorder", AppId::VoiceRecorder),
+                DockAppState::new(
+                    AppId::VoiceRecorder,
+                    "Sunlight Voice Recorder",
+                    AppId::VoiceRecorder,
+                ),
                 DockAppState::new(
                     AppId::DocumentViewer,
                     "Document Viewer",
@@ -2060,7 +2073,10 @@ impl VortexShell {
             }
             wallpaper_worker::retire(prepared);
             if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() {
-                debug_log(&alloc::format!("[WALLPAPER] swap_ms={}\n", monotonic_millis() - started));
+                debug_log(&alloc::format!(
+                    "[WALLPAPER] swap_ms={}\n",
+                    monotonic_millis() - started
+                ));
             }
         }
     }
@@ -5761,7 +5777,11 @@ pub(crate) fn load_wallpaper_from_config(cfg: &DesktopConfig) -> (Option<RgbaIma
     let decode_started = monotonic_millis();
     let decoded = decode_simg(&bytes);
     if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() {
-        debug_log(&alloc::format!("[WALLPAPER] read_ms={} decode_ms={}\n", decode_started - load_started, monotonic_millis() - decode_started));
+        debug_log(&alloc::format!(
+            "[WALLPAPER] read_ms={} decode_ms={}\n",
+            decode_started - load_started,
+            monotonic_millis() - decode_started
+        ));
     }
     match decoded {
         Ok(img) => {
@@ -8257,7 +8277,9 @@ impl App for VortexShell {
         if let Some(ref wp) = self.wallpaper {
             // Cover blit forces A=0xFF so glass/compositor never shows a gray hole.
             if wp.width == cw && wp.height == ch {
-                for (dst, src) in canvas.pixels.chunks_mut(canvas.stride as usize)
+                for (dst, src) in canvas
+                    .pixels
+                    .chunks_mut(canvas.stride as usize)
                     .take(ch as usize)
                     .zip(wp.pixels().chunks(cw as usize))
                 {
@@ -9533,7 +9555,9 @@ impl App for VortexShell {
                 false
             }
             Event::Tick => {
-                if self.start_menu.refresh_identity(monotonic_millis()) { return true; }
+                if self.start_menu.refresh_identity(monotonic_millis()) {
+                    return true;
+                }
                 let now = monotonic_millis();
                 let mut dirty = self.advance_calendar_load() || wallpaper_worker::pending();
                 #[cfg(feature = "stress")]

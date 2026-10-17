@@ -119,6 +119,13 @@ impl Registry {
         Ok(())
     }
 
+    fn refresh_inventory(&mut self) {
+        // Kernel driver binding is published after the initial PCI snapshot.
+        // Refresh before each inventory query so callers observe the current
+        // state while retaining the previous snapshot if a bounded read fails.
+        let _ = self.import_inventory();
+    }
+
     fn collect_inventory_candidate(&mut self) -> Result<usize, InventoryImportError> {
         let mut count = 0usize;
         let mut expected_total = None;
@@ -556,9 +563,18 @@ pub extern "C" fn _start() -> ! {
             DevicedMsg::GET_DEVICE => registry.get_device(&msg),
             DevicedMsg::MARK_DRIVER_FAILED => registry.mark_failed(&msg),
             DevicedMsg::UNREGISTER_DRIVER => registry.unregister(&msg),
-            DevicedMsg::LIST_INVENTORY => registry.list_inventory(&msg),
-            DevicedMsg::GET_INVENTORY => registry.get_inventory(&msg),
-            DevicedMsg::GET_INVENTORY_FIELD => registry.get_inventory_field(&msg),
+            DevicedMsg::LIST_INVENTORY => {
+                registry.refresh_inventory();
+                registry.list_inventory(&msg)
+            }
+            DevicedMsg::GET_INVENTORY => {
+                registry.refresh_inventory();
+                registry.get_inventory(&msg)
+            }
+            DevicedMsg::GET_INVENTORY_FIELD => {
+                registry.refresh_inventory();
+                registry.get_inventory_field(&msg)
+            }
             _ => reply_err(DevicedMsg::ERR_BAD_REQUEST),
         };
         msg = ipc_reply_and_wait(ep, reply);
