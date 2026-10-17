@@ -106,6 +106,11 @@ pub fn load_defaults() -> (
     let _ = configs.push(cfg("sunlight-terminal", Priority::Critical, true, 0));
     let _ = configs.push(cfg("sunlight-mouse", Priority::Critical, true, 0));
     let _ = configs.push(cfg("display_server", Priority::Critical, true, 0));
+    // audiod polls the ES1371 period latch in userspace. Keep it in the
+    // realtime class so compositor/terminal bursts cannot leave the DMA ring
+    // unrefilled long enough to turn a transient scheduling delay into
+    // audible starvation.
+    let _ = configs.push(cfg("audiod", Priority::Critical, true, 0));
     let _ = configs.push(cfg("vfs_server", Priority::Critical, true, 0));
     let _ = configs.push(cfg("sunlight-niced", Priority::High, true, 0));
 
