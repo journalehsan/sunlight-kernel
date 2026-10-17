@@ -312,10 +312,16 @@ sibling navigation. MIME routing sends these formats to Light Lens. Files uses
 the shared decoder for previews and thumbd uses it for thumbnail generation.
 Files inspects up to 8 KiB of headers for Properties; JPEGs with larger metadata
 before their frame header may omit dimensions there. Existing application
-limits still apply: Light Lens reads at most 8 MiB of encoded data, and Files'
+limits still apply: Light Lens reads at most 8 MiB plus a 36-byte container
+header. SIMG/TGA and edited geometry allow 2,097,152 pixels; PNG/JPEG input
+allows 1,048,576 pixels for decoder scratch space (8,192 per side). Files'
 preview buffer must also fit the expanded TGA representation (8 MiB). Rappid
 Rabbit uses the shared JPEG decoder with its existing stricter browser limits;
 its separate PNG decoder remains in place.
+
+Light Lens also exports edited images as TGA type-2 BGRA32 or raw SIMG v2
+using shared streaming header helpers. Alpha is preserved. See the
+[Light Lens editor guide](apps/light-lens.md) for controls and limitations.
 
 The heap-free `sunlight-tui::tga::TgaImage` remains a borrowed TGA parser.
 Allocation-capable callers can decode PNG/JPEG using the UI API and pass the

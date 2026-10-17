@@ -286,6 +286,26 @@ fn write_header(
     out[32..36].copy_from_slice(&crc32.to_le_bytes());
 }
 
+/// Header for a streaming, uncompressed BGRA8 encoder. Follow with exactly
+/// `checked_layout(width, height)` bytes in top-down, straight-alpha order.
+/// CRC is optional in SIMG v2 and omitted for single-pass publication.
+pub fn encode_raw_header(width: u32, height: u32) -> Result<[u8; HEADER_SIZE_USIZE], ImageError> {
+    let len = checked_layout(width, height)? as u32;
+    let mut header = [0; HEADER_SIZE_USIZE];
+    write_header(
+        &mut header,
+        width,
+        height,
+        Compression::None,
+        Filter::None,
+        len,
+        len,
+        0,
+        0,
+    );
+    Ok(header)
+}
+
 /// Convert host RGBA8 image to canonical on-disk BGRA8 bytes.
 pub fn rgba_to_bgra(image: &ImageRgba8) -> Result<Vec<u8>, ImageError> {
     let expected = rgba_len(image.width, image.height)?;

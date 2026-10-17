@@ -3,26 +3,32 @@
 
 extern crate alloc;
 
+mod editing_ui;
+use sunlight_light_lens::editor::{self, Editor, Geometry, Sampler, State, Viewport};
+
 use core::cmp::Ordering;
 
 use sun_font::{
     draw_text as sf_draw, draw_text_centered as sf_centered, draw_text_right as sf_right,
-    draw_text_vcenter as sf_vcenter, line_height as sf_lh, measure_text as sf_measure, FontRole,
-    TextStyle,
+    draw_text_vcenter as sf_vcenter, measure_text as sf_measure, FontRole, TextStyle,
 };
+#[cfg(not(test))]
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
     process_yield, ProcessExit,
 };
-use sunlight_libc::{self as libc, crt0, DirEntry, FT_FILE};
+#[cfg(not(test))]
+use sunlight_libc::crt0;
+use sunlight_libc::{self as libc, DirEntry, FT_FILE};
 use sunlight_ui::image::{decode_simg, RgbaImage, TgaImage};
 use sunlight_ui::widgets::StatusBar;
 use sunlight_ui::{
     request_close, App, AxisSizing, Canvas, Color, Column, Event, LayoutBox, LayoutInvalidation,
-    Point, Rect, Row, Size, Sizing, Theme, UiSymbol, Window, WindowConfig, WindowDecoration,
-    WindowEvent, WindowMaterial,
+    Point, Rect, Row, Size, Sizing, Theme, UiSymbol, WindowEvent,
 };
+#[cfg(not(test))]
+use sunlight_ui::{Window, WindowConfig, WindowDecoration, WindowMaterial};
 
 const WIN_W: u32 = 1220;
 const WIN_H: u32 = 760;
@@ -40,7 +46,8 @@ const MAX_SIBLINGS: usize = 128;
 const MAX_DIR_ENTRIES: usize = 160;
 const MSG_LEN: usize = 96;
 const VALUE_LEN: usize = 96;
-const MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
+// An uncompressed maximum-size export includes a small container header.
+const MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024 + sun_img::SIMG_V2_HEADER_SIZE as usize;
 
 const KEY_ESC: u8 = 0x01;
 const KEY_Q: u8 = 0x10;
@@ -55,8 +62,7 @@ static MISSING_ICON_TGA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/icon_
 static mut IMAGE_BUF: [u8; MAX_IMAGE_BYTES] = [0u8; MAX_IMAGE_BYTES];
 static mut IMAGE_LEN: usize = 0;
 
-// Global allocator comes from sunlight-libc (`global-alloc` feature) so SIMG v2
-// can allocate a single decoded pixel buffer.
+// The shared bounded allocator holds the original image and decoder scratch space.
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct PathBuf {
@@ -267,10 +273,21 @@ struct LightLensApp {
     sibling_count: usize,
     current_index: usize,
     has_current_index: bool,
-    /// Decoded photo pixels (straight ARGB u32). Prefer this over a TGA view so
-    /// we can force-opaque blit the same way the File Manager preview fixed the
-    /// gray SIMG v2 hole on alpha-capable surfaces.
+    /// Immutable original pixels, straight ARGB. Preview composites alpha over
+    /// the checkerboard; history stores only geometry and adjustment values.
     image: Option<RgbaImage>,
+    editor: Editor,
+    viewport: Viewport,
+    crop_mode: bool,
+    crop: Option<Rect>,
+    crop_start: Option<Point>,
+    crop_ratio: usize,
+    pan_start: Option<Point>,
+    slider_drag: Option<(usize, State)>,
+    suppress_click: bool,
+    side_scroll: i32,
+    keep_aspect: bool,
+    export: Option<editing_ui::ExportJob>,
     info: ImageInfo,
     load_state: LoadState,
     message: TextBuf<MSG_LEN>,
@@ -308,6 +325,18 @@ impl LightLensApp {
             current_index: 0,
             has_current_index: false,
             image: None,
+            editor: Editor::new(0, 0),
+            viewport: Viewport::default(),
+            crop_mode: false,
+            crop: None,
+            crop_start: None,
+            crop_ratio: 0,
+            pan_start: None,
+            slider_drag: None,
+            suppress_click: false,
+            side_scroll: 0,
+            keep_aspect: true,
+            export: None,
             info: ImageInfo::empty(),
             load_state: LoadState::Empty,
             message: TextBuf::empty(),
@@ -542,87 +571,6 @@ impl LightLensApp {
         }
     }
 
-    /// A small dim section heading with a faint separator trailing to the
-    /// right edge. Returns the y just below the heading.
-    fn draw_section_label(
-        canvas: &mut Canvas,
-        theme: &Theme,
-        x: i32,
-        y: i32,
-        w: u32,
-        label: &str,
-    ) -> i32 {
-        let role = FontRole::UiSmall;
-        sf_draw(canvas, label, x, y, &TextStyle::new(role, theme.text_dim));
-        let label_w = sf_measure(label, role).w as i32;
-        let lh = sf_lh(role) as i32;
-        let sep_x = x + label_w + 8;
-        let sep_w = (w as i32 - label_w - 8).max(0) as u32;
-        canvas.hline(sep_x, y + lh / 2, sep_w, theme.border);
-        y + 18
-    }
-
-    /// Compute the deterministic Fit presentation rectangle owned by the
-    /// image renderer. The layout system owns `viewport`; this helper never
-    /// changes it and never returns geometry for an unusable source/viewport.
-    fn fit_image_rect(viewport: Rect, width: u32, height: u32) -> Option<Rect> {
-        if width == 0 || height == 0 || viewport.w == 0 || viewport.h == 0 {
-            return None;
-        }
-        let scale_w = u64::from(viewport.w).saturating_mul(u64::from(height));
-        let scale_h = u64::from(viewport.h).saturating_mul(u64::from(width));
-        let (fit_w, fit_h) = if scale_w <= scale_h {
-            let h = u64::from(viewport.w).saturating_mul(u64::from(height)) / u64::from(width);
-            (viewport.w, (h as u32).max(1).min(viewport.h))
-        } else {
-            let w = u64::from(viewport.h).saturating_mul(u64::from(width)) / u64::from(height);
-            ((w as u32).max(1).min(viewport.w), viewport.h)
-        };
-        Some(Rect::new(
-            viewport.x + (viewport.w.saturating_sub(fit_w) / 2) as i32,
-            viewport.y + (viewport.h.saturating_sub(fit_h) / 2) as i32,
-            fit_w,
-            fit_h,
-        ))
-    }
-
-    /// Fit-blit decoded photo pixels with **forced opaque ARGB**.
-    ///
-    /// Same class of fix as File Manager preview: on alpha-capable window
-    /// surfaces, samples without a solid alpha byte show as a flat gray
-    /// panel hole under glass/compositor blend. Photo content is always
-    /// treated as opaque for display (source alpha is ignored for RGB).
-    fn draw_photo(canvas: &mut Canvas, img: &RgbaImage, dst: Rect) {
-        if img.width == 0 || img.height == 0 || dst.w == 0 || dst.h == 0 {
-            return;
-        }
-        let cx0 = dst.x.max(0) as u32;
-        let cy0 = dst.y.max(0) as u32;
-        let cx1 = dst.right().min(canvas.width as i32).max(0) as u32;
-        let cy1 = dst.bottom().min(canvas.height as i32).max(0) as u32;
-        if cx0 >= cx1 || cy0 >= cy1 {
-            return;
-        }
-        let dw = dst.w.max(1) as u64;
-        let dh = dst.h.max(1) as u64;
-        let sw = img.width as u64;
-        let sh = img.height as u64;
-        for dy in cy0..cy1 {
-            let ly = (dy as i32 - dst.y) as u64;
-            let sy = ((ly * sh) / dh) as u32;
-            let row_off = dy as usize * canvas.stride as usize;
-            for dx in cx0..cx1 {
-                let lx = (dx as i32 - dst.x) as u64;
-                let sx = ((lx * sw) / dw) as u32;
-                let idx = row_off + dx as usize;
-                if idx < canvas.pixels.len() {
-                    // Force opaque so glass surfaces never composite a gray hole.
-                    canvas.pixels[idx] = 0xFF00_0000 | (img.pixel(sx, sy) & 0x00FF_FFFF);
-                }
-            }
-        }
-    }
-
     fn has_previous(&self) -> bool {
         self.has_current_index && self.current_index > 0
     }
@@ -635,6 +583,9 @@ impl LightLensApp {
         if !self.has_previous() {
             return false;
         }
+        if !self.confirm_leave() {
+            return true;
+        }
         let target = self.sibling_paths[self.current_index - 1];
         self.open_path(target);
         true
@@ -644,6 +595,9 @@ impl LightLensApp {
         if !self.has_next() {
             return false;
         }
+        if !self.confirm_leave() {
+            return true;
+        }
         let target = self.sibling_paths[self.current_index + 1];
         self.open_path(target);
         true
@@ -651,6 +605,11 @@ impl LightLensApp {
 
     fn open_path(&mut self, path: PathBuf) {
         self.current_path = path;
+        self.editor = Editor::new(0, 0);
+        self.viewport = Viewport::default();
+        self.cancel_crop();
+        self.pan_start = None;
+        self.slider_drag = None;
         self.image = None;
         self.info = ImageInfo::empty();
         self.load_state = LoadState::Empty;
@@ -706,7 +665,7 @@ impl LightLensApp {
             return;
         }
         if stat.size as usize > MAX_IMAGE_BYTES {
-            self.set_error("Image is too large for Light Lens MVP.");
+            self.set_error("Image file exceeds the 8 MiB input limit.");
             return;
         }
 
@@ -734,6 +693,10 @@ impl LightLensApp {
         }
 
         // SIMG v2 needs only 4 magic bytes to detect; legacy TGA needs 18.
+        if total != stat.size as usize {
+            self.set_error("Could not read the complete image file.");
+            return;
+        }
         if total < 4 {
             self.set_error("Unsupported or broken image.");
             return;
@@ -743,12 +706,18 @@ impl LightLensApp {
             return;
         }
 
+        let validation = unsafe { editor::inspect_input(&IMAGE_BUF[..total]) };
+        if let Err(message) = validation {
+            self.set_error(message);
+            return;
+        }
         match unsafe { decode_runtime_image(total) } {
             Some((image, kind)) => {
                 self.info.width = image.width;
                 self.info.height = image.height;
                 self.info.bpp = 32;
                 self.info.format = kind;
+                self.editor = Editor::new(image.width, image.height);
                 self.image = Some(image);
                 self.load_state = LoadState::Ready;
                 self.message.set_str("Ready");
@@ -813,6 +782,8 @@ impl LightLensApp {
     fn set_error(&mut self, text: &str) {
         self.load_state = LoadState::Error;
         self.message.set_str(text);
+        #[cfg(not(test))]
+        debug_log(&alloc::format!("[LIGHT-LENS] load error: {text}\n"));
     }
 
     fn draw_header(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
@@ -838,11 +809,15 @@ impl LightLensApp {
             &TextStyle::new(FontRole::UiMedium, theme.text),
         );
         let mut sub_buf: TextBuf<VALUE_LEN> = TextBuf::empty();
-        sub_buf.set_str(if self.current_path.is_empty() {
-            "Image Viewer"
+        if self.editor.dirty() {
+            sub_buf.set_str(&alloc::format!("* {}", self.current_path.file_name_str()));
         } else {
-            self.current_path.file_name_str()
-        });
+            sub_buf.set_str(if self.current_path.is_empty() {
+                "Image Editor"
+            } else {
+                self.current_path.file_name_str()
+            });
+        }
         let subtitle = sub_buf.truncate_to_width(rect.w as i32 - 130, FontRole::UiSmall);
         sf_right(
             canvas,
@@ -890,7 +865,7 @@ impl LightLensApp {
             back_rect,
             UiSymbol::Back,
             "Back",
-            self.has_previous(),
+            self.has_previous() && self.export.is_none(),
         );
         Self::draw_nav_button(
             canvas,
@@ -898,11 +873,10 @@ impl LightLensApp {
             next_rect,
             UiSymbol::Forward,
             "Next",
-            self.has_next(),
+            self.has_next() && self.export.is_none(),
         );
 
-        // Decorative edit tools (right cluster) — all inactive placeholders
-        // with UiSymbol glyphs so they read as polished tool buttons.
+        // Preserve the existing toolbar geometry and activate supported tools.
         let tools: [(Option<UiSymbol>, &str); 6] = [
             (Some(UiSymbol::Search), "Zoom +"),
             (Some(UiSymbol::Minus), "Zoom -"),
@@ -912,7 +886,15 @@ impl LightLensApp {
             (Some(UiSymbol::Multiply), "Flip H"),
         ];
         for (idx, (sym, label)) in tools.iter().enumerate() {
-            Self::draw_placeholder_chip(canvas, theme, tool_rects[idx], *sym, label);
+            let _ = sym;
+            Self::draw_edit_button(
+                canvas,
+                theme,
+                tool_rects[idx],
+                label,
+                self.editable(),
+                idx == 4 && self.crop_mode,
+            );
         }
 
         // Subtle keyboard hint in the free middle area, if there is room.
@@ -921,76 +903,6 @@ impl LightLensApp {
         if hint_x1 > hint_x0 + 40 {
             Self::draw_toolbar_hint(canvas, theme, hint_x0, hint_x1, rect);
         }
-    }
-
-    fn draw_left_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
-        let content = Self::draw_panel(canvas, theme, rect, "Edit Tools");
-        if content.w == 0 || content.h == 0 {
-            return;
-        }
-        let pad = 12i32;
-        let inner_w = (content.w as i32 - pad * 2).max(0) as u32;
-        let chip_h = 26u32;
-        let chip_gap = 6i32;
-        let dim = TextStyle::new(FontRole::UiSmall, theme.text_dim);
-
-        // "Coming soon" caption — makes the placeholder intent unmistakable.
-        let mut y = content.y + 12;
-        canvas.fill_rect(Rect::new(content.x + pad, y + 2, 6, 6), theme.warn);
-        sf_draw(canvas, "Coming soon", content.x + pad + 11, y, &dim);
-        y += 24;
-
-        // Section: Modes
-        y = Self::draw_section_label(canvas, theme, content.x + pad, y, inner_w, "Modes");
-        for label in ["Edit Mode", "AI Enhance", "Reset All"] {
-            Self::draw_placeholder_chip(
-                canvas,
-                theme,
-                Rect::new(content.x + pad, y, inner_w, chip_h),
-                None,
-                label,
-            );
-            y += chip_h as i32 + chip_gap;
-        }
-
-        // Section: Adjust — muted sliders, knob centered = no change applied.
-        y += 4;
-        y = Self::draw_section_label(canvas, theme, content.x + pad, y, inner_w, "Adjust");
-        for label in ["Brightness", "Contrast", "Saturation"] {
-            sf_draw(canvas, label, content.x + pad, y, &dim);
-            let track = Rect::new(content.x + pad, y + 14, inner_w, 6);
-            canvas.fill_rect(track, theme.panel_alt);
-            canvas.draw_rect(track, theme.border);
-            let knob = Rect::new(track.x + track.w as i32 / 2 - 5, track.y - 3, 10, 12);
-            canvas.fill_rect(knob, theme.text_dim);
-            y += 32;
-        }
-
-        // Section: Filters — two columns of inactive chips.
-        y += 4;
-        y = Self::draw_section_label(canvas, theme, content.x + pad, y, inner_w, "Filters");
-        let col_gap = 8i32;
-        let col_w = ((inner_w as i32 - col_gap) / 2).max(0) as u32;
-        for (idx, label) in ["Filters", "Effects", "Crop", "Flip H"]
-            .into_iter()
-            .enumerate()
-        {
-            let col = (idx % 2) as i32;
-            let row = (idx / 2) as i32;
-            let cr = Rect::new(
-                content.x + pad + col * (col_w as i32 + col_gap),
-                y + row * (chip_h as i32 + chip_gap),
-                col_w,
-                chip_h,
-            );
-            Self::draw_placeholder_chip(canvas, theme, cr, None, label);
-        }
-        y += 2 * (chip_h as i32 + chip_gap);
-
-        // Footer note.
-        y += 10;
-        sf_draw(canvas, "Editing arrives", content.x + pad, y, &dim);
-        sf_draw(canvas, "in a later release.", content.x + pad, y + 14, &dim);
     }
 
     /// Subtle two-tone checkerboard — makes the preview read as an image
@@ -1028,22 +940,16 @@ impl LightLensApp {
 
         match (self.load_state, self.image.as_ref()) {
             (LoadState::Ready, Some(image)) => {
-                // All photo operations use viewport-local coordinates. The
-                // shared Canvas clip therefore makes it impossible for scaled
-                // pixels to reach the toolbar, side panels, or status bar.
                 let mut viewport_canvas = canvas.sub_canvas(content);
-                let local_viewport = Rect::new(0, 0, content.w, content.h).inset(16);
-                if let Some(image_rect) =
-                    Self::fit_image_rect(local_viewport, image.width, image.height)
-                {
-                    viewport_canvas.fill_rect(
-                        image_rect,
-                        Color::rgb(theme.bg.r(), theme.bg.g(), theme.bg.b()),
-                    );
-                    Self::draw_photo(&mut viewport_canvas, image, image_rect);
-                    viewport_canvas.draw_rect(image_rect, theme.border);
-                    viewport_canvas.draw_rect(image_rect.inset(-1), theme.border);
-                }
+                let image_rect = self.image_rect();
+                let local_rect = Rect::new(
+                    image_rect.x - content.x,
+                    image_rect.y - content.y,
+                    image_rect.w,
+                    image_rect.h,
+                );
+                self.draw_edited_photo(&mut viewport_canvas, image, local_rect);
+                self.draw_crop_overlay(&mut viewport_canvas, local_rect, theme);
             }
             (LoadState::Error, _) => {
                 if let Some(icon) = self.missing_icon {
@@ -1133,6 +1039,8 @@ impl LightLensApp {
             return;
         }
 
+        let mut info = self.info;
+        (info.width, info.height) = self.editor.state.size;
         const ROWS: usize = 8;
         const ROW_H: i32 = 32;
 
@@ -1148,11 +1056,20 @@ impl LightLensApp {
             let (label, value) = match idx {
                 0 => ("Filename", self.current_path.file_name_str()),
                 1 => ("Format", format_label(self.info.format)),
-                2 => ("Resolution", fill_resolution(&self.info, &mut src)),
+                2 => ("Resolution", fill_resolution(&info, &mut src)),
                 3 => ("File Size", fill_size(self.info.size_bytes, &mut src)),
-                4 => ("Zoom", "Fit"),
+                4 => {
+                    let zoom = if self.viewport.fit {
+                        Viewport::fit_zoom(self.preview_area(), self.editor.state.size)
+                    } else {
+                        self.viewport.zoom
+                    };
+                    let mut len = write_zoom(&mut src, zoom);
+                    len += write_bytes(&mut src[len..], b"%");
+                    ("Zoom", core::str::from_utf8(&src[..len]).unwrap_or(""))
+                }
                 5 => ("Color Depth", fill_bpp(self.info.bpp, &mut src)),
-                6 => ("Modified", "Unknown"),
+                6 => ("Modified", if self.editor.dirty() { "Yes" } else { "No" }),
                 _ => (
                     "Folder",
                     fill_folder_position(self.current_index, self.sibling_count, &mut src),
@@ -1199,7 +1116,9 @@ impl LightLensApp {
         let mut right_buf = [0u8; 24];
         let mut left_buf: TextBuf<VALUE_LEN> = TextBuf::empty();
 
-        let raw = if self.current_path.is_empty() {
+        let raw = if !self.message.as_str().is_empty() {
+            self.message.as_str()
+        } else if self.current_path.is_empty() {
             "No image"
         } else if self.load_state == LoadState::Error {
             self.message.as_str()
@@ -1210,13 +1129,30 @@ impl LightLensApp {
         // Keep the filename within roughly the left third of the bar.
         let left = left_buf.truncate_to_width((rect.w as i32 / 3) - 16, FontRole::UiSmall);
 
+        let mut display_info = self.info;
+        (display_info.width, display_info.height) = self.editor.state.size;
         let center = fill_status_center(
-            &self.info,
+            &display_info,
             self.current_index,
             self.sibling_count,
             &mut center_buf,
         );
-        let right = fill_status_right(self.load_state, &mut right_buf);
+        let area = self.preview_area();
+        let zoom = if self.viewport.fit {
+            Viewport::fit_zoom(area, self.editor.state.size)
+        } else {
+            self.viewport.zoom
+        };
+        let mut len = write_zoom(&mut right_buf, zoom);
+        len += write_bytes(
+            &mut right_buf[len..],
+            if self.editor.dirty() {
+                b"% * Modified"
+            } else {
+                b"%"
+            },
+        );
+        let right = core::str::from_utf8(&right_buf[..len]).unwrap_or("");
 
         // Render the status bar with the MiniType font. The StatusBar widget
         // draws its own text with the bitmap font, so its three sections are
@@ -1270,39 +1206,30 @@ impl App for LightLensApp {
     }
 
     fn update(&mut self, event: Event) -> bool {
-        match event {
-            Event::Click { x, y } => {
-                if self.layout.back.contains(Point::new(x, y)) {
-                    return self.show_previous();
-                }
-                if self.layout.next.contains(Point::new(x, y)) {
-                    return self.show_next();
-                }
-                false
-            }
-            Event::KeyPress {
-                keycode,
-                pressed: true,
-                ctrl,
-                ..
-            } => {
-                if keycode == KEY_ESC || (ctrl && keycode == KEY_Q) {
-                    request_close();
-                    return true;
-                }
-                match keycode {
-                    KEY_LEFT => self.show_previous(),
-                    KEY_RIGHT => self.show_next(),
-                    _ => false,
-                }
-            }
-            _ => false,
+        self.editor_event(event)
+    }
+
+    fn poll_timeout_ms(&self) -> u64 {
+        if self.export.is_some() {
+            0
+        } else {
+            200
         }
     }
 
     fn window_event(&mut self, event: WindowEvent) -> bool {
         let WindowEvent::Resized { width, height } = event;
-        self.set_client_bounds(width, height)
+        self.pan_start = None;
+        self.crop_start = None;
+        self.finish_slider();
+        let changed = self.set_client_bounds(width, height);
+        self.viewport
+            .clamp(self.preview_area(), self.editor.state.size);
+        self.side_scroll = self.side_scroll.clamp(
+            0,
+            (478 - self.layout.left.h.saturating_sub(20) as i32).max(0),
+        );
+        changed
     }
 }
 
@@ -1336,8 +1263,8 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
             title: "Light Lens",
             decoration: WindowDecoration::Normal,
         },
-        // Match Files / Control Panel so photo pixels use the same
-        // alpha-capable surface path (opaque ARGB samples).
+        // Match the existing glass window material; the renderer composites
+        // straight-alpha image pixels onto the checkerboard.
         WindowMaterial::WindowGlass,
     ) {
         Some(window) => window,
@@ -1352,6 +1279,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     ProcessExit::exit(0);
 }
 
+#[cfg(not(test))]
 fn parse_user_path_arg(argc: u64, argv: *const *const u8) -> Option<PathBuf> {
     let mut raw = [core::ptr::null::<u8>(); libc::MAX_ARGS];
     let count = unsafe { crt0::collect_raw_args(argc, argv, &mut raw) };
@@ -1369,6 +1297,7 @@ fn parse_user_path_arg(argc: u64, argv: *const *const u8) -> Option<PathBuf> {
     None
 }
 
+#[cfg(not(test))]
 fn is_ignored_launch_arg(arg: &[u8]) -> bool {
     arg.is_empty()
         || arg.starts_with(b"--sunlight-")
@@ -1377,6 +1306,7 @@ fn is_ignored_launch_arg(arg: &[u8]) -> bool {
         || arg[0] == b'-'
 }
 
+#[cfg(not(test))]
 fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || needle.len() > haystack.len() {
         return None;
@@ -1388,10 +1318,8 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 /// Decode runtime image bytes from `IMAGE_BUF` into an owned ARGB buffer.
 ///
-/// Uses the shared `decode_simg` path (SIMG v2, TGA, PNG, JPEG) so
-/// Light Lens matches File Manager preview decode. Drawing forces opaque
-/// ARGB (see [`LightLensApp::draw_photo`]) to avoid the gray alpha-hole that
-/// previously affected the Files preview pane on glass surfaces.
+/// Uses the shared `decode_simg` path after the caller validates dimensions.
+/// Pixels retain straight alpha throughout editing and export.
 unsafe fn decode_runtime_image(total: usize) -> Option<(RgbaImage, FormatKind)> {
     if total < 4 {
         return None;
@@ -1494,6 +1422,15 @@ fn write_u32(out: &mut [u8], mut value: u32) -> usize {
     write_bytes(out, &buf[idx..])
 }
 
+fn write_zoom(out: &mut [u8], zoom: u32) -> usize {
+    let mut len = write_u32(out, zoom / 10);
+    if zoom % 10 != 0 {
+        len += write_bytes(&mut out[len..], b".");
+        len += write_u32(&mut out[len..], zoom % 10);
+    }
+    len
+}
+
 fn write_u64(out: &mut [u8], mut value: u64) -> usize {
     let mut buf = [0u8; 24];
     let mut idx = buf.len();
@@ -1572,9 +1509,9 @@ fn fill_status_center<'a>(
         len += write_u32(&mut out[len..], info.width);
         len += write_bytes(&mut out[len..], b"x");
         len += write_u32(&mut out[len..], info.height);
-        len += write_bytes(&mut out[len..], b" | Fit");
+        len += write_bytes(&mut out[len..], b" |");
     } else {
-        len += write_bytes(&mut out[len..], b"Fit");
+        len += write_bytes(&mut out[len..], b"");
     }
     if count != 0 {
         len += write_bytes(&mut out[len..], b" | ");
@@ -1585,23 +1522,21 @@ fn fill_status_center<'a>(
     core::str::from_utf8(&out[..len]).unwrap_or("Fit")
 }
 
-fn fill_status_right<'a>(state: LoadState, out: &'a mut [u8; 24]) -> &'a str {
-    let text = match state {
-        LoadState::Ready => b"Ready".as_slice(),
-        LoadState::Error => b"Load Error".as_slice(),
-        LoadState::Empty => b"Waiting".as_slice(),
-    };
-    let len = write_bytes(out, text);
-    core::str::from_utf8(&out[..len]).unwrap_or("Waiting")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::vec;
 
+    #[test]
+    fn maximum_raw_export_fits_input_file_limit() {
+        assert!(
+            editor::MAX_PIXELS as usize * 4 + sun_img::SIMG_V2_HEADER_SIZE as usize
+                <= MAX_IMAGE_BYTES
+        );
+    }
+
     fn fit(viewport: Rect, width: u32, height: u32) -> Rect {
-        LightLensApp::fit_image_rect(viewport, width, height).expect("valid fit")
+        editor::fit_rect(viewport, (width, height)).expect("valid fit")
     }
 
     #[test]
@@ -1703,16 +1638,10 @@ mod tests {
     #[test]
     fn zero_source_or_viewport_produces_no_image_geometry() {
         let viewport = Rect::new(0, 0, 100, 100);
-        assert_eq!(LightLensApp::fit_image_rect(viewport, 0, 10), None);
-        assert_eq!(LightLensApp::fit_image_rect(viewport, 10, 0), None);
-        assert_eq!(
-            LightLensApp::fit_image_rect(Rect::new(0, 0, 0, 100), 10, 10),
-            None
-        );
-        assert_eq!(
-            LightLensApp::fit_image_rect(Rect::new(0, 0, 100, 0), 10, 10),
-            None
-        );
+        assert_eq!(editor::fit_rect(viewport, (0, 10)), None);
+        assert_eq!(editor::fit_rect(viewport, (10, 0)), None);
+        assert_eq!(editor::fit_rect(Rect::new(0, 0, 0, 100), (10, 10)), None);
+        assert_eq!(editor::fit_rect(Rect::new(0, 0, 100, 0), (10, 10)), None);
     }
 
     #[test]
@@ -1739,11 +1668,13 @@ mod tests {
             height: 1,
             pixels: vec![photo_pixel],
         };
+        let mut app = LightLensApp::new(None);
+        app.editor = Editor::new(1, 1);
         let mut canvas = Canvas::new(&mut pixels, WIDTH, WIDTH, HEIGHT);
         {
             let mut viewport =
                 canvas.sub_canvas(Rect::new(0, TOOLBAR as i32, WIDTH, HEIGHT - TOOLBAR));
-            LightLensApp::draw_photo(&mut viewport, &image, Rect::new(-5, -5, 30, 30));
+            app.draw_edited_photo(&mut viewport, &image, Rect::new(-5, -5, 30, 30));
         }
         assert!(pixels[..(WIDTH * TOOLBAR) as usize]
             .iter()

@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-light-lens"
-version = "0.2.4959-alpha.2"
+version = "0.2.4976-alpha.2"
+
+
 
 
 
@@ -187,8 +189,11 @@ path = "src/main.rs"
 
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
-# 8 MiB demand-mapped heap: SIMG v2 sample photos decode to ~4 MiB ARGB.
-sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-8m"] }
+# Bounded decoder scratch space; editing retains only the original pixels.
+sunlight-libc = { path = "../sunlight-libc", features = ["global-alloc", "dynamic-heap-16m"] }
+sun-img = { path = "../sun-img", default-features = false }
+sunlight-dialogs = { path = "../sunlight-dialogs" }
+libm = "0.2"
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
 

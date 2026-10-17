@@ -45,7 +45,7 @@ footprint) is obvious during review.
 | sunlight-clipd       | ~1 MiB      | clipboard history (32 entries × ≤2 KiB text)             |
 | sunlight-clipman     | ~2 MiB      | clipboard history UI (≤32 rows)                          |
 | dialog host          | ~4 MiB      | file picker / dialog transient state                     |
-| Light Lens           | ~12 MiB     | 8 MiB image decode buffer + viewer state                 |
+| Light Lens           | ~24 MiB max | 8 MiB input (+ header) + 16 MiB demand-mapped heap budget     |
 
 ## Cache bounds (verified Day 30)
 
@@ -55,7 +55,11 @@ All caches are already bounded — no unbounded growth paths were found:
   bounded by construction.
 - **Preview buffers** (`sunlight-files`): `PREVIEW_SRC_BUF` 4 MiB, `TEXT_PREVIEW_BUF`
   8 KiB — fixed static buffers.
-- **Light Lens** (`sunlight-light-lens`): `IMAGE_BUF` 8 MiB fixed static buffer.
+- **Light Lens** (`sunlight-light-lens`): `IMAGE_BUF` 8 MiB + 36-byte fixed static buffer,
+  16 MiB demand-mapped heap budget, one SIMG/TGA original capped at 8 MiB
+  (PNG/JPEG: 4 MiB to allow decoder scratch),
+  parameter-only history (32 undo + 32 redo states), and 8 KiB export scratch.
+  See [editor limits](apps/light-lens.md#processing-and-resource-limits).
 - **Thumbnail cache** (`sunlight-thumbd`): on-disk with `CACHE_MAX_BYTES` 64 MiB
   and `cleanup_cache` eviction.
 - **Clipboard history** (`sunlight-clipd`): `HISTORY_LIMIT` 32 entries,

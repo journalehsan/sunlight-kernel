@@ -195,17 +195,7 @@ pub fn encode_tga_rgba32(image: &ImageRgba8) -> Result<Vec<u8>, ImageError> {
     validate_rgba_image(image)?;
     let expected_len = rgba_len(image.width, image.height)?;
     let mut out = Vec::with_capacity(18 + expected_len);
-    out.extend_from_slice(&[
-        0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    ]);
-    out.extend_from_slice(
-        &(u16::try_from(image.width).map_err(|_| ImageError::InvalidDimensions)?).to_le_bytes(),
-    );
-    out.extend_from_slice(
-        &(u16::try_from(image.height).map_err(|_| ImageError::InvalidDimensions)?).to_le_bytes(),
-    );
-    out.push(32);
-    out.push(0x28);
+    out.extend_from_slice(&encode_tga_rgba32_header(image.width, image.height)?);
 
     for chunk in image.pixels.chunks_exact(4) {
         let r = chunk[0];
@@ -219,6 +209,22 @@ pub fn encode_tga_rgba32(image: &ImageRgba8) -> Result<Vec<u8>, ImageError> {
     }
 
     Ok(out)
+}
+
+/// Header for streaming top-down TGA type-2 BGRA8 pixels with straight alpha.
+pub fn encode_tga_rgba32_header(width: u32, height: u32) -> Result<[u8; 18], ImageError> {
+    let width = u16::try_from(width).map_err(|_| ImageError::InvalidDimensions)?;
+    let height = u16::try_from(height).map_err(|_| ImageError::InvalidDimensions)?;
+    if width == 0 || height == 0 {
+        return Err(ImageError::InvalidDimensions);
+    }
+    let mut header = [0; 18];
+    header[2] = 2;
+    header[12..14].copy_from_slice(&width.to_le_bytes());
+    header[14..16].copy_from_slice(&height.to_le_bytes());
+    header[16] = 32;
+    header[17] = 0x28;
+    Ok(header)
 }
 
 pub fn convert_to_tga_rgba32(input: &[u8]) -> Result<Vec<u8>, ImageError> {
