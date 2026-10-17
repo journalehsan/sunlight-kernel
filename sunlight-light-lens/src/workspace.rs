@@ -2,7 +2,8 @@
 use super::*;
 use alloc::{format, rc::Rc, string::String};
 use sunlight_dialogs::{
-    DialogClient, DialogCommonOptions, DialogRequest, DialogResult, TextInputRequest,
+    ColorPickerRequest, DialogClient, DialogCommonOptions, DialogRequest, DialogResult,
+    TextInputRequest,
 };
 use sunlight_light_lens::annotations::{self, Object, Style, TextMask, Tool, P};
 
@@ -199,7 +200,7 @@ impl LightLensApp {
             .map(|o| o.tool)
             .unwrap_or(self.workspace.tool)
     }
-    fn annotation_labels(&self) -> alloc::vec::Vec<String> {
+    pub(super) fn annotation_labels(&self) -> alloc::vec::Vec<String> {
         let mut out: alloc::vec::Vec<String> =
             Tool::ALL.iter().map(|t| String::from(t.label())).collect();
         out.push(format!(
@@ -497,22 +498,17 @@ impl LightLensApp {
         }
         match i {
             8 => {
-                if let Some(value) = self.input(
-                    "Annotation color",
-                    "Hex RGB (for example FFB52E):",
-                    &format!("{:06X}", self.workspace.style.color & 0xffffff),
-                ) {
-                    if let Ok(color) = u32::from_str_radix(value.trim().trim_start_matches('#'), 16)
-                    {
-                        if color <= 0xffffff {
-                            self.workspace.style.color = 0xff000000 | color;
-                        } else {
-                            self.message.set_str("Color requires six hex digits.");
-                        }
-                    } else {
-                        self.message.set_str("Invalid RGB color.");
-                    }
-                }
+                self.finish_slider();
+                self.slider_focus = None;
+                let request = DialogRequest::ColorPicker(ColorPickerRequest {
+                    title: String::from("Annotation color"),
+                    initial_color: format!("#{:06X}", self.workspace.style.color & 0xffffff),
+                    // Annotation opacity remains its own existing style control.
+                    allow_alpha: false,
+                });
+                let result = DialogClient::new().show(&request);
+                self.apply_annotation_color_result(result);
+                return;
             }
             9 => {
                 let text = self.property_tool() == Tool::Text;
@@ -579,6 +575,55 @@ impl LightLensApp {
         if let Some(mut o) = self.selected_object().cloned() {
             o.style = self.workspace.style;
             self.scene_action(|s| s.replace(o));
+        }
+    }
+
+    /// Commit through the existing scene transaction only after a valid HEX
+    /// selection. Cancellation never creates a history entry or touches objects.
+    pub(super) fn apply_annotation_color_result(
+        &mut self,
+        result: Result<DialogResult, sunlight_dialogs::DialogError>,
+    ) {
+        #[cfg(not(test))]
+        sunlight_ipc::debug_log(&format!("[LIGHT-LENS] color picker result: {result:?}\n"));
+        let value = match result {
+            Ok(DialogResult::ColorSelected(value)) => value,
+            Err(error) => {
+                self.message
+                    .set_str(&format!("Native color dialog failed: {error:?}."));
+                return;
+            }
+            Ok(DialogResult::Cancel | DialogResult::Cancelled | DialogResult::Dismissed) => return,
+            Ok(DialogResult::Error(error)) => {
+                self.message.set_str(&error);
+                return;
+            }
+            Ok(_) => {
+                self.message.set_str("Unexpected color dialog result.");
+                return;
+            }
+        };
+        let digits = value.trim().trim_start_matches('#');
+        if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+            self.message.set_str("Invalid RGB color.");
+            return;
+        }
+        if let Ok(color) = u32::from_str_radix(digits, 16) {
+            let color = 0xff000000 | color;
+            self.workspace.style.color = color;
+            self.message
+                .set_str(&format!("Annotation color: #{:06X}", color & 0xffffff));
+            #[cfg(not(test))]
+            sunlight_ipc::debug_log(&format!(
+                "[LIGHT-LENS] annotation color set: #{:06X}\n",
+                color & 0xffffff
+            ));
+            if let Some(mut object) = self.selected_object().cloned() {
+                if object.style.color != color {
+                    object.style.color = color;
+                    self.scene_action(|s| s.replace(object));
+                }
+            }
         }
     }
     fn doc_point(&self, p: Point) -> P {

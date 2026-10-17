@@ -23,10 +23,10 @@ Sunlight Dialogs provides shared native SunlightOS dialogs so apps use one consi
 - `OpenFile`
 - `OpenFolder`
 - `SaveFile`
+- `ColorPicker`
 
 Future request kinds are reserved for:
 
-- `ColorPicker`
 - `FontPicker`
 - `PrintDialog`
 
@@ -40,6 +40,7 @@ Current request variants:
 - `DialogRequest::OpenFile(OpenFileRequest)`
 - `DialogRequest::OpenFolder(OpenFolderRequest)`
 - `DialogRequest::SaveFile(SaveFileRequest)`
+- `DialogRequest::ColorPicker(ColorPickerRequest)`
 
 ### Alert
 
@@ -88,6 +89,82 @@ Current request variants:
 
 Apps should use the shared types directly instead of inventing custom dialog payloads.
 
+### Color Picker
+
+`ColorPickerRequest` contains `title`, `initial_color`, and `allow_alpha`.
+The native host supplies a draggable saturation/value area, hue track, original
+and new previews, editable HEX and RGB fields, ten presets, and eight session-local
+recent colors. Recent colors are deduplicated and recorded only after OK; they
+are cleared when dialogd restarts. No settings service is required.
+
+```rust
+use sunlight_dialogs::{ColorPickerRequest, DialogClient, DialogError, DialogRequest, DialogResult};
+
+fn choose_color(current: &mut String) -> Result<(), DialogError> {
+    let request = DialogRequest::ColorPicker(ColorPickerRequest {
+        title: "Annotation color".into(),
+        initial_color: current.clone(),
+        allow_alpha: false,
+    });
+    match DialogClient::new().show(&request)? {
+        DialogResult::ColorSelected(hex) => *current = hex,
+        DialogResult::Cancelled => {}, // Preserve the caller's original value.
+        _ => {},
+    }
+    Ok(())
+}
+```
+
+RGB requests accept exactly six HEX digits, optionally prefixed with `#`, and
+return uppercase `#RRGGBB`. With `allow_alpha: true`, requests also accept
+`#RRGGBBAA` and always return `#RRGGBBAA` (alpha last, straight alpha). An RGB
+initial value starts fully opaque. Eight-digit input is rejected when alpha is
+disabled. Packed framebuffer ARGB is converted explicitly; its byte ordering is
+never used for HEX strings. Shared parsing and HSV math live in
+`sunlight_dialogs::color`.
+
+Incomplete/invalid edits retain the last valid preview and show a small hint;
+OK waits for valid fields. Editing a valid field updates the other controls
+without rewriting the active text or moving its caret. Tab/Shift+Tab move focus,
+arrow keys adjust the visual controls (Shift increases the step), Enter accepts
+or activates a focused swatch/button, and Escape cancels. Alpha-enabled requests
+show an opacity track and checkerboard previews. Closing the native window also
+returns `Cancelled`.
+
+Click to select a color, or hold the left button to drag within the originating
+color field/track. Moving outside that control preserves the last color inside;
+releasing anywhere ends the drag. Hovering after release leaves the selection
+unchanged. The native event loop reports left release as `Click`, which the
+picker handles alongside explicit `MouseUp` events.
+
+The picker uses the existing synchronous dialog host, native overlay stacking,
+pointer capture, and window cleanup. It can be called from an application's
+modal workflow using the same API; the existing parent-attachment and concurrent
+request limitations below still apply. Applications must not recursively call
+the host's own IPC endpoint while it is serving a request.
+
+All dialog kinds retain the native window title `Sunlight Dialog`. The existing
+compositor uses that identity for its `KeepAlive` policy; request-specific titles
+are painted inside the window. Giving a picker another native title would cause
+closing its last window to terminate dialogd before it can send the result.
+
+The host reuses one bounded gradient buffer and regenerates it only when hue or
+field dimensions change. Pointer updates use stack formatting buffers, and idle
+ticks do not repaint. The host uses the existing reclaiming userspace allocator
+so repeated dialogs release their allocations.
+
+Light Lens requests RGB only, passes returned HEX through its existing integer
+parser, and keeps annotation opacity separate. Only confirmation changes the
+current color; selected-object recoloring uses one existing undo transaction and
+preserves fill, opacity, and unrelated objects. No selected object means only
+the current tool color changes.
+
+For runtime diagnosis, dialogd logs `[DIALOGD] color picker result: ...`, and
+Light Lens logs `[LIGHT-LENS] color picker result: ...` followed by
+`[LIGHT-LENS] annotation color set: #RRGGBB` on successful parsing. Light Lens's
+status bar shows the applied HEX color, transport error, or unexpected result.
+The leading `#` is removed before its existing RGB integer parser is called.
+
 ## Result Semantics
 
 Current result variants:
@@ -104,6 +181,7 @@ Current result variants:
 - `SavePathSelected(String)`
 - `Cancelled`
 - `Error(String)`
+- `ColorSelected(String)`
 
 Notes:
 
@@ -133,6 +211,8 @@ sunlight-dialog input --title "Rename" --message "New name:" --default "file.txt
 sunlight-dialog open-file --title "Open Image" --initial-dir /home/demo/Pictures --ext png,jpg
 sunlight-dialog open-folder --title "Choose Project Folder" --initial-dir /home/demo
 sunlight-dialog save-file --title "Export Note" --initial-dir /home/demo --suggested-name note.txt
+sunlight-dialog color-picker --title "Annotation color" --initial-color '#FFB52E'
+sunlight-dialog color-picker --initial-color '#12AB3480' --alpha
 ```
 
 CLI output is script-friendly:
@@ -143,6 +223,7 @@ CLI output is script-friendly:
 - `no`
 - submitted text for `TextInput`
 - selected path for `OpenFile`, `OpenFolder`, and `SaveFile`
+- normalized HEX for `ColorPicker`, or `cancelled` on cancellation
 - `cancelled` when a file dialog is dismissed
 
 ## Keyboard Behavior
@@ -180,9 +261,22 @@ CLI output is script-friendly:
 
 ## Planned Later
 
-- `ColorPicker`
 - `FontPicker`
 - `PrintDialog`
 - richer parent-window attachment
 - queued dialog requests
 - richer previews and optional multi-select support
+
+## Focused Validation
+
+```sh
+cargo test -p sunlight-dialogs -p sunlight-dialogd --lib --target x86_64-unknown-linux-gnu
+cargo test -p sunlight-light-lens --target x86_64-unknown-linux-gnu
+```
+
+Set `SUNLIGHT_COLOR_PREVIEW=1` on the shared tests to write RGB/RGBA raster
+previews to `/tmp/sunlight-color-picker-{rgb,rgba}.ppm`. These tests cover color
+math, wire roundtrips, invalid edits, coordinate clamping, captured drags,
+keyboard focus, cancellation, cached gradients, small surfaces, and Light Lens
+style/history preservation. Native compositor focus/stacking and real mouse
+capture still require a graphical runtime check.

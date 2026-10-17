@@ -8,38 +8,15 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use sunlight_dialogs::{
-    decode_result, encode_request, AlertRequest, ConfirmRequest, ConfirmStyle, DialogButton,
-    DialogCommonOptions, DialogError, DialogMsg, DialogRequest, DialogResult, DialogSeverity,
-    OpenFileRequest, OpenFolderRequest, SaveFileRequest, TextInputRequest,
+    decode_result, encode_request, AlertRequest, ColorPickerRequest, ConfirmRequest, ConfirmStyle,
+    DialogButton, DialogCommonOptions, DialogError, DialogMsg, DialogRequest, DialogResult,
+    DialogSeverity, OpenFileRequest, OpenFolderRequest, SaveFileRequest, TextInputRequest,
 };
 use sunlight_ipc::{
     ipc_call, nameserver_lookup, nameserver_lookup_timeout, process_yield, shm_alloc, shm_free,
     shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc as libc;
-
-struct BumpAllocator;
-
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 160 * 1024] = [0; 160 * 1024];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
 
 const MAX_ARGS: usize = 32;
 
@@ -81,6 +58,15 @@ fn parse_request(args: &[&str]) -> Result<DialogRequest, &'static str> {
         return Err("missing subcommand");
     };
     match cmd {
+        "color-picker" => Ok(DialogRequest::ColorPicker(ColorPickerRequest {
+            title: read_flag(args, "--title")
+                .unwrap_or("Choose color")
+                .to_string(),
+            initial_color: read_flag(args, "--initial-color")
+                .unwrap_or("#FFB52E")
+                .to_string(),
+            allow_alpha: has_flag(args, "--alpha"),
+        })),
         "alert" => {
             let title = read_flag(args, "--title").unwrap_or("");
             let message = read_flag(args, "--message").unwrap_or("");
@@ -171,6 +157,9 @@ fn dialog_common(
 }
 
 fn run_request(cap: CapabilityToken, request: DialogRequest) -> i32 {
+    if let Err(err) = sunlight_dialogs::validate_request(&request) {
+        return print_error(err);
+    }
     let body = encode_request(&request);
     let reply = match call_with_page(cap, DialogMsg::SHOW_DIALOG, &body) {
         Ok(reply) => reply,
@@ -194,6 +183,7 @@ fn run_request(cap: CapabilityToken, request: DialogRequest) -> i32 {
         DialogResult::No => println!("no"),
         DialogResult::Dismissed => println!("dismissed"),
         DialogResult::TextSubmitted(text) => println!("{}", text),
+        DialogResult::ColorSelected(color) => println!("{}", color),
         DialogResult::FileSelected(path) => println!("{}", path),
         DialogResult::FilesSelected(paths) => {
             for path in paths {
@@ -304,6 +294,9 @@ fn print_usage() {
         "  sunlight-dialog confirm --title <title> --message <message> [--style yes-no|ok-cancel]"
     );
     println!("  sunlight-dialog input --title <title> --message <message> [--default <text>] [--no-empty]");
+    println!(
+        "  sunlight-dialog color-picker [--title <title>] [--initial-color '#FFB52E'] [--alpha]"
+    );
     println!("  sunlight-dialog open-file [--title <title>] [--initial-dir <dir>] [--ext txt,rs] [--mime text/plain]");
     println!("  sunlight-dialog open-folder [--title <title>] [--initial-dir <dir>]");
     println!("  sunlight-dialog save-file [--title <title>] [--initial-dir <dir>] [--suggested-name <name>]");

@@ -2260,4 +2260,120 @@ mod tests {
         app.history(false);
         assert!(app.editor.scene.object(id).is_some());
     }
+
+    #[test]
+    fn shared_color_picker_preserves_cancel_opacity_and_scene_history() {
+        use sunlight_light_lens::annotations::{Object, Style, Tool, P};
+        let mut app = annotation_ready();
+        let mut id = 0;
+        let mut other_id = 0;
+        app.editor
+            .edit_scene(|s| {
+                let mut object = Object::new(
+                    Tool::Rectangle,
+                    P::new(10., 10.),
+                    Style {
+                        opacity: 96,
+                        fill: Some(0xff123456),
+                        ..Style::default()
+                    },
+                );
+                object.b = P::new(25., 25.);
+                id = s.insert(object)?;
+                let mut other = Object::new(Tool::Ellipse, P::new(30., 30.), Style::default());
+                other.b = P::new(50., 50.);
+                other_id = s.insert(other)?;
+                Ok(())
+            })
+            .unwrap();
+        app.workspace.selected = Some(id);
+        app.workspace.style = app.selected_object().unwrap().style;
+        let scene = app.editor.scene.clone();
+        let style = app.workspace.style;
+        app.apply_annotation_color_result(Ok(DialogResult::Cancelled));
+        app.apply_annotation_color_result(Err(sunlight_dialogs::DialogError::HostUnavailable));
+        app.apply_annotation_color_result(Ok(DialogResult::ColorSelected(String::from(
+            "#11223344",
+        ))));
+        assert_eq!(app.workspace.style, style);
+        assert_eq!(app.editor.scene, scene);
+        app.apply_annotation_color_result(Ok(DialogResult::ColorSelected(String::from("#00aaff"))));
+        let after = app.editor.scene.clone();
+        assert_eq!(app.workspace.style.color, 0xff00aaff);
+        assert_eq!(app.editor.scene.object(id).unwrap().style.opacity, 96);
+        assert_eq!(
+            app.editor.scene.object(id).unwrap().style.fill,
+            Some(0xff123456)
+        );
+        assert_eq!(app.editor.scene.object(other_id), scene.object(other_id));
+        app.history(false);
+        assert_eq!(app.editor.scene, scene);
+        app.history(true);
+        assert_eq!(app.editor.scene, after);
+        // Cancelling and reselecting the same color create no extra transaction.
+        app.workspace.selected = Some(id);
+        app.apply_annotation_color_result(Ok(DialogResult::Cancelled));
+        app.apply_annotation_color_result(Ok(DialogResult::ColorSelected(String::from("#00AAFF"))));
+        app.history(false);
+        assert_eq!(app.editor.scene, scene);
+        // Undo may leave the tool's current style unchanged. Selecting that
+        // color again still recolors the selected object through one transaction.
+        app.workspace.selected = Some(id);
+        app.apply_annotation_color_result(Ok(DialogResult::ColorSelected(String::from("#00AAFF"))));
+        assert_eq!(app.editor.scene, after);
+        app.history(false);
+        assert_eq!(app.editor.scene, scene);
+        app.workspace.selected = None;
+        app.apply_annotation_color_result(Ok(DialogResult::ColorSelected(String::from("#FF0000"))));
+        assert_eq!(app.workspace.style.color, 0xffff0000);
+        assert_eq!(app.editor.scene, scene);
+    }
+
+    #[test]
+    fn dialog_hex_wire_output_updates_label_and_new_annotation_pixels() {
+        use sunlight_dialogs::{decode_result, encode_result};
+        use sunlight_light_lens::annotations::{Tool, P};
+        for hex in ["#302513", "#00aaff", "#000000", "#FFFFFF", "12AB34"] {
+            let mut app = annotation_ready();
+            let payload = encode_result(&DialogResult::ColorSelected(String::from(hex)));
+            let decoded = decode_result(&payload).unwrap();
+            app.apply_annotation_color_result(Ok(decoded));
+            let expected =
+                0xff000000 | u32::from_str_radix(hex.trim_start_matches('#'), 16).unwrap();
+            assert_eq!(app.workspace.style.color, expected, "{hex}");
+            assert_eq!(
+                app.annotation_labels()[8],
+                format!("Color #{:06X}", expected & 0xffffff)
+            );
+            assert_eq!(
+                app.message.as_str(),
+                format!("Annotation color: #{:06X}", expected & 0xffffff)
+            );
+            app.workspace.tool = Tool::Rectangle;
+            let a = annotation_point(&app, 20., 20.);
+            let b = annotation_point(&app, 60., 50.);
+            app.update(Event::mouse_down(a.x, a.y, 0));
+            app.update(Event::mouse_move(b.x, b.y));
+            app.update(Event::click(b.x, b.y));
+            let object = app.selected_object().unwrap();
+            assert_eq!(object.style.color, expected);
+            let edge = P::new(object.a.x, (object.a.y + object.b.y) / 2.);
+            assert_eq!(app.editor.scene.pixel(0xff000000, edge), expected);
+        }
+    }
+
+    #[test]
+    fn color_result_errors_are_visible_and_preserve_current_color() {
+        let mut app = annotation_ready();
+        let original = app.workspace.style;
+        app.apply_annotation_color_result(Err(sunlight_dialogs::DialogError::Corrupt));
+        assert_eq!(app.message.as_str(), "Native color dialog failed: Corrupt.");
+        app.apply_annotation_color_result(Ok(DialogResult::TextSubmitted(String::from("#123456"))));
+        assert_eq!(app.message.as_str(), "Unexpected color dialog result.");
+        app.apply_annotation_color_result(Ok(DialogResult::Error(String::from(
+            "Dialog host failed",
+        ))));
+        assert_eq!(app.message.as_str(), "Dialog host failed");
+        assert_eq!(app.workspace.style, original);
+    }
 }

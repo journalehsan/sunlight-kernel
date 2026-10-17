@@ -2,6 +2,8 @@
 
 extern crate alloc;
 
+pub mod color;
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use sunlight_audio::SystemSound;
@@ -277,6 +279,14 @@ pub struct SaveFileRequest {
     pub confirm_button_label: Option<String>,
 }
 
+/// RGB HEX by default; alpha is explicitly opt-in and always comes last.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ColorPickerRequest {
+    pub title: String,
+    pub initial_color: String,
+    pub allow_alpha: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DialogRequest {
     Alert(AlertRequest),
@@ -285,7 +295,7 @@ pub enum DialogRequest {
     OpenFile(OpenFileRequest),
     OpenFolder(OpenFolderRequest),
     SaveFile(SaveFileRequest),
-    ColorPicker,
+    ColorPicker(ColorPickerRequest),
     FontPicker,
     PrintDialog,
 }
@@ -299,7 +309,7 @@ impl DialogRequest {
             Self::OpenFile(_) => DialogKind::OpenFile,
             Self::OpenFolder(_) => DialogKind::OpenFolder,
             Self::SaveFile(_) => DialogKind::SaveFile,
-            Self::ColorPicker => DialogKind::ColorPicker,
+            Self::ColorPicker(_) => DialogKind::ColorPicker,
             Self::FontPicker => DialogKind::FontPicker,
             Self::PrintDialog => DialogKind::PrintDialog,
         }
@@ -360,6 +370,7 @@ pub enum DialogResult {
     SavePathSelected(String),
     Cancelled,
     Error(String),
+    ColorSelected(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -521,6 +532,13 @@ pub fn encode_request(request: &DialogRequest) -> Vec<u8> {
             push_joined_csv(&mut out, &req.allowed_extensions);
             push_opt_string(&mut out, req.confirm_button_label.as_ref());
         }
+        DialogRequest::ColorPicker(req) => {
+            push_u16(&mut out, req.title.len() as u16);
+            push_u16(&mut out, req.initial_color.len() as u16);
+            out.push(req.allow_alpha as u8);
+            out.extend_from_slice(req.title.as_bytes());
+            out.extend_from_slice(req.initial_color.as_bytes());
+        }
         _ => {}
     }
     out
@@ -657,7 +675,24 @@ pub fn decode_request(bytes: &[u8]) -> Result<DialogRequest, DialogError> {
                 confirm_button_label,
             }))
         }
-        DialogKind::ColorPicker => Ok(DialogRequest::ColorPicker),
+        DialogKind::ColorPicker => {
+            let title_len = take_u16(bytes, &mut index).ok_or(DialogError::Corrupt)? as usize;
+            let color_len = take_u16(bytes, &mut index).ok_or(DialogError::Corrupt)? as usize;
+            let allow_alpha = match take_u8(bytes, &mut index) {
+                Some(0) => false,
+                Some(1) => true,
+                _ => return Err(DialogError::Corrupt),
+            };
+            let title = take_string(bytes, &mut index, title_len)?;
+            let initial_color = take_string(bytes, &mut index, color_len)?;
+            let request = DialogRequest::ColorPicker(ColorPickerRequest {
+                title,
+                initial_color,
+                allow_alpha,
+            });
+            validate_request(&request)?;
+            Ok(request)
+        }
         DialogKind::FontPicker => Ok(DialogRequest::FontPicker),
         DialogKind::PrintDialog => Ok(DialogRequest::PrintDialog),
     }
@@ -735,6 +770,12 @@ pub fn encode_result(result: &DialogResult) -> Vec<u8> {
             push_u16(&mut out, message.len() as u16);
             out.extend_from_slice(message.as_bytes());
         }
+        DialogResult::ColorSelected(color) => {
+            out.push(13);
+            out.push(0);
+            push_u16(&mut out, color.len() as u16);
+            out.extend_from_slice(color.as_bytes());
+        }
     }
     out
 }
@@ -764,12 +805,25 @@ pub fn decode_result(bytes: &[u8]) -> Result<DialogResult, DialogError> {
         10 => DialogResult::SavePathSelected(take_string(bytes, &mut index, text_len)?),
         11 => DialogResult::Cancelled,
         12 => DialogResult::Error(take_string(bytes, &mut index, text_len)?),
+        13 => {
+            let text = take_string(bytes, &mut index, text_len)?;
+            color::Rgba::parse_hex(&text, true).ok_or(DialogError::Corrupt)?;
+            DialogResult::ColorSelected(text)
+        }
         _ => return Err(DialogError::Corrupt),
     })
 }
 
 pub fn validate_request(request: &DialogRequest) -> Result<(), DialogError> {
     match request {
+        DialogRequest::ColorPicker(req) => {
+            if req.title.len() > MAX_TEXT_BYTES {
+                return Err(DialogError::TooLarge);
+            }
+            color::Rgba::parse_hex(&req.initial_color, req.allow_alpha)
+                .ok_or(DialogError::BadRequest)?;
+            Ok(())
+        }
         DialogRequest::Alert(req) => validate_common(&req.common),
         DialogRequest::Confirm(req) => validate_common(&req.common),
         DialogRequest::TextInput(req) => {
@@ -929,6 +983,7 @@ pub fn result_keyword(result: &DialogResult) -> &str {
         DialogResult::SavePathSelected(_) => "save-path",
         DialogResult::Cancelled => "cancelled",
         DialogResult::Error(_) => "error",
+        DialogResult::ColorSelected(_) => "color",
     }
 }
 
@@ -943,6 +998,43 @@ pub fn confirm_labels(style: ConfirmStyle) -> (&'static str, &'static str) {
 mod tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn color_request_and_result_roundtrip() {
+        for allow_alpha in [false, true] {
+            let request = DialogRequest::ColorPicker(ColorPickerRequest {
+                title: String::from("Annotation color"),
+                initial_color: String::from(if allow_alpha { "#12AB3480" } else { "#12AB34" }),
+                allow_alpha,
+            });
+            assert_eq!(validate_request(&request), Ok(()));
+            let bytes = encode_request(&request);
+            assert_eq!(decode_request(&bytes).unwrap(), request);
+            for n in 0..bytes.len() {
+                assert!(decode_request(&bytes[..n]).is_err());
+            }
+        }
+        for result in [
+            DialogResult::ColorSelected(String::from("#FFAA00")),
+            DialogResult::ColorSelected(String::from("#12345600")),
+            DialogResult::Cancelled,
+        ] {
+            assert_eq!(decode_result(&encode_result(&result)).unwrap(), result);
+        }
+        let bad = DialogRequest::ColorPicker(ColorPickerRequest {
+            title: String::from("Color"),
+            initial_color: String::from("#12345678"),
+            allow_alpha: false,
+        });
+        assert_eq!(validate_request(&bad), Err(DialogError::BadRequest));
+        assert!(decode_request(&encode_request(&bad)).is_err());
+        assert!(
+            decode_result(&encode_result(&DialogResult::ColorSelected(String::from(
+                "bad"
+            ))))
+            .is_err()
+        );
+    }
 
     #[test]
     fn alert_roundtrip() {

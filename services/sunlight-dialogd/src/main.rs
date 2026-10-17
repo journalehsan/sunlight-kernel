@@ -12,6 +12,8 @@ use sun_font::{
     draw_text as sf_draw, line_height as sf_lh, measure_text as sf_measure, FontRole, TextStyle,
 };
 use sunlight_audiod::AudioClient;
+use sunlight_dialogd::color_picker::{self, ColorPicker};
+use sunlight_dialogs::color::{RecentColors, Rgba};
 use sunlight_dialogs::{
     confirm_labels, decode_request, encode_result, validate_request, ConfirmStyle, DialogButton,
     DialogError, DialogMsg, DialogRequest, DialogResult, DialogSeverity, TextInputRequest,
@@ -25,7 +27,7 @@ use sunlight_ui::image::{mime_icon, TgaImage};
 use sunlight_ui::widgets::{Button, ButtonState, TextInput};
 use sunlight_ui::{
     request_close, App, Canvas, Color, Event, Point, Rect, Theme, UiSymbol, Window, WindowConfig,
-    WindowDecoration,
+    WindowDecoration, WindowEvent,
 };
 
 const ALERT_W: u32 = 460;
@@ -78,29 +80,6 @@ static ICON_VIDEO_GENERIC_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.tga");
 static ICON_UNKNOWN_FILE_TGA: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/unknown.tga");
-
-struct BumpAllocator;
-
-unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        static mut HEAP: [u8; 1024 * 1024] = [0; 1024 * 1024];
-        static mut NEXT: usize = 0;
-        let start = NEXT;
-        let align = layout.align();
-        let aligned = (start + align - 1) & !(align - 1);
-        let end = aligned + layout.size();
-        if end > HEAP.len() {
-            return core::ptr::null_mut();
-        }
-        NEXT = end;
-        HEAP.as_mut_ptr().add(aligned)
-    }
-
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
-}
-
-#[global_allocator]
-static BUMP: BumpAllocator = BumpAllocator;
 
 #[derive(Clone, Copy)]
 struct MimeIconTheme {
@@ -699,6 +678,7 @@ impl FileDialogState {
 enum DialogMode {
     Simple(SimpleDialogState),
     File(FileDialogState),
+    Color(ColorPicker),
 }
 
 struct SimpleDialogState {
@@ -754,8 +734,11 @@ struct DialogApp {
 }
 
 impl DialogApp {
-    fn new(request: DialogRequest, height: u32) -> Self {
+    fn new(request: DialogRequest, height: u32, recent: RecentColors) -> Self {
         let mode = match request {
+            DialogRequest::ColorPicker(request) => {
+                DialogMode::Color(ColorPicker::new(request, recent))
+            }
             DialogRequest::Alert(_) | DialogRequest::Confirm(_) | DialogRequest::TextInput(_) => {
                 DialogMode::Simple(SimpleDialogState::new(request))
             }
@@ -804,11 +787,11 @@ impl DialogApp {
     }
 
     fn simple_card_rect(&self) -> Rect {
-        Rect::new(10, 10, ALERT_W - 20, self.height - 20)
+        Rect::new(10, 10, ALERT_W - 20, self.height.saturating_sub(20))
     }
 
     fn file_card_rect(&self) -> Rect {
-        Rect::new(10, 10, FILE_W - 20, self.height - 20)
+        Rect::new(10, 10, FILE_W - 20, self.height.saturating_sub(20))
     }
 }
 
@@ -828,6 +811,7 @@ impl App for DialogApp {
             Color::rgba(0x12, 0x12, 0x14, 0xF2),
         );
         match &mut self.mode {
+            DialogMode::Color(state) => state.draw(canvas, theme),
             DialogMode::Simple(state) => draw_simple_dialog(
                 canvas,
                 theme,
@@ -853,6 +837,14 @@ impl App for DialogApp {
         let primary_rect = self.primary_button_rect();
         let secondary_rect = self.secondary_button_rect();
         match &mut self.mode {
+            DialogMode::Color(state) => {
+                let changed = state.update(event);
+                if let Some(result) = state.result() {
+                    self.result = Some(result.clone());
+                    request_close();
+                }
+                changed
+            }
             DialogMode::Simple(state) => {
                 update_simple_dialog(state, event, primary_rect, secondary_rect, &mut self.result)
             }
@@ -866,21 +858,44 @@ impl App for DialogApp {
             ),
         }
     }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        if let DialogMode::Color(picker) = &mut self.mode {
+            let WindowEvent::Resized { width, height } = event;
+            picker.resize(width, height);
+            self.height = height;
+            true
+        } else {
+            false
+        }
+    }
 }
 
-fn present_dialog(request: DialogRequest) -> Result<DialogResult, DialogError> {
+fn present_dialog(
+    request: DialogRequest,
+    recent: RecentColors,
+) -> Result<DialogResult, DialogError> {
+    let is_color = matches!(request, DialogRequest::ColorPicker(_));
     let semantic_sound = request.system_sound();
-    let (title, width, height) = match &request {
+    let (width, height) = match &request {
+        DialogRequest::ColorPicker(req) => (
+            color_picker::WIDTH,
+            if req.allow_alpha {
+                color_picker::ALPHA_HEIGHT
+            } else {
+                color_picker::HEIGHT
+            },
+        ),
         DialogRequest::OpenFile(_) | DialogRequest::OpenFolder(_) | DialogRequest::SaveFile(_) => {
-            ("Sunlight Dialog", FILE_W, FILE_H)
+            (FILE_W, FILE_H)
         }
-        DialogRequest::TextInput(_) => ("Sunlight Dialog", ALERT_W, INPUT_H),
-        _ => ("Sunlight Dialog", ALERT_W, ALERT_H),
+        DialogRequest::TextInput(_) => (ALERT_W, INPUT_H),
+        _ => (ALERT_W, ALERT_H),
     };
     let mut window = Window::connect(WindowConfig {
         width,
         height,
-        title,
+        title: sunlight_dialogd::WINDOW_TITLE,
         decoration: WindowDecoration::HiddenOverlay,
     })
     .ok_or(DialogError::HostUnavailable)?;
@@ -890,9 +905,18 @@ fn present_dialog(request: DialogRequest) -> Result<DialogResult, DialogError> {
     }
     let flags = 1 | (1 << 5) | (90 << 6);
     window.configure_flags(flags);
-    let mut app = DialogApp::new(request, height);
+    let mut app = DialogApp::new(request, height, recent);
     window.run(&mut app);
-    app.result.ok_or(DialogError::Internal)
+    if is_color {
+        // A compositor-side closure is cancellation too, never a selection.
+        let result = app.result.unwrap_or(DialogResult::Cancelled);
+        debug_log(&alloc::format!(
+            "[DIALOGD] color picker result: {result:?}\n"
+        ));
+        Ok(result)
+    } else {
+        app.result.ok_or(DialogError::Internal)
+    }
 }
 
 fn draw_simple_dialog(
@@ -1498,13 +1522,17 @@ fn reply_with_bytes(label: u64, value0: u64, bytes: &[u8]) -> Result<IpcMsg, Dia
 
 struct DialogServer {
     ep: sunlight_ipc::EndpointId,
+    recent_colors: RecentColors,
 }
 
 impl DialogServer {
     fn new() -> Self {
         let ep = endpoint_create();
         nameserver_register("dialogd", ep);
-        Self { ep }
+        Self {
+            ep,
+            recent_colors: RecentColors::default(),
+        }
     }
 
     fn run(&mut self) -> ! {
@@ -1532,8 +1560,13 @@ impl DialogServer {
                     Ok(req) => req,
                     Err(err) => return IpcMsg::with_label(DialogMsg::ERROR).word(0, err.code()),
                 };
-                match present_dialog(request) {
+                match present_dialog(request, self.recent_colors.clone()) {
                     Ok(result) => {
+                        if let DialogResult::ColorSelected(hex) = &result {
+                            if let Some(color) = Rgba::parse_hex(hex, true) {
+                                self.recent_colors.record(color);
+                            }
+                        }
                         match reply_with_bytes(DialogMsg::REPLY, 0, &encode_result(&result)) {
                             Ok(reply) => reply,
                             Err(err) => IpcMsg::with_label(DialogMsg::ERROR).word(0, err.code()),

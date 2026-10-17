@@ -1,6 +1,10 @@
 [package]
 name = "sunlight-dialogd"
-version = "0.2.5016-alpha.2"
+version = "0.2.5046-alpha.2"
+
+
+
+
 
 
 
@@ -368,7 +372,7 @@ sun-font = { path = "../../sun-font" }
 sunlight-dialogs = { path = "../../sunlight-dialogs" }
 sunlight-audiod = { path = "../sunlight-audiod" }
 sunlight-ipc = { path = "../../ipc" }
-sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc", "dynamic-heap"] }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 
 [[bin]]
