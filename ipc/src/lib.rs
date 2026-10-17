@@ -4881,6 +4881,28 @@ pub fn process_is_alive(pid: u64) -> bool {
     ret == 1
 }
 
+/// Trusted PTY-broker liveness check qualified by the process publication
+/// incarnation captured when a session was created. PID reuse cannot make an
+/// old terminal owner appear alive.
+pub fn process_is_alive_generation(pid: u64, generation: u64) -> bool {
+    if pid == 0 || generation == 0 {
+        return false;
+    }
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::ProcessIsAlive,
+            pid,
+            generation,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    ret == 1
+}
+
 /// Publish or clear a PTY's authoritative winsize in the kernel TTY cache.
 /// Only the trusted PTY broker is authorized by the kernel. `None` clears the
 /// exact generation during session teardown.

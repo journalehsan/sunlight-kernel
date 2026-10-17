@@ -84,8 +84,9 @@ session identity and scope membership, not controller authority.
 Kernel bindings additionally carry the broker's publication incarnation.
 Cancel, rebind and diagnostic operations qualify the session by that incarnation,
 so a second genuine broker cannot select another broker's identically numbered
-session. Broker restart creates a distinct authority domain. This does not add
-automatic broker-death teardown of the previous domain.
+session. Broker restart creates a distinct authority domain. The PTY broker
+also sweeps sessions whose creator PID and publication generation are no
+longer alive, so terminal-client death does not require a GUI callback.
 
 The desktop terminal sends ETX for Ctrl+C using its existing keyboard event
 path. The broker consumes ETX only after validating the master role. It then
@@ -146,14 +147,16 @@ child waits. Complete allocation-failure recovery is not established.
 
 ## Disconnect policy and Helios boundary
 
-Authenticated CLOSE_MASTER and CLOSE_SESSION cancel owned foreground work and
-terminate the session controller. Closing the shell's slave endpoint is normal
-shell-side termination; its process exit cancels remaining owned work. Repeated
-or simultaneous cancellation is idempotent. Session slot reuse requires a new
-generation; old role tokens and bindings cannot select the new controller.
-Terminal application/tab close uses its existing PTY closure path and wait
-path. Closing or killing the broker process without a closure notification is
-not an independently verified lifecycle gate.
+Authenticated CLOSE_MASTER and CLOSE_SESSION cancel active foreground work and
+terminate every live member of the exact generation-qualified session,
+including an idle controller and descendants that were reparented. Closing the
+shell's slave endpoint is normal shell-side termination; its process exit
+cancels remaining owned work. Repeated or simultaneous cancellation is
+idempotent. Session slot reuse requires a new generation; old role tokens and
+bindings cannot select the new controller. Terminal application/tab close uses
+its existing PTY closure path and bounded wait path. The broker's owner-death
+sweep handles an unexpected terminal-client exit; broker loss itself remains a
+separate service-availability failure boundary.
 
 The Linux signal state, process groups and termios remain separate. A Helios
 task launched inside a native scope inherits scope membership and is subject

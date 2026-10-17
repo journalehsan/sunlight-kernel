@@ -183,3 +183,31 @@ fn session_identity_is_qualified_by_broker_publication() {
     assert!(!f.matches_session(0, 1, 7));
     assert!(!f.matches_session(100, 1, 0));
 }
+
+#[test]
+fn full_session_teardown_reaches_idle_and_reparented_members() {
+    let mut owner = process(10, 0);
+    owner.foreground.session_owner = true;
+    owner.foreground.session_broker = 77;
+    owner.foreground.session = 4;
+    owner.foreground.generation = 9;
+    let mut idle = process(11, 0);
+    idle.foreground.session_broker = 77;
+    idle.foreground.session = 4;
+    idle.foreground.generation = 9;
+    idle.ppid = 1; // the original shell parent is gone
+    let mut unrelated = process(12, 0);
+    unrelated.foreground.session_broker = 77;
+    unrelated.foreground.session = 5;
+    unrelated.foreground.generation = 9;
+    let mut s = sched::Scheduler {
+        processes: vec![owner, idle, unrelated],
+        ..Default::default()
+    };
+
+    s.terminate_session(77, 4, 9, 1);
+    assert_eq!(s.processes[0].foreground.forced_exit, Some(129));
+    assert_eq!(s.processes[1].foreground.forced_exit, Some(129));
+    assert_eq!(s.processes[2].foreground.forced_exit, None);
+    assert_eq!(s.wakes, [10, 11]);
+}

@@ -135,6 +135,7 @@ use sunlight_ipc::{
 use sunlight_libc as libc;
 use sunlight_tty::TerminalGrid as ModelGrid;
 use sunlight_ui::{
+    request_close,
     widgets::{Label, StatusBar},
     App, Canvas, Event, Point, Rect, VecText, Window, WindowConfig, WindowEvent,
 };
@@ -1632,13 +1633,13 @@ impl TerminalApp {
     /// was still in flight for this tab, it is cancelled and any
     /// partially-created PTY session is released rather than leaked.
     ///
-    /// Closing the *last* remaining tab is deliberately a no-op — there is
-    /// therefore always at least one tab open; closing the terminal itself
-    /// requires closing the window.
+    /// Closing the last remaining tab also requests window close after its
+    /// session teardown has been initiated. This keeps the last-tab, titlebar,
+    /// and application-exit paths on one cleanup policy.
     ///
     /// Returns `true` if a tab was actually closed.
     fn close_tab(&mut self, idx: usize) -> bool {
-        if self.tab_count <= 1 {
+        if self.tab_count == 0 {
             return false;
         }
         let Some(tab) = self.remove_tab(idx) else {
@@ -1662,6 +1663,9 @@ impl TerminalApp {
             }
         }
         self.clear_tracked_mods();
+        if self.tab_count == 0 {
+            request_close();
+        }
         true
     }
 
@@ -2102,12 +2106,12 @@ mod tests {
     }
 
     #[test]
-    fn close_tab_is_a_no_op_on_the_last_remaining_tab() {
+    fn closing_last_tab_removes_it_and_requests_window_close() {
         let mut app = test_app();
         app.insert_tab(test_tab(1, b"Tab 1"));
-        assert!(!app.close_tab(0));
-        assert_eq!(app.tab_count, 1);
-        assert_eq!(app.tabs[0].as_ref().unwrap().title_str(), "Tab 1");
+        assert!(app.close_tab(0));
+        assert_eq!(app.tab_count, 0);
+        assert!(app.tabs[0].is_none());
     }
 
     #[test]

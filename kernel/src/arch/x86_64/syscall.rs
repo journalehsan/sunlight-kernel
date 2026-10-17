@@ -1942,13 +1942,22 @@ fn sys_tty_stdout_pull(frame: &mut SyscallFrame) -> u64 {
 
 /// Syscall: ProcessIsAlive (25). Non-reaping liveness probe. rdi=pid.
 /// Returns 1 if a process with that pid exists and is not Finished, else 0.
+/// The trusted PTY broker may also pass rsi=publication incarnation to make
+/// the check safe across PID reuse.
 fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
     let pid = frame.rdi as usize;
     let sched = crate::sched::SCHEDULER.lock();
+    if frame.rsi != 0 && !sched.current_process().trusted_pty_service {
+        return 0;
+    }
     let alive = sched
         .processes
         .iter()
-        .any(|p| p.pid == pid && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped));
+        .any(|p| {
+            p.pid == pid
+                && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+                && (frame.rsi == 0 || p.foreground.incarnation == frame.rsi)
+        });
     alive as u64
 }
 

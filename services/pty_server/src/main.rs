@@ -16,8 +16,8 @@ use sunlight_ipc::{
 #[cfg(not(test))]
 use sunlight_ipc::{
     endpoint_create, entropy_u64, ipc_complete_deferred_reply, ipc_defer_reply,
-    ipc_deferred_reply_is_live, ipc_recv, ipc_reply_and_wait, nameserver_register,
-    secure_entropy_ready,
+    ipc_deferred_reply_is_live, ipc_recv_timeout, ipc_reply_and_recv_timeout, nameserver_register,
+    process_is_alive_generation, secure_entropy_ready,
 };
 
 #[cfg(not(test))]
@@ -97,6 +97,7 @@ struct PtyOwner {
     uid: u32,
     gid: u32,
     creator_pid: u64,
+    creator_generation: u64,
 }
 
 impl PtyOwner {
@@ -105,6 +106,7 @@ impl PtyOwner {
             uid: 0,
             gid: 0,
             creator_pid: 0,
+            creator_generation: 0,
         }
     }
 }
@@ -332,6 +334,7 @@ impl PtyServer {
             uid: caller.uid,
             gid: caller.gid,
             creator_pid: caller.pid,
+            creator_generation: caller.generation,
         };
         session.mode_flags = mode_flags;
         session.size = size;
@@ -673,6 +676,35 @@ fn complete_write_waiters(server: &PtyServer, waiters: &mut [Option<WriteWait>; 
 }
 
 #[cfg(not(test))]
+fn reap_dead_owners(server: &mut PtyServer, waiters: &mut [Option<WriteWait>; MAX_SESSIONS]) {
+    for index in 0..server.sessions.len() {
+        let session = &server.sessions[index];
+        if !session.live
+            || session.owner.creator_pid == 0
+            || process_is_alive_generation(
+                session.owner.creator_pid,
+                session.owner.creator_generation,
+            )
+        {
+            continue;
+        }
+
+        let id = session.id;
+        let generation = session.generation;
+        let _ = sunlight_ipc::foreground_session_cancel(id, generation, 1);
+        if let Some(wait) = waiters[index].take() {
+            let _ = ipc_complete_deferred_reply(
+                wait.token,
+                IpcMsg::with_label(PtyMsg::ERROR).word(0, PtyMsg::ERR_PEER_CLOSED),
+            );
+        }
+        let _ = tty_publish_winsize(id, generation, None);
+        server.sessions[index].destroy();
+        debug_log("[PTY] owner-death cleanup\n");
+    }
+}
+
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     debug_log("[PTY] pty_server started\n");
@@ -682,15 +714,20 @@ pub extern "C" fn _start() -> ! {
 
     let mut server = PtyServer::new();
     let mut waiters = [None; MAX_SESSIONS];
-    let mut msg = ipc_recv(endpoint);
+    let mut msg = ipc_recv_timeout(endpoint, 50);
     loop {
+        reap_dead_owners(&mut server, &mut waiters);
         complete_write_waiters(&server, &mut waiters);
-        let mut reply = handle_message(&mut server, &msg);
+        let Some(current_msg) = msg else {
+            msg = ipc_recv_timeout(endpoint, 50);
+            continue;
+        };
+        let mut reply = handle_message(&mut server, &current_msg);
         // Claim a delegated bearer slave after its first authenticated use.
         // Descendants receive lifecycle membership, not this role authority.
         if reply.label == PtyMsg::REPLY
             && matches!(
-                msg.label,
+                current_msg.label,
                 PtyMsg::BIND_FOREGROUND_OWNER
                     | PtyMsg::READ_SLAVE
                     | PtyMsg::WRITE_SLAVE
@@ -698,8 +735,8 @@ pub extern "C" fn _start() -> ! {
                     | PtyMsg::WAIT_SLAVE_WRITABLE
             )
         {
-            if let Some(caller) = pty_caller_credentials(msg.badge) {
-                if let Ok(index) = server.locate(msg.words[0], msg.words[1]) {
+            if let Some(caller) = pty_caller_credentials(current_msg.badge) {
+                if let Ok(index) = server.locate(current_msg.words[0], current_msg.words[1]) {
                     let authority = &mut server.sessions[index].slave;
                     if authority.pid == 0 {
                         authority.pid = caller.pid;
@@ -708,28 +745,28 @@ pub extern "C" fn _start() -> ! {
                 }
             }
         }
-        if msg.label == PtyMsg::WRITE_MASTER
+        if current_msg.label == PtyMsg::WRITE_MASTER
             && reply.label == PtyMsg::REPLY
-            && unpack_payload(&msg).contains(&3)
+            && unpack_payload(&current_msg).contains(&3)
         {
             // A cancelled relay must escape a deferred full-buffer wait even
             // before the master drains output. Authority was checked above.
-            if let Some(wait) = waiters[msg.words[0] as usize - 1].take() {
+            if let Some(wait) = waiters[current_msg.words[0] as usize - 1].take() {
                 let _ = ipc_complete_deferred_reply(wait.token, IpcMsg::with_label(PtyMsg::REPLY));
             }
         }
         let mut deferred = false;
-        if msg.label == PtyMsg::WAIT_SLAVE_WRITABLE
+        if current_msg.label == PtyMsg::WAIT_SLAVE_WRITABLE
             && reply.label == PtyMsg::ERROR
             && reply.words[0] == PtyMsg::ERR_WOULD_BLOCK
         {
             // The validated WOULD_BLOCK reply guarantees a live, in-range ID.
-            let slot = &mut waiters[msg.words[0] as usize - 1];
+            let slot = &mut waiters[current_msg.words[0] as usize - 1];
             if slot.is_some() {
                 reply = error(PtyMsg::ERR_NO_SLOTS);
             } else if let Ok(token) = ipc_defer_reply() {
                 *slot = Some(WriteWait {
-                    request: msg,
+                    request: current_msg,
                     token,
                 });
                 deferred = true;
@@ -739,9 +776,9 @@ pub extern "C" fn _start() -> ! {
         }
         complete_write_waiters(&server, &mut waiters);
         msg = if deferred {
-            ipc_recv(endpoint)
+            ipc_recv_timeout(endpoint, 50)
         } else {
-            ipc_reply_and_wait(endpoint, reply)
+            ipc_reply_and_recv_timeout(endpoint, reply, 50)
         };
     }
 }
