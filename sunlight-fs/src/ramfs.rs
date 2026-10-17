@@ -814,6 +814,9 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/home", 0, 0, mode::DIR_755),
     RamEntry::dir("/root/.config", 0, 0, mode::DIR_700),
     RamEntry::dir("/root/.config/sunlight", 0, 0, mode::DIR_700),
+    // Yazi's user theme is supplied by the OS so its directory entries stay
+    // legible on the Sunlight terminal without requiring writable config.
+    RamEntry::dir("/root/.config/yazi", 0, 0, mode::DIR_700),
     RamEntry::dir("/tests", 0, 0, mode::DIR_755),
     RamEntry::dir("/home/user", 1000, 1000, mode::DIR_755),
     // Default unprivileged user's standard folders (uid/gid 1000).
@@ -1151,6 +1154,20 @@ pub static INITRAMFS: &[RamEntry] = &[
         0,
         mode::FILE_644,
         b"Welcome to SunlightOS\n",
+    ),
+    RamEntry::file(
+        "/root/.config/yazi/theme.toml",
+        0,
+        0,
+        mode::FILE_644,
+        b"[filetype]\nrules = [\n  { url = \"*/\", fg = \"lightblue\" },\n]\n",
+    ),
+    RamEntry::file(
+        "/root/.config/yazi/yazi.toml",
+        0,
+        0,
+        mode::FILE_644,
+        b"# SunlightOS TTY does not implement terminal image protocols. Keep previews\n# and their background preload workers disabled for a clean, responsive UI.\n[plugin]\npreviewers = []\npreloaders = []\n",
     ),
     // Large file for shared-memory IPC read test (>48 bytes triggers shm path)
     RamEntry::file("/etc/large_test", 0, 0, mode::FILE_644, &[b'A'; 2048]),
