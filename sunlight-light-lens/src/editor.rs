@@ -1,4 +1,6 @@
 //! Bounded, non-destructive CPU editor. History contains parameters, never pixels.
+use crate::annotations::Scene;
+use alloc::{rc::Rc, vec::Vec};
 use sunlight_ui::image::RgbaImage;
 use sunlight_ui::{Point, Rect};
 
@@ -157,79 +159,133 @@ impl State {
     }
 }
 
+#[derive(Clone)]
+struct Frame {
+    state: State,
+    scene: Rc<Scene>,
+}
 pub struct Editor {
     pub state: State,
+    pub scene: Rc<Scene>,
     original: State,
     saved: State,
-    undo: [State; HISTORY],
-    redo: [State; HISTORY],
+    saved_scene: Rc<Scene>,
+    next_id: u64,
+    undo: Vec<Frame>,
+    redo: Vec<Frame>,
     undo_len: usize,
     redo_len: usize,
 }
 impl Editor {
     pub fn new(w: u32, h: u32) -> Self {
         let state = State::new(w, h);
+        let scene = Rc::new(Scene::default());
         Self {
             state,
+            scene: scene.clone(),
             original: state,
             saved: state,
-            undo: [state; HISTORY],
-            redo: [state; HISTORY],
+            saved_scene: scene,
+            next_id: 1,
+            undo: Vec::new(),
+            redo: Vec::new(),
             undo_len: 0,
             redo_len: 0,
         }
     }
     pub fn dirty(&self) -> bool {
-        self.state != self.saved
+        self.state != self.saved || self.scene.layers != self.saved_scene.layers
     }
+    /// Flattened exports checkpoint pixels, but editable objects still need an exit warning.
     pub fn mark_saved(&mut self) {
         self.saved = self.state;
+        self.saved_scene = self.scene.clone();
     }
     pub fn can_undo(&self) -> bool {
-        self.undo_len != 0
+        !self.undo.is_empty()
     }
     pub fn can_redo(&self) -> bool {
-        self.redo_len != 0
+        !self.redo.is_empty()
     }
-    fn push(list: &mut [State; HISTORY], len: &mut usize, state: State) {
-        if *len == HISTORY {
-            list.copy_within(1.., 0);
-            *len -= 1;
+    fn record(&mut self, state: State, scene: Rc<Scene>) {
+        if self.undo.len() == HISTORY {
+            self.undo.remove(0);
         }
-        list[*len] = state;
-        *len += 1;
+        self.undo.push(Frame { state, scene });
+        self.redo.clear();
+        self.undo_len = self.undo.len();
+        self.redo_len = 0;
     }
-    /// Record once on slider release, even if hundreds of previews were drawn.
     pub fn commit(&mut self, before: State) {
         if before != self.state {
-            Self::push(&mut self.undo, &mut self.undo_len, before);
-            self.redo_len = 0;
+            self.record(before, self.scene.clone());
+        }
+    }
+    pub fn edit_scene(
+        &mut self,
+        edit: impl FnOnce(&mut Scene) -> Result<(), &'static str>,
+    ) -> Result<(), &'static str> {
+        let mut next = (*self.scene).clone();
+        next.id_floor(self.next_id);
+        edit(&mut next)?;
+        self.next_id = self.next_id.max(next.next_id());
+        if next.layers != self.scene.layers {
+            let before = self.scene.clone();
+            self.record(self.state, before);
+            self.scene = Rc::new(next);
+        }
+        Ok(())
+    }
+    /// Active selection is workspace state and does not create history or dirty the image.
+    pub fn activate(&mut self, id: u64) {
+        if self.scene.layers.iter().any(|l| l.id == id) {
+            Rc::make_mut(&mut self.scene).active = id;
         }
     }
     pub fn geometry(&mut self, op: Geometry) -> Result<(), &'static str> {
         let before = self.state;
-        self.state.geometry(op)?;
-        self.commit(before);
+        let scene = self.scene.clone();
+        let mut next = self.state;
+        next.geometry(op)?;
+        let mut layers = (*self.scene).clone();
+        layers.transform(op, before.size)?;
+        self.state = next;
+        self.scene = Rc::new(layers);
+        self.record(before, scene);
         Ok(())
     }
     pub fn undo(&mut self) {
-        if self.undo_len > 0 {
-            Self::push(&mut self.redo, &mut self.redo_len, self.state);
-            self.undo_len -= 1;
-            self.state = self.undo[self.undo_len];
+        if let Some(f) = self.undo.pop() {
+            self.redo.push(Frame {
+                state: self.state,
+                scene: self.scene.clone(),
+            });
+            self.state = f.state;
+            self.scene = f.scene;
         }
+        self.undo_len = self.undo.len();
+        self.redo_len = self.redo.len();
     }
     pub fn redo(&mut self) {
-        if self.redo_len > 0 {
-            Self::push(&mut self.undo, &mut self.undo_len, self.state);
-            self.redo_len -= 1;
-            self.state = self.redo[self.redo_len];
+        if let Some(f) = self.redo.pop() {
+            self.undo.push(Frame {
+                state: self.state,
+                scene: self.scene.clone(),
+            });
+            self.state = f.state;
+            self.scene = f.scene;
         }
+        self.undo_len = self.undo.len();
+        self.redo_len = self.redo.len();
     }
     pub fn reset(&mut self) {
-        let before = self.state;
-        self.state = self.original;
-        self.commit(before);
+        if self.state != self.original || self.scene.layers != Scene::default().layers {
+            let state = self.state;
+            let scene = self.scene.clone();
+            self.state = self.original;
+            self.scene = Rc::new(Scene::default());
+            self.record(state, scene);
+        }
     }
 }
 
@@ -637,12 +693,17 @@ pub fn drag_crop(
 pub struct Histogram {
     pub bins: [u32; 256],
     pub samples: u32,
+    pub channels: [[u32; 256]; 3],
 }
 impl Histogram {
     pub fn compute(image: &RgbaImage, state: State) -> Self {
+        Self::compute_scene(image, state, None)
+    }
+    pub fn compute_scene(image: &RgbaImage, state: State, scene: Option<&Scene>) -> Self {
         let mut out = Self {
             bins: [0; 256],
             samples: 0,
+            channels: [[0; 256]; 3],
         };
         let (w, h) = state.size;
         if w == 0 || h == 0 {
@@ -655,7 +716,18 @@ impl Histogram {
             let y = ((2 * gy + 1) as u64 * h as u64 / (2 * ny) as u64) as u32;
             for gx in 0..nx {
                 let x = ((2 * gx + 1) as u64 * w as u64 / (2 * nx) as u64) as u32;
-                let p = sampler.pixel(image, x, y);
+                let base = sampler.pixel(image, x, y);
+                let p = scene
+                    .map(|s| {
+                        s.pixel(
+                            base,
+                            crate::annotations::P::new(x as f32 + 0.5, y as f32 + 0.5),
+                        )
+                    })
+                    .unwrap_or(base);
+                for (c, shift) in [16, 8, 0].into_iter().enumerate() {
+                    out.channels[c][((p >> shift) & 255) as usize] += p >> 24;
+                }
                 let l = (77 * ((p >> 16) & 255) + 150 * ((p >> 8) & 255) + 29 * (p & 255)) / 256;
                 out.bins[l as usize] += p >> 24;
                 out.samples += 1;

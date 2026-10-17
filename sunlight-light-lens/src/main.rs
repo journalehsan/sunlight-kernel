@@ -5,6 +5,7 @@ extern crate alloc;
 
 mod editing_ui;
 mod export_io;
+mod workspace;
 use sunlight_light_lens::editor::{self, Editor, Geometry, Sampler, State, Viewport};
 
 use core::{cell::RefCell, cmp::Ordering};
@@ -280,6 +281,7 @@ struct LightLensApp {
     /// the checkerboard; history stores only geometry and adjustment values.
     image: Option<RgbaImage>,
     editor: Editor,
+    workspace: workspace::Workspace,
     viewport: Viewport,
     crop_mode: bool,
     crop: Option<Rect>,
@@ -293,6 +295,7 @@ struct LightLensApp {
     slider_click: Option<(usize, Point, u64)>,
     histogram_open: bool,
     histogram: Option<(State, editor::Histogram)>,
+    histogram_scene: Option<alloc::rc::Rc<sunlight_light_lens::annotations::Scene>>,
     preview_cache: RefCell<PreviewCache>,
     pan_start: Option<Point>,
     slider_drag: Option<(usize, State)>,
@@ -339,6 +342,7 @@ impl LightLensApp {
             has_current_index: false,
             image: None,
             editor: Editor::new(0, 0),
+            workspace: workspace::Workspace::default(),
             viewport: Viewport::default(),
             crop_mode: false,
             crop: None,
@@ -352,6 +356,7 @@ impl LightLensApp {
             slider_click: None,
             histogram_open: false,
             histogram: None,
+            histogram_scene: None,
             preview_cache: RefCell::new(PreviewCache::default()),
             pan_start: None,
             slider_drag: None,
@@ -396,17 +401,30 @@ impl LightLensApp {
         let status = root_children[3].bounds();
 
         let body_inner = body.inset(OUTER_PAD);
+        let left_w = if root.w < 900 {
+            140.min(root.w / 3)
+        } else {
+            LEFT_W
+        };
+        let right_w = if root.w < 900 {
+            180.min(root.w / 3)
+        } else {
+            RIGHT_W
+        };
         let mut body_children = [
-            LayoutBox::new(Rect::new(0, 0, LEFT_W, 0))
-                .with_sizing(Sizing::new(AxisSizing::Fixed(LEFT_W), AxisSizing::Fill)),
+            LayoutBox::new(Rect::new(0, 0, left_w, 0))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(left_w), AxisSizing::Fill)),
             LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill),
-            LayoutBox::new(Rect::new(0, 0, RIGHT_W, 0))
-                .with_sizing(Sizing::new(AxisSizing::Fixed(RIGHT_W), AxisSizing::Fill)),
+            LayoutBox::new(Rect::new(0, 0, right_w, 0))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(right_w), AxisSizing::Fill)),
         ];
         let _ = Row::new(body_inner)
             .with_gap(GAP.max(0) as u32)
             .arrange(&mut body_children);
 
+        if body_inner.h == 0 {
+            body_children[1] = LayoutBox::new(Rect::new(body_inner.x, body_inner.y, 0, 0));
+        }
         // Preserve the existing left/right clusters. Only the middle spacer
         // consumes changing toolbar width.
         let tool_widths = [54u32, 54, 62, 62, 48, 56];
@@ -468,6 +486,7 @@ impl LightLensApp {
             return false;
         }
         self.layout = Self::compute_layout(self.client_bounds);
+        self.apply_panel_collapse();
         true
     }
 
@@ -558,42 +577,6 @@ impl LightLensApp {
         );
     }
 
-    /// A clearly-inactive placeholder chip: flat fill, faint border, dim text.
-    /// When `symbol` is provided a small UiSymbol glyph is drawn before the
-    /// label so the chip reads as a decorative tool button. Used for every
-    /// placeholder edit control so none read as clickable.
-    fn draw_placeholder_chip(
-        canvas: &mut Canvas,
-        theme: &Theme,
-        rect: Rect,
-        symbol: Option<UiSymbol>,
-        label: &str,
-    ) {
-        canvas.fill_rect(rect, theme.panel_alt);
-        canvas.draw_rect(rect, theme.border);
-        let dim_style = TextStyle::new(FontRole::UiSmall, theme.text_dim);
-        let dim_color = theme.text_dim;
-
-        if let Some(sym) = symbol {
-            let sw = Canvas::measure_ui_symbol(sym) as i32;
-            let tw = sf_measure(label, FontRole::UiSmall).w as i32;
-            let gap = 4i32;
-            let unit = sw + gap + tw;
-            let start_x = rect.x + (rect.w as i32 - unit) / 2;
-            canvas.draw_ui_symbol(start_x, rect.y + (rect.h as i32 - 9) / 2, sym, dim_color);
-            sf_vcenter(
-                canvas,
-                label,
-                start_x + sw + gap,
-                rect.y,
-                rect.h,
-                &dim_style,
-            );
-        } else {
-            sf_centered(canvas, rect, label, &dim_style);
-        }
-    }
-
     fn has_previous(&self) -> bool {
         self.has_current_index && self.current_index > 0
     }
@@ -629,6 +612,7 @@ impl LightLensApp {
     fn open_path(&mut self, path: PathBuf) {
         self.current_path = path;
         self.editor = Editor::new(0, 0);
+        self.workspace = workspace::Workspace::default();
         self.viewport = Viewport::default();
         self.cancel_crop();
         self.pan_start = None;
@@ -640,6 +624,7 @@ impl LightLensApp {
         self.slider_click = None;
         self.hovered = None;
         self.histogram = None;
+        self.histogram_scene = None;
         self.preview_cache = RefCell::new(PreviewCache::default());
         self.info = ImageInfo::empty();
         self.load_state = LoadState::Empty;
@@ -848,7 +833,25 @@ impl LightLensApp {
                 self.current_path.file_name_str()
             });
         }
-        let subtitle = sub_buf.truncate_to_width(rect.w as i32 - 130, FontRole::UiSmall);
+        let subtitle = sub_buf.truncate_to_width(
+            rect.w as i32 - if rect.w >= 480 { 290 } else { 130 },
+            FontRole::UiSmall,
+        );
+        for left in [true, false] {
+            Self::draw_edit_button(
+                canvas,
+                theme,
+                self.panel_toggle(left),
+                if left { "Tools" } else { "Details" },
+                true,
+                if left {
+                    !self.workspace.collapsed_left
+                } else {
+                    !self.workspace.collapsed_right
+                },
+                false,
+            );
+        }
         sf_right(
             canvas,
             rect,
@@ -866,6 +869,9 @@ impl LightLensApp {
         let tail = "  browse";
         let role = FontRole::UiSmall;
         let total = back_w + sf_measure(mid, role).w + fwd_w + sf_measure(tail, role).w;
+        if x1 - x0 < total as i32 + 12 {
+            return;
+        }
         let cx = x0 + ((x1 - x0) - total as i32) / 2;
         let glyph_ty = bar.y + (bar.h as i32 - 9) / 2;
         let dim = theme.text_dim;
@@ -1015,6 +1021,7 @@ impl LightLensApp {
                     );
                 }
                 if !self.comparing() {
+                    self.draw_annotation_overlay(&mut viewport_canvas, local_rect, theme);
                     self.draw_crop_overlay(&mut viewport_canvas, local_rect, theme);
                 }
             }
@@ -1101,7 +1108,28 @@ impl LightLensApp {
     }
 
     fn draw_info_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
-        let content = Self::draw_panel(canvas, theme, rect, "Image Info").inset(12);
+        if self.workspace.collapsed_right {
+            canvas.fill_rect(rect, theme.panel);
+            self.draw_tabs(canvas, theme, false);
+            return;
+        }
+        if self.workspace.right == 0 {
+            self.draw_layers_panel(canvas, theme);
+            return;
+        }
+        canvas.fill_rect(rect, theme.panel);
+        self.draw_tabs(canvas, theme, false);
+        if self.workspace.right == 2 {
+            self.draw_histogram(canvas, theme);
+            return;
+        }
+        let area = Rect::new(rect.x, rect.y + 27, rect.w, rect.h.saturating_sub(27));
+        if area.w == 0 || area.h == 0 {
+            return;
+        }
+        let mut sub = canvas.sub_canvas(area);
+        let canvas = &mut sub;
+        let content = Rect::new(0, -self.workspace.info_scroll, area.w, area.h).inset(12);
         if content.w == 0 || content.h == 0 {
             return;
         }
@@ -1147,8 +1175,6 @@ impl LightLensApp {
             let shown = dst.truncate_to_width(max_w, FontRole::UiRegular);
             self.draw_info_row(canvas, theme, row, label, shown);
         }
-
-        self.draw_histogram(canvas, theme);
 
         // Footer: parent folder location, truncated to fit.
         if !self.current_path.is_empty() {
@@ -1289,6 +1315,7 @@ impl App for LightLensApp {
     fn window_event(&mut self, event: WindowEvent) -> bool {
         let WindowEvent::Resized { width, height } = event;
         self.pan_start = None;
+        self.workspace.gesture = None;
         self.crop_start = None;
         self.crop_drag = None;
         self.compare_key = false;

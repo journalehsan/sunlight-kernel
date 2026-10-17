@@ -1,7 +1,8 @@
 # Light Lens image editor
 
-Light Lens retains its three-column native UI: tools, preview, and image info.
-Launch `light-lens /path/to/image.simg` or open an image from Sunlight Files.
+Light Lens uses a three-column native workspace: Edit/Annotate tools, preview,
+and Layers/Info/Histogram. Amber accents and the existing CPU drawing and image
+sampling paths are retained. Launch `light-lens /path/to/image.simg` or open an image from Sunlight Files.
 
 ## Available editing features
 
@@ -47,22 +48,77 @@ Launch `light-lens /path/to/image.simg` or open an image from Sunlight Files.
   uses nearest neighbor.
 - Undo/Redo buttons, Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y, and undoable Reset All.
   Modified state appears in the header, info panel, and zoom status.
-- Image Info includes a collapsible, alpha-weighted luminance histogram of the
-  currently edited output, with up to 64×64 stratified samples. It computes on
-  the next idle tick after an edit, never during a slider drag. Stale data is
-  replaced by an Updating label until ready; an empty document shows No image.
-  Metadata stays visible. The section hides in panels shorter than 450 pixels.
+- The right Histogram tab shows an alpha-weighted histogram of the visible
+  composite, with up to 64×64 stratified samples. Click its channel button to
+  cycle Luminance, Red, Green, Blue, and RGB combined. Calculations run on idle
+  ticks after edits and gestures finish. Channel, zoom, pan, selection, layer
+  rename and lock changes reuse cached bins. Image and visible annotation edits
+  invalidate them. The Info tab retains metadata and folder location.
 - Back/Next and Left/Right preserve folder browsing. Navigation, Escape outside
   Crop, and Ctrl+Q ask before discarding unsaved edits. Choosing No returns to
   editing; Save As can then preserve the work. Arrow navigation is suppressed
   during crop mode or slider focus. Native dialogs own their keyboard routing;
   unmodified character presses and raw modifier/release events are both handled.
-- Wheel over the left panel to reach tools at smaller window heights. AI is
-  disabled and marked Future.
+- Wheel over either tools tab, the Layers panel, or Info to reach content at
+  smaller heights. Header Tools and Details buttons collapse either sidebar;
+  abbreviated tabs stay visible and clicking one restores the panel. Widths
+  contract below 900 pixels. AI remains disabled and marked Future.
+
+## Layers and annotations (Phase 3)
+
+The Layers tab starts with a protected Background layer. Add an annotation layer
+before drawing. Layer rows select the active layer; the panel supports add,
+delete, rename, visibility, locking, opacity and raise/lower. The top row is the
+topmost layer. Background cannot be removed or reordered and has no editable
+annotation objects; its visibility and opacity can be changed. Locking blocks
+object selection, modification and deletion, plus layer deletion. Image geometry
+operations still transform every layer, including hidden and locked layers.
+
+Annotate provides Select / Move, Pen, Arrow, Line, Rectangle, Ellipse, Text and
+Highlighter. Drag on the image to draw. Shapes accept both drag directions;
+Escape cancels a preview. Strokes use distance-based point suppression and
+periodic decimation at the 256-point cap, preserving the current endpoint.
+Highlighters start at 96/255 opacity, and self-overlap within one stroke does not
+compound alpha. Color and size buttons open native input dialogs. Opacity cycles
+through bounded presets. Shapes expose an independent RGB fill color or `none`;
+text exposes font size instead of stroke width. Properties apply to a selected
+object as one undo operation, or become the style of the next object.
+
+Select clicks the topmost visible, unlocked object across layers and activates
+its parent layer. Drag moves it; Delete removes it. Supported shapes and text
+show one lower-right bounding-box handle for resizing. Arrow keys nudge a selected
+object one document pixel, or ten with Shift. Escape cancels a drag or deselects.
+Text placement opens the existing native text dialog, which owns keyboard focus.
+Select placed text and use Edit text or Enter to reopen it. Text is single-line,
+up to 128 UTF-8 bytes, with the existing UiRegular glyphs. A bounded glyph coverage
+cache is shared by history; font size and transforms scale it without a new font
+engine. Text rendering and export use identical glyph coverage.
+
+Annotation geometry is stored in continuous image-edge coordinates. Each object
+has a stable ID, style and affine transform; order in its layer determines its
+Z-order. IDs are not reused after undo branches or Reset All. The immutable
+background is never copied into annotation layers. Image rotation, flip, crop
+and resize apply matching affine transforms in the same history transaction.
+Crop translates objects and clips their rendering to the new canvas; off-canvas
+geometry remains editable data and Undo restores the previous canvas. Text also
+rotates/flips with the image. Resize scales all geometry, including stroke widths
+and text, on both axes. Unsupported extreme or singular transforms are rejected
+atomically with feedback. Tool preview, selection and handles follow zoom, pan,
+Fit and window size. Switch to Edit to drag-pan an overflowing image; wheel zoom
+also works in Annotate. A window resize or focus loss cancels an unfinished
+annotation gesture and retains committed objects.
+
+History combines image parameters and shared annotation scenes. Creation,
+deletion, movement, resizing, text/style changes and all layer mutations are
+undoable; a pointer drag commits once on release. Selection and tab changes do
+not create history. Original comparison hides annotations without changing them.
+Layer opacity applies once after compositing its objects, so overlaps fade as a
+group. Export and preview use straight-alpha source-over with the same coverage
+rules. Annotation overlays do not invalidate the background viewport cache.
 
 ## Saving and exporting
 
-Save / Ctrl+S saves to an encodable current path. Save As / Ctrl+Shift+S selects
+Save / Ctrl+S exports flattened pixels to an encodable current path. Save As / Ctrl+Shift+S selects
 an export destination. PNG/JPEG inputs open Save As because their encoders are
 unavailable. The only accepted output extensions are `.tga` and `.simg`, case
 insensitive. Both export top-down, straight-alpha BGRA8 pixels with correct
@@ -83,6 +139,14 @@ buffer. Editing and navigation pause while the saved state is being rendered;
 Escape cancels. No older background result can replace a newer edit. The
 modified flag clears only after publication succeeds. Reset All continues to
 refer to the original image loaded for this session, including after Save As.
+
+Editable project persistence is deferred. TGA and SIMG contain flattened pixels,
+including visible annotations, opacity and Z-order. Neither format stores layers
+or objects. When annotations exist, Save explicitly confirms flattened export;
+a successful export keeps editable layers and history in memory. Application-owned
+navigation and exits warn about discarding editable objects even after an export.
+There is no project loader, project serializer, or promise of reopening editable
+annotations. The existing non-cancellable titlebar-close limitation still applies.
 
 ## Processing and resource limits
 
@@ -111,8 +175,8 @@ filter and view changes when its own parameters are unchanged.
 
 Preview rendering remains synchronous; expensive filters and long geometry
 chains can still delay an input frame. There are no background preview jobs that
-could publish stale edits. Histogram caching uses complete edit-state equality
-and is independent of the viewport cache and temporary original comparison.
+could publish stale edits. Histogram caching uses complete image edit-state equality and visible annotation
+content, and is independent of the viewport cache and temporary comparison.
 
 The current conservative limits are:
 
@@ -130,8 +194,15 @@ The current conservative limits are:
   does not coexist with the old document's cache during navigation.
 - Geometry: 16 steps per edit state. An additional step is rejected with a
   message; Undo or Reset All makes room. Crops/resizes also count as steps.
-- Undo and redo: 32 parameter states each, with oldest entries evicted. New edits
-  clear redo. Slider previews do not allocate full-image buffers.
+- Annotation limits: eight layers including Background, 64 objects per document,
+  at most 16 text objects, 256 points per stroke, 128 UTF-8 bytes per text object,
+  and 32 KiB per native glyph coverage mask. Font and stroke sizes are 1–128
+  document pixels. Layer names are limited to 32 UTF-8 bytes. Geometry and
+  transform bounds are validated before commit.
+- Undo and redo: at most 32 transactions combined, with oldest entries evicted.
+  Image parameter frames share annotation scenes, object geometry and text masks;
+  new edits clear redo. Slider and annotation previews do not allocate full-image
+  buffers. No image-sized layer or undo snapshots are introduced.
 
 The shared decoders retain their existing format validation. Decoder allocation
 failure still follows the platform allocator's failure path; the app's preflight
@@ -142,8 +213,16 @@ come from the existing `sunlight-dialogs` crate.
 
 ## Partial and deferred work
 
-Core editing, sidebar/toolbar wiring, adjustment preview, bounded history,
-nearest-neighbor resizing, filters, and TGA/SIMG export are implemented.
+Core editing, tabbed workspace, layers, vector-style annotation geometry,
+single-object selection, move/resize, native text input, adjustment preview,
+bounded unified history and flattened TGA/SIMG export are implemented.
+
+Object resizing currently uses one lower-right axis-aligned handle. Multi-selection,
+object-specific rotation controls, vertex editing, text wrapping, alignment options,
+font choice and an editable project format are deferred. Text scales cached native
+glyphs, so large text may show pixel edges. Freehand decimation can simplify very
+long strokes. No native latency measurement is claimed for dense annotation scenes;
+rendering is bounded and clipped, but remains synchronous.
 
 Rotation supports right angles. Optional split comparison is deferred: hold
 comparison provides the requested inspection without another viewport gesture.
@@ -209,3 +288,29 @@ No QEMU boot gate or live VM interaction was run for this phase. Native dialog
 operation, file publication/failure behavior on SunlightOS filesystems, physical
 disk exhaustion, rapid filesystem navigation/open-close cycles, pointer capture
 outside the window, and interactive performance still need VM checks.
+
+## Phase 3 validation
+
+The focused host suite passes 60 Light Lens tests and 30 sun-img tests. The native
+release application builds with the userspace linker command above. Dependency
+cfg/dead-code warnings remain; no dependencies, kernel features or shared UI
+protocol changes were added.
+
+New tests cover stable layer/object IDs, background protection, visibility and
+locking, Z-order, movement and resize hit testing, geometry alignment after both
+rotations/flips/crop/nonuniform resize, mixed image/annotation undo and redo,
+text modification and glyph sharing, malformed text/geometry and allocation caps,
+straight-alpha blending and group opacity, flattened streaming TGA/SIMG round trips,
+export failure/checkpoint preservation, native Click-release gestures, cancellation,
+panel collapse and small-window clipping, and histogram invalidation. Serialization
+tests do not apply because no editable project format is implemented.
+
+Work-count assertions confirm annotation creation and pointer previews reuse the
+background cache without additional image sampling. This preserves the existing
+sampling path; it is not a native frame-rate or dense-scene latency benchmark.
+Offscreen annotated photo renders cover 640×480, 1024×768, 1366×768 and 1920×1080;
+640×480 and 1024×768 outputs were visually inspected. Set
+`LIGHT_LENS_SCREENSHOT=1` for `/tmp/light-lens-phase3-{width}.ppm` artifacts.
+No live VM, native text-dialog interaction, or native filesystem publication test
+was performed for this phase. The titlebar-close limitation remains as documented
+above; application-owned exits/navigation do prompt for editable objects.

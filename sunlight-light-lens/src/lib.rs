@@ -1,5 +1,6 @@
 #![no_std]
 extern crate alloc;
+pub mod annotations;
 pub mod editor;
 pub mod preview;
 

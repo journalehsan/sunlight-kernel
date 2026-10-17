@@ -51,13 +51,22 @@ impl LightLensApp {
     }
     fn histogram_button(&self) -> Rect {
         let r = self.layout.right;
-        if r.h < 450 {
+        if self.workspace.right != 2 {
             return Rect::new(r.x, r.y, 0, 0);
         }
-        Rect::new(r.x + 12, r.y + 350, r.w.saturating_sub(24), 24)
+        Rect::new(r.x + 12, r.y + 38, r.w.saturating_sub(24), 24)
     }
     pub(super) fn draw_histogram(&self, canvas: &mut Canvas, theme: &Theme) {
-        let r = self.histogram_button();
+        let mut r = self.histogram_button();
+        let panel = self.layout.right;
+        let area = Rect::new(panel.x, panel.y + 27, panel.w, panel.h.saturating_sub(27));
+        if area.w == 0 || area.h == 0 {
+            return;
+        }
+        let mut sub = canvas.sub_canvas(area);
+        let canvas = &mut sub;
+        r.x -= area.x;
+        r.y -= area.y;
         if r.w == 0 || r.h == 0 {
             return;
         }
@@ -65,24 +74,25 @@ impl LightLensApp {
             canvas,
             theme,
             r,
-            if self.histogram_open {
-                "Histogram: Luma [-]"
-            } else {
-                "Histogram: Luma [+]"
-            },
+            ["Luminance", "Red", "Green", "Blue", "RGB combined"][self.workspace.histogram_channel],
             true,
             self.histogram_open,
             self.hovered == Some(r),
         );
-        if !self.histogram_open {
-            return;
-        }
         let plot = Rect::new(r.x, r.bottom() + 6, r.w, 64);
         canvas.fill_rect(plot, theme.bg);
         canvas.draw_rect(plot, theme.border);
         let text = match (&self.image, &self.histogram) {
             (None, _) => Some("No image"),
-            (_, Some((state, _))) if *state == self.editor.state => None,
+            (_, Some((state, _)))
+                if *state == self.editor.state
+                    && self
+                        .histogram_scene
+                        .as_ref()
+                        .is_some_and(|s| s.same_pixels(&self.editor.scene)) =>
+            {
+                None
+            }
             _ => Some("Updating after edit..."),
         };
         if let Some(text) = text {
@@ -93,20 +103,53 @@ impl LightLensApp {
                 &TextStyle::new(FontRole::UiSmall, theme.text_dim),
             );
         } else if let Some((_, hist)) = &self.histogram {
-            let peak = *hist.bins.iter().max().unwrap_or(&1);
-            for x in 0..plot.w.saturating_sub(2) {
-                let lo = x as usize * 256 / plot.w.saturating_sub(2) as usize;
-                let hi = ((x + 1) as usize * 256 / plot.w.saturating_sub(2) as usize)
-                    .max(lo + 1)
+            let channel = self.workspace.histogram_channel;
+            let series: &[usize] = match channel {
+                1 => &[0],
+                2 => &[1],
+                3 => &[2],
+                4 => &[0, 1, 2],
+                _ => &[3],
+            };
+            let peak = series
+                .iter()
+                .flat_map(|&i| {
+                    if i == 3 {
+                        hist.bins.iter()
+                    } else {
+                        hist.channels[i].iter()
+                    }
+                })
+                .copied()
+                .max()
+                .unwrap_or(1)
+                .max(1);
+            for &i in series {
+                let bins = if i == 3 {
+                    &hist.bins
+                } else {
+                    &hist.channels[i]
+                };
+                let color = match i {
+                    0 => Color::rgb(240, 90, 90),
+                    1 => Color::rgb(85, 210, 130),
+                    2 => Color::rgb(100, 150, 255),
+                    _ => theme.accent,
+                };
+                for x in 0..plot.w.saturating_sub(2) {
+                    let lo = x as usize * 256 / plot.w.saturating_sub(2) as usize;
+                    let hi = (((x + 1) as usize * 256 / plot.w.saturating_sub(2) as usize)
+                        .max(lo + 1))
                     .min(256);
-                let value = *hist.bins[lo..hi].iter().max().unwrap_or(&0);
-                let height = (value as u64 * 60 / peak.max(1) as u64) as u32;
-                canvas.vline(
-                    plot.x + 1 + x as i32,
-                    plot.bottom() - 1 - height as i32,
-                    height,
-                    theme.accent,
-                );
+                    let value = *bins[lo..hi].iter().max().unwrap_or(&0);
+                    let height = (value as u64 * 60 / peak as u64) as u32;
+                    canvas.vline(
+                        plot.x + 1 + x as i32,
+                        plot.bottom() - 1 - height as i32,
+                        height,
+                        color,
+                    );
+                }
             }
         }
     }
@@ -114,10 +157,14 @@ impl LightLensApp {
         if !self.histogram_open
             || self.histogram_button().h == 0
             || self.slider_drag.is_some()
-            || self
-                .histogram
-                .as_ref()
-                .is_some_and(|(s, _)| *s == self.editor.state)
+            || self.workspace.gesture.is_some()
+            || self.histogram.as_ref().is_some_and(|(s, _)| {
+                *s == self.editor.state
+                    && self
+                        .histogram_scene
+                        .as_ref()
+                        .is_some_and(|scene| scene.same_pixels(&self.editor.scene))
+            })
         {
             return false;
         }
@@ -126,8 +173,9 @@ impl LightLensApp {
         };
         self.histogram = Some((
             self.editor.state,
-            editor::Histogram::compute(image, self.editor.state),
+            editor::Histogram::compute_scene(image, self.editor.state, Some(&self.editor.scene)),
         ));
+        self.histogram_scene = Some(self.editor.scene.clone());
         true
     }
     fn crop_display(&self, dst: Rect, crop: Rect) -> Rect {
@@ -278,12 +326,14 @@ impl LightLensApp {
             Err(message) => self.message.set_str(message),
         }
     }
-    fn history(&mut self, redo: bool) {
+    pub(super) fn history(&mut self, redo: bool) {
         if !self.editable() {
             return;
         }
         self.finish_slider();
         self.cancel_crop();
+        self.workspace.selected = None;
+        self.workspace.gesture = None;
         if redo {
             self.editor.redo();
         } else {
@@ -302,28 +352,50 @@ impl LightLensApp {
         active: bool,
         hovered: bool,
     ) {
-        Self::draw_placeholder_chip(canvas, theme, r, None, label);
-        if enabled {
-            if hovered {
-                canvas.fill_rect(r.inset(1), theme.panel_alt.lighten(8));
-            }
-            if active || hovered {
-                canvas.draw_rect(r, theme.accent);
-            }
-            sf_centered(
-                canvas,
-                r,
-                label,
-                &TextStyle::new(
-                    FontRole::UiSmall,
-                    if active { theme.accent } else { theme.text },
-                ),
-            );
+        canvas.fill_rect(
+            r,
+            if hovered && enabled {
+                theme.panel_alt.lighten(8)
+            } else {
+                theme.panel_alt
+            },
+        );
+        canvas.draw_rect(
+            r,
+            if enabled && (active || hovered) {
+                theme.accent
+            } else {
+                theme.border
+            },
+        );
+        if r.w < 12 || r.h < 10 {
+            return;
         }
+        let mut shown: TextBuf<96> = TextBuf::empty();
+        shown.set_str(label);
+        let label = shown.truncate_to_width(r.w.saturating_sub(8) as i32, FontRole::UiSmall);
+        sf_centered(
+            canvas,
+            r,
+            label,
+            &TextStyle::new(
+                FontRole::UiSmall,
+                if !enabled {
+                    theme.text_dim
+                } else if active {
+                    theme.accent
+                } else {
+                    theme.text
+                },
+            ),
+        );
     }
     fn side_area(&self) -> Rect {
         let r = self.layout.left;
-        Rect::new(r.x, r.y + 20, r.w, r.h.saturating_sub(20))
+        if self.workspace.collapsed_left {
+            return Rect::new(r.x, r.y, 0, 0);
+        }
+        Rect::new(r.x, r.y + 27, r.w, r.h.saturating_sub(27))
     }
     fn side_button(&self, index: usize) -> Rect {
         let area = self.side_area();
@@ -368,7 +440,18 @@ impl LightLensApp {
             }
     }
     pub(super) fn draw_left_panel(&self, canvas: &mut Canvas, theme: &Theme, rect: Rect) {
-        let area = Self::draw_panel(canvas, theme, rect, "Edit Tools");
+        if self.workspace.collapsed_left {
+            canvas.fill_rect(rect, theme.panel);
+            self.draw_tabs(canvas, theme, true);
+            return;
+        }
+        if self.workspace.left == 1 {
+            self.draw_annotations_panel(canvas, theme);
+            return;
+        }
+        canvas.fill_rect(rect, theme.panel);
+        self.draw_tabs(canvas, theme, true);
+        let area = self.side_area();
         if area.w == 0 || area.h == 0 {
             return;
         }
@@ -513,7 +596,14 @@ impl LightLensApp {
                     let sy = ((y as i64 - dst.y as i64) * size.1 as i64 / dst.h as i64) as u32;
                     sampler.as_ref().unwrap().pixel(image, sx, sy)
                 };
-                let alpha = p >> 24;
+                let bg_layer = &self.editor.scene.layers[0];
+                let alpha = if self.comparing() {
+                    p >> 24
+                } else if bg_layer.visible {
+                    ((p >> 24) * bg_layer.opacity as u32 + 127) / 255
+                } else {
+                    0
+                };
                 let idx = y as usize * canvas.stride as usize + x as usize;
                 let bg = canvas.pixels[idx];
                 let mut out = 0xff000000;
@@ -621,6 +711,8 @@ impl LightLensApp {
             8 => self.resize_dialog(),
             9 => self.keep_aspect = !self.keep_aspect,
             10 => {
+                self.workspace.left = 0;
+                self.workspace.gesture = None;
                 self.crop_mode = !self.crop_mode;
                 self.crop = None;
                 self.crop_start = None;
@@ -711,10 +803,10 @@ impl LightLensApp {
             return false;
         }
         self.finish_slider();
-        !self.editor.dirty()
+        (!self.editor.dirty() && !self.editor.scene.has_annotations())
             || self.confirm(
                 "Unsaved image",
-                "Discard unsaved edits? Choose No to return and Save As.",
+                if self.editor.scene.has_annotations() {"Discard editable layers? Export saves flattened pixels only; objects are kept only in memory."}else{"Discard unsaved edits? Choose No to return and Save As."},
             )
     }
     fn save(&mut self, save_as: bool) {
@@ -724,6 +816,7 @@ impl LightLensApp {
             return;
         }
         self.finish_slider();
+        if self.editor.scene.has_annotations() && !self.confirm("Export flattened image?","Visible layers will be flattened. Editable objects remain in memory only and cannot be reopened.") {return;}
         let mut path = self.current_path;
         if save_as
             || !matches!(
@@ -861,6 +954,18 @@ impl LightLensApp {
         let mut bytes = [0u8; 8192];
         let (w, h) = job.state.size;
         let len = job.sampler.write_bgra(image, job.position, &mut bytes);
+        for (i, pixel) in bytes[..len].chunks_exact_mut(4).enumerate() {
+            let n = job.position + i as u32;
+            let base = u32::from_le_bytes(pixel.try_into().unwrap());
+            let color = self.editor.scene.pixel(
+                base,
+                sunlight_light_lens::annotations::P::new(
+                    (n % w) as f32 + 0.5,
+                    (n / w) as f32 + 0.5,
+                ),
+            );
+            pixel.copy_from_slice(&color.to_le_bytes());
+        }
         let end = job.position + (len / 4) as u32;
         if export_io::write_all(job.fd, &bytes[..len]).is_err() {
             self.message
@@ -889,7 +994,12 @@ impl LightLensApp {
         self.info.format = job.format;
         self.info.size_bytes = job.file_size;
         self.editor.mark_saved();
-        self.message.set_str("Saved image with alpha preserved.");
+        self.message
+            .set_str(if self.editor.scene.has_annotations() {
+                "Flattened export saved. Editable layers remain in memory only."
+            } else {
+                "Saved image with alpha preserved."
+            });
         #[cfg(not(test))]
         self.collect_siblings();
         true
@@ -929,7 +1039,8 @@ impl LightLensApp {
                 && self.slider_drag.is_none()
                 && self.crop_start.is_none()
                 && self.crop_drag.is_none()
-                && self.pan_start.is_none();
+                && self.pan_start.is_none()
+                && self.workspace.gesture.is_none();
             let changed = self.compare_key != active;
             self.compare_key = active;
             return changed;
@@ -983,6 +1094,11 @@ impl LightLensApp {
                 _ => false,
             };
         }
+        if !(matches!(event, Event::Click { .. }) && self.suppress_click) {
+            if let Some(changed) = self.workspace_event(&event) {
+                return changed;
+            }
+        }
         match event {
             Event::Tick => self.histogram_tick(),
             Event::Click { x, y } => {
@@ -997,7 +1113,8 @@ impl LightLensApp {
                 }
                 let p = Point::new(x, y);
                 if self.histogram_button().contains(p) {
-                    self.histogram_open = !self.histogram_open;
+                    self.workspace.histogram_channel = (self.workspace.histogram_channel + 1) % 5;
+                    self.histogram_open = true;
                     return true;
                 }
                 if self.layout.back.contains(p) {
@@ -1498,6 +1615,7 @@ mod tests {
     fn histogram_waits_for_slider_release_and_caches_current_edits() {
         let mut app = ready();
         app.histogram_open = true;
+        app.workspace.right = 2;
         assert!(app.update(Event::Tick));
         assert!(!app.update(Event::Tick));
         let r = app.slider_rect(0);
@@ -1723,6 +1841,7 @@ mod tests {
         app.crop_mode = true;
         app.crop = Some(Rect::new(200, 150, 800, 450));
         app.histogram_open = true;
+        app.workspace.right = 2;
         app.histogram_tick();
         for (w, h) in [(1024, 768), (1366, 768), (1600, 900), (1920, 1080)] {
             app.window_event(WindowEvent::Resized {
@@ -1785,5 +1904,360 @@ mod tests {
                 std::fs::write("/tmp/light-lens-preview.ppm", bytes).unwrap();
             }
         }
+    }
+    fn annotation_point(app: &LightLensApp, x: f32, y: f32) -> Point {
+        let r = app.image_rect();
+        let (w, h) = app.editor.state.size;
+        Point::new(
+            r.x + (x * r.w as f32 / w as f32) as i32,
+            r.y + (y * r.h as f32 / h as f32) as i32,
+        )
+    }
+    fn annotation_ready() -> LightLensApp {
+        let mut app = ready();
+        app.workspace.left = 1;
+        app.editor
+            .edit_scene(|s| {
+                s.add_layer()?;
+                Ok(())
+            })
+            .unwrap();
+        app
+    }
+    #[test]
+    fn annotation_drag_selection_resize_cancel_delete_are_single_transactions() {
+        use sunlight_light_lens::annotations::Tool;
+        let mut app = annotation_ready();
+        app.workspace.tool = Tool::Rectangle;
+        let a = annotation_point(&app, 20., 20.);
+        let b = annotation_point(&app, 60., 50.);
+        app.update(Event::mouse_down(a.x, a.y, 0));
+        app.update(Event::mouse_move(b.x, b.y));
+        assert_eq!(app.editor.scene.count(), 0);
+        app.update(Event::click(b.x, b.y));
+        assert_eq!(app.editor.scene.count(), 1);
+        let id = app.workspace.selected.unwrap();
+        let original = app.editor.scene.object(id).unwrap().clone();
+        app.history(false);
+        assert_eq!(app.editor.scene.count(), 0);
+        app.history(true);
+        assert_eq!(app.editor.scene.count(), 1);
+        app.workspace.tool = Tool::Select;
+        let start = annotation_point(&app, 20., 30.);
+        let end = annotation_point(&app, 30., 40.);
+        app.update(Event::mouse_down(start.x, start.y, 0));
+        app.update(Event::mouse_move(end.x, end.y));
+        app.update(Event::click(end.x, end.y));
+        let moved = app.editor.scene.object(id).unwrap().clone();
+        assert_ne!(moved.transform, original.transform);
+        app.history(false);
+        assert_eq!(app.editor.scene.object(id).unwrap(), &original);
+        app.history(true);
+        // Re-select, then drag the visible lower-right resize handle.
+        app.update(Event::mouse_down(end.x, end.y, 0));
+        app.update(Event::click(end.x, end.y));
+        let (_, corner) = app.editor.scene.object(id).unwrap().bounds();
+        let p = annotation_point(&app, corner.x, corner.y);
+        let q = annotation_point(&app, corner.x + 10., corner.y + 10.);
+        app.update(Event::mouse_down(p.x, p.y, 0));
+        assert!(app.workspace.gesture.as_ref().unwrap().resizing);
+        app.update(Event::mouse_move(q.x, q.y));
+        app.update(Event::click(q.x, q.y));
+        assert_ne!(
+            app.editor.scene.object(id).unwrap().transform,
+            moved.transform
+        );
+        app.history(false);
+        assert_eq!(app.editor.scene.object(id).unwrap(), &moved);
+        app.workspace.tool = Tool::Ellipse;
+        app.update(Event::mouse_down(a.x, a.y, 0));
+        app.update(Event::mouse_move(b.x, b.y));
+        app.update(key(KEY_ESC, true, false, false));
+        app.update(Event::click(b.x, b.y));
+        assert_eq!(app.editor.scene.count(), 1);
+        app.workspace.tool = Tool::Select;
+        app.update(Event::mouse_down(end.x, end.y, 0));
+        app.update(Event::click(end.x, end.y));
+        assert_eq!(app.workspace.selected, Some(id));
+        app.update(key(0x53, true, false, false));
+        assert_eq!(app.editor.scene.count(), 0);
+        app.history(false);
+        assert_eq!(app.editor.scene.count(), 1);
+    }
+    #[test]
+    fn zoom_pan_mapping_and_annotation_interactions_reuse_background_samples() {
+        use sunlight_light_lens::annotations::{Tool, P};
+        let mut app = annotation_ready();
+        app.viewport = Viewport {
+            fit: false,
+            zoom: 400,
+            pan: Point::new(10, -10),
+        };
+        app.viewport
+            .clamp(app.preview_area(), app.editor.state.size);
+        paint(&mut app);
+        let samples = app.preview_cache.borrow().sampled_pixels;
+        app.workspace.tool = Tool::Line;
+        let a = annotation_point(&app, 20., 30.);
+        let b = annotation_point(&app, 50., 60.);
+        app.update(Event::mouse_down(a.x, a.y, 0));
+        for n in 0..4 {
+            app.update(Event::mouse_move(b.x + n, b.y));
+            paint(&mut app);
+        }
+        app.update(Event::click(b.x, b.y));
+        paint(&mut app);
+        let id = app.workspace.selected.unwrap();
+        let o = app.editor.scene.object(id).unwrap();
+        assert_eq!(o.a, P::new(20., 30.));
+        assert_eq!(o.b, P::new(50., 60.));
+        assert_eq!(app.preview_cache.borrow().sampled_pixels, samples);
+        app.workspace.right = 2;
+        app.histogram_open = true;
+        assert!(app.update(Event::Tick));
+        assert!(!app.update(Event::Tick));
+        let cached = app.histogram_scene.clone().unwrap();
+        app.editor
+            .edit_scene(|s| {
+                s.layer_mut().unwrap().visible = false;
+                Ok(())
+            })
+            .unwrap();
+        assert!(app.update(Event::Tick));
+        assert_ne!(cached.layers, app.histogram_scene.as_ref().unwrap().layers);
+        app.workspace.histogram_channel = 4;
+        assert!(!app.update(Event::Tick));
+        app.editor
+            .edit_scene(|s| {
+                let l = s.layer_mut().unwrap();
+                l.name = String::from("Notes");
+                l.locked = true;
+                Ok(())
+            })
+            .unwrap();
+        assert!(!app.update(Event::Tick));
+    }
+    #[test]
+    fn flattened_streaming_exports_match_composite_and_retain_editable_history() {
+        use sunlight_light_lens::annotations::{Object, Style, Tool, P};
+        let dir = TestDir::new();
+        let mut app = annotation_ready();
+        let mut o = Object::new(
+            Tool::Rectangle,
+            P::new(10., 10.),
+            Style {
+                fill: Some(0xffe03020),
+                color: 0xffe03020,
+                ..Style::default()
+            },
+        );
+        o.b = P::new(60., 60.);
+        app.editor
+            .edit_scene(|s| {
+                s.insert(o)?;
+                s.layer_mut().unwrap().opacity = 128;
+                s.add_layer()?;
+                let mut hidden = Object::new(Tool::Ellipse, P::new(5., 5.), Style::default());
+                hidden.b = P::new(80., 80.);
+                s.insert(hidden)?;
+                s.layer_mut().unwrap().visible = false;
+                Ok(())
+            })
+            .unwrap();
+        let scene = app.editor.scene.clone();
+        for (name, kind) in [
+            ("layers.tga", FormatKind::Tga),
+            ("layers.simg", FormatKind::SimgV2),
+        ] {
+            app.start_export(dir.path(name), kind, false).unwrap();
+            while app.export.is_some() {
+                app.export_tick();
+            }
+            let bytes = std::fs::read(dir.0.join(name)).unwrap();
+            let image = if kind == FormatKind::Tga {
+                decode_simg(&bytes).unwrap()
+            } else {
+                decode_simg(&bytes).unwrap()
+            };
+            assert_eq!(image.width, 100);
+            for (x, y) in [(0, 0), (10, 10), (20, 20), (99, 99)] {
+                let base = app.image.as_ref().unwrap().pixel(x, y);
+                assert_eq!(
+                    image.pixel(x, y),
+                    scene.pixel(base, P::new(x as f32 + 0.5, y as f32 + 0.5))
+                );
+            }
+            assert_eq!(app.editor.scene, scene);
+            assert!(!app.editor.dirty());
+            assert!(app.editor.scene.has_annotations());
+            assert!(app.message.as_str().contains("Flattened"));
+        }
+        app.history(false);
+        assert!(app.editor.dirty());
+        app.history(true);
+        assert!(!app.editor.dirty());
+        assert_eq!(app.editor.scene, scene);
+        let path = app.current_path;
+        export_io::FAIL_WRITE.set(true);
+        assert!(app
+            .start_export(dir.path("failed.simg"), FormatKind::SimgV2, false)
+            .is_err());
+        export_io::FAIL_WRITE.set(false);
+        assert!(app.current_path == path);
+        assert_eq!(app.editor.scene, scene);
+        assert!(!app.editor.dirty());
+    }
+    #[test]
+    fn panels_collapse_keep_tabs_accessible_and_scroll_at_small_heights() {
+        let mut app = annotation_ready();
+        let full = app.layout.viewport.w;
+        for left in [true, false] {
+            let r = app.panel_toggle(left);
+            app.update(Event::click(r.x + 2, r.y + 2));
+        }
+        assert!(app.workspace.collapsed_left && app.workspace.collapsed_right);
+        assert!(app.layout.viewport.w > full + 300);
+        paint(&mut app);
+        for left in [true, false] {
+            let r = app.tab_rect(left, 1);
+            app.update(Event::click(r.x + 2, r.y + 2));
+        }
+        assert!(!app.workspace.collapsed_left && !app.workspace.collapsed_right);
+        assert_eq!(app.workspace.left, 1);
+        assert_eq!(app.workspace.right, 1);
+        for (w, h) in [(0, 0), (320, 150), (640, 400), (800, 600), (1024, 768)] {
+            app.set_client_bounds(w, h);
+            for tab in 0..3 {
+                app.workspace.right = tab;
+                paint(&mut app);
+            }
+            app.workspace.left = 0;
+            paint(&mut app);
+            app.workspace.left = 1;
+            paint(&mut app);
+        }
+        app.set_client_bounds(640, 400);
+        app.workspace.right = 0;
+        let r = app.layout.right;
+        app.update(Event::mouse_wheel(r.x + 20, r.y + 60, 120));
+        assert!(app.workspace.layer_scroll > 0);
+        paint(&mut app);
+    }
+    #[test]
+    fn annotated_sample_renders_tabs_and_layers_at_multiple_sizes() {
+        use sunlight_light_lens::annotations::{Object, Style, TextMask, Tool, P};
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/images/Samples");
+        let file = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|f| f.unwrap().path())
+            .find(|p| p.extension().and_then(|s| s.to_str()) == Some("simg"))
+            .unwrap();
+        let image = decode_simg(&std::fs::read(file).unwrap()).unwrap();
+        let mut app = ready();
+        app.editor = Editor::new(image.width, image.height);
+        app.image = Some(image);
+        app.workspace.left = 1;
+        app.workspace.scroll = 90;
+        app.editor
+            .edit_scene(|s| {
+                s.add_layer()?;
+                for (tool, a, b) in [
+                    (Tool::Rectangle, P::new(160., 180.), P::new(620., 580.)),
+                    (Tool::Arrow, P::new(850., 180.), P::new(650., 390.)),
+                    (Tool::Ellipse, P::new(750., 420.), P::new(1120., 680.)),
+                ] {
+                    let mut o = Object::new(
+                        tool,
+                        a,
+                        Style {
+                            width: 6,
+                            ..Style::default()
+                        },
+                    );
+                    o.b = b;
+                    s.insert(o)?;
+                }
+                let mut text = Object::new(
+                    Tool::Text,
+                    P::new(200., 100.),
+                    Style {
+                        font_size: 44,
+                        ..Style::default()
+                    },
+                );
+                text.text = Some(alloc::rc::Rc::new(TextMask::new("Light Lens")?));
+                s.insert(text)?;
+                Ok(())
+            })
+            .unwrap();
+        for (w, h) in [(640, 480), (1024, 768), (1366, 768), (1920, 1080)] {
+            app.set_client_bounds(w, h);
+            let mut pixels = vec![0; w as usize * h as usize];
+            app.view(
+                &mut Canvas::new(&mut pixels, w, w, h),
+                &Theme::sunlight_dark(),
+            );
+            if std::env::var_os("LIGHT_LENS_SCREENSHOT").is_some() {
+                let mut bytes = format!("P6\n{w} {h}\n255\n").into_bytes();
+                for p in &pixels {
+                    bytes.extend_from_slice(&[(p >> 16) as u8, (p >> 8) as u8, *p as u8]);
+                }
+                std::fs::write(format!("/tmp/light-lens-phase3-{w}.ppm"), bytes).unwrap();
+            }
+        }
+    }
+    #[test]
+    fn text_content_style_and_layer_commands_share_history_without_changing_glyph_cache() {
+        use alloc::rc::Rc;
+        use sunlight_light_lens::annotations::{Object, Style, TextMask, Tool, P};
+        let mut app = annotation_ready();
+        let mut text = Object::new(Tool::Text, P::new(10., 10.), Style::default());
+        text.text = Some(Rc::new(TextMask::new("First").unwrap()));
+        let mut id = 0;
+        app.editor
+            .edit_scene(|s| {
+                id = s.insert(text)?;
+                Ok(())
+            })
+            .unwrap();
+        let first = app.editor.scene.clone();
+        let mut text = app.editor.scene.object(id).unwrap().clone();
+        text.text = Some(Rc::new(TextMask::new("Edited").unwrap()));
+        text.style.font_size = 40;
+        text.style.color = 0xff00ff00;
+        app.editor.edit_scene(|s| s.replace(text)).unwrap();
+        let edited = app.editor.scene.clone();
+        app.history(false);
+        assert_eq!(app.editor.scene, first);
+        app.history(true);
+        assert_eq!(app.editor.scene, edited);
+        let glyphs = app.editor.scene.object(id).unwrap().text.clone().unwrap();
+        app.change_geometry(Geometry::RotateRight);
+        assert!(Rc::ptr_eq(
+            &glyphs,
+            app.editor.scene.object(id).unwrap().text.as_ref().unwrap()
+        ));
+        app.history(false);
+        app.workspace.selected = Some(id);
+        let before = app.editor.scene.object(id).unwrap().transform;
+        app.update(key(KEY_RIGHT, true, false, false));
+        assert_ne!(app.editor.scene.object(id).unwrap().transform, before);
+        app.history(false);
+        assert_eq!(app.editor.scene.object(id).unwrap().transform, before);
+        app.editor
+            .edit_scene(|s| {
+                s.layer_mut().unwrap().locked = true;
+                Ok(())
+            })
+            .unwrap();
+        app.workspace.selected = Some(id);
+        app.update(key(0x53, true, false, false));
+        assert!(app.editor.scene.object(id).is_some());
+        app.history(false);
+        app.workspace.selected = Some(id);
+        app.update(key(0x53, true, false, false));
+        assert!(app.editor.scene.object(id).is_none());
+        app.history(false);
+        assert!(app.editor.scene.object(id).is_some());
     }
 }
