@@ -11,6 +11,26 @@ struct EmbeddedBinary<'a> {
 }
 
 fn main() {
+    if env::var_os("CARGO_FEATURE_SCHEDULER_B_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let input = root.join("tools/helios-probes/scheduler-probe.S");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        println!("cargo:rerun-if-changed={}", input.display());
+        assert!(Command::new("as")
+            .args(["--64", "-o"])
+            .arg(out.join("scheduler-probe.o"))
+            .arg(input)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ld")
+            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+            .arg(out.join("scheduler-probe.elf"))
+            .arg(out.join("scheduler-probe.o"))
+            .status()
+            .unwrap()
+            .success());
+    }
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("missing manifest dir"));
     let workspace_root = manifest_dir
         .parent()

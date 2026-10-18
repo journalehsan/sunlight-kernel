@@ -250,6 +250,9 @@ pub struct Process {
     /// Which logical CPU's run-queue this process is enqueued in.
     /// u8::MAX means not in any ready queue.
     pub queued_on_core: u8,
+    /// Last CPU to pin this saved context's physical outgoing stack. A stale
+    /// value is harmless: the stable per-CPU handoff slot must also match.
+    pub stack_handoff_core: u8,
 
     // === BORE Scheduling Metrics (Phase 3.0) ===
     /// Burst score: 0-1024 (0=interactive, 1024=CPU-bound)
@@ -481,15 +484,16 @@ impl Process {
             cpu_mask: u64::MAX,      // all CPUs
             owning_core: u8::MAX,    // not running on any core
             queued_on_core: u8::MAX, // not in any ready queue
-            burst_score: 256,        // Start at MEDIUM tier (interactive bias)
-            timeslice_used: 0,       // Fresh quantum
-            last_run_tick: 0,        // Will be set on first run
-            io_wait_time: 0,         // No wait yet
-            interactive_bonus: 20,   // Assume interactive initially
-            block_start_tick: 0,     // Not blocked yet
-            aging_counter: 0,        // No aging yet
-            wait_child: None,        // Not waiting on a child
-            tty_tab: None,           // Attached to a TTY tab only when spawned for one
+            stack_handoff_core: u8::MAX,
+            burst_score: 256,      // Start at MEDIUM tier (interactive bias)
+            timeslice_used: 0,     // Fresh quantum
+            last_run_tick: 0,      // Will be set on first run
+            io_wait_time: 0,       // No wait yet
+            interactive_bonus: 20, // Assume interactive initially
+            block_start_tick: 0,   // Not blocked yet
+            aging_counter: 0,      // No aging yet
+            wait_child: None,      // Not waiting on a child
+            tty_tab: None,         // Attached to a TTY tab only when spawned for one
             tty_generation: 0,
             owned_shared: alloc::vec::Vec::new(),
             mapped_shared: alloc::vec::Vec::new(),
@@ -656,6 +660,7 @@ impl Process {
             cpu_mask: u64::MAX,
             owning_core: u8::MAX,
             queued_on_core: u8::MAX,
+            stack_handoff_core: u8::MAX,
             burst_score: 256,
             timeslice_used: 0,
             last_run_tick: 0,

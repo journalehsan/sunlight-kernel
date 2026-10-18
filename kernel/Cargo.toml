@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5047-alpha.2"
+version = "0.2.5073-alpha.2"
+
 
 
 
@@ -650,3 +651,5 @@ memory_accounting_test = []
 verbose_diag = []
 # Bounded CPU audit reports and wakeup/scheduler event counters.
 cpu_accounting_diag = []
+# Isolated real ring-3 scheduler lifecycle gate; never enabled by default.
+scheduler_b_test = []

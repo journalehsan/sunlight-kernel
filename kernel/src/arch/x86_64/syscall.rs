@@ -1961,11 +1961,17 @@ fn process_exit(code: i32) -> ! {
     // to the process's kernel stack (kernel heap — mapped in every address
     // space), then re-enable interrupts (syscall_entry ran `cli`) and wait
     // to be switched away from; this context is never resumed.
+    let handoff = sched::stack_handoff_slot();
     unsafe {
-        if kstack_top != 0 {
-            core::arch::asm!("mov rsp, {}", in(reg) kstack_top);
-        }
-        core::arch::asm!("jmp {idle}", idle = sym crate::sched::core_idle_entry, options(noreturn));
+        core::arch::asm!(
+            "mov rsp, {stack}",
+            "mov qword ptr [{handoff}], -1",
+            "jmp {idle}",
+            stack = in(reg) kstack_top,
+            handoff = in(reg) handoff,
+            idle = sym crate::sched::core_idle_entry,
+            options(noreturn)
+        );
     }
 }
 

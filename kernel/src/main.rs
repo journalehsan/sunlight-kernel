@@ -721,6 +721,9 @@ pub extern "C" fn _start() -> ! {
     splash.redraw();
     capability::init_token_seed();
 
+    #[cfg(feature = "scheduler_b_test")]
+    crate::sched::regression::run(hhdm_offset);
+
     // 7b. Security hardening self-test (Bite 4, Task 0)
     run_security_hardening_tests(hhdm_offset);
 

@@ -82,6 +82,12 @@
 //! - pick_next_* only returns Ready tasks (or falls back safely).
 
 pub mod accounting;
+mod handoff;
+mod quantum;
+mod requests;
+const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
+#[cfg(feature = "scheduler_b_test")]
+pub mod regression;
 use crate::arch::x86_64::interrupts::now_ns;
 use crate::process::{Process, ProcessState, QueueTier};
 use crate::serial_println;
@@ -167,7 +173,7 @@ pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
 /// target CPU running a task that just transitioned to `BlockedOnIpc` or
 /// leaving a woken live task `Ready` but not enqueued. Each CPU consumes only
 /// its own bit; cross-core wakeups set the owner CPU's bit.
-static RESCHEDULE_MASK: AtomicU64 = AtomicU64::new(0);
+static RESCHEDULE_MASK: requests::RescheduleRequests = requests::RescheduleRequests::new();
 static DISPATCH_NOTIFICATION_MASK: AtomicU64 = AtomicU64::new(0);
 static DISPATCH_NOTIFICATIONS_SENT: AtomicU64 = AtomicU64::new(0);
 static DISPATCH_NOTIFICATIONS_BUSY: AtomicU64 = AtomicU64::new(0);
@@ -226,9 +232,8 @@ fn accumulate_counter(process: &mut Process) {
 }
 
 /// Post-run housekeeping for the RoundRobin counter system. [FEAT-3]
-fn on_task_ran(process: &mut Process, ticks_used: u64) {
+fn on_task_ran(process: &mut Process, ticks_used: u64, q: u32) {
     process.aging_boosted_this_pick = false;
-    let q = quantum_ticks(process);
     process.quantum_override = None;
     if ticks_used < (q / 2) as u64 {
         process.counter /= 2;
@@ -245,6 +250,13 @@ fn on_task_ran(process: &mut Process, ticks_used: u64) {
 
 /// Maximum number of logical CPUs supported by the per-core scheduler.
 pub const MAX_CORES: usize = 64;
+static STACK_HANDOFFS: handoff::Handoffs<MAX_CORES> = handoff::Handoffs::new();
+
+/// Called before a naked IRQ stub publishes its outgoing context. The returned
+/// slot is stable even if another CPU grows/reuses the process table.
+pub(crate) extern "C" fn stack_handoff_slot() -> *const AtomicUsize {
+    STACK_HANDOFFS.slot(current_cpu_id())
+}
 
 /// Number of cores that have completed phase-0 init and can receive tasks.
 /// Initialised to 1 (BSP only); updated by init_cores() after SMP bring-up.
@@ -289,8 +301,9 @@ pub struct CoreState {
     /// Index into Scheduler::processes for the task currently running on this
     /// core. None when the core is idle.
     pub current_task: Option<usize>,
-    /// Ticks accumulated by current_task within its current quantum.
+    /// Current dispatch's elapsed 10 ms units (delivered IRQs only without TSC).
     pub current_ticks: u64,
+    slice: quantum::Slice,
     /// Total timer IRQ ticks handled on this core.
     pub timer_ticks: u64,
     /// Lifetime context transitions, including task/idle; excludes same-task selection.
@@ -314,6 +327,7 @@ impl CoreState {
             run_queue_low: VecDeque::new(),
             current_task: None,
             current_ticks: 0,
+            slice: quantum::Slice::new(),
             timer_ticks: 0,
             context_switches: 0,
             steal_count: 0,
@@ -360,6 +374,7 @@ pub struct Scheduler {
     /// truth now lives in `crate::timekeeping` and this field mirrors it.
     pub global_tick: u64,
     pub idle_context_rsp: u64,
+    last_reap_tick: u64,
 }
 
 impl Scheduler {
@@ -372,6 +387,7 @@ impl Scheduler {
             online_cores: 1,
             global_tick: 0,
             idle_context_rsp: 0,
+            last_reap_tick: 0,
         }
     }
 
@@ -407,26 +423,6 @@ impl Scheduler {
             SchedulerMode::Bore => {
                 self.cores[cpu_id].context_switches =
                     self.cores[cpu_id].context_switches.saturating_add(1);
-            }
-        }
-    }
-
-    #[inline]
-    fn core_current_ticks(&self, cpu_id: usize) -> u64 {
-        match SCHEDULER_MODE {
-            SchedulerMode::RoundRobin => CORE_STATES[cpu_id].lock().current_ticks,
-            SchedulerMode::Bore => self.cores[cpu_id].current_ticks,
-        }
-    }
-
-    #[inline]
-    fn set_core_current_ticks(&mut self, cpu_id: usize, ticks: u64) {
-        match SCHEDULER_MODE {
-            SchedulerMode::RoundRobin => {
-                CORE_STATES[cpu_id].lock().current_ticks = ticks;
-            }
-            SchedulerMode::Bore => {
-                self.cores[cpu_id].current_ticks = ticks;
             }
         }
     }
@@ -527,6 +523,7 @@ impl Scheduler {
                 (p.state == ProcessState::Reaped
                     || (p.state == ProcessState::Finished && !p.exit_cleanup_pending))
                     && in_use[..online].iter().all(|&cur| cur != *idx)
+                    && !self.stack_is_pinned(*idx)
             })
             .map(|(idx, _)| idx)
         {
@@ -561,7 +558,9 @@ impl Scheduler {
             .iter()
             .enumerate()
             .find(|(idx, p)| {
-                p.state == ProcessState::Reaped && in_use[..online].iter().all(|&cur| cur != *idx)
+                p.state == ProcessState::Reaped
+                    && in_use[..online].iter().all(|&cur| cur != *idx)
+                    && !self.stack_is_pinned(*idx)
             })
             .map(|(idx, _)| idx)
         {
@@ -626,6 +625,12 @@ impl Scheduler {
 
     /// Enqueue a Ready process onto a specific core's tier queue.
     fn enqueue_process_to_core(&mut self, idx: usize, core_id: usize) {
+        self.queue_process_to_core(idx, core_id, true);
+    }
+
+    // Internal rotation must not request another dispatch of the CPU already
+    // selecting a task. External wakes/publications still request dispatch.
+    fn queue_process_to_core(&mut self, idx: usize, core_id: usize, notify: bool) {
         if idx >= self.processes.len() || !matches!(self.processes[idx].state, ProcessState::Ready)
         {
             return;
@@ -636,13 +641,16 @@ impl Scheduler {
         // The local CPU is already executing the enqueue path (including
         // transient requeue during a context switch); only a remote idle CPU
         // needs an interrupt in addition to its published reschedule flag.
-        let notify_idle = self.core_current_task(core_id).is_none()
+        let notify_idle = notify
+            && self.core_current_task(core_id).is_none()
             && SCHEDULER_READY.load(Ordering::Acquire)
             && core_id != current_cpu_id();
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             self.processes[idx].queued_on_core = core_id as u8;
             CORE_STATES[core_id].lock().rr_queue.push_back(idx);
-            request_reschedule_on(core_id);
+            if notify {
+                request_reschedule_on(core_id);
+            }
             if notify_idle {
                 DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(core_id), Ordering::Release);
             }
@@ -658,7 +666,9 @@ impl Scheduler {
         }
         // Publish the queue before requesting dispatch. BORE previously left
         // a detached consumer on an idle CPU until its next periodic tick.
-        request_reschedule_on(core_id);
+        if notify {
+            request_reschedule_on(core_id);
+        }
         if notify_idle {
             DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(core_id), Ordering::Release);
         }
@@ -790,6 +800,20 @@ impl Scheduler {
     /// owning core re-enqueues it on its next `schedule_tick` deschedule.
     pub(crate) fn is_live_on_core(&self, idx: usize) -> bool {
         idx < self.processes.len() && self.processes[idx].owning_core != u8::MAX
+    }
+
+    fn stack_is_pinned(&self, idx: usize) -> bool {
+        let cpu = self.processes[idx].stack_handoff_core as usize;
+        cpu < MAX_CORES && STACK_HANDOFFS.is_pinned(cpu, idx)
+    }
+
+    fn stack_is_pinned_remotely(&self, idx: usize, cpu_id: usize) -> bool {
+        self.processes[idx].stack_handoff_core as usize != cpu_id && self.stack_is_pinned(idx)
+    }
+
+    fn pin_outgoing_stack(&mut self, cpu_id: usize, idx: usize) {
+        STACK_HANDOFFS.pin(cpu_id, idx);
+        self.processes[idx].stack_handoff_core = cpu_id as u8;
     }
 
     /// Return the CPU that still owns `idx` as its current task, if any.
@@ -939,6 +963,19 @@ impl Scheduler {
         let now = now_ns();
         self.processes[idx].last_start_ns = now;
         self.processes[idx].cpu_charge_since = Some(now);
+        let cpu_id = current_cpu_id();
+        let budget = quantum_ticks(&self.processes[idx]);
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                let mut core = CORE_STATES[cpu_id].lock();
+                core.slice.start(now, budget);
+                core.current_ticks = 0;
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].slice.start(now, budget);
+                self.cores[cpu_id].current_ticks = 0;
+            }
+        }
     }
 
     /// Snapshot all task clocks at the publication timestamp under SCHEDULER.
@@ -950,13 +987,41 @@ impl Scheduler {
     }
 
     fn stop_execution_clock(&mut self, idx: usize) {
+        let now = now_ns();
         let p = &mut self.processes[idx];
         sunlight_ipc::cpu_accounting::checkpoint(
             &mut p.cpu_runtime_ns,
             &mut p.cpu_charge_since,
-            now_ns(),
+            now,
             true,
         );
+        let cpu_id = current_cpu_id();
+        let calibrated = crate::arch::x86_64::interrupts::tsc_hz() != 0;
+        let usage = match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                let mut core = CORE_STATES[cpu_id].lock();
+                core.current_ticks = 0;
+                core.slice.finish(now, calibrated)
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].current_ticks = 0;
+                self.cores[cpu_id].slice.finish(now, calibrated)
+            }
+        };
+        if let Some(usage) = usage {
+            let p = &mut self.processes[idx];
+            p.timeslice_used = usage.ticks.min(u32::MAX as u64) as u32;
+            // Retire the old override before modifying burst/quantum policy.
+            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                on_task_ran(p, usage.ticks, usage.budget_ticks);
+            } else {
+                p.quantum_override = None;
+                p.aging_boosted_this_pick = false;
+            }
+            if usage.expired {
+                update_burst_score(p, BurstReason::FullQuantum);
+            }
+        }
     }
 
     // ── State management ─────────────────────────────────────────────────────
@@ -986,14 +1051,29 @@ impl Scheduler {
             self.expire_native_futex_timeouts();
             crate::ipc::trace_pty_stall(self);
         }
-        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
-            let mut core = CORE_STATES[cpu_id].lock();
-            core.current_ticks += 1;
-            core.timer_ticks += 1;
-        } else {
-            self.cores[cpu_id].current_ticks += 1;
-            self.cores[cpu_id].timer_ticks += 1;
+        // Reaping must also progress when the final task left a CPU idle.
+        // Use an elapsed deadline, once globally, rather than a modulo per CPU.
+        if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID
+            && self.global_tick.saturating_sub(self.last_reap_tick) >= 50
+        {
+            self.last_reap_tick = self.global_tick;
+            self.reap_finished_processes();
         }
+        let now = now_ns();
+        let calibrated = crate::arch::x86_64::interrupts::tsc_hz() != 0;
+        let usage = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            let mut core = CORE_STATES[cpu_id].lock();
+            core.timer_ticks += 1;
+            let usage = core.slice.timer(now, calibrated);
+            core.current_ticks = usage.ticks;
+            usage
+        } else {
+            let core = &mut self.cores[cpu_id];
+            core.timer_ticks += 1;
+            let usage = core.slice.timer(now, calibrated);
+            core.current_ticks = usage.ticks;
+            usage
+        };
 
         let current = match self.core_current_task(cpu_id) {
             Some(idx) => idx,
@@ -1008,7 +1088,6 @@ impl Scheduler {
         }
 
         if !matches!(self.processes[current].state, ProcessState::Running) {
-            self.set_core_current_ticks(cpu_id, 0);
             request_reschedule_on(cpu_id);
             return;
         }
@@ -1017,26 +1096,13 @@ impl Scheduler {
         // must be noticed even when the task never enters a syscall. Timer
         // preemption is a safe kernel/user return point for that check.
         if self.apply_pending_fatal_signal(current) {
-            self.set_core_current_ticks(cpu_id, 0);
             request_reschedule_on(cpu_id);
             return;
         }
 
-        let quantum = quantum_ticks(&self.processes[current]) as u64;
-
-        if self.core_current_ticks(cpu_id) >= quantum {
-            let ticks_used = self.core_current_ticks(cpu_id);
+        if usage.expired {
+            let ticks_used = usage.ticks;
             let current_proc = &mut self.processes[current];
-            current_proc.timeslice_used = ticks_used as u32;
-
-            update_burst_score(current_proc, BurstReason::FullQuantum);
-
-            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
-                on_task_ran(current_proc, ticks_used);
-            } else {
-                current_proc.quantum_override = None;
-                current_proc.aging_boosted_this_pick = false;
-            }
 
             // [FEAT-1] Per-process watchdog.
             if let Some(wd) = current_proc.wd_period_ticks {
@@ -1055,14 +1121,7 @@ impl Scheduler {
             }
 
             self.age_ready_tasks();
-            self.set_core_current_ticks(cpu_id, 0);
             request_reschedule_on(cpu_id);
-        }
-
-        // Periodic opportunistic reaping of Finished (cheap no-op if none).
-        // 50 ticks ~ 0.5s at 100Hz; keeps Finished from lingering without depending on spawn/switch.
-        if self.global_tick % 50 == 0 {
-            self.reap_finished_processes();
         }
 
         // The diagnostic dump writes per-core + per-process state over the slow
@@ -1214,6 +1273,14 @@ impl Scheduler {
                     self.processes[idx].queued_on_core = u8::MAX;
                 }
 
+                // Publication may precede the old CPU's RSP pivot. Keep the
+                // entry reachable, but do not restore its stack remotely yet.
+                if self.stack_is_pinned_remotely(idx, thief_id) {
+                    self.processes[idx].queued_on_core = victim_id as u8;
+                    CORE_STATES[victim_id].lock().rr_queue.push_back(idx);
+                    continue;
+                }
+
                 let eligible = matches!(self.processes[idx].state, ProcessState::Ready)
                     && !self.is_live_on_other_core(idx, thief_id)
                     && self.processes[idx].cpu_mask & (1u64 << thief_id) != 0
@@ -1360,6 +1427,7 @@ impl Scheduler {
                     Some(idx) => idx,
                     None => {
                         core.empty_pops += 1;
+                        drop(core);
                         return self.steal_work(cpu_id);
                     }
                 }
@@ -1373,6 +1441,12 @@ impl Scheduler {
 
             if self.processes[idx].queued_on_core == cpu_id as u8 {
                 self.processes[idx].queued_on_core = u8::MAX;
+            }
+
+            if self.stack_is_pinned_remotely(idx, cpu_id) {
+                self.processes[idx].queued_on_core = cpu_id as u8;
+                CORE_STATES[cpu_id].lock().rr_queue.push_back(idx);
+                continue;
             }
 
             if !matches!(self.processes[idx].state, ProcessState::Ready)
@@ -1393,6 +1467,9 @@ impl Scheduler {
             let ticks_waiting = self
                 .global_tick
                 .saturating_sub(self.processes[idx].last_run_tick);
+            // Aging must guarantee admission, not just add credit that the
+            // same visit's nice debt can immediately cancel (nice +8..+10).
+            let starvation_rescue = ticks_waiting > AGING_THRESHOLD_TICKS;
             if ticks_waiting > AGING_THRESHOLD_TICKS && !self.processes[idx].aging_boosted_this_pick
             {
                 self.processes[idx].counter =
@@ -1421,7 +1498,10 @@ impl Scheduler {
             }
 
             // Low priority skip.
-            if self.processes[idx].nice > 0 && self.processes[idx].counter <= SKIP_LIMIT {
+            if self.processes[idx].nice > 0
+                && self.processes[idx].counter <= SKIP_LIMIT
+                && !starvation_rescue
+            {
                 self.processes[idx].counter += DECAY_RATE;
                 self.processes[idx].aging_boosted_this_pick = false;
                 self.processes[idx].queued_on_core = cpu_id as u8;
@@ -1493,13 +1573,13 @@ impl Scheduler {
                 self.processes[next].last_run_tick = self.global_tick;
                 self.processes[next].owning_core = cpu_id as u8;
                 self.processes[next].queued_on_core = u8::MAX;
-                self.start_charging_runtime(next);
                 unsafe {
                     self.processes[next].address_space.activate();
                     self.processes[next].fx_state.restore();
                     x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
                 }
                 crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
+                self.start_charging_runtime(next);
                 return next_rsp;
             }
             unsafe {
@@ -1514,6 +1594,9 @@ impl Scheduler {
             return 0;
         }
 
+        // Ownership can be published before Rust returns, but this physical
+        // stack remains in use until the naked epilogue releases the pin.
+        self.pin_outgoing_stack(cpu_id, current);
         self.account_and_apply_churn_penalty();
         self.stop_execution_clock(current);
 
@@ -1534,7 +1617,7 @@ impl Scheduler {
         if matches!(self.processes[current].state, ProcessState::Ready) {
             self.processes[current].owning_core = u8::MAX;
             self.set_core_current_task(cpu_id, None);
-            self.enqueue_process_to_core(current, cpu_id);
+            self.queue_process_to_core(current, cpu_id, false);
         } else if !was_runnable || !matches!(self.processes[current].state, ProcessState::Ready) {
             self.processes[current].owning_core = u8::MAX;
             self.set_core_current_task(cpu_id, None);
@@ -1556,8 +1639,6 @@ impl Scheduler {
             self.processes[next].last_run_tick = self.global_tick;
             self.processes[next].owning_core = cpu_id as u8;
             self.processes[next].queued_on_core = u8::MAX;
-            self.start_charging_runtime(next);
-
             unsafe {
                 self.processes[next].address_space.activate();
                 self.processes[next].fx_state.restore();
@@ -1580,6 +1661,7 @@ impl Scheduler {
             // Opportunistic global reaping of any other safe Finished processes.
             self.reap_finished_processes();
 
+            self.start_charging_runtime(next);
             next_rsp
         } else {
             if current < self.processes.len()
@@ -2233,7 +2315,9 @@ impl Scheduler {
     }
 
     pub fn reap_process_resources(&mut self, idx: usize) {
-        if idx >= self.processes.len() {
+        if idx >= self.processes.len() || self.stack_is_pinned(idx) {
+            #[cfg(feature = "scheduler_b_test")]
+            regression::note_deferred_reap();
             return;
         }
         if !self.processes[idx].exit_cleanup_pending {
@@ -2539,6 +2623,9 @@ impl Scheduler {
 
         for idx in 0..self.processes.len() {
             if self.processes[idx].state != ProcessState::Finished {
+                continue;
+            }
+            if self.stack_is_pinned(idx) {
                 continue;
             }
             if !self.processes[idx].exit_cleanup_pending {
@@ -3518,8 +3605,7 @@ fn reschedule_bit(cpu_id: usize) -> u64 {
 /// Uses AcqRel: cheaper than SeqCst (no store-load fence) but still correct
 /// because only the owning core ever clears its own bit.
 pub fn check_reschedule_on(cpu_id: usize) -> bool {
-    let bit = reschedule_bit(cpu_id);
-    RESCHEDULE_MASK.fetch_and(!bit, Ordering::AcqRel) & bit != 0
+    RESCHEDULE_MASK.take(cpu_id.min(63))
 }
 
 /// Non-consuming peek: returns true if the reschedule bit is set for `cpu_id`
@@ -3527,12 +3613,12 @@ pub fn check_reschedule_on(cpu_id: usize) -> bool {
 /// each core owns its own bit and no other core clears it.
 #[inline]
 pub fn peek_reschedule_on(cpu_id: usize) -> bool {
-    RESCHEDULE_MASK.load(Ordering::Relaxed) & reschedule_bit(cpu_id) != 0
+    RESCHEDULE_MASK.pending(cpu_id.min(63))
 }
 
 /// Set the reschedule flag for a specific CPU.
 pub fn request_reschedule_on(cpu_id: usize) {
-    RESCHEDULE_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::AcqRel);
+    RESCHEDULE_MASK.request(cpu_id.min(63));
 }
 
 /// Set the reschedule flag for the current CPU.
@@ -3634,7 +3720,10 @@ pub fn native_borrower_lifecycle_counts() -> (usize, usize, usize, usize, usize,
 /// heap-allocated `kernel_stack_top`) for the caller's final `sti; hlt` loop.
 /// Callers (`process_exit` in `arch/x86_64/syscall.rs` and
 /// `terminate_current_user_process` in `arch/x86_64/interrupts.rs`) pivot RSP
-/// to this value, then halt until the next timer IRQ deschedules them.
+/// to this value, release the physical handoff pin in that same asm block,
+/// then halt until the next timer IRQ dispatches. Until the post-pivot store,
+/// neither the task's stack nor its slot may be reclaimed, including borrowers
+/// whose caller-owned user stack can be freed after a join observes Reaped.
 ///
 /// Returning the dying process's own `kernel_stack_top` here would leave the
 /// CPU halted on a `Box`-owned per-process stack whose memory is freed when
@@ -3667,10 +3756,34 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         return idle_top;
     }
 
+    sched.pin_outgoing_stack(cpu_id, cur);
+    #[cfg(feature = "scheduler_b_test")]
+    if code == 0 {
+        regression::race_exit(&mut sched, cur);
+    }
     if matches!(
         sched.processes[cur].state,
         crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
     ) {
+        // A remote kill can win just before this task's self-exit. Preserve
+        // that terminal result, but still retire actual execution exactly once
+        // before halting on the idle stack (not at a later timer callback).
+        sched.account_current_runtime();
+        sched.stop_execution_clock(cur);
+        sched.increment_context_switches(cpu_id);
+        sched.processes[cur].owning_core = u8::MAX;
+        sched.remove_from_ready_queues(cur);
+        sched.set_core_current_task(cpu_id, None);
+        #[cfg(feature = "scheduler_b_test")]
+        {
+            assert!(sched.processes[cur].cpu_charge_since.is_none());
+            assert_eq!(sched.processes[cur].exit_code, 137);
+            assert!(CORE_STATES[cpu_id]
+                .lock()
+                .slice
+                .finish(now_ns(), true)
+                .is_none());
+        }
         return idle_top;
     }
 
@@ -3705,7 +3818,6 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         note_native_borrower_finished();
     }
     sched.set_core_current_task(cpu_id, None);
-    sched.set_core_current_ticks(cpu_id, 0);
     sched.remove_from_ready_queues(cur);
     if sched.processes[cur].owns_address_space && sched.processes[cur].linux_tgid.is_none() {
         sched.terminate_address_space_borrowers(cur, "address-space-owner-exit");
@@ -3770,7 +3882,6 @@ pub fn enter_first_process() -> ! {
             sched.processes[idx].last_run_tick = sched.global_tick;
             sched.processes[idx].owning_core = 0;
             sched.processes[idx].queued_on_core = u8::MAX;
-            sched.start_charging_runtime(idx);
             sched.seed_ready_queues_except(idx);
             // Run queues are now seeded and core 0 has its first task. Release
             // the AP cores so their next LAPIC timer tick can steal/dispatch.
@@ -3789,6 +3900,7 @@ pub fn enter_first_process() -> ! {
                 sched.processes[idx].name_str(),
                 rsp
             );
+            sched.start_charging_runtime(idx);
             (rsp, fs_base, kernel_stack_top)
         } else {
             serial_println!("[SCHED] No user processes, entering idle");

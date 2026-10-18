@@ -251,11 +251,17 @@ fn terminate_current_user_process(reason: &str, code: i32) -> ! {
     let kstack_top = crate::sched::finish_current_process(code, reason);
     crate::sched::request_reschedule();
 
+    let handoff = crate::sched::stack_handoff_slot();
     unsafe {
-        if kstack_top != 0 {
-            core::arch::asm!("mov rsp, {}", in(reg) kstack_top);
-        }
-        core::arch::asm!("jmp {idle}", idle = sym crate::sched::core_idle_entry, options(noreturn));
+        core::arch::asm!(
+            "mov rsp, {stack}",
+            "mov qword ptr [{handoff}], -1",
+            "jmp {idle}",
+            stack = in(reg) kstack_top,
+            handoff = in(reg) handoff,
+            idle = sym crate::sched::core_idle_entry,
+            options(noreturn)
+        );
     }
 }
 
@@ -761,7 +767,10 @@ pub unsafe extern "C" fn timer_entry() {
         "push r13",
         "push r14",
         "push r15",
-        "mov rdi, rsp",
+        "mov r12, rsp",
+        "call {handoff_slot}",
+        "mov r13, rax", // stable per-CPU release address, callee-saved
+        "mov rdi, r12",
         "call timer_rust",
         // Save return value (new RSP) in r12 (callee-saved, preserved by timer_rust).
         "mov r12, rax",
@@ -776,6 +785,9 @@ pub unsafe extern "C" fn timer_entry() {
         "jz 1f",
         "mov rsp, rax",
         "1:",
+        // This CPU will never access the outgoing stack again. An aligned
+        // x86 store is Release; a remote picker/reaper loads with Acquire.
+        "mov qword ptr [r13], -1",
         // Pop in the same order as iretq_to_context (r15 first, rax last).
         "pop r15",
         "pop r14",
@@ -793,6 +805,7 @@ pub unsafe extern "C" fn timer_entry() {
         "pop rcx",
         "pop rax",
         "iretq",
+        handoff_slot = sym crate::sched::stack_handoff_slot,
     );
 }
 
@@ -820,7 +833,10 @@ pub unsafe extern "C" fn reschedule_entry() {
         "push r13",
         "push r14",
         "push r15",
-        "mov rdi, rsp",
+        "mov r12, rsp",
+        "call {handoff_slot}",
+        "mov r13, rax",
+        "mov rdi, r12",
         "call reschedule_rust",
         "mov r12, rax",
         "mov rbx, [rsp + 136]",
@@ -831,6 +847,7 @@ pub unsafe extern "C" fn reschedule_entry() {
         "jz 1f",
         "mov rsp, rax",
         "1:",
+        "mov qword ptr [r13], -1",
         "pop r15",
         "pop r14",
         "pop r13",
@@ -847,6 +864,7 @@ pub unsafe extern "C" fn reschedule_entry() {
         "pop rcx",
         "pop rax",
         "iretq",
+        handoff_slot = sym crate::sched::stack_handoff_slot,
     );
 }
 
@@ -859,7 +877,11 @@ extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
     let cpu_id = crate::sched::current_cpu_id();
     crate::sched::accounting::interrupt_entry(cpu_id);
     let mut sched = crate::sched::SCHEDULER.lock();
-    sched.schedule_tick(cpu_id, saved_rsp)
+    let result = sched.schedule_tick(cpu_id, saved_rsp);
+    drop(sched);
+    #[cfg(feature = "scheduler_b_test")]
+    crate::sched::regression::handoff_delay();
+    result
 }
 
 /// Wake tty_server every N timer ticks for the foreground render cadence.
@@ -924,6 +946,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     {
         let mut sched = crate::sched::SCHEDULER.lock();
         sched.tick(cpu_id, ticks_total);
+        #[cfg(feature = "scheduler_b_test")]
+        crate::sched::regression::on_tick(&mut sched, cpu_id);
 
         // Telemetry and cross-process timer work are BSP-only (CPU 0).
         if cpu_id == 0 {
@@ -1030,6 +1054,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let result = sched.schedule_tick(cpu_id, saved_rsp);
     drop(sched);
+
+    #[cfg(feature = "scheduler_b_test")]
+    crate::sched::regression::handoff_delay();
 
     // IMPORTANT: do NOT re-enable interrupts here.
     //
