@@ -472,8 +472,16 @@ version = "0.2.5126-alpha.2"
 edition = "2021"
 
 [features]
-native-svg = ["sunlight-ui/svg", "sunlight-libc/native-std"]
-# Native std SVG builds retain the desktop's 16 MiB mmap-backed heap.
+# native-std alone defaults to a 1 MiB dynamic heap; pin 16 MiB here so SVG
+# icon caches and SIMG wallpaper decode stay under one budget even when
+# `--no-default-features` is used. Screen-sized wallpaper pixels use mmap on
+# `target_os = "sunlightos"` (see wallpaper_buffer.rs), not this heap.
+native-svg = [
+    "sunlight-ui/svg",
+    "sunlight-libc/native-std",
+    "sunlight-libc/dynamic-heap-16m",
+    "dynamic-heap",
+]
 default = ["dynamic-heap"]
 # 16 MiB: SIMG wallpapers need ~file+decoded ARGB peak (~10 MiB). 8 MiB OOM'd
 # the decode and left the solid gray FALLBACK_BG desktop.

@@ -1,15 +1,19 @@
 //! Owned screen-sized pixels, outside the shell's small general-purpose heap.
 //! The worker recycles the retired mapping on the next wallpaper preparation.
+//!
+//! Native freestanding (`none`) and native-std SVG (`sunlightos`) builds use
+//! anonymous mmap so SIMG decode + SVG icon caches can share the 16 MiB heap.
+//! Host unit tests keep a Vec-backed path.
 
-#[cfg(not(target_os = "none"))]
+#[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
 extern crate alloc;
 
 pub(crate) struct Wallpaper {
     pub width: u32,
     pub height: u32,
-    #[cfg(target_os = "none")]
+    #[cfg(any(target_os = "none", target_os = "sunlightos"))]
     ptr: core::ptr::NonNull<u32>,
-    #[cfg(not(target_os = "none"))]
+    #[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
     storage: alloc::vec::Vec<u32>,
     len: usize,
 }
@@ -21,7 +25,7 @@ impl Wallpaper {
         if width == 0 || height == 0 || bytes > isize::MAX as usize {
             return None;
         }
-        #[cfg(target_os = "none")]
+        #[cfg(any(target_os = "none", target_os = "sunlightos"))]
         let ptr = {
             use sunlight_libc::mman::*;
             // Private anonymous mappings are zero initialized and page aligned.
@@ -36,7 +40,7 @@ impl Wallpaper {
             .ok()?;
             core::ptr::NonNull::new(address.cast::<u32>())?
         };
-        #[cfg(not(target_os = "none"))]
+        #[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
         let storage = {
             let mut storage = alloc::vec::Vec::new();
             storage.try_reserve_exact(len).ok()?;
@@ -47,30 +51,30 @@ impl Wallpaper {
             width,
             height,
             len,
-            #[cfg(target_os = "none")]
+            #[cfg(any(target_os = "none", target_os = "sunlightos"))]
             ptr,
-            #[cfg(not(target_os = "none"))]
+            #[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
             storage,
         })
     }
 
     pub fn pixels(&self) -> &[u32] {
-        #[cfg(target_os = "none")]
+        #[cfg(any(target_os = "none", target_os = "sunlightos"))]
         // The mapping is owned by self and remains live until Drop.
         unsafe {
             core::slice::from_raw_parts(self.ptr.as_ptr(), self.len)
         }
-        #[cfg(not(target_os = "none"))]
+        #[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
         &self.storage[..self.len]
     }
 
     fn pixels_mut(&mut self) -> &mut [u32] {
-        #[cfg(target_os = "none")]
+        #[cfg(any(target_os = "none", target_os = "sunlightos"))]
         // Exclusive ownership of the retired/new buffer is required to fill it.
         unsafe {
             core::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len)
         }
-        #[cfg(not(target_os = "none"))]
+        #[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
         &mut self.storage[..self.len]
     }
 
@@ -111,7 +115,7 @@ impl Wallpaper {
     }
 }
 
-#[cfg(target_os = "none")]
+#[cfg(any(target_os = "none", target_os = "sunlightos"))]
 impl Drop for Wallpaper {
     fn drop(&mut self) {
         // Normal retirement and resize cleanup happen on the worker that mapped

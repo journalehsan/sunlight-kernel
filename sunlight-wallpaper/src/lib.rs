@@ -47,10 +47,9 @@ pub struct WallpaperEntry {
     /// Listed/source asset (e.g. a `.tga`, or a `.jpg`/`.png` that has a TGA sidecar).
     pub path: String,
     /// Path written to the desktop config and rendered by the shell.
-    /// Always a render-ready TGA (the desktop renderer is TGA-only); for a
-    /// `.jpg`/`.png` source this points at its converted `.tga` sidecar.
+    /// Always a render-ready `.simg`/`.tga` (Vortex loads via `decode_simg`).
     pub apply_path: String,
-    /// Path the settings preview loads. Always a TGA (preview is TGA-only).
+    /// Path the settings preview loads (same render-ready image formats).
     pub preview_path: String,
     pub label: String,
     pub source: WallpaperSource,
