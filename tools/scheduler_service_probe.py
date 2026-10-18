@@ -25,7 +25,7 @@ def function(name):
 
 
 fixture = (root / 'tools/tests/scheduler_service.rs').read_text()
-methods = ['schedule_tick', 'priority_preemption_candidate', 'start_charging_runtime',
+methods = ['schedule_tick', 'priority_preemption_candidate', 'retain_priority_request', 'start_charging_runtime',
            'stop_execution_clock', 'account_current_runtime', 'account_and_apply_churn_penalty',
            'queue_process_to_core', 'enqueue_process_to_core', 'set_state',
            'pick_next_round_robin']

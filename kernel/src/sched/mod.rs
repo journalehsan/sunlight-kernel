@@ -1625,6 +1625,20 @@ impl Scheduler {
         })
     }
 
+    /// A wake request can select one service while another remains Ready.
+    /// If FIFO later resumes a lower-priority turn, keep re-evaluation pending
+    /// for the next safe dispatch opportunity; the already-Ready task may not
+    /// publish another wake. Equal/lower peers never rearm a rotation.
+    fn retain_priority_request(&self, cpu_id: usize, selected: usize) {
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin
+            && self
+                .priority_preemption_candidate(cpu_id, selected)
+                .is_some()
+        {
+            request_reschedule_on(cpu_id);
+        }
+    }
+
     // ── Per-core dispatch ────────────────────────────────────────────────────
 
     /// Central per-core scheduling dispatch.
@@ -1675,6 +1689,7 @@ impl Scheduler {
                 }
                 crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
                 self.start_charging_runtime(next);
+                self.retain_priority_request(cpu_id, next);
                 return next_rsp;
             }
             unsafe {
@@ -1809,6 +1824,7 @@ impl Scheduler {
             self.reap_finished_processes();
 
             self.start_charging_runtime(next);
+            self.retain_priority_request(cpu_id, next);
             next_rsp
         } else {
             if current < self.processes.len()

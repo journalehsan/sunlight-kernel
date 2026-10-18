@@ -324,6 +324,49 @@ fn higher_priority_wake_wins_when_worker_slice_expires_same_tick() {
 }
 
 #[test]
+fn another_service_blocking_retains_request_for_already_ready_timer() {
+    let mut s = setup(4);
+    s.processes[2].nice = -10;
+    s.processes[3].nice = -5;
+    // The first wake picks an earlier high service; the timer is still Ready.
+    assert_eq!(dispatch(&mut s, 1_000_000), 3000);
+    s.processes[2].state = ProcessState::BlockedOnIpc;
+    assert_eq!(dispatch(&mut s, 10_000), 1000);
+    assert!(
+        REQUEST.load(Ordering::Acquire),
+        "Ready timer lost its request at service block"
+    );
+    // No synthetic request: exercise the one retained by production dispatch.
+    CLOCK.fetch_add(10_000_000, Ordering::Relaxed);
+    assert_eq!(s.schedule_tick(0, 1000), 4000);
+    assert_eq!(runtime(&s, 0), 11_000_000);
+    s.processes[3].state = ProcessState::BlockedOnIpc;
+    assert_eq!(dispatch(&mut s, 10_000), 1000);
+    assert_eq!(dispatch(&mut s, 169_000_000), 2000);
+    assert_eq!(runtime(&s, 0), 180_000_000);
+    assert_eq!(s.processes[0].burst_score, 336);
+    assert!(s.processes[0].slice_credit.is_none());
+}
+
+#[test]
+fn idle_dispatch_retains_request_when_fifo_selects_a_lower_priority_peer() {
+    let mut s = setup(3);
+    s.stop_execution_clock(0, false);
+    s.processes[0].state = ProcessState::BlockedOnIpc;
+    s.processes[0].owning_core = u8::MAX;
+    s.set_core_current_task(0, None);
+    s.processes[2].nice = -5;
+    assert_eq!(dispatch(&mut s, 1_000_000), 2000);
+    assert!(REQUEST.load(Ordering::Acquire));
+    CLOCK.fetch_add(10_000_000, Ordering::Relaxed);
+    assert_eq!(s.schedule_tick(0, 2000), 3000);
+    assert_eq!(runtime(&s, 1), 10_000_000);
+    assert!(s.processes[1].slice_credit.is_some());
+    assert_eq!(s.processes[1].burst_score, 304);
+    assert_eq!(queue(), [1]);
+}
+
+#[test]
 fn yield_sleep_wake_termination_discard_credit_and_reject_duplicate_enqueue() {
     let mut s = setup(3);
     s.processes[2].nice = -1;
