@@ -4,9 +4,7 @@
 mod calculator_state;
 
 use calculator_state::{ButtonAction, CalculatorState};
-use sun_font::{
-    self, draw_text_centered, draw_text_vcenter, measure_text, FontRole, TextStyle, VecFont,
-};
+use sun_font::{draw_text_centered, draw_text_vcenter, measure_text, FontRole, TextStyle, VecFont};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
@@ -29,14 +27,10 @@ const WIN_H: u32 = 350;
 const HEADER_H: u32 = 50;
 const DISPLAY_H: u32 = 46;
 
-const GRID_X: i32 = 15;
-const GRID_Y: i32 = 108;
-const BTN_W: u32 = 58;
-const BTN_H: u32 = 34;
-const GAP: u32 = 5;
-const BTN_ROWS: usize = 5;
 const BTN_COLS: usize = 5;
-const TOTAL_BTNS: usize = BTN_ROWS * BTN_COLS;
+const STANDARD_BTNS: usize = 25;
+const SCIENTIFIC_BTNS: usize = 30;
+const TOTAL_BTNS: usize = SCIENTIFIC_BTNS;
 
 // ── Custom button colors ───────────────────────────────────────────────────────
 
@@ -130,6 +124,11 @@ const BUTTON_FACES: [ButtonFace; TOTAL_BTNS] = [
     ButtonFace::Symbol(UiSymbol::PlusMinus),
     ButtonFace::Text("+"),
     ButtonFace::Text("="),
+    ButtonFace::Text("sin"),
+    ButtonFace::Text("cos"),
+    ButtonFace::Text("tan"),
+    ButtonFace::Text("x²"),
+    ButtonFace::Text("log"),
 ];
 
 const BUTTON_ACTIONS: [ButtonAction; TOTAL_BTNS] = [
@@ -158,6 +157,11 @@ const BUTTON_ACTIONS: [ButtonAction; TOTAL_BTNS] = [
     ButtonAction::Negate,
     ButtonAction::Add,
     ButtonAction::Equals,
+    ButtonAction::Sin,
+    ButtonAction::Cos,
+    ButtonAction::Tan,
+    ButtonAction::Square,
+    ButtonAction::Log10,
 ];
 
 const BUTTON_KINDS: [BtnKind; TOTAL_BTNS] = [
@@ -186,6 +190,11 @@ const BUTTON_KINDS: [BtnKind; TOTAL_BTNS] = [
     BtnKind::Negate,
     BtnKind::Operator,
     BtnKind::Equals,
+    BtnKind::Func,
+    BtnKind::Func,
+    BtnKind::Func,
+    BtnKind::Func,
+    BtnKind::Func,
 ];
 
 const KEY_ESC: u8 = 0x01;
@@ -196,6 +205,10 @@ struct CalcApp {
     state: CalculatorState,
     hovered_idx: Option<usize>,
     pressed_idx: Option<usize>,
+    scientific: bool,
+    menu_open: bool,
+    width: u32,
+    height: u32,
 }
 
 impl CalcApp {
@@ -204,23 +217,44 @@ impl CalcApp {
             state: CalculatorState::new(),
             hovered_idx: None,
             pressed_idx: None,
+            scientific: false,
+            menu_open: false,
+            width: WIN_W,
+            height: WIN_H,
         }
     }
 
-    fn btn_rect(idx: usize) -> Rect {
+    fn button_count(&self) -> usize {
+        if self.scientific {
+            SCIENTIFIC_BTNS
+        } else {
+            STANDARD_BTNS
+        }
+    }
+
+    fn btn_rect(&self, idx: usize) -> Rect {
         let row = idx / BTN_COLS;
         let col = idx % BTN_COLS;
+        let rows = self.button_count().div_ceil(BTN_COLS) as u32;
+        let side = 14u32;
+        let gap_x = 5u32;
+        let gap_y = 5u32;
+        let inner_w = self.width.saturating_sub(side * 2);
+        let btn_w = inner_w.saturating_sub(gap_x * (BTN_COLS as u32 - 1)) / BTN_COLS as u32;
+        let grid_y = 108u32;
+        let available_h = self.height.saturating_sub(grid_y + 12);
+        let btn_h = available_h.saturating_sub(gap_y * rows.saturating_sub(1)) / rows.max(1);
         Rect::new(
-            GRID_X + (col as i32) * (BTN_W + GAP) as i32,
-            GRID_Y as i32 + (row as i32) * (BTN_H + GAP) as i32,
-            BTN_W,
-            BTN_H,
+            (side + col as u32 * (btn_w + gap_x)) as i32,
+            (grid_y + row as u32 * (btn_h + gap_y)) as i32,
+            btn_w,
+            btn_h,
         )
     }
 
     fn hit_test(&self, x: i32, y: i32) -> Option<usize> {
-        for idx in 0..TOTAL_BTNS {
-            let rect = Self::btn_rect(idx);
+        for idx in 0..self.button_count() {
+            let rect = self.btn_rect(idx);
             if rect.contains(sunlight_ui::Point::new(x, y)) {
                 return Some(idx);
             }
@@ -228,8 +262,14 @@ impl CalcApp {
         None
     }
 
-    fn draw_button(canvas: &mut Canvas, idx: usize, hovered: bool, pressed: bool, theme: &Theme) {
-        let rect = Self::btn_rect(idx);
+    fn draw_button(
+        canvas: &mut Canvas,
+        rect: Rect,
+        idx: usize,
+        hovered: bool,
+        pressed: bool,
+        theme: &Theme,
+    ) {
         let kind = BUTTON_KINDS[idx];
         let face = BUTTON_FACES[idx];
 
@@ -313,8 +353,8 @@ impl CalcApp {
         }
     }
 
-    fn draw_header(canvas: &mut Canvas, theme: &Theme) {
-        let header = Rect::new(0, 0, WIN_W, HEADER_H);
+    fn draw_header(canvas: &mut Canvas, width: u32, theme: &Theme) {
+        let header = Rect::new(0, 0, width, HEADER_H);
         // Denser header over transparent WindowGlass root.
         canvas.fill_material(
             header,
@@ -335,24 +375,33 @@ impl CalcApp {
         .with_font(&F_SMALL)
         .draw(canvas, theme);
 
-        let sunlight_label = "SunlightOS";
-        let tw = measure_text(sunlight_label, FontRole::UiSmall).w;
-        let lh = sun_font::line_height(FontRole::UiSmall) as i32;
-        let pill_h = (lh + 6) as u32;
-        let pill_rect = Rect::new((WIN_W as i32) - (tw as i32) - 24, 4, tw + 14, pill_h);
-        canvas.fill_rounded_rect(pill_rect, 8, theme.chrome.card_bg);
-        draw_text_vcenter(
-            canvas,
-            sunlight_label,
-            pill_rect.x + 7,
-            pill_rect.y,
-            pill_rect.h,
-            &TextStyle::new(FontRole::UiSmall, theme.accent),
+        let menu = Self::menu_button_rect(width);
+        canvas.fill_rounded_rect_with_border(
+            menu,
+            7,
+            theme.chrome.card_bg,
+            theme.border.lighten(24),
+            1,
         );
+        for offset in [0, 5, 10] {
+            canvas.fill_rounded_rect(
+                Rect::new(menu.x + 8, menu.y + 7 + offset, menu.w - 16, 2),
+                1,
+                theme.text,
+            );
+        }
+    }
+
+    fn menu_button_rect(width: u32) -> Rect {
+        Rect::new(width.saturating_sub(48) as i32, 8, 36, 34)
+    }
+
+    fn menu_rect(width: u32) -> Rect {
+        Rect::new(width.saturating_sub(154) as i32, 46, 144, 76)
     }
 
     fn draw_display(canvas: &mut Canvas, app: &Self, theme: &Theme) {
-        let display_rect = Rect::new(10, 54, WIN_W - 20, DISPLAY_H);
+        let display_rect = Rect::new(10, 54, app.width.saturating_sub(20), DISPLAY_H);
         canvas.fill_rounded_rect_with_border(
             display_rect,
             DISPLAY_RADIUS,
@@ -397,15 +446,21 @@ impl CalcApp {
 
 impl App for CalcApp {
     fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        canvas.clear_transparent(Rect::new(0, 0, WIN_W, WIN_H));
+        self.width = canvas.width.max(220);
+        self.height = canvas.height.max(260);
+        canvas.clear_transparent(Rect::new(0, 0, canvas.width, canvas.height));
 
-        Self::draw_header(canvas, theme);
+        Self::draw_header(canvas, self.width, theme);
         Self::draw_display(canvas, self, theme);
 
-        for idx in 0..TOTAL_BTNS {
+        let button_count = self.button_count();
+        for idx in 0..button_count {
             let hovered = self.hovered_idx == Some(idx);
             let pressed = self.pressed_idx == Some(idx);
-            Self::draw_button(canvas, idx, hovered, pressed, theme);
+            Self::draw_button(canvas, self.btn_rect(idx), idx, hovered, pressed, theme);
+        }
+        if self.menu_open {
+            self.draw_menu(canvas, theme);
         }
     }
 
@@ -413,6 +468,21 @@ impl App for CalcApp {
         match event {
             Event::Click { x, y } => {
                 self.pressed_idx = None;
+                if Self::menu_button_rect(self.width).contains(sunlight_ui::Point::new(x, y)) {
+                    self.menu_open = !self.menu_open;
+                    return true;
+                }
+                if self.menu_open {
+                    let menu = Self::menu_rect(self.width);
+                    if menu.contains(sunlight_ui::Point::new(x, y)) {
+                        self.scientific = y >= menu.y + 38;
+                        self.menu_open = false;
+                        self.hovered_idx = None;
+                        return true;
+                    }
+                    self.menu_open = false;
+                    return true;
+                }
                 if let Some(idx) = self.hit_test(x, y) {
                     if let Some(&action) = BUTTON_ACTIONS.get(idx) {
                         self.state.handle_action(action);
@@ -446,6 +516,26 @@ impl App for CalcApp {
                 false
             }
             _ => false,
+        }
+    }
+}
+
+impl CalcApp {
+    fn draw_menu(&self, canvas: &mut Canvas, theme: &Theme) {
+        let menu = Self::menu_rect(self.width);
+        canvas.fill_rounded_rect_with_border(menu, 9, theme.panel, theme.border.lighten(32), 1);
+        let standard = Rect::new(menu.x + 5, menu.y + 5, menu.w - 10, 30);
+        let scientific = Rect::new(menu.x + 5, menu.y + 41, menu.w - 10, 30);
+        for (rect, label, selected) in [
+            (standard, "Standard", !self.scientific),
+            (scientific, "Scientific", self.scientific),
+        ] {
+            if selected {
+                canvas.fill_rounded_rect(rect, 6, theme.panel_alt);
+            }
+            Label::new(rect, label)
+                .with_font(&F_SMALL)
+                .draw(canvas, theme);
         }
     }
 }

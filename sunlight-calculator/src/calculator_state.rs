@@ -26,6 +26,11 @@ pub enum ButtonAction {
     Percent,
     Reciprocal,
     Negate,
+    Sin,
+    Cos,
+    Tan,
+    Square,
+    Log10,
 }
 
 pub struct CalculatorState {
@@ -86,6 +91,24 @@ impl CalculatorState {
             ButtonAction::Percent => self.handle_unary(|x| x / 100.0),
             ButtonAction::Reciprocal => self.handle_unary(|x| 1.0 / x),
             ButtonAction::Negate => self.negate(),
+            ButtonAction::Sin => self.handle_unary(|x| fsin(x)),
+            ButtonAction::Cos => self.handle_unary(|x| fcos(x)),
+            ButtonAction::Tan => self.handle_unary(|x| {
+                let c = fcos(x);
+                if c == 0.0 {
+                    f64::NAN
+                } else {
+                    fsin(x) / c
+                }
+            }),
+            ButtonAction::Square => self.handle_unary(|x| x * x),
+            ButtonAction::Log10 => self.handle_unary(|x| {
+                if x <= 0.0 {
+                    f64::NAN
+                } else {
+                    fln(x) / 2.302585092994046
+                }
+            }),
         }
     }
 
@@ -392,6 +415,50 @@ fn fsqrt(x: f64) -> f64 {
         guess = (guess + x / guess) * 0.5;
     }
     guess
+}
+
+fn fsin(mut x: f64) -> f64 {
+    const PI: f64 = 3.141592653589793;
+    const TAU: f64 = 6.283185307179586;
+    while x > PI {
+        x -= TAU;
+    }
+    while x < -PI {
+        x += TAU;
+    }
+    let x2 = x * x;
+    let mut term = x;
+    let mut sum = x;
+    for n in 1..9 {
+        term *= -x2 / ((2 * n * (2 * n + 1)) as f64);
+        sum += term;
+    }
+    sum
+}
+
+fn fcos(x: f64) -> f64 {
+    fsin(x + 1.5707963267948966)
+}
+
+fn fln(mut x: f64) -> f64 {
+    let mut scale = 0.0;
+    while x >= 2.0 {
+        x *= 0.5;
+        scale += 0.6931471805599453;
+    }
+    while x < 1.0 {
+        x *= 2.0;
+        scale -= 0.6931471805599453;
+    }
+    let y = (x - 1.0) / (x + 1.0);
+    let y2 = y * y;
+    let mut term = y;
+    let mut sum = 0.0;
+    for n in 0..20 {
+        sum += term / (2 * n + 1) as f64;
+        term *= y2;
+    }
+    scale + 2.0 * sum
 }
 
 fn fmt_f64(value: f64, buf: &mut [u8; DISPLAY_BUF_SIZE], len: &mut usize) {

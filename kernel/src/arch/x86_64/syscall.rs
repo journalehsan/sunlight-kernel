@@ -5221,6 +5221,29 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
     use sunlight_compat_linux::abi::{dirent64_reclen, DT_DIR, DT_REG};
     use sunlight_fs::vfs::FileType;
 
+    fn append_dirent(
+        packed: &mut alloc::vec::Vec<u8>,
+        count: usize,
+        name: &[u8],
+        dtype: u8,
+        ino: u64,
+        index: usize,
+    ) -> Result<(), bool> {
+        let reclen = dirent64_reclen(name.len());
+        if packed.len() + reclen > count {
+            return Err(packed.is_empty());
+        }
+        let start = packed.len();
+        packed.resize(start + reclen, 0);
+        packed[start..start + 8].copy_from_slice(&ino.to_le_bytes());
+        packed[start + 8..start + 16].copy_from_slice(&((index + 1) as i64).to_le_bytes());
+        packed[start + 16..start + 18].copy_from_slice(&(reclen as u16).to_le_bytes());
+        packed[start + 18] = dtype;
+        packed[start + 19..start + 19 + name.len()].copy_from_slice(name);
+        packed[start + 19 + name.len()] = 0;
+        Ok(())
+    }
+
     let fd = frame.rdi as i32;
     let dirp = frame.rsi;
     let count = frame.rdx as usize;
@@ -5247,15 +5270,19 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
         Err(error) => return error,
     };
     if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
-        let tid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
-        crate::serial_println!(
-            "[HELIOS-YAZI-DIRENT] getdents64 tid={} fd={} path={:?} count={} skip={}",
-            tid,
-            fd,
-            dir_path,
-            count,
-            skip
-        );
+        use core::sync::atomic::{AtomicUsize, Ordering};
+        static TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+        if TRACE_COUNT.fetch_add(1, Ordering::Relaxed) < 4 {
+            let tid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
+            crate::serial_println!(
+                "[HELIOS-YAZI-DIRENT] getdents64 tid={} fd={} path={:?} count={} skip={}",
+                tid,
+                fd,
+                dir_path,
+                count,
+                skip
+            );
+        }
     }
     {
         let mut guard = crate::KERNEL_VFS.lock();
@@ -5269,7 +5296,6 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
-    let mut names: alloc::vec::Vec<(alloc::vec::Vec<u8>, u8, u64)> = alloc::vec::Vec::new();
     let parent = if dir_path == "/" {
         dir_path.clone()
     } else {
@@ -5278,54 +5304,75 @@ fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {
             Some(idx) => alloc::string::String::from(&dir_path[..idx]),
         }
     };
-    names.push((b".".to_vec(), DT_DIR, synthetic_ino(&dir_path)));
-    names.push((b"..".to_vec(), DT_DIR, synthetic_ino(&parent)));
-    {
-        let mut guard = crate::KERNEL_VFS.lock();
-        let Some(vfs) = guard.as_mut() else {
-            return linux_errno(sunlight_compat_linux::abi::EIO as u64);
-        };
-        if let Err(error) = vfs.read_dir(&dir_path, &mut |entry| {
-            let dtype = match entry.file_type {
-                FileType::Directory => DT_DIR,
-                FileType::File => DT_REG,
-            };
-            let child = if dir_path == "/" {
-                alloc::format!("/{}", entry.name())
-            } else {
-                alloc::format!("{}/{}", dir_path, entry.name())
-            };
-            names.push((entry.name_bytes().to_vec(), dtype, synthetic_ino(&child)));
-            names.len() < 256
-        }) {
-            return linux_from_fs(error);
-        }
-    }
-
-    if skip >= names.len() {
-        return 0;
-    }
-
     let mut packed = alloc::vec::Vec::new();
     let mut consumed = 0usize;
-    for (index, (name, dtype, ino)) in names.iter().enumerate().skip(skip) {
-        let reclen = dirent64_reclen(name.len());
-        if packed.len() + reclen > count {
-            if packed.is_empty() {
-                return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    let mut buffer_too_small = false;
+    for (index, (name, path)) in [
+        (b".".as_slice(), dir_path.as_str()),
+        (b"..", parent.as_str()),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if index >= skip {
+            match append_dirent(&mut packed, count, name, DT_DIR, synthetic_ino(path), index) {
+                Ok(()) => consumed += 1,
+                Err(empty) => {
+                    buffer_too_small = empty;
+                    break;
+                }
             }
-            break;
         }
-        let start = packed.len();
-        packed.resize(start + reclen, 0);
-        packed[start..start + 8].copy_from_slice(&ino.to_le_bytes());
-        let next_off = (index + 1) as i64;
-        packed[start + 8..start + 16].copy_from_slice(&next_off.to_le_bytes());
-        packed[start + 16..start + 18].copy_from_slice(&(reclen as u16).to_le_bytes());
-        packed[start + 18] = *dtype;
-        packed[start + 19..start + 19 + name.len()].copy_from_slice(name);
-        packed[start + 19 + name.len()] = 0;
-        consumed += 1;
+    }
+    if packed.len() < count && !buffer_too_small {
+        let mut index = 2usize;
+        {
+            let mut guard = crate::KERNEL_VFS.lock();
+            let Some(vfs) = guard.as_mut() else {
+                return linux_errno(sunlight_compat_linux::abi::EIO as u64);
+            };
+            if let Err(error) = vfs.read_dir(&dir_path, &mut |entry| {
+                let entry_index = index;
+                index += 1;
+                if entry_index < skip {
+                    return true;
+                }
+                let dtype = match entry.file_type {
+                    FileType::Directory => DT_DIR,
+                    FileType::File => DT_REG,
+                };
+                let child = if dir_path == "/" {
+                    alloc::format!("/{}", entry.name())
+                } else {
+                    alloc::format!("{}/{}", dir_path, entry.name())
+                };
+                match append_dirent(
+                    &mut packed,
+                    count,
+                    entry.name_bytes(),
+                    dtype,
+                    synthetic_ino(&child),
+                    entry_index,
+                ) {
+                    Ok(()) => {
+                        consumed += 1;
+                        packed.len() < count
+                    }
+                    Err(empty) => {
+                        buffer_too_small = empty;
+                        false
+                    }
+                }
+            }) {
+                return linux_from_fs(error);
+            }
+        }
+    }
+    if buffer_too_small {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    if packed.is_empty() {
+        return 0;
     }
 
     if crate::memory::user::copy_to_current(dirp, &packed).is_err() {
