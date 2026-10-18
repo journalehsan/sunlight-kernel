@@ -17,8 +17,8 @@
 //!
 //! Icons: SunlightOS icon theme (Breeze-inspired, TGA format).
 
-#![cfg_attr(not(test), no_std)]
-#![cfg_attr(not(test), no_main)]
+#![cfg_attr(all(not(test), not(feature = "native-svg")), no_std)]
+#![cfg_attr(all(not(test), not(feature = "native-svg")), no_main)]
 
 extern crate alloc;
 
@@ -48,7 +48,7 @@ use sunlight_ipc::{
 };
 use sunlight_libc::{crt0, sun_exec::ControlPanelPage};
 use sunlight_ui::{
-    image::{decode_simg, draw_mono_icon, MonoIcon, RgbaImage, TgaImage},
+    image::{decode_simg, draw_mono_icon, MonoIcon, RgbaImage, IconImage},
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, Slider},
     App, AxisSizing, Canvas, Color, Column, Event, HBox, LayoutBox, LayoutInvalidation,
@@ -72,18 +72,18 @@ use sysinfo::{FixedStr, SystemInfoSnapshot};
 // Icon theme assets (embedded at compile time)
 // ---------------------------------------------------------------------------
 
-static ICON_MOUSE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/input-mouse.tga");
-static ICON_MONITOR_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/video-display.tga");
-static ICON_WALLPAPER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-desktop-wallpaper.tga");
-static ICON_SETTINGS_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
-static ICON_COMPUTER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/computer.tga");
-static ICON_ABOUT_OS_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
+static ICON_MOUSE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/input-mouse.svg");
+static ICON_MONITOR_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/video-display.svg");
+static ICON_WALLPAPER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-desktop-wallpaper.svg");
+static ICON_SETTINGS_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.svg");
+static ICON_COMPUTER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/computer.svg");
+static ICON_ABOUT_OS_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.svg");
 static ICON_PREFS_MONO_RAW: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/preferences-symbolic.raw"));
 static ICON_SYM_DND_ON_TGA: &[u8] =
@@ -94,17 +94,17 @@ static ICON_SYM_NOTIFICATIONS_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/notifications.tga"));
 static ICON_SUNLIGHT_LOGO_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icons/sunlightos-logo.tga"));
-static ICON_NETWORK_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/network-card.tga");
-static ICON_POWER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/battery.tga");
-static ICON_DATETIME_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system-time.tga");
-static ICON_SESSION_TGA: &[u8] = include_bytes!(
-    "../../../docs/icons/SunlightOS/apps/48/preferences-system-session-services.tga"
+static ICON_NETWORK_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/network-card.svg");
+static ICON_POWER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/battery.svg");
+static ICON_DATETIME_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system-time.svg");
+static ICON_SESSION_SVG: &[u8] = include_bytes!(
+    "../../../docs/icons/SunlightOS/apps/48/preferences-system-session-services.svg"
 );
-static ICON_SOUND_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/audio-card.tga");
+static ICON_SOUND_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/audio-card.svg");
 
 const ICON_PREFS_MONO: MonoIcon<'static> = MonoIcon::new(16, 16, ICON_PREFS_MONO_RAW);
 
@@ -362,21 +362,21 @@ struct ControlPanelApp {
     wallpaper_status: [u8; 96],
     wallpaper_status_len: usize,
     /// TGA icon for the Mouse settings card / page.
-    icon_mouse: Option<TgaImage>,
+    icon_mouse: Option<IconImage>,
     /// TGA icon for the Monitor settings card / page.
-    icon_monitor: Option<TgaImage>,
-    icon_wallpaper: Option<TgaImage>,
-    icon_notifications: Option<TgaImage>,
-    icon_dnd_on: Option<TgaImage>,
-    icon_dnd: Option<TgaImage>,
-    icon_computer: Option<TgaImage>,
-    icon_about_os: Option<TgaImage>,
-    icon_logo: Option<TgaImage>,
-    icon_network: Option<TgaImage>,
-    icon_power: Option<TgaImage>,
-    icon_datetime: Option<TgaImage>,
-    icon_session: Option<TgaImage>,
-    icon_sound: Option<TgaImage>,
+    icon_monitor: Option<IconImage>,
+    icon_wallpaper: Option<IconImage>,
+    icon_notifications: Option<IconImage>,
+    icon_dnd_on: Option<IconImage>,
+    icon_dnd: Option<IconImage>,
+    icon_computer: Option<IconImage>,
+    icon_about_os: Option<IconImage>,
+    icon_logo: Option<IconImage>,
+    icon_network: Option<IconImage>,
+    icon_power: Option<IconImage>,
+    icon_datetime: Option<IconImage>,
+    icon_session: Option<IconImage>,
+    icon_sound: Option<IconImage>,
     wallpaper_items: Vec<WallpaperEntry>,
     wallpaper_config: DesktopConfig,
     wallpaper_selected: usize,
@@ -444,20 +444,20 @@ impl ControlPanelApp {
             status_len: 0,
             wallpaper_status: [0u8; 96],
             wallpaper_status_len: 0,
-            icon_mouse: TgaImage::parse(ICON_MOUSE_TGA).ok(),
-            icon_monitor: TgaImage::parse(ICON_MONITOR_TGA).ok(),
-            icon_wallpaper: TgaImage::parse(ICON_WALLPAPER_TGA).ok(),
-            icon_notifications: TgaImage::parse(ICON_SYM_NOTIFICATIONS_TGA).ok(),
-            icon_dnd_on: TgaImage::parse(ICON_SYM_DND_ON_TGA).ok(),
-            icon_dnd: TgaImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
-            icon_computer: TgaImage::parse(ICON_COMPUTER_TGA).ok(),
-            icon_about_os: TgaImage::parse(ICON_ABOUT_OS_TGA).ok(),
-            icon_logo: TgaImage::parse(ICON_SUNLIGHT_LOGO_TGA).ok(),
-            icon_network: TgaImage::parse(ICON_NETWORK_TGA).ok(),
-            icon_power: TgaImage::parse(ICON_POWER_TGA).ok(),
-            icon_datetime: TgaImage::parse(ICON_DATETIME_TGA).ok(),
-            icon_session: TgaImage::parse(ICON_SESSION_TGA).ok(),
-            icon_sound: TgaImage::parse(ICON_SOUND_TGA).ok(),
+            icon_mouse: IconImage::parse(ICON_MOUSE_SVG).ok(),
+            icon_monitor: IconImage::parse(ICON_MONITOR_SVG).ok(),
+            icon_wallpaper: IconImage::parse(ICON_WALLPAPER_SVG).ok(),
+            icon_notifications: IconImage::parse(ICON_SYM_NOTIFICATIONS_TGA).ok(),
+            icon_dnd_on: IconImage::parse(ICON_SYM_DND_ON_TGA).ok(),
+            icon_dnd: IconImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
+            icon_computer: IconImage::parse(ICON_COMPUTER_SVG).ok(),
+            icon_about_os: IconImage::parse(ICON_ABOUT_OS_SVG).ok(),
+            icon_logo: IconImage::parse(ICON_SUNLIGHT_LOGO_TGA).ok(),
+            icon_network: IconImage::parse(ICON_NETWORK_SVG).ok(),
+            icon_power: IconImage::parse(ICON_POWER_SVG).ok(),
+            icon_datetime: IconImage::parse(ICON_DATETIME_SVG).ok(),
+            icon_session: IconImage::parse(ICON_SESSION_SVG).ok(),
+            icon_sound: IconImage::parse(ICON_SOUND_SVG).ok(),
             wallpaper_items,
             wallpaper_config,
             wallpaper_selected,
@@ -821,7 +821,7 @@ impl ControlPanelApp {
         icon_color: Color,
         label: &str,
         sublabel: &str,
-        tga_icon: Option<TgaImage>,
+        tga_icon: Option<IconImage>,
     ) {
         canvas.fill_material(
             rect,
@@ -840,7 +840,7 @@ impl ControlPanelApp {
 
         if let Some(tga) = tga_icon {
             // Rounded application icon (AA corner clip + bilinear when scaled).
-            canvas.draw_tga_icon_rounded(&tga, icon_rect, 9);
+            canvas.draw_icon_rounded(&tga, icon_rect, 9);
         } else {
             // Fallback: solid color square + inner highlight.
             canvas.fill_rect(icon_rect, icon_color);
@@ -885,8 +885,8 @@ impl ControlPanelApp {
         );
 
         // Header: settings icon + title
-        if let Ok(tga) = TgaImage::parse(ICON_SETTINGS_TGA) {
-            canvas.draw_tga_icon(&tga, Rect::new(8, 6, 32, 32));
+        if let Ok(tga) = IconImage::parse(ICON_SETTINGS_SVG) {
+            canvas.draw_icon(&tga, Rect::new(8, 6, 32, 32));
         }
         let _ = draw_mono_icon(
             canvas,
@@ -1274,7 +1274,7 @@ impl ControlPanelApp {
         );
         let dnd = notification_dnd_enabled();
         if let Some(icon) = self.icon_notifications {
-            canvas.draw_tga_icon_tinted(&icon, Rect::new(28, 56, 20, 20), theme.accent);
+            canvas.draw_icon_tinted(&icon, Rect::new(28, 56, 20, 20), theme.accent);
         }
         Self::draw_label(
             canvas,
@@ -1285,7 +1285,7 @@ impl ControlPanelApp {
         );
         let dnd_icon = if dnd { self.icon_dnd_on } else { self.icon_dnd };
         if let Some(icon) = dnd_icon {
-            canvas.draw_tga_icon_tinted(
+            canvas.draw_icon_tinted(
                 &icon,
                 Rect::new(28, 86, 20, 20),
                 if dnd { theme.warn } else { theme.icon_muted },
@@ -2194,6 +2194,7 @@ fn fit_image_rect(img_w: u32, img_h: u32, bounds: Rect) -> Rect {
 }
 
 #[cfg(not(test))]
+#[cfg(not(feature = "native-svg"))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     debug_log("[CONTROL-PANEL] panic\n");
@@ -2207,8 +2208,7 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 // ---------------------------------------------------------------------------
 
 #[cfg(not(test))]
-#[no_mangle]
-pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
+fn application_main(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(argc, argv);
     let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
     launch_trace::log_phase_now(
@@ -2377,4 +2377,10 @@ mod tests {
             ControlPanelApp::compute_layout(bounds)
         );
     }
+}
+
+#[cfg(all(not(test), feature = "native-svg", target_os = "sunlightos"))]
+fn main() {
+    let (argc, argv, envp) = sunlight_libc::std_runtime::startup_args();
+    application_main(argc, argv, envp);
 }

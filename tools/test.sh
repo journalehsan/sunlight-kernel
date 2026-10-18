@@ -624,14 +624,14 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-open --release >>"$BUIL
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release >>"$BUILD_LOG" 2>&1
+bash tools/build_svg_apps.sh -p sunlight-vortex-shell >>"$BUILD_LOG" 2>&1
 if [[ "$PHASE" != "mm2b" && "$PHASE" != "mm2d" && "$PHASE" != "swap1" ]]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release >>"$BUILD_LOG" 2>&1
 fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-widget-gallery --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release >>"$BUILD_LOG" 2>&1
+bash tools/build_svg_apps.sh -p sunlight-files >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package melody-mina --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-voice-recorder --release >>"$BUILD_LOG" 2>&1
@@ -642,8 +642,8 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --releas
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-devices --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --features dom --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dialogd --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-control-panel --release >>"$BUILD_LOG" 2>&1
+bash tools/build_svg_apps.sh -p sunlight-dialogd >>"$BUILD_LOG" 2>&1
+bash tools/build_svg_apps.sh -p sunlight-control-panel >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release >>"$BUILD_LOG" 2>&1

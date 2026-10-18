@@ -1698,16 +1698,20 @@ impl Scheduler {
         if SCHEDULER_MODE == SchedulerMode::RoundRobin
             && self.processes[current].state == ProcessState::Running
             && self.processes[current].cpu_mask & (1u64 << cpu_id) != 0
-            && !CORE_STATES[cpu_id]
+        {
+            let slice_expired = CORE_STATES[cpu_id]
                 .lock()
                 .slice
-                .expired(now_ns(), crate::arch::x86_64::interrupts::tsc_hz() != 0)
-        {
+                .expired(now_ns(), crate::arch::x86_64::interrupts::tsc_hz() != 0);
             priority_next = self.priority_preemption_candidate(cpu_id, current);
-            if priority_next.is_none() {
+            if priority_next.is_none() && !slice_expired {
                 return 0;
             }
-            preserve_turn = true;
+            // An unexpired turn keeps its residual entitlement.  If the
+            // wake coincides with expiration, retire the old turn normally
+            // but still dispatch the higher-priority Ready service now; the
+            // consumed request must not strand an already-runnable service.
+            preserve_turn = priority_next.is_some() && !slice_expired;
         }
         // Ownership can be published before Rust returns, but this physical
         // stack remains in use until the naked epilogue releases the pin.

@@ -983,7 +983,7 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/Applications/VoiceRecorder.sunapp", 0, 0, mode::DIR_755),
     RamEntry::dir("/Applications/VoiceRecorder.sunapp/Resources", 0, 0, mode::DIR_755),
     RamEntry::file("/Applications/VoiceRecorder.sunapp/Manifest.toml", 0, 0, mode::FILE_644, include_bytes!("../../VoiceRecorder.sunapp/Manifest.toml")),
-    RamEntry::file("/Applications/VoiceRecorder.sunapp/Resources/icon.tga", 0, 0, mode::FILE_644, include_bytes!("../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga")),
+    RamEntry::file("/Applications/VoiceRecorder.sunapp/Resources/icon.svg", 0, 0, mode::FILE_644, include_bytes!("../../docs/icons/SunlightOS/devices/16/audio-input-microphone.svg")),
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),
     RamEntry::dir("/state", 0, 0, mode::DIR_755),
@@ -1037,7 +1037,7 @@ pub static INITRAMFS: &[RamEntry] = &[
     // SunlightOS icon theme directory structure.
     // Icons are embedded directly in service binaries (same approach as the wallpaper).
     // This directory tree is provided so future VFS-based icon loading works at:
-    //   /var/sunlightos/icons/SunlightOS/{category}/{size}/{name}.tga
+    //   /var/sunlightos/icons/SunlightOS/{category}/{size}/{name}.svg
     RamEntry::dir("/var/sunlightos/icons", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos/icons/SunlightOS", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos/icons/SunlightOS/apps", 0, 0, mode::DIR_755),
@@ -1069,25 +1069,25 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::dir("/var/sunlightos/icons/SunlightOS/preferences/32", 0, 0, mode::DIR_755),
     RamEntry::dir("/var/sunlightos/icons/SunlightOS/preferences/16", 0, 0, mode::DIR_755),
     RamEntry::file(
-        "/var/sunlightos/icons/SunlightOS/apps/48/sunlight-runner.tga",
+        "/var/sunlightos/icons/SunlightOS/apps/48/sunlight-runner.svg",
         0,
         0,
         mode::FILE_644,
-        include_bytes!("../../docs/icons/SunlightOS/apps/48/system-run.tga"),
+        include_bytes!("../../docs/icons/SunlightOS/apps/48/system-run.svg"),
     ),
     RamEntry::file(
-        "/var/sunlightos/icons/SunlightOS/apps/48/runner.tga",
+        "/var/sunlightos/icons/SunlightOS/apps/48/runner.svg",
         0,
         0,
         mode::FILE_644,
-        include_bytes!("../../docs/icons/SunlightOS/apps/48/system-run.tga"),
+        include_bytes!("../../docs/icons/SunlightOS/apps/48/system-run.svg"),
     ),
     RamEntry::file(
-        "/var/sunlightos/icons/SunlightOS/apps/48/generic-app.tga",
+        "/var/sunlightos/icons/SunlightOS/apps/48/generic-app.svg",
         0,
         0,
         mode::FILE_644,
-        include_bytes!("../../docs/icons/SunlightOS/apps/48/applications-system.tga"),
+        include_bytes!("../../docs/icons/SunlightOS/apps/48/applications-system.svg"),
     ),
     // Desktop wallpapers as SIMG v2 (sub+lz4). Default desktop.toml points at
     // wallpaper.simg so Vortex loads an image on first boot. See docs/SIMG_V2.md.

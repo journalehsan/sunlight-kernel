@@ -78,18 +78,35 @@ impl Worker {
     }
 }
 
+#[derive(Clone, Copy)]
 struct Service {
+    pid: u64,
+    baseline: u64,
+    cpu_ns: u64,
     ready_since: Option<u64>,
     waits: [u64; MAX_WAITS],
     count: usize,
     overflow: bool,
+    ready_count: u64,
+    dispatches: u64,
+    deadline_count: u64,
+    deadline_late_ns: u64,
+    deadline_max_ns: u64,
 }
 impl Service {
     const ZERO: Self = Self {
+        pid: 0,
+        baseline: 0,
+        cpu_ns: 0,
         ready_since: None,
         waits: [0; MAX_WAITS],
         count: 0,
         overflow: false,
+        ready_count: 0,
+        dispatches: 0,
+        deadline_count: 0,
+        deadline_late_ns: 0,
+        deadline_max_ns: 0,
     };
 }
 
@@ -97,6 +114,7 @@ struct State {
     services: [Service; 2],
     workers: [Worker; N],
     start: u64,
+    start_tick: u64,
     run: u64,
 }
 struct Protected(UnsafeCell<State>);
@@ -106,6 +124,7 @@ static STATE: Protected = Protected(UnsafeCell::new(State {
     services: [Service::ZERO, Service::ZERO],
     workers: [Worker::ZERO; N],
     start: 0,
+    start_tick: 0,
     run: 0,
 }));
 
@@ -120,7 +139,29 @@ pub fn service_ready(name: &str, now: u64) {
         "tty_server" => 1,
         _ => return,
     };
-    state.services[slot].ready_since.get_or_insert(now);
+    let service = &mut state.services[slot];
+    service.ready_count = service.ready_count.saturating_add(1);
+    service.ready_since.get_or_insert(now);
+}
+
+/// Record the BSP timer deadline observation against the calibrated clock.
+/// The expected timestamp is relative to the benchmark start tick, so this
+/// separates timer/TCG delivery lateness from Ready-to-dispatch residence.
+pub fn timer_deadline(global_tick: u64, now: u64) {
+    let state = unsafe { &mut *STATE.0.get() };
+    if state.start == 0 {
+        return;
+    }
+    let service = &mut state.services[0];
+    let expected = state.start.saturating_add(
+        global_tick
+            .saturating_sub(state.start_tick)
+            .saturating_mul(10_000_000),
+    );
+    let late = now.saturating_sub(expected);
+    service.deadline_count = service.deadline_count.saturating_add(1);
+    service.deadline_late_ns = service.deadline_late_ns.saturating_add(late);
+    service.deadline_max_ns = service.deadline_max_ns.max(late);
 }
 
 /// Call only while holding SCHEDULER, immediately after schedule_tick. A
@@ -143,6 +184,7 @@ pub fn observe(sched: &Scheduler, outgoing: Option<usize>, result: u64, reason: 
             };
             if let Some(slot) = slot {
                 let service = &mut state.services[slot];
+                service.dispatches = service.dispatches.saturating_add(1);
                 if let Some(ready) = service.ready_since.take() {
                     if service.count < MAX_WAITS {
                         service.waits[service.count] = now.saturating_sub(ready);
@@ -222,9 +264,17 @@ pub fn syscall(action: u64, value: u64) -> u64 {
                 core::ptr::write_bytes(state.workers.as_mut_ptr(), 0, N);
             }
             for service in &mut state.services {
+                service.pid = 0;
+                service.baseline = 0;
+                service.cpu_ns = 0;
                 service.ready_since = None;
                 service.count = 0;
                 service.overflow = false;
+                service.ready_count = 0;
+                service.dispatches = 0;
+                service.deadline_count = 0;
+                service.deadline_late_ns = 0;
+                service.deadline_max_ns = 0;
             }
             state.start = 0;
         }
@@ -242,7 +292,15 @@ pub fn syscall(action: u64, value: u64) -> u64 {
                 return u64::MAX;
             }
             state.start = now;
+            state.start_tick = sched.global_tick;
             state.run = value;
+            for (slot, service) in state.services.iter_mut().enumerate() {
+                let name = ["timer_server", "tty_server"][slot];
+                if let Some(idx) = sched.processes.iter().position(|p| p.name_str() == name) {
+                    service.pid = sched.processes[idx].pid as u64;
+                    service.baseline = sched.effective_runtime_at(idx, now);
+                }
+            }
             for w in &mut state.workers {
                 let Some(idx) = sched.processes.iter().position(|p| p.pid == w.pid) else {
                     return u64::MAX;
@@ -283,11 +341,18 @@ pub fn syscall(action: u64, value: u64) -> u64 {
             // storage, keeping the IRQ/syscall stack independent of trace size.
             let workers = state.workers.to_vec();
             let start = state.start;
-            let services: alloc::vec::Vec<_> = state
-                .services
-                .iter()
-                .map(|s| (s.waits[..s.count].to_vec(), s.overflow))
-                .collect();
+            let mut services = state.services;
+            for service in &mut services {
+                if let Some(idx) = sched
+                    .processes
+                    .iter()
+                    .position(|p| p.pid == service.pid as usize)
+                {
+                    service.cpu_ns = sched
+                        .effective_runtime_at(idx, now)
+                        .saturating_sub(service.baseline);
+                }
+            }
             let reaped = core::array::from_fn::<_, N, _>(|slot| {
                 let w = &workers[slot];
                 sched
@@ -298,9 +363,9 @@ pub fn syscall(action: u64, value: u64) -> u64 {
                     .unwrap_or(true)
             });
             drop(sched);
-            for (slot, (waits, overflow)) in services.iter().enumerate() {
+            for (slot, service) in services.iter().enumerate() {
                 let name = ["timer_server", "tty_server"][slot];
-                crate::serial_println!("[SCHED-BENCH] SERVICE {{\"run\":\"1-{}-1\",\"name\":\"{}\",\"overflow\":{},\"waits_ns\":{:?}}}", value, name, overflow, waits);
+                crate::serial_println!("[SCHED-BENCH] SERVICE {{\"run\":\"1-{}-1\",\"name\":\"{}\",\"pid\":{},\"cpu_ns\":{},\"ready_count\":{},\"dispatches\":{},\"deadline_count\":{},\"deadline_late_ns\":{},\"deadline_max_ns\":{},\"overflow\":{},\"waits_ns\":{:?}}}", value, name, service.pid, service.cpu_ns, service.ready_count, service.dispatches, service.deadline_count, service.deadline_late_ns, service.deadline_max_ns, service.overflow, &service.waits[..service.count]);
             }
             for (slot, w) in workers.iter().enumerate() {
                 crate::serial_println!("[SCHED-BENCH] WORKER {{\"run\":\"1-{}-1\",\"slot\":{},\"pid\":{},\"cpu_ns\":{},\"dispatches\":{},\"wait_ns\":{},\"wait_max_ns\":{},\"wait_count\":{},\"wait_overflow\":{},\"first_ns\":{},\"finish_ns\":{},\"burst_start\":{},\"burst_end\":{},\"nice\":{},\"mask\":{},\"invalid_observations\":{},\"reaped\":{}}}",

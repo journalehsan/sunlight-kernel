@@ -11,7 +11,7 @@
 //! search scope, and documented limitations.
 
 use sun_font::{draw_text_centered, draw_text_vcenter, measure_text, FontRole, TextStyle};
-use sunlight_ui::{image::TgaImage, Canvas, Event, Point, Rect, Theme};
+use sunlight_ui::{image::IconImage, Canvas, Event, Point, Rect, Theme};
 
 use crate::{AppId, AppLaunchState, DockAppState, BOT_H, BOT_Y_OFF, TOP_H, TOP_PAD, TOP_Y};
 
@@ -22,63 +22,63 @@ use crate::{AppId, AppLaunchState, DockAppState, BOT_H, BOT_Y_OFF, TOP_H, TOP_PA
 // icons for the apps/placeholders that have none today.
 // ---------------------------------------------------------------------------
 
-static ICON_TERMINAL_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/utilities-terminal.tga");
-static ICON_SETTINGS_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
-static ICON_FILES_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/org.kde.dolphin.tga");
-static ICON_CALC_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/galculator.tga");
-static ICON_TASKS_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
-static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
-static ICON_TEXT_EDITOR_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
-static ICON_WRITER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.tga");
-static ICON_CALENDAR_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/org.kde.merkuro.calendar.tga");
-static ICON_DEVICES_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/hwinfo.tga");
-static ICON_RABBIT_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
-static ICON_API_LAB_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.tga");
-static ICON_MINES_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/bomber.tga");
-static ICON_SILICON_ECHOES_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
-static ICON_WELCOME_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
+static ICON_TERMINAL_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/utilities-terminal.svg");
+static ICON_SETTINGS_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.svg");
+static ICON_FILES_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/org.kde.dolphin.svg");
+static ICON_CALC_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/galculator.svg");
+static ICON_TASKS_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.svg");
+static ICON_BENCH_SVG: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.svg");
+static ICON_TEXT_EDITOR_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.svg");
+static ICON_WRITER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.svg");
+static ICON_CALENDAR_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/org.kde.merkuro.calendar.svg");
+static ICON_DEVICES_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/hwinfo.svg");
+static ICON_RABBIT_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.svg");
+static ICON_API_LAB_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.svg");
+static ICON_MINES_SVG: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/bomber.svg");
+static ICON_SILICON_ECHOES_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.svg");
+static ICON_WELCOME_SVG: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.svg");
 static ICON_WISEOWL_TGA: &[u8] = include_bytes!("../../../WiseOwl.sunapp/Resources/icon.tga");
-static ICON_VOICE_RECORDER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
-static ICON_MELODY_MINA_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
-static ICON_DOCUMENT_VIEWER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/mupdf.tga");
+static ICON_VOICE_RECORDER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.svg");
+static ICON_MELODY_MINA_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.svg");
+static ICON_DOCUMENT_VIEWER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/mupdf.svg");
 
-static ICON_SEARCH_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.tga");
-static ICON_LOCK_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/16/system-lock-screen-symbolic.tga");
-static ICON_SLEEP_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/32/system-suspend-symbolic.tga");
-static ICON_RESTART_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/16/system-reboot-symbolic.tga");
-static ICON_SHUTDOWN_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/16/system-shutdown-symbolic.tga");
+static ICON_SEARCH_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/edit-find-symbolic.svg");
+static ICON_LOCK_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/system-lock-screen-symbolic.svg");
+static ICON_SLEEP_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/32/system-suspend-symbolic.svg");
+static ICON_RESTART_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/system-reboot-symbolic.svg");
+static ICON_SHUTDOWN_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/system-shutdown-symbolic.svg");
 
-fn icon(bytes: &'static [u8]) -> Option<TgaImage> {
-    TgaImage::parse(bytes).ok()
+fn icon(bytes: &'static [u8]) -> Option<IconImage> {
+    IconImage::parse(bytes).ok()
 }
 
 const APP_CATALOG_LEN: usize = 20;
 
 #[derive(Clone, Copy)]
 struct StartMenuIcons {
-    search: Option<TgaImage>,
-    power: [Option<TgaImage>; POWER_CAP],
-    apps: [Option<TgaImage>; APP_CATALOG_LEN],
+    search: Option<IconImage>,
+    power: [Option<IconImage>; POWER_CAP],
+    apps: [Option<IconImage>; APP_CATALOG_LEN],
 }
 
 impl StartMenuIcons {
@@ -90,25 +90,25 @@ impl StartMenuIcons {
             i += 1;
         }
         Self {
-            search: icon(ICON_SEARCH_TGA),
+            search: icon(ICON_SEARCH_SVG),
             power: [
-                icon(ICON_LOCK_TGA),
-                icon(ICON_SLEEP_TGA),
-                icon(ICON_RESTART_TGA),
-                icon(ICON_SHUTDOWN_TGA),
+                icon(ICON_LOCK_SVG),
+                icon(ICON_SLEEP_SVG),
+                icon(ICON_RESTART_SVG),
+                icon(ICON_SHUTDOWN_SVG),
             ],
             apps,
         }
     }
 
-    fn app_icon(&self, entry: &AppCatalogEntry) -> Option<TgaImage> {
+    fn app_icon(&self, entry: &AppCatalogEntry) -> Option<IconImage> {
         APP_CATALOG
             .iter()
             .position(|candidate| core::ptr::eq(candidate, entry))
             .and_then(|idx| self.apps[idx])
     }
 
-    fn power_icon(&self, action: PowerAction) -> Option<TgaImage> {
+    fn power_icon(&self, action: PowerAction) -> Option<IconImage> {
         let idx = match action {
             PowerAction::Lock => 0,
             PowerAction::Sleep => 1,
@@ -146,119 +146,119 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         id: CatalogId::App(AppId::VoiceRecorder),
         name: "Voice Recorder",
         category: "Multimedia",
-        icon_bytes: Some(ICON_VOICE_RECORDER_TGA),
+        icon_bytes: Some(ICON_VOICE_RECORDER_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Terminal),
         name: "Terminal",
         category: "Utilities",
-        icon_bytes: Some(ICON_TERMINAL_TGA),
+        icon_bytes: Some(ICON_TERMINAL_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Chronos),
         name: "Sunlight DOS Terminal",
         category: "Compatibility",
-        icon_bytes: Some(ICON_TERMINAL_TGA),
+        icon_bytes: Some(ICON_TERMINAL_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Files),
         name: "Files",
         category: "System",
-        icon_bytes: Some(ICON_FILES_TGA),
+        icon_bytes: Some(ICON_FILES_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Calculator),
         name: "Calculator",
         category: "Utilities",
-        icon_bytes: Some(ICON_CALC_TGA),
+        icon_bytes: Some(ICON_CALC_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Settings),
         name: "Settings",
         category: "System",
-        icon_bytes: Some(ICON_SETTINGS_TGA),
+        icon_bytes: Some(ICON_SETTINGS_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Tasks),
         name: "Task Manager",
         category: "System",
-        icon_bytes: Some(ICON_TASKS_TGA),
+        icon_bytes: Some(ICON_TASKS_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Bench),
         name: "Sunlight Bench",
         category: "Utilities",
-        icon_bytes: Some(ICON_BENCH_TGA),
+        icon_bytes: Some(ICON_BENCH_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Calendar),
         name: "Sunlight Calendar",
         category: "Productivity",
-        icon_bytes: Some(ICON_CALENDAR_TGA),
+        icon_bytes: Some(ICON_CALENDAR_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Devices),
         name: "Sunlight Devices",
         category: "System",
-        icon_bytes: Some(ICON_DEVICES_TGA),
+        icon_bytes: Some(ICON_DEVICES_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Writer),
         name: "Sunlight Writer",
         category: "Productivity",
-        icon_bytes: Some(ICON_WRITER_TGA),
+        icon_bytes: Some(ICON_WRITER_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::TextEditor),
         name: "Text Editor",
         category: "Productivity",
-        icon_bytes: Some(ICON_TEXT_EDITOR_TGA),
+        icon_bytes: Some(ICON_TEXT_EDITOR_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::RappidRabbit),
         name: "Rappid Rabbit",
         category: "Network",
-        icon_bytes: Some(ICON_RABBIT_TGA),
+        icon_bytes: Some(ICON_RABBIT_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::ApiLab),
         name: "Sunlight API Lab",
         category: "Network",
-        icon_bytes: Some(ICON_API_LAB_TGA),
+        icon_bytes: Some(ICON_API_LAB_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Mines),
         name: "Sunlight Mines",
         category: "Games",
-        icon_bytes: Some(ICON_MINES_TGA),
+        icon_bytes: Some(ICON_MINES_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::SiliconEchoes),
         name: "Silicon Echoes: 1993",
         category: "Games",
-        icon_bytes: Some(ICON_SILICON_ECHOES_TGA),
+        icon_bytes: Some(ICON_SILICON_ECHOES_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::Welcome),
         name: "Welcome to SunlightOS",
         category: "System",
-        icon_bytes: Some(ICON_WELCOME_TGA),
+        icon_bytes: Some(ICON_WELCOME_SVG),
         available: true,
     },
     AppCatalogEntry {
@@ -272,14 +272,14 @@ static APP_CATALOG: [AppCatalogEntry; APP_CATALOG_LEN] = [
         id: CatalogId::App(AppId::MelodyMina),
         name: "Melody Mina",
         category: "Multimedia",
-        icon_bytes: Some(ICON_MELODY_MINA_TGA),
+        icon_bytes: Some(ICON_MELODY_MINA_SVG),
         available: true,
     },
     AppCatalogEntry {
         id: CatalogId::App(AppId::DocumentViewer),
         name: "Document Viewer",
         category: "Productivity",
-        icon_bytes: Some(ICON_DOCUMENT_VIEWER_TGA),
+        icon_bytes: Some(ICON_DOCUMENT_VIEWER_SVG),
         available: true,
     },
 ];
@@ -1548,7 +1548,7 @@ impl StartMenuState {
         );
         let mut tx = rect.x + 12;
         if let Some(img) = self.icons.search {
-            canvas.draw_tga_icon(
+            canvas.draw_icon(
                 &img,
                 Rect::new(tx, rect.y + (rect.h as i32 - 16) / 2, 16, 16),
             );
@@ -1614,7 +1614,7 @@ impl StartMenuState {
         );
         if let Some(img) = self.icons.app_icon(slot.entry) {
             // Soft-rounded app tile icons (radius 8 ≈ modern launcher chips).
-            canvas.draw_tga_icon_rounded(&img, icon_rect, 8);
+            canvas.draw_icon_rounded(&img, icon_rect, 8);
         } else {
             canvas.fill_rounded_rect(icon_rect, 6, theme.panel);
         }
@@ -1726,7 +1726,7 @@ fn draw_power_button(
     canvas: &mut Canvas,
     theme: &Theme,
     rect: Rect,
-    icon_img: Option<TgaImage>,
+    icon_img: Option<IconImage>,
     action: PowerAction,
     confirming: bool,
 ) {
@@ -1745,7 +1745,7 @@ fn draw_power_button(
         icon_size,
     );
     if let Some(img) = icon_img {
-        canvas.draw_tga_icon(&img, icon_rect);
+        canvas.draw_icon(&img, icon_rect);
     }
     let label_rect = Rect::new(rect.x - 10, icon_rect.bottom() + 2, rect.w + 20, 12);
     let shown = if confirming {

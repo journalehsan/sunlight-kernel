@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-control-panel"
-version = "0.2.5103-alpha.2"
+version = "0.2.5126-alpha.2"
+
+
 
 
 
@@ -453,6 +455,7 @@ build = "build.rs"
 [[bin]]
 name = "control-panel"
 path = "src/main.rs"
+required-features = ["native-svg"]
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
@@ -472,3 +475,6 @@ sun-font = { path = "../../sun-font" }
 [build-dependencies]
 fontdue = "0.7"
 image = { version = "0.25.9", default-features = false, features = ["png"] }
+
+[features]
+native-svg = ["sunlight-ui/svg", "sunlight-libc/native-std"]

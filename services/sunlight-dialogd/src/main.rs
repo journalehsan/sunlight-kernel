@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(feature = "native-svg"), no_std)]
+#![cfg_attr(not(feature = "native-svg"), no_main)]
 #![allow(static_mut_refs)]
 
 extern crate alloc;
@@ -23,7 +23,7 @@ use sunlight_ipc::{
     shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE, MAX_PATH};
-use sunlight_ui::image::{mime_icon, TgaImage};
+use sunlight_ui::image::{mime_icon, IconImage};
 use sunlight_ui::widgets::{Button, ButtonState, TextInput};
 use sunlight_ui::{
     request_close, App, Canvas, Color, Event, Point, Rect, Theme, UiSymbol, Window, WindowConfig,
@@ -54,70 +54,70 @@ const KEY_LEFT: u8 = 0x4B;
 const KEY_BACKSPACE: char = '\u{8}';
 const SERVICE_POLL_MS: u64 = 20;
 
-static ICON_FOLDER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.tga");
-static ICON_INODE_DIRECTORY_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/inode-directory.tga");
-static ICON_IMAGE_FILE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.tga");
-static ICON_TEXT_PLAIN_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-plain.tga");
-static ICON_TEXT_MARKDOWN_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-markdown.tga");
-static ICON_TEXT_RUST_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-rust.tga");
-static ICON_TEXT_GENERIC_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
-static ICON_APPLICATION_JSON_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-json.tga");
-static ICON_APPLICATION_EXECUTABLE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.tga");
-static ICON_APPLICATION_OCTET_STREAM_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.tga");
-static ICON_AUDIO_GENERIC_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
-static ICON_VIDEO_GENERIC_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.tga");
-static ICON_UNKNOWN_FILE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/unknown.tga");
+static ICON_FOLDER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.svg");
+static ICON_INODE_DIRECTORY_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/inode-directory.svg");
+static ICON_IMAGE_FILE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.svg");
+static ICON_TEXT_PLAIN_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-plain.svg");
+static ICON_TEXT_MARKDOWN_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-markdown.svg");
+static ICON_TEXT_RUST_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-rust.svg");
+static ICON_TEXT_GENERIC_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.svg");
+static ICON_APPLICATION_JSON_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-json.svg");
+static ICON_APPLICATION_EXECUTABLE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.svg");
+static ICON_APPLICATION_OCTET_STREAM_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.svg");
+static ICON_AUDIO_GENERIC_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.svg");
+static ICON_VIDEO_GENERIC_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.svg");
+static ICON_UNKNOWN_FILE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/unknown.svg");
 
 #[derive(Clone, Copy)]
 struct MimeIconTheme {
-    folder: Option<TgaImage>,
-    inode_directory: Option<TgaImage>,
-    image_generic: Option<TgaImage>,
-    text_plain: Option<TgaImage>,
-    text_markdown: Option<TgaImage>,
-    text_rust: Option<TgaImage>,
-    text_generic: Option<TgaImage>,
-    application_json: Option<TgaImage>,
-    application_executable: Option<TgaImage>,
-    application_octet_stream: Option<TgaImage>,
-    audio_generic: Option<TgaImage>,
-    video_generic: Option<TgaImage>,
-    unknown: Option<TgaImage>,
+    folder: Option<IconImage>,
+    inode_directory: Option<IconImage>,
+    image_generic: Option<IconImage>,
+    text_plain: Option<IconImage>,
+    text_markdown: Option<IconImage>,
+    text_rust: Option<IconImage>,
+    text_generic: Option<IconImage>,
+    application_json: Option<IconImage>,
+    application_executable: Option<IconImage>,
+    application_octet_stream: Option<IconImage>,
+    audio_generic: Option<IconImage>,
+    video_generic: Option<IconImage>,
+    unknown: Option<IconImage>,
 }
 
 impl MimeIconTheme {
     fn load() -> Self {
         Self {
-            folder: TgaImage::parse(ICON_FOLDER_TGA).ok(),
-            inode_directory: TgaImage::parse(ICON_INODE_DIRECTORY_TGA).ok(),
-            image_generic: TgaImage::parse(ICON_IMAGE_FILE_TGA).ok(),
-            text_plain: TgaImage::parse(ICON_TEXT_PLAIN_TGA).ok(),
-            text_markdown: TgaImage::parse(ICON_TEXT_MARKDOWN_TGA).ok(),
-            text_rust: TgaImage::parse(ICON_TEXT_RUST_TGA).ok(),
-            text_generic: TgaImage::parse(ICON_TEXT_GENERIC_TGA).ok(),
-            application_json: TgaImage::parse(ICON_APPLICATION_JSON_TGA).ok(),
-            application_executable: TgaImage::parse(ICON_APPLICATION_EXECUTABLE_TGA).ok(),
-            application_octet_stream: TgaImage::parse(ICON_APPLICATION_OCTET_STREAM_TGA).ok(),
-            audio_generic: TgaImage::parse(ICON_AUDIO_GENERIC_TGA).ok(),
-            video_generic: TgaImage::parse(ICON_VIDEO_GENERIC_TGA).ok(),
-            unknown: TgaImage::parse(ICON_UNKNOWN_FILE_TGA).ok(),
+            folder: IconImage::parse(ICON_FOLDER_SVG).ok(),
+            inode_directory: IconImage::parse(ICON_INODE_DIRECTORY_SVG).ok(),
+            image_generic: IconImage::parse(ICON_IMAGE_FILE_SVG).ok(),
+            text_plain: IconImage::parse(ICON_TEXT_PLAIN_SVG).ok(),
+            text_markdown: IconImage::parse(ICON_TEXT_MARKDOWN_SVG).ok(),
+            text_rust: IconImage::parse(ICON_TEXT_RUST_SVG).ok(),
+            text_generic: IconImage::parse(ICON_TEXT_GENERIC_SVG).ok(),
+            application_json: IconImage::parse(ICON_APPLICATION_JSON_SVG).ok(),
+            application_executable: IconImage::parse(ICON_APPLICATION_EXECUTABLE_SVG).ok(),
+            application_octet_stream: IconImage::parse(ICON_APPLICATION_OCTET_STREAM_SVG).ok(),
+            audio_generic: IconImage::parse(ICON_AUDIO_GENERIC_SVG).ok(),
+            video_generic: IconImage::parse(ICON_VIDEO_GENERIC_SVG).ok(),
+            unknown: IconImage::parse(ICON_UNKNOWN_FILE_SVG).ok(),
         }
     }
 
-    fn icon_for_entry(&self, entry: &DirEntry) -> Option<TgaImage> {
+    fn icon_for_entry(&self, entry: &DirEntry) -> Option<IconImage> {
         if entry.file_type == FT_DIR {
             return self
                 .folder
@@ -135,7 +135,7 @@ impl MimeIconTheme {
             .or(self.unknown)
     }
 
-    fn icon_by_name(&self, name: &str) -> Option<TgaImage> {
+    fn icon_by_name(&self, name: &str) -> Option<IconImage> {
         match name {
             "folder" => self.folder,
             "inode-directory" => self.inode_directory,
@@ -1197,7 +1197,7 @@ fn draw_file_dialog(
         canvas.fill_rect(row_rect, bg);
         let icon_rect = Rect::new(row_rect.x + 6, row_rect.y + 5, 22, 22);
         if let Some(icon) = icons.icon_for_entry(&row.entry) {
-            canvas.draw_tga_icon(&icon, icon_rect);
+            canvas.draw_icon(&icon, icon_rect);
         } else {
             canvas.draw_ui_symbol_centered(
                 icon_rect,
@@ -1758,8 +1758,7 @@ fn matches_extension(name: &str, allowed: &[String]) -> bool {
     })
 }
 
-#[no_mangle]
-pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
+fn application_main(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
     env::init(envp);
     debug_log("[DIALOGD] starting\n");
     let mut server = DialogServer::new();
@@ -1767,8 +1766,15 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *cons
     server.run();
 }
 
+#[cfg(not(feature = "native-svg"))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     debug_log("[DIALOGD] PANIC\n");
     ProcessExit::exit(101);
+}
+
+#[cfg(all(not(test), feature = "native-svg", target_os = "sunlightos"))]
+fn main() {
+    let (argc, argv, envp) = sunlight_libc::std_runtime::startup_args();
+    application_main(argc, argv, envp);
 }

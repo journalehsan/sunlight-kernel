@@ -1,5 +1,5 @@
-#![cfg_attr(not(test), no_std)]
-#![cfg_attr(not(test), no_main)]
+#![cfg_attr(all(not(test), not(feature = "native-svg")), no_std)]
+#![cfg_attr(all(not(test), not(feature = "native-svg")), no_main)]
 
 extern crate alloc;
 
@@ -24,7 +24,7 @@ use sunlight_ipc::{
     monotonic_millis, process_yield, ProcessExit,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
-use sunlight_ui::image::{mime_icon, TgaImage};
+use sunlight_ui::image::{mime_icon, IconImage};
 use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
 use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
 use sunlight_ui::{
@@ -41,123 +41,123 @@ static FONT_UI_REG: VecFont = VecFont(FontRole::UiRegular);
 static FONT_UI_SMALL: VecFont = VecFont(FontRole::UiSmall);
 
 // ---------------------------------------------------------------------------
-// Embedded place icons (16 px TGA, nearest-neighbour scaled to 32px in widget)
+// Embedded SVG place icons (rasterized at widget size)
 // ---------------------------------------------------------------------------
 
-static ICON_HOME_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/user-home.tga");
-static ICON_FOLDER_DESKTOP_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-desktop.tga");
-static ICON_FOLDER_DOCUMENTS_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-documents.tga");
-static ICON_FOLDER_DOWNLOADS_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-downloads.tga");
-static ICON_FOLDER_MUSIC_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-music.tga");
-static ICON_FOLDER_PICTURES_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-pictures.tga");
-static ICON_FOLDER_VIDEOS_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-videos.tga");
-static ICON_FOLDER_NETWORK_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-network.tga");
-static ICON_USER_TRASH_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.tga");
-static ICON_FOLDER_TGA: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/folder.tga");
-static ICON_INODE_DIRECTORY_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/inode-directory.tga");
-static ICON_IMAGE_FILE_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.tga");
-static ICON_TEXT_PLAIN_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-plain.tga");
-static ICON_TEXT_MARKDOWN_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-markdown.tga");
-static ICON_TEXT_RUST_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-rust.tga");
-static ICON_TEXT_GENERIC_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
-static ICON_APPLICATION_JSON_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-json.tga");
-static ICON_APPLICATION_EXECUTABLE_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.tga");
-static ICON_APPLICATION_OCTET_STREAM_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.tga");
-static ICON_AUDIO_GENERIC_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
-static ICON_VIDEO_GENERIC_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.tga");
-static ICON_UNKNOWN_FILE_TGA: &[u8] =
-    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/unknown.tga");
+static ICON_HOME_SVG: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/user-home.svg");
+static ICON_FOLDER_DESKTOP_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-desktop.svg");
+static ICON_FOLDER_DOCUMENTS_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-documents.svg");
+static ICON_FOLDER_DOWNLOADS_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-downloads.svg");
+static ICON_FOLDER_MUSIC_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-music.svg");
+static ICON_FOLDER_PICTURES_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-pictures.svg");
+static ICON_FOLDER_VIDEOS_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-videos.svg");
+static ICON_FOLDER_NETWORK_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-network.svg");
+static ICON_USER_TRASH_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.svg");
+static ICON_FOLDER_SVG: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/folder.svg");
+static ICON_INODE_DIRECTORY_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/inode-directory.svg");
+static ICON_IMAGE_FILE_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.svg");
+static ICON_TEXT_PLAIN_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-plain.svg");
+static ICON_TEXT_MARKDOWN_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-markdown.svg");
+static ICON_TEXT_RUST_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-rust.svg");
+static ICON_TEXT_GENERIC_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.svg");
+static ICON_APPLICATION_JSON_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-json.svg");
+static ICON_APPLICATION_EXECUTABLE_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.svg");
+static ICON_APPLICATION_OCTET_STREAM_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.svg");
+static ICON_AUDIO_GENERIC_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.svg");
+static ICON_VIDEO_GENERIC_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.svg");
+static ICON_UNKNOWN_FILE_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/unknown.svg");
 
-/// Parse a sidebar icon TGA for the given sidebar index.
+/// Load the embedded SVG place icon for the given sidebar index.
 /// Returns `None` if parsing fails (the widget falls back to the UiSymbol).
-fn sidebar_tga(idx: usize) -> Option<TgaImage> {
+fn sidebar_tga(idx: usize) -> Option<IconImage> {
     let bytes: &'static [u8] = match idx {
-        0 => ICON_HOME_TGA,
-        1 => ICON_FOLDER_DESKTOP_TGA,
-        2 => ICON_FOLDER_DOCUMENTS_TGA,
-        3 => ICON_FOLDER_DOWNLOADS_TGA,
-        4 => ICON_FOLDER_PICTURES_TGA,
-        5 => ICON_FOLDER_MUSIC_TGA,
-        6 => ICON_FOLDER_VIDEOS_TGA,
-        7 => ICON_FOLDER_TGA, // Root /
-        8 => ICON_FOLDER_TGA, // Volumes (no device icon in places set)
-        9 => ICON_FOLDER_NETWORK_TGA,
-        10 => ICON_USER_TRASH_TGA,
+        0 => ICON_HOME_SVG,
+        1 => ICON_FOLDER_DESKTOP_SVG,
+        2 => ICON_FOLDER_DOCUMENTS_SVG,
+        3 => ICON_FOLDER_DOWNLOADS_SVG,
+        4 => ICON_FOLDER_PICTURES_SVG,
+        5 => ICON_FOLDER_MUSIC_SVG,
+        6 => ICON_FOLDER_VIDEOS_SVG,
+        7 => ICON_FOLDER_SVG, // Root /
+        8 => ICON_FOLDER_SVG, // Volumes (no device icon in places set)
+        9 => ICON_FOLDER_NETWORK_SVG,
+        10 => ICON_USER_TRASH_SVG,
         _ => return None,
     };
-    TgaImage::parse(bytes).ok()
+    IconImage::parse(bytes).ok()
 }
 
 /// Parse a home-grid folder icon for the given folder index (0=Desktop…5=Videos).
-fn home_folder_tga(idx: usize) -> Option<TgaImage> {
+fn home_folder_tga(idx: usize) -> Option<IconImage> {
     let bytes: &'static [u8] = match idx {
-        0 => ICON_FOLDER_DESKTOP_TGA,
-        1 => ICON_FOLDER_DOCUMENTS_TGA,
-        2 => ICON_FOLDER_DOWNLOADS_TGA,
-        3 => ICON_FOLDER_PICTURES_TGA,
-        4 => ICON_FOLDER_MUSIC_TGA,
-        5 => ICON_FOLDER_VIDEOS_TGA,
-        _ => ICON_FOLDER_TGA,
+        0 => ICON_FOLDER_DESKTOP_SVG,
+        1 => ICON_FOLDER_DOCUMENTS_SVG,
+        2 => ICON_FOLDER_DOWNLOADS_SVG,
+        3 => ICON_FOLDER_PICTURES_SVG,
+        4 => ICON_FOLDER_MUSIC_SVG,
+        5 => ICON_FOLDER_VIDEOS_SVG,
+        _ => ICON_FOLDER_SVG,
     };
-    TgaImage::parse(bytes).ok()
+    IconImage::parse(bytes).ok()
 }
 
 #[derive(Clone, Copy)]
 struct MimeIconTheme {
-    folder: Option<TgaImage>,
-    inode_directory: Option<TgaImage>,
-    image_generic: Option<TgaImage>,
-    text_plain: Option<TgaImage>,
-    text_markdown: Option<TgaImage>,
-    text_rust: Option<TgaImage>,
-    text_generic: Option<TgaImage>,
-    application_json: Option<TgaImage>,
-    application_executable: Option<TgaImage>,
-    application_octet_stream: Option<TgaImage>,
-    audio_generic: Option<TgaImage>,
-    video_generic: Option<TgaImage>,
-    unknown: Option<TgaImage>,
+    folder: Option<IconImage>,
+    inode_directory: Option<IconImage>,
+    image_generic: Option<IconImage>,
+    text_plain: Option<IconImage>,
+    text_markdown: Option<IconImage>,
+    text_rust: Option<IconImage>,
+    text_generic: Option<IconImage>,
+    application_json: Option<IconImage>,
+    application_executable: Option<IconImage>,
+    application_octet_stream: Option<IconImage>,
+    audio_generic: Option<IconImage>,
+    video_generic: Option<IconImage>,
+    unknown: Option<IconImage>,
 }
 
 impl MimeIconTheme {
     fn load() -> Self {
         Self {
-            folder: TgaImage::parse(ICON_FOLDER_TGA).ok(),
-            inode_directory: TgaImage::parse(ICON_INODE_DIRECTORY_TGA).ok(),
-            image_generic: TgaImage::parse(ICON_IMAGE_FILE_TGA).ok(),
-            text_plain: TgaImage::parse(ICON_TEXT_PLAIN_TGA).ok(),
-            text_markdown: TgaImage::parse(ICON_TEXT_MARKDOWN_TGA).ok(),
-            text_rust: TgaImage::parse(ICON_TEXT_RUST_TGA).ok(),
-            text_generic: TgaImage::parse(ICON_TEXT_GENERIC_TGA).ok(),
-            application_json: TgaImage::parse(ICON_APPLICATION_JSON_TGA).ok(),
-            application_executable: TgaImage::parse(ICON_APPLICATION_EXECUTABLE_TGA).ok(),
-            application_octet_stream: TgaImage::parse(ICON_APPLICATION_OCTET_STREAM_TGA).ok(),
-            audio_generic: TgaImage::parse(ICON_AUDIO_GENERIC_TGA).ok(),
-            video_generic: TgaImage::parse(ICON_VIDEO_GENERIC_TGA).ok(),
-            unknown: TgaImage::parse(ICON_UNKNOWN_FILE_TGA).ok(),
+            folder: IconImage::parse(ICON_FOLDER_SVG).ok(),
+            inode_directory: IconImage::parse(ICON_INODE_DIRECTORY_SVG).ok(),
+            image_generic: IconImage::parse(ICON_IMAGE_FILE_SVG).ok(),
+            text_plain: IconImage::parse(ICON_TEXT_PLAIN_SVG).ok(),
+            text_markdown: IconImage::parse(ICON_TEXT_MARKDOWN_SVG).ok(),
+            text_rust: IconImage::parse(ICON_TEXT_RUST_SVG).ok(),
+            text_generic: IconImage::parse(ICON_TEXT_GENERIC_SVG).ok(),
+            application_json: IconImage::parse(ICON_APPLICATION_JSON_SVG).ok(),
+            application_executable: IconImage::parse(ICON_APPLICATION_EXECUTABLE_SVG).ok(),
+            application_octet_stream: IconImage::parse(ICON_APPLICATION_OCTET_STREAM_SVG).ok(),
+            audio_generic: IconImage::parse(ICON_AUDIO_GENERIC_SVG).ok(),
+            video_generic: IconImage::parse(ICON_VIDEO_GENERIC_SVG).ok(),
+            unknown: IconImage::parse(ICON_UNKNOWN_FILE_SVG).ok(),
         }
     }
 
-    fn icon_for_entry(&self, entry: DirEntry) -> Option<TgaImage> {
+    fn icon_for_entry(&self, entry: DirEntry) -> Option<IconImage> {
         if entry.file_type == FT_DIR {
             return self
                 .folder
@@ -183,7 +183,7 @@ impl MimeIconTheme {
             .or(self.icon_by_name(mime_icon::UNKNOWN_ICON))
     }
 
-    fn icon_by_name(&self, name: &str) -> Option<TgaImage> {
+    fn icon_by_name(&self, name: &str) -> Option<IconImage> {
         match name {
             "folder" => self.folder,
             "inode-directory" => self.inode_directory,
@@ -992,6 +992,7 @@ fn draw_argb_image(canvas: &mut Canvas, img: &sunlight_ui::image::RgbaImage, dst
 }
 
 #[cfg(not(test))]
+#[cfg(not(feature = "native-svg"))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     debug_log("[FILES] panic\n");
@@ -3139,7 +3140,7 @@ impl FilesApp {
             // Icon — TGA preferred, UiSymbol fallback
             let icon_rect = Rect::new(rect.x + 6, rect.y + 7, 34, 34);
             if let Some(tga) = home_folder_tga(idx) {
-                canvas.draw_tga_icon(&tga, icon_rect);
+                canvas.draw_icon(&tga, icon_rect);
             } else {
                 let sym = home_folder_symbol(idx);
                 canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, sym, theme.accent);
@@ -3553,7 +3554,7 @@ impl FilesApp {
                     ),
                 );
             } else if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
-                clipped.draw_tga_icon(&icon, bounds);
+                clipped.draw_icon(&icon, bounds);
             } else {
                 clipped.draw_ui_symbol_centered(bounds, UiSymbol::File, theme.text_dim);
             }
@@ -3697,7 +3698,7 @@ impl FilesApp {
             let icon_y = row_y + (ROW_H as i32 - 24) / 2;
             let icon_rect = Rect::new(row.x + 8, icon_y, 24, 24);
             if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
-                canvas.draw_tga_icon(&icon, icon_rect);
+                canvas.draw_icon(&icon, icon_rect);
             } else {
                 let sym_x = row.x + (ICON_SLOT as i32 - 10) / 2;
                 let sym_y = row_y + (ROW_H as i32 - 12) / 2;
@@ -3971,7 +3972,7 @@ impl FilesApp {
         let icon_x = preview.x + (preview.w as i32 - icon_size as i32) / 2;
         let icon_y = preview.y + (preview.h as i32 - icon_size as i32) / 2;
         if let Some(icon) = self.mime_icons.folder.or(self.mime_icons.inode_directory) {
-            canvas.draw_tga_icon(&icon, Rect::new(icon_x, icon_y, icon_size, icon_size));
+            canvas.draw_icon(&icon, Rect::new(icon_x, icon_y, icon_size, icon_size));
         } else {
             canvas.draw_ui_symbol_centered(
                 Rect::new(icon_x, icon_y, icon_size, icon_size),
@@ -4113,7 +4114,7 @@ impl FilesApp {
                     let sz = icon_inset.h.min(64);
                     let ix = icon_inset.x + (icon_inset.w as i32 - sz as i32) / 2;
                     let iy = icon_inset.y + (icon_inset.h as i32 - sz as i32) / 2;
-                    canvas.draw_tga_icon(&icon, Rect::new(ix, iy, sz, sz));
+                    canvas.draw_icon(&icon, Rect::new(ix, iy, sz, sz));
                 } else {
                     canvas.draw_ui_symbol_centered(icon_inset, UiSymbol::Pictures, theme.accent);
                 }
@@ -4124,7 +4125,7 @@ impl FilesApp {
             let ix = preview.x + (preview.w as i32 - sz as i32) / 2;
             let iy = preview.y + (preview.h as i32 - sz as i32) / 2;
             if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
-                canvas.draw_tga_icon(&icon, Rect::new(ix, iy, sz, sz));
+                canvas.draw_icon(&icon, Rect::new(ix, iy, sz, sz));
             } else {
                 canvas.draw_ui_symbol_centered(
                     Rect::new(ix, iy, sz, sz),
@@ -4286,7 +4287,7 @@ impl FilesApp {
             FT_FILE
         };
         if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
-            canvas.draw_tga_icon(&icon, icon_rect);
+            canvas.draw_icon(&icon, icon_rect);
         } else {
             let sym = if props.kind == PropertiesKind::Folder {
                 UiSymbol::Folder
@@ -5294,9 +5295,8 @@ fn draw_pill(
 // Entry point — window is opened BEFORE state init to show UI immediately
 // ---------------------------------------------------------------------------
 
-#[no_mangle]
 #[cfg(not(test))]
-pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
+fn application_main(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
     sunlight_libc::launch_trace::init_from_argv(_argc, _argv);
     let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
     launch_trace::log_phase_now(
@@ -5949,4 +5949,10 @@ mod tests {
             FilesApp::compute_layout(bounds)
         );
     }
+}
+
+#[cfg(all(not(test), feature = "native-svg", target_os = "sunlightos"))]
+fn main() {
+    let (argc, argv, envp) = sunlight_libc::std_runtime::startup_args();
+    application_main(argc, argv, envp);
 }

@@ -39,6 +39,58 @@ fn main() {
     let release_dir = target_dir.join("x86_64-unknown-none").join("release");
     let scratch_target_dir = target_dir.join("embedded-build");
 
+    // SVG theme consumers link native std. Build in the independent scratch
+    // directory so nested Cargo cannot deadlock on this kernel build's lock.
+    for input in [
+        "tools/build_svg_apps.sh",
+        "tools/build_native_std.sh",
+        "tools/native-std",
+        "tools/targets/x86_64-sunlightos.json",
+        "sunlight-ui",
+        "sunlight-libc",
+        "sunlight-files",
+        "services/sunlight-vortex-shell",
+        "services/sunlight-dialogd",
+        "services/sunlight-control-panel",
+        "docs/icons/SunlightOS",
+    ] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            workspace_root.join(input).display()
+        );
+    }
+    let svg_status = Command::new("bash")
+        .arg(workspace_root.join("tools/build_svg_apps.sh"))
+        .env("CARGO_TARGET_DIR", &scratch_target_dir)
+        .current_dir(workspace_root)
+        .status()
+        .expect("invoke native SVG app builder");
+    assert!(svg_status.success(), "failed to build native SVG consumers");
+    for output in [
+        "sunlight-vortex-shell",
+        "sunlight-files",
+        "sunlight-dialogd",
+        "sunlight-dialog",
+        "control-panel",
+    ] {
+        let source = scratch_target_dir
+            .join("x86_64-sunlightos/release")
+            .join(output);
+        let dest = target_dir.join("x86_64-sunlightos/release").join(output);
+        let bytes = fs::read(&source).expect("read native SVG application");
+        assert_eq!(&bytes[..4], b"\x7fELF");
+        assert_eq!(bytes[7], 0, "native SVG apps must use ELFOSABI_NONE");
+        assert_ne!(
+            &bytes[9..15],
+            b"HLNX01",
+            "native SVG apps must not use Helios"
+        );
+        if fs::read(&dest).ok().as_deref() != Some(bytes.as_slice()) {
+            fs::create_dir_all(dest.parent().unwrap()).expect("create native output directory");
+            fs::copy(source, &dest).expect("stage native SVG application");
+        }
+    }
+
     // Yazi is embedded unconditionally; ordinary kernel builds must prepare it
     // too, rather than relying on a previous Yazi-specific test run.
     let yazi_script = workspace_root.join("tools/build_yazi.sh");
@@ -806,20 +858,8 @@ fn main() {
             args: &["--release"],
         },
         EmbeddedBinary {
-            package: "sunlight-vortex-shell",
-            output: "sunlight-vortex-shell",
-            rustflags: service_rustflags,
-            args: &["--release"],
-        },
-        EmbeddedBinary {
             package: "mezzo",
             output: "mezzo",
-            rustflags: service_rustflags,
-            args: &["--release"],
-        },
-        EmbeddedBinary {
-            package: "sunlight-control-panel",
-            output: "control-panel",
             rustflags: service_rustflags,
             args: &["--release"],
         },

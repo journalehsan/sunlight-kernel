@@ -1,5 +1,5 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(feature = "native-svg"), no_std)]
+#![cfg_attr(not(feature = "native-svg"), no_main)]
 #![allow(static_mut_refs)]
 
 extern crate alloc;
@@ -30,8 +30,7 @@ macro_rules! println {
     }};
 }
 
-#[no_mangle]
-pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+fn application_main(argc: u64, argv: *const *const u8) -> ! {
     let mut storage = [""; MAX_ARGS];
     let count = unsafe { collect_args(argc, argv, &mut storage) };
     let args = &storage[..count];
@@ -332,8 +331,21 @@ unsafe fn collect_args(argc: u64, argv: *const *const u8, out: &mut [&str]) -> u
     count
 }
 
+#[cfg(not(feature = "native-svg"))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     println!("sunlight-dialog: PANIC");
     ProcessExit::exit(101);
+}
+
+#[cfg(not(feature = "native-svg"))]
+#[no_mangle]
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    application_main(argc, argv)
+}
+
+#[cfg(all(feature = "native-svg", target_os = "sunlightos"))]
+fn main() {
+    let (argc, argv, _) = sunlight_libc::std_runtime::startup_args();
+    application_main(argc, argv);
 }

@@ -196,7 +196,7 @@ build_image() {
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release
+    bash tools/build_svg_apps.sh -p sunlight-vortex-shell
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-widget-gallery --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package melody-mina --release

@@ -6,7 +6,7 @@ id = "org.sunlight.voice-recorder"
 name = "Sunlight Voice Recorder"
 version = "0.1.0"
 kind = "windowed"
-icon = "Resources/icon.tga"
+icon = "Resources/icon.svg"
 
 [runtime]
 type = "native"

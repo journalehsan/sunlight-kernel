@@ -98,6 +98,11 @@ pub fn load_defaults() -> (
 ) {
     let mut configs: Vec<ProcessConfig, MAX_CONFIGS> = Vec::new();
 
+    // Timer notifications are published every 10 ms.  Keep the service in
+    // the existing protected High class so C1.2C's strict-lower-nice wake
+    // path can dispatch it promptly while preserving the interrupted worker's
+    // residual turn.
+    let _ = configs.push(cfg("timer_server", Priority::High, true, 0));
     let _ = configs.push(cfg("tty_server", Priority::High, true, 0));
     let _ = configs.push(cfg("sshl", Priority::High, true, 0));
     let _ = configs.push(cfg("net_server", Priority::High, true, 0));

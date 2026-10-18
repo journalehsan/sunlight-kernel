@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-files"
-version = "0.2.5103-alpha.2"
+version = "0.2.5126-alpha.2"
+
+
 
 
 
@@ -465,6 +467,7 @@ edition = "2021"
 [[bin]]
 name = "sunlight-files"
 path = "src/main.rs"
+required-features = ["native-svg"]
 
 [dependencies]
 anyhow = { version = "1", default-features = false }
@@ -475,4 +478,5 @@ sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
 
 [features]
+native-svg = ["sunlight-ui/svg", "sunlight-libc/native-std"]
 document-thumbnail-smoke = []

@@ -3,7 +3,7 @@
 //! The SunlightOS icon theme lives at:
 //!   `/var/sunlightos/icons/SunlightOS`
 //!
-//! Directory layout (Breeze-inspired, TGA format):
+//! Directory layout (SVG source assets):
 //!   apps/{size}/      — application icons
 //!   places/{size}/    — places, folders
 //!   mimetypes/{size}/ — file-type icons
@@ -12,9 +12,8 @@
 //!   status/{size}/    — status indicators
 //!   preferences/{size}/ — settings / preferences
 //!
-//! All icons are stored as uncompressed 32-bit BGRA TGA type-2 images.
-//! The canonical size for dock / desktop use is 48 or 64 px, but the actual
-//! pixel dimensions are always 256×256 (scaled on blit).
+//! Theme icons are SVG sources. Native std consumers rasterize them at the
+//! destination size and keep a bounded process-local cache.
 //!
 //! Fallback order for `resolve_icon`:
 //!   1. Exact category/size/name match
@@ -22,8 +21,8 @@
 //!   3. Generic fallback (folder, file)
 //!
 //! For the current release, icons are embedded directly in service binaries
-//! using `include_bytes!` (same approach as the wallpaper).  Future releases
-//! will support runtime loading from the VFS path above.
+//! using `include_bytes!`. The desktop also resolves file-loaded SVG overrides
+//! and the small set of aliases installed at the VFS path above.
 
 /// Root path of the SunlightOS icon theme inside the VFS.
 pub const ICON_THEME_ROOT: &str = "/var/sunlightos/icons/SunlightOS";
@@ -42,7 +41,7 @@ pub mod category {
 /// Write the VFS path for an icon into `buf`.  Returns the byte length written,
 /// or 0 if the buffer is too small.
 ///
-/// Path format: `{ICON_THEME_ROOT}/{category}/{size}/{name}.tga`
+/// Path format: `{ICON_THEME_ROOT}/{category}/{size}/{name}.svg`
 pub fn icon_path(category: &str, size: u32, name: &str, buf: &mut [u8]) -> usize {
     let mut pos = 0usize;
 
@@ -80,7 +79,7 @@ pub fn icon_path(category: &str, size: u32, name: &str, buf: &mut [u8]) -> usize
     append!(&size_buf[size_start..]);
     append!(b"/");
     append!(name.as_bytes());
-    append!(b".tga");
+    append!(b".svg");
 
     pos
 }

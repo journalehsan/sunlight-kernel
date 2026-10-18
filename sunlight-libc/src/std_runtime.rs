@@ -1,7 +1,22 @@
 //! Stable, allocation-cycle-free ABI used by the pinned native Rust std overlay.
 use crate::{sys, Fd};
 use core::alloc::{GlobalAlloc, Layout};
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+
+static START_ARGC: AtomicUsize = AtomicUsize::new(0);
+static START_ARGV: AtomicPtr<*const u8> = AtomicPtr::new(core::ptr::null_mut());
+static START_ENVP: AtomicPtr<*const u8> = AtomicPtr::new(core::ptr::null_mut());
+
+/// Original native entry arguments for applications migrating their existing
+/// argument handling to Rust's std startup. The kernel-owned strings remain
+/// valid for the process lifetime; callers must not modify or free them.
+pub fn startup_args() -> (u64, *const *const u8, *const *const u8) {
+    (
+        START_ARGC.load(Ordering::Acquire) as u64,
+        START_ARGV.load(Ordering::Acquire).cast_const(),
+        START_ENVP.load(Ordering::Acquire).cast_const(),
+    )
+}
 
 core::arch::global_asm!(
     ".global _start",
@@ -26,6 +41,9 @@ unsafe extern "C" fn sl_std_start(
     argv: *const *const u8,
     envp: *const *const u8,
 ) -> ! {
+    START_ARGC.store(argc as usize, Ordering::Release);
+    START_ARGV.store(argv.cast_mut(), Ordering::Release);
+    START_ENVP.store(envp.cast_mut(), Ordering::Release);
     sl_std_init_tls();
     crate::env::init(envp);
     let status = main(argc, argv);

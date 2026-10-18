@@ -349,9 +349,32 @@ impl<'fb> Canvas<'fb> {
     ///
     /// Fully transparent source samples are skipped; partial alpha uses the
     /// canonical source-over blend. Clipping against canvas bounds is automatic.
-    /// No heap allocation.
+    /// TGA drawing needs no allocation. SVG prepares a bounded cached raster.
     pub fn draw_tga_icon(&mut self, img: &crate::image::TgaImage, dst: Rect) {
         self.draw_tga_icon_rounded(img, dst, 0);
+    }
+
+    /// Draw an embedded SVG or legacy TGA icon, rasterizing SVG at `dst` size.
+    pub fn draw_icon(&mut self, img: &crate::image::IconImage, dst: Rect) {
+        self.draw_tga_icon(img, dst);
+    }
+
+    pub fn draw_icon_rounded(&mut self, img: &crate::image::IconImage, dst: Rect, radius: u32) {
+        self.draw_tga_icon_rounded(img, dst, radius);
+    }
+
+    pub fn draw_icon_tinted(&mut self, img: &crate::image::IconImage, dst: Rect, tint: Color) {
+        self.draw_tga_icon_tinted(img, dst, tint);
+    }
+
+    pub fn draw_icon_tinted_rounded(
+        &mut self,
+        img: &crate::image::IconImage,
+        dst: Rect,
+        tint: Color,
+        radius: u32,
+    ) {
+        self.draw_tga_icon_tinted_rounded(img, dst, tint, radius);
     }
 
     /// Like [`draw_tga_icon`](Self::draw_tga_icon) with optional corner radius.
@@ -412,6 +435,9 @@ impl<'fb> Canvas<'fb> {
             return;
         }
 
+        let Ok(img) = img.rasterize(dst.w, dst.h) else {
+            return;
+        };
         let dw = dst.w;
         let dh = dst.h;
         let sw = img.width;

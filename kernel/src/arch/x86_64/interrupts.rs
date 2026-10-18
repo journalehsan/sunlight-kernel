@@ -1012,6 +1012,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 .and_then(|p| p.ipc_endpoint.map(|ep| (ep, p.pid)));
 
             if let Some((endpoint_id, timer_pid)) = timer_endpoint {
+                #[cfg(feature = "scheduler_guest_bench")]
+                crate::scheduler_bench_diag::timer_deadline(ticks_total, now_ns());
                 crate::ipc::with_shard(endpoint_id, |bus| {
                     bus.send_timer_tick(endpoint_id, ticks_total);
                 });

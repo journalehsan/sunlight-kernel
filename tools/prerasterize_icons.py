@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 SunlightOS Icon Pre-rasterizer
-Converts SVG icons to 32-bit TGA (with alpha channel) for the SunlightOS kernel/shell.
+Legacy SVG-to-TGA exporter for raster fixtures and compatibility assets.
+The current SunlightOS icon theme loads original SVG sources at runtime.
 
 Usage examples:
   # Convert a folder (keeps SVGs, writes .tga next to them)

@@ -306,7 +306,7 @@ static SILICON_ECHOES_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/silicon-echoes");
 // Sunlight Files: native file manager.
 static SUNLIGHT_FILES_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-files");
+    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-files");
 // Light Lens: lightweight graphical image viewer.
 static LIGHT_LENS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/light-lens");
@@ -340,13 +340,13 @@ static SUNLIGHT_API_LAB_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-api-lab");
 // Dialog host: shared native dialog service for GUI apps.
 static SUNLIGHT_DIALOGD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-dialogd");
+    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-dialogd");
 // Vortex Shell: SunlightOS desktop surface (Phase 1 — wallpaper + desktop layer).
 static SUNLIGHT_VORTEX_SHELL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vortex-shell");
+    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-vortex-shell");
 // Control Panel: System Preferences GUI (Mouse + Monitor settings — Day 22/23).
 static SUNLIGHT_CONTROL_PANEL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/control-panel");
+    include_bytes!("../../target/x86_64-sunlightos/release/control-panel");
 // Thumbnail daemon: decodes .simg sources and caches 128/256px thumbnails.
 static SUNLIGHT_THUMBD_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-thumbd");

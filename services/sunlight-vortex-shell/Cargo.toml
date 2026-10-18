@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-vortex-shell"
-version = "0.2.5103-alpha.2"
+version = "0.2.5126-alpha.2"
+
+
 
 
 
@@ -470,10 +472,8 @@ version = "0.2.5103-alpha.2"
 edition = "2021"
 
 [features]
-# Native SunlightOS desktop builds retain the established 8 MiB mmap-backed
-# heap.  Keeping this as a shell feature also lets the focused integration
-# proof compile the same shell against libc's static heap with
-# `--no-default-features --features stress`.
+native-svg = ["sunlight-ui/svg", "sunlight-libc/native-std"]
+# Native std SVG builds retain the desktop's 16 MiB mmap-backed heap.
 default = ["dynamic-heap"]
 # 16 MiB: SIMG wallpapers need ~file+decoded ARGB peak (~10 MiB). 8 MiB OOM'd
 # the decode and left the solid gray FALLBACK_BG desktop.
@@ -507,3 +507,4 @@ sunshell = { path = "../../sunshell", default-features = false, features = ["sun
 [[bin]]
 name = "sunlight-vortex-shell"
 path = "src/main.rs"
+required-features = ["native-svg"]

@@ -354,12 +354,12 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vortex-shell --release
+    bash tools/build_svg_apps.sh -p sunlight-vortex-shell
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-widget-gallery --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --release
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-files --release
+    bash tools/build_svg_apps.sh -p sunlight-files
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package melody-mina --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-voice-recorder --release
@@ -370,9 +370,9 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-devices --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --features dom --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dialogd --release
+    bash tools/build_svg_apps.sh -p sunlight-dialogd
     echo -e "${YELLOW}Building Control Panel (includes generated monochrome PNG icon assets)...${NC}"
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-control-panel --release
+    bash tools/build_svg_apps.sh -p sunlight-control-panel
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release

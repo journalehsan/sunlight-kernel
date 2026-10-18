@@ -27,6 +27,8 @@
 #![cfg_attr(not(test), no_std)]
 
 extern crate alloc;
+#[cfg(feature = "svg")]
+extern crate std;
 
 pub mod draw;
 pub mod event;

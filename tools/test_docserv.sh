@@ -5,8 +5,7 @@ set -euo pipefail
 supervisor_features=document-service-gate
 if [[ "${DOCSERV_TEST_UI:-0}" == 1 ]]; then supervisor_features=document-ui-gate; fi
 if [[ "${DOCSERV_TEST_UI:-0}" == 1 ]]; then
-    env RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' \
-        cargo build -p sunlight-files --release --features document-thumbnail-smoke
+    bash tools/build_svg_apps.sh -p sunlight-files --features document-thumbnail-smoke
 fi
 env RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' \
     cargo build -p sunlightd --release --features "$supervisor_features"

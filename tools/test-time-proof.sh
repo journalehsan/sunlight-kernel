@@ -29,5 +29,5 @@ cargo test --manifest-path "$proof_root/Cargo.toml" \
 
 cargo test --manifest-path "$proof_root/Cargo.toml" \
     --target x86_64-unknown-linux-gnu \
-    --package sunlight-vortex-shell \
+    --package sunlight-vortex-shell --features native-svg \
     panel_formats_july_31_and_august_1_from_service_weekday

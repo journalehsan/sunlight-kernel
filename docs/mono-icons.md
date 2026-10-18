@@ -1,6 +1,6 @@
 # SunlightOS Monochrome Icon Pipeline
 
-SunlightOS now has a small monochrome icon path for theme-aware UI glyphs. This is separate from the existing TGA icon theme and separate from any future wallpaper pipeline.
+SunlightOS now has a small monochrome icon path for theme-aware UI glyphs. This is separate from the SVG icon theme and separate from any future wallpaper pipeline.
 
 ## Scope
 

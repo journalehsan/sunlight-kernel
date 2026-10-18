@@ -19,3 +19,8 @@ encode time (`--verify`).
 
 Runtime loaders (`decode_simg`, Vortex wallpaper, lock presenter, tty login)
 accept SIMG v2 beside legacy TGA.
+
+The theme TGA sources listed above were retired during the SVG icon migration.
+These proof fixtures retain their original raster bytes. Current theme originals
+are `docs/icons/SunlightOS/apps/48/system-run.svg` and
+`docs/icons/SunlightOS/apps/48/applications-system.svg`.

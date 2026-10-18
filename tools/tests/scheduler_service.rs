@@ -311,6 +311,18 @@ fn priority_interrupt_resumes_fractional_budget_and_original_position() {
     assert_eq!(s.processes[0].burst_score, 336); // full-turn feedback exactly once
     assert_eq!(queue(), [0]);
 }
+
+#[test]
+fn higher_priority_wake_wins_when_worker_slice_expires_same_tick() {
+    let mut s = setup(3);
+    s.processes[2].nice = -5;
+    // Queue order is [worker 1, timer service].  At the exact 180 ms
+    // expiration, the service must not lose its wake to ordinary FIFO.
+    assert_eq!(dispatch(&mut s, 180_000_000), 3000);
+    assert_eq!(s.core_current_task(0), Some(2));
+    assert_eq!(s.processes[0].burst_score, 336);
+}
+
 #[test]
 fn yield_sleep_wake_termination_discard_credit_and_reject_duplicate_enqueue() {
     let mut s = setup(3);
@@ -369,6 +381,35 @@ fn frequent_background_wakes_produce_equal_service_and_stable_bursts() {
         scores.iter().all(|&score| (1004..=1024).contains(&score)),
         "{scores:?}"
     ); // aging remains active
+}
+
+#[test]
+fn high_priority_timer_service_wake_is_bounded_without_losing_worker_credit() {
+    let mut s = setup(5);
+    s.processes[4].nice = -5; // sunlight-niced High service policy
+    for _ in 0..1_000 {
+        if s.core_current_task(0) == Some(4) {
+            s.processes[4].state = ProcessState::BlockedOnTimer;
+            dispatch(&mut s, 10_000_000);
+            continue;
+        }
+        if s.processes[4].state == ProcessState::BlockedOnTimer {
+            s.processes[4].state = ProcessState::Ready;
+            s.enqueue_process_to_core(4, 0);
+            dispatch(&mut s, 10_000_000);
+            let mut waited = 10_000_000;
+            while s.core_current_task(0) != Some(4) {
+                assert!(waited <= 200_000_000, "timer service wait={waited} ns");
+                dispatch(&mut s, 10_000_000);
+                waited += 10_000_000;
+            }
+            continue;
+        }
+        dispatch(&mut s, 10_000_000);
+    }
+    for i in 0..4 {
+        assert!(runtime(&s, i) > 0, "worker {i} made no progress");
+    }
 }
 
 #[test]

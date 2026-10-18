@@ -48,8 +48,8 @@
 //!   fake battery behavior: static icon (BAT_ROWS), no queries
 //!   TODOs: see TODO(battery) marker above.
 
-#![cfg_attr(not(test), no_std)]
-#![cfg_attr(not(test), no_main)]
+#![cfg_attr(all(not(test), not(feature = "native-svg")), no_std)]
+#![cfg_attr(all(not(test), not(feature = "native-svg")), no_main)]
 
 extern crate alloc;
 
@@ -95,7 +95,7 @@ use sunlight_ui::{
     image::{
         decode_simg,
         icon_theme::{self, category as icon_category, name as icon_name},
-        mime_icon, RgbaImage, TgaImage,
+        mime_icon, RgbaImage, IconImage,
     },
     set_client_cursor, App, Canvas, Color, CursorShape, Event, EventPollCounters, Point, Rect,
     Theme, Window, WindowConfig,
@@ -114,15 +114,14 @@ const FALLBACK_BG: u32 = 0x00121214;
 const DESKTOP_CONFIG_PATH: &[u8] = b"/root/.config/sunlight/desktop.toml";
 
 // ---------------------------------------------------------------------------
-// Icon theme — SunlightOS icon set (Breeze-inspired, 256×256 BGRA TGA type-2)
-// Each icon is embedded at compile time; decoded on-demand via TgaImage::pixel_argb.
+// Icon theme — embedded SunlightOS SVG sources, rasterized and cached at draw size.
 // ---------------------------------------------------------------------------
 
 // Desktop icons
-static ICON_COMPUTER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/computer.tga");
-static ICON_HOME_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/places/16/user-home.tga");
+static ICON_COMPUTER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/computer.svg");
+static ICON_HOME_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/16/user-home.svg");
 
 #[derive(Clone, Copy)]
 struct SessionBinding {
@@ -197,89 +196,89 @@ fn request_session_action(action: SessionAction) -> bool {
     .is_ok_and(|reply| reply.label == SessionMsg::REPLY)
 }
 /// Monochrome dock trash (empty) — tinted at draw time.
-static ICON_TRASH_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/scalable/xsi-user-trash-symbolic.tga");
+static ICON_TRASH_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/scalable/xsi-user-trash-symbolic.svg");
 /// Monochrome dock trash (full) — tinted at draw time.
-static ICON_TRASH_FULL_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/places/symbolic/user-trash-full-symbolic.tga");
-static ICON_FOLDER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.tga");
-static ICON_INODE_DIRECTORY_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/inode-directory.tga");
-static ICON_DRIVE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/64/drive-harddisk.tga");
-static ICON_NETWORK_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/preferences/22/yast-nfs-server.tga");
-static ICON_FILE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.tga");
-static ICON_IMAGE_FILE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.tga");
-static ICON_TEXT_PLAIN_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-plain.tga");
-static ICON_TEXT_MARKDOWN_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-markdown.tga");
-static ICON_TEXT_RUST_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-rust.tga");
-static ICON_APPLICATION_JSON_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-json.tga");
-static ICON_APPLICATION_EXECUTABLE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.tga");
-static ICON_APPLICATION_OCTET_STREAM_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.tga");
-static ICON_AUDIO_GENERIC_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
-static ICON_VIDEO_GENERIC_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.tga");
-static ICON_UNKNOWN_FILE_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/unknown.tga");
+static ICON_TRASH_FULL_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/symbolic/user-trash-full-symbolic.svg");
+static ICON_FOLDER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.svg");
+static ICON_INODE_DIRECTORY_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/inode-directory.svg");
+static ICON_DRIVE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/64/drive-harddisk.svg");
+static ICON_NETWORK_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/preferences/22/yast-nfs-server.svg");
+static ICON_FILE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.svg");
+static ICON_IMAGE_FILE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.svg");
+static ICON_TEXT_PLAIN_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-plain.svg");
+static ICON_TEXT_MARKDOWN_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-markdown.svg");
+static ICON_TEXT_RUST_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/text-rust.svg");
+static ICON_APPLICATION_JSON_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-json.svg");
+static ICON_APPLICATION_EXECUTABLE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.svg");
+static ICON_APPLICATION_OCTET_STREAM_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.svg");
+static ICON_AUDIO_GENERIC_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.svg");
+static ICON_VIDEO_GENERIC_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.svg");
+static ICON_UNKNOWN_FILE_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/unknown.svg");
 
 // Dock icons
-static ICON_TERMINAL_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/utilities-terminal.tga");
-static ICON_CALC_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/accessories-calculator.tga");
-static ICON_FILES_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/places/16/system-file-manager.tga");
-static ICON_SETTINGS_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.tga");
-static ICON_CALENDAR_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/org.kde.merkuro.calendar.tga");
-static ICON_RUNNER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/system-run.tga");
-static ICON_GENERIC_APP_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/applications-system.tga");
-static ICON_API_LAB_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.tga");
-static ICON_TASKS_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.tga");
-static ICON_DEVICES_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/hwinfo.tga");
-static ICON_ABOUT_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.tga");
-static ICON_BENCH_TGA: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.tga");
-static ICON_TEXT_EDITOR_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.tga");
-static ICON_WRITER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.tga");
-static ICON_RABBIT_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.tga");
-static ICON_SILICON_ECHOES_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.tga");
-static ICON_VOICE_RECORDER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.tga");
-static ICON_DOCUMENT_VIEWER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/apps/48/mupdf.tga");
-static ICON_MELODY_MINA_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.tga");
-static MENU_NEW_FOLDER_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.tga");
-static MENU_NEW_TEXT_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/16/document-new.tga");
-static MENU_REFRESH_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/16/view-refresh.tga");
-static MENU_SORT_TGA: &[u8] =
-    include_bytes!("../../../docs/icons/SunlightOS/actions/16/sort-name.tga");
-static MENU_TERMINAL_TGA: &[u8] = include_bytes!(
-    "../../../docs/icons/SunlightOS/actions/scalable/xsi-utilities-terminal-symbolic.tga"
+static ICON_TERMINAL_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/utilities-terminal.svg");
+static ICON_CALC_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/accessories-calculator.svg");
+static ICON_FILES_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/places/16/system-file-manager.svg");
+static ICON_SETTINGS_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/preferences-system.svg");
+static ICON_CALENDAR_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/org.kde.merkuro.calendar.svg");
+static ICON_RUNNER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/system-run.svg");
+static ICON_GENERIC_APP_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/applications-system.svg");
+static ICON_API_LAB_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/apifox.svg");
+static ICON_TASKS_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/ksysguard.svg");
+static ICON_DEVICES_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/hwinfo.svg");
+static ICON_ABOUT_SVG: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/about.svg");
+static ICON_BENCH_SVG: &[u8] = include_bytes!("../../../docs/icons/SunlightOS/apps/48/cpu-x.svg");
+static ICON_TEXT_EDITOR_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/kate.svg");
+static ICON_WRITER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/libreoffice-writer.svg");
+static ICON_RABBIT_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/internet-web-browser.svg");
+static ICON_SILICON_ECHOES_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/symbolic/clock-app-symbolic.svg");
+static ICON_VOICE_RECORDER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/devices/16/audio-input-microphone.svg");
+static ICON_DOCUMENT_VIEWER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/apps/48/mupdf.svg");
+static ICON_MELODY_MINA_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.svg");
+static MENU_NEW_FOLDER_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/folder-new.svg");
+static MENU_NEW_TEXT_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/document-new.svg");
+static MENU_REFRESH_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/view-refresh.svg");
+static MENU_SORT_SVG: &[u8] =
+    include_bytes!("../../../docs/icons/SunlightOS/actions/16/sort-name.svg");
+static MENU_TERMINAL_SVG: &[u8] = include_bytes!(
+    "../../../docs/icons/SunlightOS/actions/scalable/xsi-utilities-terminal-symbolic.svg"
 );
 
 // Material Symbols glyphs (rasterized at build time from assets/fonts/material-symbols/
@@ -319,52 +318,52 @@ static ICON_SYM_VOLUME_MUTE_TGA: &[u8] =
 static ICON_SYM_VOLUME_OFF_TGA: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/icon_volume_off.tga"));
 
-/// Theme icons for desktop shortcuts. All fields are `Copy` (TgaImage borrows `&'static [u8]`).
+/// Theme icons for desktop shortcuts. All fields are `Copy` (IconImage borrows `&'static [u8]`).
 #[derive(Clone, Copy)]
 struct DesktopTheme {
-    computer: Option<TgaImage>,
-    home: Option<TgaImage>,
-    folder: Option<TgaImage>,
-    inode_directory: Option<TgaImage>,
-    drive: Option<TgaImage>,
-    network: Option<TgaImage>,
-    file: Option<TgaImage>,
-    image: Option<TgaImage>,
-    text_plain: Option<TgaImage>,
-    text_markdown: Option<TgaImage>,
-    text_rust: Option<TgaImage>,
-    application_json: Option<TgaImage>,
-    application_executable: Option<TgaImage>,
-    application_octet_stream: Option<TgaImage>,
-    audio_generic: Option<TgaImage>,
-    video_generic: Option<TgaImage>,
-    unknown: Option<TgaImage>,
+    computer: Option<IconImage>,
+    home: Option<IconImage>,
+    folder: Option<IconImage>,
+    inode_directory: Option<IconImage>,
+    drive: Option<IconImage>,
+    network: Option<IconImage>,
+    file: Option<IconImage>,
+    image: Option<IconImage>,
+    text_plain: Option<IconImage>,
+    text_markdown: Option<IconImage>,
+    text_rust: Option<IconImage>,
+    application_json: Option<IconImage>,
+    application_executable: Option<IconImage>,
+    application_octet_stream: Option<IconImage>,
+    audio_generic: Option<IconImage>,
+    video_generic: Option<IconImage>,
+    unknown: Option<IconImage>,
 }
 
 impl DesktopTheme {
     fn load() -> Self {
         Self {
-            computer: TgaImage::parse(ICON_COMPUTER_TGA).ok(),
-            home: TgaImage::parse(ICON_HOME_TGA).ok(),
-            folder: TgaImage::parse(ICON_FOLDER_TGA).ok(),
-            inode_directory: TgaImage::parse(ICON_INODE_DIRECTORY_TGA).ok(),
-            drive: TgaImage::parse(ICON_DRIVE_TGA).ok(),
-            network: TgaImage::parse(ICON_NETWORK_TGA).ok(),
-            file: TgaImage::parse(ICON_FILE_TGA).ok(),
-            image: TgaImage::parse(ICON_IMAGE_FILE_TGA).ok(),
-            text_plain: TgaImage::parse(ICON_TEXT_PLAIN_TGA).ok(),
-            text_markdown: TgaImage::parse(ICON_TEXT_MARKDOWN_TGA).ok(),
-            text_rust: TgaImage::parse(ICON_TEXT_RUST_TGA).ok(),
-            application_json: TgaImage::parse(ICON_APPLICATION_JSON_TGA).ok(),
-            application_executable: TgaImage::parse(ICON_APPLICATION_EXECUTABLE_TGA).ok(),
-            application_octet_stream: TgaImage::parse(ICON_APPLICATION_OCTET_STREAM_TGA).ok(),
-            audio_generic: TgaImage::parse(ICON_AUDIO_GENERIC_TGA).ok(),
-            video_generic: TgaImage::parse(ICON_VIDEO_GENERIC_TGA).ok(),
-            unknown: TgaImage::parse(ICON_UNKNOWN_FILE_TGA).ok(),
+            computer: IconImage::parse(ICON_COMPUTER_SVG).ok(),
+            home: IconImage::parse(ICON_HOME_SVG).ok(),
+            folder: IconImage::parse(ICON_FOLDER_SVG).ok(),
+            inode_directory: IconImage::parse(ICON_INODE_DIRECTORY_SVG).ok(),
+            drive: IconImage::parse(ICON_DRIVE_SVG).ok(),
+            network: IconImage::parse(ICON_NETWORK_SVG).ok(),
+            file: IconImage::parse(ICON_FILE_SVG).ok(),
+            image: IconImage::parse(ICON_IMAGE_FILE_SVG).ok(),
+            text_plain: IconImage::parse(ICON_TEXT_PLAIN_SVG).ok(),
+            text_markdown: IconImage::parse(ICON_TEXT_MARKDOWN_SVG).ok(),
+            text_rust: IconImage::parse(ICON_TEXT_RUST_SVG).ok(),
+            application_json: IconImage::parse(ICON_APPLICATION_JSON_SVG).ok(),
+            application_executable: IconImage::parse(ICON_APPLICATION_EXECUTABLE_SVG).ok(),
+            application_octet_stream: IconImage::parse(ICON_APPLICATION_OCTET_STREAM_SVG).ok(),
+            audio_generic: IconImage::parse(ICON_AUDIO_GENERIC_SVG).ok(),
+            video_generic: IconImage::parse(ICON_VIDEO_GENERIC_SVG).ok(),
+            unknown: IconImage::parse(ICON_UNKNOWN_FILE_SVG).ok(),
         }
     }
 
-    fn icon_for(&self, kind: DesktopIconKind) -> Option<TgaImage> {
+    fn icon_for(&self, kind: DesktopIconKind) -> Option<IconImage> {
         match kind {
             DesktopIconKind::Computer => self.computer,
             DesktopIconKind::Home => self.home,
@@ -376,7 +375,7 @@ impl DesktopTheme {
         }
     }
 
-    fn icon_for_entry(&self, kind: DesktopIconKind, name: &str) -> Option<TgaImage> {
+    fn icon_for_entry(&self, kind: DesktopIconKind, name: &str) -> Option<IconImage> {
         if matches!(
             kind,
             DesktopIconKind::Computer
@@ -410,7 +409,7 @@ impl DesktopTheme {
             .or(self.icon_by_name(mime_icon::UNKNOWN_ICON))
     }
 
-    fn icon_by_name(&self, name: &str) -> Option<TgaImage> {
+    fn icon_by_name(&self, name: &str) -> Option<IconImage> {
         match name {
             "folder" => self.folder,
             "inode-directory" => self.inode_directory,
@@ -433,37 +432,37 @@ impl DesktopTheme {
 /// Theme icons for the bottom dock (and settings pill).
 #[derive(Clone, Copy)]
 struct DockTheme {
-    terminal: Option<TgaImage>,
-    calendar: Option<TgaImage>,
-    calc: Option<TgaImage>,
-    files: Option<TgaImage>,
-    settings: Option<TgaImage>,
-    editor: Option<TgaImage>,
-    writer: Option<TgaImage>,
-    rabbit: Option<TgaImage>,
+    terminal: Option<IconImage>,
+    calendar: Option<IconImage>,
+    calc: Option<IconImage>,
+    files: Option<IconImage>,
+    settings: Option<IconImage>,
+    editor: Option<IconImage>,
+    writer: Option<IconImage>,
+    rabbit: Option<IconImage>,
     /// Monochrome shelf trash (empty).
-    trash: Option<TgaImage>,
+    trash: Option<IconImage>,
     /// Monochrome shelf trash (has items).
-    trash_full: Option<TgaImage>,
+    trash_full: Option<IconImage>,
 }
 
 impl DockTheme {
     fn load() -> Self {
         Self {
-            terminal: TgaImage::parse(ICON_TERMINAL_TGA).ok(),
-            calendar: TgaImage::parse(ICON_CALENDAR_TGA).ok(),
-            calc: TgaImage::parse(ICON_CALC_TGA).ok(),
-            files: TgaImage::parse(ICON_FILES_TGA).ok(),
-            settings: TgaImage::parse(ICON_SETTINGS_TGA).ok(),
-            editor: TgaImage::parse(ICON_TEXT_EDITOR_TGA).ok(),
-            writer: TgaImage::parse(ICON_WRITER_TGA).ok(),
-            rabbit: TgaImage::parse(ICON_RABBIT_TGA).ok(),
-            trash: TgaImage::parse(ICON_TRASH_TGA).ok(),
-            trash_full: TgaImage::parse(ICON_TRASH_FULL_TGA).ok(),
+            terminal: IconImage::parse(ICON_TERMINAL_SVG).ok(),
+            calendar: IconImage::parse(ICON_CALENDAR_SVG).ok(),
+            calc: IconImage::parse(ICON_CALC_SVG).ok(),
+            files: IconImage::parse(ICON_FILES_SVG).ok(),
+            settings: IconImage::parse(ICON_SETTINGS_SVG).ok(),
+            editor: IconImage::parse(ICON_TEXT_EDITOR_SVG).ok(),
+            writer: IconImage::parse(ICON_WRITER_SVG).ok(),
+            rabbit: IconImage::parse(ICON_RABBIT_SVG).ok(),
+            trash: IconImage::parse(ICON_TRASH_SVG).ok(),
+            trash_full: IconImage::parse(ICON_TRASH_FULL_SVG).ok(),
         }
     }
 
-    fn trash_icon(&self, full: bool) -> Option<TgaImage> {
+    fn trash_icon(&self, full: bool) -> Option<IconImage> {
         if full {
             self.trash_full.or(self.trash)
         } else {
@@ -471,7 +470,7 @@ impl DockTheme {
         }
     }
 
-    fn icon_for_app(&self, app_id: AppId) -> Option<TgaImage> {
+    fn icon_for_app(&self, app_id: AppId) -> Option<IconImage> {
         match app_id {
             AppId::Terminal | AppId::Chronos => self.terminal,
             AppId::Calculator => self.calc,
@@ -502,63 +501,63 @@ impl DockTheme {
 /// Centralized to avoid scattering raw glyph strings or per-site loads.
 #[derive(Clone, Copy)]
 struct SymbolTheme {
-    home: Option<TgaImage>,
-    search: Option<TgaImage>,
-    terminal: Option<TgaImage>,
-    folder: Option<TgaImage>,
-    calendar: Option<TgaImage>,
-    notifications: Option<TgaImage>,
-    logout: Option<TgaImage>,
-    lan: Option<TgaImage>,
-    menu: Option<TgaImage>,
-    settings: Option<TgaImage>,
-    edit: Option<TgaImage>,
-    calc: Option<TgaImage>,
-    public: Option<TgaImage>,
-    code: Option<TgaImage>,
-    article: Option<TgaImage>,
-    sunny: Option<TgaImage>,
-    start: Option<TgaImage>,
-    close: Option<TgaImage>,
-    dnd_on: Option<TgaImage>,
-    dnd_off: Option<TgaImage>,
-    volume_up: Option<TgaImage>,
-    volume_down: Option<TgaImage>,
-    volume_mute: Option<TgaImage>,
-    volume_off: Option<TgaImage>,
+    home: Option<IconImage>,
+    search: Option<IconImage>,
+    terminal: Option<IconImage>,
+    folder: Option<IconImage>,
+    calendar: Option<IconImage>,
+    notifications: Option<IconImage>,
+    logout: Option<IconImage>,
+    lan: Option<IconImage>,
+    menu: Option<IconImage>,
+    settings: Option<IconImage>,
+    edit: Option<IconImage>,
+    calc: Option<IconImage>,
+    public: Option<IconImage>,
+    code: Option<IconImage>,
+    article: Option<IconImage>,
+    sunny: Option<IconImage>,
+    start: Option<IconImage>,
+    close: Option<IconImage>,
+    dnd_on: Option<IconImage>,
+    dnd_off: Option<IconImage>,
+    volume_up: Option<IconImage>,
+    volume_down: Option<IconImage>,
+    volume_mute: Option<IconImage>,
+    volume_off: Option<IconImage>,
 }
 
 impl SymbolTheme {
     fn load() -> Self {
         Self {
-            home: TgaImage::parse(ICON_SYM_HOME_TGA).ok(),
-            search: TgaImage::parse(ICON_SYM_SEARCH_TGA).ok(),
-            terminal: TgaImage::parse(ICON_SYM_TERMINAL_TGA).ok(),
-            folder: TgaImage::parse(ICON_SYM_FOLDER_TGA).ok(),
-            calendar: TgaImage::parse(ICON_SYM_CALENDAR_TGA).ok(),
-            notifications: TgaImage::parse(ICON_SYM_NOTIF_TGA).ok(),
-            logout: TgaImage::parse(ICON_SYM_LOGOUT_TGA).ok(),
-            lan: TgaImage::parse(ICON_SYM_LAN_TGA).ok(),
-            menu: TgaImage::parse(ICON_SYM_MENU_TGA).ok(),
-            settings: TgaImage::parse(ICON_SYM_SETTINGS_TGA).ok(),
-            edit: TgaImage::parse(ICON_SYM_EDIT_TGA).ok(),
-            calc: TgaImage::parse(ICON_SYM_CALC_TGA).ok(),
-            public: TgaImage::parse(ICON_SYM_PUBLIC_TGA).ok(),
-            code: TgaImage::parse(ICON_SYM_CODE_TGA).ok(),
-            article: TgaImage::parse(ICON_SYM_ARTICLE_TGA).ok(),
-            sunny: TgaImage::parse(ICON_SYM_SUNNY_TGA).ok(),
-            start: TgaImage::parse(ICON_SYM_START_TGA).ok(),
-            close: TgaImage::parse(ICON_SYM_CLOSE_TGA).ok(),
-            dnd_on: TgaImage::parse(ICON_SYM_DND_ON_TGA).ok(),
-            dnd_off: TgaImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
-            volume_up: TgaImage::parse(ICON_SYM_VOLUME_UP_TGA).ok(),
-            volume_down: TgaImage::parse(ICON_SYM_VOLUME_DOWN_TGA).ok(),
-            volume_mute: TgaImage::parse(ICON_SYM_VOLUME_MUTE_TGA).ok(),
-            volume_off: TgaImage::parse(ICON_SYM_VOLUME_OFF_TGA).ok(),
+            home: IconImage::parse(ICON_SYM_HOME_TGA).ok(),
+            search: IconImage::parse(ICON_SYM_SEARCH_TGA).ok(),
+            terminal: IconImage::parse(ICON_SYM_TERMINAL_TGA).ok(),
+            folder: IconImage::parse(ICON_SYM_FOLDER_TGA).ok(),
+            calendar: IconImage::parse(ICON_SYM_CALENDAR_TGA).ok(),
+            notifications: IconImage::parse(ICON_SYM_NOTIF_TGA).ok(),
+            logout: IconImage::parse(ICON_SYM_LOGOUT_TGA).ok(),
+            lan: IconImage::parse(ICON_SYM_LAN_TGA).ok(),
+            menu: IconImage::parse(ICON_SYM_MENU_TGA).ok(),
+            settings: IconImage::parse(ICON_SYM_SETTINGS_TGA).ok(),
+            edit: IconImage::parse(ICON_SYM_EDIT_TGA).ok(),
+            calc: IconImage::parse(ICON_SYM_CALC_TGA).ok(),
+            public: IconImage::parse(ICON_SYM_PUBLIC_TGA).ok(),
+            code: IconImage::parse(ICON_SYM_CODE_TGA).ok(),
+            article: IconImage::parse(ICON_SYM_ARTICLE_TGA).ok(),
+            sunny: IconImage::parse(ICON_SYM_SUNNY_TGA).ok(),
+            start: IconImage::parse(ICON_SYM_START_TGA).ok(),
+            close: IconImage::parse(ICON_SYM_CLOSE_TGA).ok(),
+            dnd_on: IconImage::parse(ICON_SYM_DND_ON_TGA).ok(),
+            dnd_off: IconImage::parse(ICON_SYM_DND_OFF_TGA).ok(),
+            volume_up: IconImage::parse(ICON_SYM_VOLUME_UP_TGA).ok(),
+            volume_down: IconImage::parse(ICON_SYM_VOLUME_DOWN_TGA).ok(),
+            volume_mute: IconImage::parse(ICON_SYM_VOLUME_MUTE_TGA).ok(),
+            volume_off: IconImage::parse(ICON_SYM_VOLUME_OFF_TGA).ok(),
         }
     }
 
-    fn get(&self, name: &str) -> Option<TgaImage> {
+    fn get(&self, name: &str) -> Option<IconImage> {
         match name {
             "home" => self.home,
             "search" => self.search,
@@ -957,8 +956,8 @@ impl WindowSnapshot {
 
 #[derive(Clone)]
 enum RunningIcon {
-    Static(TgaImage),
-    Runtime(Vec<u8>),
+    Static(IconImage),
+    Runtime(alloc::sync::Arc<RgbaImage>),
     Missing,
 }
 
@@ -1546,7 +1545,7 @@ struct MenuItem {
     action: ContextMenuAction,
     label: &'static str,
     rect: Rect,
-    icon: Option<TgaImage>,
+    icon: Option<IconImage>,
 }
 
 struct ContextMenuState {
@@ -4010,7 +4009,7 @@ impl VortexShell {
     }
 
     /// Resolve bounded icon images for the four switcher cards (no unbounded cache).
-    fn workspace_switcher_icon_images(&self) -> [[Option<TgaImage>; 3]; 4] {
+    fn workspace_switcher_icon_images(&self) -> [[Option<IconImage>; 3]; 4] {
         use workspace_switcher::WorkspaceAppIcon;
         let mut out = [[None; 3]; 4];
         for (ci, summary) in self.workspace_switcher.cards().iter().enumerate() {
@@ -4021,7 +4020,7 @@ impl VortexShell {
                 out[ci][si] = match summary.icons[si] {
                     Some(WorkspaceAppIcon::App(app_id)) => self.icon_tga_for_app(app_id),
                     Some(WorkspaceAppIcon::Generic) | None => {
-                        TgaImage::parse(ICON_GENERIC_APP_TGA).ok()
+                        IconImage::parse(ICON_GENERIC_APP_SVG).ok()
                     }
                 };
             }
@@ -4029,32 +4028,32 @@ impl VortexShell {
         out
     }
 
-    fn icon_tga_for_app(&self, app_id: AppId) -> Option<TgaImage> {
+    fn icon_tga_for_app(&self, app_id: AppId) -> Option<IconImage> {
         if let Some(img) = self.dock_theme.icon_for_app(app_id) {
             return Some(img);
         }
         let bytes = match app_id {
-            AppId::Terminal | AppId::Chronos => Some(ICON_TERMINAL_TGA),
-            AppId::Calculator => Some(ICON_CALC_TGA),
-            AppId::Files => Some(ICON_FILES_TGA),
-            AppId::Settings => Some(ICON_SETTINGS_TGA),
-            AppId::Tasks => Some(ICON_TASKS_TGA),
-            AppId::Bench => Some(ICON_BENCH_TGA),
-            AppId::TextEditor => Some(ICON_TEXT_EDITOR_TGA),
-            AppId::Writer => Some(ICON_WRITER_TGA),
-            AppId::Calendar => Some(ICON_CALENDAR_TGA),
-            AppId::Devices => Some(ICON_DEVICES_TGA),
-            AppId::RappidRabbit => Some(ICON_RABBIT_TGA),
-            AppId::ApiLab => Some(ICON_API_LAB_TGA),
-            AppId::Mines => Some(ICON_GENERIC_APP_TGA),
-            AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_TGA),
-            AppId::Welcome => Some(ICON_GENERIC_APP_TGA),
-            AppId::WiseOwl => Some(ICON_GENERIC_APP_TGA),
-            AppId::MelodyMina => Some(ICON_MELODY_MINA_TGA),
-            AppId::VoiceRecorder => Some(ICON_VOICE_RECORDER_TGA),
-            AppId::DocumentViewer => Some(ICON_DOCUMENT_VIEWER_TGA),
+            AppId::Terminal | AppId::Chronos => Some(ICON_TERMINAL_SVG),
+            AppId::Calculator => Some(ICON_CALC_SVG),
+            AppId::Files => Some(ICON_FILES_SVG),
+            AppId::Settings => Some(ICON_SETTINGS_SVG),
+            AppId::Tasks => Some(ICON_TASKS_SVG),
+            AppId::Bench => Some(ICON_BENCH_SVG),
+            AppId::TextEditor => Some(ICON_TEXT_EDITOR_SVG),
+            AppId::Writer => Some(ICON_WRITER_SVG),
+            AppId::Calendar => Some(ICON_CALENDAR_SVG),
+            AppId::Devices => Some(ICON_DEVICES_SVG),
+            AppId::RappidRabbit => Some(ICON_RABBIT_SVG),
+            AppId::ApiLab => Some(ICON_API_LAB_SVG),
+            AppId::Mines => Some(ICON_GENERIC_APP_SVG),
+            AppId::SiliconEchoes => Some(ICON_SILICON_ECHOES_SVG),
+            AppId::Welcome => Some(ICON_GENERIC_APP_SVG),
+            AppId::WiseOwl => Some(ICON_GENERIC_APP_SVG),
+            AppId::MelodyMina => Some(ICON_MELODY_MINA_SVG),
+            AppId::VoiceRecorder => Some(ICON_VOICE_RECORDER_SVG),
+            AppId::DocumentViewer => Some(ICON_DOCUMENT_VIEWER_SVG),
         };
-        bytes.and_then(|b| TgaImage::parse(b).ok())
+        bytes.and_then(|b| IconImage::parse(b).ok())
     }
 
     fn sidebar_telemetry_view(&self) -> Option<sidebar::SystemMonitorViewData> {
@@ -4431,141 +4430,23 @@ fn draw_app_button(
     }
 
     if let Some(tga) = dock.icon_for_app(app.icon) {
-        canvas.draw_tga_icon(&tga, cell.inset(2));
+        canvas.draw_icon(&tga, cell.inset(2));
     } else {
         draw_icon16(canvas, cell, rows, icon_color);
     }
 }
 
-/// Tint a white+alpha TGA glyph to the given color using its alpha mask.
+/// Tint a white+alpha icon to the given color using its alpha mask.
 /// Used for Material Symbols so they pick up orange accent at small panel size.
-fn draw_tga_tinted_orange(canvas: &mut Canvas, img: &TgaImage, dst: Rect, tint: Color) {
-    if img.width == 0 || img.height == 0 {
-        return;
-    }
-    let cx0 = dst.x.max(0) as u32;
-    let cy0 = dst.y.max(0) as u32;
-    let cx1 = (dst.right() as u32).min(canvas.width);
-    let cy1 = (dst.bottom() as u32).min(canvas.height);
-    if cx0 >= cx1 || cy0 >= cy1 {
-        return;
-    }
-    let dw = (dst.right() - dst.x.max(0)).max(1) as u32;
-    let dh = (dst.bottom() - dst.y.max(0)).max(1) as u32;
-    let tr = ((tint.0 >> 16) & 0xFF) as u32;
-    let tg = ((tint.0 >> 8) & 0xFF) as u32;
-    let tb = (tint.0 & 0xFF) as u32;
-
-    for dy in cy0..cy1 {
-        let src_y = (dy - cy0) * img.height / dh;
-        for dx in cx0..cx1 {
-            let src_x = (dx - cx0) * img.width / dw;
-            let argb = img.pixel_argb(src_x, src_y);
-            let a = (argb >> 24) as u32;
-            if a == 0 {
-                continue;
-            }
-            // Blend tint over dst using src alpha
-            let ia = 255 - a;
-            // Read dst? Canvas doesn't expose easy read for all; approximate by direct write scaled
-            // For small icons we just write the tinted value (overwrites, good for panel bg)
-            let r = (tr * a + 0 * ia) / 255; // assume dark panel; simple solid tint
-            let g = (tg * a + 0 * ia) / 255;
-            let b = (tb * a + 0 * ia) / 255;
-            canvas.put_pixel(dx as i32, dy as i32, Color((r << 16) | (g << 8) | b));
-        }
-    }
+fn draw_icon_tinted_orange(canvas: &mut Canvas, img: &IconImage, dst: Rect, tint: Color) {
+    canvas.draw_icon_tinted(img, dst, tint);
 }
 
-fn draw_tga_bytes(canvas: &mut Canvas, bytes: &[u8], dst: Rect) {
-    if bytes.len() < 18 {
-        return;
-    }
-    if bytes[2] != 2 {
-        return;
-    }
-    let bpp = bytes[16];
-    if bpp != 24 && bpp != 32 {
-        return;
-    }
-    let width = u16::from_le_bytes([bytes[12], bytes[13]]) as u32;
-    let height = u16::from_le_bytes([bytes[14], bytes[15]]) as u32;
-    if width == 0 || height == 0 {
-        return;
-    }
-    let id_len = bytes[0] as usize;
-    let cm_len = u16::from_le_bytes([bytes[5], bytes[6]]) as u32;
-    let cm_entry_bits = bytes[7] as u32;
-    let cm_bytes = if bytes[1] != 0 {
-        cm_len * ((cm_entry_bits + 7) / 8)
-    } else {
-        0
-    };
-    let data_offset = 18usize
-        .saturating_add(id_len)
-        .saturating_add(cm_bytes as usize);
-    if data_offset >= bytes.len() {
-        return;
-    }
-    let top_down = (bytes[17] & 0x20) != 0;
-
-    let cx0 = dst.x.max(0) as u32;
-    let cy0 = dst.y.max(0) as u32;
-    let cx1 = (dst.right() as u32).min(canvas.width);
-    let cy1 = (dst.bottom() as u32).min(canvas.height);
-    if cx0 >= cx1 || cy0 >= cy1 {
-        return;
-    }
-    let dw = (dst.right() - dst.x.max(0)).max(1) as u32;
-    let dh = (dst.bottom() - dst.y.max(0)).max(1) as u32;
-    let bpp_bytes = (bpp / 8) as u32;
-    let row_stride = width.saturating_mul(bpp_bytes);
-
-    for dy in cy0..cy1 {
-        let src_y = (dy - cy0) * height / dh;
-        let file_row = if top_down {
-            src_y
-        } else {
-            height.saturating_sub(1).saturating_sub(src_y)
-        };
-        let row_start = data_offset + file_row as usize * row_stride as usize;
-        let out_row = dy as usize * canvas.stride as usize;
-        for dx in cx0..cx1 {
-            let src_x = (dx - cx0) * width / dw;
-            let idx = row_start + src_x as usize * bpp_bytes as usize;
-            if idx + 2 >= bytes.len() {
-                continue;
-            }
-            let b = bytes[idx] as u32;
-            let g = bytes[idx + 1] as u32;
-            let r = bytes[idx + 2] as u32;
-            let a = if bpp == 32 && idx + 3 < bytes.len() {
-                bytes[idx + 3] as u32
-            } else {
-                0xFF
-            };
-            if a == 0 {
-                continue;
-            }
-            let px = out_row + dx as usize;
-            if px >= canvas.pixels.len() {
-                continue;
-            }
-            if a == 0xFF {
-                canvas.pixels[px] = (r << 16) | (g << 8) | b;
-            } else {
-                let dst_px = canvas.pixels[px];
-                let dr = (dst_px >> 16) & 0xFF;
-                let dg = (dst_px >> 8) & 0xFF;
-                let db = dst_px & 0xFF;
-                let ia = 255 - a;
-                let nr = (r * a + dr * ia) >> 8;
-                let ng = (g * a + dg * ia) >> 8;
-                let nb = (b * a + db * ia) >> 8;
-                canvas.pixels[px] = (nr << 16) | (ng << 8) | nb;
-            }
-        }
-    }
+fn decode_runtime_icon(bytes: Vec<u8>) -> Option<RunningIcon> {
+    let image = sunlight_ui::image::decode_svg(&bytes, 64, 64)
+        .ok()
+        .or_else(|| decode_simg(&bytes).ok())?;
+    Some(RunningIcon::Runtime(alloc::sync::Arc::new(image)))
 }
 
 fn draw_generic_app_icon(canvas: &mut Canvas, rect: Rect, fill: Color, border: Color) {
@@ -4645,8 +4526,8 @@ fn draw_running_app_button(
         RUNNING_ICON,
     );
     match &entry.icon {
-        Some(RunningIcon::Static(img)) => canvas.draw_tga_icon(img, icon_rect),
-        Some(RunningIcon::Runtime(bytes)) => draw_tga_bytes(canvas, bytes, icon_rect),
+        Some(RunningIcon::Static(img)) => canvas.draw_icon(img, icon_rect),
+        Some(RunningIcon::Runtime(image)) => canvas.draw_rgba_image(image, icon_rect),
         Some(RunningIcon::Missing) | None => {
             draw_generic_app_icon(canvas, icon_rect, icon_color.darken(72), border)
         }
@@ -4903,7 +4784,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
         TOP_BRAND_ICON_SIZE,
     );
     if let Some(tga) = sym.sunny {
-        canvas.draw_tga_icon_tinted(&tga, sun_cell, theme.accent);
+        canvas.draw_icon_tinted(&tga, sun_cell, theme.accent);
     } else {
         draw_icon16(canvas, sun_cell, &SUN_ROWS, theme.accent);
     }
@@ -4955,7 +4836,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
             } else {
                 theme.text_dim
             };
-            canvas.draw_tga_icon_tinted(&tga, ic_cell, tint);
+            canvas.draw_icon_tinted(&tga, ic_cell, tint);
         }
         shell.workspace_btn_zones[i] = cell;
         shell.top_panel_item_zones[item_idx] = cell;
@@ -5033,7 +4914,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
             ic,
             ic,
         );
-        canvas.draw_tga_icon_tinted(
+        canvas.draw_icon_tinted(
             &tga,
             icon_rect,
             if logout_hover || logout_focus {
@@ -5072,7 +4953,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
             ic,
             ic,
         );
-        canvas.draw_tga_icon_tinted(
+        canvas.draw_icon_tinted(
             &tga,
             icon_rect,
             if notif_dnd_on {
@@ -5132,7 +5013,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
             ic,
             ic,
         );
-        canvas.draw_tga_icon_tinted(&tga, icon_rect, sound_color);
+        canvas.draw_icon_tinted(&tga, icon_rect, sound_color);
     }
     shell.sound_zone = sound_cell;
     shell.top_panel_item_zones[TOP_ITEM_SOUND] = sound_cell;
@@ -5170,7 +5051,7 @@ fn draw_top_bar(canvas: &mut Canvas, theme: &Theme, screen_w: u32, shell: &mut V
             ic,
             ic,
         );
-        canvas.draw_tga_icon_tinted(&tga, icon_rect, net_color);
+        canvas.draw_icon_tinted(&tga, icon_rect, net_color);
         let dot = Rect::new(net_cell.right() - 6, net_cell.y + 4, 3, 3);
         let dot_color = match shell.network.indicator {
             NetworkIndicatorState::Connected => theme.ok,
@@ -6160,7 +6041,7 @@ fn draw_desktop_icons(
 
         // Prefer TGA theme icon; fall back to pixel-art if not loaded.
         if let Some(tga) = dt.icon_for_entry(icon.kind, &icon.name) {
-            canvas.draw_tga_icon(&tga, icon_rect);
+            canvas.draw_icon(&tga, icon_rect);
         } else {
             let (rows, color) = desktop_icon_visual(icon.kind, theme);
             draw_icon16_scaled(canvas, icon_rect, rows, color, DESKTOP_ICON_SCALE);
@@ -6250,12 +6131,12 @@ fn make_context_menu(
         .enumerate()
         .map(|(i, (label, action))| {
             let icon = match action {
-                ContextMenuAction::NewFolder => TgaImage::parse(MENU_NEW_FOLDER_TGA).ok(),
-                ContextMenuAction::NewTextFile => TgaImage::parse(MENU_NEW_TEXT_TGA).ok(),
-                ContextMenuAction::Refresh => TgaImage::parse(MENU_REFRESH_TGA).ok(),
-                ContextMenuAction::SortByName => TgaImage::parse(MENU_SORT_TGA).ok(),
-                ContextMenuAction::OpenTerminalHere => TgaImage::parse(MENU_TERMINAL_TGA).ok(),
-                ContextMenuAction::WallpaperSettings => TgaImage::parse(ICON_SETTINGS_TGA).ok(),
+                ContextMenuAction::NewFolder => IconImage::parse(MENU_NEW_FOLDER_SVG).ok(),
+                ContextMenuAction::NewTextFile => IconImage::parse(MENU_NEW_TEXT_SVG).ok(),
+                ContextMenuAction::Refresh => IconImage::parse(MENU_REFRESH_SVG).ok(),
+                ContextMenuAction::SortByName => IconImage::parse(MENU_SORT_SVG).ok(),
+                ContextMenuAction::OpenTerminalHere => IconImage::parse(MENU_TERMINAL_SVG).ok(),
+                ContextMenuAction::WallpaperSettings => IconImage::parse(ICON_SETTINGS_SVG).ok(),
                 _ => None,
             };
             MenuItem {
@@ -6288,7 +6169,7 @@ fn draw_context_menu(canvas: &mut Canvas, theme: &Theme, menu: &ContextMenuState
             canvas.fill_rect(Rect::new(item.x, item.y, item.w, 1), theme.border);
         }
         if let Some(icon) = menu.items[i].icon {
-            canvas.draw_tga_icon(&icon, Rect::new(item.x + 4, item.y + 2, 16, 16));
+            canvas.draw_icon(&icon, Rect::new(item.x + 4, item.y + 2, 16, 16));
         }
         let tw = measure_text(label, FontRole::UiRegular).w;
         let tx = (item.x + 24).min(item.x + item.w as i32 - tw as i32);
@@ -6361,14 +6242,14 @@ fn draw_system_menu(canvas: &mut Canvas, theme: &Theme, menu: Rect, hovered: Opt
             canvas.fill_rounded_rect(row, 6, theme.accent.darken(165));
         }
         let icon = match action {
-            SystemMenuAction::AboutComputer => TgaImage::parse(ICON_COMPUTER_TGA).ok(),
-            SystemMenuAction::AboutOs => TgaImage::parse(ICON_ABOUT_TGA).ok(),
-            SystemMenuAction::Devices => TgaImage::parse(ICON_DEVICES_TGA).ok(),
-            SystemMenuAction::Tasks => TgaImage::parse(ICON_TASKS_TGA).ok(),
-            SystemMenuAction::ControlPanel => TgaImage::parse(ICON_SETTINGS_TGA).ok(),
+            SystemMenuAction::AboutComputer => IconImage::parse(ICON_COMPUTER_SVG).ok(),
+            SystemMenuAction::AboutOs => IconImage::parse(ICON_ABOUT_SVG).ok(),
+            SystemMenuAction::Devices => IconImage::parse(ICON_DEVICES_SVG).ok(),
+            SystemMenuAction::Tasks => IconImage::parse(ICON_TASKS_SVG).ok(),
+            SystemMenuAction::ControlPanel => IconImage::parse(ICON_SETTINGS_SVG).ok(),
         };
         if let Some(icon) = icon {
-            canvas.draw_tga_icon(&icon, Rect::new(row.x + 8, row.y + 8, 24, 24));
+            canvas.draw_icon(&icon, Rect::new(row.x + 8, row.y + 8, 24, 24));
         }
         draw_text_vcenter(
             canvas,
@@ -6587,14 +6468,14 @@ fn icon_override_for<'a>(overrides: &'a [IconOverride], name: &str) -> Option<&'
 
 fn resolve_icon_ref(icon_ref: &str) -> Option<RunningIcon> {
     if icon_ref.starts_with('/') {
-        return read_file_bytes(icon_ref.as_bytes(), 32 * 1024).map(RunningIcon::Runtime);
+        return read_file_bytes(icon_ref.as_bytes(), 2 * 1024 * 1024).and_then(decode_runtime_icon);
     }
     if let Some(bytes) = resolve_icon_bytes(icon_ref) {
-        if let Ok(img) = TgaImage::parse(bytes) {
+        if let Ok(img) = IconImage::parse(bytes) {
             return Some(RunningIcon::Static(img));
         }
     }
-    try_load_runtime_icon(icon_ref).map(RunningIcon::Runtime)
+    try_load_runtime_icon(icon_ref).and_then(decode_runtime_icon)
 }
 
 fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
@@ -6605,9 +6486,9 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "xterm"
         | "konsole"
         | "alacritty"
-        | "sunlight-terminal" => Some(ICON_TERMINAL_TGA),
+        | "sunlight-terminal" => Some(ICON_TERMINAL_SVG),
         "calc" | "calculator" | icon_name::CALCULATOR | "kcalc" | "sunlight-calculator" => {
-            Some(ICON_CALC_TGA)
+            Some(ICON_CALC_SVG)
         }
         "files"
         | "file-manager"
@@ -6616,16 +6497,16 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "org.kde.dolphin"
         | "nautilus"
         | "thunar"
-        | "sunlight-files" => Some(ICON_FILES_TGA),
+        | "sunlight-files" => Some(ICON_FILES_SVG),
         "settings"
         | icon_name::SETTINGS
         | "systemsettings"
         | "system-settings"
-        | "sunlight-settings" => Some(ICON_SETTINGS_TGA),
-        "folder" | "home" | "folder-home" => Some(ICON_FOLDER_TGA),
-        "computer" | "desktop-computer" => Some(ICON_COMPUTER_TGA),
-        "drive" | icon_name::DRIVE | "disk" => Some(ICON_DRIVE_TGA),
-        "sunlight-writer" | "writer" | "libreoffice-writer" => Some(ICON_WRITER_TGA),
+        | "sunlight-settings" => Some(ICON_SETTINGS_SVG),
+        "folder" | "home" | "folder-home" => Some(ICON_FOLDER_SVG),
+        "computer" | "desktop-computer" => Some(ICON_COMPUTER_SVG),
+        "drive" | icon_name::DRIVE | "disk" => Some(ICON_DRIVE_SVG),
+        "sunlight-writer" | "writer" | "libreoffice-writer" => Some(ICON_WRITER_SVG),
         "text"
         | icon_name::TEXT_GENERIC
         | "editor"
@@ -6634,20 +6515,20 @@ fn resolve_icon_bytes(name: &str) -> Option<&'static [u8]> {
         | "notes"
         | "sunlight-edit"
         | "sunlight-text"
-        | "kate" => Some(ICON_TEXT_EDITOR_TGA),
-        "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_TGA),
-        "sunlight-docview" | "docview" | "document-viewer" => Some(ICON_DOCUMENT_VIEWER_TGA),
-        "melody-mina" | "melody" | "music-player" => Some(ICON_MELODY_MINA_TGA),
-        "silicon-echoes" | "silicon" => Some(ICON_SILICON_ECHOES_TGA),
+        | "kate" => Some(ICON_TEXT_EDITOR_SVG),
+        "calendar" | "sunlight-calendar" => Some(ICON_CALENDAR_SVG),
+        "sunlight-docview" | "docview" | "document-viewer" => Some(ICON_DOCUMENT_VIEWER_SVG),
+        "melody-mina" | "melody" | "music-player" => Some(ICON_MELODY_MINA_SVG),
+        "silicon-echoes" | "silicon" => Some(ICON_SILICON_ECHOES_SVG),
         "rappid-rabbit" | "rabbit" | "internet-web-browser" | "web-browser" => {
-            Some(ICON_GENERIC_APP_TGA)
+            Some(ICON_GENERIC_APP_SVG)
         }
-        "sunlight-api-lab" | "api-lab" | "apifox" => Some(ICON_API_LAB_TGA),
-        "runner" | "run" | "system-run" => Some(ICON_RUNNER_TGA),
-        "tasks" | "task-manager" | "ksysguard" | "sunlight-tasks" => Some(ICON_TASKS_TGA),
-        "bench" | "sunlight-bench" | "cpu-x" => Some(ICON_BENCH_TGA),
+        "sunlight-api-lab" | "api-lab" | "apifox" => Some(ICON_API_LAB_SVG),
+        "runner" | "run" | "system-run" => Some(ICON_RUNNER_SVG),
+        "tasks" | "task-manager" | "ksysguard" | "sunlight-tasks" => Some(ICON_TASKS_SVG),
+        "bench" | "sunlight-bench" | "cpu-x" => Some(ICON_BENCH_SVG),
         "generic-app" | "app" | "application" | "applications-system" | "windows" => {
-            Some(ICON_GENERIC_APP_TGA)
+            Some(ICON_GENERIC_APP_SVG)
         }
         _ => None,
     }
@@ -6684,7 +6565,7 @@ fn try_load_runtime_icon(name: &str) -> Option<Vec<u8>> {
                 if len == 0 {
                     continue;
                 }
-                if let Some(bytes) = read_file_bytes(&path[..len], 32 * 1024) {
+                if let Some(bytes) = read_file_bytes(&path[..len], 2 * 1024 * 1024) {
                     if !bytes.is_empty() {
                         return Some(bytes);
                     }
@@ -6710,7 +6591,7 @@ fn resolve_running_icon(
 
     for candidate in [proc_name, Some(display_name)].into_iter().flatten() {
         if let Some(bytes) = resolve_icon_bytes(candidate) {
-            if let Ok(img) = TgaImage::parse(bytes) {
+            if let Ok(img) = IconImage::parse(bytes) {
                 return Some(RunningIcon::Static(img));
             }
         }
@@ -6718,17 +6599,17 @@ fn resolve_running_icon(
 
     for candidate in [proc_name, Some(display_name)].into_iter().flatten() {
         if let Some(bytes) = try_load_runtime_icon(candidate) {
-            return Some(RunningIcon::Runtime(bytes));
+            return decode_runtime_icon(bytes);
         }
     }
 
     if let Some(bytes) = resolve_icon_bytes("generic-app") {
-        if let Ok(img) = TgaImage::parse(bytes) {
+        if let Ok(img) = IconImage::parse(bytes) {
             return Some(RunningIcon::Static(img));
         }
     }
     if let Some(bytes) = try_load_runtime_icon("generic-app") {
-        return Some(RunningIcon::Runtime(bytes));
+        return decode_runtime_icon(bytes);
     }
     Some(RunningIcon::Missing)
 }
@@ -6930,7 +6811,7 @@ fn draw_bot_center(
             canvas.stroke_rounded_rect(cell, 5, 1, theme.accent);
         }
         if let Some(tga) = sym.start.or(sym.menu) {
-            draw_tga_tinted_orange(canvas, &tga, cell.inset(4), theme.accent);
+            draw_icon_tinted_orange(canvas, &tga, cell.inset(4), theme.accent);
         } else {
             draw_icon_btn(canvas, cell, &GRID_ROWS, theme, false, false);
         }
@@ -7418,7 +7299,7 @@ impl VortexShell {
         };
         let icon_rect = Rect::new(panel.x + 14, panel.y + 12, 18, 18);
         if let Some(tga) = icon {
-            canvas.draw_tga_icon_tinted(&tga, icon_rect, theme.text);
+            canvas.draw_icon_tinted(&tga, icon_rect, theme.text);
         }
         draw_text_vcenter(
             canvas,
@@ -7500,7 +7381,7 @@ impl VortexShell {
             NetworkIndicatorState::Error => theme.warn,
         };
         if let Some(icon) = self.symbols.lan {
-            canvas.draw_tga_icon_tinted(&icon, icon_rect, icon_tint);
+            canvas.draw_icon_tinted(&icon, icon_rect, icon_tint);
         }
         draw_text_vcenter(
             canvas,
@@ -7722,7 +7603,7 @@ impl VortexShell {
         );
         if let Some(icon) = self.symbols.settings {
             let icon_rect = Rect::new(btn.x + 8, btn.y + 3, 16, 16);
-            canvas.draw_tga_icon_tinted(&icon, icon_rect, btn_text);
+            canvas.draw_icon_tinted(&icon, icon_rect, btn_text);
         }
         draw_text_vcenter(
             canvas,
@@ -7753,7 +7634,7 @@ impl VortexShell {
 
         let header_icon_r = Rect::new(panel.x + 14, panel.y + 11, 18, 18);
         if let Some(icon) = self.symbols.notifications {
-            canvas.draw_tga_icon_tinted(&icon, header_icon_r, theme.accent);
+            canvas.draw_icon_tinted(&icon, header_icon_r, theme.accent);
         }
         draw_text_vcenter(
             canvas,
@@ -7793,7 +7674,7 @@ impl VortexShell {
             self.symbols.dnd_off
         };
         if let Some(icon) = dnd_icon {
-            canvas.draw_tga_icon_tinted(
+            canvas.draw_icon_tinted(
                 &icon,
                 dnd_icon_r,
                 if dnd_on { theme.text } else { theme.icon_muted },
@@ -7850,7 +7731,7 @@ impl VortexShell {
             }
             let group_icon_r = Rect::new(panel.x + 14, cy + 1, 16, 16);
             if let Some(icon) = self.symbols.settings {
-                canvas.draw_tga_icon_tinted(&icon, group_icon_r, theme.text_dim.darken(20));
+                canvas.draw_icon_tinted(&icon, group_icon_r, theme.text_dim.darken(20));
             }
             let label = ellipsize_label(&group, 30);
             draw_text_vcenter(
@@ -7919,7 +7800,7 @@ impl VortexShell {
                 canvas.fill_rounded_rect(close_r, 4, theme.panel);
                 canvas.stroke_rounded_rect(close_r, 4, 1, theme.border);
                 if let Some(icon) = self.symbols.close {
-                    canvas.draw_tga_icon_tinted(&icon, close_r, theme.text_dim);
+                    canvas.draw_icon_tinted(&icon, close_r, theme.text_dim);
                 } else {
                     draw_text_vcenter(
                         canvas,
@@ -8056,7 +7937,7 @@ fn draw_bot_right(
     );
     if let Some(tga) = dock.trash_icon(trash_full) {
         // Prefer alpha-tint path so white symbolic art picks up shelf color.
-        canvas.draw_tga_icon_tinted(&tga, trash_icon, trash_tint);
+        canvas.draw_icon_tinted(&tga, trash_icon, trash_tint);
     } else {
         draw_icon16(canvas, trash_icon, &TRASH_ROWS, trash_tint);
     }
@@ -8077,7 +7958,7 @@ fn draw_bot_right(
         icon_size,
     );
     if let Some(tga) = sym.search {
-        draw_tga_tinted_orange(canvas, &tga, search_icon, search_tint);
+        draw_icon_tinted_orange(canvas, &tga, search_icon, search_tint);
     }
 
     BottomRightZones {
@@ -8474,7 +8355,7 @@ impl App for VortexShell {
         // mutual-exclusion correctly left only one open.
         if self.workspace_switcher.is_open() {
             let icon_images = self.workspace_switcher_icon_images();
-            let generic = TgaImage::parse(ICON_GENERIC_APP_TGA).ok();
+            let generic = IconImage::parse(ICON_GENERIC_APP_SVG).ok();
             let top_inset = top_bar_rect(cw, self.top_panel_presentation).bottom() + 8;
             self.workspace_switcher.view(
                 canvas,
@@ -9633,8 +9514,7 @@ impl App for VortexShell {
 // ---------------------------------------------------------------------------
 
 #[cfg(not(test))]
-#[no_mangle]
-pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+fn application_main(argc: u64, argv: *const *const u8) -> ! {
     if lock_presenter::requested(argc, argv) {
         lock_presenter::run();
     }
@@ -9826,6 +9706,7 @@ fn launch_error_text(err: sun_exec::LaunchError) -> &'static str {
 }
 
 #[cfg(not(test))]
+#[cfg(not(feature = "native-svg"))]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     debug_log("[VORTEX] panic");
@@ -9841,4 +9722,10 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     loop {
         process_yield();
     }
+}
+
+#[cfg(all(not(test), feature = "native-svg", target_os = "sunlightos"))]
+fn main() {
+    let (argc, argv, _envp) = sunlight_libc::std_runtime::startup_args();
+    application_main(argc, argv);
 }
