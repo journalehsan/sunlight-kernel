@@ -32,7 +32,7 @@
 //!
 //! The effective quantum is:
 //!   quantum = calculate_quantum_with_nice(burst_score, nice)
-//!   where positive nice inflates the score (shorter slice) and negative deflates it.
+//!   where positive nice inflates the score (longer slice) and negative deflates it.
 //!
 //! ### Quantum
 //! - Base range: [QUANTUM_MIN, QUANTUM_MAX] ticks (~5..50 at 100 Hz).
@@ -40,6 +40,11 @@
 //! - CPU-bound (high burst) receive longer quanta to reduce switch overhead.
 //!
 //! quantum_override may be set by the nice promotion logic for one shot bonuses.
+//!
+//! In RR, an equal/lower-priority wake leaves the current unexpired turn intact.
+//! A queued task with lower nice may interrupt it; the interrupted task retains
+//! its frozen residual budget and resumes ahead of peers. Forced interruptions
+//! do not produce voluntary short-burst feedback. Yield/block/exit retire a turn.
 //!
 //! ### Per-Core Tiered Queues (BORE mode)
 //! Each `CoreState` maintains three ready queues (high/med/low). pick_next_bore
@@ -85,7 +90,7 @@ pub mod accounting;
 mod handoff;
 #[cfg(feature = "scheduler_perf_diag")]
 pub mod perf;
-mod quantum;
+pub(crate) mod quantum;
 mod requests;
 const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
 #[cfg(feature = "scheduler_b_test")]
@@ -639,7 +644,9 @@ impl Scheduler {
         {
             return;
         }
-        if self.processes[idx].owning_core != u8::MAX {
+        if self.processes[idx].owning_core != u8::MAX
+            || self.processes[idx].queued_on_core != u8::MAX
+        {
             return;
         }
         // The local CPU is already executing the enqueue path (including
@@ -649,6 +656,8 @@ impl Scheduler {
             && self.core_current_task(core_id).is_none()
             && SCHEDULER_READY.load(Ordering::Acquire)
             && core_id != current_cpu_id();
+        #[cfg(feature = "scheduler_guest_bench")]
+        crate::scheduler_bench_diag::service_ready(self.processes[idx].name_str(), now_ns());
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             self.processes[idx].queued_on_core = core_id as u8;
             #[cfg(feature = "scheduler_perf_diag")]
@@ -1001,10 +1010,11 @@ impl Scheduler {
         self.processes[idx].cpu_charge_since = Some(now);
         let cpu_id = current_cpu_id();
         let budget = quantum_ticks(&self.processes[idx]);
+        let credit = self.processes[idx].slice_credit.take();
         match SCHEDULER_MODE {
             SchedulerMode::RoundRobin => {
                 let mut core = CORE_STATES[cpu_id].lock();
-                core.slice.start(now, budget);
+                core.slice.resume(now, budget, credit);
                 core.current_ticks = 0;
             }
             SchedulerMode::Bore => {
@@ -1022,7 +1032,7 @@ impl Scheduler {
         sunlight_ipc::cpu_accounting::runtime_at(p.cpu_runtime_ns, p.cpu_charge_since, now)
     }
 
-    fn stop_execution_clock(&mut self, idx: usize) {
+    fn stop_execution_clock(&mut self, idx: usize, preserve_turn: bool) {
         let now = now_ns();
         let p = &mut self.processes[idx];
         sunlight_ipc::cpu_accounting::checkpoint(
@@ -1037,16 +1047,21 @@ impl Scheduler {
             SchedulerMode::RoundRobin => {
                 let mut core = CORE_STATES[cpu_id].lock();
                 core.current_ticks = 0;
-                core.slice.finish(now, calibrated)
+                core.slice.interrupt(now, calibrated)
             }
             SchedulerMode::Bore => {
                 self.cores[cpu_id].current_ticks = 0;
-                self.cores[cpu_id].slice.finish(now, calibrated)
+                self.cores[cpu_id].slice.interrupt(now, calibrated)
             }
         };
-        if let Some(usage) = usage {
+        self.processes[idx].slice_credit = None;
+        if let Some((usage, credit)) = usage {
             let p = &mut self.processes[idx];
             p.timeslice_used = usage.ticks.min(u32::MAX as u64) as u32;
+            if preserve_turn && credit.is_some() {
+                p.slice_credit = credit;
+                return; // Policy feedback belongs to the whole turn, once.
+            }
             // Retire the old override before modifying burst/quantum policy.
             if SCHEDULER_MODE == SchedulerMode::RoundRobin {
                 on_task_ran(p, usage.ticks, usage.budget_ticks);
@@ -1069,6 +1084,7 @@ impl Scheduler {
         self.processes[idx].state = new_state;
         let runnable = matches!(new_state, ProcessState::Ready | ProcessState::Running);
         if !runnable {
+            self.processes[idx].slice_credit = None;
             self.remove_from_ready_queues(idx);
         }
     }
@@ -1516,6 +1532,12 @@ impl Scheduler {
                 continue;
             }
 
+            // A forced interruption resumes the same admitted turn. Do not
+            // accumulate nice debt/credit or skip it again on each fragment.
+            if self.processes[idx].slice_credit.is_some() {
+                return Some(idx);
+            }
+
             // Starvation rescue BEFORE accumulate_counter.
             let ticks_waiting = self
                 .global_tick
@@ -1587,6 +1609,22 @@ impl Scheduler {
         next
     }
 
+    /// Lower nice is the only wake-preemption priority in RR. Burst score
+    /// controls quantum length, never permission to interrupt an equal peer.
+    /// Search the local FIFO without changing peers' order or stealing.
+    fn priority_preemption_candidate(&self, cpu_id: usize, current: usize) -> Option<usize> {
+        let core = CORE_STATES[cpu_id].lock();
+        core.rr_queue.iter().copied().find(|&idx| {
+            idx < self.processes.len()
+                && self.processes[idx].nice < self.processes[current].nice
+                && self.processes[idx].state == ProcessState::Ready
+                && self.processes[idx].cpu_mask & (1u64 << cpu_id) != 0
+                && !self.is_live_on_other_core(idx, cpu_id)
+                && !self.stack_is_pinned_remotely(idx, cpu_id)
+                && self.context_is_dispatchable(idx)
+        })
+    }
+
     // ── Per-core dispatch ────────────────────────────────────────────────────
 
     /// Central per-core scheduling dispatch.
@@ -1651,11 +1689,45 @@ impl Scheduler {
             return 0;
         }
 
+        // A request means re-evaluate, not necessarily rotate. Equal/lower
+        // priority Ready publications leave an eligible unexpired RR turn open.
+        // Ready (explicit yield or raced wake), blocked and terminal tasks must
+        // still leave the CPU. BORE retains its existing dispatch behavior.
+        let mut priority_next = None;
+        let mut preserve_turn = false;
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin
+            && self.processes[current].state == ProcessState::Running
+            && self.processes[current].cpu_mask & (1u64 << cpu_id) != 0
+            && !CORE_STATES[cpu_id]
+                .lock()
+                .slice
+                .expired(now_ns(), crate::arch::x86_64::interrupts::tsc_hz() != 0)
+        {
+            priority_next = self.priority_preemption_candidate(cpu_id, current);
+            if priority_next.is_none() {
+                return 0;
+            }
+            preserve_turn = true;
+        }
         // Ownership can be published before Rust returns, but this physical
         // stack remains in use until the naked epilogue releases the pin.
         self.pin_outgoing_stack(cpu_id, current);
-        self.account_and_apply_churn_penalty();
-        self.stop_execution_clock(current);
+        // Some block/yield callers already checkpoint; their last_start_ns is
+        // zero, so this cannot penalize twice. Other I/O/futex waits rely on
+        // dispatch to account voluntary churn. Forced preemption and teardown
+        // must never be classified as voluntary short-burst behavior.
+        if matches!(
+            self.processes[current].state,
+            ProcessState::Ready
+                | ProcessState::BlockedOnIpc
+                | ProcessState::BlockedOnTimer
+                | ProcessState::BlockedOnIo
+        ) {
+            self.account_and_apply_churn_penalty();
+        } else {
+            self.account_current_runtime();
+        }
+        self.stop_execution_clock(current, preserve_turn);
 
         // Save interrupted context.
         unsafe { self.processes[current].fx_state.save() };
@@ -1675,13 +1747,25 @@ impl Scheduler {
             self.processes[current].owning_core = u8::MAX;
             self.set_core_current_task(cpu_id, None);
             self.queue_process_to_core(current, cpu_id, false);
+            if self.processes[current].slice_credit.is_some() {
+                // Resume ahead of peers after the priority task relinquishes.
+                let mut core = CORE_STATES[cpu_id].lock();
+                core.rr_queue.retain(|&idx| idx != current);
+                core.rr_queue.push_front(current);
+            }
         } else if !was_runnable || !matches!(self.processes[current].state, ProcessState::Ready) {
             self.processes[current].owning_core = u8::MAX;
             self.set_core_current_task(cpu_id, None);
             self.remove_from_ready_queues(current);
         }
 
-        if let Some(next) = self.pick_next(cpu_id) {
+        let next = if let Some(next) = priority_next {
+            self.remove_from_ready_queues(next);
+            Some(next)
+        } else {
+            self.pick_next(cpu_id)
+        };
+        if let Some(next) = next {
             #[cfg(feature = "scheduler_perf_diag")]
             record_perf_dispatch(&self.processes[next], cpu_id);
             let next_rsp = self.processes[next].context_rsp;
@@ -2342,6 +2426,7 @@ impl Scheduler {
             }
             self.processes[idx].exit_code = 128 + 9;
             self.processes[idx].state = ProcessState::Finished;
+            self.processes[idx].slice_credit = None;
             self.processes[idx].exit_cleanup_pending = true;
             if self.processes[idx].native_thread {
                 note_native_borrower_finished();
@@ -2378,6 +2463,12 @@ impl Scheduler {
             #[cfg(feature = "scheduler_b_test")]
             regression::note_deferred_reap();
             return;
+        }
+        if matches!(
+            self.processes[idx].state,
+            ProcessState::Finished | ProcessState::Reaped
+        ) {
+            self.processes[idx].slice_credit = None;
         }
         if !self.processes[idx].exit_cleanup_pending {
             // Already reaped or never marked for cleanup. Ensure state reflects it.
@@ -2687,6 +2778,7 @@ impl Scheduler {
             if self.stack_is_pinned(idx) {
                 continue;
             }
+            self.processes[idx].slice_credit = None;
             if !self.processes[idx].exit_cleanup_pending {
                 // Stale Finished without pending flag: promote to Reaped for reuse safety.
                 self.processes[idx].state = ProcessState::Reaped;
@@ -2779,6 +2871,7 @@ impl Scheduler {
         self.cancel_foreground(idx, 1);
         self.processes[idx].exit_code = code;
         self.processes[idx].state = ProcessState::Finished;
+        self.processes[idx].slice_credit = None;
         self.processes[idx].exit_cleanup_pending = true;
         if self.processes[idx].native_thread {
             note_native_borrower_finished();
@@ -2845,6 +2938,7 @@ impl Scheduler {
         self.cancel_foreground(idx, 1);
         self.processes[idx].exit_code = code;
         self.processes[idx].state = ProcessState::Finished;
+        self.processes[idx].slice_credit = None;
         self.processes[idx].exit_cleanup_pending = true;
         if self.processes[idx].native_thread {
             note_native_borrower_finished();
@@ -3875,7 +3969,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         // that terminal result, but still retire actual execution exactly once
         // before halting on the idle stack (not at a later timer callback).
         sched.account_current_runtime();
-        sched.stop_execution_clock(cur);
+        sched.stop_execution_clock(cur, false);
         sched.increment_context_switches(cpu_id);
         sched.processes[cur].owning_core = u8::MAX;
         sched.remove_from_ready_queues(cur);
@@ -3909,7 +4003,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     );
 
     sched.account_current_runtime();
-    sched.stop_execution_clock(cur);
+    sched.stop_execution_clock(cur, false);
     sched.increment_context_switches(cpu_id); // exiting task -> idle
     let is_borrower = sched.processes[cur].native_thread;
     {

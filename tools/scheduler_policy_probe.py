@@ -39,7 +39,7 @@ static CORE_STATES: [Lock<Core>; 1] = [Lock(Mutex::new(Core {
 enum BurstReason { EarlyBlock, FullQuantum, Aged }
 struct Process { state: ProcessState, queued_on_core: u8, cpu_mask: u64,
     last_run_tick: u64, aging_boosted_this_pick: bool, counter: i32,
-    nice: i8, quantum_override: Option<u32>, burst_score: u32,
+    nice: i8, slice_credit: Option<()>, quantum_override: Option<u32>, burst_score: u32,
     interactive_bonus: i32, aging_counter: u32, stack_handoff_core: u8 }
 struct Scheduler { processes: Vec<Process>, global_tick: u64 }
 impl Scheduler {
@@ -55,7 +55,7 @@ fn main() {
     for nice in -10..=10 {
         let p = Process { state: ProcessState::Ready, queued_on_core: 0,
             cpu_mask: 1, last_run_tick: 0, aging_boosted_this_pick: false,
-            counter: 0, nice, quantum_override: None, burst_score: burst,
+            counter: 0, nice, slice_credit: None, quantum_override: None, burst_score: burst,
             interactive_bonus: 0, aging_counter: 0, stack_handoff_core: u8::MAX };
         let peer = Process { nice: 0, ..p };
         let mut s = Scheduler { processes: vec![p, peer], global_tick: 0 };
@@ -93,7 +93,7 @@ fn main() {
     if !LEGACY {
         let p = Process { state: ProcessState::Ready, queued_on_core: 0,
             cpu_mask: 1, last_run_tick: 0, aging_boosted_this_pick: false,
-            counter: 0, nice: 0, quantum_override: None, burst_score: 256,
+            counter: 0, nice: 0, slice_credit: None, quantum_override: None, burst_score: 256,
             interactive_bonus: 0, aging_counter: 0, stack_handoff_core: 1 };
         let peer = Process { stack_handoff_core: u8::MAX, ..p };
         let mut s = Scheduler { processes: vec![p, peer], global_tick: 0 };

@@ -109,6 +109,17 @@ The canonical order remains S -> one core; no two core locks are held together.
 
 ## Quantum and runtime contract
 
+**C1.2C amendment:** [CPU-service fairness](scheduler-phase-c12c-fairness.md)
+refines Phase B's dispatch-slice contract below. An unrelated equal/lower-nice-
+priority wake now consumes the request without ending an unexpired RR turn.
+A strictly higher-priority (lower nice) Ready task may interrupt; its victim
+retains only the unused frozen entitlement and resumes ahead of FIFO peers.
+Counter/override/full-quantum feedback happens once when that whole turn ends.
+Yield, block, sleep and exit discard residual entitlement. Cumulative execution
+accounting, physical handoff pins and deferred reclamation remain Phase B's.
+The bullets below document the original Phase B behavior and are historical
+where they describe every preemption/migration as starting a fresh slice.
+
 [Slice](../../kernel/src/sched/quantum.rs#L1) is fixed-size per-core dispatch
 state. Its contract differs from cumulative `cpu_runtime_ns`:
 

@@ -1,5 +1,8 @@
 # Scheduler Phase C1.2B: single-vCPU fairness and repeatability
 
+Follow-up: [Phase C1.2C correction and measurements](scheduler-phase-c12c-fairness.md).
+This report and its CSV retain the uncorrected C1.2B evidence.
+
 Measured on 2026-10-18. The synchronized benchmark still exposes a CPU-service
 fairness problem. Nice-0 RR admission/rotation works, but equal dispatch counts
 do not imply equal CPU time: periodic service wakeups repeatedly truncate some

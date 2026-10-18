@@ -46,6 +46,8 @@ def main():
                                stderr=subprocess.STDOUT, check=True, timeout=args.timeout)
             subprocess.run([sys.executable, 'tools/scheduler_policy_probe.py'], cwd=root,
                            stdout=log, stderr=subprocess.STDOUT, check=True, timeout=args.timeout)
+            subprocess.run([sys.executable, 'tools/scheduler_service_probe.py'], cwd=root,
+                           stdout=log, stderr=subprocess.STDOUT, check=True, timeout=args.timeout)
             subprocess.run([sys.executable, 'tools/scheduler_queue_probe.py'], cwd=root,
                            stdout=log, stderr=subprocess.STDOUT, check=True, timeout=args.timeout)
     print('Focused production state/lifecycle/accounting/policy tests: PASS', flush=True)

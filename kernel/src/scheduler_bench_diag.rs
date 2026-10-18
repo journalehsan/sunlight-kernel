@@ -78,7 +78,23 @@ impl Worker {
     }
 }
 
+struct Service {
+    ready_since: Option<u64>,
+    waits: [u64; MAX_WAITS],
+    count: usize,
+    overflow: bool,
+}
+impl Service {
+    const ZERO: Self = Self {
+        ready_since: None,
+        waits: [0; MAX_WAITS],
+        count: 0,
+        overflow: false,
+    };
+}
+
 struct State {
+    services: [Service; 2],
     workers: [Worker; N],
     start: u64,
     run: u64,
@@ -87,10 +103,25 @@ struct Protected(UnsafeCell<State>);
 // SAFETY: access is serialized by the existing global scheduler lock.
 unsafe impl Sync for Protected {}
 static STATE: Protected = Protected(UnsafeCell::new(State {
+    services: [Service::ZERO, Service::ZERO],
     workers: [Worker::ZERO; N],
     start: 0,
     run: 0,
 }));
+
+/// Diagnostic Ready publication under SCHEDULER; no allocation or logging.
+pub fn service_ready(name: &str, now: u64) {
+    let state = unsafe { &mut *STATE.0.get() };
+    if state.start == 0 || !state.workers.iter().any(|w| w.active) {
+        return;
+    }
+    let slot = match name {
+        "timer_server" => 0,
+        "tty_server" => 1,
+        _ => return,
+    };
+    state.services[slot].ready_since.get_or_insert(now);
+}
 
 /// Call only while holding SCHEDULER, immediately after schedule_tick. A
 /// nonzero result means a selected dispatch, including same-task reselection.
@@ -103,6 +134,26 @@ pub fn observe(sched: &Scheduler, outgoing: Option<usize>, result: u64, reason: 
     }
     let now = sched.now_ns();
     let selected = sched.diagnostic_current_pid(0);
+    if result != 0 {
+        if let Some(p) = sched.processes.iter().find(|p| Some(p.pid) == selected) {
+            let slot = match p.name_str() {
+                "timer_server" => Some(0),
+                "tty_server" => Some(1),
+                _ => None,
+            };
+            if let Some(slot) = slot {
+                let service = &mut state.services[slot];
+                if let Some(ready) = service.ready_since.take() {
+                    if service.count < MAX_WAITS {
+                        service.waits[service.count] = now.saturating_sub(ready);
+                        service.count += 1;
+                    } else {
+                        service.overflow = true;
+                    }
+                }
+            }
+        }
+    }
     for w in &mut state.workers {
         if !w.active {
             continue;
@@ -170,6 +221,11 @@ pub fn syscall(action: u64, value: u64) -> u64 {
             unsafe {
                 core::ptr::write_bytes(state.workers.as_mut_ptr(), 0, N);
             }
+            for service in &mut state.services {
+                service.ready_since = None;
+                service.count = 0;
+                service.overflow = false;
+            }
             state.start = 0;
         }
         1 if value < N as u64 => {
@@ -227,6 +283,11 @@ pub fn syscall(action: u64, value: u64) -> u64 {
             // storage, keeping the IRQ/syscall stack independent of trace size.
             let workers = state.workers.to_vec();
             let start = state.start;
+            let services: alloc::vec::Vec<_> = state
+                .services
+                .iter()
+                .map(|s| (s.waits[..s.count].to_vec(), s.overflow))
+                .collect();
             let reaped = core::array::from_fn::<_, N, _>(|slot| {
                 let w = &workers[slot];
                 sched
@@ -237,6 +298,10 @@ pub fn syscall(action: u64, value: u64) -> u64 {
                     .unwrap_or(true)
             });
             drop(sched);
+            for (slot, (waits, overflow)) in services.iter().enumerate() {
+                let name = ["timer_server", "tty_server"][slot];
+                crate::serial_println!("[SCHED-BENCH] SERVICE {{\"run\":\"1-{}-1\",\"name\":\"{}\",\"overflow\":{},\"waits_ns\":{:?}}}", value, name, overflow, waits);
+            }
             for (slot, w) in workers.iter().enumerate() {
                 crate::serial_println!("[SCHED-BENCH] WORKER {{\"run\":\"1-{}-1\",\"slot\":{},\"pid\":{},\"cpu_ns\":{},\"dispatches\":{},\"wait_ns\":{},\"wait_max_ns\":{},\"wait_count\":{},\"wait_overflow\":{},\"first_ns\":{},\"finish_ns\":{},\"burst_start\":{},\"burst_end\":{},\"nice\":{},\"mask\":{},\"invalid_observations\":{},\"reaped\":{}}}",
                     value, slot, w.pid, w.runtime, w.dispatches, w.wait_sum, w.wait_max,

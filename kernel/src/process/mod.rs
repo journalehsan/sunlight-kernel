@@ -260,6 +260,8 @@ pub struct Process {
     pub burst_score: u32,
     /// Ticks consumed in current timeslice (0-10)
     pub timeslice_used: u32,
+    /// Unexpired RR service entitlement after a forced priority interruption.
+    pub(crate) slice_credit: Option<crate::sched::quantum::Credit>,
     /// Global tick counter when this process last ran
     pub last_run_tick: u64,
     /// C1 diagnostic timestamp for the current runnable interval.
@@ -490,7 +492,8 @@ impl Process {
             owning_core: u8::MAX,    // not running on any core
             queued_on_core: u8::MAX, // not in any ready queue
             stack_handoff_core: u8::MAX,
-            burst_score: 256,  // Start at MEDIUM tier (interactive bias)
+            burst_score: 256, // Start at MEDIUM tier (interactive bias)
+            slice_credit: None,
             timeslice_used: 0, // Fresh quantum
             last_run_tick: 0,  // Will be set on first run
             #[cfg(feature = "scheduler_perf_diag")]
@@ -671,6 +674,7 @@ impl Process {
             queued_on_core: u8::MAX,
             stack_handoff_core: u8::MAX,
             burst_score: 256,
+            slice_credit: None,
             timeslice_used: 0,
             last_run_tick: 0,
             #[cfg(feature = "scheduler_perf_diag")]
