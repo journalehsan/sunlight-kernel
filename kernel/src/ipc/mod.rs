@@ -1015,6 +1015,7 @@ fn wake_terminal(sched: &mut Scheduler, idx: usize) {
         0,
     );
     sched.processes[idx].state = ProcessState::Ready;
+    sched.processes[idx].priority_wake_pending = true;
     sched.remove_from_ready_queues(idx);
     if let Some(cpu_id) = sched.live_owner_core(idx) {
         crate::sched::request_reschedule_on(cpu_id);

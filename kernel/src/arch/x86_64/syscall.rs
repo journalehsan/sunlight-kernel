@@ -3015,6 +3015,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         bytes, &mut child, &mut pmm, hhdm, &argv_refs, &envp_refs, false,
     ) {
         Ok(_) => {
+            child.nice = crate::process::spawn::initial_embedded_nice(path_str, uid);
             child.trusted_display_service =
                 crate::process::spawn::is_trusted_display_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();

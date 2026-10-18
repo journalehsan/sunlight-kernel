@@ -4,13 +4,14 @@ use core::cell::UnsafeCell;
 
 use crate::sched::Scheduler;
 
-const CAPACITY: usize = 16_384;
+const CAPACITY: usize = 65_536;
 struct State {
     active: bool,
     count: usize,
     overflow: bool,
     invalid_clock: bool,
     last: u64,
+    pending_timer: usize,
     events: [[u64; 7]; CAPACITY],
 }
 struct Protected(UnsafeCell<State>);
@@ -22,6 +23,7 @@ static STATE: Protected = Protected(UnsafeCell::new(State {
     overflow: false,
     invalid_clock: false,
     last: 0,
+    pending_timer: 0,
     events: [[0; 7]; CAPACITY],
 }));
 
@@ -32,6 +34,7 @@ pub fn begin(sched: &Scheduler) {
     state.overflow = false;
     state.invalid_clock = crate::arch::x86_64::interrupts::tsc_hz() == 0;
     state.last = 0;
+    state.pending_timer = 0;
 }
 
 /// Row: kind, timestamp ns, CPU, subject pid, a, b, c.
@@ -45,6 +48,9 @@ pub fn begin(sched: &Scheduler) {
 /// 8 caller consumes reply (a=generation,b=label); 9 dispatch decision
 /// (a=current pid,b=current nice+20,c=request|expired<<1|running<<2).
 /// 11 actual BlockedOnIpc-to-Ready wake (a=nice+20,b=current pid,c=pending call).
+/// 12 dispatch/reap checkpoint (a=stage, subject=process pid);
+/// 13 Rust handler tail before dropping SCHEDULER (a=vector,b=switched,c=request);
+/// 14 retained priority request (subject=selected pid,a=candidate pid).
 pub fn event(sched: &Scheduler, kind: u64, pid: usize, a: u64, b: u64, c: u64) {
     let state = unsafe { &mut *STATE.0.get() };
     if !state.active {
@@ -60,6 +66,20 @@ pub fn event(sched: &Scheduler, kind: u64, pid: usize, a: u64, b: u64, c: u64) {
     }
     state.events[state.count] = [kind, now, cpu as u64, pid as u64, a, b, c];
     state.count += 1;
+    if kind == 11 {
+        state.pending_timer = pid;
+    } else if kind == 4 && state.pending_timer == pid {
+        state.pending_timer = 0;
+    }
+}
+
+/// Dispatch checkpoints only while a timer wake is outstanding. Reap stages
+/// (20+) are sparse and retained even outside a wake, to expose IRQ-off work.
+pub fn checkpoint(sched: &Scheduler, stage: u64, pid: usize) {
+    let state = unsafe { &*STATE.0.get() };
+    if state.active && (state.pending_timer != 0 || stage >= 20) {
+        event(sched, 12, pid, stage, 0, 0);
+    }
 }
 
 pub fn receive(sched: &Scheduler, server_pid: usize, caller: usize, generation: u64) {

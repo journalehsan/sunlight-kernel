@@ -3420,7 +3420,7 @@ dependencies = [
 
 [[package]]
 name = "sunlight-vortex-shell"
-version = "0.2.5126-alpha.2"
+version = "0.2.5137-alpha.2"
 dependencies = [
  "fontdue",
  "sun-font",

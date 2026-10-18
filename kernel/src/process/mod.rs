@@ -262,6 +262,9 @@ pub struct Process {
     pub timeslice_used: u32,
     /// Unexpired RR service entitlement after a forced priority interruption.
     pub(crate) slice_credit: Option<crate::sched::quantum::Credit>,
+    /// An external Ready publication not yet satisfied by a dispatch. Internal
+    /// RR rotation/residual requeue must never create another wake entitlement.
+    pub(crate) priority_wake_pending: bool,
     /// Global tick counter when this process last ran
     pub last_run_tick: u64,
     /// C1 diagnostic timestamp for the current runnable interval.
@@ -494,6 +497,7 @@ impl Process {
             stack_handoff_core: u8::MAX,
             burst_score: 256, // Start at MEDIUM tier (interactive bias)
             slice_credit: None,
+            priority_wake_pending: false,
             timeslice_used: 0, // Fresh quantum
             last_run_tick: 0,  // Will be set on first run
             #[cfg(feature = "scheduler_perf_diag")]
@@ -675,6 +679,7 @@ impl Process {
             stack_handoff_core: u8::MAX,
             burst_score: 256,
             slice_credit: None,
+            priority_wake_pending: false,
             timeslice_used: 0,
             last_run_tick: 0,
             #[cfg(feature = "scheduler_perf_diag")]

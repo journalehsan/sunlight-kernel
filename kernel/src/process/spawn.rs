@@ -13,6 +13,18 @@ pub fn name_from_path(path: &str) -> &str {
     path.rfind('/').map(|i| &path[i + 1..]).unwrap_or(path)
 }
 
+/// Bootstrap the existing niced High policy before the embedded timer's first
+/// Ready publication. Never grant priority by process name or to a non-root
+/// launch. Root already has authority to set this nice through setnice.
+/// Keep this value aligned with sunlight-niced's protected timer policy.
+pub fn initial_embedded_nice(path: &str, uid: u32) -> i8 {
+    if uid == 0 && path == "/sbin/timer_server" {
+        -5
+    } else {
+        0
+    }
+}
+
 pub fn is_trusted_display_path(path: &str) -> bool {
     matches!(
         path,
@@ -644,6 +656,7 @@ pub fn spawn_from_path_with_restrictions(
     let envp_strings = process.env.to_envp();
     let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
     exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false)?;
+    process.nice = initial_embedded_nice(path, uid);
     process.trusted_display_service = is_trusted_display_path(path);
     process.trusted_swap_admin_service = is_trusted_swap_admin_path(path);
     process.trusted_zram_diagnostic = is_trusted_zram_diagnostic_path(path);

@@ -644,6 +644,9 @@ impl Scheduler {
         {
             return;
         }
+        if notify {
+            self.processes[idx].priority_wake_pending = true;
+        }
         if self.processes[idx].owning_core != u8::MAX
             || self.processes[idx].queued_on_core != u8::MAX
         {
@@ -1630,6 +1633,7 @@ impl Scheduler {
         let core = CORE_STATES[cpu_id].lock();
         core.rr_queue.iter().copied().find(|&idx| {
             idx < self.processes.len()
+                && self.processes[idx].priority_wake_pending
                 && self.processes[idx].nice < self.processes[current].nice
                 && self.processes[idx].state == ProcessState::Ready
                 && self.processes[idx].cpu_mask & (1u64 << cpu_id) != 0
@@ -1650,6 +1654,23 @@ impl Scheduler {
                 .is_some()
         {
             request_reschedule_on(cpu_id);
+            // The request must have a safe delivery opportunity even if the
+            // selected worker makes no blocking syscall. The IRQ handlers
+            // flush this coalesced notification after dropping all guards;
+            // IF stays clear until the naked epilogue completes IRET.
+            if SCHEDULER_READY.load(Ordering::Acquire) {
+                DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+            }
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::event(
+                self,
+                14,
+                self.processes[selected].pid,
+                self.priority_preemption_candidate(cpu_id, selected)
+                    .map_or(0, |idx| self.processes[idx].pid) as u64,
+                0,
+                0,
+            );
         }
     }
 
@@ -1717,6 +1738,7 @@ impl Scheduler {
                 self.set_core_current_task(cpu_id, Some(next));
                 self.increment_context_switches(cpu_id);
                 self.processes[next].state = ProcessState::Running;
+                self.processes[next].priority_wake_pending = false;
                 self.processes[next].last_run_tick = self.global_tick;
                 self.processes[next].owning_core = cpu_id as u8;
                 self.processes[next].queued_on_core = u8::MAX;
@@ -1785,12 +1807,16 @@ impl Scheduler {
             self.account_current_runtime();
         }
         self.stop_execution_clock(current, preserve_turn);
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 1, self.processes[current].pid);
 
         // Save interrupted context.
         unsafe { self.processes[current].fx_state.save() };
         self.processes[current].context_rsp = saved_rsp;
         self.processes[current].fs_base =
             unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 2, self.processes[current].pid);
 
         // Maintain runnable-only queue invariant.
         let was_runnable = matches!(
@@ -1823,6 +1849,8 @@ impl Scheduler {
             self.pick_next(cpu_id)
         };
         if let Some(next) = next {
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::checkpoint(self, 3, self.processes[next].pid);
             #[cfg(feature = "scheduler_perf_diag")]
             record_perf_dispatch(&self.processes[next], cpu_id);
             let next_rsp = self.processes[next].context_rsp;
@@ -1836,6 +1864,7 @@ impl Scheduler {
             }
             self.set_core_current_task(cpu_id, Some(next));
             self.processes[next].state = ProcessState::Running;
+            self.processes[next].priority_wake_pending = false;
             self.processes[next].last_run_tick = self.global_tick;
             self.processes[next].owning_core = cpu_id as u8;
             self.processes[next].queued_on_core = u8::MAX;
@@ -1849,6 +1878,9 @@ impl Scheduler {
             // (BSP → global TSS; APs → AP_TSS_STORE[cpu_id-1]).
             crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
 
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::checkpoint(self, 4, self.processes[next].pid);
+
             if matches!(
                 self.processes[prev].state,
                 ProcessState::Finished | ProcessState::Reaped
@@ -1860,6 +1892,9 @@ impl Scheduler {
 
             // Opportunistic global reaping of any other safe Finished processes.
             self.reap_finished_processes();
+
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::checkpoint(self, 5, self.processes[next].pid);
 
             self.start_charging_runtime(next);
             self.retain_priority_request(cpu_id, next);
@@ -1970,6 +2005,7 @@ impl Scheduler {
         self.processes[idx].native_futex_deadline = None;
         self.record_wakeup(false);
         self.processes[idx].state = ProcessState::Ready;
+        self.processes[idx].priority_wake_pending = true;
         self.remove_from_ready_queues(idx);
         if let Some(cpu) = self.live_owner_core(idx) {
             request_reschedule_on(cpu);
@@ -2103,6 +2139,7 @@ impl Scheduler {
             }
             self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
+            self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
             if let Some(cpu_id) = self.live_owner_core(idx) {
                 request_reschedule_on(cpu_id);
@@ -2137,6 +2174,7 @@ impl Scheduler {
             }
             self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
+            self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
             if let Some(cpu_id) = self.live_owner_core(idx) {
                 request_reschedule_on(cpu_id);
@@ -2170,6 +2208,7 @@ impl Scheduler {
             }
             self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
+            self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
             if let Some(cpu) = self.live_owner_core(idx) {
                 request_reschedule_on(cpu);
@@ -2392,6 +2431,7 @@ impl Scheduler {
         }
         self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
         self.processes[idx].state = ProcessState::Ready;
+        self.processes[idx].priority_wake_pending = true;
         self.remove_from_ready_queues(idx);
         if let Some(cpu_id) = self.live_owner_core(idx) {
             request_reschedule_on(cpu_id);
@@ -2414,6 +2454,7 @@ impl Scheduler {
             }
             self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
+            self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
             if let Some(cpu_id) = self.live_owner_core(idx) {
                 request_reschedule_on(cpu_id);
@@ -2447,6 +2488,7 @@ impl Scheduler {
                 }
                 self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
                 self.processes[idx].state = ProcessState::Ready;
+                self.processes[idx].priority_wake_pending = true;
                 self.processes[idx].block_start_tick = self.global_tick;
                 self.remove_from_ready_queues(idx);
                 if let Some(cpu_id) = self.live_owner_core(idx) {
@@ -2583,6 +2625,8 @@ impl Scheduler {
         let pid = self.processes[idx].pid;
         let name: alloc::string::String = self.processes[idx].name_str().into();
         let is_native_borrower = self.processes[idx].native_thread;
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 20, pid);
         if self.processes[idx].owns_address_space {
             let borrowers = self.live_address_space_borrowers(idx);
             if borrowers != 0 {
@@ -2699,6 +2743,8 @@ impl Scheduler {
             );
         }
 
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 21, pid);
         let reclaim = if self.processes[idx].owns_address_space {
             let mut pmm = crate::PMM.lock();
             unsafe {
@@ -2713,6 +2759,8 @@ impl Scheduler {
             crate::process::address_space::ReclaimStats::default()
         };
 
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 22, pid);
         // Clear per-process kernel structures (idempotent clears).
         let ipc_q_len = self.processes[idx].ipc_queue.len();
         self.processes[idx].ipc_queue.clear();
@@ -2753,6 +2801,8 @@ impl Scheduler {
             NATIVE_BORROWERS_REAPED.fetch_add(1, Ordering::Relaxed);
         }
 
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 23, pid);
         serial_println!(
             "[SCHED] process_reaped pid={} name='{}' user_frames={} page_tables={} swap_blocks={} ipc_cleared={}",
             pid,
@@ -2771,7 +2821,15 @@ impl Scheduler {
             pid,
             ipc_pending_before
         );
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 24, pid);
+        // This diagnostic scans the entire 16 GiB owner table, including for
+        // borrower threads that own no user frames. Keep the opt-in audit,
+        // but do not delay IRQ return for an O(MAX_FRAMES) report in normal use.
+        #[cfg(any(feature = "verbose_diag", feature = "scheduler_b_test"))]
         crate::PMM.lock().diagnostic_report_pid(pid as u32);
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 25, pid);
         if is_native_borrower {
             let (created, finished, reaped, skipped, stale_wakes, reused, max_live) =
                 native_borrower_lifecycle_counts();

@@ -116,6 +116,7 @@ struct State {
     start: u64,
     start_tick: u64,
     run: u64,
+    switches: u64,
 }
 struct Protected(UnsafeCell<State>);
 // SAFETY: access is serialized by the existing global scheduler lock.
@@ -126,7 +127,17 @@ static STATE: Protected = Protected(UnsafeCell::new(State {
     start: 0,
     start_tick: 0,
     run: 0,
+    switches: 0,
 }));
+
+fn switches(sched: &Scheduler) -> u64 {
+    match crate::sched::SCHEDULER_MODE {
+        crate::sched::SchedulerMode::RoundRobin => {
+            crate::sched::CORE_STATES[0].lock().context_switches
+        }
+        crate::sched::SchedulerMode::Bore => sched.cores[0].context_switches,
+    }
+}
 
 /// Diagnostic Ready publication under SCHEDULER; no allocation or logging.
 pub fn service_ready(name: &str, now: u64) {
@@ -306,6 +317,7 @@ pub fn syscall(action: u64, value: u64) -> u64 {
                 return u64::MAX;
             }
             state.start = now;
+            state.switches = switches(&sched);
             #[cfg(feature = "scheduler_timer_trace")]
             crate::scheduler_timer_trace::begin(&sched);
             state.start_tick = sched.global_tick;
@@ -380,7 +392,10 @@ pub fn syscall(action: u64, value: u64) -> u64 {
             });
             #[cfg(feature = "scheduler_timer_trace")]
             let (events, overflow, invalid_clock) = crate::scheduler_timer_trace::finish();
+            let context_switches = switches(&sched).saturating_sub(state.switches);
+            let elapsed_ns = now.saturating_sub(start);
             drop(sched);
+            crate::serial_println!("[SCHED-BENCH] COST {{\"run\":\"1-{}-1\",\"elapsed_ns\":{},\"context_switches\":{}}}", value, elapsed_ns, context_switches);
             #[cfg(feature = "scheduler_timer_trace")]
             {
                 crate::serial_println!("[SCHED-TIMER] TRACE {{\"run\":{},\"count\":{},\"overflow\":{},\"invalid_clock\":{}}}", value, events.len(), overflow, invalid_clock);

@@ -102,6 +102,7 @@ struct Process {
     quantum_override: Option<u32>,
     timeslice_used: u32,
     slice_credit: Option<quantum::Credit>,
+    priority_wake_pending: bool,
     last_start_ns: u64,
     cpu_charge_since: Option<u64>,
     cpu_runtime_ns: u64,
@@ -220,6 +221,7 @@ fn setup(workers: usize) -> Scheduler {
     *CORE_STATES[0].lock() = Core::new();
     CLOCK.store(1, Ordering::Relaxed);
     REQUEST.store(false, Ordering::Relaxed);
+    DISPATCH_NOTIFICATION_MASK.store(0, Ordering::Relaxed);
     let mut s = Scheduler {
         processes: (0..workers)
             .map(|i| Process {
@@ -236,6 +238,7 @@ fn setup(workers: usize) -> Scheduler {
                 quantum_override: None,
                 timeslice_used: 0,
                 slice_credit: None,
+                priority_wake_pending: i != 0,
                 last_start_ns: 0,
                 cpu_charge_since: None,
                 cpu_runtime_ns: 0,
@@ -276,6 +279,36 @@ fn runtime(s: &Scheduler, i: usize) -> u64 {
         s.processes[i].cpu_charge_since,
         now_ns(),
     )
+}
+#[test]
+fn timer_bootstrap_policy_requires_root_and_exact_embedded_path() {
+    assert_eq!(initial_embedded_nice("/sbin/timer_server", 0), -5);
+    for uid in [1, 1000, u32::MAX] {
+        assert_eq!(initial_embedded_nice("/sbin/timer_server", uid), 0);
+    }
+    for path in [
+        "timer_server",
+        "/tmp/timer_server",
+        "/sbin/timer_server-copy",
+        "/sbin/../sbin/timer_server",
+        "/sbin/net_server",
+    ] {
+        assert_eq!(initial_embedded_nice(path, 0), 0);
+    }
+}
+
+#[test]
+fn equal_peer_and_boot_dispatch_do_not_queue_priority_ipis() {
+    let mut s = setup(3);
+    dispatch(&mut s, 1_000_000);
+    assert_eq!(DISPATCH_NOTIFICATION_MASK.load(Ordering::Acquire), 0);
+    s.processes[2].nice = -5;
+    SCHEDULER_READY.store(false, Ordering::Release);
+    // The BSP can dispatch during boot; retain the flag but no early IPI.
+    s.retain_priority_request(0, 0);
+    SCHEDULER_READY.store(true, Ordering::Release);
+    assert!(REQUEST.load(Ordering::Acquire));
+    assert_eq!(DISPATCH_NOTIFICATION_MASK.load(Ordering::Acquire), 0);
 }
 #[test]
 fn unrelated_wakes_keep_turn_and_expiration_rotates_once() {
@@ -336,13 +369,20 @@ fn another_service_blocking_retains_request_for_already_ready_timer() {
         REQUEST.load(Ordering::Acquire),
         "Ready timer lost its request at service block"
     );
-    // No synthetic request: exercise the one retained by production dispatch.
-    CLOCK.fetch_add(10_000_000, Ordering::Relaxed);
+    assert_eq!(
+        DISPATCH_NOTIFICATION_MASK.load(Ordering::Acquire),
+        1,
+        "Ready timer depends on another periodic tick despite a safe IRQ return"
+    );
+    // Model delivery at the safe interrupt return, with no clock advance and
+    // no periodic tick or synthetic request. Production flush coalesces this
+    // mask into the existing LAPIC reschedule vector.
+    assert_eq!(DISPATCH_NOTIFICATION_MASK.swap(0, Ordering::AcqRel), 1);
     assert_eq!(s.schedule_tick(0, 1000), 4000);
-    assert_eq!(runtime(&s, 0), 11_000_000);
+    assert_eq!(runtime(&s, 0), 1_000_000);
     s.processes[3].state = ProcessState::BlockedOnIpc;
     assert_eq!(dispatch(&mut s, 10_000), 1000);
-    assert_eq!(dispatch(&mut s, 169_000_000), 2000);
+    assert_eq!(dispatch(&mut s, 179_000_000), 2000);
     assert_eq!(runtime(&s, 0), 180_000_000);
     assert_eq!(s.processes[0].burst_score, 336);
     assert!(s.processes[0].slice_credit.is_none());
@@ -358,9 +398,10 @@ fn idle_dispatch_retains_request_when_fifo_selects_a_lower_priority_peer() {
     s.processes[2].nice = -5;
     assert_eq!(dispatch(&mut s, 1_000_000), 2000);
     assert!(REQUEST.load(Ordering::Acquire));
-    CLOCK.fetch_add(10_000_000, Ordering::Relaxed);
+    assert_eq!(DISPATCH_NOTIFICATION_MASK.load(Ordering::Acquire), 1);
+    assert_eq!(DISPATCH_NOTIFICATION_MASK.swap(0, Ordering::AcqRel), 1);
     assert_eq!(s.schedule_tick(0, 2000), 3000);
-    assert_eq!(runtime(&s, 1), 10_000_000);
+    assert_eq!(runtime(&s, 1), 0);
     assert!(s.processes[1].slice_credit.is_some());
     assert_eq!(s.processes[1].burst_score, 304);
     assert_eq!(queue(), [1]);
@@ -477,6 +518,56 @@ fn low_nice_workers_progress_under_higher_priority_background_wakes() {
             "nice {} runtime {}",
             s.processes[i].nice,
             runtime(&s, i)
+        );
+    }
+}
+
+#[test]
+fn immediate_wake_delivery_preserves_admitted_nice_cpu_peers() {
+    let mut s = setup(5);
+    for i in 1..4 {
+        s.processes[i].nice = 7 + i as i8;
+    }
+    s.processes[4].nice = -5;
+    let mut first = [None; 4];
+    for _ in 0..2000 {
+        if s.processes[4].state == ProcessState::BlockedOnTimer {
+            s.processes[4].state = ProcessState::Ready;
+            s.enqueue_process_to_core(4, 0);
+        }
+        dispatch(&mut s, 10_000_000);
+        // Deliver all coalesced notifications without inventing a timer tick.
+        // A selected service executes for 1 us and blocks immediately.
+        let mut settled = false;
+        for _ in 0..12 {
+            let current = s.core_current_task(0).unwrap();
+            if current < 4 {
+                first[current].get_or_insert(now_ns());
+            }
+            if current == 4 {
+                s.set_state(4, ProcessState::BlockedOnTimer);
+                dispatch(&mut s, 1000);
+            } else if DISPATCH_NOTIFICATION_MASK.swap(0, Ordering::AcqRel) != 0 {
+                s.schedule_tick(0, (current + 1) as u64 * 1000);
+            } else {
+                settled = true;
+                break;
+            }
+        }
+        assert!(settled, "unbounded self-IPI chain");
+    }
+    for i in 0..4 {
+        assert!(
+            runtime(&s, i) > 100_000_000,
+            "nice {} CPU={}",
+            s.processes[i].nice,
+            runtime(&s, i)
+        );
+        assert!(
+            first[i].unwrap() < 3_000_000_000,
+            "nice {} first={:?}",
+            s.processes[i].nice,
+            first[i]
         );
     }
 }

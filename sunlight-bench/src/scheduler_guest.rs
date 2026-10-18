@@ -384,7 +384,11 @@ fn run(config: Config) -> bool {
     let mut replies = 0;
     let mut reply_errors = 0;
     let mut reply_max_ms = 0;
-    while FINISHED.load(Ordering::Acquire) != WORKERS as u64 {
+    // A startup audio RPC can outlast the one-second warmup. Still issue one
+    // real timer RPC in that case; the trace classifies it outside saturation.
+    while FINISHED.load(Ordering::Acquire) != WORKERS as u64
+        || (config.mixed && replies == 0 && reply_errors == 0)
+    {
         if monotonic_millis() > start + config.duration_ms + 30_000 {
             return false;
         }

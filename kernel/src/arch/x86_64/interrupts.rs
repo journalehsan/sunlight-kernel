@@ -882,7 +882,17 @@ extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
     let result = sched.schedule_tick(cpu_id, saved_rsp);
     #[cfg(feature = "scheduler_guest_bench")]
     crate::scheduler_bench_diag::observe(&sched, outgoing, result, 32);
+    #[cfg(feature = "scheduler_timer_trace")]
+    crate::scheduler_timer_trace::event(
+        &sched,
+        13,
+        sched.diagnostic_current_pid(cpu_id).unwrap_or(0),
+        RESCHEDULE_VECTOR as u64,
+        (result != 0) as u64,
+        crate::sched::peek_reschedule_on(cpu_id) as u64,
+    );
     drop(sched);
+    crate::sched::flush_dispatch_notifications();
     #[cfg(feature = "scheduler_b_test")]
     crate::sched::regression::handoff_delay();
     result
@@ -1111,7 +1121,17 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     let result = sched.schedule_tick(cpu_id, saved_rsp);
     #[cfg(feature = "scheduler_guest_bench")]
     crate::scheduler_bench_diag::observe(&sched, outgoing, result, bench_reason);
+    #[cfg(feature = "scheduler_timer_trace")]
+    crate::scheduler_timer_trace::event(
+        &sched,
+        13,
+        sched.diagnostic_current_pid(cpu_id).unwrap_or(0),
+        32,
+        (result != 0) as u64,
+        crate::sched::peek_reschedule_on(cpu_id) as u64,
+    );
     drop(sched);
+    crate::sched::flush_dispatch_notifications();
 
     #[cfg(feature = "scheduler_b_test")]
     crate::sched::regression::handoff_delay();

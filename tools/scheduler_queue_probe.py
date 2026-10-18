@@ -37,7 +37,7 @@ static REQUESTS: requests::RescheduleRequests = requests::RescheduleRequests::ne
 const SCHEDULER_MODE: SchedulerMode = SchedulerMode::RoundRobin;
 enum ProcessState { Ready, Running, Finished }
 enum QueueTier { High, Medium, Low }
-struct Process { state: ProcessState, owning_core: u8, queued_on_core: u8 }
+struct Process { state: ProcessState, owning_core: u8, queued_on_core: u8, priority_wake_pending: bool }
 impl Process { fn get_queue_tier(&self) -> QueueTier { QueueTier::Medium } }
 fn current_cpu_id() -> usize { 0 }
 fn reschedule_bit(cpu: usize) -> u64 { 1 << cpu }
@@ -49,14 +49,17 @@ impl Scheduler {
 test = r'''
 }
 fn main() {
-    let ready = || Process { state: ProcessState::Ready, owning_core: u8::MAX, queued_on_core: u8::MAX };
+    let ready = || Process { state: ProcessState::Ready, owning_core: u8::MAX, queued_on_core: u8::MAX, priority_wake_pending: false };
     let mut s = Scheduler { processes: vec![ready(), ready()], cores: [Core::new()] };
     s.enqueue_process_to_core(0, 0);
     assert!(REQUESTS.take(0));
+    assert!(s.processes[0].priority_wake_pending);
     CORE_STATES[0].lock().rr_queue.clear(); // model dequeue before rotation
+    s.processes[0].priority_wake_pending = false; // dispatch satisfies the wake
     s.processes[0].queued_on_core = u8::MAX;
     s.queue_process_to_core(0, 0, false);
     assert!(!REQUESTS.pending(0), "internal rotation rearmed dispatch");
+    assert!(!s.processes[0].priority_wake_pending, "internal rotation invented a wake");
     assert_eq!(CORE_STATES[0].lock().rr_queue.len(), 1);
     CORE_STATES[0].lock().rr_queue.clear();
     s.processes[0].queued_on_core = u8::MAX;

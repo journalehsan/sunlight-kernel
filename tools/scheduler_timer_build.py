@@ -53,6 +53,8 @@ def main():
     sources = ['kernel/src/sched/mod.rs', 'kernel/src/sched/quantum.rs', 'kernel/src/sched/requests.rs',
                'kernel/src/scheduler_bench_diag.rs', 'kernel/src/scheduler_timer_trace.rs',
                'kernel/src/arch/x86_64/interrupts.rs', 'kernel/src/ipc/mod.rs', 'kernel/src/main.rs',
+               'kernel/src/process/spawn.rs', 'kernel/src/process/mod.rs', 'kernel/src/arch/x86_64/syscall.rs',
+               'kernel/src/memory/pmm.rs',
                'kernel/Cargo.toml', 'sunlight-bench/src/scheduler_guest.rs', 'sunlight-bench/src/thread.rs',
                'services/timer_server/src/main.rs', 'services/sunlight-niced/src/config.rs',
                'tools/scheduler_timer.py', 'tools/scheduler_bench.py', 'tools/scheduler_timer_build.py']

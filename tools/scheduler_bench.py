@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import time
 import re
+from contextlib import nullcontext
 
 
 RECORD = re.compile(r'^\[SCHED-BENCH\] (START|SAMPLE|END) (\{.*\})$')
@@ -77,6 +78,8 @@ def main():
     p.add_argument('--seed', type=int, default=1)
     p.add_argument('--memory', default='1536M')
     p.add_argument('--cpu-model', default='max')
+    p.add_argument('--qemu-cpu', type=int, help='pin QEMU threads to this host CPU; observer stays unpinned')
+    p.add_argument('--host-sched', action='store_true', help='retain 10 ms /proc thread schedstat samples')
     p.add_argument('--output', type=Path, default=Path('target/scheduler-perf'))
     args = p.parse_args()
     if not args.iso.is_file() or not args.cpus or any(c not in (1, 2, 4, 8, 12) for c in args.cpus) or args.warmup < 0 or args.duration < 1 or args.repetitions < 1:
@@ -101,6 +104,7 @@ def main():
         'repetitions': args.repetitions, 'seed': args.seed,
         'memory': args.memory, 'cpu_model': args.cpu_model,
         'suite': args.suite, 'mixed': args.mixed, 'audio': args.audio, 'host_load_start': os.getloadavg(),
+        'qemu_host_cpu': args.qemu_cpu, 'host_sched_observer': args.host_sched,
         'results': [],
     }
     for ncpu in args.cpus:
@@ -114,10 +118,15 @@ def main():
                        '-display', 'none', '-nic', 'none', '-no-reboot', '-no-shutdown']
             if args.audio:
                 command += ['-audiodev', 'none,id=snd0', '-device', 'intel-hda', '-device', 'hda-micro,audiodev=snd0']
+            if args.qemu_cpu is not None:
+                command = ['taskset', '-c', str(args.qemu_cpu)] + command
             started = time.time()
             serial.write_text('')
             with qlog.open('w') as log:
                 proc = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
+                from scheduler_host_observer import HostObserver
+                observer = HostObserver(proc.pid, serial, args.output / f'{stem}.host.jsonl') if args.host_sched else nullcontext()
+                observer.__enter__()
                 try:
                     if args.suite or args.mixed:
                         deadline = time.monotonic() + args.warmup + args.duration
@@ -136,6 +145,7 @@ def main():
                     except subprocess.TimeoutExpired:
                         proc.kill()
                         code = proc.wait()
+                    observer.__exit__(None, None, None)
             raw = serial.read_text(errors='replace') if serial.exists() else ''
             run_seed = args.seed + rep
             if args.mixed:
