@@ -262,6 +262,11 @@ pub struct Process {
     pub timeslice_used: u32,
     /// Global tick counter when this process last ran
     pub last_run_tick: u64,
+    /// C1 diagnostic timestamp for the current runnable interval.
+    #[cfg(feature = "scheduler_perf_diag")]
+    pub perf_ready_since_ns: u64,
+    #[cfg(feature = "scheduler_perf_diag")]
+    pub perf_ready_cpu: u8,
     /// Ticks spent blocked on IPC/IO (for interactivity detection)
     pub io_wait_time: u32,
     /// Latency bonus ticks for interactive processes (-50..+50)
@@ -485,9 +490,13 @@ impl Process {
             owning_core: u8::MAX,    // not running on any core
             queued_on_core: u8::MAX, // not in any ready queue
             stack_handoff_core: u8::MAX,
-            burst_score: 256,      // Start at MEDIUM tier (interactive bias)
-            timeslice_used: 0,     // Fresh quantum
-            last_run_tick: 0,      // Will be set on first run
+            burst_score: 256,  // Start at MEDIUM tier (interactive bias)
+            timeslice_used: 0, // Fresh quantum
+            last_run_tick: 0,  // Will be set on first run
+            #[cfg(feature = "scheduler_perf_diag")]
+            perf_ready_since_ns: 0,
+            #[cfg(feature = "scheduler_perf_diag")]
+            perf_ready_cpu: u8::MAX,
             io_wait_time: 0,       // No wait yet
             interactive_bonus: 20, // Assume interactive initially
             block_start_tick: 0,   // Not blocked yet
@@ -664,6 +673,10 @@ impl Process {
             burst_score: 256,
             timeslice_used: 0,
             last_run_tick: 0,
+            #[cfg(feature = "scheduler_perf_diag")]
+            perf_ready_since_ns: 0,
+            #[cfg(feature = "scheduler_perf_diag")]
+            perf_ready_cpu: u8::MAX,
             io_wait_time: 0,
             interactive_bonus: 20,
             block_start_tick: 0,

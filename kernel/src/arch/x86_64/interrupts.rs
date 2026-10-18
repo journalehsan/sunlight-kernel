@@ -937,14 +937,31 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     x86_64::instructions::interrupts::disable();
 
     let sched_lock_start = now_ns();
+    #[cfg(feature = "scheduler_perf_diag")]
+    let sched_lock_clock_valid = crate::sched::perf::observe_clock(cpu_id, sched_lock_start);
 
     // ── Phase 1: brief lock — tick accounting + BSP timer work (no heavy telemetry) ─
     //
     // Capture telemetry scalars under lock (cheap), release lock, then do expensive
     // page counting outside the lock (Phase 2 goal).
     let mut telemetry_snap: Option<crate::telemetry::TelemetrySnapshot> = None;
+    #[cfg(feature = "scheduler_perf_diag")]
+    let sched_lock_acquired;
     {
         let mut sched = crate::sched::SCHEDULER.lock();
+        #[cfg(feature = "scheduler_perf_diag")]
+        {
+            sched_lock_acquired = now_ns();
+            let acquired_clock_valid =
+                crate::sched::perf::observe_clock(cpu_id, sched_lock_acquired);
+            if sched_lock_clock_valid && acquired_clock_valid {
+                let rec = &crate::sched::perf::CPU[cpu_id];
+                crate::sched::perf::sample(
+                    &rec.lock_wait,
+                    sched_lock_acquired.saturating_sub(sched_lock_start),
+                );
+            }
+        }
         sched.tick(cpu_id, ticks_total);
         #[cfg(feature = "scheduler_b_test")]
         crate::sched::regression::on_tick(&mut sched, cpu_id);
@@ -1010,6 +1027,13 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     } // Phase 1 lock released here — other cores can now proceed.
 
     let sched_lock_end = now_ns();
+    #[cfg(feature = "scheduler_perf_diag")]
+    if sched_lock_clock_valid && crate::sched::perf::observe_clock(cpu_id, sched_lock_end) {
+        crate::sched::perf::sample(
+            &crate::sched::perf::CPU[cpu_id].lock_hold,
+            sched_lock_end.saturating_sub(sched_lock_acquired),
+        );
+    }
 
     // Phase 2 telemetry commit outside SCHEDULER lock (expensive page walks here).
     if let Some(snap) = telemetry_snap {

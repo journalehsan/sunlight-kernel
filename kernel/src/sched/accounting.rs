@@ -28,6 +28,8 @@ static IDLE: [IdleClock; MAX_CORES] = [const { IdleClock::new() }; MAX_CORES];
 
 /// Called with maskable interrupts disabled immediately before STI;HLT.
 pub fn enter_idle(cpu: usize) {
+    #[cfg(feature = "scheduler_perf_diag")]
+    super::perf::add(&super::perf::CPU[cpu].idle_enter, 1);
     let c = &IDLE[cpu];
     c.sequence.fetch_add(1, Ordering::AcqRel);
     c.start.store(now_ns().max(1), Ordering::Relaxed);
@@ -43,6 +45,8 @@ pub fn interrupt_entry(cpu: usize) {
     if start == 0 {
         return;
     }
+    #[cfg(feature = "scheduler_perf_diag")]
+    super::perf::add(&super::perf::CPU[cpu].idle_exit, 1);
     c.sequence.fetch_add(1, Ordering::AcqRel);
     let total = c.total.load(Ordering::Relaxed);
     c.total.store(

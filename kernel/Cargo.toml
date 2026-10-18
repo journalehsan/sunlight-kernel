@@ -653,3 +653,5 @@ verbose_diag = []
 cpu_accounting_diag = []
 # Isolated real ring-3 scheduler lifecycle gate; never enabled by default.
 scheduler_b_test = []
+# Fixed-size per-CPU scheduler performance instrumentation; disabled by default.
+scheduler_perf_diag = []

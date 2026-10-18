@@ -83,6 +83,8 @@
 
 pub mod accounting;
 mod handoff;
+#[cfg(feature = "scheduler_perf_diag")]
+pub mod perf;
 mod quantum;
 mod requests;
 const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
@@ -415,6 +417,8 @@ impl Scheduler {
 
     #[inline]
     fn increment_context_switches(&mut self, cpu_id: usize) {
+        #[cfg(feature = "scheduler_perf_diag")]
+        perf::add(&perf::CPU[cpu_id].switches, 1);
         match SCHEDULER_MODE {
             SchedulerMode::RoundRobin => {
                 let mut core = CORE_STATES[cpu_id].lock();
@@ -647,7 +651,39 @@ impl Scheduler {
             && core_id != current_cpu_id();
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             self.processes[idx].queued_on_core = core_id as u8;
-            CORE_STATES[core_id].lock().rr_queue.push_back(idx);
+            #[cfg(feature = "scheduler_perf_diag")]
+            {
+                let writer_cpu = current_cpu_id();
+                let timestamp = now_ns();
+                let _ = perf::observe_clock(writer_cpu, timestamp);
+                self.processes[idx].perf_ready_since_ns = timestamp;
+                self.processes[idx].perf_ready_cpu = writer_cpu as u8;
+            }
+            let depth = {
+                let mut core = CORE_STATES[core_id].lock();
+                core.rr_queue.push_back(idx);
+                core.rr_queue.len() as u64
+            };
+            #[cfg(not(feature = "scheduler_perf_diag"))]
+            let _ = depth;
+            #[cfg(feature = "scheduler_perf_diag")]
+            if core_id == current_cpu_id() {
+                let rec = &perf::CPU[core_id];
+                perf::add(&rec.enqueues, 1);
+                rec.queue_depth.store(depth, Ordering::Relaxed);
+                let mut old = rec.queue_high_water.load(Ordering::Relaxed);
+                while depth > old {
+                    match rec.queue_high_water.compare_exchange_weak(
+                        old,
+                        depth,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                    ) {
+                        Ok(_) => break,
+                        Err(v) => old = v,
+                    }
+                }
+            }
             if notify {
                 request_reschedule_on(core_id);
             }
@@ -1308,6 +1344,14 @@ impl Scheduler {
 
             if picked.is_some() || moved > 0 {
                 CORE_STATES[thief_id].lock().steal_count += 1;
+                #[cfg(feature = "scheduler_perf_diag")]
+                {
+                    perf::add(&perf::CPU[thief_id].steals, 1);
+                    perf::add(
+                        &perf::CPU[thief_id].migrations,
+                        moved.saturating_add(usize::from(picked.is_some())) as u64,
+                    );
+                }
             }
             if picked.is_some() {
                 return picked;
@@ -1424,7 +1468,16 @@ impl Scheduler {
             let idx = {
                 let mut core = CORE_STATES[cpu_id].lock();
                 match core.rr_queue.pop_front() {
-                    Some(idx) => idx,
+                    Some(idx) => {
+                        #[cfg(feature = "scheduler_perf_diag")]
+                        {
+                            let rec = &perf::CPU[cpu_id];
+                            perf::add(&rec.dequeues, 1);
+                            rec.queue_depth
+                                .store(core.rr_queue.len() as u64, Ordering::Relaxed);
+                        }
+                        idx
+                    }
                     None => {
                         core.empty_pops += 1;
                         drop(core);
@@ -1542,6 +1595,8 @@ impl Scheduler {
     /// and the kernel RSP saved by the naked interrupt entry stub. Returns the
     /// RSP of the next process to resume (0 = stay on current context).
     pub fn schedule_tick(&mut self, cpu_id: usize, saved_rsp: u64) -> u64 {
+        #[cfg(feature = "scheduler_perf_diag")]
+        perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].invocations, 1);
         #[cfg(feature = "cpu_accounting_diag")]
         {
             self.cpu_events[cpu_id][0] = self.cpu_events[cpu_id][0].saturating_add(1);
@@ -1564,6 +1619,8 @@ impl Scheduler {
         if self.core_current_task(cpu_id).is_none() {
             self.set_core_idle_context_rsp(cpu_id, saved_rsp);
             if let Some(next) = self.pick_next(cpu_id) {
+                #[cfg(feature = "scheduler_perf_diag")]
+                record_perf_dispatch(&self.processes[next], cpu_id);
                 let next_rsp = self.processes[next].context_rsp;
                 let next_stack_top = self.processes[next].kernel_stack_top;
                 let next_fs_base = self.processes[next].fs_base;
@@ -1625,6 +1682,8 @@ impl Scheduler {
         }
 
         if let Some(next) = self.pick_next(cpu_id) {
+            #[cfg(feature = "scheduler_perf_diag")]
+            record_perf_dispatch(&self.processes[next], cpu_id);
             let next_rsp = self.processes[next].context_rsp;
             let next_stack_top = self.processes[next].kernel_stack_top;
             let next_fs_base = self.processes[next].fs_base;
@@ -3605,7 +3664,12 @@ fn reschedule_bit(cpu_id: usize) -> u64 {
 /// Uses AcqRel: cheaper than SeqCst (no store-load fence) but still correct
 /// because only the owning core ever clears its own bit.
 pub fn check_reschedule_on(cpu_id: usize) -> bool {
-    RESCHEDULE_MASK.take(cpu_id.min(63))
+    let requested = RESCHEDULE_MASK.take(cpu_id.min(63));
+    #[cfg(feature = "scheduler_perf_diag")]
+    if requested {
+        perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].rearms, 1);
+    }
+    requested
 }
 
 /// Non-consuming peek: returns true if the reschedule bit is set for `cpu_id`
@@ -3618,7 +3682,49 @@ pub fn peek_reschedule_on(cpu_id: usize) -> bool {
 
 /// Set the reschedule flag for a specific CPU.
 pub fn request_reschedule_on(cpu_id: usize) {
+    #[cfg(feature = "scheduler_perf_diag")]
+    perf::add(&perf::CPU[current_cpu_id().min(MAX_CORES - 1)].requests, 1);
     RESCHEDULE_MASK.request(cpu_id.min(63));
+}
+
+#[cfg(feature = "scheduler_perf_diag")]
+fn record_perf_dispatch(process: &Process, cpu_id: usize) {
+    let rec = &perf::CPU[cpu_id];
+    perf::add(&rec.dispatches, 1);
+    let dispatch_ns = now_ns();
+    let clock_valid = perf::observe_clock(cpu_id, dispatch_ns);
+    let same_cpu_clock = process.perf_ready_cpu as usize == cpu_id && clock_valid;
+    let waited = if same_cpu_clock {
+        dispatch_ns.saturating_sub(process.perf_ready_since_ns)
+    } else {
+        0
+    };
+    if same_cpu_clock {
+        perf::sample(&rec.runnable_wait, waited);
+    }
+    let class = match process.nice {
+        8 => Some(0),
+        9 => Some(1),
+        10 => Some(2),
+        _ => None,
+    };
+    if let Some(class) = class {
+        perf::add(&rec.nice_dispatches[class], 1);
+        if same_cpu_clock {
+            let mut old = rec.nice_wait_max_ns[class].load(Ordering::Relaxed);
+            while waited > old {
+                match rec.nice_wait_max_ns[class].compare_exchange_weak(
+                    old,
+                    waited,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(v) => old = v,
+                }
+            }
+        }
+    }
 }
 
 /// Set the reschedule flag for the current CPU.

@@ -3,7 +3,7 @@
 
 Requires Rust kernel toolchain, GNU as/ld, Limine/xorriso and QEMU. TCG results
 are functional evidence, not performance measurements. --skip-build requires
-the exact feature-enabled ELF/ISO produced by a previous invocation.
+the exact feature-set ELF/ISO produced by a previous invocation.
 """
 import argparse
 import hashlib
@@ -19,19 +19,28 @@ def main():
     parser.add_argument('--cpus', nargs='+', type=int, default=[1, 2, 4, 12])
     parser.add_argument('--timeout', type=int, default=360)
     parser.add_argument('--skip-build', action='store_true')
+    parser.add_argument('--perf-diag', action='store_true',
+                        help='also compile scheduler_perf_diag for functional coverage')
+    parser.add_argument('--evidence-dir', type=Path,
+                        help='retain this run in a separate directory')
     args = parser.parse_args()
     if any(c < 1 or c > 12 for c in args.cpus) or args.timeout < 1:
         parser.error('CPUs must be 1..12 and timeout must be positive')
     root = Path(__file__).resolve().parents[1]
-    evidence = root / 'target/scheduler-b-evidence'
+    evidence = args.evidence_dir or Path('target/scheduler-b-evidence')
+    if not evidence.is_absolute():
+        evidence = root / evidence
     evidence.mkdir(parents=True, exist_ok=True)
     elf = evidence / 'sunlight-kernel.elf'
     iso = evidence / 'sunlightos.iso'
     if not args.skip_build:
         with (evidence / 'build.log').open('w') as log:
+            features = ['scheduler_b_test']
+            if args.perf_diag:
+                features.append('scheduler_perf_diag')
             subprocess.run([
                 'cargo', 'build', '--package', 'sunlight-kernel', '--bin',
-                'sunlight-kernel', '--features', 'scheduler_b_test', '--offline',
+                'sunlight-kernel', '--features', ','.join(features), '--offline',
             ], cwd=root, stdout=log, stderr=subprocess.STDOUT, check=True)
             shutil.copy2(root / 'target/x86_64-unknown-none/debug/sunlight-kernel', elf)
             subprocess.run([
@@ -43,7 +52,9 @@ def main():
         'elf_sha256': hashlib.sha256(elf.read_bytes()).hexdigest(),
         'iso_sha256': hashlib.sha256(iso.read_bytes()).hexdigest(),
         'qemu': subprocess.check_output(['qemu-system-x86_64', '--version'], text=True).splitlines()[0],
-        'accelerator': 'tcg', 'cpus': args.cpus, 'results': [],
+        'accelerator': 'tcg', 'cpus': args.cpus,
+        'features': ['scheduler_b_test'] + (['scheduler_perf_diag'] if args.perf_diag else []),
+        'results': [],
     }
     try:
         failures = []
