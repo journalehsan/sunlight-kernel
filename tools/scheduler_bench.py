@@ -14,6 +14,41 @@ import platform
 import shutil
 import subprocess
 import time
+import re
+
+
+RECORD = re.compile(r'^\[SCHED-BENCH\] (START|SAMPLE|END) (\{.*\})$')
+
+
+def validate_guest_report(raw, seed, cpus, repetition):
+    """Require a complete framed report; boot output alone is never a sample."""
+    records = []
+    for line in raw.splitlines():
+        match = RECORD.match(line.strip())
+        if match:
+            try:
+                records.append((match.group(1), json.loads(match.group(2))))
+            except json.JSONDecodeError:
+                return False, 'malformed_record'
+    starts = [v for k, v in records if k == 'START']
+    ends = [v for k, v in records if k == 'END']
+    samples = [v for k, v in records if k == 'SAMPLE']
+    if len(starts) != 1 or len(ends) != 1:
+        return False, 'missing_or_duplicate_boundary'
+    start, end = starts[0], ends[0]
+    expected_id = f'{cpus}-{repetition}-{seed}'
+    if start.get('run') != expected_id or end.get('run') != expected_id:
+        return False, 'run_id_mismatch'
+    if start.get('seed') != seed or start.get('cpus') != cpus:
+        return False, 'configuration_mismatch'
+    count = start.get('samples')
+    if not isinstance(count, int) or count < 1 or len(samples) != count:
+        return False, 'incomplete_samples'
+    if any(v.get('run') != expected_id for v in samples):
+        return False, 'sample_run_id_mismatch'
+    if end.get('sample_count') != count or end.get('status') != 'ok':
+        return False, 'invalid_end_record'
+    return True, None
 
 
 def sha256(path):
@@ -78,13 +113,17 @@ def main():
                         proc.kill()
                         code = proc.wait()
             raw = serial.read_text(errors='replace') if serial.exists() else ''
+            run_seed = args.seed + rep
+            valid, invalid_reason = validate_guest_report(raw, run_seed, ncpu, rep + 1)
             base['results'].append({
-                'cpus': ncpu, 'repetition': rep + 1, 'seed': args.seed + rep,
+                'cpus': ncpu, 'repetition': rep + 1, 'seed': run_seed,
                 'command': command, 'start_unix': started,
                 'elapsed_seconds': time.time() - started, 'qemu_exit': code,
                 'serial_file': str(serial), 'serial_sha256': sha256(serial) if serial.exists() else None,
                 'serial_bytes': len(raw), 'qemu_log': str(qlog),
-                'guest_report_markers': [line for line in raw.splitlines() if '[SCHED-PERF]' in line],
+                'guest_report_markers': [line for line in raw.splitlines() if '[SCHED-BENCH]' in line],
+                'guest_report_complete': valid,
+                'guest_report_invalid_reason': invalid_reason,
             })
             (args.output / 'results.json').write_text(json.dumps(base, indent=2) + '\n')
             print(f'{ncpu} CPUs repetition {rep + 1}: captured {serial}', flush=True)

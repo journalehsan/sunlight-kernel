@@ -1,4 +1,4 @@
-# Scheduler Phase C1: instrumentation implementation and performance baseline
+# Scheduler Phase C1/C1.2: instrumentation and performance pilot status
 
 Date: 2026-10-18. Source state: Phase B described in
 [scheduler-hardening.md](scheduler-hardening.md). This report records the
@@ -68,12 +68,25 @@ or add scheduler locks in C1.
 ## 3. Reproducible benchmark plan and results
 
 There are **no scheduler throughput or latency measurements** for this source
-state. `tools/scheduler_bench.py` is a QEMU capture harness: it records VM
-metadata, raw serial logs and `[SCHED-PERF]` lines for repeated 1/2/4/8/12 CPU
-runs. It does not create a workload guest; no deterministic benchmark guest
-suite is implemented. All requested workload results, CPU-count performance
-results, distributions, and enabled/disabled overhead are **not measured**.
+state. `tools/scheduler_bench.py` remains a capture harness and does not create
+or launch a deterministic guest workload. It now checks framed
+`[SCHED-BENCH] START/SAMPLE/END` JSON records for run identity, configuration,
+sample count, and successful completion; incomplete captures are retained and
+explicitly marked invalid in `results.json`. `python3
+tools/test_scheduler_bench.py` tests the framing validator. This validation
+change does not supply guest workloads. The three C1.2 guest workloads, their
+serial records, all 1/2/4-vCPU results, diagnostic enabled/disabled comparison,
+and requested performance statistics remain **not implemented/not measured**.
 The lifecycle gates are correctness evidence only.
+
+No C1.2 workload pilot was run for this update: the workspace contains
+`target/sunlightos.iso`, but no separately configured benchmark ISO or guest
+that emits the required records. Running that ordinary image would produce
+boot/lifecycle data, not valid workload measurements. Consequently there are
+no actual throughput, progress, fairness, latency, overhead, or run-variability
+values to report. The 30-second warmup/60-second measurement and five-repetition
+plan remains the target. QEMU's earlier functional results below used TCG
+(`thread=multi`); those results provide no timing evidence for C1.2.
 
 Functional evidence collected 2026-10-18: standard Phase B fixture passed at
 1, 2, 4, 8 and 12 vCPUs; the same fixture with `scheduler_perf_diag` enabled
