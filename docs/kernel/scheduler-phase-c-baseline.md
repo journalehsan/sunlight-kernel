@@ -5,6 +5,12 @@ Date: 2026-10-18. Source state: Phase B described in
 available evidence and defines the next measurable baseline. It does not claim
 performance improvement or scheduler regression from package tests.
 
+
+The subsequent [C1.2B fairness investigation](scheduler-phase-c12b-fairness.md)
+now contains repeated 1/5/10-second single-vCPU guest measurements, per-worker
+CPU/dispatch/wait evidence, creation-order controls, and a root-cause finding.
+The C1.2A pilot below remains the original preliminary evidence.
+
 ## 1. Regression triage
 
 The six outcomes below are from isolated host library tests on

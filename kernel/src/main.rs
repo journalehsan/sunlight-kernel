@@ -21,6 +21,8 @@ mod memory;
 mod panic;
 mod process;
 mod sched;
+#[cfg(feature = "scheduler_guest_bench")]
+mod scheduler_bench_diag;
 mod smbios;
 mod telemetry;
 mod thermal_hw;

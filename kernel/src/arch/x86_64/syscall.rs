@@ -815,6 +815,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
         22 => thread_spawn(frame, false),
+        #[cfg(feature = "scheduler_guest_bench")]
+        0x5342 => crate::scheduler_bench_diag::syscall(frame.rdi, frame.rsi),
         155 => sys_native_futex(frame),
         156 => sys_native_thread_reaped(frame),
         157 => sys_native_exit_group(frame.rdi as i32),

@@ -35,6 +35,17 @@ class ReportValidationTests(unittest.TestCase):
         self.assertEqual(MODULE.validate_guest_report(raw, 41, 2, 1)[1],
                          'incomplete_samples')
 
+    def test_duplicate_index(self):
+        raw = report().replace('"index": 1', '"index": 0')
+        self.assertEqual(MODULE.validate_guest_report(raw, 41, 2, 1)[1],
+                         'sample_index_mismatch')
+
+    def test_record_outside_boundaries(self):
+        lines = report().splitlines()
+        lines[0], lines[1] = lines[1], lines[0]
+        self.assertEqual(MODULE.validate_guest_report('\n'.join(lines), 41, 2, 1)[1],
+                         'record_order_mismatch')
+
     def test_configuration_mismatch(self):
         self.assertEqual(MODULE.validate_guest_report(report(), 42, 2, 1)[1],
                          'run_id_mismatch')

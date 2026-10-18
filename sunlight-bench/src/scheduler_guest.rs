@@ -1,4 +1,4 @@
-//! Bounded, headless scheduler contention workload used by the C1.2A guest gate.
+//! Synchronized C1.2B single-vCPU fairness and creation-order experiment.
 //!
 //! The workload deliberately uses the existing native ThreadSpawn ABI through
 //! `thread.rs`. Four borrower threads execute a deterministic xorshift/rotate
@@ -26,10 +26,10 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 }
 
 const WORKERS: usize = 4;
-const DEFAULT_DURATION_MS: u64 = 500;
+const DEFAULT_DURATION_MS: u64 = 1_000;
 const DEFAULT_SEED: u64 = 1;
 const DEFAULT_CPUS: u64 = 1;
-const MAX_DURATION_MS: u64 = 5_000;
+const MAX_DURATION_MS: u64 = 10_000;
 
 static READY: AtomicU64 = AtomicU64::new(0);
 static START_MS: AtomicU64 = AtomicU64::new(0);
@@ -50,28 +50,35 @@ struct Config {
     duration_ms: u64,
     seed: u64,
     cpus: u64,
+    run: u64,
+    repetition: u64,
+    reverse: bool,
 }
 
 unsafe extern "C" fn worker(arg: u64) {
     let slot = arg as usize;
+    if diagnostic(1, arg) != 0 {
+        ProcessExit::exit(1);
+    }
+    READY_AT[slot].store(monotonic_millis(), Ordering::Relaxed);
     READY.fetch_add(1, Ordering::Release);
     while START_MS.load(Ordering::Acquire) == 0 {
         process_yield();
     }
 
-    let seed = ConfigSeed::for_worker(SEED.load(Ordering::Acquire), slot);
+    let seed = SEED.load(Ordering::Acquire) ^ 0x9E37_79B9_7F4A_7C15;
     let mut state = seed;
     let mut operations = 0u64;
     let start = START_MS.load(Ordering::Acquire);
-    let stop = STOP_MS.load(Ordering::Acquire);
+    // START is the release/acquire gate for the already-published deadline.
+    let stop = STOP_MS.load(Ordering::Relaxed);
+    ENTERED_AT[slot].store(monotonic_millis(), Ordering::Relaxed);
 
     while monotonic_millis() < stop {
         state ^= state >> 12;
         state ^= state << 25;
         state ^= state >> 27;
-        state = state
-            .wrapping_mul(0x2545_F491_4F6C_DD1D)
-            .rotate_left((slot as u32) + 1);
+        state = state.wrapping_mul(0x2545_F491_4F6C_DD1D).rotate_left(7);
         state = state.wrapping_add(start ^ operations);
         operations = operations.wrapping_add(1);
         if operations & 0x3ff == 0 {
@@ -79,19 +86,34 @@ unsafe extern "C" fn worker(arg: u64) {
         }
     }
 
+    EXITED_AT[slot].store(monotonic_millis(), Ordering::Relaxed);
+    if diagnostic(3, arg) != 0 {
+        ProcessExit::exit(1);
+    }
     black_box(state);
     PROGRESS[slot].store(operations, Ordering::Release);
     CHECKSUM[slot].store(state, Ordering::Release);
     FINISHED.fetch_add(1, Ordering::Release);
 }
 
-struct ConfigSeed;
-
-impl ConfigSeed {
-    fn for_worker(seed: u64, slot: usize) -> u64 {
-        seed.wrapping_add((slot as u64).wrapping_mul(0xD1B5_4A32_D192_ED03)) ^ 0x9E37_79B9_7F4A_7C15
-    }
+// Feature-private observer ABI. These calls are outside the arithmetic loop.
+fn diagnostic(action: u64, value: u64) -> u64 {
+    syscall(0x5342, action, value)
 }
+
+fn syscall(number: u64, a: u64, b: u64) -> u64 {
+    let result: u64;
+    unsafe {
+        core::arch::asm!("syscall", inlateout("rax") number => result,
+            in("rdi") a, in("rsi") b, lateout("rcx") _, lateout("r11") _,
+            options(nostack));
+    }
+    result
+}
+
+static READY_AT: [AtomicU64; WORKERS] = [const { AtomicU64::new(0) }; WORKERS];
+static ENTERED_AT: [AtomicU64; WORKERS] = [const { AtomicU64::new(0) }; WORKERS];
+static EXITED_AT: [AtomicU64; WORKERS] = [const { AtomicU64::new(0) }; WORKERS];
 
 fn parse_u64(bytes: &[u8]) -> Option<u64> {
     if bytes.is_empty() {
@@ -127,6 +149,9 @@ unsafe fn config_from_args(argc: u64, argv: *const *const u8) -> Config {
         duration_ms: DEFAULT_DURATION_MS,
         seed: DEFAULT_SEED,
         cpus: DEFAULT_CPUS,
+        run: 1,
+        repetition: 1,
+        reverse: false,
     };
     let mut index = 1usize;
     while index + 1 < argc as usize {
@@ -187,30 +212,40 @@ impl JsonRecord {
     }
 }
 
-fn run_id(record: &mut JsonRecord, cpus: u64, seed: u64) {
-    record.number(cpus);
-    record.push(b"-1-");
-    record.number(seed);
+fn run_id(record: &mut JsonRecord, config: Config) {
+    record.number(config.cpus);
+    record.push(b"-");
+    record.number(config.run);
+    record.push(b"-");
+    record.number(config.seed);
 }
 
 fn emit_start(config: Config) {
     let mut record = JsonRecord::new();
     record.push(b"[SCHED-BENCH] START {\"run\":\"");
-    run_id(&mut record, config.cpus, config.seed);
+    run_id(&mut record, config);
     record.push(b"\",\"seed\":");
     record.number(config.seed);
     record.push(b",\"cpus\":");
     record.number(config.cpus);
     record.push(b",\"workers\":4,\"duration_ms\":");
     record.number(config.duration_ms);
-    record.push(b",\"samples\":1,\"clock\":\"monotonic_ms\"}");
+    record.push(b",\"repetition\":");
+    record.number(config.repetition);
+    record.push(b",\"order\":\"");
+    record.push(if config.reverse {
+        b"reverse"
+    } else {
+        b"forward"
+    });
+    record.push(b"\",\"samples\":1,\"clock\":\"monotonic_ms\"}");
     record.finish();
 }
 
 fn emit_sample(config: Config, elapsed_ms: u64, total: u64) {
     let mut record = JsonRecord::new();
     record.push(b"[SCHED-BENCH] SAMPLE {\"run\":\"");
-    run_id(&mut record, config.cpus, config.seed);
+    run_id(&mut record, config);
     record.push(b"\",\"index\":0,\"elapsed_ms\":");
     record.number(elapsed_ms);
     record.push(b",\"operations\":");
@@ -242,7 +277,7 @@ fn emit_sample(config: Config, elapsed_ms: u64, total: u64) {
 fn emit_end(config: Config, total: u64, elapsed_ms: u64, success: bool) {
     let mut record = JsonRecord::new();
     record.push(b"[SCHED-BENCH] END {\"run\":\"");
-    run_id(&mut record, config.cpus, config.seed);
+    run_id(&mut record, config);
     record.push(b"\",\"sample_count\":1,\"status\":\"");
     record.push(if success { b"ok" } else { b"error" });
     record.push(b"\",\"elapsed_ms\":");
@@ -261,12 +296,11 @@ fn emit_end(config: Config, total: u64, elapsed_ms: u64, success: bool) {
     record.finish();
 }
 
-#[cfg(not(test))]
-#[no_mangle]
-pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
-    let config = unsafe { config_from_args(argc, argv) };
+fn run(config: Config) -> bool {
     emit_start(config);
-
+    if diagnostic(0, 0) != 0 {
+        return false;
+    }
     READY.store(0, Ordering::Release);
     START_MS.store(0, Ordering::Release);
     STOP_MS.store(0, Ordering::Release);
@@ -276,37 +310,113 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         PROGRESS[slot].store(0, Ordering::Release);
         CHECKSUM[slot].store(0, Ordering::Release);
     }
-
-    let mut spawned = 0usize;
-    for slot in 0..WORKERS {
-        if thread::spawn(worker, slot as u64) == 0 {
-            break;
+    let mut tids = [0u64; WORKERS];
+    let mut created_at = [0u64; WORKERS];
+    for rank in 0..WORKERS {
+        let slot = if config.reverse {
+            WORKERS - 1 - rank
+        } else {
+            rank
+        };
+        created_at[slot] = monotonic_millis();
+        tids[slot] = thread::spawn(worker, slot as u64);
+        if tids[slot] == 0 {
+            return false;
         }
-        spawned += 1;
     }
-
-    if spawned != WORKERS {
-        emit_end(config, 0, 0, false);
-        ProcessExit::exit(1);
-    }
-
+    // A bounded wait fails the whole process, never releases a partial cohort.
+    let ready_limit = monotonic_millis() + 30_000;
     while READY.load(Ordering::Acquire) != WORKERS as u64 {
+        if monotonic_millis() > ready_limit {
+            return false;
+        }
         process_yield();
+    }
+    if diagnostic(2, config.run) != 0 {
+        return false;
     }
     let start = monotonic_millis();
+    STOP_MS.store(start.saturating_add(config.duration_ms), Ordering::Relaxed);
     START_MS.store(start, Ordering::Release);
-    STOP_MS.store(start.saturating_add(config.duration_ms), Ordering::Release);
 
     while FINISHED.load(Ordering::Acquire) != WORKERS as u64 {
+        if monotonic_millis() > start + config.duration_ms + 30_000 {
+            return false;
+        }
         process_yield();
     }
-    let end = monotonic_millis();
-    let elapsed = end.saturating_sub(start);
+    let elapsed = monotonic_millis().saturating_sub(start);
+    // Logical completion is not thread exit. Do not reset shared data or reuse
+    // benchmark state until every borrower is definitively Reaped.
+    for tid in tids {
+        while syscall(156, tid, 0) != 1 {
+            if monotonic_millis() > start + config.duration_ms + 30_000 {
+                return false;
+            }
+            process_yield();
+        }
+    }
+    if diagnostic(4, config.run) != 0 {
+        return false;
+    }
+    for (slot, created) in created_at.iter().enumerate() {
+        let mut record = JsonRecord::new();
+        record.push(b"[SCHED-BENCH] LIFECYCLE {\"run\":\"");
+        run_id(&mut record, config);
+        record.push(b"\",\"slot\":");
+        record.number(slot as u64);
+        record.push(b",\"created_ms\":");
+        record.number(*created);
+        record.push(b",\"ready_ms\":");
+        record.number(READY_AT[slot].load(Ordering::Acquire));
+        record.push(b",\"start_ms\":");
+        record.number(start);
+        record.push(b",\"entered_ms\":");
+        record.number(ENTERED_AT[slot].load(Ordering::Acquire));
+        record.push(b",\"exited_ms\":");
+        record.number(EXITED_AT[slot].load(Ordering::Acquire));
+        record.push(b"}");
+        record.finish();
+    }
     let total = (0..WORKERS)
         .map(|slot| PROGRESS[slot].load(Ordering::Acquire))
         .fold(0u64, u64::saturating_add);
-    let success = total > 0 && (0..WORKERS).all(|slot| PROGRESS[slot].load(Ordering::Acquire) > 0);
+    let success = (0..WORKERS).all(|slot| PROGRESS[slot].load(Ordering::Acquire) > 0);
     emit_sample(config, elapsed, total);
     emit_end(config, total, elapsed, success);
-    ProcessExit::exit(if success { 0 } else { 1 });
+    success
+}
+
+#[cfg(not(test))]
+#[no_mangle]
+pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
+    let mut config = unsafe { config_from_args(argc, argv) };
+    if !sunlight_ipc::set_nice(0, 0) {
+        ProcessExit::exit(1);
+    }
+    // Alternate order within each repetition to separate slot identity from
+    // creation rank. Seed, instructions and input state are identical.
+    let mut ordinal = 0;
+    for repetition in 0..=5 {
+        let durations: &[u64] = if repetition == 0 {
+            &[1_000]
+        } else {
+            &[5_000, 10_000]
+        };
+        for &duration in durations {
+            for reverse in [false, true] {
+                ordinal += 1;
+                config.duration_ms = duration;
+                config.repetition = repetition.max(1);
+                config.reverse = reverse;
+                config.run = ordinal;
+                if !run(config) {
+                    debug_log("[SCHED-BENCH] suite failed");
+                    ProcessExit::exit(1);
+                }
+            }
+        }
+    }
+    debug_log("[SCHED-BENCH] SUITE complete runs=22");
+    ProcessExit::exit(0);
 }

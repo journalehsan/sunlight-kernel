@@ -877,7 +877,11 @@ extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
     let cpu_id = crate::sched::current_cpu_id();
     crate::sched::accounting::interrupt_entry(cpu_id);
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(feature = "scheduler_guest_bench")]
+    let outgoing = sched.diagnostic_current_pid(cpu_id);
     let result = sched.schedule_tick(cpu_id, saved_rsp);
+    #[cfg(feature = "scheduler_guest_bench")]
+    crate::scheduler_bench_diag::observe(&sched, outgoing, result, 32);
     drop(sched);
     #[cfg(feature = "scheduler_b_test")]
     crate::sched::regression::handoff_delay();
@@ -944,6 +948,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     //
     // Capture telemetry scalars under lock (cheap), release lock, then do expensive
     // page counting outside the lock (Phase 2 goal).
+    #[cfg(feature = "scheduler_guest_bench")]
+    let mut bench_reason = 0;
     let mut telemetry_snap: Option<crate::telemetry::TelemetrySnapshot> = None;
     #[cfg(feature = "scheduler_perf_diag")]
     let sched_lock_acquired;
@@ -962,7 +968,15 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 );
             }
         }
+        #[cfg(feature = "scheduler_guest_bench")]
+        if crate::sched::peek_reschedule_on(cpu_id) {
+            bench_reason |= 1;
+        }
         sched.tick(cpu_id, ticks_total);
+        #[cfg(feature = "scheduler_guest_bench")]
+        if crate::sched::peek_reschedule_on(cpu_id) {
+            bench_reason |= 2;
+        }
         #[cfg(feature = "scheduler_b_test")]
         crate::sched::regression::on_tick(&mut sched, cpu_id);
 
@@ -1001,6 +1015,10 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 crate::ipc::with_shard(endpoint_id, |bus| {
                     bus.send_timer_tick(endpoint_id, ticks_total);
                 });
+                #[cfg(feature = "scheduler_guest_bench")]
+                if sched.is_blocked_on_recv(timer_pid) {
+                    bench_reason |= 4;
+                }
                 sched.wake_pid(timer_pid);
             }
 
@@ -1020,6 +1038,10 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                     // it Ready during a nested login call to UAC: the grant
                     // mint requires the TTY caller to remain blocked until the
                     // reply commits. Preserve the established SMP wake path.
+                    #[cfg(feature = "scheduler_guest_bench")]
+                    if sched.is_blocked_on_recv(tty_pid) {
+                        bench_reason |= 8;
+                    }
                     sched.wake_pid(tty_pid);
                 }
             }
@@ -1076,7 +1098,11 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // lock, save the interrupted context, run pick_next / steal_work, switch
     // address spaces, and update the TSS RSP0.
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(feature = "scheduler_guest_bench")]
+    let outgoing = sched.diagnostic_current_pid(cpu_id);
     let result = sched.schedule_tick(cpu_id, saved_rsp);
+    #[cfg(feature = "scheduler_guest_bench")]
+    crate::scheduler_bench_diag::observe(&sched, outgoing, result, bench_reason);
     drop(sched);
 
     #[cfg(feature = "scheduler_b_test")]
