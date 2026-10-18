@@ -658,6 +658,20 @@ impl Scheduler {
             && core_id != current_cpu_id();
         #[cfg(feature = "scheduler_guest_bench")]
         crate::scheduler_bench_diag::service_ready(self.processes[idx].name_str(), now_ns());
+        #[cfg(feature = "scheduler_timer_trace")]
+        if matches!(
+            self.processes[idx].name_str(),
+            "timer_server" | "tty_server"
+        ) {
+            crate::scheduler_timer_trace::event(
+                self,
+                3,
+                self.processes[idx].pid,
+                notify as u64,
+                (self.processes[idx].nice as i64 + 20) as u64,
+                self.diagnostic_current_pid(core_id).unwrap_or(0) as u64,
+            );
+        }
         if SCHEDULER_MODE == SchedulerMode::RoundRobin {
             self.processes[idx].queued_on_core = core_id as u8;
             #[cfg(feature = "scheduler_perf_diag")]
@@ -1661,6 +1675,30 @@ impl Scheduler {
             return 0;
         }
 
+        #[cfg(feature = "scheduler_timer_trace")]
+        if let Some(timer) = self
+            .processes
+            .iter()
+            .find(|p| p.name_str() == "timer_server" && p.state == ProcessState::Ready)
+        {
+            let current = self.core_current_task(cpu_id);
+            let expired = CORE_STATES[cpu_id]
+                .lock()
+                .slice
+                .expired(now_ns(), crate::arch::x86_64::interrupts::tsc_hz() != 0);
+            let running =
+                current.is_some_and(|idx| self.processes[idx].state == ProcessState::Running);
+            crate::scheduler_timer_trace::event(
+                self,
+                9,
+                timer.pid,
+                current.map_or(0, |idx| self.processes[idx].pid) as u64,
+                current.map_or(20, |idx| (self.processes[idx].nice as i64 + 20) as u64),
+                peek_reschedule_on(cpu_id) as u64
+                    | ((expired as u64) << 1)
+                    | ((running as u64) << 2),
+            );
+        }
         if !check_reschedule_on(cpu_id) {
             return 0;
         }
@@ -2046,6 +2084,17 @@ impl Scheduler {
         };
 
         if self.processes[idx].state == ProcessState::BlockedOnIpc {
+            #[cfg(feature = "scheduler_timer_trace")]
+            if self.processes[idx].name_str() == "timer_server" {
+                crate::scheduler_timer_trace::event(
+                    self,
+                    11,
+                    pid,
+                    (self.processes[idx].nice as i64 + 20) as u64,
+                    self.diagnostic_current_pid(current_cpu_id()).unwrap_or(0) as u64,
+                    self.processes[idx].pending_call.is_some() as u64,
+                );
+            }
             let ticks_blocked = self
                 .global_tick
                 .saturating_sub(self.processes[idx].block_start_tick);

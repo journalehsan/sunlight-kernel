@@ -898,6 +898,8 @@ const TTY_WAKE_INTERVAL_TICKS: u64 = 3;
 /// Returns 0 to resume the interrupted context, or a new RSP to switch.
 #[no_mangle]
 pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
+    #[cfg(feature = "scheduler_timer_trace")]
+    let timer_entry_ns = now_ns();
     // Send LAPIC EOI. All cores (BSP and APs) now receive their timer
     // interrupts from the per-core LAPIC, not the legacy 8259 PIC.
     unsafe {
@@ -955,6 +957,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     let sched_lock_acquired;
     {
         let mut sched = crate::sched::SCHEDULER.lock();
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::event(&sched, 1, 0, timer_entry_ns, ticks_total, 0);
         #[cfg(feature = "scheduler_perf_diag")]
         {
             sched_lock_acquired = now_ns();
@@ -1017,6 +1021,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
                 crate::ipc::with_shard(endpoint_id, |bus| {
                     bus.send_timer_tick(endpoint_id, ticks_total);
                 });
+                #[cfg(feature = "scheduler_timer_trace")]
+                crate::scheduler_timer_trace::event(&sched, 2, timer_pid, ticks_total, 0, 0);
                 #[cfg(feature = "scheduler_guest_bench")]
                 if sched.is_blocked_on_recv(timer_pid) {
                     bench_reason |= 4;

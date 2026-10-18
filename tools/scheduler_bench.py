@@ -67,6 +67,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--iso', type=Path, required=True)
     p.add_argument('--suite', action='store_true', help='capture the 22-run C1.2B suite; duration is host timeout')
+    p.add_argument('--mixed', action='store_true', help='capture the 8-run C1.2E timer/IPC/audio suite')
+    p.add_argument('--audio', action='store_true', help='attach Intel HDA with the silent QEMU audio backend')
     p.add_argument('--cpus', nargs='+', type=int, default=[1, 2, 4, 8, 12])
     p.add_argument('--accel', choices=['tcg', 'kvm'], default='tcg')
     p.add_argument('--warmup', type=int, default=30)
@@ -82,7 +84,9 @@ def main():
     qemu = shutil.which('qemu-system-x86_64')
     if not qemu:
         p.error('qemu-system-x86_64 not found')
-    if args.suite and (args.cpus != [1] or args.repetitions != 1 or args.seed != 1):
+    if args.mixed and args.suite:
+        p.error('select suite or mixed')
+    if (args.suite or args.mixed) and (args.cpus != [1] or args.repetitions != 1 or args.seed != 1):
         p.error('C1.2B suite requires --cpus 1 --repetitions 1 --seed 1; it contains its own repetitions')
     args.output.mkdir(parents=True, exist_ok=True)
     base = {
@@ -96,7 +100,7 @@ def main():
         'warmup_seconds': args.warmup, 'measurement_seconds': args.duration,
         'repetitions': args.repetitions, 'seed': args.seed,
         'memory': args.memory, 'cpu_model': args.cpu_model,
-        'suite': args.suite, 'host_load_start': os.getloadavg(),
+        'suite': args.suite, 'mixed': args.mixed, 'audio': args.audio, 'host_load_start': os.getloadavg(),
         'results': [],
     }
     for ncpu in args.cpus:
@@ -108,16 +112,18 @@ def main():
                        '-cpu', args.cpu_model, '-smp', str(ncpu), '-m', args.memory,
                        '-cdrom', str(args.iso.resolve()), '-serial', f'file:{serial}',
                        '-display', 'none', '-nic', 'none', '-no-reboot', '-no-shutdown']
+            if args.audio:
+                command += ['-audiodev', 'none,id=snd0', '-device', 'intel-hda', '-device', 'hda-micro,audiodev=snd0']
             started = time.time()
             serial.write_text('')
             with qlog.open('w') as log:
                 proc = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
                 try:
-                    if args.suite:
+                    if args.suite or args.mixed:
                         deadline = time.monotonic() + args.warmup + args.duration
                         while time.monotonic() < deadline and proc.poll() is None:
                             raw = serial.read_text(errors='replace') if serial.exists() else ''
-                            if any(marker in raw for marker in ('[SCHED-BENCH] SUITE complete runs=22', '[SCHED-BENCH] suite failed', '[FAULT]')):
+                            if any(marker in raw for marker in ('[SCHED-BENCH] SUITE complete runs=22', '[SCHED-BENCH] suite failed', '[SCHED-TIMER] MIXED complete runs=8', '[SCHED-TIMER] mixed failed', '[FAULT]')):
                                 break
                             time.sleep(0.25)
                     else:
@@ -132,7 +138,15 @@ def main():
                         code = proc.wait()
             raw = serial.read_text(errors='replace') if serial.exists() else ''
             run_seed = args.seed + rep
-            if args.suite:
+            if args.mixed:
+                from scheduler_timer import analyze
+                try:
+                    measured = analyze(raw, mixed=True)
+                    (args.output / f'{stem}.timer.json').write_text(json.dumps(measured, indent=2) + '\n')
+                    valid, invalid_reason = True, None
+                except (ValueError, KeyError, TypeError, ZeroDivisionError) as error:
+                    valid, invalid_reason = False, str(error)
+            elif args.suite:
                 from scheduler_fairness import validate_suite
                 try:
                     measured = validate_suite(raw)

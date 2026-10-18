@@ -36,6 +36,7 @@ static START_MS: AtomicU64 = AtomicU64::new(0);
 static STOP_MS: AtomicU64 = AtomicU64::new(0);
 static SEED: AtomicU64 = AtomicU64::new(DEFAULT_SEED);
 static FINISHED: AtomicU64 = AtomicU64::new(0);
+static NICE_TEST: AtomicU64 = AtomicU64::new(0);
 static PROGRESS: [AtomicU64; WORKERS] = {
     const ZERO: AtomicU64 = AtomicU64::new(0);
     [ZERO; WORKERS]
@@ -53,10 +54,20 @@ struct Config {
     run: u64,
     repetition: u64,
     reverse: bool,
+    mixed: bool,
+    nice_test: bool,
 }
 
 unsafe extern "C" fn worker(arg: u64) {
     let slot = arg as usize;
+    let nice = if NICE_TEST.load(Ordering::Acquire) != 0 {
+        [0, 8, 9, 10][slot]
+    } else {
+        0
+    };
+    if !sunlight_ipc::set_nice(0, nice) {
+        ProcessExit::exit(1);
+    }
     if diagnostic(1, arg) != 0 {
         ProcessExit::exit(1);
     }
@@ -152,6 +163,8 @@ unsafe fn config_from_args(argc: u64, argv: *const *const u8) -> Config {
         run: 1,
         repetition: 1,
         reverse: false,
+        mixed: false,
+        nice_test: false,
     };
     let mut index = 1usize;
     while index + 1 < argc as usize {
@@ -161,6 +174,7 @@ unsafe fn config_from_args(argc: u64, argv: *const *const u8) -> Config {
             (b"--duration-ms", Some(value)) => config.duration_ms = value,
             (b"--seed", Some(value)) => config.seed = value,
             (b"--cpus", Some(value)) => config.cpus = value.max(1),
+            (b"--mixed", Some(value)) => config.mixed = value != 0,
             _ => {}
         }
         index += 2;
@@ -306,6 +320,7 @@ fn run(config: Config) -> bool {
     STOP_MS.store(0, Ordering::Release);
     FINISHED.store(0, Ordering::Release);
     SEED.store(config.seed, Ordering::Release);
+    NICE_TEST.store(config.nice_test as u64, Ordering::Release);
     for slot in 0..WORKERS {
         PROGRESS[slot].store(0, Ordering::Release);
         CHECKSUM[slot].store(0, Ordering::Release);
@@ -332,20 +347,69 @@ fn run(config: Config) -> bool {
         }
         process_yield();
     }
+    let timer = if config.mixed {
+        sunlight_ipc::nameserver_lookup_timeout("time", 5_000)
+    } else {
+        None
+    };
+    if config.mixed && timer.is_none() {
+        return false;
+    }
+    let audio = if config.mixed {
+        sunlight_ipc::nameserver_lookup_timeout("audiod", 5_000)
+    } else {
+        None
+    };
+    let audio_before = audio.and_then(audio_status);
+    // A private receive deadline paces RPCs without a runnable coordinator
+    // spinning ahead of nice +8/+9/+10 workers. Bound observer demand too.
+    let pacer = config.mixed.then(sunlight_ipc::endpoint_create);
     if diagnostic(2, config.run) != 0 {
         return false;
     }
     let start = monotonic_millis();
     STOP_MS.store(start.saturating_add(config.duration_ms), Ordering::Relaxed);
     START_MS.store(start, Ordering::Release);
+    let audio_tone = audio.and_then(|cap| {
+        sunlight_ipc::ipc_call_timeout(
+            cap,
+            sunlight_ipc::IpcMsg::with_label(sunlight_ipc::AudiodMsg::PLAY_TONE)
+                .word(0, 440)
+                .word(1, config.duration_ms.min(5_000)),
+            5_000,
+        )
+        .ok()
+    });
 
+    let mut replies = 0;
+    let mut reply_errors = 0;
+    let mut reply_max_ms = 0;
     while FINISHED.load(Ordering::Acquire) != WORKERS as u64 {
         if monotonic_millis() > start + config.duration_ms + 30_000 {
             return false;
         }
-        process_yield();
+        if let Some(timer) = timer {
+            let before = monotonic_millis();
+            match sunlight_ipc::ipc_call_timeout(
+                timer,
+                sunlight_ipc::IpcMsg::with_label(sunlight_ipc::TimerMsg::GET_TICKS),
+                5_000,
+            ) {
+                Ok(msg) if msg.label == sunlight_ipc::TimerMsg::REPLY => replies += 1,
+                _ => reply_errors += 1,
+            }
+            reply_max_ms = reply_max_ms.max(monotonic_millis().saturating_sub(before));
+            if let Some(pacer) = pacer {
+                if sunlight_ipc::ipc_recv_timeout(pacer, 100).is_some() {
+                    return false;
+                }
+            }
+        } else {
+            process_yield();
+        }
     }
     let elapsed = monotonic_millis().saturating_sub(start);
+    let audio_after = audio.and_then(audio_status);
     // Logical completion is not thread exit. Do not reset shared data or reuse
     // benchmark state until every borrower is definitively Reaped.
     for tid in tids {
@@ -358,6 +422,38 @@ fn run(config: Config) -> bool {
     }
     if diagnostic(4, config.run) != 0 {
         return false;
+    }
+    if config.mixed {
+        let mut audio_record = JsonRecord::new();
+        audio_record.push(b"[SCHED-TIMER] AUDIO {\"run\":");
+        audio_record.number(config.run);
+        audio_record.push(b",\"tone_label\":");
+        audio_record.number(audio_tone.map_or(0, |msg| msg.label));
+        audio_record.push(b",\"before_frames\":");
+        audio_record.number(audio_before.map_or(0, |s| s.frames_played as u64));
+        audio_record.push(b",\"after_frames\":");
+        audio_record.number(audio_after.map_or(0, |s| s.frames_played as u64));
+        audio_record.push(b",\"before_underruns\":");
+        audio_record.number(audio_before.map_or(0, |s| s.underruns as u64));
+        audio_record.push(b",\"after_underruns\":");
+        audio_record.number(audio_after.map_or(0, |s| s.underruns as u64));
+        audio_record.push(b",\"state\":");
+        audio_record.number(audio_after.map_or(255, |s| s.state as u64));
+        audio_record.push(b"}");
+        audio_record.finish();
+        let mut record = JsonRecord::new();
+        record.push(b"[SCHED-TIMER] CLIENT {\"run\":");
+        record.number(config.run);
+        record.push(b",\"nice_test\":");
+        record.number(config.nice_test as u64);
+        record.push(b",\"replies\":");
+        record.number(replies);
+        record.push(b",\"errors\":");
+        record.number(reply_errors);
+        record.push(b",\"max_ms\":");
+        record.number(reply_max_ms);
+        record.push(b"}");
+        record.finish();
     }
     for (slot, created) in created_at.iter().enumerate() {
         let mut record = JsonRecord::new();
@@ -381,10 +477,21 @@ fn run(config: Config) -> bool {
     let total = (0..WORKERS)
         .map(|slot| PROGRESS[slot].load(Ordering::Acquire))
         .fold(0u64, u64::saturating_add);
-    let success = (0..WORKERS).all(|slot| PROGRESS[slot].load(Ordering::Acquire) > 0);
+    let success = (0..WORKERS).all(|slot| PROGRESS[slot].load(Ordering::Acquire) > 0)
+        && (!config.mixed || (replies > 0 && reply_errors == 0));
     emit_sample(config, elapsed, total);
     emit_end(config, total, elapsed, success);
     success
+}
+
+fn audio_status(cap: sunlight_ipc::CapabilityToken) -> Option<sunlight_ipc::AudioStatus> {
+    let msg = sunlight_ipc::ipc_call_timeout(
+        cap,
+        sunlight_ipc::IpcMsg::with_label(sunlight_ipc::AudiodMsg::GET_STATUS),
+        5_000,
+    )
+    .ok()?;
+    sunlight_ipc::unpack_audio_status(&msg)
 }
 
 #[cfg(not(test))]
@@ -393,6 +500,20 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
     let mut config = unsafe { config_from_args(argc, argv) };
     if !sunlight_ipc::set_nice(0, 0) {
         ProcessExit::exit(1);
+    }
+    if config.mixed {
+        for ordinal in 1..=8 {
+            config.run = ordinal;
+            config.duration_ms = if ordinal <= 2 { 1_000 } else { 10_000 };
+            config.nice_test = ordinal > 2 && ordinal % 2 == 0;
+            config.reverse = ordinal % 2 == 0;
+            if !run(config) {
+                debug_log("[SCHED-TIMER] mixed failed");
+                ProcessExit::exit(1);
+            }
+        }
+        debug_log("[SCHED-TIMER] MIXED complete runs=8");
+        ProcessExit::exit(0);
     }
     // Alternate order within each repetition to separate slot identity from
     // creation rank. Seed, instructions and input state are identical.

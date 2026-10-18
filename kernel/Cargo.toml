@@ -661,3 +661,6 @@ scheduler_perf_diag = []
 # Automatically launch the bounded C1.2A guest CPU contention workload.
 # This is a test-only boot image feature and is disabled for normal boots.
 scheduler_guest_bench = []
+# Bounded same-CPU timer/IPC stage trace; never enabled in ordinary images.
+scheduler_timer_trace = ["scheduler_guest_bench"]
+scheduler_mixed_bench = ["scheduler_timer_trace"]

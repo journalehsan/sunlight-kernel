@@ -1,5 +1,11 @@
 # Scheduler Phase C1.2D: timer-service latency and fairness
 
+Follow-up: [C1.2E measurements and corrections](scheduler-phase-c12e-timer.md)
+reproduce the retained raw captures, distinguish actual wakes from queue
+insertion, and explain why the tick-phase metric below is not independent
+hardware interrupt delivery lateness. That report also lists regenerated
+values where the retained captures differ from this historical table.
+
 Measured on October 18, 2026 on one vCPU with QEMU TCG (`thread=multi`,
 `-cpu max`, 1024 MiB, serial capture, host CPU 6). The comparison uses the
 validated C1.2B and C1.2C captures already retained under `target/`, plus two

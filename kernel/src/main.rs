@@ -23,6 +23,8 @@ mod process;
 mod sched;
 #[cfg(feature = "scheduler_guest_bench")]
 mod scheduler_bench_diag;
+#[cfg(feature = "scheduler_timer_trace")]
+mod scheduler_timer_trace;
 mod smbios;
 mod telemetry;
 mod thermal_hw;
@@ -926,6 +928,7 @@ pub extern "C" fn _start() -> ! {
         serial_println!("[SCHED-BENCH] launching guest contention workload");
         let mut pmm = PMM.lock();
         let mut benchmark = unsafe { Process::new(5, 0, "schedbench", &mut pmm, hhdm_offset) };
+        #[cfg(not(feature = "scheduler_mixed_bench"))]
         let argv: [&[u8]; 7] = [
             b"schedbench",
             b"--duration-ms",
@@ -935,6 +938,8 @@ pub extern "C" fn _start() -> ! {
             b"--cpus",
             b"1",
         ];
+        #[cfg(feature = "scheduler_mixed_bench")]
+        let argv: [&[u8]; 3] = [b"schedbench", b"--mixed", b"1"];
         let envp: [&[u8]; 0] = [];
         match process::spawn::exec_into_process(
             SCHEDULER_GUEST_BENCH_ELF_BYTES,

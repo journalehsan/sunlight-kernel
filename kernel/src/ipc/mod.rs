@@ -805,7 +805,14 @@ fn deliver_reply_to_current_target(
         return Ok(());
     };
 
-    deliver_reply_to_target(target, reply, sched, bus)
+    let result = deliver_reply_to_target(target, reply, sched, bus);
+    #[cfg(feature = "scheduler_timer_trace")]
+    if result.is_ok() && sched.processes.iter().any(|p| p.pid == target.call.pid && matches!(p.ipc_call_outcome, Some(IpcCallOutcome::ReplyDelivered(g)) if g == target.call.generation)) {
+        if let Some(idx) = sched.processes.iter().position(|p| p.pid == server_pid && p.name_str() == "timer_server") {
+            crate::scheduler_timer_trace::event(sched, 7, server_pid, target.call.pid as u64, target.call.generation, sched.effective_runtime_at(idx, sched.now_ns()));
+        }
+    }
+    result
 }
 
 fn deliver_reply_to_target(
@@ -888,6 +895,17 @@ pub(crate) fn take_terminal_result(
     match outcome {
         IpcCallOutcome::ReplyDelivered(generation) => {
             let reply = sched.processes[idx].ipc_reply.take();
+            #[cfg(feature = "scheduler_timer_trace")]
+            if sched.processes[idx].name.starts_with(b"schedbench") {
+                crate::scheduler_timer_trace::event(
+                    sched,
+                    8,
+                    sched.processes[idx].pid,
+                    generation,
+                    reply.map_or(0, |(_, msg)| msg.label),
+                    0,
+                );
+            }
             Some(match reply {
                 Some((reply_generation, msg)) if reply_generation == generation => Ok(msg),
                 _ => Err(IpcError::InvalidArgument),
@@ -1066,6 +1084,21 @@ pub fn handle_ipc_call(
             return Err(error);
         }
         sched.processes[idx].ipc_call_generation = generation;
+        #[cfg(feature = "scheduler_timer_trace")]
+        if sched
+            .processes
+            .iter()
+            .any(|p| p.pid == target_owner && p.name_str() == "timer_server")
+        {
+            crate::scheduler_timer_trace::event(
+                sched,
+                5,
+                target_owner,
+                caller_pid as u64,
+                generation,
+                msg.label,
+            );
+        }
         sched.processes[idx].pending_call = Some(PendingIpcCall {
             target_cap: target_cap.0,
             endpoint_id,
@@ -1344,6 +1377,13 @@ pub fn handle_ipc_recv(
         sched.processes[idx].ipc_next_deadline_tick = None;
         sched.processes[idx].ipc_recv_deadline = None;
         set_reply_target(sched, receiver_pid, endpoint_id, msg.call);
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::receive(
+            sched,
+            receiver_pid,
+            msg.call.map_or(0, |c| c.pid),
+            msg.call.map_or(msg.msg.words[0], |c| c.generation),
+        );
         return Ok(msg.msg);
     }
     bus.block_on_recv(endpoint_id, receiver_pid, sched);
@@ -1506,6 +1546,21 @@ pub fn handle_ipc_reply_wait(
         .is_some_and(|p| p.pending_reply_wait.is_some());
 
     if !already_waiting {
+        #[cfg(feature = "scheduler_timer_trace")]
+        if let Some(idx) = sched
+            .processes
+            .iter()
+            .position(|p| p.pid == server_pid && p.name_str() == "timer_server")
+        {
+            crate::scheduler_timer_trace::event(
+                sched,
+                10,
+                server_pid,
+                0,
+                0,
+                sched.effective_runtime_at(idx, sched.now_ns()),
+            );
+        }
         deliver_reply_to_current_target(server_pid, reply, sched, bus)?;
     }
 
@@ -1514,6 +1569,13 @@ pub fn handle_ipc_reply_wait(
             server.ipc_reply_target = msg.call.map(|call| IpcReplyTarget { endpoint_id, call });
             server.ipc_endpoint = Some(endpoint_id);
             server.pending_reply_wait = None;
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::receive(
+                sched,
+                server_pid,
+                msg.call.map_or(0, |c| c.pid),
+                msg.call.map_or(msg.msg.words[0], |c| c.generation),
+            );
             return Ok(msg.msg);
         }
 

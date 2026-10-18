@@ -144,9 +144,10 @@ pub fn service_ready(name: &str, now: u64) {
     service.ready_since.get_or_insert(now);
 }
 
-/// Record the BSP timer deadline observation against the calibrated clock.
-/// The expected timestamp is relative to the benchmark start tick, so this
-/// separates timer/TCG delivery lateness from Ready-to-dispatch residence.
+/// Record the BSP timer's benchmark-relative tick phase against the clock.
+/// global_tick is itself derived from calibrated elapsed time and catches up
+/// after delayed delivery. This phase remainder is not independent evidence
+/// of timely IRQ delivery. C1.2E records handler-entry interarrival gaps too.
 pub fn timer_deadline(global_tick: u64, now: u64) {
     let state = unsafe { &mut *STATE.0.get() };
     if state.start == 0 {
@@ -175,6 +176,19 @@ pub fn observe(sched: &Scheduler, outgoing: Option<usize>, result: u64, reason: 
     }
     let now = sched.now_ns();
     let selected = sched.diagnostic_current_pid(0);
+    #[cfg(feature = "scheduler_timer_trace")]
+    if result != 0 {
+        if let Some(p) = sched.processes.iter().find(|p| Some(p.pid) == selected) {
+            crate::scheduler_timer_trace::event(
+                sched,
+                4,
+                p.pid,
+                outgoing.unwrap_or(0) as u64,
+                reason,
+                (p.nice as i64 + 20) as u64,
+            );
+        }
+    }
     if result != 0 {
         if let Some(p) = sched.processes.iter().find(|p| Some(p.pid) == selected) {
             let slot = match p.name_str() {
@@ -205,7 +219,7 @@ pub fn observe(sched: &Scheduler, outgoing: Option<usize>, result: u64, reason: 
             continue;
         };
         if !matches!(p.state, ProcessState::Ready | ProcessState::Running)
-            || p.nice != 0
+            || p.nice != w.nice
             || p.cpu_mask & 1 == 0
             || p.context_rsp == 0
             || p.exit_cleanup_pending
@@ -280,7 +294,7 @@ pub fn syscall(action: u64, value: u64) -> u64 {
         }
         1 if value < N as u64 => {
             let w = &mut state.workers[value as usize];
-            if w.pid != 0 || current.nice != 0 || current.cpu_mask & 1 == 0 {
+            if w.pid != 0 || !matches!(current.nice, 0 | 8..=10) || current.cpu_mask & 1 == 0 {
                 return u64::MAX;
             }
             w.pid = current.pid;
@@ -292,6 +306,8 @@ pub fn syscall(action: u64, value: u64) -> u64 {
                 return u64::MAX;
             }
             state.start = now;
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::begin(&sched);
             state.start_tick = sched.global_tick;
             state.run = value;
             for (slot, service) in state.services.iter_mut().enumerate() {
@@ -362,7 +378,16 @@ pub fn syscall(action: u64, value: u64) -> u64 {
                     .map(|p| p.state == ProcessState::Reaped)
                     .unwrap_or(true)
             });
+            #[cfg(feature = "scheduler_timer_trace")]
+            let (events, overflow, invalid_clock) = crate::scheduler_timer_trace::finish();
             drop(sched);
+            #[cfg(feature = "scheduler_timer_trace")]
+            {
+                crate::serial_println!("[SCHED-TIMER] TRACE {{\"run\":{},\"count\":{},\"overflow\":{},\"invalid_clock\":{}}}", value, events.len(), overflow, invalid_clock);
+                for row in events {
+                    crate::serial_println!("[SCHED-TIMER] EVENT {:?}", row);
+                }
+            }
             for (slot, service) in services.iter().enumerate() {
                 let name = ["timer_server", "tty_server"][slot];
                 crate::serial_println!("[SCHED-BENCH] SERVICE {{\"run\":\"1-{}-1\",\"name\":\"{}\",\"pid\":{},\"cpu_ns\":{},\"ready_count\":{},\"dispatches\":{},\"deadline_count\":{},\"deadline_late_ns\":{},\"deadline_max_ns\":{},\"overflow\":{},\"waits_ns\":{:?}}}", value, name, service.pid, service.cpu_ns, service.ready_count, service.dispatches, service.deadline_count, service.deadline_late_ns, service.deadline_max_ns, service.overflow, &service.waits[..service.count]);
