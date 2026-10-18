@@ -481,9 +481,12 @@ edition = "2021"
 name = "sunbench"
 path = "src/main.rs"
 
+[[bin]]
+name = "schedbench"
+path = "src/scheduler_guest.rs"
+
 [dependencies]
 sunlight-ipc = { path = "../ipc" }
 sunlight-telemetry = { path = "../sunlight-telemetry" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 sun-font = { path = "../sun-font" }
-

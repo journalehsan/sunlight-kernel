@@ -287,6 +287,9 @@ static SUNLIGHT_TASKS_ELF_BYTES: &[u8] =
 // SunLight-Bench: CPU/multi-core performance benchmarking suite.
 static SUNLIGHT_BENCH_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunbench");
+#[cfg(feature = "scheduler_guest_bench")]
+static SCHEDULER_GUEST_BENCH_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/schedbench");
 // Sunlight Calculator: lightweight graphical calculator.
 static SUNLIGHT_CALCULATOR_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/calculator");
@@ -910,6 +913,46 @@ pub extern "C" fn _start() -> ! {
         } else {
             serial_println!("[PROC] Failed to load tty_server ELF");
             splash.log("[PROC] Failed to load tty_server ELF");
+        }
+    }
+
+    // C1.2A guest benchmark: launch a headless native workload as a normal
+    // scheduled process. It is feature-gated so ordinary boots retain the
+    // existing process set and all Phase B lifecycle contracts.
+    #[cfg(feature = "scheduler_guest_bench")]
+    {
+        serial_println!("[SCHED-BENCH] launching guest contention workload");
+        let mut pmm = PMM.lock();
+        let mut benchmark = unsafe { Process::new(5, 0, "schedbench", &mut pmm, hhdm_offset) };
+        let argv: [&[u8]; 7] = [
+            b"schedbench",
+            b"--duration-ms",
+            b"500",
+            b"--seed",
+            b"1",
+            b"--cpus",
+            b"1",
+        ];
+        let envp: [&[u8]; 0] = [];
+        match process::spawn::exec_into_process(
+            SCHEDULER_GUEST_BENCH_ELF_BYTES,
+            &mut benchmark,
+            &mut pmm,
+            hhdm_offset,
+            &argv,
+            &envp,
+            false,
+        ) {
+            Ok(_) => {
+                drop(pmm);
+                sched::with_scheduler(|s| {
+                    s.add_process(benchmark);
+                });
+                serial_println!("[SCHED-BENCH] guest contention workload queued");
+            }
+            Err(_) => {
+                serial_println!("[SCHED-BENCH] guest contention workload load failed");
+            }
         }
     }
 

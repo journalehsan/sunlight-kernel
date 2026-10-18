@@ -67,26 +67,51 @@ or add scheduler locks in C1.
 
 ## 3. Reproducible benchmark plan and results
 
-There are **no scheduler throughput or latency measurements** for this source
-state. `tools/scheduler_bench.py` remains a capture harness and does not create
-or launch a deterministic guest workload. It now checks framed
-`[SCHED-BENCH] START/SAMPLE/END` JSON records for run identity, configuration,
-sample count, and successful completion; incomplete captures are retained and
-explicitly marked invalid in `results.json`. `python3
-tools/test_scheduler_bench.py` tests the framing validator. This validation
-change does not supply guest workloads. The three C1.2 guest workloads, their
-serial records, all 1/2/4-vCPU results, diagnostic enabled/disabled comparison,
-and requested performance statistics remain **not implemented/not measured**.
-The lifecycle gates are correctness evidence only.
+`tools/scheduler_bench.py` is now exercised by a real C1.2A guest workload.
+The new `schedbench` binary is an additional headless target in the existing
+`sunlight-bench` package. It uses the existing native ThreadSpawn helper and
+`monotonic_millis()` interface, starts four borrower threads, performs a
+deterministic xorshift/rotate integer mix until a bounded deadline, and records
+independent progress counters plus an aggregate checksum. The kernel launches
+it only with the `scheduler_guest_bench` feature, after the normal boot
+processes are created; normal boots are unchanged.
 
-No C1.2 workload pilot was run for this update: the workspace contains
-`target/sunlightos.iso`, but no separately configured benchmark ISO or guest
-that emits the required records. Running that ordinary image would produce
-boot/lifecycle data, not valid workload measurements. Consequently there are
-no actual throughput, progress, fairness, latency, overhead, or run-variability
-values to report. The 30-second warmup/60-second measurement and five-repetition
-plan remains the target. QEMU's earlier functional results below used TCG
-(`thread=multi`); those results provide no timing evidence for C1.2.
+The guest emits one framed sample with the existing protocol. START and END
+records are outside the measured interval, and SAMPLE contains the elapsed
+guest monotonic time, total operations, operations/second, all four worker
+counts, and the checksum. `tools/scheduler_bench.py` validates the run ID,
+seed, CPU configuration, declared sample count, sample identity, and successful
+END record. The complete serial stream and parsed `results.json` are retained
+under `target/scheduler-c12a-capture3/` for the pilot run.
+
+The completed preliminary pilot used one vCPU, seed 1, four workers, and a
+500 ms requested guest interval. QEMU 11.1.1 used TCG
+(`-accel tcg,thread=multi`), `-cpu max`, 1024 MiB, no NIC, and serial-file
+output. The debug kernel image needed about 45 seconds of host warmup before
+the harness window; this is boot cost, not measured workload time. The guest
+reported 560 ms elapsed on the kernel's 10 ms resolution monotonic clock,
+742,868 integer operations, and 1,326,550 operations/second. Per-worker
+progress was worker0=12,540, worker1=31,845, worker2=315,164, and
+worker3=383,319; every worker was nonzero, so the run verified four scheduled
+workers. The smallest worker completed 3.27% of the largest in this single
+one-vCPU sample (30.57x max/min), which is a preliminary fairness observation,
+not a stable scheduler statistic.
+
+The preserved `results.json` marks the run `guest_report_complete: true` and
+contains one non-empty SAMPLE plus a matching `status: "ok"` END. The raw
+serial file is 60,725 bytes. This C1.2A pilot does not yet measure diagnostic
+enabled/disabled overhead, 2/4-vCPU scaling, or the later sleep/wakeup and nice
+workloads. The requested five repetitions with 30-second warmup and 60-second
+measurement remain the full pilot plan; this shorter one-repetition run is
+labelled preliminary because TCG timing and one-vCPU contention are variable.
+
+The captured framed records were:
+
+```text
+[SCHED-BENCH] START {"run":"1-1-1","seed":1,"cpus":1,"workers":4,"duration_ms":500,"samples":1,"clock":"monotonic_ms"}
+[SCHED-BENCH] SAMPLE {"run":"1-1-1","index":0,"elapsed_ms":560,"operations":742868,"ops_per_sec":1326550,"worker0":12540,"worker1":31845,"worker2":315164,"worker3":383319,"checksum":14777114858084104889}
+[SCHED-BENCH] END {"run":"1-1-1","sample_count":1,"status":"ok","elapsed_ms":560,"operations":742868,"all_workers_progress":true}
+```
 
 Functional evidence collected 2026-10-18: standard Phase B fixture passed at
 1, 2, 4, 8 and 12 vCPUs; the same fixture with `scheduler_perf_diag` enabled
@@ -107,17 +132,26 @@ not measure throughput or latency.
 | `python3 tools/test_scheduler_smp.py --cpus 1 2 4 8 12` | 1, 2, 4, 8, 12 | PASS | Lifecycle/correctness only; TCG |
 | `python3 tools/test_scheduler_smp.py --perf-diag --cpus 1 2 4` | 1, 2, 4 | PASS | Instrumented lifecycle/correctness only; TCG |
 | `python3 tools/test_scheduler_host.py` | host | PASS | Production state/lifecycle/accounting/policy tests |
+| `python3 tools/test_scheduler_smp.py --cpus 1 --evidence-dir target/scheduler-c12a-lifecycle` | 1 | PASS | Fresh guest lifecycle gate for this source state; TCG |
+| `python3 tools/scheduler_bench.py --iso target/scheduler-c12a.iso --accel tcg --cpus 1 --warmup 45 --duration 5 --repetitions 1 --seed 1 --memory 1024M --output target/scheduler-c12a-capture3` | 1 | PASS | Real C1.2A workload; one preliminary measurement |
 | `cargo check --package sunlight-kernel --offline` | host build | PASS | Default feature set |
 | `cargo check --package sunlight-kernel --features scheduler_perf_diag --offline` | host build | PASS | Diagnostic feature compiles |
 | `cargo fmt --all -- --check`, `git diff --check` | source | PASS | Formatting/whitespace |
 
-Run the capture harness with a benchmark ISO that emits meaningful guest
-measurements:
+Build the C1.2A guest binary and feature-gated ISO, then run the capture
+harness:
 
 ```sh
-python3 tools/scheduler_bench.py --iso target/scheduler-bench.iso \
-  --accel tcg --cpus 1 2 4 8 12 --warmup 30 --duration 60 \
-  --repetitions 5 --seed 1 --memory 1536M
+RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone' \
+  cargo build --package sunlight-bench --bin schedbench --release \
+  --target x86_64-unknown-none --offline
+cargo build --package sunlight-kernel --features scheduler_guest_bench --offline
+tools/make_hybrid_iso.sh target/x86_64-unknown-none/debug/sunlight-kernel \
+  target/scheduler-c12a.iso target/limine "$PWD"
+python3 tools/scheduler_bench.py --iso target/scheduler-c12a.iso \
+  --accel tcg --cpus 1 --warmup 45 --duration 5 \
+  --repetitions 1 --seed 1 --memory 1024M \
+  --output target/scheduler-c12a-capture3
 ```
 
 It retains raw per-run serial data and `results.json`; it does not derive

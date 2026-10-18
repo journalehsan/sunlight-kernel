@@ -655,3 +655,6 @@ cpu_accounting_diag = []
 scheduler_b_test = []
 # Fixed-size per-CPU scheduler performance instrumentation; disabled by default.
 scheduler_perf_diag = []
+# Automatically launch the bounded C1.2A guest CPU contention workload.
+# This is a test-only boot image feature and is disabled for normal boots.
+scheduler_guest_bench = []
