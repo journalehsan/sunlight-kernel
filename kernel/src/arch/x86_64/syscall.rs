@@ -1378,6 +1378,14 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let caller_is_init = sched.current_process().name_str() == "init";
     let caller_is_trusted_manager = sched.current_process().trusted_service_manager;
+    let reap_watcher = (sched.current_process().pid, sched.current_process().address_space.identity().generation);
+    let tracked = msg.label == ::sunlight_ipc::demand::SPAWN_TRACKED;
+    if tracked && (!caller_is_trusted_manager || sched.processes.iter()
+        .filter(|p| p.service_reap_watcher == Some(reap_watcher)).count() >= 32) {
+        IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
+        return 0;
+    }
+
     crate::serial_println!(
         "[SPAWN] Request from pid={} for path={} uid={} gid={} caps={:#x}",
         sched.current_process().pid,
@@ -1410,6 +1418,9 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
                 .iter_mut()
                 .find(|process| process.pid == pid)
             {
+                if tracked {
+                    child.service_reap_watcher = Some(reap_watcher);
+                }
                 // The trust chain begins at the kernel-created init process.
                 // An arbitrary process cannot acquire either marker merely by
                 // executing a binary with the same basename.
@@ -1664,8 +1675,56 @@ fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
 
 fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
     let target_pid = frame.rdi as usize;
-    let sched = crate::sched::SCHEDULER.lock();
+    let mut sched = crate::sched::SCHEDULER.lock();
     let caller = sched.current_process();
+    // Explicit manager-only D2 mode. Legacy credential callers still observe
+    // only live processes. Finished is deliberately distinct from Reaped.
+    if matches!(frame.rsi, ::sunlight_ipc::demand::REAP_QUERY | ::sunlight_ipc::demand::REAP_RELEASE
+        | ::sunlight_ipc::demand::ACCOUNT_QUERY) {
+        let watcher = (caller.pid, caller.address_space.identity().generation);
+        if !caller.trusted_service_manager || frame.rdx == 0 {
+            return u64::MAX;
+        }
+        let Some(target) = sched.processes.iter_mut().find(|p| p.pid == target_pid) else {
+            // A missing receipt is not proof that this incarnation was reaped.
+            return u64::MAX;
+        };
+        let generation = if target.state == ProcessState::Reaped {
+            target.service_reap_receipt[0]
+        } else {
+            target.address_space.identity().generation
+        };
+        if generation != frame.rdx || target.service_reap_watcher != Some(watcher) {
+            return u64::MAX;
+        }
+        if frame.rsi == ::sunlight_ipc::demand::ACCOUNT_QUERY {
+            if matches!(target.state, ProcessState::Finished | ProcessState::Reaped) {
+                return u64::MAX;
+            }
+            let Some(hhdm) = crate::HHDM_REQ.response() else { return u64::MAX; };
+            frame.r8 = target.cpu_runtime_ns;
+            frame.r9 = unsafe { target.address_space.count_user_pages(VirtAddr::new(hhdm.offset)) } as u64;
+            frame.r10 = target.mapped_shared.iter().map(|(_,_,size)| size.div_ceil(4096) as u64).sum();
+            frame.r12 = crate::PMM.lock().free_page_count() as u64;
+            return 0;
+        }
+        if frame.rsi == ::sunlight_ipc::demand::REAP_RELEASE {
+            if target.state != ProcessState::Reaped || target.exit_cleanup_pending {
+                return u64::MAX;
+            }
+            target.service_reap_watcher = None;
+            return 0;
+        }
+        frame.r8 = target.service_reap_receipt[1];
+        frame.r9 = target.service_reap_receipt[2];
+        frame.r10 = target.service_reap_receipt[3];
+        frame.r12 = target.exit_code as u64;
+        return match target.state {
+            ProcessState::Reaped if !target.exit_cleanup_pending => 2,
+            ProcessState::Finished | ProcessState::Reaped => 1,
+            _ => 0,
+        };
+    }
     if !caller.trusted_session_service && !caller.trusted_service_manager {
         // UAC may inspect only the authenticated synchronous request it is
         // servicing. An arbitrary GUI cannot query or supply caller credentials.

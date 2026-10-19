@@ -2,7 +2,7 @@
 use core::fmt::{self, Write};
 pub fn log(args: fmt::Arguments<'_>) {
     struct Record {
-        bytes: [u8; 256],
+        bytes: [u8; 512],
         len: usize,
     }
     impl Write for Record {
@@ -18,7 +18,7 @@ pub fn log(args: fmt::Arguments<'_>) {
         }
     }
     let mut record = Record {
-        bytes: [0; 256],
+        bytes: [0; 512],
         len: 0,
     };
     let _ = record.write_fmt(args);

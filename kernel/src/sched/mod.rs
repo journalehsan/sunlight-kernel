@@ -531,6 +531,7 @@ impl Scheduler {
             .find(|(idx, p)| {
                 (p.state == ProcessState::Reaped
                     || (p.state == ProcessState::Finished && !p.exit_cleanup_pending))
+                    && p.service_reap_watcher.is_none()
                     && in_use[..online].iter().all(|&cur| cur != *idx)
                     && !self.stack_is_pinned(*idx)
             })
@@ -568,6 +569,7 @@ impl Scheduler {
             .enumerate()
             .find(|(idx, p)| {
                 p.state == ProcessState::Reaped
+                    && p.service_reap_watcher.is_none()
                     && in_use[..online].iter().all(|&cur| cur != *idx)
                     && !self.stack_is_pinned(*idx)
             })
@@ -2745,6 +2747,7 @@ impl Scheduler {
 
         #[cfg(feature = "scheduler_timer_trace")]
         crate::scheduler_timer_trace::checkpoint(self, 21, pid);
+        let reaped_generation = self.processes[idx].address_space.identity().generation;
         let reclaim = if self.processes[idx].owns_address_space {
             let mut pmm = crate::PMM.lock();
             unsafe {
@@ -2794,6 +2797,20 @@ impl Scheduler {
         self.processes[idx].fs_base = 0;
         self.processes[idx].fx_state = crate::arch::x86_64::cpu::FxState::initial();
         self.processes[idx].exit_cleanup_pending = false;
+
+        // A dead manager cannot retain lifecycle receipts indefinitely.
+        for process in &mut self.processes {
+            if process.service_reap_watcher.is_some_and(|(owner, _)| owner == pid) {
+                process.service_reap_watcher = None;
+            }
+        }
+
+        self.processes[idx].service_reap_receipt = [
+            reaped_generation,
+            reclaim.user_frames as u64,
+            reclaim.page_tables as u64,
+            crate::PMM.lock().free_page_count() as u64,
+        ];
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;

@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-startup-fixture"
-version = "0.2.5179-alpha.2"
+version = "0.2.5217-alpha.2"
+
 
 
 
@@ -163,6 +164,7 @@ path = "src/su2.rs"
 
 [features]
 demand-test = []
+idle-test = ["demand-test"]
 
 [[bin]]
 name = "d1-fixture"
@@ -204,4 +206,22 @@ test = false
 name = "d1-activate-only"
 path = "src/d1_activation_only.rs"
 required-features = ["demand-test"]
+test = false
+
+[[bin]]
+name = "d2-fixture"
+path = "src/d2_fixture.rs"
+required-features = ["idle-test"]
+test = false
+
+[[bin]]
+name = "d2-driver"
+path = "src/d2_driver.rs"
+required-features = ["idle-test"]
+test = false
+
+[[bin]]
+name = "d2-dependent"
+path = "src/d2_dependent.rs"
+required-features = ["idle-test"]
 test = false

@@ -6,6 +6,7 @@
 extern crate alloc;
 
 pub mod activation;
+pub mod idle;
 pub mod graph;
 pub mod ipc;
 pub mod journal;

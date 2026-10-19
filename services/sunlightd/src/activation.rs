@@ -9,6 +9,9 @@ pub enum Phase {
     Starting,
     Ready,
     Failed,
+    IdleCandidate,
+    Quiescing,
+    Stopping,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +49,11 @@ pub struct Activation {
     pub retry_at: u64,
     pub metrics: Metrics,
     pub spawn_attempted: bool,
+    pub idle_reported: bool,
+    pub ready_at: u64,
+    pub quiesce_nonce: u64,
+    pub quiesce_at: u64,
+    pub stop_ack: bool,
 }
 
 impl Default for Activation {
@@ -60,6 +68,11 @@ impl Default for Activation {
             retry_at: 0,
             metrics: Metrics::default(),
             spawn_attempted: false,
+            idle_reported: false,
+            ready_at: 0,
+            quiesce_nonce: 0,
+            quiesce_at: 0,
+            stop_ack: false,
         }
     }
 }
@@ -72,7 +85,11 @@ impl Activation {
                 self.metrics.coalesced = self.metrics.coalesced.saturating_add(1);
                 return Ok(Request::Join);
             }
-            Phase::Ready => return Ok(Request::Reuse),
+            Phase::Ready | Phase::IdleCandidate => {
+                self.phase = Phase::Ready;
+                return Ok(Request::Reuse);
+            }
+            Phase::Quiescing | Phase::Stopping => return Err(wire::BUSY),
             Phase::Failed if now < self.retry_at || self.runtime.is_some() => {
                 return Err(wire::BUSY)
             }
@@ -83,6 +100,8 @@ impl Activation {
         self.requested_at = now;
         self.failure = 0;
         self.spawn_attempted = false;
+        self.idle_reported = false;
+        self.stop_ack = false;
         Ok(Request::Start)
     }
 
@@ -114,6 +133,7 @@ impl Activation {
         }
         self.runtime = Some(runtime);
         self.phase = Phase::Ready;
+        self.ready_at = now;
         self.metrics.ready_ms = now.saturating_sub(self.requested_at);
         Ok(())
     }
@@ -126,6 +146,7 @@ impl Activation {
             }
         }
         self.phase = Phase::Failed;
+        self.idle_reported = false;
         self.failure = code;
         self.retry_at = now.saturating_add(wire::RETRY_MS);
         // Retain the old runtime until confirmed dead. Failure never permits

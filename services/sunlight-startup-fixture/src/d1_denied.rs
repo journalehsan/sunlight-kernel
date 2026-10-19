@@ -21,7 +21,27 @@ pub extern "C" fn _start() -> ! {
         ipc::ipc_call_timeout(manager, d::request(1, "d1-fixture").unwrap(), 1_000),
         Err(ipc::IpcCallError::InvalidCapability)
     );
-    let rejected = rejected && legacy_rejected;
+    let lease_rejected = matches!(
+        ipc::ipc_call_timeout(
+            manager,
+            IpcMsg::with_label(d::LEASE_ACQUIRE)
+                .word(0, 1)
+                .word(1, 1)
+                .word(2, 1)
+                .word(3, 1000),
+            1000
+        ),
+        Err(ipc::IpcCallError::InvalidCapability)
+    );
+    let account_rejected = matches!(
+        ipc::ipc_call_timeout(
+            manager,
+            d::request(d::IDLE_ACCOUNT, "d2-fixture").unwrap(),
+            1000
+        ),
+        Err(ipc::IpcCallError::InvalidCapability)
+    );
+    let rejected = rejected && legacy_rejected && lease_rejected && account_rejected;
     ipc::ipc_reply(IpcMsg::with_label(d::OK).word(0, rejected as u64));
     sunlight_libc::exit(if rejected { 0 } else { 99 })
 }

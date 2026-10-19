@@ -8,6 +8,103 @@ pub const ACTIVATE: u64 = 0xD101;
 pub const HELLO: u64 = 0xD102;
 pub const READY: u64 = 0xD103;
 pub const METRICS: u64 = 0xD104;
+/// D2 primary-service report: generation, busy work/session/resource count,
+/// uncommitted persistent transactions. Only zero/zero nominates idle.
+pub const IDLE_REPORT: u64 = 0xD200;
+/// Administrative residency lease: activation generation, PID, process
+/// generation, lifetime_ms. Does not activate an inactive service.
+pub const LEASE_ACQUIRE: u64 = 0xD201;
+/// Owner-only release: lease ID, activation generation.
+pub const LEASE_RELEASE: u64 = 0xD202;
+pub const IDLE_METRICS: u64 = 0xD203;
+pub const IDLE_ACCOUNT: u64 = 0xD204;
+/// Manager -> service: activation generation, monotonically increasing nonce.
+/// ACK echoes both, and attests closed admission, zero accepted work/resources
+/// and zero uncommitted transactions. Unknown opcodes MUST NOT be acknowledged.
+pub const QUIESCE: u64 = 0xD210;
+/// Only accepted behind the closed admission barrier for the exact nonce.
+pub const COMMIT_EXIT: u64 = 0xD211;
+pub const DRAINED: u64 = 0xD280;
+pub const REAP_QUERY: u64 = 0x4432524541500001;
+pub const REAP_RELEASE: u64 = 0x4432524541500002;
+pub const ACCOUNT_QUERY: u64 = 0x4432524541500003;
+/// Explicit manager-only spawn mode, used only for cooperative D2 units.
+pub const SPAWN_TRACKED: u64 = 0xD220;
+pub const LEASE_MAX_MS: u64 = 60_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstanceStatus {
+    Live,
+    Exiting,
+    Reaped {
+        private_frames: u64,
+        page_tables: u64,
+        free_frames: u64,
+        exit_code: i32,
+    },
+}
+
+/// Trusted manager only. Missing/overwritten receipts fail closed. This is
+/// deliberately stronger than the live-process credential query.
+pub fn instance_status(pid: u32, generation: u64) -> Option<InstanceStatus> {
+    let (status, msg) = unsafe {
+        crate::raw_syscall(
+            SunlightSyscall::SessionGetCredentials,
+            pid as u64,
+            REAP_QUERY,
+            generation,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    match status {
+        0 => Some(InstanceStatus::Live),
+        1 => Some(InstanceStatus::Exiting),
+        2 => Some(InstanceStatus::Reaped {
+            private_frames: msg.words[0],
+            page_tables: msg.words[1],
+            free_frames: msg.words[2],
+            exit_code: msg.words[3] as i32,
+        }),
+        _ => None,
+    }
+}
+
+pub fn release_reap_receipt(pid: u32, generation: u64) -> bool {
+    let (status, _) = unsafe {
+        crate::raw_syscall(
+            SunlightSyscall::SessionGetCredentials,
+            pid as u64,
+            REAP_RELEASE,
+            generation,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    status == 0
+}
+
+/// Explicit diagnostic sample: scheduler runtime ns, mapped user pages,
+/// shared mapping pages and global PMM free frames. Not an RSS reclamation claim.
+pub fn instance_account(pid: u32, generation: u64) -> Option<[u64; 4]> {
+    let (status, msg) = unsafe {
+        crate::raw_syscall(
+            SunlightSyscall::SessionGetCredentials,
+            pid as u64,
+            ACCOUNT_QUERY,
+            generation,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    (status == 0).then_some([msg.words[0], msg.words[1], msg.words[2], msg.words[3]])
+}
 pub const OK: u64 = 0xD180;
 pub const ERROR: u64 = 0xD1FF;
 pub const TIMEOUT_MS: u64 = 5_000;

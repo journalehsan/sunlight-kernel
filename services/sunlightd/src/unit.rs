@@ -8,6 +8,25 @@ pub const MAX_UNITS: usize = 32;
 
 pub type UnitName = String<64>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IdlePolicy {
+    pub unload_when_idle: bool,
+    pub idle_grace_ms: u64,
+    pub shutdown_timeout_ms: u64,
+    pub minimum_uptime_ms: u64,
+}
+
+impl Default for IdlePolicy {
+    fn default() -> Self {
+        Self {
+            unload_when_idle: false,
+            idle_grace_ms: 1_000,
+            shutdown_timeout_ms: 1_000,
+            minimum_uptime_ms: 1_000,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum ActivationPolicy {
     #[default]
@@ -53,6 +72,7 @@ pub struct ServiceUnit {
     // [Service]
     pub service_type: ServiceType,
     pub activation: ActivationPolicy,
+    pub idle: IdlePolicy,
     pub exec_start: String<256>,
     pub exec_start_pre: Option<String<256>>,
     pub exec_stop: Option<String<256>>,
@@ -82,6 +102,7 @@ impl Default for ServiceUnit {
             wants: Vec::new(),
             service_type: ServiceType::Simple,
             activation: ActivationPolicy::Resident,
+            idle: IdlePolicy::default(),
             exec_start: String::new(),
             exec_start_pre: None,
             exec_stop: None,
@@ -209,6 +230,9 @@ pub fn parse_service_unit(content: &[u8]) -> Result<ServiceUnit, ParseError> {
     {
         return Err(ParseError::InvalidKey);
     }
+    if unit.idle.unload_when_idle && unit.activation != ActivationPolicy::OnDemand {
+        return Err(ParseError::InvalidKey);
+    }
     Ok(unit)
 }
 
@@ -245,6 +269,29 @@ fn parse_unit_key(unit: &mut ServiceUnit, key: &str, value: &str) -> Result<(), 
 
 fn parse_service_key(unit: &mut ServiceUnit, key: &str, value: &str) -> Result<(), ParseError> {
     match key {
+        "UnloadWhenIdle" => {
+            unit.idle.unload_when_idle = match value {
+                "yes" => true,
+                "no" => false,
+                _ => return Err(ParseError::InvalidKey),
+            }
+        }
+        "IdleGraceMs" | "ShutdownTimeoutMs" | "MinimumUptimeMs" => {
+            let ms = value.parse::<u64>().map_err(|_| ParseError::InvalidKey)?;
+            if !(50..=60_000).contains(&ms) {
+                return Err(ParseError::InvalidKey);
+            }
+            // One cooperative handshake must not monopolize the daemon past
+            // D1's five-second readiness budget. Default and maximum are 1 s.
+            if key == "ShutdownTimeoutMs" && ms > 1_000 {
+                return Err(ParseError::InvalidKey);
+            }
+            match key {
+                "IdleGraceMs" => unit.idle.idle_grace_ms = ms,
+                "ShutdownTimeoutMs" => unit.idle.shutdown_timeout_ms = ms,
+                _ => unit.idle.minimum_uptime_ms = ms,
+            }
+        }
         "Activation" => {
             unit.activation = match value {
                 "resident" => ActivationPolicy::Resident,

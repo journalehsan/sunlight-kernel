@@ -324,6 +324,12 @@ pub struct Process {
     /// True while a finished task still has kernel-side resources pending
     /// final reclamation after its address space is no longer active.
     pub exit_cleanup_pending: bool,
+    /// Generation, private frames, page tables and free PMM frames at completed
+    /// reap. Kept after AddressSpace::identity is invalidated, until slot reuse.
+    pub service_reap_receipt: [u64; 4],
+    /// A cooperative service's small reaped slot is retained until its manager
+    /// consumes the receipt, or that manager itself is reaped.
+    pub service_reap_watcher: Option<(usize, u64)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -522,6 +528,8 @@ impl Process {
             last_start_ns: 0,
             cwd: alloc::string::String::from("/"),
             exit_cleanup_pending: false,
+            service_reap_receipt: [0; 4],
+            service_reap_watcher: None,
         })
     }
 
@@ -704,6 +712,8 @@ impl Process {
             last_start_ns: 0,
             cwd: alloc::string::String::from("/"),
             exit_cleanup_pending: false,
+            service_reap_receipt: [0; 4],
+            service_reap_watcher: None,
         }
     }
 

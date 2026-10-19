@@ -63,6 +63,7 @@ macro_rules! serial_println {
 }
 
 mod demand_runtime;
+mod idle_runtime;
 
 const ENABLED_STATE_PATH: &[u8] = b"/state/sunlightd/enabled-services";
 const ENABLED_STATE_TMP_PATH: &[u8] = b"/state/sunlightd/enabled-services.tmp";
@@ -993,6 +994,9 @@ fn observe_managed_process(pid: u32) -> ProcessObservation {
 }
 
 fn observe_service_process(services: &ServiceTable, idx: usize, pid: u32) -> ProcessObservation {
+    if services.get(idx).is_some_and(|e| e.unit.idle.unload_when_idle && e.activation.runtime.is_some()) {
+        return ProcessObservation::Alive;
+    }
     if let Some(entry) = services.get(idx) {
         if entry.unit.activation == ActivationPolicy::OnDemand {
             if let Some(runtime) = entry.activation.runtime {
@@ -1015,6 +1019,7 @@ fn spawn_named_with_identity(
     gid: u32,
     capability_mask: u64,
     bounded: bool,
+    tracked: bool,
 ) -> Result<(u32, u64), u32> {
     use sunlight_ipc::SpawnMsg;
 
@@ -1023,6 +1028,7 @@ fn spawn_named_with_identity(
         .with_service_caps(capability_mask);
     let mut msg = IpcMsg::empty();
     req.pack_into(&mut msg);
+    if tracked { msg.label = demand_wire::SPAWN_TRACKED; }
 
     let reply = if bounded {
         sunlight_ipc::ipc_call_timeout(spawn_cap, msg, 1_000).map_err(|_| DETAIL_SPAWN)?
@@ -1153,6 +1159,7 @@ fn spawn_service_at(
         gid,
         unit.capability_mask,
         unit.activation == ActivationPolicy::OnDemand,
+        unit.idle.unload_when_idle,
     ) {
         Ok((pid, process_generation)) => {
             let now = monotonic_millis();
@@ -1570,6 +1577,17 @@ fn handle_control_message(
             return reply;
         }
     };
+
+    if matches!(op, SunlightdOp::Stop | SunlightdOp::Restart) {
+        let name = extract_unit_name(msg);
+        if services.find_by_name(&name).and_then(|i| services.get(i))
+            .is_some_and(|e| e.unit.idle.unload_when_idle && e.activation.runtime.is_some()) {
+            // Cooperative units must never reach legacy SIGKILL escalation.
+            reply.label=REPLY_ERR;
+            pack_control_err(&mut reply, DETAIL_TRANSITION_BUSY, 0, 0, true);
+            return reply;
+        }
+    }
 
     match op {
         SunlightdOp::Start => {
@@ -2022,6 +2040,7 @@ impl IdentityPhaseCGate {
                     gid,
                     unit.capability_mask,
                     false,
+                    false,
                 );
                 match duplicate {
                     Ok((pid, _)) => {
@@ -2191,13 +2210,19 @@ fn _start() -> ! {
         autostart_services(&mut services, &mut startup, spawn_cap);
         #[cfg(feature = "identity-phase-c-test")]
         identity_phase_c_gate.poll(&mut services, spawn_cap);
-        match ipc_reply_and_recv_timeout(ep, reply, 50) {
+        match ipc_reply_and_recv_timeout(ep, reply, demand.receive_timeout()) {
             Some(msg) => {
                 reply = if demand_runtime::is_demand_op(msg.label) {
                     demand.handle(&msg, &mut services)
                 } else {
                     handle_control_message(&msg, &mut services, spawn_cap)
                 };
+                if matches!(msg.label, 1..=3) { demand.control_changed(&mut services); }
+                // Commit an immediate resolution reply before maintenance can
+                // close that generation's admission barrier. Deferred D1
+                // replies have already relinquished the current reply target.
+                sunlight_ipc::ipc_reply(reply);
+                reply = IpcMsg::empty();
             }
             None => {
                 reply = IpcMsg::empty();

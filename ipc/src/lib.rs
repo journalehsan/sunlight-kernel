@@ -559,7 +559,7 @@ pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'sta
 
 pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::DemandFixture.bit() != 0
-        && ["d1-fixture", "d1-denied", "d1-activate-only"].iter().any(|name| name_key == name_to_u64(name))
+        && ["d1-fixture", "d1-denied", "d1-activate-only", "d2-fixture", "d2-dependent"].iter().any(|name| name_key == name_to_u64(name))
     {
         return true;
     }

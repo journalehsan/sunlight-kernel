@@ -852,6 +852,12 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
             Ok(crate::SUNLIGHT_SESSIONCTL_ELF_BYTES)
         }
         // Session Configuration Phase 1 fixtures (SpawnRequest path must be ≤31 chars).
+        #[cfg(feature = "idle_test")]
+        "/sbin/d2-dependent" => Ok(crate::D2_DEPENDENT_ELF_BYTES),
+        #[cfg(feature = "idle_test")]
+        "/sbin/d2-fixture" => Ok(crate::D2_FIXTURE_ELF_BYTES),
+        #[cfg(feature = "idle_test")]
+        "/sbin/d2-driver" => Ok(crate::D2_DRIVER_ELF_BYTES),
         #[cfg(feature = "demand_test")]
         "/sbin/d1-fixture" => Ok(crate::D1_FIXTURE_ELF_BYTES),
         #[cfg(feature = "demand_test")]
