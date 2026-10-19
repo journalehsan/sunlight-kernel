@@ -214,6 +214,12 @@ static UAC_SERVICE_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
 static SUNLIGHT_SESSIOND_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessiond");
+#[cfg(feature = "dependency_test")]
+static D3_PARENT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d3-parent");
+#[cfg(feature = "dependency_test")]
+static D3_LEAF_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d3-leaf");
+#[cfg(feature = "dependency_test")]
+static D3_CLIENT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d3-client");
 // Session Configuration Phase 1 optional-startup test fixtures.
 #[cfg(feature = "idle_test")]
 static D2_DEPENDENT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d2-dependent");

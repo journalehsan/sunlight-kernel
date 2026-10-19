@@ -165,6 +165,7 @@ path = "src/su2.rs"
 [features]
 demand-test = []
 idle-test = ["demand-test"]
+dependency-test = ["idle-test"]
 
 [[bin]]
 name = "d1-fixture"
@@ -224,4 +225,22 @@ test = false
 name = "d2-dependent"
 path = "src/d2_dependent.rs"
 required-features = ["idle-test"]
+test = false
+
+[[bin]]
+name = "d3-parent"
+path = "src/d2_fixture.rs"
+required-features = ["dependency-test"]
+test = false
+
+[[bin]]
+name = "d3-leaf"
+path = "src/d2_fixture.rs"
+required-features = ["dependency-test"]
+test = false
+
+[[bin]]
+name = "d3-client"
+path = "src/d3_client.rs"
+required-features = ["dependency-test"]
 test = false

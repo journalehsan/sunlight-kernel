@@ -1069,11 +1069,19 @@ pub fn handle_ipc_call(
     // D1 checks apply on every call, including callers holding a leaked SEND
     // token. The message payload and caller-supplied badge confer no authority.
     if target_owner != 1
+        && msg.label == sunlight_ipc::demand::DISCOVER
+        && sched.processes.iter().any(|p| p.pid == target_owner && p.trusted_service_manager)
+        && !sunlight_ipc::demand::discovery_authorized(sched.processes[idx].service_lookup_restrictions)
+    {
+        sched.processes[idx].ipc_next_deadline_tick = None;
+        return Err(IpcError::InvalidCapability);
+    }
+    if target_owner != 1
         && (matches!(msg.label, sunlight_ipc::demand::ACTIVATE | sunlight_ipc::demand::LEASE_ACQUIRE
             | sunlight_ipc::demand::IDLE_ACCOUNT)
             || matches!(msg.label, 1..=6))
-        && !sunlight_ipc::demand::activation_authorized(
-            sched.processes[idx].service_lookup_restrictions,
+        && !sunlight_ipc::demand::activation_words_authorized(
+            sched.processes[idx].service_lookup_restrictions, msg.label, msg.word_count, &msg.words,
         )
         && sched.processes.iter().any(|p| p.pid == target_owner && p.trusted_service_manager)
     {

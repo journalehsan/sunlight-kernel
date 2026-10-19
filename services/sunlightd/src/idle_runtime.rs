@@ -70,9 +70,12 @@ pub(super) fn is_idle_op(op: u64) -> bool {
 
 fn dependent(services: &ServiceTable, provider: usize) -> bool {
     let name = binary_name_of(&services.get(provider).unwrap().unit.exec_start);
-    (0..services.count).any(|i| {
+    services.dependencies.busy(sunlightd::dependency::Instance {
+        unit: provider, generation: services.get(provider).unwrap().activation.generation,
+    }) || (0..services.count).any(|i| {
         let e = services.get(i).unwrap();
-        (e.activation.phase == Phase::Starting
+        e.unit.activation != ActivationPolicy::OnDemand
+            && (e.activation.phase == Phase::Starting
             || e.activation.runtime.is_some()
             || e.state.may_still_be_alive())
             && e.unit
@@ -264,6 +267,7 @@ impl IdleManager {
         }
         // Releasing only after recording the receipt permits safe slot reuse.
         assert!(wire::release_reap_receipt(r.pid, r.process_generation));
+        demand_runtime::cleanup_dependencies(services);
         self.dependencies_changed(services);
     }
     fn quarantine(&mut self, services: &mut ServiceTable, idx: usize, code: u64) {

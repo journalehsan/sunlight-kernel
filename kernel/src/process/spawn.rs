@@ -852,6 +852,12 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
             Ok(crate::SUNLIGHT_SESSIONCTL_ELF_BYTES)
         }
         // Session Configuration Phase 1 fixtures (SpawnRequest path must be ≤31 chars).
+        #[cfg(feature = "dependency_test")]
+        "/sbin/d3-parent" => Ok(crate::D3_PARENT_ELF_BYTES),
+        #[cfg(feature = "dependency_test")]
+        "/sbin/d3-leaf" => Ok(crate::D3_LEAF_ELF_BYTES),
+        #[cfg(feature = "dependency_test")]
+        "/sbin/d3-client" => Ok(crate::D3_CLIENT_ELF_BYTES),
         #[cfg(feature = "idle_test")]
         "/sbin/d2-dependent" => Ok(crate::D2_DEPENDENT_ELF_BYTES),
         #[cfg(feature = "idle_test")]

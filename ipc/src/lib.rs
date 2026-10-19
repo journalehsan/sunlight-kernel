@@ -439,6 +439,8 @@ pub enum ServiceCapability {
     DemandFixture = 27,
     /// Lookup of SunlightD for D1 service readiness, without lifecycle authority.
     ServiceNotify = 28,
+    /// Activation of d3-parent only; grants neither endpoint lookup nor management.
+    DemandActivateTest = 29,
 }
 
 impl ServiceCapability {
@@ -479,6 +481,7 @@ impl ServiceCapability {
             "microphone" => Some(Self::Microphone),
             "demand-fixture" => Some(Self::DemandFixture),
             "service-notify" => Some(Self::ServiceNotify),
+            "demand-activate-test" => Some(Self::DemandActivateTest),
             _ => None,
         }
     }
@@ -514,11 +517,12 @@ impl ServiceCapability {
             Self::Microphone => "microphone",
             Self::DemandFixture => "demand-fixture",
             Self::ServiceNotify => "service-notify",
+            Self::DemandActivateTest => "demand-activate-test",
         }
     }
 }
 
-pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 29] = [
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 30] = [
     ServiceCapability::Network,
     ServiceCapability::Authentication,
     ServiceCapability::Pty,
@@ -548,6 +552,7 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 29] = [
     ServiceCapability::Microphone,
     ServiceCapability::DemandFixture,
     ServiceCapability::ServiceNotify,
+    ServiceCapability::DemandActivateTest,
 ];
 
 pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'static str> + Clone {
@@ -559,7 +564,7 @@ pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'sta
 
 pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::DemandFixture.bit() != 0
-        && ["d1-fixture", "d1-denied", "d1-activate-only", "d2-fixture", "d2-dependent"].iter().any(|name| name_key == name_to_u64(name))
+        && ["d1-fixture", "d1-denied", "d1-activate-only", "d2-fixture", "d2-dependent", "d3-parent", "d3-leaf", "d3-client"].iter().any(|name| name_key == name_to_u64(name))
     {
         return true;
     }

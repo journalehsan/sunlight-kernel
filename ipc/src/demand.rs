@@ -18,6 +18,9 @@ pub const LEASE_ACQUIRE: u64 = 0xD201;
 pub const LEASE_RELEASE: u64 = 0xD202;
 pub const IDLE_METRICS: u64 = 0xD203;
 pub const IDLE_ACCOUNT: u64 = 0xD204;
+/// Bounded snapshot: total dependency holds, outgoing holds, incoming holds,
+/// manager-retained service processes (resident and demand). Diagnostic metadata; no capabilities.
+pub const DEPENDENCY_METRICS: u64 = 0xD300;
 /// Manager -> service: activation generation, monotonically increasing nonce.
 /// ACK echoes both, and attests closed admission, zero accepted work/resources
 /// and zero uncommitted transactions. Unknown opcodes MUST NOT be acknowledged.
@@ -184,4 +187,99 @@ pub fn kill_instance(pid: u32, generation: u64, signal: u32) -> bool {
         )
     };
     ret == 0
+}
+
+/// DISCOVER returns metadata only. Restricted processes need the existing
+/// readiness/discovery or lifecycle capability; activation authority is separate.
+pub fn discovery_authorized(restrictions: Option<u64>) -> bool {
+    restrictions.is_none_or(|mask| {
+        mask & (ServiceCapability::ServiceNotify.bit() | ServiceCapability::ServiceLifecycle.bit())
+            != 0
+    })
+}
+
+/// Fixed synthetic policy in the existing capability profile system. Called
+/// with the real process profile under kernel IPC mediation, never payload claims.
+/// The capability conveys no manager lookup, endpoint lookup, invocation, lease
+/// administration or authority to activate arbitrary dependency names.
+pub fn activation_request_authorized(restrictions: Option<u64>, msg: &IpcMsg) -> bool {
+    activation_words_authorized(restrictions, msg.label, msg.word_count, &msg.words)
+}
+
+/// Shared policy for the kernel's internal message representation.
+pub fn activation_words_authorized(
+    restrictions: Option<u64>,
+    label: u64,
+    word_count: u32,
+    words: &[u64; 8],
+) -> bool {
+    if activation_authorized(restrictions) {
+        return true;
+    }
+    if label != ACTIVATE
+        || word_count != 4
+        || !restrictions.is_some_and(|m| m & ServiceCapability::DemandActivateTest.bit() != 0)
+    {
+        return false;
+    }
+    ["d3-parent", "d3-parent.service"]
+        .iter()
+        .any(|name| request(ACTIVATE, name).is_some_and(|r| r.words[..4] == words[..4]))
+}
+
+#[cfg(test)]
+mod scoped_tests {
+    use super::*;
+    #[test]
+    fn scoped_activation_cannot_manage_invoke_or_resolve() {
+        let profile = ServiceCapability::DemandActivateTest.bit();
+        assert!(!activation_authorized(Some(profile)));
+        assert!(!discovery_authorized(Some(profile)));
+        assert!(discovery_authorized(Some(
+            ServiceCapability::ServiceNotify.bit()
+        )));
+        assert!(discovery_authorized(Some(
+            ServiceCapability::ServiceLifecycle.bit()
+        )));
+        for name in ["d3-parent", "d3-parent.service"] {
+            assert!(activation_request_authorized(
+                Some(profile),
+                &request(ACTIVATE, name).unwrap()
+            ));
+        }
+        for name in [
+            "d3-leaf",
+            "d2-fixture",
+            "sunlightd",
+            "vfs",
+            "d3-parent.serviceX",
+        ] {
+            assert!(!activation_request_authorized(
+                Some(profile),
+                &request(ACTIVATE, name).unwrap()
+            ));
+        }
+        for op in [1, 2, 3, LEASE_ACQUIRE, IDLE_ACCOUNT, DISCOVER] {
+            assert!(!activation_request_authorized(
+                Some(profile),
+                &request(op, "d3-parent").unwrap()
+            ));
+        }
+        for name in ["sunlightd", "d3-parent", "d3-leaf"] {
+            assert!(!crate::service_capability_allows_hashed_name(
+                profile,
+                crate::name_to_u64(name)
+            ));
+        }
+        assert!(!activation_request_authorized(
+            Some(ServiceCapability::ServiceNotify.bit()),
+            &request(ACTIVATE, "d3-parent").unwrap()
+        ));
+        let mut forged = request(ACTIVATE, "d3-parent").unwrap();
+        forged.words[3] = 1;
+        assert!(!activation_request_authorized(Some(profile), &forged));
+        forged = request(ACTIVATE, "d3-parent").unwrap();
+        forged.word_count = 3;
+        assert!(!activation_request_authorized(Some(profile), &forged));
+    }
 }

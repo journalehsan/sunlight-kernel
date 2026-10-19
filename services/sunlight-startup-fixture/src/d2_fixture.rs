@@ -53,17 +53,19 @@ pub extern "C" fn _start() -> ! {
     let (generation, manager_pid) = (hello.words[0], hello.words[1]);
     assert!(manager_pid != 0);
     let ep = ipc::endpoint_create();
-    assert!(ipc::nameserver_register("d2-fixture", ep));
-    assert_eq!(
-        ipc::ipc_call_timeout(
-            manager,
-            IpcMsg::with_label(d::READY).word(0, generation),
-            1000
-        )
-        .unwrap()
-        .label,
-        d::OK
-    );
+    let name = env!("CARGO_BIN_NAME");
+    if name != "d2-fixture" { let _ = ipc::ipc_recv_timeout(sleep_ep, 120); }
+    assert!(ipc::nameserver_register(name, ep));
+    let readiness = ipc::ipc_call_timeout(
+        manager, IpcMsg::with_label(d::READY).word(0, generation), 1000,
+    ).unwrap();
+    if name != "d2-fixture" && readiness.label == d::ERROR {
+        // The dependency may die during local initialization. Failed readiness
+        // is an expected bounded startup failure; never open admission.
+        assert!(matches!(readiness.words[0], d::STALE | d::DEPENDENCY));
+        sunlight_libc::exit(42);
+    }
+    assert_eq!(readiness.label, d::OK);
     let (mut busy, mut dirty, mut closed, mut nonce, mut mode, mut completed) =
         (0, 0, false, 0, 0, 0);
     report(manager, generation, busy, dirty);

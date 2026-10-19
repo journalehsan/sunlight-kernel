@@ -82,6 +82,7 @@ const FAILURE_STARTUP: u32 = 3;
 struct ServiceTable {
     services: [Option<ServiceEntry>; MAX_UNITS],
     count: usize,
+    dependencies: sunlightd::dependency::Dependencies,
 }
 
 struct BootStartup {
@@ -93,6 +94,7 @@ struct BootStartup {
 impl ServiceTable {
     fn new() -> Self {
         Self {
+            dependencies: sunlightd::dependency::Dependencies::default(),
             services: [const { None }; MAX_UNITS],
             count: 0,
         }
@@ -1118,6 +1120,18 @@ fn spawn_service_at(
             if entry.activation.spawn_attempted {
                 return Err(DETAIL_TRANSITION_BUSY);
             }
+        }
+    }
+    if services.get(idx).is_some_and(|e| e.unit.activation == ActivationPolicy::OnDemand) {
+        let mut selected = [false; MAX_UNITS];
+        selected[idx] = true;
+        demand_runtime::reserve_dependencies(services, &selected, false)
+            .map_err(|_| DETAIL_TRANSITION_BUSY)?;
+        demand_runtime::bind_dependencies(services, idx)
+            .map_err(|_| DETAIL_TRANSITION_BUSY)?;
+    }
+    if let Some(entry) = services.get_mut(idx) {
+        if entry.unit.activation == ActivationPolicy::OnDemand {
             entry.activation.spawn_attempted = true;
         }
     }

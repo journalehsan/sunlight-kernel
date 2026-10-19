@@ -2,6 +2,8 @@
 #![no_std]
 #![no_main]
 mod d1_log;
+#[cfg(feature = "dependency-test")]
+mod d3_driver;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use sunlight_ipc::{self as ipc, demand as d, CapabilityToken, IpcMsg};
 static MANAGER: AtomicU64 = AtomicU64::new(0);
@@ -356,6 +358,8 @@ pub extern "C" fn _start() -> ! {
     assert!(ipc::nameserver_lookup_timeout("tz", 500).is_some());
     pass("resident compatibility");
     pass("COMPLETE");
+    #[cfg(feature = "dependency-test")]
+    d3_driver::run();
     sunlight_libc::exit(0)
 }
 #[panic_handler]

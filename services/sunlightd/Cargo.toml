@@ -614,6 +614,7 @@ document-ui-gate = ["document-service"]
 identity-phase-c-test = []
 demand-test = []
 idle-test = ["demand-test"]
+dependency-test = ["idle-test"]
 
 [lib]
 name = "sunlightd"

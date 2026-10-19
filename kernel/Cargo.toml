@@ -631,6 +631,7 @@ lz4_flex = { version = "0.11", default-features = false }
 [features]
 demand_test = []
 idle_test = ["demand_test"]
+dependency_test = ["idle_test"]
 # Native Hayro/viewer artifacts are built with tools/build_docserv.sh.
 # The optional legacy MuPDF renderer requires a separate musl C/C++ toolchain.
 default = []
