@@ -16,7 +16,6 @@ use sunlight_ipc::{
     ipc_call, nameserver_lookup, nameserver_lookup_timeout, process_yield, shm_alloc, shm_free,
     shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
-use sunlight_libc as libc;
 
 const MAX_ARGS: usize = 32;
 
@@ -234,8 +233,8 @@ fn ensure_dialog_service() -> Option<CapabilityToken> {
     if let Some(cap) = nameserver_lookup_timeout("dialogd", 50) {
         return Some(cap);
     }
-    let _ = libc::spawn(b"/sbin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
-        .or_else(|_| libc::spawn(b"/bin/sunlight-dialogd", &[b"sunlight-dialogd"], None));
+    // SunlightD owns this resident service, including crash recovery.
+    // Wait for its registration without starting a competing process.
     for _ in 0..8 {
         if let Some(cap) = nameserver_lookup_timeout("dialogd", 75) {
             return Some(cap);

@@ -40,11 +40,8 @@ impl DialogClient {
         let cap = if let Some(cap) = nameserver_lookup("dialogd") {
             cap
         } else {
-            #[cfg(any(target_os = "none", target_os = "sunlightos"))]
-            let _ = sunlight_libc::spawn(b"/sbin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
-                .or_else(|_| {
-                    sunlight_libc::spawn(b"/bin/sunlight-dialogd", &[b"sunlight-dialogd"], None)
-                });
+            // SunlightD owns this resident service, including crash recovery.
+            // Wait for its registration without starting a competing process.
             let mut found = None;
             for _ in 0..8 {
                 if let Some(cap) = nameserver_lookup_timeout("dialogd", 75) {

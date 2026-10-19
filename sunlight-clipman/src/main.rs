@@ -12,7 +12,6 @@ use sunlight_ipc::{
     debug_log, ipc_call, nameserver_lookup_timeout, process_yield, shm_free, shm_map,
     CapabilityToken, ClipMsg, IpcMsg, ProcessExit,
 };
-use sunlight_libc as libc;
 use sunlight_ui::{
     request_close, App, Canvas, Color, Event, Point, Rect, Theme, Window, WindowConfig,
     WindowDecoration,
@@ -432,8 +431,8 @@ fn ensure_clipboard_service() -> Option<CapabilityToken> {
     if let Some(cap) = nameserver_lookup_timeout("clipd", 50) {
         return Some(cap);
     }
-    let _ = libc::spawn(b"/sbin/sunlight-clipd", &[b"sunlight-clipd"], None)
-        .or_else(|_| libc::spawn(b"/bin/sunlight-clipd", &[b"sunlight-clipd"], None));
+    // SunlightD owns this resident service, including crash recovery.
+    // Wait for its registration without starting a competing process.
     for _ in 0..8 {
         if let Some(cap) = nameserver_lookup_timeout("clipd", 75) {
             return Some(cap);
