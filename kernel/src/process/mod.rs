@@ -313,6 +313,10 @@ pub struct Process {
     // === CPU Accounting (for sunlight-top and scheduler) ===
     /// Total CPU runtime consumed by this process, in nanoseconds (monotonic).
     pub cpu_runtime_ns: u64,
+    /// Bounded D3.8-W diagnostics: Ready publications, IPC-state publications,
+    /// receive deadline expirations and call deadline expirations. Per incarnation.
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub wake_audit: [u64; 4],
     /// Open execution interval, including the tail of a blocking syscall.
     pub cpu_charge_since: Option<u64>,
     /// Monotonic burst-policy clock. Cleared at block/yield; independent of
@@ -524,6 +528,8 @@ impl Process {
             aging_boosted_this_pick: false,
             quantum_override: None,
             cpu_runtime_ns: 0,
+            #[cfg(feature = "cpu_accounting_diag")]
+            wake_audit: [0; 4],
             cpu_charge_since: None,
             last_start_ns: 0,
             cwd: alloc::string::String::from("/"),
@@ -708,6 +714,8 @@ impl Process {
             aging_boosted_this_pick: false,
             quantum_override: None,
             cpu_runtime_ns: 0,
+            #[cfg(feature = "cpu_accounting_diag")]
+            wake_audit: [0; 4],
             cpu_charge_since: None,
             last_start_ns: 0,
             cwd: alloc::string::String::from("/"),

@@ -170,6 +170,13 @@ demand-test = []
 idle-test = ["demand-test"]
 dependency-test = ["idle-test"]
 recovery-test = ["dependency-test"]
+idle-wakeup-test = []
+
+[[bin]]
+name = "d38w-probe"
+path = "src/d38w_probe.rs"
+required-features = ["idle-wakeup-test"]
+test = false
 
 [[bin]]
 name = "d1-fixture"

@@ -204,6 +204,12 @@ pub struct ProcSnap {
     pub cpu_ticks: u64,
     pub pml4_phys: x86_64::PhysAddr,
     pub generation: u32,
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub wake_audit: [u64; 4],
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub audit_generation: u64,
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub audit_deadlines: [bool; 2],
     pub is_finished_or_cleanup: bool,
 }
 
@@ -297,6 +303,15 @@ pub fn capture_telemetry_snapshot(
             cpu_ticks: runtime,
             pml4_phys: proc.address_space.pml4_phys,
             generation: (proc.address_space.identity().generation & 0xFFFF_FFFF) as u32,
+            #[cfg(feature = "cpu_accounting_diag")]
+            wake_audit: proc.wake_audit,
+            #[cfg(feature = "cpu_accounting_diag")]
+            audit_generation: proc.foreground.incarnation,
+            #[cfg(feature = "cpu_accounting_diag")]
+            audit_deadlines: [
+                proc.ipc_recv_deadline.is_some(),
+                proc.ipc_deadline.is_some(),
+            ],
             is_finished_or_cleanup,
         });
     }
@@ -506,6 +521,7 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
     use sunlight_ipc::cpu_accounting::{rate, usage_bp};
     static mut PREV: [CpuCounters; MAX_CORES] = [CpuCounters::ZERO; MAX_CORES];
     static mut PIDS: [u32; MAX_PROCESSES] = [0; MAX_PROCESSES];
+    static mut GENERATIONS: [u64; MAX_PROCESSES] = [0; MAX_PROCESSES];
     static mut RUNTIME: [u64; MAX_PROCESSES] = [0; MAX_PROCESSES];
     static mut LAST: u64 = 0;
     static mut REPORTS: u32 = 0;
@@ -516,9 +532,11 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
         if dt < 5_000_000_000 || REPORTS >= 120 {
             return;
         }
+        let report_started = crate::arch::x86_64::interrupts::now_ns();
         let baseline = LAST == 0;
         let (mut capacity, mut busy, mut idle, mut switches, mut wakes, mut schedules) =
             (0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
+        let (mut ipc_wakes, mut timer_irqs) = (0u64, 0u64);
         for (i, core) in snap.cores.iter().enumerate() {
             let c = core.counters;
             let p = PREV[i];
@@ -531,6 +549,8 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
             switches = switches.saturating_add(c.switches.saturating_sub(p.switches));
             wakes = wakes.saturating_add(c.wakeups.saturating_sub(p.wakeups));
             schedules = schedules.saturating_add(c.schedules.saturating_sub(p.schedules));
+            ipc_wakes = ipc_wakes.saturating_add(c.ipc_wakeups.saturating_sub(p.ipc_wakeups));
+            timer_irqs = timer_irqs.saturating_add(c.timer_irqs.saturating_sub(p.timer_irqs));
             if !baseline {
                 crate::serial_println!("[CPU-AUDIT] core={} pid={} elapsed_ns={} busy_ns={} idle_ns={} busy_bp={} cs_s={} sched_s={} wake_s={} ipc_wake_s={} timer_s={} idle_in={} idle_out={}",
                     i,core.current_pid,elapsed,b,d,usage_bp(b,elapsed),rate(c.switches.saturating_sub(p.switches),dt),
@@ -543,7 +563,8 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
         let mut top = [(0usize, 0u64); 5];
         let mut legacy = 0u64;
         for (i, p) in snap.procs.iter().enumerate() {
-            let previous = (0..MAX_PROCESSES).find(|j| PIDS[*j] == p.pid);
+            let previous = (0..MAX_PROCESSES)
+                .find(|j| PIDS[*j] == p.pid && GENERATIONS[*j] == p.audit_generation);
             let delta = previous
                 .map(|j| p.cpu_ticks.saturating_sub(RUNTIME[j]))
                 .unwrap_or(0);
@@ -562,13 +583,36 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
         }
         for (i, p) in snap.procs.iter().enumerate() {
             PIDS[i] = p.pid;
+            GENERATIONS[i] = p.audit_generation;
             RUNTIME[i] = p.cpu_ticks;
         }
         for i in snap.procs.len()..MAX_PROCESSES {
             PIDS[i] = 0;
+            GENERATIONS[i] = 0;
             RUNTIME[i] = 0;
         }
         if !baseline {
+            let runnable = snap.procs.iter().filter(|p| p.state <= 1).count();
+            let recv_armed = snap.procs.iter().filter(|p| p.audit_deadlines[0]).count();
+            let call_armed = snap.procs.iter().filter(|p| p.audit_deadlines[1]).count();
+            crate::serial_println!("[WAKE-AUDIT] sample at_ns={} dt_ns={} runnable={} tasks={} limit={} recv_armed={} call_armed={} wakes_delta={} switches_delta={} ipc_delta={} timer_delta={}",
+                snap.sample_time_ns, dt, runnable, snap.procs.len(), MAX_PROCESSES,
+                recv_armed, call_armed, wakes, switches, ipc_wakes, timer_irqs);
+            let ipc = crate::ipc::diagnostic_snapshot();
+            crate::serial_println!("[WAKE-AUDIT] ipc at_ns={} depth={} high={} enqueue={} dequeue={} full={} coalesced={} expired={} cancelled={} late={} peer_closed={}",
+                snap.sample_time_ns, ipc.current_queue_depth, ipc.high_watermark,
+                ipc.enqueue_count, ipc.dequeue_count, ipc.queue_full_count,
+                ipc.coalesced_notification_count, ipc.deadline_expired_count,
+                ipc.explicit_cancel_count, ipc.late_reply_drop_count, ipc.peer_closed_wake_count);
+            // Cumulative snapshots, never per-event logging; at most 64 rows
+            // every five seconds, using the existing diagnostic report budget.
+            for p in &snap.procs {
+                let n = p.name.iter().position(|b| *b == 0).unwrap_or(p.name.len());
+                crate::serial_println!("[WAKE-AUDIT] task at_ns={} pid={} gen={} name={} state={} wakes={} ipc={} recv_exp={} call_exp={} runtime_ns={}",
+                    snap.sample_time_ns,p.pid,p.audit_generation,
+                    core::str::from_utf8(&p.name[..n]).unwrap_or("?"),p.state,
+                    p.wake_audit[0],p.wake_audit[1],p.wake_audit[2],p.wake_audit[3],p.cpu_ticks);
+            }
             crate::serial_println!("[CPU-AUDIT] system at_ns={} capacity_ns={} busy_ns={} idle_ns={} busy_bp={} idle_bp={} legacy_bp={} cs_s={} wake_s={} sched_s={}",
                 snap.sample_time_ns,capacity,busy,idle,usage_bp(busy,capacity),usage_bp(idle,capacity),
                 usage_bp(legacy,dt.saturating_mul(snap.core_count as u64)),rate(switches,dt),rate(wakes,dt),rate(schedules,dt));
@@ -619,6 +663,9 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
                 );
             }
             REPORTS += 1;
+            crate::serial_println!("[WAKE-AUDIT] cost at_ns={} report_ns={}",
+                snap.sample_time_ns,
+                crate::arch::x86_64::interrupts::now_ns().saturating_sub(report_started));
         }
         LAST = snap.sample_time_ns;
     }

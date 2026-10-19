@@ -320,6 +320,9 @@ static SUNLIGHT_BENCH_ELF_BYTES: &[u8] =
 #[cfg(feature = "scheduler_guest_bench")]
 static SCHEDULER_GUEST_BENCH_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/schedbench");
+#[cfg(feature = "idle_wakeup_test")]
+static IDLE_WAKEUP_PROBE_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/d38w-probe");
 // Sunlight Calculator: lightweight graphical calculator.
 static SUNLIGHT_CALCULATOR_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/calculator");
@@ -988,6 +991,26 @@ pub extern "C" fn _start() -> ! {
                 serial_println!("[SCHED-BENCH] guest contention workload load failed");
             }
         }
+    }
+
+    #[cfg(feature = "idle_wakeup_test")]
+    {
+        let mut pmm = PMM.lock();
+        let mut probe = unsafe { Process::new(5, 0, "d38w-probe", &mut pmm, hhdm_offset) };
+        process::spawn::exec_into_process(
+            IDLE_WAKEUP_PROBE_ELF_BYTES,
+            &mut probe,
+            &mut pmm,
+            hhdm_offset,
+            &[b"d38w-probe"],
+            &[],
+            false,
+        )
+        .expect("D3.8-W probe ELF");
+        drop(pmm);
+        sched::with_scheduler(|s| {
+            s.add_process(probe);
+        });
     }
 
     splash.set_progress(975); // 97.5%

@@ -2018,7 +2018,7 @@ impl Scheduler {
     fn wake_native_futex_index(&mut self, idx: usize) {
         self.processes[idx].native_futex_wait = None;
         self.processes[idx].native_futex_deadline = None;
-        self.record_wakeup(false);
+        self.record_wakeup(idx, false);
         self.processes[idx].state = ProcessState::Ready;
         self.processes[idx].priority_wake_pending = true;
         self.remove_from_ready_queues(idx);
@@ -2115,9 +2115,14 @@ impl Scheduler {
             .any(|p| p.pid == pid && p.state == ProcessState::BlockedOnIpc)
     }
 
-    pub(crate) fn record_wakeup(&mut self, ipc: bool) {
+    pub(crate) fn record_wakeup(&mut self, idx: usize, ipc: bool) {
         #[cfg(feature = "cpu_accounting_diag")]
         {
+            let audit = &mut self.processes[idx].wake_audit;
+            audit[0] = audit[0].saturating_add(1);
+            if ipc {
+                audit[1] = audit[1].saturating_add(1);
+            }
             let c = &mut self.cpu_events[current_cpu_id()];
             c[1] = c[1].saturating_add(1);
             if ipc {
@@ -2125,7 +2130,7 @@ impl Scheduler {
             }
         }
         #[cfg(not(feature = "cpu_accounting_diag"))]
-        let _ = ipc;
+        let _ = (idx, ipc);
     }
 
     pub fn wake_pid(&mut self, pid: usize) {
@@ -2152,7 +2157,7 @@ impl Scheduler {
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
-            self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
+            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
             self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
@@ -2187,7 +2192,7 @@ impl Scheduler {
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
-            self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
+            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
             self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
@@ -2221,7 +2226,7 @@ impl Scheduler {
             if let Some(state) = self.processes[idx].linux_state_mut() {
                 state.futex_wait = None;
             }
-            self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
+            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
             self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
@@ -2444,7 +2449,7 @@ impl Scheduler {
             state.eventfd_wait = None;
             state.pipe_wait = None;
         }
-        self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
+        self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
         self.processes[idx].state = ProcessState::Ready;
         self.processes[idx].priority_wake_pending = true;
         self.remove_from_ready_queues(idx);
@@ -2467,7 +2472,7 @@ impl Scheduler {
             if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
                 update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
             }
-            self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
+            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
             self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
@@ -2501,7 +2506,7 @@ impl Scheduler {
                 if let Some(state) = self.processes[idx].linux_state_mut() {
                     state.poll_wake_tick = None;
                 }
-                self.record_wakeup(self.processes[idx].state == ProcessState::BlockedOnIpc);
+                self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
                 self.processes[idx].state = ProcessState::Ready;
                 self.processes[idx].priority_wake_pending = true;
                 self.processes[idx].block_start_tick = self.global_tick;

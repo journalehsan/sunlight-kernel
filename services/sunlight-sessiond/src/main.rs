@@ -13,13 +13,14 @@ use config_ops::{
 };
 use heapless::Vec;
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_reply_and_recv_timeout, kill,
-    monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive,
-    session_consume_auth_grant, session_query_process, validate_session_caller,
-    wiseowl_set_active_session_authority, wiseowl_validate_delegated_caller, IpcMsg, MezzoMsg,
-    ServiceCapability, SessionAction, SessionComponentRole, SessionComponentState,
-    SessionGeneration, SessionId, SessionKind, SessionMsg, SessionProcessCredentials, SessionState,
-    SpawnMsg, SpawnRequest, SESSION_CALLER_TTY_SERVICE, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
+    debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv_result,
+    ipc_recv_timeout_result, ipc_reply, kill, monotonic_millis, nameserver_lookup,
+    nameserver_register, process_is_alive, session_consume_auth_grant, session_query_process,
+    validate_session_caller, wiseowl_set_active_session_authority,
+    wiseowl_validate_delegated_caller, IpcError, IpcMsg, MezzoMsg, ServiceCapability,
+    SessionAction, SessionComponentRole, SessionComponentState, SessionGeneration, SessionId,
+    SessionKind, SessionMsg, SessionProcessCredentials, SessionState, SpawnMsg, SpawnRequest,
+    SESSION_CALLER_TTY_SERVICE, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
     WISEOWL_DELEGATION_PROTOCOL_VERSION,
 };
 use sunlight_sessiond::{
@@ -1520,6 +1521,7 @@ fn handle_profile_status(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         .word(3, 0)
 }
 
+#[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     let endpoint = endpoint_create();
@@ -1531,9 +1533,27 @@ pub extern "C" fn _start() -> ! {
     loop {
         supervise(&mut state);
         sync_wiseowl_session_authority(&mut state);
-        let Some(message) = ipc_reply_and_recv_timeout(endpoint, reply, 50) else {
-            reply = IpcMsg::empty();
-            continue;
+        ipc_reply(reply);
+        // With no session there are no children, deferred launches, readiness
+        // or stop deadlines to supervise. Only a queued request can create one.
+        // Keep bounded progress for EVERY active state, including Stopping.
+        let received = if state.active.is_none() {
+            ipc_recv_result(endpoint)
+        } else {
+            ipc_recv_timeout_result(endpoint, 50)
+        };
+        let message = match received {
+            Ok(message) => message,
+            Err(IpcError::DeadlineExpired) if state.active.is_some() => {
+                reply = IpcMsg::empty();
+                continue;
+            }
+            Err(_) => {
+                // Receive authority cannot be repaired by retrying this token.
+                // Fatal signals still use the kernel's normal termination path.
+                write_log("[SESSION-FOUNDATION] receive failed; exiting\n");
+                sunlight_ipc::ProcessExit::exit(1);
+            }
         };
         reply = match message.label {
             SessionMsg::SESSION_CREATE => create_session(&mut state, message),
@@ -1585,6 +1605,7 @@ pub extern "C" fn _start() -> ! {
     }
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}

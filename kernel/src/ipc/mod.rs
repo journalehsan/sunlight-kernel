@@ -1004,7 +1004,7 @@ fn wake_terminal(sched: &mut Scheduler, idx: usize) {
     if sched.processes[idx].state != ProcessState::BlockedOnIpc {
         return;
     }
-    sched.record_wakeup(true);
+    sched.record_wakeup(idx, true);
     trace_pty_event(
         sched,
         idx,
@@ -1729,6 +1729,11 @@ pub fn expire_deadlines(sched: &mut Scheduler, now_tick: u64) {
             bus.reply_waiter_remove(pending.endpoint_id, call);
         });
         finish_call(sched, idx, IpcCallOutcome::DeadlineExpired(generation));
+        #[cfg(feature = "cpu_accounting_diag")]
+        {
+            let count = &mut sched.processes[idx].wake_audit[3];
+            *count = count.saturating_add(1);
+        }
         DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -1750,6 +1755,11 @@ pub fn expire_deadlines(sched: &mut Scheduler, now_tick: u64) {
         }
         sched.processes[idx].ipc_recv_deadline = None;
         sched.processes[idx].ipc_recv_timeout = Some((generation, endpoint_id));
+        #[cfg(feature = "cpu_accounting_diag")]
+        {
+            let count = &mut sched.processes[idx].wake_audit[2];
+            *count = count.saturating_add(1);
+        }
         DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
         wake_terminal(sched, idx);
     }

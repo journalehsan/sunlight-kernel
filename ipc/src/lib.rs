@@ -4531,6 +4531,86 @@ pub fn ipc_try_recv(ep: EndpointId) -> Option<IpcMsg> {
     (ret == 0).then_some(msg)
 }
 
+/// Blocking receive with explicit terminal errors. Unlike the legacy message-only
+/// wrapper, this never presents an IPC error as an empty request. WouldBlock
+/// means the kernel has parked this task; yield completes the existing handoff.
+pub fn ipc_recv_result(ep: EndpointId) -> Result<IpcMsg, IpcError> {
+    loop {
+        // SAFETY: the kernel validates the endpoint owner token and receive right.
+        let (ret, msg) =
+            unsafe { raw_syscall_ipc(SunlightSyscall::IpcRecv, ep.0, IpcMsg::empty()) };
+        if would_block(ret) {
+            process_yield();
+        } else {
+            return decode_receive_result(ret, msg);
+        }
+    }
+}
+
+/// Checked receive using the existing generation-bound kernel deadline. The
+/// deadline is armed once, so handoff retries cannot extend a maintenance wait.
+pub fn ipc_recv_timeout_result(ep: EndpointId, timeout_ms: u64) -> Result<IpcMsg, IpcError> {
+    let deadline = monotonic_millis()
+        .checked_add(timeout_ms)
+        .ok_or(IpcError::InvalidArgument)?;
+    // SAFETY: IpcSetDeadline accepts an absolute monotonic millisecond value.
+    let (ret, _) =
+        unsafe { raw_syscall(SunlightSyscall::IpcSetDeadline, deadline, 0, 0, 0, 0, 0, 0) };
+    decode_receive_result(ret, IpcMsg::empty())?;
+    ipc_recv_result(ep)
+}
+
+fn decode_receive_result(ret: u64, msg: IpcMsg) -> Result<IpcMsg, IpcError> {
+    match ret {
+        0 => Ok(msg),
+        1 => Err(IpcError::InvalidCapability),
+        2 => Err(IpcError::EndpointNotFound),
+        3 => Err(IpcError::WouldBlock),
+        4 => Err(IpcError::InvalidArgument),
+        5 => Err(IpcError::InvalidWordCount),
+        6 => Err(IpcError::InvalidCapCount),
+        7 => Err(IpcError::QueueFull),
+        8 => Err(IpcError::DeadlineExpired),
+        9 => Err(IpcError::Cancelled),
+        10 => Err(IpcError::PeerClosed),
+        _ => Err(IpcError::InvalidArgument),
+    }
+}
+
+#[cfg(test)]
+mod receive_result_tests {
+    use super::*;
+
+    #[test]
+    fn failed_receive_cannot_become_a_successful_empty_message() {
+        let errors = [
+            IpcError::InvalidCapability,
+            IpcError::EndpointNotFound,
+            IpcError::WouldBlock,
+            IpcError::InvalidArgument,
+            IpcError::InvalidWordCount,
+            IpcError::InvalidCapCount,
+            IpcError::QueueFull,
+            IpcError::DeadlineExpired,
+            IpcError::Cancelled,
+            IpcError::PeerClosed,
+        ];
+        for error in errors {
+            assert_eq!(
+                decode_receive_result(error as u64, IpcMsg::empty()).err(),
+                Some(error)
+            );
+        }
+        assert!(decode_receive_result(u64::MAX, IpcMsg::empty()).is_err());
+        assert_eq!(
+            decode_receive_result(0, IpcMsg::with_label(42))
+                .unwrap()
+                .label,
+            42
+        );
+    }
+}
+
 /// Receive a message with a kernel-enforced absolute monotonic deadline.
 ///
 /// Returns `None` if no message arrives before `timeout_ms` elapses.
