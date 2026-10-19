@@ -95,7 +95,7 @@ use sunlight_ui::{
     image::{
         decode_simg,
         icon_theme::{self, category as icon_category, name as icon_name},
-        mime_icon, RgbaImage, IconImage,
+        mime_icon, IconImage, RgbaImage,
     },
     set_client_cursor, App, Canvas, Color, CursorShape, Event, EventPollCounters, Point, Rect,
     Theme, Window, WindowConfig,

@@ -1059,7 +1059,24 @@ pub fn handle_ipc_call(
         mediate_nameserver_register(caller_pid, &mut msg, caps, sched)?;
     }
     if target_owner == 1 && msg.label == sunlight_ipc::InitMsg::LOOKUP {
-        mediate_nameserver_lookup(caller_pid, &msg, sched)?;
+        if let Err(error) = mediate_nameserver_lookup(caller_pid, &msg, sched) {
+            // A denied bounded lookup never enters pending_call. Consume its
+            // armed deadline so the caller can issue another bounded request.
+            sched.processes[idx].ipc_next_deadline_tick = None;
+            return Err(error);
+        }
+    }
+    // D1 checks apply on every call, including callers holding a leaked SEND
+    // token. The message payload and caller-supplied badge confer no authority.
+    if target_owner != 1
+        && (msg.label == sunlight_ipc::demand::ACTIVATE || matches!(msg.label, 1..=6))
+        && !sunlight_ipc::demand::activation_authorized(
+            sched.processes[idx].service_lookup_restrictions,
+        )
+        && sched.processes.iter().any(|p| p.pid == target_owner && p.trusted_service_manager)
+    {
+        sched.processes[idx].ipc_next_deadline_tick = None;
+        return Err(IpcError::InvalidCapability);
     }
     if let Some(pending) = sched.processes[idx].pending_call {
         if pending.target_cap != target_cap.0 || pending.endpoint_id != endpoint_id {

@@ -852,6 +852,20 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
             Ok(crate::SUNLIGHT_SESSIONCTL_ELF_BYTES)
         }
         // Session Configuration Phase 1 fixtures (SpawnRequest path must be ≤31 chars).
+        #[cfg(feature = "demand_test")]
+        "/sbin/d1-fixture" => Ok(crate::D1_FIXTURE_ELF_BYTES),
+        #[cfg(feature = "demand_test")]
+        "/sbin/d1-timeout" => Ok(crate::D1_TIMEOUT_ELF_BYTES),
+        #[cfg(feature = "demand_test")]
+        "/sbin/d1-crash" => Ok(crate::D1_CRASH_ELF_BYTES),
+        #[cfg(feature = "demand_test")]
+        "/sbin/d1-dependent" => Ok(crate::D1_DEPENDENT_ELF_BYTES),
+        #[cfg(feature = "demand_test")]
+        "/sbin/d1-driver" => Ok(crate::D1_DRIVER_ELF_BYTES),
+        #[cfg(feature = "demand_test")]
+        "/sbin/d1-denied" => Ok(crate::D1_DENIED_ELF_BYTES),
+        #[cfg(feature = "demand_test")]
+        "/sbin/d1-activate-only" => Ok(crate::D1_ACTIVATION_ONLY_ELF_BYTES),
         "/bin/su1" | "/usr/bin/su1" => Ok(crate::SU1_ELF_BYTES),
         "/bin/su2" | "/usr/bin/su2" => Ok(crate::SU2_ELF_BYTES),
         "/usr/bin/devicectl" | "/bin/devicectl" => Ok(crate::DEVICECTL_ELF_BYTES),

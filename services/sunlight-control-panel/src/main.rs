@@ -48,7 +48,7 @@ use sunlight_ipc::{
 };
 use sunlight_libc::{crt0, sun_exec::ControlPanelPage};
 use sunlight_ui::{
-    image::{decode_simg, draw_mono_icon, MonoIcon, RgbaImage, IconImage},
+    image::{decode_simg, draw_mono_icon, IconImage, MonoIcon, RgbaImage},
     request_close,
     widgets::{Button, ButtonState, Checkbox, Label, Panel, Slider},
     App, AxisSizing, Canvas, Color, Column, Event, HBox, LayoutBox, LayoutInvalidation,

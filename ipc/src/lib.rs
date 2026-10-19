@@ -435,6 +435,10 @@ pub enum ServiceCapability {
     SessionIdentity = 25,
     /// Permission to resolve the separate audiod microphone endpoint.
     Microphone = 26,
+    /// Synthetic D1 operation access; independent of lifecycle authority.
+    DemandFixture = 27,
+    /// Lookup of SunlightD for D1 service readiness, without lifecycle authority.
+    ServiceNotify = 28,
 }
 
 impl ServiceCapability {
@@ -473,6 +477,8 @@ impl ServiceCapability {
             "wiseowl-memorydb" => Some(Self::WiseOwlMemoryDb),
             "session-identity" => Some(Self::SessionIdentity),
             "microphone" => Some(Self::Microphone),
+            "demand-fixture" => Some(Self::DemandFixture),
+            "service-notify" => Some(Self::ServiceNotify),
             _ => None,
         }
     }
@@ -506,11 +512,13 @@ impl ServiceCapability {
             Self::WiseOwlMemoryDb => "wiseowl-memorydb",
             Self::SessionIdentity => "session-identity",
             Self::Microphone => "microphone",
+            Self::DemandFixture => "demand-fixture",
+            Self::ServiceNotify => "service-notify",
         }
     }
 }
 
-pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 27] = [
+pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 29] = [
     ServiceCapability::Network,
     ServiceCapability::Authentication,
     ServiceCapability::Pty,
@@ -538,6 +546,8 @@ pub const ALL_SERVICE_CAPABILITIES: [ServiceCapability; 27] = [
     ServiceCapability::WiseOwlMemoryDb,
     ServiceCapability::SessionIdentity,
     ServiceCapability::Microphone,
+    ServiceCapability::DemandFixture,
+    ServiceCapability::ServiceNotify,
 ];
 
 pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'static str> + Clone {
@@ -548,6 +558,11 @@ pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'sta
 }
 
 pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
+    if mask & ServiceCapability::DemandFixture.bit() != 0
+        && ["d1-fixture", "d1-denied", "d1-activate-only"].iter().any(|name| name_key == name_to_u64(name))
+    {
+        return true;
+    }
     if mask & ServiceCapability::Microphone.bit() != 0 && name_key == name_to_u64("audiod.capture")
     {
         return true;
@@ -578,7 +593,7 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::HostKeyAdmin.bit() != 0 && name_key == name_to_u64("vfs") {
         return true;
     }
-    if mask & ServiceCapability::ServiceLifecycle.bit() != 0 && name_key == name_to_u64("sunlightd")
+    if mask & (ServiceCapability::ServiceLifecycle.bit() | ServiceCapability::ServiceNotify.bit()) != 0 && name_key == name_to_u64("sunlightd")
     {
         return true;
     }
@@ -6391,6 +6406,7 @@ mod audio_protocol_tests {
 }
 
 pub mod accounts;
+pub mod demand;
 
 /// Native caller-owned execution lifecycle. IDs are never reused.
 /// op: 0 begin, 1 cancellation status, 2 end, 3 interrupt owned scope.

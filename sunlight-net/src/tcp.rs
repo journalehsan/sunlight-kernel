@@ -103,6 +103,7 @@ struct TcpSlot {
     reset: bool,
     local_closed: bool,
     last_tcp_state: tcp::State,
+    connected_at_ms: Option<u64>,
     deadline_ms: Option<u64>,
 }
 
@@ -195,6 +196,7 @@ impl TcpManager {
                 reset: false,
                 local_closed: false,
                 last_tcp_state: tcp::State::Closed,
+                connected_at_ms: None,
                 deadline_ms: None,
             },
         );
@@ -318,8 +320,9 @@ impl TcpManager {
             )
             .map_err(|_| TcpError::SocketError)?;
         slot.kind = SocketKind::Connected;
-        slot.deadline_ms =
-            Some(sunlight_ipc::monotonic_millis().saturating_add(CONNECT_TIMEOUT_MS));
+        let now_ms = sunlight_ipc::monotonic_millis();
+        slot.connected_at_ms = Some(now_ms);
+        slot.deadline_ms = Some(now_ms.saturating_add(CONNECT_TIMEOUT_MS));
         self.diagnostics.stream_alloc_total = self.diagnostics.stream_alloc_total.saturating_add(1);
         self.diagnostics.stream_live = self.diagnostics.stream_live.saturating_add(1);
         Ok(())
@@ -365,16 +368,49 @@ impl TcpManager {
                         }
                     }
                     tcp::State::Closed | tcp::State::TimeWait => {
-                        if !matches!(slot.last_tcp_state, tcp::State::CloseWait) {
-                            slot.reset = true;
-                        } else if socket.can_recv() {
+                        // smoltcp exposes the terminal TCP state but does not
+                        // expose whether it came from a received RST or its
+                        // retransmission timeout. Do not report RESET based
+                        // only on CLOSED/TIME-WAIT; preserve EOF/CLOSED below.
+                        if matches!(slot.last_tcp_state, tcp::State::CloseWait) && socket.can_recv()
+                        {
                             slot.peer_closed = false;
-                        } else {
+                        } else if matches!(slot.last_tcp_state, tcp::State::CloseWait) {
                             slot.peer_closed = true;
                         }
                         slot.deadline_ms = Some(now_ms.saturating_add(TERMINAL_REAP_DELAY_MS));
                     }
                     _ => {}
+                }
+                if socket.state() != slot.last_tcp_state {
+                    let remote = socket
+                        .remote_endpoint()
+                        .map(|endpoint| alloc::format!("{}:{}", endpoint.addr, endpoint.port))
+                        .unwrap_or_else(|| alloc::string::String::from("none"));
+                    let elapsed_ms = slot
+                        .connected_at_ms
+                        .map_or(0, |started| now_ms.saturating_sub(started));
+                    if matches!(socket.state(), tcp::State::Closed | tcp::State::TimeWait) {
+                        sunlight_ipc::debug_log(&alloc::format!(
+                            "[NET-TCP] terminal socket={:#x} owner={} remote={} state={:?}->{:?} elapsed_ms={} cause=unavailable",
+                            Self::identity(id, slot.generation).0,
+                            slot.owner_pid,
+                            remote,
+                            slot.last_tcp_state,
+                            socket.state(),
+                            elapsed_ms,
+                        ));
+                    } else {
+                        sunlight_ipc::debug_log(&alloc::format!(
+                            "[NET-TCP] socket={:#x} owner={} remote={} state={:?}->{:?} elapsed_ms={}",
+                            Self::identity(id, slot.generation).0,
+                            slot.owner_pid,
+                            remote,
+                            slot.last_tcp_state,
+                            socket.state(),
+                            elapsed_ms,
+                        ));
+                    }
                 }
                 slot.last_tcp_state = socket.state();
                 if slot.deadline_ms.is_some_and(|deadline| now_ms >= deadline) {

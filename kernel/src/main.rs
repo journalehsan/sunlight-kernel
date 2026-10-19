@@ -215,6 +215,20 @@ static UAC_SERVICE_ELF_BYTES: &[u8] =
 static SUNLIGHT_SESSIOND_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessiond");
 // Session Configuration Phase 1 optional-startup test fixtures.
+#[cfg(feature = "demand_test")]
+static D1_FIXTURE_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-fixture");
+#[cfg(feature = "demand_test")]
+static D1_TIMEOUT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-timeout");
+#[cfg(feature = "demand_test")]
+static D1_CRASH_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-crash");
+#[cfg(feature = "demand_test")]
+static D1_DEPENDENT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-dependent");
+#[cfg(feature = "demand_test")]
+static D1_DRIVER_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-driver");
+#[cfg(feature = "demand_test")]
+static D1_ACTIVATION_ONLY_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-activate-only");
+#[cfg(feature = "demand_test")]
+static D1_DENIED_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-denied");
 static SU1_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/su1");
 static SU2_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/su2");
 static MEZZO_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/mezzo");

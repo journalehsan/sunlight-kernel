@@ -361,6 +361,14 @@ fn deliver_pending_signals(
 }
 
 fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(), ()> {
+    send_signal_generation(pid, signal, None)
+}
+
+fn send_signal_generation(
+    pid: usize,
+    signal: crate::process::signal::Signal,
+    generation: Option<u64>,
+) -> Result<(), ()> {
     use crate::process::signal::Signal;
 
     let mut sched = crate::sched::SCHEDULER.lock();
@@ -376,7 +384,15 @@ fn send_signal(pid: usize, signal: crate::process::signal::Signal) -> Result<(),
     }
 
     let sender = sched.current_process_index().ok_or(())?;
-    let trusted = sched.processes[sender].trusted_pty_service
+    if let Some(generation) = generation {
+        if !sched.processes[sender].trusted_service_manager
+            || sched.processes[idx].address_space.identity().generation != generation
+        {
+            return Err(());
+        }
+    }
+    let trusted = (generation.is_some() && sched.processes[sender].trusted_service_manager)
+        || sched.processes[sender].trusted_pty_service
         || sched.processes[sender].trusted_tty_session_service
         || sched.processes[sender].trusted_session_service
         || sched.processes[sender].trusted_display_service;
@@ -805,7 +821,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         8 => ipc_set_deadline(frame.rdi),
         10 => endpoint_create(),
         11 => endpoint_bind(frame.rdi),
-        12 => nameserver_endpoint_validate(frame.rdi, frame.rsi),
+        12 => nameserver_endpoint_validate(frame.rdi, frame.rsi, frame.rdx),
         13 => endpoint_destroy(frame.rdi),
         14 => nameserver_diagnostic_event(frame.rdi),
         15 => ipc_defer_reply(),
@@ -1406,6 +1422,10 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
             }
             let mut reply = IpcMsg::with_label(crate::ipc::SpawnMsg::REPLY);
             reply.words[0] = pid as u64;
+            reply.words[1] = sched.processes.iter()
+                .find(|p| p.pid == pid)
+                .map_or(0, |p| p.address_space.identity().generation);
+            reply.word_count = 2;
             reply.to_registers(frame);
             0
         }
@@ -1646,7 +1666,7 @@ fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
     let target_pid = frame.rdi as usize;
     let sched = crate::sched::SCHEDULER.lock();
     let caller = sched.current_process();
-    if !caller.trusted_session_service {
+    if !caller.trusted_session_service && !caller.trusted_service_manager {
         // UAC may inspect only the authenticated synchronous request it is
         // servicing. An arbitrary GUI cannot query or supply caller credentials.
         if !caller.trusted_auth_broker {
@@ -1907,8 +1927,24 @@ fn endpoint_bind(token: u64) -> u64 {
 }
 
 /// PID 1-only liveness query used for lazy nameserver registry cleanup.
-fn nameserver_endpoint_validate(token: u64, endpoint_id: u64) -> u64 {
-    let caller_pid = sched::with_scheduler(|sched| sched.current_process().pid);
+fn nameserver_endpoint_validate(token: u64, endpoint_id: u64, generation: u64) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    let caller = sched.current_process();
+    // Manager mode: endpoint_id is the expected PID; generation is supplied
+    // from the kernel spawn reply. Never trust the service's claimed identity.
+    if caller.trusted_service_manager && generation != 0 {
+        let Some(process) = sched.processes.iter().find(|p| {
+            p.pid as u64 == endpoint_id
+                && p.address_space.identity().generation == generation
+                && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+        }) else { return 0; };
+        let caps = crate::capability::CAP_BROKER.lock();
+        return match caps.token_owner(CapabilityToken(token), CapabilityRights::SEND) {
+            Ok((id, owner)) if owner == process.pid => id as u64 + 1,
+            _ => 0,
+        };
+    }
+    let caller_pid = caller.pid;
     if caller_pid != 1 || endpoint_id > u32::MAX as u64 {
         return 0;
     }
@@ -8631,7 +8667,19 @@ fn sys_kill(frame: &mut SyscallFrame) -> u64 {
     let Some(signal) = crate::process::signal::Signal::try_from_u32(sig) else {
         return u64::MAX;
     };
-    match send_signal(pid, signal) {
+    // Select the extension explicitly: legacy kill(pid, sig) leaves rdx
+    // unspecified. Valid legacy signal arguments occupy only the low 32 bits.
+    let expected = if frame.rsi & ::sunlight_ipc::demand::KILL_GENERATION_FLAG != 0 {
+        if frame.rdx == 0
+            || !sched::with_scheduler(|s| s.current_process().trusted_service_manager)
+        {
+            return u64::MAX;
+        }
+        Some(frame.rdx)
+    } else {
+        None
+    };
+    match send_signal_generation(pid, signal, expected) {
         Ok(()) => 0,
         Err(()) => u64::MAX,
     }

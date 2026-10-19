@@ -8,6 +8,13 @@ pub const MAX_UNITS: usize = 32;
 
 pub type UnitName = String<64>;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ActivationPolicy {
+    #[default]
+    Resident,
+    OnDemand,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ServiceType {
     Simple,
@@ -45,6 +52,7 @@ pub struct ServiceUnit {
 
     // [Service]
     pub service_type: ServiceType,
+    pub activation: ActivationPolicy,
     pub exec_start: String<256>,
     pub exec_start_pre: Option<String<256>>,
     pub exec_stop: Option<String<256>>,
@@ -73,6 +81,7 @@ impl Default for ServiceUnit {
             requires: Vec::new(),
             wants: Vec::new(),
             service_type: ServiceType::Simple,
+            activation: ActivationPolicy::Resident,
             exec_start: String::new(),
             exec_start_pre: None,
             exec_stop: None,
@@ -186,6 +195,20 @@ pub fn parse_service_unit(content: &[u8]) -> Result<ServiceUnit, ParseError> {
         }
     }
 
+    if unit.activation == ActivationPolicy::OnDemand
+        && (unit.service_type != ServiceType::Notify
+            || unit.restart != RestartPolicy::No
+            || unit.exec_start.len() > 31
+            || !unit.exec_start.starts_with('/')
+            || unit.exec_start.ends_with('/')
+            || !unit.exec_start.is_ascii()
+            || unit
+                .exec_start
+                .bytes()
+                .any(|b| b.is_ascii_whitespace() || b == 0))
+    {
+        return Err(ParseError::InvalidKey);
+    }
     Ok(unit)
 }
 
@@ -222,6 +245,13 @@ fn parse_unit_key(unit: &mut ServiceUnit, key: &str, value: &str) -> Result<(), 
 
 fn parse_service_key(unit: &mut ServiceUnit, key: &str, value: &str) -> Result<(), ParseError> {
     match key {
+        "Activation" => {
+            unit.activation = match value {
+                "resident" => ActivationPolicy::Resident,
+                "on-demand" => ActivationPolicy::OnDemand,
+                _ => return Err(ParseError::InvalidKey),
+            };
+        }
         "Type" => {
             unit.service_type = match value {
                 "simple" => ServiceType::Simple,

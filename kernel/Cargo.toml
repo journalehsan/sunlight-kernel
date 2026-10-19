@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5146-alpha.2"
+version = "0.2.5179-alpha.2"
+
+
 
 
 
@@ -626,6 +628,7 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+demand_test = []
 # Native Hayro/viewer artifacts are built with tools/build_docserv.sh.
 # The optional legacy MuPDF renderer requires a separate musl C/C++ toolchain.
 default = []

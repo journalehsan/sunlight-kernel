@@ -33,12 +33,15 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
 #[global_allocator]
 static BUMP: BumpAllocator = BumpAllocator;
 
+use demand_runtime::DemandManager;
+use sunlight_ipc::demand as demand_wire;
 use sunlight_ipc::{
     debug_log, endpoint_create, ipc_call, ipc_reply_and_recv_timeout, monotonic_millis,
     nameserver_lookup, nameserver_register, process_is_alive, CapabilityToken, IpcMsg,
     SpawnRequest,
 };
 use sunlight_libc::{self as libc, Errno, O_CREAT, O_RDONLY, O_TRUNC, O_WRONLY};
+use sunlightd::activation::Phase;
 use sunlightd::graph::DepGraph;
 use sunlightd::ipc::{extract_unit_name, ControlReply, ListEntry, StatusReply, SunlightdOp};
 use sunlightd::supervisor::{
@@ -47,6 +50,7 @@ use sunlightd::supervisor::{
     DETAIL_NOT_FOUND, DETAIL_RESTART_ABORTED, DETAIL_SPAWN, DETAIL_STOP_TIMEOUT,
     DETAIL_TERMINATION_UNCONFIRMED, DETAIL_TRANSITION_BUSY, OP_RESTART, OP_START, OP_STOP,
 };
+use sunlightd::unit::ActivationPolicy;
 use sunlightd::unit::{parse_service_unit, ServiceUnit, SocketUnit, MAX_UNITS};
 
 macro_rules! serial_println {
@@ -57,6 +61,8 @@ macro_rules! serial_println {
         debug_log(&buf);
     }};
 }
+
+mod demand_runtime;
 
 const ENABLED_STATE_PATH: &[u8] = b"/state/sunlightd/enabled-services";
 const ENABLED_STATE_TMP_PATH: &[u8] = b"/state/sunlightd/enabled-services.tmp";
@@ -148,7 +154,7 @@ impl BootStartup {
         let mut remaining = 0usize;
         for idx in 0..services.count {
             if let Some(entry) = services.get(idx) {
-                if entry.enabled {
+                if entry.enabled && entry.unit.activation == ActivationPolicy::Resident {
                     pending[idx] = true;
                     remaining += 1;
                 }
@@ -336,11 +342,24 @@ fn pack_path_words(msg: &mut IpcMsg, path: &str) {
     msg.word_count = 4;
 }
 
+#[cfg(feature = "identity-phase-c-test")]
 fn lookup_user_credentials(username: &str) -> Option<(u32, u32)> {
-    let vfs = nameserver_lookup("vfs")?;
+    lookup_service_credentials(username, false)
+}
+
+fn lookup_service_credentials(username: &str, bounded: bool) -> Option<(u32, u32)> {
+    let vfs = if bounded {
+        sunlight_ipc::nameserver_lookup_timeout("vfs", 100)?
+    } else {
+        nameserver_lookup("vfs")?
+    };
     let mut msg = IpcMsg::with_label(sunlight_ipc::VfsMsg::GETPWNAM);
     pack_path_words(&mut msg, username);
-    let reply = ipc_call(vfs, msg);
+    let reply = if bounded {
+        sunlight_ipc::ipc_call_timeout(vfs, msg, 250).ok()?
+    } else {
+        ipc_call(vfs, msg)
+    };
     if reply.label != sunlight_ipc::VfsMsg::REPLY || reply.words[0] != 0 {
         return None;
     }
@@ -905,6 +924,8 @@ WantedBy=sunlight.target
             let _ = services.add(unit);
         }
     }
+    #[cfg(feature = "demand-test")]
+    demand_runtime::add_test_units(&mut services);
     (services, sockets)
 }
 
@@ -971,6 +992,21 @@ fn observe_managed_process(pid: u32) -> ProcessObservation {
     }
 }
 
+fn observe_service_process(services: &ServiceTable, idx: usize, pid: u32) -> ProcessObservation {
+    if let Some(entry) = services.get(idx) {
+        if entry.unit.activation == ActivationPolicy::OnDemand {
+            if let Some(runtime) = entry.activation.runtime {
+                if !sunlight_ipc::session_query_process(pid as u64)
+                    .is_some_and(|p| p.generation == runtime.process_generation)
+                {
+                    return ProcessObservation::Gone;
+                }
+            }
+        }
+    }
+    observe_managed_process(pid)
+}
+
 fn spawn_named_with_identity(
     spawn_cap: CapabilityToken,
     path: &str,
@@ -978,7 +1014,8 @@ fn spawn_named_with_identity(
     uid: u32,
     gid: u32,
     capability_mask: u64,
-) -> Result<u32, u32> {
+    bounded: bool,
+) -> Result<(u32, u64), u32> {
     use sunlight_ipc::SpawnMsg;
 
     let req = SpawnRequest::new(path, name)
@@ -987,9 +1024,13 @@ fn spawn_named_with_identity(
     let mut msg = IpcMsg::empty();
     req.pack_into(&mut msg);
 
-    let reply = ipc_call(spawn_cap, msg);
+    let reply = if bounded {
+        sunlight_ipc::ipc_call_timeout(spawn_cap, msg, 1_000).map_err(|_| DETAIL_SPAWN)?
+    } else {
+        ipc_call(spawn_cap, msg)
+    };
     if reply.label == SpawnMsg::REPLY {
-        Ok(reply.words[0] as u32)
+        Ok((reply.words[0] as u32, reply.words[1]))
     } else {
         // Kernel packs SpawnError discriminant into words[0] on ERROR.
         Err(detail_from_spawn_error(reply.words[0]))
@@ -1036,7 +1077,7 @@ fn spawn_service_at(
         if entry.state.may_still_be_alive() {
             // Reconcile first: stale Running/Stopping after external death.
             if let Some(pid) = entry.state.pid() {
-                match observe_managed_process(pid) {
+                match observe_service_process(services, idx, pid) {
                     ProcessObservation::Alive => {
                         return Err(DETAIL_ALREADY_RUNNING);
                     }
@@ -1053,6 +1094,27 @@ fn spawn_service_at(
         }
     }
 
+    if services
+        .get(idx)
+        .is_some_and(|e| e.unit.activation == ActivationPolicy::OnDemand)
+        && !demand_runtime::dependencies_ready(services, idx)
+    {
+        return Err(DETAIL_TRANSITION_BUSY);
+    }
+    if let Some(entry) = services.get_mut(idx) {
+        if entry.unit.activation == ActivationPolicy::OnDemand {
+            if entry.activation.phase != Phase::Starting {
+                entry
+                    .activation
+                    .request(monotonic_millis())
+                    .map_err(|_| DETAIL_TRANSITION_BUSY)?;
+            }
+            if entry.activation.spawn_attempted {
+                return Err(DETAIL_TRANSITION_BUSY);
+            }
+            entry.activation.spawn_attempted = true;
+        }
+    }
     let Some(unit) = services.get(idx).map(|entry| entry.unit.clone()) else {
         return Err(DETAIL_SPAWN);
     };
@@ -1061,7 +1123,10 @@ fn spawn_service_at(
     let bin = binary_name_of(&path);
     let mut name_buf = heapless::String::<64>::new();
     let _ = name_buf.push_str(bin);
-    let Some((uid, gid)) = lookup_user_credentials(unit.user.as_str()) else {
+    let Some((uid, gid)) = lookup_service_credentials(
+        unit.user.as_str(),
+        unit.activation == ActivationPolicy::OnDemand,
+    ) else {
         serial_println!(
             "[SUNLIGHTD] failed to resolve User={} for {}",
             unit.user,
@@ -1080,15 +1145,26 @@ fn spawn_service_at(
         gid,
         capability_summary(unit.capability_mask)
     );
-    match spawn_named_with_identity(spawn_cap, &path, &name_buf, uid, gid, unit.capability_mask) {
-        Ok(pid) => {
+    match spawn_named_with_identity(
+        spawn_cap,
+        &path,
+        &name_buf,
+        uid,
+        gid,
+        unit.capability_mask,
+        unit.activation == ActivationPolicy::OnDemand,
+    ) {
+        Ok((pid, process_generation)) => {
             let now = monotonic_millis();
             if let Some(entry) = services.get_mut(idx) {
                 entry.mark_starting(pid, now);
+                if entry.unit.activation == ActivationPolicy::OnDemand {
+                    entry.activation.spawned(pid, process_generation, now);
+                }
             }
             serial_println!("[SUNLIGHTD] spawned {} pid={}", name_buf, pid);
             // Immediate post-spawn death must not leave Running.
-            match observe_managed_process(pid) {
+            match observe_service_process(services, idx, pid) {
                 ProcessObservation::Exited { code } => {
                     serial_println!(
                         "[SUNLIGHTD] {} exited immediately after spawn code={}",
@@ -1145,6 +1221,17 @@ fn apply_confirmed_exit(
     exit_code: Option<i32>,
 ) {
     let now = monotonic_millis();
+    if let Some(entry) = services.get_mut(idx) {
+        if entry.unit.activation == ActivationPolicy::OnDemand {
+            if entry.activation.phase != Phase::Failed {
+                entry.activation.fail(demand_wire::DIED, now);
+            }
+            entry.activation.runtime = None;
+            if entry.restart_after_stop {
+                entry.activation.retry_at = now;
+            }
+        }
+    }
     let disposition = services
         .get_mut(idx)
         .map(|entry| entry.observe_confirmed_exit(exit_code, now));
@@ -1163,15 +1250,37 @@ enum StopOutcome {
     NotFound,
 }
 
+fn signal_service(services: &ServiceTable, idx: usize, pid: u32, signal: u32) -> Result<(), ()> {
+    if let Some(entry) = services.get(idx) {
+        if entry.unit.activation == ActivationPolicy::OnDemand {
+            let r = entry.activation.runtime.ok_or(())?;
+            return demand_wire::kill_instance(pid, r.process_generation, signal)
+                .then_some(())
+                .ok_or(());
+        }
+    }
+    libc::kill(pid as u64, signal).map_err(|_| ())
+}
+
 fn stop_service(
     services: &mut ServiceTable,
     idx: usize,
     spawn_cap: CapabilityToken,
     restart_after_stop: bool,
 ) -> StopOutcome {
+    if let Some(entry) = services.get_mut(idx) {
+        if entry.unit.activation == ActivationPolicy::OnDemand
+            && (matches!(entry.activation.phase, Phase::Starting | Phase::Ready)
+                || entry.activation.runtime.is_some())
+        {
+            entry
+                .activation
+                .fail(demand_wire::STOPPED, monotonic_millis());
+        }
+    }
     // Reconcile before deciding; may clear stale active state.
     if let Some(pid) = services.get(idx).and_then(entry_pid) {
-        match observe_managed_process(pid) {
+        match observe_service_process(services, idx, pid) {
             ProcessObservation::Exited { code } => {
                 apply_confirmed_exit(services, idx, spawn_cap, Some(code as i32));
             }
@@ -1187,6 +1296,11 @@ fn stop_service(
         if let Some(entry) = services.get_mut(idx) {
             if restart_after_stop {
                 // Nothing to stop; start replacement.
+                if entry.unit.activation == ActivationPolicy::OnDemand
+                    && entry.activation.runtime.is_none()
+                {
+                    entry.activation.retry_at = monotonic_millis();
+                }
                 entry.set_last_op(if restart_after_stop {
                     OP_RESTART
                 } else {
@@ -1226,7 +1340,7 @@ fn stop_service(
     // Deliver SIGTERM. Kill failures are recorded but we still wait for death
     // (process may exit for other reasons). Generic kill semantics are out of
     // scope for this patch — report outcomes truthfully only.
-    if libc::kill(pid as u64, SIGTERM).is_err() {
+    if signal_service(services, idx, pid, SIGTERM).is_err() {
         serial_println!(
             "[SUNLIGHTD] SIGTERM failed for pid={} (process may ignore or kill unsupported)",
             pid
@@ -1236,7 +1350,7 @@ fn stop_service(
     let start = monotonic_millis();
     let mut sent_sigkill = false;
     loop {
-        match observe_managed_process(pid) {
+        match observe_service_process(services, idx, pid) {
             ProcessObservation::Exited { code } => {
                 let was_restart = services
                     .get(idx)
@@ -1264,7 +1378,7 @@ fn stop_service(
                 if !sent_sigkill && elapsed >= STOP_GRACE_MS {
                     // Existing auto-SIGKILL escalation (preserved, not newly
                     // introduced). Wait remains bounded; no redesign of kill.
-                    if libc::kill(pid as u64, SIGKILL).is_err() {
+                    if signal_service(services, idx, pid, SIGKILL).is_err() {
                         serial_println!(
                             "[SUNLIGHTD] SIGKILL failed for pid={} — termination unconfirmed",
                             pid
@@ -1309,7 +1423,7 @@ fn poll_service_exits(services: &mut ServiceTable, spawn_cap: CapabilityToken) {
         let Some(pid) = pid else {
             continue;
         };
-        match observe_managed_process(pid) {
+        match observe_service_process(services, idx, pid) {
             ProcessObservation::Exited { code } => {
                 apply_confirmed_exit(services, idx, spawn_cap, Some(code as i32));
             }
@@ -1705,6 +1819,12 @@ fn handle_control_message(
         }
 
         SunlightdOp::NotifyReady => {
+            if find_service_idx_by_pid(services, msg.badge as u32)
+                .and_then(|i| services.get(i))
+                .is_some_and(|e| e.unit.activation == ActivationPolicy::OnDemand)
+            {
+                return demand_wire::error(demand_wire::STALE);
+            }
             let pid = msg.badge as u32;
             if let Some(idx) = find_service_idx_by_pid(services, pid) {
                 let next = services.get(idx).and_then(|entry| match entry.state {
@@ -1728,6 +1848,12 @@ fn handle_control_message(
         }
 
         SunlightdOp::NotifyFailed => {
+            if find_service_idx_by_pid(services, msg.badge as u32)
+                .and_then(|i| services.get(i))
+                .is_some_and(|e| e.unit.activation == ActivationPolicy::OnDemand)
+            {
+                return demand_wire::error(demand_wire::STALE);
+            }
             let pid = msg.badge as u32;
             if let Some(idx) = find_service_idx_by_pid(services, pid) {
                 let exit_code = msg.words[0] as i32;
@@ -1747,7 +1873,7 @@ fn handle_control_message(
             if let Some(idx) = services.find_by_name(&unit_name) {
                 // Cheap liveness reconcile on status so operators see truth.
                 if let Some(pid) = services.get(idx).and_then(entry_pid) {
-                    match observe_managed_process(pid) {
+                    match observe_service_process(services, idx, pid) {
                         ProcessObservation::Exited { code } => {
                             apply_confirmed_exit(services, idx, spawn_cap, Some(code as i32));
                         }
@@ -1895,9 +2021,10 @@ impl IdentityPhaseCGate {
                     uid,
                     gid,
                     unit.capability_mask,
+                    false,
                 );
                 match duplicate {
-                    Ok(pid) => {
+                    Ok((pid, _)) => {
                         self.first_pid = first_pid;
                         self.duplicate_pid = pid;
                         self.started_ms = monotonic_millis();
@@ -2056,15 +2183,21 @@ fn _start() -> ! {
 
     // Incoming calls wake immediately; a 50 ms deadline drives dependency
     // startup and exit supervision without a permanently runnable poll loop.
+    let mut demand = DemandManager::new();
     let mut reply = IpcMsg::empty();
     loop {
+        demand.tick(&mut services, spawn_cap);
         poll_service_exits(&mut services, spawn_cap);
         autostart_services(&mut services, &mut startup, spawn_cap);
         #[cfg(feature = "identity-phase-c-test")]
         identity_phase_c_gate.poll(&mut services, spawn_cap);
         match ipc_reply_and_recv_timeout(ep, reply, 50) {
             Some(msg) => {
-                reply = handle_control_message(&msg, &mut services, spawn_cap);
+                reply = if demand_runtime::is_demand_op(msg.label) {
+                    demand.handle(&msg, &mut services)
+                } else {
+                    handle_control_message(&msg, &mut services, spawn_cap)
+                };
             }
             None => {
                 reply = IpcMsg::empty();

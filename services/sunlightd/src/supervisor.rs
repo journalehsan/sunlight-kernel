@@ -131,6 +131,7 @@ pub struct ServiceDiagnostics {
 
 pub struct ServiceEntry {
     pub unit: ServiceUnit,
+    pub activation: crate::activation::Activation,
     pub state: ServiceState,
     pub restart_count: u32,
     pub last_restart_time: u64,
@@ -146,6 +147,7 @@ impl ServiceEntry {
     pub fn new(unit: ServiceUnit) -> Self {
         Self {
             unit,
+            activation: crate::activation::Activation::default(),
             state: ServiceState::Stopped,
             restart_count: 0,
             last_restart_time: 0,
@@ -159,6 +161,9 @@ impl ServiceEntry {
 
     /// Check if we should restart this service based on exit code
     pub fn should_restart(&self, exit_code: i32) -> bool {
+        if self.unit.activation == crate::unit::ActivationPolicy::OnDemand {
+            return false;
+        }
         match self.unit.restart {
             RestartPolicy::No => false,
             RestartPolicy::OnFailure => exit_code != 0,
