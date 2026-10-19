@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod supervision;
 pub mod cpu_accounting;
 pub mod display_metrics;
 pub mod display_modes;

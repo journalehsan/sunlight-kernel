@@ -56,9 +56,18 @@ pub extern "C" fn _start() -> ! {
     let name = env!("CARGO_BIN_NAME");
     if name != "d2-fixture" { let _ = ipc::ipc_recv_timeout(sleep_ep, 120); }
     assert!(ipc::nameserver_register(name, ep));
-    let readiness = ipc::ipc_call_timeout(
+    let readiness = match ipc::ipc_call_timeout(
         manager, IpcMsg::with_label(d::READY).word(0, generation), 1000,
-    ).unwrap();
+    ) {
+        Ok(reply) => reply,
+        #[cfg(feature = "recovery-test")]
+        Err(_) => {
+            d1_log::log(format_args!("[D36R-TEST] manager loss before readiness: explicit fixture exit"));
+            sunlight_libc::exit(42);
+        }
+        #[cfg(not(feature = "recovery-test"))]
+        Err(error) => panic!("readiness transport: {:?}", error),
+    };
     if name != "d2-fixture" && readiness.label == d::ERROR {
         // The dependency may die during local initialization. Failed readiness
         // is an expected bounded startup failure; never open admission.

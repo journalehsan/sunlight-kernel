@@ -13,6 +13,8 @@ parser.add_argument("--iso", default="target/sunlightd-d1.iso")
 parser.add_argument("--evidence", default="target/d1-evidence")
 parser.add_argument("--d2", action="store_true")
 parser.add_argument("--d3", action="store_true")
+parser.add_argument("--d36r", action="store_true")
+parser.add_argument("--d36r-scenario", default="after-ready", choices=["after-ready", "pre-ready", "quiescing", "receipt-release", "registration-timeout"])
 args = parser.parse_args()
 evidence = pathlib.Path(args.evidence)
 evidence.mkdir(parents=True, exist_ok=True)
@@ -43,9 +45,9 @@ for cpus in args.cpus:
             deadline = time.monotonic() + args.timeout
             while time.monotonic() < deadline:
                 output = log.read_text(errors="replace") if log.exists() else ""
-                if re.search(r"\[D[123]-TEST\].*FAIL|KERNEL PANIC|\[SUNLIGHTD\] PANIC", output):
+                if re.search(r"\[D[123]-TEST\].*FAIL|\[D36R-TEST\].*FAIL|KERNEL PANIC|\[SUNLIGHTD\] PANIC", output):
                     raise RuntimeError(f"{cpus} CPU native failure\n{output[-7000:]}")
-                if "[D1-TEST] COMPLETE PASS" in output and (not args.d2 or "[D2-TEST] COMPLETE PASS" in output) and (not args.d3 or "[D3-TEST] COMPLETE PASS" in output):
+                if "[D1-TEST] COMPLETE PASS" in output and (not args.d2 or "[D2-TEST] COMPLETE PASS" in output) and (not args.d3 or "[D3-TEST] COMPLETE PASS" in output) and (not args.d36r or "[D36R-TEST] COMPLETE PASS" in output):
                     missing = [m for m in expected if f"[D1-TEST] {m} PASS" not in output]
                     if missing:
                         raise RuntimeError(f"Missing native assertions: {missing}")
@@ -98,6 +100,33 @@ for cpus in args.cpus:
                         measurements.append(dict(cpus=cpus, accelerator=accelerator, unit=unit,
                             generation=int(generation), pid=int(pid), process_generation=int(proc_gen),
                             endpoint=int(ep), cold_ms=int(cold), ready_ms=int(ready)))
+                    if args.d36r:
+                        timeout_case = args.d36r_scenario == "registration-timeout"
+                        if timeout_case:
+                            assert "[INIT-RECOVERY] registration timeout; terminal recovery blocked" in output
+                        else:
+                            assert "[INIT-RECOVERY] restart budget exhausted; recovery blocked" in output
+                        if args.d36r_scenario in ("after-ready", "registration-timeout"):
+                            assert "[D36R-TEST] concurrent unauthorized registration rejected PASS" in output
+                        else:
+                            assert f"[D36R-TEST] phase {args.d36r_scenario} blocked without replacement PASS" in output
+                        samples = [dict(cpus=cpus, **{k:int(v) for k,v in re.findall(r"(\w+)=(\d+)",line)})
+                                   for line in output.splitlines() if "[D36R-CYCLE]" in line]
+                        assert [s["epoch"] for s in samples] == ([2] if timeout_case else [2,3,4])
+                        assert all(s["replacements"] == 0 for s in samples)
+                        if args.d36r_scenario in ("after-ready", "registration-timeout"):
+                            assert all(s["old_service_instances"] == 1 for s in samples)
+                        else:
+                            assert all(s["snapshot_rows"] == 3 for s in samples)
+                            assert "[D36R-FAULT]" in output
+                        reaps = [dict(cpus=cpus, **{k:int(v) for k,v in re.findall(r"(\w+)=(\d+)",line)})
+                                 for line in output.splitlines() if "[D36R-REAP]" in line]
+                        assert len(reaps) == 1 and reaps[0]["private_frames"] > 0 and reaps[0]["page_tables"] > 0
+                        (evidence / f"recovery-{cpus}cpu.json").write_text(json.dumps({"cycles":samples,"reaping":reaps,
+                            "outcome":"RecoveryBlocked; no adoption or normal activation resumed",
+                            "external_lease_and_dependency_state":"unknown", "scenario":args.d36r_scenario,
+                            "recovery_timeouts":int(timeout_case),
+                            "free_frame_sample_range":max(s["free_frames"] for s in samples)-min(s["free_frames"] for s in samples)},indent=2)+"\n")
                     print(f"D1 {cpus} CPU: PASS ({accelerator}); serial: {log}", flush=True)
                     break
                 if process.poll() is not None:

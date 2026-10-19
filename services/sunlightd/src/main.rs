@@ -2175,16 +2175,128 @@ impl IdentityPhaseCGate {
     }
 }
 
+#[cfg(feature = "recovery-test")]
+static RECOVERY_TEST_STAGE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+#[cfg(feature = "recovery-test")]
+fn recovery_test_fault(stage: u64, services: &ServiceTable, idx: usize) {
+    if RECOVERY_TEST_STAGE.load(core::sync::atomic::Ordering::Acquire) == stage
+        && binary_name_of(&services.get(idx).unwrap().unit.exec_start) == "d3-parent"
+    {
+        serial_println!(
+            "[D36R-FAULT] stage={} at_ms={} holds={} phase={}",
+            stage,
+            monotonic_millis(),
+            services.dependencies.count(),
+            services.get(idx).unwrap().activation.phase as u64
+        );
+        sunlight_ipc::ProcessExit::exit(86);
+    }
+}
+
+fn recovery_message(msg: &IpcMsg) -> Option<IpcMsg> {
+    use sunlight_ipc::supervision as own;
+    #[cfg(feature = "recovery-test")]
+    if msg.label == own::TEST_ARM {
+        RECOVERY_TEST_STAGE.store(msg.words[0], core::sync::atomic::Ordering::Release);
+        return Some(IpcMsg::with_label(demand_wire::OK));
+    }
+    #[cfg(feature = "recovery-test")]
+    if msg.label == own::TEST_CRASH {
+        sunlight_ipc::ipc_reply(IpcMsg::with_label(demand_wire::OK));
+        sunlight_ipc::ProcessExit::exit(86);
+    }
+    #[cfg(feature = "recovery-test")]
+    if msg.label == own::TEST_PROBE {
+        let cap = CapabilityToken(msg.words[0]);
+        let pid = msg.words[1] as u32;
+        let generation = msg.words[2];
+        assert!(demand_wire::endpoint_identity(cap, pid, generation).is_none());
+        // SIGCHLD is non-destructive even if this denial check regresses.
+        assert!(!demand_wire::kill_instance(pid, generation, 17));
+        assert!(!demand_wire::release_reap_receipt(pid, generation));
+        assert!(sunlight_ipc::ipc_call_timeout(cap, IpcMsg::with_label(1), 100).is_err());
+        assert!(libc::spawn(b"/sbin/d1-fixture", &[], None).is_err());
+        assert!(libc::open(b"/etc/passwd").is_err());
+        assert!(libc::kill(pid as u64, 17).is_err());
+        serial_println!("[D36R-TEST] blocked authority probes PASS");
+        return Some(IpcMsg::with_label(demand_wire::OK));
+    }
+    let operation = match msg.label {
+        own::RPC_STATUS => own::STATUS,
+        own::RPC_RECORD => own::RECORD,
+        own::RPC_DETAIL => own::DETAIL,
+        own::RPC_ACCOUNT => own::ACCOUNT,
+        own::RPC_PATH => own::PATH,
+        _ => return None,
+    };
+    Some(match own::query(operation, msg.words[0]) {
+        Some(words) => IpcMsg::with_label(demand_wire::OK)
+            .word(0, words[0])
+            .word(1, words[1])
+            .word(2, words[2])
+            .word(3, words[3]),
+        None => demand_wire::error(demand_wire::STALE),
+    })
+}
+
+fn recovery_blocked_loop(ep: sunlight_ipc::EndpointId) -> ! {
+    use sunlight_ipc::supervision as own;
+    let status = own::query(own::STATUS, 0).expect("diagnostic supervisor grant");
+    serial_println!(
+        "[D36R] RecoveryBlocked epoch={} retained={} attempts={} leases=unknown holds=unknown",
+        status[1],
+        status[2],
+        status[3]
+    );
+    // No unit loading, startup queue, graph reconstruction, lease expiry or stop.
+    loop {
+        if let Some(msg) = sunlight_ipc::ipc_recv_timeout(ep, 500) {
+            let reply =
+                recovery_message(&msg).unwrap_or_else(|| demand_wire::error(own::ERROR_BLOCKED));
+            sunlight_ipc::ipc_reply(reply);
+        }
+    }
+}
+
 #[cfg(not(test))]
 #[no_mangle]
 fn _start() -> ! {
     sunlight_ipc::debug_log("[SUNLIGHTD] main() reached\n");
     serial_println!("[SUNLIGHTD] Starting sunlightd v0.2");
 
+    // A basename, PID or existing endpoint never grants management authority.
+    let Some(ownership) = sunlight_ipc::supervision::query(sunlight_ipc::supervision::STATUS, 0) else {
+        serial_println!("[SUNLIGHTD] no kernel supervisor grant; startup rejected");
+        sunlight_ipc::ProcessExit::exit(1);
+    };
+    #[cfg(feature = "recovery-test")]
+    if ownership[0] == sunlight_ipc::supervision::BLOCKED && option_env!("D36R_SCENARIO") == Some("registration-timeout") {
+        let pause = endpoint_create();
+        let _ = sunlight_ipc::ipc_recv_timeout(pause, 6200);
+        assert!(sunlight_ipc::endpoint_destroy(pause));
+    }
     // Register self FIRST (before any other IPC lookups, to avoid deadlock)
     let ep = endpoint_create();
-    nameserver_register("sunlightd", ep);
+    if !nameserver_register("sunlightd", ep) {
+        // A live-name conflict or registration failure must not leave an
+        // undiscoverable manager launching another set of resident services.
+        // This guard does not reconcile services left by a dead manager; Init
+        // must not enable automatic restart without that ownership contract.
+        serial_println!("[SUNLIGHTD] registration rejected; refusing service startup");
+        sunlight_ipc::ProcessExit::exit(1);
+    }
     serial_println!("[SUNLIGHTD] Registered as 'sunlightd'");
+    #[cfg(feature = "recovery-test")]
+    {
+        let competing = endpoint_create();
+        assert!(!nameserver_register("sunlightd", competing));
+        assert!(sunlight_ipc::endpoint_destroy(competing));
+        serial_println!("[D36R-TEST] conflicting endpoint registration rejected PASS");
+    }
+    if ownership[0] != sunlight_ipc::supervision::ACTIVE {
+        recovery_blocked_loop(ep);
+    }
+
 
     // Load unit files
     let (mut services, _sockets) = load_units();
@@ -2226,7 +2338,8 @@ fn _start() -> ! {
         identity_phase_c_gate.poll(&mut services, spawn_cap);
         match ipc_reply_and_recv_timeout(ep, reply, demand.receive_timeout()) {
             Some(msg) => {
-                reply = if demand_runtime::is_demand_op(msg.label) {
+                reply = if let Some(reply) = recovery_message(&msg) { reply }
+                else if demand_runtime::is_demand_op(msg.label) {
                     demand.handle(&msg, &mut services)
                 } else {
                     handle_control_message(&msg, &mut services, spawn_cap)
@@ -2236,6 +2349,12 @@ fn _start() -> ! {
                 // close that generation's admission barrier. Deferred D1
                 // replies have already relinquished the current reply target.
                 sunlight_ipc::ipc_reply(reply);
+                #[cfg(feature = "recovery-test")]
+                if msg.label == demand_wire::HELLO && reply.label == demand_wire::OK {
+                    if let Some(idx) = find_service_idx_by_pid(&services, msg.badge as u32) {
+                        recovery_test_fault(1, &services, idx);
+                    }
+                }
                 reply = IpcMsg::empty();
             }
             None => {

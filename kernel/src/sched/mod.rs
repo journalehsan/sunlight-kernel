@@ -367,6 +367,7 @@ pub static CORE_STATES: [spin::Mutex<CoreState>; MAX_CORES] =
 // ─── Scheduler ───────────────────────────────────────────────────────────────
 
 pub struct Scheduler {
+    pub supervision: sunlight_ipc::supervision::Supervisor,
     #[cfg(feature = "cpu_accounting_diag")]
     pub cpu_events: [[u64; 3]; MAX_CORES],
     pub processes: Vec<Process>,
@@ -385,10 +386,22 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
+    pub fn supervision_identity(process: &Process) -> sunlight_ipc::supervision::Identity {
+        sunlight_ipc::supervision::Identity {
+            pid: process.pid as u64,
+            generation: process.address_space.identity().generation,
+        }
+    }
+    pub fn active_manager(&self, process: &Process) -> bool {
+        process.trusted_service_manager
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+            && self.supervision.active(Self::supervision_identity(process))
+    }
     pub const fn new() -> Self {
         Self {
             #[cfg(feature = "cpu_accounting_diag")]
             cpu_events: [[0; 3]; MAX_CORES],
+            supervision: sunlight_ipc::supervision::Supervisor::new(),
             processes: Vec::new(),
             cores: [const { CoreState::new() }; MAX_CORES],
             online_cores: 1,
@@ -2811,6 +2824,14 @@ impl Scheduler {
             reclaim.page_tables as u64,
             crate::PMM.lock().free_page_count() as u64,
         ];
+
+        // Ownership evidence outlives both the old manager and reusable process slots.
+        let identity = sunlight_ipc::supervision::Identity { pid: pid as u64, generation: reaped_generation };
+        let owner_live = self.supervision.manager().is_some_and(|owner| self.processes.iter().any(|p|
+            Self::supervision_identity(p) == owner && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)));
+        self.supervision.reaped(identity, [reclaim.user_frames as u64, reclaim.page_tables as u64,
+            self.processes[idx].service_reap_receipt[3]], owner_live);
+        self.supervision.manager_reaped(identity);
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;

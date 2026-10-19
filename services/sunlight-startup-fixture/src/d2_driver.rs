@@ -2,6 +2,10 @@
 #![no_std]
 #![no_main]
 mod d1_log;
+#[cfg(feature = "recovery-test")]
+mod d36r_driver;
+#[cfg(feature = "recovery-test")]
+mod d36r_fault_driver;
 #[cfg(feature = "dependency-test")]
 mod d3_driver;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -360,6 +364,8 @@ pub extern "C" fn _start() -> ! {
     pass("COMPLETE");
     #[cfg(feature = "dependency-test")]
     d3_driver::run();
+    #[cfg(feature = "recovery-test")]
+    d36r_driver::run();
     sunlight_libc::exit(0)
 }
 #[panic_handler]

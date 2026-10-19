@@ -2,9 +2,9 @@
 #![no_main]
 
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_call, ipc_recv, ipc_recv_timeout, ipc_reply,
-    ipc_reply_and_wait, nameserver_endpoint_is_live, nameserver_note_diagnostic, CapabilityToken,
-    EndpointId, InitMsg, InitStatus, IpcMsg, NameserverDiagnosticEvent, SpawnMsg,
+    debug_log, endpoint_create, ipc_call, ipc_recv_timeout, ipc_reply, nameserver_endpoint_is_live,
+    nameserver_note_diagnostic, CapabilityToken, EndpointId, InitMsg, InitStatus, IpcMsg,
+    NameserverDiagnosticEvent, SpawnMsg,
 };
 
 /// Base servers that init launches via the kernel spawn capability once it
@@ -145,6 +145,14 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
             } else {
                 debug_log("[init] FAILED to launch base service");
             }
+            #[cfg(feature = "recovery-test")]
+            if *path == "/sbin/sunlightd" {
+                if !spawn_service(spawn_cap, path) {
+                    debug_log("[D36R-TEST] live manager bootstrap competitor rejected PASS");
+                } else {
+                    debug_log("[D36R-TEST] FAIL duplicate bootstrap authority");
+                }
+            }
             drain_nameserver(ep, &mut registry, DRAIN_MSGS_PER_SPAWN, DRAIN_TIMEOUT_MS);
         }
         drain_nameserver(
@@ -156,10 +164,43 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         debug_log("[init] base service spawn pass complete");
     }
 
-    let mut msg = ipc_recv(ep);
+    // The kernel retains the authenticated bootstrap/grant even if a spawn
+    // reply was lost. Finished never permits restart; only its exact reap does.
+    let mut monitor = sunlight_ipc::supervision::BootstrapMonitor::default();
+    let mut next_probe = 0;
     loop {
-        let reply = handle_nameserver_msg(&mut registry, msg);
-        msg = ipc_reply_and_wait(ep, reply);
+        if let Some(msg) = ipc_recv_timeout(ep, 100) {
+            ipc_reply(handle_nameserver_msg(&mut registry, msg));
+        }
+        use sunlight_ipc::supervision::{self as own, BootstrapAction};
+        let now = sunlight_ipc::monotonic_millis();
+        if now < next_probe || spawn_token == 0 {
+            continue;
+        }
+        next_probe = now.saturating_add(100);
+        if let Some(status) = own::query(own::STATUS, 0) {
+            let registered = registry
+                .iter()
+                .any(|r| r.name == name_to_u64("sunlightd") && r.is_live());
+            match monitor.step(now, status, registered) {
+                BootstrapAction::Launch => {
+                    debug_log("[INIT-RECOVERY] exact manager reap; bounded diagnostic restart");
+                    if !spawn_service(CapabilityToken(spawn_token), "/sbin/sunlightd") {
+                        debug_log("[INIT-RECOVERY] diagnostic spawn failed");
+                    }
+                }
+                BootstrapAction::Exhausted => {
+                    debug_log("[INIT-RECOVERY] restart budget exhausted; recovery blocked")
+                }
+                BootstrapAction::RegistrationTimeout => {
+                    debug_log("[INIT-RECOVERY] registration timeout; terminal recovery blocked")
+                }
+                BootstrapAction::ReapTimeout => {
+                    debug_log("[INIT-RECOVERY] manager reap timeout; terminal recovery blocked")
+                }
+                BootstrapAction::Wait => {}
+            }
+        }
     }
 }
 

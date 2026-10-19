@@ -384,14 +384,16 @@ fn send_signal_generation(
     }
 
     let sender = sched.current_process_index().ok_or(())?;
+    if sched.processes[sender].trusted_service_manager && !sched.active_manager(&sched.processes[sender]) { return Err(()); }
+
     if let Some(generation) = generation {
-        if !sched.processes[sender].trusted_service_manager
+        if !sched.active_manager(&sched.processes[sender])
             || sched.processes[idx].address_space.identity().generation != generation
         {
             return Err(());
         }
     }
-    let trusted = (generation.is_some() && sched.processes[sender].trusted_service_manager)
+    let trusted = (generation.is_some() && sched.active_manager(&sched.processes[sender]))
         || sched.processes[sender].trusted_pty_service
         || sched.processes[sender].trusted_tty_session_service
         || sched.processes[sender].trusted_session_service
@@ -439,6 +441,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         frame.rdi, frame.rsi, frame.rdx, frame.r10, frame.r8, frame.r9,
     ];
     let mut linux_compat = false;
+    let mut diagnostic_manager = false;
 
     if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") && num == 45 {
         use core::sync::atomic::{AtomicUsize, Ordering};
@@ -493,6 +496,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
 
     // Phase 4.5: Check if this is a Linux-compat process and translate syscall
     crate::sched::with_scheduler(|sched| {
+        diagnostic_manager = sched.current_process().trusted_service_manager
+            && !sched.active_manager(sched.current_process());
         linux_compat = sched.current_process().is_linux_compat();
         // Native IPC/shared-memory bridge for std userspace engines. A tag
         // selects the native register ABI and bypasses Linux errno conversion;
@@ -811,6 +816,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     let linux_special = linux_compat && num >= 1000;
 
     let result = match num {
+        _ if diagnostic_manager && !::sunlight_ipc::supervision::diagnostic_syscall_allowed(num) => u64::MAX,
         1 => ipc_call(frame),
         2 => ipc_reply(frame),
         3 => ipc_reply_wait(frame),
@@ -1376,12 +1382,33 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     };
 
     let mut sched = crate::sched::SCHEDULER.lock();
-    let caller_is_init = sched.current_process().name_str() == "init";
-    let caller_is_trusted_manager = sched.current_process().trusted_service_manager;
-    let reap_watcher = (sched.current_process().pid, sched.current_process().address_space.identity().generation);
+    let caller_identity = crate::sched::Scheduler::supervision_identity(sched.current_process());
+    let caller_is_init = sched.supervision.is_bootstrap(caller_identity)
+        && !matches!(sched.current_process().state, ProcessState::Finished | ProcessState::Reaped);
+    let caller_is_trusted_manager = sched.active_manager(sched.current_process());
+    let reap_watcher = (
+        sched.current_process().pid,
+        sched.current_process().address_space.identity().generation,
+    );
     let tracked = msg.label == ::sunlight_ipc::demand::SPAWN_TRACKED;
-    if tracked && (!caller_is_trusted_manager || sched.processes.iter()
-        .filter(|p| p.service_reap_watcher == Some(reap_watcher)).count() >= 32) {
+    let manager_launch = caller_is_init && path == "/sbin/sunlightd";
+    if (sched.current_process().trusted_service_manager
+        && (!caller_is_trusted_manager || !sched.supervision.can_spawn(caller_identity)))
+        || (manager_launch && !sched.supervision.attempt(caller_identity))
+    {
+        IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
+        return 0;
+    }
+
+    if tracked
+        && (!caller_is_trusted_manager
+            || sched
+                .processes
+                .iter()
+                .filter(|p| p.service_reap_watcher == Some(reap_watcher))
+                .count()
+                >= 32)
+    {
         IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
         return 0;
     }
@@ -1431,9 +1458,29 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
                     child.trusted_auth_broker = true;
                 }
             }
+            let child_identity = crate::sched::Scheduler::supervision_identity(
+                sched
+                    .processes
+                    .iter()
+                    .find(|p| p.pid == pid)
+                    .expect("spawned process"),
+            );
+            if manager_launch {
+                sched.supervision.grant(child_identity);
+            }
+            if caller_is_trusted_manager {
+                sched.supervision.spawned(
+                    caller_identity,
+                    child_identity,
+                    [msg.words[0], msg.words[1], msg.words[2], msg.words[3]],
+                    tracked,
+                );
+            }
             let mut reply = IpcMsg::with_label(crate::ipc::SpawnMsg::REPLY);
             reply.words[0] = pid as u64;
-            reply.words[1] = sched.processes.iter()
+            reply.words[1] = sched
+                .processes
+                .iter()
                 .find(|p| p.pid == pid)
                 .map_or(0, |p| p.address_space.identity().generation);
             reply.word_count = 2;
@@ -1677,12 +1724,88 @@ fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
     let target_pid = frame.rdi as usize;
     let mut sched = crate::sched::SCHEDULER.lock();
     let caller = sched.current_process();
+    if matches!(
+        frame.rsi,
+        ::sunlight_ipc::supervision::STATUS
+            | ::sunlight_ipc::supervision::RECORD
+            | ::sunlight_ipc::supervision::DETAIL
+            | ::sunlight_ipc::supervision::ACCOUNT
+            | ::sunlight_ipc::supervision::PATH
+    ) {
+        use ::sunlight_ipc::supervision as own;
+        if !sched
+            .supervision
+            .readable(crate::sched::Scheduler::supervision_identity(caller))
+        {
+            return u64::MAX;
+        }
+        let words = match frame.rsi {
+            own::STATUS => {
+                let mut status = sched.supervision.status();
+                if status[0] != own::REAPED && !sched.supervision.manager().is_some_and(|owner| {
+                    sched.processes.iter().any(|p| crate::sched::Scheduler::supervision_identity(p) == owner
+                        && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
+                }) { status[0] = own::EXITING; }
+                status
+            },
+            own::ACCOUNT => {
+                let mut live = 0;
+                let mut reaped = 0;
+                for i in 0..own::CAPACITY {
+                    if let Some(r) = sched.supervision.record(i) {
+                        if r.reap.is_some() {
+                            reaped += 1;
+                        } else {
+                            live += 1;
+                        }
+                    }
+                }
+                [
+                    crate::PMM.lock().free_page_count() as u64,
+                    live,
+                    reaped,
+                    own::CAPACITY as u64,
+                ]
+            }
+            own::RECORD => {
+                let Some(r) = sched.supervision.record(target_pid) else {
+                    return u64::MAX;
+                };
+                [r.id, r.process.pid, r.process.generation, r.owner_epoch]
+            }
+            own::PATH => {
+                let Some(r) = sched.supervision.by_id(frame.rdi) else {
+                    return u64::MAX;
+                };
+                r.path
+            }
+            own::DETAIL => {
+                let Some(r) = sched.supervision.by_id(frame.rdi) else {
+                    return u64::MAX;
+                };
+                match r.reap {
+                    Some(v) => [1, v[0], v[1], v[2]],
+                    None => [0, 0, 0, 0],
+                }
+            }
+            _ => return u64::MAX,
+        };
+        frame.r8 = words[0];
+        frame.r9 = words[1];
+        frame.r10 = words[2];
+        frame.r12 = words[3];
+        return 0;
+    }
     // Explicit manager-only D2 mode. Legacy credential callers still observe
     // only live processes. Finished is deliberately distinct from Reaped.
-    if matches!(frame.rsi, ::sunlight_ipc::demand::REAP_QUERY | ::sunlight_ipc::demand::REAP_RELEASE
-        | ::sunlight_ipc::demand::ACCOUNT_QUERY) {
+    if matches!(
+        frame.rsi,
+        ::sunlight_ipc::demand::REAP_QUERY
+            | ::sunlight_ipc::demand::REAP_RELEASE
+            | ::sunlight_ipc::demand::ACCOUNT_QUERY
+    ) {
         let watcher = (caller.pid, caller.address_space.identity().generation);
-        if !caller.trusted_service_manager || frame.rdx == 0 {
+        if !sched.active_manager(caller) || frame.rdx == 0 {
             return u64::MAX;
         }
         let Some(target) = sched.processes.iter_mut().find(|p| p.pid == target_pid) else {
@@ -1701,10 +1824,20 @@ fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
             if matches!(target.state, ProcessState::Finished | ProcessState::Reaped) {
                 return u64::MAX;
             }
-            let Some(hhdm) = crate::HHDM_REQ.response() else { return u64::MAX; };
+            let Some(hhdm) = crate::HHDM_REQ.response() else {
+                return u64::MAX;
+            };
             frame.r8 = target.cpu_runtime_ns;
-            frame.r9 = unsafe { target.address_space.count_user_pages(VirtAddr::new(hhdm.offset)) } as u64;
-            frame.r10 = target.mapped_shared.iter().map(|(_,_,size)| size.div_ceil(4096) as u64).sum();
+            frame.r9 = unsafe {
+                target
+                    .address_space
+                    .count_user_pages(VirtAddr::new(hhdm.offset))
+            } as u64;
+            frame.r10 = target
+                .mapped_shared
+                .iter()
+                .map(|(_, _, size)| size.div_ceil(4096) as u64)
+                .sum();
             frame.r12 = crate::PMM.lock().free_page_count() as u64;
             return 0;
         }
@@ -1712,7 +1845,23 @@ fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
             if target.state != ProcessState::Reaped || target.exit_cleanup_pending {
                 return u64::MAX;
             }
-            target.service_reap_watcher = None;
+            let process = ::sunlight_ipc::supervision::Identity {
+                pid: target_pid as u64,
+                generation: frame.rdx,
+            };
+            let manager = ::sunlight_ipc::supervision::Identity {
+                pid: watcher.0 as u64,
+                generation: watcher.1,
+            };
+            if !sched.supervision.release(manager, process) {
+                return u64::MAX;
+            }
+            sched
+                .processes
+                .iter_mut()
+                .find(|p| p.pid == target_pid)
+                .expect("validated receipt")
+                .service_reap_watcher = None;
             return 0;
         }
         frame.r8 = target.service_reap_receipt[1];
@@ -1725,7 +1874,7 @@ fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
             _ => 0,
         };
     }
-    if !caller.trusted_session_service && !caller.trusted_service_manager {
+    if !caller.trusted_session_service && !sched.active_manager(caller) {
         // UAC may inspect only the authenticated synchronous request it is
         // servicing. An arbitrary GUI cannot query or supply caller credentials.
         if !caller.trusted_auth_broker {
@@ -1991,7 +2140,7 @@ fn nameserver_endpoint_validate(token: u64, endpoint_id: u64, generation: u64) -
     let caller = sched.current_process();
     // Manager mode: endpoint_id is the expected PID; generation is supplied
     // from the kernel spawn reply. Never trust the service's claimed identity.
-    if caller.trusted_service_manager && generation != 0 {
+    if sched.active_manager(caller) && generation != 0 {
         let Some(process) = sched.processes.iter().find(|p| {
             p.pid as u64 == endpoint_id
                 && p.address_space.identity().generation == generation
@@ -2164,6 +2313,8 @@ fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
 /// RDI/RSI of the new thread's initial context so `thread_trampoline`
 /// receives them as normal C arguments.
 fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
+    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) { return u64::MAX; }
+
     let current_cpu = crate::sched::current_cpu_id();
     let trampoline = frame.rdi;
     let user_stack_top = frame.rsi;
@@ -2601,6 +2752,8 @@ fn sys_linux_exit_group(code: i32) -> ! {
 /// rsi = argv pointer (array of *const u8, NULL-terminated)
 /// rdx = envp pointer (array of *const u8, NULL-terminated)
 fn sys_exec(frame: &mut SyscallFrame) -> u64 {
+    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) { return u64::MAX; }
+
     let path_ptr = frame.rdi;
     let argv_ptr = frame.rsi;
     let envp_ptr = frame.rdx;
@@ -2891,6 +3044,8 @@ fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
 /// rdx = stdout fd, r10 = stdin fd, r8 = stderr fd (u64::MAX keeps TTY default)
 /// Returns the child pid, or -1 on error.
 fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
+    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) { return u64::MAX; }
+
     // [LAUNCH-TRACE] Point 1: request received
     let current_cpu = crate::sched::current_cpu_id();
     let launch_id = crate::launch_trace::next_launch_id();
@@ -8730,7 +8885,7 @@ fn sys_kill(frame: &mut SyscallFrame) -> u64 {
     // unspecified. Valid legacy signal arguments occupy only the low 32 bits.
     let expected = if frame.rsi & ::sunlight_ipc::demand::KILL_GENERATION_FLAG != 0 {
         if frame.rdx == 0
-            || !sched::with_scheduler(|s| s.current_process().trusted_service_manager)
+            || !sched::with_scheduler(|s| s.active_manager(s.current_process()))
         {
             return u64::MAX;
         }

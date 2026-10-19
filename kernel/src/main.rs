@@ -816,6 +816,7 @@ pub extern "C" fn _start() -> ! {
             // no other core ran the timer; fatal once AP timers are live.
             drop(pmm);
             sched::with_scheduler(|s| {
+                assert!(s.supervision.install_bootstrap(sched::Scheduler::supervision_identity(&init)));
                 s.add_process(init);
             });
             splash.log("[PROC] init pid=1");

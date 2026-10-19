@@ -266,6 +266,8 @@ impl IdleManager {
             e.mark_failed(-1, monotonic_millis());
         }
         // Releasing only after recording the receipt permits safe slot reuse.
+        #[cfg(feature = "recovery-test")]
+        recovery_test_fault(3, services, idx);
         assert!(wire::release_reap_receipt(r.pid, r.process_generation));
         demand_runtime::cleanup_dependencies(services);
         self.dependencies_changed(services);
@@ -386,6 +388,8 @@ impl IdleManager {
                 self.quarantine(services, idx, wire::STALE);
                 continue;
             }
+            #[cfg(feature = "recovery-test")]
+            recovery_test_fault(2, services, idx);
             let e = services.get_mut(idx).unwrap();
             if e.activation.drained(generation, nonce, false).is_err() {
                 self.quarantine(services, idx, wire::STALE);

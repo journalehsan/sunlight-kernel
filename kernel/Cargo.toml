@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5241-alpha.2"
+version = "0.2.5275-alpha.2"
+
 
 
 
@@ -633,6 +634,7 @@ lz4_flex = { version = "0.11", default-features = false }
 demand_test = []
 idle_test = ["demand_test"]
 dependency_test = ["idle_test"]
+recovery_test = ["dependency_test"]
 # Native Hayro/viewer artifacts are built with tools/build_docserv.sh.
 # The optional legacy MuPDF renderer requires a separate musl C/C++ toolchain.
 default = []

@@ -1052,6 +1052,12 @@ pub fn handle_ipc_call(
             return Err(IpcError::InvalidCapability);
         }
     };
+    // A diagnostic successor can publish its own endpoint, never control survivors.
+    if sched.processes[idx].trusted_service_manager && !sched.active_manager(&sched.processes[idx])
+        && !(target_owner == 1 && msg.label == NAMESERVER_REGISTER) {
+        sched.processes[idx].ipc_next_deadline_tick = None;
+        return Err(IpcError::InvalidCapability);
+    }
     if sched.processes[idx].pending_call.is_none()
         && target_owner == 1
         && msg.label == NAMESERVER_REGISTER
@@ -1078,7 +1084,10 @@ pub fn handle_ipc_call(
     }
     if target_owner != 1
         && (matches!(msg.label, sunlight_ipc::demand::ACTIVATE | sunlight_ipc::demand::LEASE_ACQUIRE
-            | sunlight_ipc::demand::IDLE_ACCOUNT)
+            | sunlight_ipc::demand::IDLE_ACCOUNT | sunlight_ipc::supervision::RPC_RECORD
+            | sunlight_ipc::supervision::RPC_DETAIL | sunlight_ipc::supervision::RPC_ACCOUNT
+            | sunlight_ipc::supervision::RPC_PATH | sunlight_ipc::supervision::TEST_ARM
+            | sunlight_ipc::supervision::TEST_PROBE | sunlight_ipc::supervision::TEST_CRASH)
             || matches!(msg.label, 1..=6))
         && !sunlight_ipc::demand::activation_words_authorized(
             sched.processes[idx].service_lookup_restrictions, msg.label, msg.word_count, &msg.words,
@@ -1180,6 +1189,12 @@ fn mediate_nameserver_register(
     if !registration_authorized(owner_pid, caller_pid, process_name, msg.words[0]) {
         UNAUTHORIZED_REGISTER_COUNT.fetch_add(1, Ordering::Relaxed);
         return Err(IpcError::InvalidCapability);
+    }
+    if msg.words[0] == name_hash("sunlightd") {
+        let process = sched.processes.iter().find(|p| p.pid == caller_pid).ok_or(IpcError::InvalidCapability)?;
+        if !sched.supervision.current(Scheduler::supervision_identity(process)) {
+            return Err(IpcError::InvalidCapability);
+        }
     }
     if msg.words[0] == name_hash("display_server") {
         if !trusted_display_service {
