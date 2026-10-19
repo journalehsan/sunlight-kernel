@@ -509,6 +509,7 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
     static mut RUNTIME: [u64; MAX_PROCESSES] = [0; MAX_PROCESSES];
     static mut LAST: u64 = 0;
     static mut REPORTS: u32 = 0;
+    static mut MEMORY_PROCESSES_REPORTED: bool = false;
     // Single writer: BSP timer only, interrupt-disabled. No other call sites.
     unsafe {
         let dt = snap.sample_time_ns.saturating_sub(LAST);
@@ -571,6 +572,37 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
             crate::serial_println!("[CPU-AUDIT] system at_ns={} capacity_ns={} busy_ns={} idle_ns={} busy_bp={} idle_bp={} legacy_bp={} cs_s={} wake_s={} sched_s={}",
                 snap.sample_time_ns,capacity,busy,idle,usage_bp(busy,capacity),usage_bp(idle,capacity),
                 usage_bp(legacy,dt.saturating_mul(snap.core_count as u64)),rate(switches,dt),rate(wakes,dt),rate(schedules,dt));
+            let m = snap.mem_acct;
+            crate::serial_println!("[MEM-AUDIT] at_ns={} installed={} managed={} free={} tasks={} private_unique={} shared_unique={} kernel_core={} kernel_heap={} kernel_stack={} page_tables={} ramfs_data={} ramfs_metadata={} fs_cache={} reclaimable_cache={} graphics={} dma={} zram_physical={} other={} unclassified={} flags={}",
+                snap.sample_time_ns,m.installed_bytes,m.managed_bytes,m.free_bytes,m.active_task_count,
+                m.task_private_unique_bytes,m.shared_memory_unique_bytes,m.kernel_core_bytes,
+                m.kernel_heap_bytes,m.kernel_stack_bytes,m.page_table_bytes,m.ramfs_file_data_bytes,
+                m.ramfs_metadata_bytes,m.filesystem_cache_bytes,m.other_reclaimable_cache_bytes,
+                m.graphics_buffer_bytes,m.device_dma_bytes,m.zram_physical_bytes,
+                m.other_accounted_bytes,m.unclassified_bytes,m.flags);
+            if !MEMORY_PROCESSES_REPORTED {
+                if let Some(hhdm) = crate::HHDM_REQ.response() {
+                    for p in snap
+                        .procs
+                        .iter()
+                        .filter(|p| !p.is_finished_or_cleanup && p.state != 7)
+                    {
+                        let aspace =
+                            crate::process::address_space::AddressSpace::from_pml4(p.pml4_phys);
+                        let pages = if aspace.is_reclaimed() {
+                            0
+                        } else {
+                            // Same present-mapping count used by the read-only
+                            // telemetry page; shared mappings count per process.
+                            aspace.count_user_pages(x86_64::VirtAddr::new(hhdm.offset))
+                        };
+                        let n = p.name.iter().position(|b| *b == 0).unwrap_or(p.name.len());
+                        crate::serial_println!("[MEM-AUDIT] process pid={} name={} state={} mapped_user_pages={} mapped_bytes={}",
+                        p.pid,core::str::from_utf8(&p.name[..n]).unwrap_or("?"),p.state,pages,pages.saturating_mul(4096));
+                    }
+                }
+                MEMORY_PROCESSES_REPORTED = true;
+            }
             for (i, delta) in top {
                 if delta == 0 {
                     continue;

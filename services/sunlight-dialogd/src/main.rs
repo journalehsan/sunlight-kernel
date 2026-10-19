@@ -19,8 +19,8 @@ use sunlight_dialogs::{
     DialogError, DialogMsg, DialogRequest, DialogResult, DialogSeverity, TextInputRequest,
 };
 use sunlight_ipc::{
-    debug_log, endpoint_create, ipc_recv_timeout, ipc_reply, nameserver_register, process_yield,
-    shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
+    debug_log, endpoint_create, ipc_recv, ipc_reply, nameserver_register, shm_alloc, shm_free,
+    shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
 };
 use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE, MAX_PATH};
 use sunlight_ui::image::{mime_icon, IconImage};
@@ -52,7 +52,6 @@ const KEY_UP: u8 = 0x48;
 const KEY_DOWN: u8 = 0x50;
 const KEY_LEFT: u8 = 0x4B;
 const KEY_BACKSPACE: char = '\u{8}';
-const SERVICE_POLL_MS: u64 = 20;
 
 static ICON_FOLDER_SVG: &[u8] =
     include_bytes!("../../../docs/icons/SunlightOS/places/16/folder.svg");
@@ -1537,10 +1536,9 @@ impl DialogServer {
 
     fn run(&mut self) -> ! {
         loop {
-            let Some(msg) = ipc_recv_timeout(self.ep, SERVICE_POLL_MS) else {
-                process_yield();
-                continue;
-            };
+            // This server has no periodic background work. Block for the next
+            // request instead of waking every 20 ms while the dialog host is idle.
+            let msg = ipc_recv(self.ep);
             let reply = self.handle_message(msg);
             ipc_reply(reply);
         }

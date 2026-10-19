@@ -751,6 +751,9 @@ elif [[ "$PHASE" == "swap1" ]]; then
 elif [[ "$PHASE" == "memory-accounting" ]]; then
     KERNEL_FEATURES="--features memory_accounting_test"
 fi
+if [[ "${SUNLIGHT_TEST_KERNEL_FEATURES:-}" == *cpu_accounting_diag* ]]; then
+    KERNEL_FEATURES="$KERNEL_FEATURES --features cpu_accounting_diag"
+fi
 EXTRA_ENV=()
 if [[ "$PHASE" == shell-* ]]; then
     EXTRA_ENV+=("SUNLIGHT_INJECT_PHASE=$PHASE")
@@ -936,6 +939,9 @@ for ((i=0; i<TIMEOUT; i++)); do
         if [[ "$PHASE" == "yazi-phase1" ]]; then
             # Keep observing after input for late worker and TTY failures.
             sleep 10
+        fi
+        if [[ -n "${SUNLIGHT_TEST_OBSERVE_SECONDS:-}" ]]; then
+            sleep "$SUNLIGHT_TEST_OBSERVE_SECONDS"
         fi
         sleep 1
         break
