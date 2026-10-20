@@ -8,13 +8,15 @@
 //! Timing and TSC values are intentionally excluded. If no approved source
 //! yields a complete seed, the kernel remains unready and secure callers fail.
 
+mod conditioner;
+use conditioner::ChaCha20;
+
 use crate::memory::pmm::PhysicalMemoryManager;
 use core::sync::atomic::{AtomicU8, Ordering};
 use spin::Mutex;
 use x86_64::VirtAddr;
 
 const SEED_BYTES: usize = 40;
-const RNG_BYTES: usize = 64;
 const STATUS_UNREADY: u8 = 0;
 const STATUS_VIRTIO: u8 = 1;
 const STATUS_RDSEED: u8 = 2;
@@ -53,6 +55,10 @@ impl Source {
 /// `false` means no approved source was available. Callers must leave
 /// cryptographic services unavailable in that case.
 pub fn init(pmm: &mut PhysicalMemoryManager, hhdm_offset: VirtAddr) -> Option<Source> {
+    // Boot-only initialization must never restart an already published stream.
+    if let Some(source) = source() {
+        return Some(source);
+    }
     let mut seed = [0u8; SEED_BYTES];
     let source = collect_seed(&mut seed, pmm, hhdm_offset)?;
     *CONDITIONER.lock() = Some(ChaCha20::from_seed(&seed));
@@ -90,11 +96,17 @@ pub fn source() -> Option<Source> {
 /// not ready. The syscall layer converts that to its documented error result.
 pub fn fill(out: &mut [u8]) -> bool {
     let mut conditioner = CONDITIONER.lock();
+    if !is_ready() {
+        return false;
+    }
     let Some(conditioner) = conditioner.as_mut() else {
         return false;
     };
-    conditioner.fill(out);
-    true
+    let filled = conditioner.fill(out);
+    if !filled {
+        STATUS.store(STATUS_UNREADY, Ordering::Release);
+    }
+    filled
 }
 
 pub fn next_u64() -> Option<u64> {
@@ -153,12 +165,6 @@ unsafe fn fill_virtio_rng(
     if out.is_empty() || out.len() > 4096 {
         return false;
     }
-    let (Some(queue_phys), Some(buffer_phys)) = (pmm.alloc_frames(3), pmm.alloc_frame()) else {
-        return false;
-    };
-    let queue_virt = hhdm_offset + queue_phys.as_u64();
-    let buffer_virt = hhdm_offset + buffer_phys.as_u64();
-
     outb(io_base + VIRTIO_REG_DEVICE_STATUS, 0);
     outb(
         io_base + VIRTIO_REG_DEVICE_STATUS,
@@ -170,9 +176,22 @@ unsafe fn fill_virtio_rng(
     );
     outw(io_base + VIRTIO_REG_QUEUE_SEL, 0);
     let queue_size = inw(io_base + VIRTIO_REG_QUEUE_NUM);
-    if queue_size == 0 {
+    // The fixed three-page layout supports at most 256 descriptors. Reject
+    // larger queues before touching memory outside that allocation.
+    if queue_size == 0 || queue_size > 256 || !queue_size.is_power_of_two() {
         return false;
     }
+    let Some(queue_phys) = pmm.alloc_frames(3) else {
+        return false;
+    };
+    let Some(buffer_phys) = pmm.alloc_frame() else {
+        for index in 0..3 {
+            pmm.free_frame(queue_phys + index * 4096u64);
+        }
+        return false;
+    };
+    let queue_virt = hhdm_offset + queue_phys.as_u64();
+    let buffer_virt = hhdm_offset + buffer_phys.as_u64();
 
     (queue_virt as *mut u8).write_bytes(0, 3 * 4096);
     (buffer_virt as *mut u8).write_bytes(0, 4096);
@@ -216,6 +235,19 @@ unsafe fn fill_virtio_rng(
         buffer_virt as *const u8,
         out.len(),
     ));
+    // Completion proves the submitted write finished. Disable the queue before
+    // reuse; if reset is not acknowledged, conservatively retain DMA backing.
+    outb(io_base + VIRTIO_REG_DEVICE_STATUS, 0);
+    if sunlight_virtio::pci::inb(io_base + VIRTIO_REG_DEVICE_STATUS) == 0 {
+        for offset in 0..4096 {
+            (buffer_virt as *mut u8).add(offset).write_volatile(0);
+        }
+        core::sync::atomic::fence(Ordering::SeqCst);
+        pmm.free_frame(buffer_phys);
+        for index in 0..3 {
+            pmm.free_frame(queue_phys + index * 4096u64);
+        }
+    }
     true
 }
 
@@ -277,143 +309,4 @@ fn rdrand_word() -> Option<u64> {
         }
     }
     None
-}
-
-struct ChaCha20 {
-    state: [u32; 16],
-    block: [u8; RNG_BYTES],
-    offset: usize,
-}
-
-impl ChaCha20 {
-    fn from_seed(seed: &[u8; SEED_BYTES]) -> Self {
-        let mut state = [0u32; 16];
-        state[0] = 0x6170_7865;
-        state[1] = 0x3320_646e;
-        state[2] = 0x7962_2d32;
-        state[3] = 0x6b20_6574;
-        for index in 0..8 {
-            let offset = index * 4;
-            state[4 + index] = u32::from_le_bytes(seed[offset..offset + 4].try_into().unwrap());
-        }
-        state[12] = 0;
-        state[13] = 0;
-        state[14] = u32::from_le_bytes(seed[32..36].try_into().unwrap());
-        state[15] = u32::from_le_bytes(seed[36..40].try_into().unwrap());
-        Self {
-            state,
-            block: [0; RNG_BYTES],
-            offset: RNG_BYTES,
-        }
-    }
-
-    fn fill(&mut self, out: &mut [u8]) {
-        let mut written = 0;
-        while written < out.len() {
-            if self.offset == RNG_BYTES {
-                self.generate_block();
-            }
-            let count = (out.len() - written).min(RNG_BYTES - self.offset);
-            out[written..written + count]
-                .copy_from_slice(&self.block[self.offset..self.offset + count]);
-            self.offset += count;
-            written += count;
-        }
-    }
-
-    fn generate_block(&mut self) {
-        let mut x = self.state;
-        macro_rules! quarter_round {
-            ($a:expr, $b:expr, $c:expr, $d:expr) => {
-                x[$a] = x[$a].wrapping_add(x[$b]);
-                x[$d] ^= x[$a];
-                x[$d] = x[$d].rotate_left(16);
-                x[$c] = x[$c].wrapping_add(x[$d]);
-                x[$b] ^= x[$c];
-                x[$b] = x[$b].rotate_left(12);
-                x[$a] = x[$a].wrapping_add(x[$b]);
-                x[$d] ^= x[$a];
-                x[$d] = x[$d].rotate_left(8);
-                x[$c] = x[$c].wrapping_add(x[$d]);
-                x[$b] ^= x[$c];
-                x[$b] = x[$b].rotate_left(7);
-            };
-        }
-        for _ in 0..10 {
-            // Column rounds (ChaCha20): last index of the fourth QR is 15, not 12.
-            quarter_round!(0, 4, 8, 12);
-            quarter_round!(1, 5, 9, 13);
-            quarter_round!(2, 6, 10, 14);
-            quarter_round!(3, 7, 11, 15);
-            // Diagonal rounds
-            quarter_round!(0, 5, 10, 15);
-            quarter_round!(1, 6, 11, 12);
-            quarter_round!(2, 7, 8, 13);
-            quarter_round!(3, 4, 9, 14);
-        }
-        for index in 0..16 {
-            let value = x[index].wrapping_add(self.state[index]);
-            self.block[index * 4..index * 4 + 4].copy_from_slice(&value.to_le_bytes());
-        }
-        let (low, carry) = self.state[12].overflowing_add(1);
-        self.state[12] = low;
-        if carry {
-            self.state[13] = self.state[13].wrapping_add(1);
-        }
-        self.offset = 0;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{ChaCha20, Source, RNG_BYTES};
-
-    #[test]
-    fn source_labels_are_explicit() {
-        assert_eq!(Source::VirtioRng.label(), "virtio-rng");
-        assert_eq!(Source::RdSeed.label(), "RDSEED");
-        assert_eq!(Source::RdRand.label(), "RDRAND");
-    }
-
-    #[test]
-    fn conditioner_expands_seed_without_repeating_a_block() {
-        let mut seed = [0u8; 40];
-        for (index, byte) in seed.iter_mut().enumerate() {
-            *byte = index as u8;
-        }
-        let mut conditioner = ChaCha20::from_seed(&seed);
-        let mut bytes = [0u8; RNG_BYTES * 2];
-        conditioner.fill(&mut bytes);
-        assert_ne!(&bytes[..RNG_BYTES], &bytes[RNG_BYTES..]);
-    }
-
-    #[test]
-    fn different_seeds_yield_different_keystreams() {
-        let mut a = [0u8; 40];
-        let mut b = [0u8; 40];
-        for i in 0..40 {
-            a[i] = i as u8;
-            b[i] = 0xFF - i as u8;
-        }
-        let mut ca = ChaCha20::from_seed(&a);
-        let mut cb = ChaCha20::from_seed(&b);
-        let mut oa = [0u8; 32];
-        let mut ob = [0u8; 32];
-        ca.fill(&mut oa);
-        cb.fill(&mut ob);
-        assert_ne!(oa, ob);
-    }
-
-    #[test]
-    fn fill_initializes_every_output_byte() {
-        let mut seed = [0u8; 40];
-        seed[0] = 1;
-        let mut c = ChaCha20::from_seed(&seed);
-        let mut out = [0xAAu8; 17];
-        c.fill(&mut out);
-        // Second block-spanning fill differs and is fully overwritten.
-        let mut out2 = [0xAAu8; 17];
-        c.fill(&mut out2);
-        assert_ne!(out, out2);
-    }
 }

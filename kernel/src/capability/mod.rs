@@ -1,7 +1,13 @@
+mod lifecycle;
+#[cfg(test)]
+mod lifecycle_tests;
 use crate::serial_println;
 use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::structures::paging::{PhysFrame, Size4KiB};
 use x86_64::PhysAddr;
+
+#[cfg(feature = "cap_issuance_test")]
+pub mod gate;
 
 /// The category a token belongs to, encoded in its high tag bits.
 ///
@@ -21,8 +27,8 @@ pub enum CapKind {
 
 /// A capability token: opaque to user-space, meaningful to the kernel.
 ///
-/// The low 62 bits are an opaque payload derived from the kernel entropy
-/// stream and monotonic allocation state; the
+/// The low 62 bits are a fresh payload from the kernel's conditioned entropy
+/// stream, checked against every active broker token; the
 /// top two bits are a *type tag* (`TAG_IPC` / `TAG_VFS`). Type checks are then
 /// a single shift+compare instead of a table walk.
 #[repr(transparent)]
@@ -36,7 +42,7 @@ impl CapabilityToken {
     const TAG_SHIFT: u64 = 62;
     /// Mask covering the tag bits.
     const TAG_MASK: u64 = 0b11 << Self::TAG_SHIFT;
-    /// Mask covering the unpredictable payload bits.
+    /// Mask covering the random payload bits (62-bit bearer strength).
     const PAYLOAD_MASK: u64 = !Self::TAG_MASK;
 
     /// Tag value for IPC capabilities.
@@ -285,11 +291,51 @@ pub enum CapError {
     InvalidCaller,
     /// No more token-capability slots in kernel table.
     CapabilityStoreFull,
+    EntropyUnavailable,
+    TokenCollisionLimit,
+    EndpointIdExhausted,
 }
 
-/// Global token counter and seed.
-static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
-static TOKEN_SEED: AtomicU64 = AtomicU64::new(0);
+/// Bounded active authority, including all token classes. No history registry.
+const MAX_ACTIVE_TOKENS: usize = 8192;
+const MAX_ENDPOINTS: usize = 4096;
+const TOKEN_ATTEMPTS: usize = 16;
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct IssuanceStats {
+    pub prepared: u64,
+    pub collisions: u64,
+    pub entropy_failures: u64,
+    pub retry_failures: u64,
+}
+
+/// Holds the exclusive broker borrow (and therefore its caller's lock guard)
+/// from reservation through publication. Dropping it publishes no authority.
+#[must_use]
+pub(crate) struct PreparedSharedRegion<'a> {
+    broker: &'a mut CapabilityBroker,
+    token: CapabilityToken,
+}
+
+impl PreparedSharedRegion<'_> {
+    /// Infallible commit after backing and the complete owner mapping exist.
+    pub(crate) fn commit(
+        self,
+        frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
+        size: usize,
+        owner_pid: usize,
+    ) -> CapabilityToken {
+        assert!(!self.broker.token_in_use(self.token));
+        assert!(self.broker.shared_regions.len() < self.broker.shared_regions.capacity());
+        self.broker.shared_regions.push(ShmEntry {
+            token: self.token,
+            obj: ShmObject { frames, size },
+            owner_pid,
+            lifetime: crate::memory::shared_lifetime::SharedLifetime::new(),
+        });
+        self.token
+    }
+}
 
 /// Global capability broker instance.
 pub static CAP_BROKER: spin::Mutex<CapabilityBroker> = spin::Mutex::new(CapabilityBroker::new());
@@ -313,25 +359,6 @@ pub struct AuthSessionGrant {
     pub expires_at_tick: u64,
 }
 
-/// Initialize ordinary capability-token mixing from the approved entropy stream.
-///
-/// Capability tokens are authorization handles, not the cryptographic API.
-/// Authentication session grants below use a fresh entropy word per mint.
-pub fn init_token_seed() {
-    TOKEN_SEED.store(crate::entropy::next_u64().unwrap_or(0), Ordering::SeqCst);
-}
-
-/// Generate a new unpredictable, type-tagged capability token.
-fn generate_token(tag: u64) -> CapabilityToken {
-    let counter = NEXT_TOKEN.fetch_add(1, Ordering::SeqCst);
-    let seed = TOKEN_SEED.load(Ordering::SeqCst);
-    CapabilityToken::tagged(counter ^ seed, tag)
-}
-
-fn generate_secure_token(tag: u64) -> Option<CapabilityToken> {
-    crate::entropy::next_u64().map(|word| CapabilityToken::tagged(word, tag))
-}
-
 /// The capability broker manages endpoints and capability tokens.
 pub struct CapabilityBroker {
     next_endpoint_id: u32,
@@ -341,6 +368,13 @@ pub struct CapabilityBroker {
     vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
     auth_session_grants: alloc::vec::Vec<AuthSessionGrant>,
     account_grants: alloc::vec::Vec<(CapabilityToken, sunlight_ipc::accounts::Grant)>,
+    issuance: IssuanceStats,
+    // Instance-local injection exists only in host tests and the opt-in native
+    // security gate. The global production broker never installs an override.
+    #[cfg(any(test, feature = "cap_issuance_test"))]
+    test_words: Option<alloc::collections::VecDeque<Option<u64>>>,
+    #[cfg(any(test, feature = "cap_issuance_test"))]
+    test_reservation_failure: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -369,10 +403,93 @@ impl CapabilityBroker {
             vfs_caps: alloc::vec::Vec::new(),
             auth_session_grants: alloc::vec::Vec::new(),
             account_grants: alloc::vec::Vec::new(),
+            issuance: IssuanceStats {
+                prepared: 0,
+                collisions: 0,
+                entropy_failures: 0,
+                retry_failures: 0,
+            },
+            #[cfg(any(test, feature = "cap_issuance_test"))]
+            test_words: None,
+            #[cfg(any(test, feature = "cap_issuance_test"))]
+            test_reservation_failure: false,
         }
     }
 
-    pub fn mint_account_grant(
+    pub fn issuance_stats(&self) -> IssuanceStats {
+        self.issuance
+    }
+
+    fn active_tokens(&self) -> usize {
+        self.capabilities.len()
+            + self.shared_regions.len()
+            + self.vfs_caps.len()
+            + self.auth_session_grants.len()
+            + self.account_grants.len()
+    }
+
+    fn check_capacity(&self, additional: usize) -> Result<(), CapError> {
+        #[cfg(any(test, feature = "cap_issuance_test"))]
+        if self.test_reservation_failure {
+            return Err(CapError::CapabilityStoreFull);
+        }
+        if additional > MAX_ACTIVE_TOKENS.saturating_sub(self.active_tokens()) {
+            return Err(CapError::CapabilityStoreFull);
+        }
+        Ok(())
+    }
+
+    fn token_in_use(&self, token: CapabilityToken) -> bool {
+        self.capabilities.iter().any(|(t, _, _)| *t == token)
+            || self.shared_regions.iter().any(|entry| entry.token == token)
+            || self.vfs_caps.iter().any(|(t, _, _)| *t == token)
+            || self
+                .auth_session_grants
+                .iter()
+                .any(|grant| grant.token == token)
+            || self.account_grants.iter().any(|(t, _)| *t == token)
+    }
+
+    fn issue_token(&mut self, tag: u64) -> Result<CapabilityToken, CapError> {
+        for _ in 0..TOKEN_ATTEMPTS {
+            #[cfg(any(test, feature = "cap_issuance_test"))]
+            let word = match self.test_words.as_mut() {
+                Some(words) => words.pop_front().flatten(),
+                None => crate::entropy::next_u64(),
+            };
+            #[cfg(not(any(test, feature = "cap_issuance_test")))]
+            let word = crate::entropy::next_u64();
+            let Some(word) = word else {
+                self.issuance.entropy_failures = self.issuance.entropy_failures.saturating_add(1);
+                return Err(CapError::EntropyUnavailable);
+            };
+            let token = CapabilityToken::tagged(word, tag);
+            if word & CapabilityToken::PAYLOAD_MASK == 0
+                || word & CapabilityToken::PAYLOAD_MASK
+                    == SPAWN_TOKEN.as_u64() & CapabilityToken::PAYLOAD_MASK
+                || self.token_in_use(token)
+            {
+                self.issuance.collisions = self.issuance.collisions.saturating_add(1);
+                continue;
+            }
+            self.issuance.prepared = self.issuance.prepared.saturating_add(1);
+            return Ok(token);
+        }
+        self.issuance.retry_failures = self.issuance.retry_failures.saturating_add(1);
+        Err(CapError::TokenCollisionLimit)
+    }
+
+    #[cfg(any(test, feature = "cap_issuance_test"))]
+    pub(crate) fn test_entropy(&mut self, words: &[Option<u64>]) {
+        self.test_words = Some(words.iter().copied().collect());
+    }
+
+    #[cfg(any(test, feature = "cap_issuance_test"))]
+    pub(crate) fn test_fail_reservation(&mut self, fail: bool) {
+        self.test_reservation_failure = fail;
+    }
+
+    fn mint_account_grant(
         &mut self,
         binding: sunlight_ipc::accounts::GrantBinding,
         now: u64,
@@ -382,10 +499,11 @@ impl CapabilityBroker {
         if self.account_grants.len() >= 64 {
             return None;
         }
-        let token = generate_secure_token(CapabilityToken::TAG_IPC)?;
-        if self.account_grants.iter().any(|(t, _)| *t == token) {
-            return None;
-        }
+        self.check_capacity(1).ok()?;
+        self.account_grants.try_reserve(1).ok()?;
+        let token = self.issue_token(CapabilityToken::TAG_IPC).ok()?;
+        #[cfg(all(feature = "cap_issuance_test", target_os = "none"))]
+        assert!(crate::sched::SCHEDULER.try_lock().is_none(), "account commit escaped lifecycle serialization");
         self.account_grants.push((
             token,
             sunlight_ipc::accounts::Grant {
@@ -410,7 +528,7 @@ impl CapabilityBroker {
         grant.consume(binding, now)
     }
 
-    pub fn mint_auth_session_grant(
+    fn mint_auth_session_grant(
         &mut self,
         owner_pid: usize,
         uid: u32,
@@ -420,7 +538,11 @@ impl CapabilityBroker {
         if self.auth_session_grants.len() >= 64 {
             return None;
         }
-        let token = generate_secure_token(CapabilityToken::TAG_IPC)?;
+        self.check_capacity(1).ok()?;
+        self.auth_session_grants.try_reserve(1).ok()?;
+        let token = self.issue_token(CapabilityToken::TAG_IPC).ok()?;
+        #[cfg(all(feature = "cap_issuance_test", target_os = "none"))]
+        assert!(crate::sched::SCHEDULER.try_lock().is_none(), "auth commit escaped lifecycle serialization");
         self.auth_session_grants.push(AuthSessionGrant {
             token,
             owner_pid,
@@ -450,8 +572,16 @@ impl CapabilityBroker {
         Some((grant.uid, grant.gid))
     }
 
-    pub fn reserve_shared_region_slot(&mut self) -> Result<(), ()> {
-        self.shared_regions.try_reserve(1).map_err(|_| ())
+    pub(crate) fn prepare_shared_region(&mut self) -> Result<PreparedSharedRegion<'_>, CapError> {
+        self.check_capacity(1)?;
+        self.shared_regions
+            .try_reserve(1)
+            .map_err(|_| CapError::CapabilityStoreFull)?;
+        let token = self.issue_token(CapabilityToken::TAG_VFS)?;
+        Ok(PreparedSharedRegion {
+            broker: self,
+            token,
+        })
     }
 
     pub fn shared_region_count(&self) -> usize {
@@ -466,20 +596,34 @@ impl CapabilityBroker {
     }
 
     /// Create a new endpoint, return its id and a send+recv capability to the owner.
-    pub fn create_endpoint(&mut self, owner_pid: usize) -> (u32, CapabilityToken) {
+    pub fn create_endpoint(
+        &mut self,
+        owner_pid: usize,
+    ) -> Result<(u32, CapabilityToken), CapError> {
         // IDs are never reused. This prevents a delayed IRQ/deadline belonging
         // to a destroyed endpoint instance from addressing a later endpoint.
         let id = self.next_endpoint_id;
-        self.next_endpoint_id = self
+        let next_id = self
             .next_endpoint_id
             .checked_add(1)
-            .expect("endpoint id space exhausted");
+            .ok_or(CapError::EndpointIdExhausted)?;
+        if self.endpoints.len() >= MAX_ENDPOINTS {
+            return Err(CapError::CapabilityStoreFull);
+        }
+        self.check_capacity(1)?;
+        self.endpoints
+            .try_reserve(1)
+            .map_err(|_| CapError::CapabilityStoreFull)?;
+        self.capabilities
+            .try_reserve(1)
+            .map_err(|_| CapError::CapabilityStoreFull)?;
+        let token = self.issue_token(CapabilityToken::TAG_IPC)?;
+        self.next_endpoint_id = next_id;
         self.endpoints.push(Endpoint { id, owner_pid });
-        let token = generate_token(CapabilityToken::TAG_IPC);
         self.capabilities
             .push((token, id, CapabilityRights::SEND_RECV));
         serial_println!("[CAP] Created endpoint {} for pid={}", id, owner_pid);
-        (id, token)
+        Ok((id, token))
     }
 
     /// Validate that `token` grants at least the requested rights for its IPC
@@ -515,16 +659,24 @@ impl CapabilityBroker {
     ///
     /// Refuses to mint if `rights` are not IPC rights, keeping the IPC and VFS
     /// capability spaces strictly disjoint.
-    pub fn mint(&mut self, endpoint_id: u32, rights: CapabilityRights) -> Option<CapabilityToken> {
+    pub fn mint(
+        &mut self,
+        endpoint_id: u32,
+        rights: CapabilityRights,
+    ) -> Result<CapabilityToken, CapError> {
         if !rights.is_ipc() {
-            return None;
+            return Err(CapError::InsufficientRights);
         }
         if !self.endpoints.iter().any(|e| e.id == endpoint_id) {
-            return None;
+            return Err(CapError::EndpointNotFound);
         }
-        let token = generate_token(CapabilityToken::TAG_IPC);
+        self.check_capacity(1)?;
+        self.capabilities
+            .try_reserve(1)
+            .map_err(|_| CapError::CapabilityStoreFull)?;
+        let token = self.issue_token(CapabilityToken::TAG_IPC)?;
         self.capabilities.push((token, endpoint_id, rights));
-        Some(token)
+        Ok(token)
     }
 
     /// Derive an attenuated IPC capability from `source` without modifying it.
@@ -565,7 +717,11 @@ impl CapabilityBroker {
             return Ok(token);
         }
 
-        let token = generate_token(CapabilityToken::TAG_IPC);
+        self.check_capacity(1)?;
+        self.capabilities
+            .try_reserve(1)
+            .map_err(|_| CapError::CapabilityStoreFull)?;
+        let token = self.issue_token(CapabilityToken::TAG_IPC)?;
         self.capabilities.push((token, endpoint_id, requested));
         if requested == CapabilityRights::SEND_ONLY {
             PUBLIC_SEND_DERIVATIONS.fetch_add(1, Ordering::Relaxed);
@@ -712,31 +868,42 @@ impl CapabilityBroker {
             .retain(|endpoint| endpoint.owner_pid != owner_pid);
         self.capabilities
             .retain(|(_, endpoint_id, _)| !endpoint_ids.iter().any(|id| id == endpoint_id));
+        // VFS tokens are transferable bearers, with no existing owner-death
+        // revocation contract. Preserve that lifetime; the bound remains 64.
+        self.retire_recipient_grants(owner_pid);
         crate::memory::security::revoke_display_authority_for_owner(owner_pid);
     }
 
-    /// Mint a capability token granting access to map a shared physical frame (single-page compat).
-    pub fn mint_shared_page(&mut self, phys: PhysAddr, owner_pid: usize) -> CapabilityToken {
-        let frame = unsafe { PhysFrame::<Size4KiB>::from_start_address_unchecked(phys) };
-        self.mint_shared_region(alloc::vec![frame], 4096, owner_pid)
+    #[cfg(feature = "cap_issuance_test")]
+    pub(crate) fn recipient_grant_count(&self, pid: usize) -> usize {
+        self.auth_session_grants.iter().filter(|r| r.owner_pid == pid).count()
+            + self.account_grants.iter().filter(|(_, r)| r.binding.pid == pid as u64).count()
     }
 
-    /// Mint a capability token for a multi-page shared memory region.
-    /// The token represents the whole object; mapping it maps all backing frames contiguously.
-    pub fn mint_shared_region(
+    /// Called under lifecycle serialization on exit and successful VM replacement.
+    /// Does not revoke transferable VFS/SHM or endpoint authority.
+    pub(crate) fn retire_recipient_grants(&mut self, owner_pid: usize) {
+        crate::delegated_caller::DELEGATED_CALLERS.lock().retire_process(owner_pid);
+        self.auth_session_grants
+            .retain(|grant| grant.owner_pid != owner_pid);
+        self.account_grants
+            .retain(|(_, grant)| grant.binding.pid != owner_pid as u64);
+    }
+
+    /// Mint a capability token granting access to map a shared physical frame (single-page compat).
+    pub fn mint_shared_page(
         &mut self,
-        frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
-        size: usize,
+        phys: PhysAddr,
         owner_pid: usize,
-    ) -> CapabilityToken {
-        let token = generate_token(CapabilityToken::TAG_VFS);
-        self.shared_regions.push(ShmEntry {
-            token,
-            obj: ShmObject { frames, size },
-            owner_pid,
-            lifetime: crate::memory::shared_lifetime::SharedLifetime::new(),
-        });
-        token
+    ) -> Result<CapabilityToken, CapError> {
+        let prepared = self.prepare_shared_region()?;
+        let frame = unsafe { PhysFrame::<Size4KiB>::from_start_address_unchecked(phys) };
+        let mut frames = alloc::vec::Vec::new();
+        frames
+            .try_reserve_exact(1)
+            .map_err(|_| CapError::CapabilityStoreFull)?;
+        frames.push(frame);
+        Ok(prepared.commit(frames, 4096, owner_pid))
     }
 
     /// Resolve a shared-page capability token to its physical frame (first page for compat / 1-page regions).
@@ -860,11 +1027,14 @@ impl CapabilityBroker {
         cap: VfsCapability,
     ) -> Result<CapabilityToken, CapError> {
         const CAP_VFS_LIMIT: usize = 64;
-        let token = generate_token(CapabilityToken::TAG_VFS);
         if self.vfs_caps.len() >= CAP_VFS_LIMIT {
             return Err(CapError::CapabilityStoreFull);
         }
-
+        self.check_capacity(1)?;
+        self.vfs_caps
+            .try_reserve(1)
+            .map_err(|_| CapError::CapabilityStoreFull)?;
+        let token = self.issue_token(CapabilityToken::TAG_VFS)?;
         self.vfs_caps.push((token, cap, owner_pid));
         Ok(token)
     }
@@ -914,16 +1084,24 @@ impl CapabilityBroker {
         owner_pid: usize,
     ) -> Result<heapless::Vec<CapabilityToken, ELEVATED_EXEC_PREFIX_COUNT>, CapError> {
         let mut out = heapless::Vec::new();
+        let original_len = self.vfs_caps.len();
         for prefix in ELEVATED_EXEC_PREFIXES {
             let mut allowed_prefix = String::new();
             if allowed_prefix.push_str(prefix).is_err() {
+                self.vfs_caps.truncate(original_len);
                 return Err(CapError::CapabilityStoreFull);
             }
             let cap = VfsCapability {
                 allowed_prefix,
                 flags: AccessFlags::READ_EXECUTE,
             };
-            let token = self.grant_vfs_capability(owner_pid, cap)?;
+            let token = match self.grant_vfs_capability(owner_pid, cap) {
+                Ok(token) => token,
+                Err(error) => {
+                    self.vfs_caps.truncate(original_len);
+                    return Err(error);
+                }
+            };
             // Vec capacity == prefix count, so this push cannot overflow.
             let _ = out.push(token);
         }
@@ -944,10 +1122,10 @@ pub const ELEVATED_EXEC_PREFIX_COUNT: usize = ELEVATED_EXEC_PREFIXES.len();
 
 /// Mock kernel entry to enforce trusted-broker minting.
 pub fn sys_grant_capability(
-    caller_pid: u32,
+    caller_pid: usize,
     cap: VfsCapability,
 ) -> Result<CapabilityToken, CapError> {
-    if caller_pid != CAPABILITY_BROKER_PID {
+    if caller_pid != CAPABILITY_BROKER_PID as usize {
         serial_println!(
             "[SEC] Capability mint denied: caller_pid={} is not broker {}",
             caller_pid,
@@ -957,7 +1135,7 @@ pub fn sys_grant_capability(
     }
 
     let mut broker = CAP_BROKER.lock();
-    broker.grant_vfs_capability(caller_pid as usize, cap)
+    broker.grant_vfs_capability(caller_pid, cap)
 }
 
 /// A registered IPC endpoint.
@@ -966,3 +1144,7 @@ pub struct Endpoint {
     pub id: u32,
     pub owner_pid: usize,
 }
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod tests;

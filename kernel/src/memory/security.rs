@@ -288,13 +288,17 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
     crate::serial_println!("[MM-0] SHM NX, zero-fill, and peer preservation: OK");
 
     let mut caps = crate::capability::CapabilityBroker::new();
-    let (endpoint_id, _) = caps.create_endpoint(0xD15A);
+    let (endpoint_id, _) = caps
+        .create_endpoint(0xD15A)
+        .expect("security fixture endpoint issuance");
     register_display_authority(0xD15A, endpoint_id, &caps);
     assert!(framebuffer_authorized(0xD15A, &caps));
     assert!(!framebuffer_authorized(0xD15B, &caps));
     caps.revoke_endpoints_owned_by(0xD15A);
     assert!(!framebuffer_authorized(0xD15A, &caps));
-    let (restart_endpoint, _) = caps.create_endpoint(0xD15C);
+    let (restart_endpoint, _) = caps
+        .create_endpoint(0xD15C)
+        .expect("security fixture endpoint issuance");
     assert_ne!(restart_endpoint, endpoint_id);
     register_display_authority(0xD15C, restart_endpoint, &caps);
     assert!(framebuffer_authorized(0xD15C, &caps));

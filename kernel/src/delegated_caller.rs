@@ -55,6 +55,13 @@ impl DelegationRegistry {
         }
     }
 
+    /// SCHEDULER serializes this withdrawal with all production issue/issue_proof
+    /// calls. Either participant retiring invalidates the fixed-purpose proof.
+    pub(crate) fn retire_process(&mut self, pid: usize) {
+        self.records.retain(|r| r.caller_pid != pid && r.mediator_pid != pid);
+        self.proofs.retain(|r| r.caller_pid != pid && r.mediator_pid != pid);
+    }
+
     pub fn active_session(&self) -> ActiveSessionBinding {
         self.active_session
     }
@@ -79,7 +86,13 @@ impl DelegationRegistry {
             || record.session_generation != self.active_session.generation
             || record.caller_uid != self.active_session.uid
             || self.records.len() >= MAX_DELEGATIONS_IN_FLIGHT
+            || record.opaque_id == 0
+            || record.integrity_tag == 0
+            || self.pair_in_use(record.opaque_id, record.integrity_tag)
         {
+            return false;
+        }
+        if self.records.try_reserve(1).is_err() {
             return false;
         }
         self.records.push(record);
@@ -98,11 +111,32 @@ impl DelegationRegistry {
     pub fn issue_proof(&mut self, proof: SessionAuthorityProofRecord) -> bool {
         self.proofs
             .retain(|entry| entry.expires_at_ms >= proof.issued_at_ms);
-        if self.proofs.len() >= MAX_AUTHORITY_PROOFS {
+        if !self.active_session.active
+            || proof.session_id != self.active_session.session_id
+            || proof.session_generation != self.active_session.generation
+            || proof.caller_uid != self.active_session.uid
+            || self.proofs.len() >= MAX_AUTHORITY_PROOFS
+            || proof.opaque_id == 0
+            || proof.integrity_tag == 0
+            || self.pair_in_use(proof.opaque_id, proof.integrity_tag)
+        {
+            return false;
+        }
+        if self.proofs.try_reserve(1).is_err() {
             return false;
         }
         self.proofs.push(proof);
         true
+    }
+
+    fn pair_in_use(&self, id: u64, tag: u64) -> bool {
+        self.records
+            .iter()
+            .any(|r| r.opaque_id == id && r.integrity_tag == tag)
+            || self
+                .proofs
+                .iter()
+                .any(|r| r.opaque_id == id && r.integrity_tag == tag)
     }
 
     pub fn take_proof(
@@ -165,6 +199,36 @@ mod tests {
     }
 
     #[test]
+    fn participant_retirement_and_session_cancellation_remove_authority() {
+        for pid in [40, 50] {
+            let mut table = DelegationRegistry::new();
+            table.set_active_session(binding(3));
+            let r = record(1);
+            let proof = SessionAuthorityProofRecord {
+                opaque_id: 2, integrity_tag: 3,
+                caller_pid: r.caller_pid, caller_process_generation: r.caller_process_generation,
+                caller_uid: r.caller_uid, mediator_pid: r.mediator_pid,
+                mediator_process_generation: r.mediator_process_generation,
+                client_instance_id: r.caller_process_generation,
+                session_id: r.session_id, session_generation: r.session_generation,
+                issued_at_ms: r.issued_at_ms, expires_at_ms: r.expires_at_ms,
+            };
+            assert!(table.issue(r));
+            assert!(table.issue_proof(proof));
+            table.retire_process(pid);
+            table.retire_process(pid);
+            assert!(table.records.is_empty() && table.proofs.is_empty());
+            assert!(table.take(r.opaque_id, r.integrity_tag).is_none());
+            assert!(table.take_proof(proof.opaque_id, proof.integrity_tag).is_none());
+            // A prepared proof must not outlive its session cancellation.
+            table.set_active_session(ActiveSessionBinding::default());
+            assert!(!table.issue(r));
+            assert!(!table.issue_proof(proof));
+            assert!(table.records.is_empty() && table.proofs.is_empty());
+        }
+    }
+
+    #[test]
     fn one_shot_take_rejects_replay_and_wrong_tag() {
         let mut table = DelegationRegistry::new();
         table.set_active_session(binding(3));
@@ -193,5 +257,36 @@ mod tests {
             assert!(table.issue(record(id)));
         }
         assert!(!table.issue(record(100)));
+    }
+
+    #[test]
+    fn duplicates_reserved_pairs_and_cross_table_collisions_fail_closed() {
+        let mut table = DelegationRegistry::new();
+        table.set_active_session(binding(3));
+        assert!(!table.issue(record(0)));
+        assert!(!table.issue(record(99))); // zero integrity tag
+        assert!(table.issue(record(1)));
+        assert!(!table.issue(record(1)));
+        let mut proof = SessionAuthorityProofRecord {
+            opaque_id: 1,
+            integrity_tag: 98,
+            caller_pid: 40,
+            caller_process_generation: 4,
+            caller_uid: 1000,
+            mediator_pid: 50,
+            mediator_process_generation: 8,
+            client_instance_id: 1,
+            session_id: 7,
+            session_generation: 3,
+            issued_at_ms: 10,
+            expires_at_ms: 20,
+        };
+        assert!(!table.issue_proof(proof));
+        proof.opaque_id = 2;
+        assert!(table.issue_proof(proof));
+        assert!(!table.issue_proof(proof));
+        assert!(table.take_proof(2, 98).is_some());
+        assert!(table.take_proof(2, 98).is_none());
+        assert!(table.take(1, 98).is_some());
     }
 }

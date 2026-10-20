@@ -182,10 +182,10 @@ pub(crate) fn trace_pty_liveness(sched: &Scheduler) {
         let (input, output) =
             crate::process::tty_io::diagnostic_occupancy(p.tty_tab.unwrap_or(0) as usize);
         crate::serial_println!(
-            "[PTY-DIAG] pid={} ppid={} name={} state={:?} owner={} queued={} tab={:?} rings={}/{} wait_child={:?} pending={:?} outcome={:?} target={:?} reply_wait={:?} blocked_ticks={} last_run_age={} nice={} burst={} queue_copies={}",
+            "[PTY-DIAG] pid={} ppid={} name={} state={:?} owner={} queued={} tab={:?} rings={}/{} wait_child={:?} pending_present={} outcome={:?} target={:?} reply_wait_present={} blocked_ticks={} last_run_age={} nice={} burst={} queue_copies={}",
             p.pid, p.ppid, p.name_str(), p.state, p.owning_core, p.queued_on_core,
-            p.tty_tab, input, output, p.wait_child, p.pending_call, p.ipc_call_outcome,
-            p.ipc_reply_target, p.pending_reply_wait,
+            p.tty_tab, input, output, p.wait_child, p.pending_call.is_some(), p.ipc_call_outcome,
+            p.ipc_reply_target, p.pending_reply_wait.is_some(),
             sched.global_tick.saturating_sub(p.block_start_tick),
             sched.global_tick.saturating_sub(p.last_run_tick), p.nice, p.burst_score,
             sched.diagnostic_ready_occurrences(idx)

@@ -153,18 +153,22 @@ fn capability_admission_probe() {
     // For consecutive counters c and c-1, c XOR (c-1) is a low-bit mask of
     // ones. XORing the same boot seed into both does not hide that relation.
     let mut caps = CapabilityBroker::new();
-    let (private_endpoint, _undisclosed) = caps.create_endpoint(0xF111);
-    let (_, attacker_token) = caps.create_endpoint(0xF112);
+    let (private_endpoint, _undisclosed) = caps
+        .create_endpoint(0xF111)
+        .expect("security fixture endpoint issuance");
+    let (_, attacker_token) = caps
+        .create_endpoint(0xF112)
+        .expect("security fixture endpoint issuance");
     let predicted = (1..=62).any(|bits| {
         let guess = CapabilityToken(attacker_token.as_u64() ^ ((1u64 << bits) - 1));
         caps.check(guess, CapabilityRights::SEND_ONLY) == Ok(private_endpoint)
     });
     assert!(
-        predicted,
-        "update F1 audit: ordinary capability issuance changed"
+        !predicted,
+        "private SEND authority predicted from an adjacent attacker token"
     );
     crate::serial_println!(
-        "[FASTLANE-F1] capability issuance prerequisite: BLOCKED (adjacent token prediction)"
+        "[FASTLANE-F1] capability issuance regression: adjacent token prediction REJECTED"
     );
 }
 

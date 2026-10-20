@@ -626,6 +626,10 @@ pub extern "C" fn _start() -> ! {
                 serial_println!(
                     "[ENTROPY] secure source=none readiness=UNREADY; crypto requests fail closed"
                 );
+                serial_println!("[CAP] bootstrap BLOCKED: secure entropy unavailable; no user authority published");
+                loop {
+                    x86_64::instructions::hlt();
+                }
             }
         }
     }
@@ -756,10 +760,12 @@ pub extern "C" fn _start() -> ! {
     splash.log("[CAP] Capability broker initialized");
     splash.set_progress(600); // 60%
     splash.redraw();
-    capability::init_token_seed();
 
     #[cfg(feature = "scheduler_b_test")]
     crate::sched::regression::run(hhdm_offset);
+
+    #[cfg(feature = "cap_issuance_test")]
+    capability::gate::run(hhdm_offset);
 
     // 7b. Security hardening self-test (Bite 4, Task 0)
     run_security_hardening_tests(hhdm_offset);
@@ -3249,7 +3255,9 @@ fn run_termination_path_self_test(hhdm_offset: VirtAddr) {
         // Reproduce kill racing syscall entry while the victim is still owned.
         // Blocking IPC and late replies must never revive the Finished task.
         let mut caps = crate::capability::CapabilityBroker::new();
-        let (endpoint, token) = caps.create_endpoint(0xCAFE);
+        let (endpoint, token) = caps
+            .create_endpoint(0xCAFE)
+            .expect("security fixture endpoint issuance");
         let mut bus = crate::ipc::IpcBus::new();
         ok &= matches!(
             crate::ipc::handle_ipc_call(
@@ -3334,6 +3342,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
     {
         let mut pmm = PMM.lock();
         memory::shared_lifetime_gate::run(&mut pmm, hhdm_offset);
+    }
+    #[cfg(feature = "fastlane_f11_audit")]
+    {
+        let mut pmm = PMM.lock();
+        memory::shared_authority_gate::run(&mut pmm, hhdm_offset);
     }
     run_termination_path_self_test(hhdm_offset);
     #[cfg(feature = "mm2c_ledger_test")]
@@ -3614,7 +3627,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let mut broker = CapabilityBroker::new();
         let owner_pid = 0x7101;
         let other_pid = 0x7102;
-        let (old_endpoint, owner_cap) = broker.create_endpoint(owner_pid);
+        let (old_endpoint, owner_cap) = broker
+            .create_endpoint(owner_pid)
+            .expect("security fixture endpoint issuance");
         let public_cap = broker
             .derive(owner_cap, CapabilityRights::SEND_ONLY)
             .expect("owner capability can derive SEND-only");
@@ -3645,7 +3660,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let public_revoked = broker
             .check(public_cap, CapabilityRights::SEND_ONLY)
             .is_err();
-        let (new_endpoint, new_owner_cap) = broker.create_endpoint(owner_pid);
+        let (new_endpoint, new_owner_cap) = broker
+            .create_endpoint(owner_pid)
+            .expect("security fixture endpoint issuance");
         let stale_isolated = new_endpoint != old_endpoint
             && new_owner_cap != owner_cap
             && broker
@@ -4124,7 +4141,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let mut pmm = PMM.lock();
         let phys = pmm.alloc_frame().expect("sectest frame alloc");
         let dead_pid = 0x9999;
-        let token = caps.mint_shared_page(phys, dead_pid);
+        let token = caps
+            .mint_shared_page(phys, dead_pid)
+            .expect("security fixture SHM issuance");
         caps.revoke_all_for(dead_pid);
         match caps.validate_shared_page(token) {
             Err(CapError::Revoked) => {

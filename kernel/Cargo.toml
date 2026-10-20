@@ -1,6 +1,8 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5318-alpha.2"
+version = "0.2.5385-alpha.2"
+
+
 
 
 
@@ -665,6 +667,10 @@ mm2d_munmap_test = ["mm2b_smp_test"]
 mm2e_mprotect_test = ["mm2b_smp_test"]
 # Audit/lifetime prerequisite gate only. Does not expose FastLane syscalls.
 fastlane_f1_audit = ["mm2b_smp_test", "mm2a_test_injection"]
+# F1.1 authority counterexamples only; no restricted-memory ABI is exposed.
+fastlane_f11_audit = ["fastlane_f1_audit"]
+# Instance-local issuance fault injection + isolated native authority fixture.
+cap_issuance_test = []
 # Focused SWAP-1 multi-pool pressure/recovery gate.
 swap1_test = ["mm2b_smp_test"]
 # Physical memory accounting Phase 1 native ISO gate.

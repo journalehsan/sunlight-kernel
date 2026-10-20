@@ -556,9 +556,21 @@ extern "x86-interrupt" fn page_fault_handler(
         pid,
         rip,
         rsp,
-        0u64
+        error_code.bits()
     );
     let vaddr = x86_64::registers::control::Cr2::read_raw();
+
+    #[cfg(feature = "cap_issuance_test")]
+    {
+        let (cr3, _) = x86_64::registers::control::Cr3::read();
+        serial_println!(
+            "[EXEC-R2] vector=14 cr2={:#x} cr3={:#x} cs={:#x} flags={:?}",
+            vaddr,
+            cr3.start_address().as_u64(),
+            _stack_frame.code_segment.0,
+            error_code
+        );
+    }
 
     // Not-present fault: check whether this page was swapped out to ZRAM.
     if !error_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
@@ -993,6 +1005,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         }
         #[cfg(feature = "scheduler_b_test")]
         crate::sched::regression::on_tick(&mut sched, cpu_id);
+        #[cfg(feature = "cap_issuance_test")]
+        crate::capability::gate::on_tick(&mut sched, cpu_id);
 
         // Telemetry and cross-process timer work are BSP-only (CPU 0).
         if cpu_id == 0 {

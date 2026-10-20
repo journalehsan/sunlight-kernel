@@ -11,6 +11,28 @@ struct EmbeddedBinary<'a> {
 }
 
 fn main() {
+    if env::var_os("CARGO_FEATURE_CAP_ISSUANCE_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        for fixture in ["capability-probe", "exec-r2"] {
+            let input = root.join(format!("tools/helios-probes/{fixture}.S"));
+            let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+            println!("cargo:rerun-if-changed={}", input.display());
+            assert!(Command::new("as")
+                .args(["--64", "-o"])
+                .arg(out.join(format!("{fixture}.o")))
+                .arg(input)
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("ld")
+                .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+                .arg(out.join(format!("{fixture}.elf")))
+                .arg(out.join(format!("{fixture}.o")))
+                .status()
+                .unwrap()
+                .success());
+        }
+    }
     if env::var_os("CARGO_FEATURE_SCHEDULER_B_TEST").is_some() {
         let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
         let input = root.join("tools/helios-probes/scheduler-probe.S");

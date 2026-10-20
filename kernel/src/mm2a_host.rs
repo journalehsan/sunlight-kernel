@@ -2,6 +2,45 @@
 
 extern crate alloc;
 
+// Compile the actual broker and conditioner in host security tests. Only
+// hardware-dependent services are stubbed; issuance and authorization are not.
+#[cfg(test)]
+extern crate std;
+#[cfg(test)]
+#[path = "capability/mod.rs"]
+pub mod capability;
+#[cfg(test)]
+#[path = "entropy/conditioner.rs"]
+pub mod conditioner;
+#[cfg(test)]
+#[path = "delegated_caller.rs"]
+pub mod delegated_caller;
+#[cfg(test)]
+pub mod entropy {
+    static STREAM: std::sync::Mutex<Option<crate::conditioner::ChaCha20>> =
+        std::sync::Mutex::new(None);
+    pub fn next_u64() -> Option<u64> {
+        let mut stream = STREAM.lock().unwrap();
+        let stream =
+            stream.get_or_insert_with(|| crate::conditioner::ChaCha20::from_seed(&[0x42; 40]));
+        let mut bytes = [0; 8];
+        stream.fill(&mut bytes).then(|| u64::from_le_bytes(bytes))
+    }
+}
+#[cfg(test)]
+pub mod memory {
+    pub use crate::shared_lifetime;
+    pub mod security {
+        pub fn revoke_display_authority_for_owner(_: usize) {}
+        pub fn revoke_display_authority_for_endpoint(_: u32) {}
+    }
+}
+#[cfg(test)]
+#[macro_export]
+macro_rules! serial_println {
+    ($($arg:tt)*) => { let _ = core::format_args!($($arg)*); };
+}
+
 #[path = "memory/shared_lifetime.rs"]
 pub mod shared_lifetime;
 
@@ -514,3 +553,13 @@ mod tests {
         assert_eq!(protected.record_at(1), Some(stack));
     }
 }
+
+#[cfg(test)]
+#[path = "capability/lifecycle_host.rs"]
+mod lifecycle_host;
+#[cfg(test)]
+mod process { pub use crate::lifecycle_host::Process; }
+#[cfg(test)]
+mod sched { pub use crate::lifecycle_host::Scheduler; }
+#[cfg(test)]
+mod ipc { pub use crate::lifecycle_host::reply_target_matches_pending_request; }

@@ -849,7 +849,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         24 => sys_tty_stdout_pull(frame),
         25 => sys_process_is_alive(frame),
         30 => sys_fork(frame),
-        31 => sys_exec(frame),
+        31 => unsafe { exec_on_kernel_stack(frame) },
         32 => sys_waitpid(frame),
         33 => sys_getpid(),
         34 => sys_getppid(frame),
@@ -1506,58 +1506,8 @@ fn sys_mint_auth_session_grant(frame: &mut SyscallFrame) -> u64 {
     let uid = frame.rsi as u32;
     let gid = frame.rdx as u32;
     let sched = crate::sched::SCHEDULER.lock();
-    let caller = sched.current_process();
-    if !caller.trusted_auth_broker {
-        crate::serial_println!("[UAC-GRANT] rejected reason=untrusted-broker");
-        return u64::MAX;
-    }
-    let reply_target = caller.ipc_reply_target;
-    let Some(requester) = sched
-        .processes
-        .iter()
-        .find(|process| process.pid == requester_pid)
-    else {
-        crate::serial_println!(
-            "[UAC-GRANT] rejected requester_pid={} reason=requester-not-found",
-            requester_pid
-        );
-        return u64::MAX;
-    };
-    // Bind the grant to the exact generation-tagged request that UAC is
-    // currently servicing. Requiring `BlockedOnIpc` here was racy on SMP: the
-    // caller's scheduler state is transient, while pending_call + UAC's reply
-    // target are the authoritative synchronous-IPC relationship.
-    if !crate::ipc::reply_target_matches_pending_request(
-        requester_pid,
-        requester.pending_call,
-        reply_target,
-    ) {
-        crate::serial_println!(
-            "[UAC-GRANT] rejected requester_pid={} reason=ipc-generation-mismatch",
-            requester_pid
-        );
-        return u64::MAX;
-    }
-    let expires_at_tick = sched.global_tick.saturating_add(500);
-    drop(sched);
-    let grant = crate::capability::CAP_BROKER
-        .lock()
-        .mint_auth_session_grant(requester_pid, uid, gid, expires_at_tick)
-        .map_or(u64::MAX, |token| token.0);
-    if grant == u64::MAX {
-        crate::serial_println!(
-            "[UAC-GRANT] rejected requester_pid={} reason=grant-allocation",
-            requester_pid
-        );
-    } else {
-        crate::serial_println!(
-            "[UAC-GRANT] minted requester_pid={} uid={} gid={}",
-            requester_pid,
-            uid,
-            gid
-        );
-    }
-    grant
+    sched.issue_auth_session_grant(requester_pid, uid, gid)
+        .map_or(u64::MAX, |token| token.0)
 }
 
 fn sys_lock_auth_consume(frame: &mut SyscallFrame) -> u64 {
@@ -1669,55 +1619,22 @@ fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
 /// Account capabilities are minted/consumed only by the authenticated broker,
 /// for the live generation-tagged IPC caller. They are never spawn grants.
 fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
-    use ::sunlight_ipc::accounts::{GrantBinding, GrantScope, Operation};
-    let sched = crate::sched::SCHEDULER.lock();
-    let caller = sched.current_process();
-    if !caller.trusted_auth_broker {
-        return u64::MAX;
-    }
-    let Some(target) = sched.processes.iter().find(|p| {
-        p.pid == frame.rdi as usize
-            && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
-    }) else {
-        return u64::MAX;
-    };
-    if !crate::ipc::reply_target_matches_pending_request(
-        target.pid,
-        target.pending_call,
-        caller.ipc_reply_target,
-    ) {
-        return u64::MAX;
-    }
+    use ::sunlight_ipc::accounts::{GrantScope, Operation};
     let Some(operation) = Operation::from_raw(frame.rsi) else {
         return u64::MAX;
     };
-    let binding = GrantBinding {
-        pid: target.pid as u64,
-        process_generation: target.address_space.identity().generation,
-        scope: GrantScope {
-            revision: frame.r12,
-            operation,
-            target: frame.rdx as u32,
-            member: (frame.rdx >> 32) as u32,
-            session: frame.r8,
-            session_generation: frame.r9,
-        },
+    let scope = GrantScope {
+        revision: frame.r12,
+        operation,
+        target: frame.rdx as u32,
+        member: (frame.rdx >> 32) as u32,
+        session: frame.r8,
+        session_generation: frame.r9,
     };
-    let now = sched.global_tick;
-    drop(sched);
-    let mut broker = crate::capability::CAP_BROKER.lock();
-    if consume {
-        if broker.consume_account_grant(crate::capability::CapabilityToken(frame.r10), binding, now)
-        {
-            0
-        } else {
-            u64::MAX
-        }
-    } else {
-        broker
-            .mint_account_grant(binding, now)
-            .map_or(u64::MAX, |t| t.0)
-    }
+    let sched = crate::sched::SCHEDULER.lock();
+    sched.account_grant(frame.rdi as usize, scope,
+        consume.then_some(CapabilityToken(frame.r10)))
+        .map_or(u64::MAX, |token| if consume { 0 } else { token.0 })
 }
 
 fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
@@ -2096,12 +2013,14 @@ fn ipc_set_deadline(absolute_deadline_ms: u64) -> u64 {
 }
 
 fn endpoint_create() -> u64 {
-    let pid = sched::with_scheduler(|s| s.current_process().pid);
-    let (_endpoint_id, token) = {
-        let mut caps = crate::capability::CAP_BROKER.lock();
-        caps.create_endpoint(pid)
-    };
-    token.0
+    let sched = crate::sched::SCHEDULER.lock();
+    let process = sched.current_process();
+    if process.is_exiting() {
+        return 0;
+    }
+    let mut caps = crate::capability::CAP_BROKER.lock();
+    caps.create_endpoint(process.pid)
+        .map_or(0, |(_, token)| token.0)
 }
 
 /// Derive a public SEND_ONLY capability from an endpoint owner token.
@@ -2751,7 +2670,79 @@ fn sys_linux_exit_group(code: i32) -> ! {
 /// rdi = path pointer (C string)
 /// rsi = argv pointer (array of *const u8, NULL-terminated)
 /// rdx = envp pointer (array of *const u8, NULL-terminated)
-fn sys_exec(frame: &mut SyscallFrame) -> u64 {
+// Exec alone must outlive the calling VM. Reserve the top 256 bytes for
+// init_context's 160-byte iret frame; preparation runs strictly below it.
+// Copy the 120-byte register input below the reservation as well. On failure
+// the old VM and syscall frame remain valid, so return normally.
+// On success sys_exec's owned temporaries have been dropped before entering
+// the installed context. Never unwind or sysret through the retired VM.
+const _: () = assert!(core::mem::size_of::<SyscallFrame>() == 120);
+
+#[unsafe(naked)]
+unsafe extern "C" fn exec_on_kernel_stack(_frame: &mut SyscallFrame) -> u64 {
+    naked_asm!(
+        "push rdi",
+        "call {stack_top}",
+        "pop rdi",
+        "mov r11, rsp",
+        "mov rsp, rax",
+        "sub rsp, 256",
+        "and rsp, -16",
+        "push r11",
+        "sub rsp, 136",
+        // Keep even the input register frame in the surviving address space.
+        "mov rsi, rdi",
+        "mov rdi, rsp",
+        "mov ecx, 15",
+        "cld",
+        "rep movsq",
+        "mov rdi, rsp",
+        "call {exec}",
+        "test rax, rax",
+        "jz 2f",
+        "add rsp, 136",
+        "pop rsp",
+        "ret",
+        "2:",
+        "call {enter}",
+        "ud2",
+        stack_top = sym exec_kernel_stack_top,
+        exec = sym sys_exec,
+        enter = sym enter_exec_image,
+    );
+}
+
+extern "C" fn exec_kernel_stack_top() -> u64 {
+    sched::SCHEDULER.lock().current_process().kernel_stack_top
+}
+
+extern "C" fn enter_exec_image() -> ! {
+    let (context, fs_base) = {
+        let mut scheduler = sched::SCHEDULER.lock();
+        let process = scheduler.current_process_mut();
+        if process.is_exiting() {
+            let code = process.exit_code;
+            drop(scheduler);
+            process_exit(code);
+        }
+        let dispositions = process.signal_state.dispositions();
+        if let Some(SignalPostAction::Exit(code)) = deliver_pending_signals(process, &dispositions)
+        {
+            drop(scheduler);
+            process_exit(code);
+        }
+        process.fx_state = crate::arch::x86_64::cpu::FxState::initial();
+        unsafe { process.fx_state.restore() };
+        (process.context_rsp, process.fs_base)
+    };
+    sched::flush_dispatch_notifications();
+    unsafe {
+        x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);
+        sched::context::iretq_to_context(context);
+    }
+}
+
+extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) { return u64::MAX; }
 
     let path_ptr = frame.rdi;
@@ -2872,7 +2863,10 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     }
 
     let mut sched = crate::sched::SCHEDULER.lock();
-    if sched.current_address_space_has_borrowers() {
+    if sched.current_process().is_exiting() {
+        return u64::MAX;
+    }
+    if !sched.current_process().owns_address_space || sched.current_address_space_has_borrowers() {
         crate::serial_println!("[MM-0] exec rejected while address-space borrowers are live");
         return if sched.current_process().is_linux_compat() {
             linux_errno(38)
@@ -2928,10 +2922,8 @@ fn sys_exec(frame: &mut SyscallFrame) -> u64 {
                 crate::process::spawn::is_trusted_control_panel_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
-            // Request immediate reschedule so the next timer tick switches context
-            crate::sched::request_reschedule();
-            // Return 0; the actual context switch will happen via timer interrupt
-            // and the next time this process runs, it will be at the new entry point
+            // The kernel-stack trampoline enters the installed iret context
+            // after this function releases its guards and owned temporaries.
             0
         }
         Err(e) => {
@@ -3476,7 +3468,7 @@ fn sys_wiseowl_delegate_caller(frame: &mut SyscallFrame) -> u64 {
     let now_ms = now_ns() / 1_000_000;
     let sched = crate::sched::SCHEDULER.lock();
     let mediator = sched.current_process();
-    if !mediator.trusted_wiseowl_braind {
+    if !mediator.trusted_wiseowl_braind || mediator.is_exiting() {
         crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-mediator-untrusted");
         return u64::MAX;
     }
@@ -3486,12 +3478,14 @@ fn sys_wiseowl_delegate_caller(frame: &mut SyscallFrame) -> u64 {
     };
     let Some(caller) = sched.processes.iter().find(|process| {
         process.pid == reply_target.call.pid
-            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+            && !process.is_exiting()
     }) else {
         crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-caller-not-live");
         return u64::MAX;
     };
-    if !caller.trusted_wiseowl_console {
+    if !caller.trusted_wiseowl_console
+        || !crate::ipc::reply_target_matches_pending_request(caller.pid, caller.pending_call, Some(reply_target))
+    {
         crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-caller-untrusted");
         return u64::MAX;
     }
@@ -3512,7 +3506,6 @@ fn sys_wiseowl_delegate_caller(frame: &mut SyscallFrame) -> u64 {
     let caller_uid = caller.uid;
     let mediator_pid = mediator.pid;
     let mediator_generation = mediator.address_space.identity().generation;
-    drop(sched);
 
     let Some(opaque_id) = crate::entropy::next_u64() else {
         return u64::MAX;
@@ -3550,10 +3543,9 @@ fn sys_wiseowl_delegate_caller(frame: &mut SyscallFrame) -> u64 {
 fn sys_wiseowl_validate_delegated_caller(frame: &mut SyscallFrame) -> u64 {
     let now_ms = now_ns() / 1_000_000;
     let sched = crate::sched::SCHEDULER.lock();
-    if !sched.current_process().trusted_session_service {
+    if !sched.current_process().trusted_session_service || sched.current_process().is_exiting() {
         return u64::MAX;
     }
-    drop(sched);
     let Some(record) = crate::delegated_caller::DELEGATED_CALLERS
         .lock()
         .take(frame.rdi, frame.rsi)
@@ -3573,24 +3565,22 @@ fn sys_wiseowl_validate_delegated_caller(frame: &mut SyscallFrame) -> u64 {
     {
         return u64::MAX;
     }
-    let sched = crate::sched::SCHEDULER.lock();
     let caller_ok = sched.processes.iter().any(|process| {
         process.pid == record.caller_pid
             && process.address_space.identity().generation == record.caller_process_generation
             && process.uid == record.caller_uid
             && process.trusted_wiseowl_console
-            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+            && !process.is_exiting()
     });
     let mediator_ok = sched.processes.iter().any(|process| {
         process.pid == record.mediator_pid
             && process.address_space.identity().generation == record.mediator_process_generation
             && process.trusted_wiseowl_braind
-            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+            && !process.is_exiting()
     });
     if !caller_ok || !mediator_ok {
         return u64::MAX;
     }
-    drop(sched);
     let Some(proof_id) = crate::entropy::next_u64() else {
         return u64::MAX;
     };
@@ -3627,10 +3617,9 @@ fn sys_wiseowl_validate_delegated_caller(frame: &mut SyscallFrame) -> u64 {
 /// Changing the session authority binding revokes all outstanding handles.
 fn sys_wiseowl_set_active_session(frame: &mut SyscallFrame) -> u64 {
     let sched = crate::sched::SCHEDULER.lock();
-    if !sched.current_process().trusted_session_service {
+    if !sched.current_process().trusted_session_service || sched.current_process().is_exiting() {
         return u64::MAX;
     }
-    drop(sched);
     let active = frame.r8 == 1;
     if active && (frame.rdi == 0 || frame.rsi == 0) {
         return u64::MAX;
@@ -4704,7 +4693,7 @@ fn username_for_uid(uid: u32) -> &'static str {
 /// rdi = pointer to path prefix string (NUL-terminated, <= 63 bytes)
 /// rsi = access bits (read=1, write=2, execute=4)
 fn sys_grant_capability_syscall(frame: &mut SyscallFrame) -> u64 {
-    let caller_pid = crate::sched::with_scheduler(|sched| sched.current_process().pid as u32);
+    let caller_pid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
 
     let path_bytes = match read_user_cstr(frame.rdi, 64) {
         Ok(bytes) => bytes,

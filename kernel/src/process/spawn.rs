@@ -168,6 +168,39 @@ pub fn exec_into_process(
     };
 
     if activate_on_success {
+        // The only live-image caller is sys_exec, holding SCHEDULER -> PMM
+        // without CAP_BROKER. Unpublished spawn uses false and may already
+        // own the broker. Withdraw before activation can replace the syscall
+        // stack's VM; failed image preparation above preserves old authority.
+        let mut broker = crate::capability::CAP_BROKER.lock();
+        #[cfg(feature = "cap_issuance_test")]
+        let old_grants = broker.recipient_grant_count(process.pid);
+        broker.retire_recipient_grants(process.pid);
+        process.pending_call = None;
+        process.ipc_reply_target = None;
+        #[cfg(feature = "cap_issuance_test")]
+        if old_grants != 0 {
+            assert_eq!(old_grants, 32);
+            assert_eq!(broker.recipient_grant_count(process.pid), 0);
+            crate::serial_println!("[CAP-PR] exec authority withdrawn before VM activation records=32 remaining=0");
+        }
+    }
+
+    if activate_on_success {
+        // FS belongs to the retired image; the replacement runtime initializes TLS.
+        process.fs_base = 0;
+        #[cfg(feature = "cap_issuance_test")]
+        {
+            let rsp: u64;
+            unsafe {
+                core::arch::asm!("mov {}, rsp", out(reg) rsp, options(nomem, nostack));
+            }
+            crate::serial_println!("[EXEC-R2] commit pid={} incarnation={} old_vm={:?} new_vm={:?} kernel_rsp={:#x} entry={:#x} user_rsp={:#x}",
+                process.pid, process.foreground.incarnation, old_address_space.identity(),
+                process.address_space.identity(), rsp, entry, process.user_stack_top);
+            assert!(rsp >= process.kernel_stack_top - super::KERNEL_STACK_SIZE as u64);
+            assert!(rsp < process.kernel_stack_top - 160);
+        }
         unsafe {
             process.address_space.activate();
         }
@@ -184,6 +217,23 @@ pub fn exec_into_process(
         crate::memory::zram::revoke_admin(process.pid, old_address_space.identity().generation);
     }
     unsafe {
+        #[cfg(feature = "cap_issuance_test")]
+        if activate_on_success {
+            assert_eq!(
+                crate::memory::tlb::active_cpu_mask(old_address_space.identity()),
+                0
+            );
+            let stats = old_address_space.reclaim_user_space(pmm, hhdm_offset, true);
+            crate::serial_println!(
+                "[EXEC-R2] retired VM reclaimed frames={} tables={} swap={} active_cpus=0",
+                stats.user_frames,
+                stats.page_tables,
+                stats.swap_blocks
+            );
+        } else {
+            old_address_space.reclaim_user_space(pmm, hhdm_offset, true);
+        }
+        #[cfg(not(feature = "cap_issuance_test"))]
         old_address_space.reclaim_user_space(pmm, hhdm_offset, true);
     }
 
@@ -842,6 +892,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
             Ok(crate::SUNLIGHT_SESSIOND_ELF_BYTES)
         }
         "/sbin/mezzo" | "/usr/sbin/mezzo" => Ok(crate::MEZZO_ELF_BYTES),
+        #[cfg(feature = "cap_issuance_test")]
+        "/test/exec-r2" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/exec-r2.elf"))),
         "/bin/capabilityctl" | "/usr/bin/capabilityctl" => Ok(crate::CAPABILITYCTL_ELF_BYTES),
         "/bin/runas" | "/usr/bin/runas" => Ok(crate::RUNAS_ELF_BYTES),
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),

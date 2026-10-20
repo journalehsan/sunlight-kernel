@@ -17,6 +17,7 @@ pub enum SharedMemError {
     AlreadyMapped,
     PageTableAllocationFailed,
     InternalInvariant,
+    AuthorityUnavailable,
 }
 
 impl From<crate::process::address_space::MappingError> for SharedMemError {
@@ -76,8 +77,9 @@ pub fn alloc_shared_region(
         .mapped_shared
         .try_reserve(1)
         .map_err(|_| SharedMemError::OutOfMemory)?;
-    caps.reserve_shared_region_slot()
-        .map_err(|_| SharedMemError::OutOfMemory)?;
+    let prepared = caps
+        .prepare_shared_region()
+        .map_err(|_| SharedMemError::AuthorityUnavailable)?;
 
     let mut frames: alloc::vec::Vec<PhysFrame<Size4KiB>> = alloc::vec::Vec::new();
     frames
@@ -134,7 +136,7 @@ pub fn alloc_shared_region(
 
     // Publication is the commit point: backing frames and the complete owner
     // mapping exist before the token becomes observable.
-    let token = caps.mint_shared_region(frames, actual_size, caller.pid);
+    let token = prepared.commit(frames, actual_size, caller.pid);
 
     caller
         .address_space

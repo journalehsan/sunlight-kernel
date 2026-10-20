@@ -3549,12 +3549,12 @@ impl Scheduler {
                     None => (0, 0),
                 };
                 serial_println!(
-                    "[SCHED-DIAG] pid={} name='{}' state={:?} ipc_ep={:?} pending_call_cap={:#x} pending_call_label={:#x} pending_call_resolved_ep={} pending_call_resolved_owner_pid={} receiver_waiting_ep={} endpoint_queue_len={} endpoint_waiting_receiver_pid={} pending_callers={} reply_wait_ep={} reply_wait_label={} blocked_ticks={}",
+                    "[SCHED-DIAG] pid={} name='{}' state={:?} ipc_ep={:?} pending_call_cap_present={} pending_call_label={:#x} pending_call_resolved_ep={} pending_call_resolved_owner_pid={} receiver_waiting_ep={} endpoint_queue_len={} endpoint_waiting_receiver_pid={} pending_callers={} reply_wait_ep={} reply_wait_label={} blocked_ticks={}",
                     p.pid,
                     p.name_str(),
                     p.state,
                     p.ipc_endpoint,
-                    pending_call_cap,
+                    pending_call_cap != 0,
                     pending_call_label,
                     resolved_ep,
                     resolved_owner,

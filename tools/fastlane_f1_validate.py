@@ -38,7 +38,7 @@ def main():
         "head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "f1_complete": False,
         "status": "blocked",
-        "blocker": "F1B: predictable ordinary IPC capabilities, no recipient-bound mapping rights or live channel revocation",
+        "blocker": "F1B: no recipient-bound mapping rights or live channel revocation; ordinary issuance repaired separately by F1.1P",
         "subsystems": {
             "F1A_audit": "implemented_and_validated",
             "backing_retirement": "implemented_but_not_fully_validated",
@@ -137,7 +137,7 @@ def main():
                         for line in (ROOT / "tools/tests" / name).read_text().splitlines()
                         if line and not line.startswith("#")]
             required += [
-                "[FASTLANE-F1] capability issuance prerequisite: BLOCKED (adjacent token prediction)",
+                "[FASTLANE-F1] capability issuance regression: adjacent token prediction REJECTED",
                 "[FASTLANE-F1] isolation prerequisite: BLOCKED (legacy bearer RW/NX)",
                 "[FASTLANE-F1] retired views, failed-unmap preflight, double free, 32 lifecycles: OK",
                 "[FASTLANE-F1] prerequisite lifetime gate: OK (channel remains BLOCKED)",
@@ -184,7 +184,7 @@ def main():
                     raise RuntimeError(f"native prerequisite gate failed on {cpus} CPU(s)")
             summary["subsystems"]["backing_retirement"] = "implemented_and_validated"
         check("diff-check", ["git", "diff", "--check"])
-        print("F1 remains BLOCKED at capability issuance and recipient-specific mapping authority; no transport benchmark.", flush=True)
+        print("F1 remains BLOCKED at recipient-specific mapping authority and active revocation; no transport benchmark.", flush=True)
     finally:
         (EVIDENCE / "validation-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 
