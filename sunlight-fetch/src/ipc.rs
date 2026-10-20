@@ -121,7 +121,31 @@ pub fn http_request(
     request: &HttpRequest,
 ) -> FetchResult<(HttpResponse, TcpHandle, Vec<u8>)> {
     check_interrupted()?;
-    http_request_impl(hostname, addr, port, use_tls, request)
+    http_request_impl(hostname, addr, port, use_tls, request, None)
+}
+
+pub(crate) fn http_request_with_proxy(
+    hostname: &str,
+    addr: &ResolvedAddr,
+    port: u16,
+    use_tls: bool,
+    request: &HttpRequest,
+    proxy: Option<sunlight_net::socks5::Proxy>,
+) -> FetchResult<(HttpResponse, TcpHandle, Vec<u8>)> {
+    check_interrupted()?;
+    http_request_impl(hostname, addr, port, use_tls, request, proxy)
+}
+
+pub(crate) fn resolve_for_request(
+    hostname: &str,
+    proxy: Option<sunlight_net::socks5::Proxy>,
+) -> FetchResult<ResolvedAddr> {
+    if proxy.is_some() {
+        // No local DNS request: the SOCKS CONNECT carries the hostname.
+        Ok(ResolvedAddr { octets: [0; 4] })
+    } else {
+        dns_resolve(hostname)
+    }
 }
 
 /// Read the remaining body from a TCP handle.
@@ -347,15 +371,63 @@ mod host {
         })
     }
 
-    fn connect_tls(hostname: &str, addr: &ResolvedAddr, port: u16) -> FetchResult<HostConnection> {
+    struct SocksStream<'a>(&'a mut TcpStream);
+
+    impl sunlight_net::socks5::Transport for SocksStream<'_> {
+        fn write_all(&mut self, bytes: &[u8]) -> Result<(), sunlight_net::socks5::Error> {
+            self.0
+                .write_all(bytes)
+                .map_err(|_| sunlight_net::socks5::Error::Io)
+        }
+        fn read_exact(&mut self, bytes: &mut [u8]) -> Result<(), sunlight_net::socks5::Error> {
+            self.0
+                .read_exact(bytes)
+                .map_err(|_| sunlight_net::socks5::Error::Io)
+        }
+    }
+
+    fn connect_proxy(
+        proxy: sunlight_net::socks5::Proxy,
+        host: &str,
+        port: u16,
+    ) -> FetchResult<TcpStream> {
+        let mut stream = TcpStream::connect_timeout(
+            &SocketAddr::from((proxy.ip, proxy.port)),
+            std::time::Duration::from_secs(20),
+        )
+        .map_err(|error| FetchError::IoError(format!("SOCKS proxy connection failed: {error}")))?;
+        let timeout = Some(std::time::Duration::from_secs(20));
+        stream
+            .set_read_timeout(timeout)
+            .map_err(|error| FetchError::IoError(error.to_string()))?;
+        stream
+            .set_write_timeout(timeout)
+            .map_err(|error| FetchError::IoError(error.to_string()))?;
+        sunlight_net::socks5::connect(&mut SocksStream(&mut stream), host, port)
+            .map_err(|error| FetchError::IoError(format!("SOCKS CONNECT failed: {error:?}")))?;
+        let _ = stream.set_read_timeout(None);
+        let _ = stream.set_write_timeout(None);
+        Ok(stream)
+    }
+
+    fn connect_tls(
+        hostname: &str,
+        addr: &ResolvedAddr,
+        port: u16,
+        proxy: Option<sunlight_net::socks5::Proxy>,
+    ) -> FetchResult<HostConnection> {
         init_tls();
 
         let socket_addr = addr.socket_addr(port);
-        let tcp = TcpStream::connect(socket_addr).map_err(|e| FetchError::ConnectionFailed {
-            host: hostname.to_string(),
-            port,
-            reason: e.to_string(),
-        })?;
+        let tcp = if let Some(proxy) = proxy {
+            connect_proxy(proxy, hostname, port)?
+        } else {
+            TcpStream::connect(socket_addr).map_err(|e| FetchError::ConnectionFailed {
+                host: hostname.to_string(),
+                port,
+                reason: e.to_string(),
+            })?
+        };
 
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
@@ -417,10 +489,15 @@ mod host {
         port: u16,
         use_tls: bool,
         request: &HttpRequest,
+        proxy: Option<sunlight_net::socks5::Proxy>,
     ) -> FetchResult<(HttpResponse, TcpHandle, Vec<u8>)> {
         let mut handle = if use_tls {
             TcpHandle {
-                conn: connect_tls(hostname, addr, port)?,
+                conn: connect_tls(hostname, addr, port, proxy)?,
+            }
+        } else if let Some(proxy) = proxy {
+            TcpHandle {
+                conn: HostConnection::Plain(connect_proxy(proxy, hostname, port)?),
             }
         } else {
             tcp_connect_impl(addr, port)?
@@ -574,7 +651,7 @@ mod sunlight {
 
     // TLS IPC protocol labels — must match sunlight-tls/src/main.rs.
     // Design B: the daemon owns the socket + crypto; we exchange plaintext only.
-    const TLS_CONNECT: u64 = 0x5401;
+    const TLS_CONNECT_EX: u64 = 0x5408;
     const TLS_SEND: u64 = 0x5402;
     const TLS_RECV: u64 = 0x5403;
     const TLS_CLOSE: u64 = 0x5405;
@@ -585,6 +662,7 @@ mod sunlight {
     const TLS_ERR_SESSIONS_FULL: u64 = 3;
     const TLS_ERR_CERT_EXPIRED: u64 = 5;
     const TLS_ERR_CONNECT: u64 = 14;
+    const TLS_ERR_SOCKS: u64 = 15;
     const TLS_ERR_SEND_HANDSHAKE: u64 = 31;
 
     // One shared page per plaintext transfer to/from the daemon.
@@ -762,6 +840,27 @@ mod sunlight {
         Ok(())
     }
 
+    struct SocksSocket(u64);
+
+    impl sunlight_net::socks5::Transport for SocksSocket {
+        fn write_all(&mut self, bytes: &[u8]) -> Result<(), sunlight_net::socks5::Error> {
+            net_send(self.0, bytes).map_err(|_| sunlight_net::socks5::Error::Io)
+        }
+        fn read_exact(&mut self, mut bytes: &mut [u8]) -> Result<(), sunlight_net::socks5::Error> {
+            while !bytes.is_empty() {
+                let data =
+                    net_recv(self.0, bytes.len()).map_err(|_| sunlight_net::socks5::Error::Io)?;
+                if data.is_empty() {
+                    return Err(sunlight_net::socks5::Error::Io);
+                }
+                let (head, tail) = bytes.split_at_mut(data.len());
+                head.copy_from_slice(&data);
+                bytes = tail;
+            }
+            Ok(())
+        }
+    }
+
     fn net_wait_ready(socket_id: u64, timeout_ms: u64, interest: u64) -> FetchResult<()> {
         let cap = net_cap()?;
         let (ptr, tok) = shm_alloc()
@@ -780,7 +879,19 @@ mod sunlight {
         );
         let _ = shm_free(tok);
         let reply = reply.map_err(|_| FetchError::IoError(String::from("TCP wait timed out")))?;
-        if reply.words[0] == NetStatus::OK {
+        if reply.label != NetOp::WAIT
+            || reply.words[0] != NetStatus::OK
+            || reply.words[1] != socket_id
+        {
+            return Err(FetchError::IoError(String::from("TCP wait failed")));
+        }
+        let ready = reply.words[2];
+        if ready & (NetReady::RESET | NetReady::CLOSED | NetReady::ERROR) != 0
+            || (interest & NetReady::WRITE != 0 && ready & NetReady::EOF != 0)
+        {
+            return Err(FetchError::IoError(String::from("TCP connection closed")));
+        }
+        if ready & interest != 0 || (interest & NetReady::READ != 0 && ready & NetReady::EOF != 0) {
             Ok(())
         } else {
             Err(FetchError::IoError(String::from("TCP wait failed")))
@@ -811,33 +922,37 @@ mod sunlight {
     /// Open a real TLS session in the daemon: it connects the socket to
     /// `addr:port` and runs the rustls handshake with SNI = `host`. Returns the
     /// session id. (Design B: the daemon owns the socket + crypto.)
-    fn tls_connect(host: &str, addr: &ResolvedAddr, port: u16) -> FetchResult<u64> {
+    fn tls_connect(
+        host: &str,
+        addr: &ResolvedAddr,
+        port: u16,
+        proxy: Option<sunlight_net::socks5::Proxy>,
+    ) -> FetchResult<u64> {
         let cap = tls_cap()?;
-        let mut msg = IpcMsg::with_label(TLS_CONNECT)
-            .word(0, pack_ipv4(addr.octets))
-            .word(1, port as u64);
-        // Pack SNI hostname into words[2..7] (NUL-padded), up to 48 bytes.
-        let hb = host.as_bytes();
-        let mut i = 0usize;
-        for w in 2..8 {
-            let mut word = 0u64;
-            for j in 0..8 {
-                if i < hb.len() {
-                    word |= (hb[i] as u64) << (j * 8);
-                    i += 1;
-                }
-            }
-            msg.words[w] = word;
-            if i >= hb.len() {
-                break;
-            }
+        if host.is_empty() || host.len() > 253 {
+            return Err(FetchError::InvalidUrl(String::from(
+                "TLS hostname must contain 1..253 bytes",
+            )));
         }
-        msg.word_count = 8;
+        let (ptr, token) = shm_alloc()
+            .map_err(|_| FetchError::IpcError(String::from("shm_alloc failed (TLS hostname)")))?;
+        unsafe {
+            core::ptr::copy_nonoverlapping(host.as_ptr(), ptr, host.len());
+        }
+        let endpoint = proxy.map_or(addr.octets, |proxy| proxy.ip);
+        let ports = port as u64 | (proxy.map_or(0, |proxy| proxy.port as u64) << 16);
+        let msg = IpcMsg::with_label(TLS_CONNECT_EX)
+            .word(0, pack_ipv4(endpoint))
+            .word(1, ports)
+            .word(2, host.len() as u64)
+            .word(3, u64::from(proxy.is_some()))
+            .with_cap(0, token);
         debug_log(&format!(
             "[FETCH-TLS] connect host={} port={}\n",
             host, port
         ));
         let reply = ipc_call(cap, msg);
+        let _ = shm_free(token);
         if reply.label == TLS_REPLY {
             let sid = reply.words[0];
             debug_log(&format!("[FETCH-TLS] hs_OK host={} sid={:#x}\n", host, sid));
@@ -858,6 +973,11 @@ mod sunlight {
                     host: String::from(host),
                     port,
                     reason: String::from("TCP connection failed or closed before TLS handshake"),
+                },
+                TLS_ERR_SOCKS => FetchError::ConnectionFailed {
+                    host: String::from(host),
+                    port,
+                    reason: String::from("SOCKS proxy negotiation failed"),
                 },
                 TLS_ERR_SEND_HANDSHAKE => FetchError::ConnectionFailed {
                     host: String::from(host),
@@ -1001,18 +1121,34 @@ mod sunlight {
         port: u16,
         use_tls: bool,
         request: &HttpRequest,
+        proxy: Option<sunlight_net::socks5::Proxy>,
     ) -> FetchResult<(HttpResponse, TcpHandle, Vec<u8>)> {
         // Establish the transport: a daemon-owned TLS session (rustls) for
         // https://, or a plain TCP socket for http://.
         let conn = if use_tls {
-            let session_id = tls_connect(hostname, addr, port)?;
+            let session_id = tls_connect(hostname, addr, port, proxy)?;
             OsConnection::Tls {
                 session_id,
                 rx: Vec::new(),
             }
         } else {
             let socket_id = net_socket()?;
-            net_connect(socket_id, addr, port)?;
+            let result = if let Some(proxy) = proxy {
+                net_connect(socket_id, &ResolvedAddr { octets: proxy.ip }, proxy.port).and_then(
+                    |()| {
+                        sunlight_net::socks5::connect(&mut SocksSocket(socket_id), hostname, port)
+                            .map_err(|error| {
+                                FetchError::IoError(format!("SOCKS CONNECT failed: {error:?}"))
+                            })
+                    },
+                )
+            } else {
+                net_connect(socket_id, addr, port)
+            };
+            if let Err(error) = result {
+                let _ = net_close(socket_id);
+                return Err(error);
+            }
             OsConnection::Tcp { socket_id }
         };
 

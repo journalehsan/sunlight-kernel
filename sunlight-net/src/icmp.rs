@@ -7,7 +7,7 @@
 //! reflect the actual network round trip rather than a hardcoded constant.
 
 use smoltcp::iface::{Interface, SocketSet};
-use smoltcp::phy::{Device, DeviceCapabilities};
+use smoltcp::phy::Device;
 use smoltcp::socket::icmp;
 use smoltcp::time::Instant;
 use smoltcp::wire::{Icmpv4Packet, Icmpv4Repr, IpAddress, Ipv4Address};
@@ -94,7 +94,6 @@ pub fn ping<D: Device>(
 
     let dst = IpAddress::Ipv4(Ipv4Address::new(target[0], target[1], target[2], target[3]));
     let mut stats = PingStats::new(target);
-    let mut tick: i64 = 0;
 
     for seq in 0..count.min(16) {
         stats.packets_sent += 1;
@@ -119,8 +118,11 @@ pub fn ping<D: Device>(
         // Wait for the matching echo reply or time out.
         let deadline = send_at.wrapping_add(PING_TIMEOUT_MS);
         loop {
-            iface.poll(Instant::from_millis(tick), device, sockets);
-            tick = tick.wrapping_add(1);
+            iface.poll(
+                Instant::from_millis(sunlight_ipc::monotonic_millis() as i64),
+                device,
+                sockets,
+            );
 
             let socket = sockets.get_mut::<icmp::Socket>(handle);
             if socket.can_recv() {

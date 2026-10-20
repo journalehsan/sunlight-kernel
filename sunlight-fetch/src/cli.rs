@@ -1,7 +1,7 @@
 //! Hand-rolled argument parser — zero dependencies, no heap for fixed args.
 //! Follows SunlightOS convention: explicit, no magic.
 
-use crate::prelude::String;
+use crate::prelude::{String, Vec};
 
 /// HTTP method supported by fetch
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +28,74 @@ impl HttpMethod {
     }
 }
 
+/// A DNS override scoped to one hostname and port; TLS still verifies the hostname.
+#[derive(Debug)]
+pub struct ResolveOverride {
+    pub host: String,
+    pub port: u16,
+    pub ip: [u8; 4],
+}
+
+impl core::str::FromStr for ResolveOverride {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, String> {
+        let error = || String::from("--resolve requires HOST:PORT:IPv4 with a nonzero port");
+        let mut parts = value.split(':');
+        let host = parts.next().ok_or_else(error)?;
+        let port = parts
+            .next()
+            .ok_or_else(error)?
+            .parse::<u16>()
+            .map_err(|_| error())?;
+        let address = parts.next().ok_or_else(error)?;
+        if host.is_empty()
+            || host.len() > 253
+            || host
+                .bytes()
+                .any(|b| !b.is_ascii_alphanumeric() && b != b'.' && b != b'-')
+            || port == 0
+            || parts.next().is_some()
+        {
+            return Err(error());
+        }
+        let mut octets = address.split('.');
+        let mut ip = [0; 4];
+        for octet in &mut ip {
+            let part = octets.next().ok_or_else(error)?;
+            if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
+                return Err(error());
+            }
+            *octet = part.parse().map_err(|_| error())?;
+        }
+        if octets.next().is_some() {
+            return Err(error());
+        }
+        Ok(Self {
+            host: String::from(host),
+            port,
+            ip,
+        })
+    }
+}
+
+pub(crate) fn resolve_address(
+    url: &crate::http::ParsedUrl,
+    proxy: Option<sunlight_net::socks5::Proxy>,
+    overrides: &[ResolveOverride],
+) -> crate::error::FetchResult<crate::ipc::ResolvedAddr> {
+    if proxy.is_none() {
+        if let Some(entry) = overrides
+            .iter()
+            .rev()
+            .find(|entry| entry.port == url.port && entry.host.eq_ignore_ascii_case(&url.host))
+        {
+            return Ok(crate::ipc::ResolvedAddr { octets: entry.ip });
+        }
+    }
+    crate::ipc::resolve_for_request(&url.host, proxy)
+}
+
 /// Parsed CLI configuration — all fields determined at parse time
 #[derive(Debug)]
 pub struct FetchConfig {
@@ -47,6 +115,11 @@ pub struct FetchConfig {
     /// Explicit output filename (None = infer from URL)
     pub output: Option<String>,
 
+    /// Explicit SOCKS5 proxy; the proxy resolves destination hostnames.
+    pub socks5_proxy: Option<sunlight_net::socks5::Proxy>,
+
+    pub resolve: Vec<ResolveOverride>,
+
     /// Show help and exit
     pub help: bool,
 }
@@ -64,6 +137,8 @@ impl Default for FetchConfig {
             post_data: None,
             chunks: 16,
             output: None,
+            socks5_proxy: None,
+            resolve: Vec::new(),
             help: false,
         }
     }
@@ -129,6 +204,22 @@ pub fn parse_args(args: &[String]) -> Result<FetchConfig, String> {
                 }
             }
 
+            "--resolve" => {
+                i += 1;
+                let value = args
+                    .get(i)
+                    .ok_or_else(|| String::from("--resolve requires HOST:PORT:IPv4"))?;
+                config.resolve.push(value.parse()?);
+            }
+
+            "--socks5-hostname" => {
+                i += 1;
+                let value = args.get(i).ok_or_else(|| {
+                    String::from("--socks5-hostname requires an IPv4 address and port")
+                })?;
+                config.socks5_proxy = Some(value.parse().map_err(String::from)?);
+            }
+
             "-o" | "--output" => {
                 i += 1;
                 let val = args
@@ -159,6 +250,11 @@ pub fn parse_args(args: &[String]) -> Result<FetchConfig, String> {
         return Err(String::from("no URL provided (see --help)"));
     }
 
+    if config.socks5_proxy.is_some() && !config.resolve.is_empty() {
+        return Err(String::from(
+            "--resolve cannot be combined with --socks5-hostname",
+        ));
+    }
     Ok(config)
 }
 
@@ -179,17 +275,20 @@ OPTIONS:
     -o, --output <FILE>     Output filename (default: infer from URL)
         --sample-file           Download a 1MB test file (plain HTTP)
         --sample-get-request    GET https://api.sampleapis.com/coffee/hot (JSON)
+        --socks5-hostname <IP:PORT>  Use SOCKS5 with proxy-side DNS
+        --resolve <HOST:PORT:IPv4>   Override DNS; repeat for multiple hosts
     -h, --help              Show this help
 
 EXAMPLES:
     fetch http://example.com
     fetch -o page.html http://example.com
+    fetch --socks5-hostname 10.0.2.2:9050 https://archlinux.org
     fetch --sample-file
     fetch -T POST -d 'key=value' http://httpbin.org/post
 
 NOTES:
     Requires 'net' and 'vfs_write' capabilities.
-    DNS resolves via /etc/hosts first, then hardcoded resolver.
+    DNS uses --resolve overrides, then the system resolver.
 ",
     );
 }
@@ -200,6 +299,68 @@ mod tests {
 
     fn s(val: &str) -> String {
         String::from(val)
+    }
+
+    #[test]
+    fn explicit_socks_proxy_and_direct_default() {
+        let direct = parse_args(&[s("https://archlinux.org")]).unwrap();
+        assert_eq!(direct.socks5_proxy, None);
+        let proxied = parse_args(&[
+            s("--socks5-hostname"),
+            s("10.0.2.2:9050"),
+            s("https://archlinux.org"),
+        ])
+        .unwrap();
+        assert_eq!(proxied.socks5_proxy.unwrap().ip, [10, 0, 2, 2]);
+        assert!(parse_args(&[s("--socks5-hostname")]).is_err());
+        assert!(parse_args(&[
+            s("--socks5-hostname"),
+            s("10.0.2.2:0"),
+            s("https://archlinux.org")
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn resolve_override_validation_and_scope() {
+        for invalid in [
+            "",
+            "host:0:1.2.3.4",
+            "host:443:256.2.3.4",
+            "host:443:1.2.3",
+            "host:443:1.2.3.4:5",
+            ":443:1.2.3.4",
+        ] {
+            assert!(invalid.parse::<ResolveOverride>().is_err(), "{invalid}");
+        }
+        let config = parse_args(&[
+            s("--resolve"),
+            s("127.0.0.1:443:10.0.2.2"),
+            s("https://127.0.0.1"),
+        ])
+        .unwrap();
+        let https = crate::http::ParsedUrl::parse("https://127.0.0.1").unwrap();
+        assert_eq!(
+            resolve_address(&https, None, &config.resolve)
+                .unwrap()
+                .octets,
+            [10, 0, 2, 2]
+        );
+        let http = crate::http::ParsedUrl::parse("http://127.0.0.1").unwrap();
+        assert_eq!(
+            resolve_address(&http, None, &config.resolve)
+                .unwrap()
+                .octets,
+            [127, 0, 0, 1]
+        );
+        assert!(parse_args(&[
+            s("--resolve"),
+            s("a:443:1.2.3.4"),
+            s("--socks5-hostname"),
+            s("10.0.2.2:9050"),
+            s("https://a")
+        ])
+        .is_err());
     }
 
     #[test]

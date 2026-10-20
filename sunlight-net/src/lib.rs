@@ -12,6 +12,7 @@ pub mod netop;
 pub mod pci;
 pub mod proxy_device;
 pub mod simulation;
+pub mod socks5;
 pub mod tcp;
 pub mod virtio_net;
 pub mod vmxnet3;

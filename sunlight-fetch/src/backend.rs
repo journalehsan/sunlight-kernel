@@ -58,7 +58,7 @@ impl PendingRequest {
 pub fn perform_request(url: ParsedUrl, request: HttpRequest) -> FetchResult<RequestResult> {
     ipc::acquire_capabilities()?;
     let addr = ipc::dns_resolve(&url.host)?;
-    let pending = begin_request_from_resolved(url, addr, request, None)?;
+    let pending = begin_request_from_resolved(url, addr, request, None, None, &[])?;
     pending.read_body(None)
 }
 
@@ -67,6 +67,8 @@ pub(crate) fn begin_request_from_resolved(
     start_addr: ResolvedAddr,
     request: HttpRequest,
     mut on_event: Option<&mut dyn FnMut(RequestEvent)>,
+    proxy: Option<sunlight_net::socks5::Proxy>,
+    overrides: &[crate::cli::ResolveOverride],
 ) -> FetchResult<PendingRequest> {
     let started_at = start_timer();
     let mut url = start_url;
@@ -76,8 +78,14 @@ pub(crate) fn begin_request_from_resolved(
     for redirect in 0..=MAX_REDIRECTS {
         emit_event(&mut on_event, RequestEvent::Connecting { url: url.clone() });
 
-        let (response, mut handle, initial_body) =
-            ipc::http_request(&url.host, &addr, url.port, url.uses_tls(), &request)?;
+        let (response, mut handle, initial_body) = ipc::http_request_with_proxy(
+            &url.host,
+            &addr,
+            url.port,
+            url.uses_tls(),
+            &request,
+            proxy,
+        )?;
 
         if matches!(response.status_code, 301 | 302 | 303 | 307 | 308) {
             let location = response
@@ -102,7 +110,7 @@ pub(crate) fn begin_request_from_resolved(
                     next_url: next_url.clone(),
                 },
             );
-            addr = ipc::dns_resolve(&next_url.host)?;
+            addr = crate::cli::resolve_address(&next_url, proxy, overrides)?;
             request = redirected_request(&request, &next_url);
             url = next_url;
             let _ = handle.close();
@@ -222,6 +230,101 @@ mod tests {
             FetchError::InvalidUrl(msg) => assert!(msg.contains("unsupported redirect location")),
             other => panic!("expected InvalidUrl, got {other:?}"),
         }
+    }
+
+    #[cfg(feature = "host-linux")]
+    #[test]
+    fn dns_override_preserves_host_across_redirects() {
+        let Some(listener) = bind_test_listener() else {
+            return;
+        };
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            for response in [
+                "HTTP/1.1 302 Found\r\nLocation: /final\r\nContent-Length: 0\r\n\r\n",
+                "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello",
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                    .unwrap();
+                let request = read_http_request(&mut stream);
+                assert!(request.contains(&format!("override.sunlight.invalid:{port}")));
+                stream.write_all(response.as_bytes()).unwrap();
+            }
+        });
+        let url =
+            ParsedUrl::parse(&format!("http://override.sunlight.invalid:{port}/start")).unwrap();
+        let overrides = [format!("override.sunlight.invalid:{port}:127.0.0.1")
+            .parse()
+            .unwrap()];
+        let address = crate::cli::resolve_address(&url, None, &overrides).unwrap();
+        let request = HttpRequest {
+            method: "GET",
+            path: url.path.clone(),
+            host: url.host_header(),
+            headers: vec![],
+            body: None,
+        };
+        let result = begin_request_from_resolved(url, address, request, None, None, &overrides)
+            .unwrap()
+            .read_body(None)
+            .unwrap();
+        assert_eq!(result.body, b"hello");
+        server.join().unwrap();
+    }
+
+    #[cfg(feature = "host-linux")]
+    #[test]
+    fn socks_proxy_resolves_both_initial_and_redirect_hostnames() {
+        let Some(listener) = bind_test_listener() else {
+            return;
+        };
+        let proxy = sunlight_net::socks5::Proxy {
+            ip: [127, 0, 0, 1],
+            port: listener.local_addr().unwrap().port(),
+        };
+        let server = thread::spawn(move || {
+            for (hostname, response) in [
+                ("initial.sunlight.invalid", "HTTP/1.1 302 Found\r\nLocation: http://redirect.sunlight.invalid/final\r\nContent-Length: 0\r\n\r\n"),
+                ("redirect.sunlight.invalid", "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello"),
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+                let mut greeting = [0; 3];
+                stream.read_exact(&mut greeting).unwrap();
+                assert_eq!(greeting, [5, 1, 0]);
+                stream.write_all(&[5, 0]).unwrap();
+                let mut request = [0; 5];
+                stream.read_exact(&mut request).unwrap();
+                assert_eq!(&request[..4], &[5, 1, 0, 3]);
+                let mut name = vec![0; request[4] as usize];
+                stream.read_exact(&mut name).unwrap();
+                assert_eq!(name, hostname.as_bytes());
+                let mut port = [0; 2];
+                stream.read_exact(&mut port).unwrap();
+                assert_eq!(u16::from_be_bytes(port), 80);
+                stream.write_all(&[5, 0, 0, 1, 127, 0, 0, 1, 0, 80]).unwrap();
+                let request = read_http_request(&mut stream);
+                assert!(request.contains(hostname));
+                stream.write_all(response.as_bytes()).unwrap();
+            }
+        });
+        let url = ParsedUrl::parse("http://initial.sunlight.invalid/start").unwrap();
+        let request = HttpRequest {
+            method: "GET",
+            path: url.path.clone(),
+            host: url.host_header(),
+            headers: vec![],
+            body: None,
+        };
+        let address = ipc::resolve_for_request(&url.host, Some(proxy)).unwrap();
+        let result = begin_request_from_resolved(url, address, request, None, Some(proxy), &[])
+            .unwrap()
+            .read_body(None)
+            .unwrap();
+        assert_eq!(result.body, b"hello");
+        server.join().unwrap();
     }
 
     #[cfg(feature = "host-linux")]

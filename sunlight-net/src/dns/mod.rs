@@ -51,9 +51,12 @@ impl ResolverChain {
         self.hosts = parse_hosts(hosts_content);
     }
 
-    /// Step 1+2 of the chain: `/etc/hosts` then the TTL cache.
+    /// Numeric IPv4 addresses need no DNS; otherwise use hosts then the cache.
     /// Returns `None` if an upstream query is required.
     pub fn resolve_local(&mut self, hostname: &str, now: u64) -> Option<[u8; 4]> {
+        if let Ok(ip) = hostname.parse::<core::net::Ipv4Addr>() {
+            return Some(ip.octets());
+        }
         if let Some(&ip) = self.hosts.get(hostname) {
             return Some(ip);
         }
@@ -90,6 +93,14 @@ unsafe impl Sync for ResolverChain {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn numeric_ipv4_does_not_require_dns_or_accept_a_cached_override() {
+        let mut chain = ResolverChain::new("");
+        chain.cache_insert("10.0.2.2", [9, 9, 9, 9], 300, 0);
+        assert_eq!(chain.resolve_local("10.0.2.2", 0), Some([10, 0, 2, 2]));
+        assert_eq!(chain.resolve_local("999.0.2.2", 0), None);
+    }
 
     #[test]
     fn hosts_take_priority_over_cache() {

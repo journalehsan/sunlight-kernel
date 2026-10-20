@@ -40,13 +40,10 @@ static mut RESOLVER_CHAIN: Option<sunlight_net::ResolverChain> = None;
 static mut NET_DEVICE: Option<ProxyNetDevice> = None;
 static mut NET_IFACE: Option<Interface> = None;
 static mut LIVE_CONFIG: Option<sunlight_net::DhcpConfig> = None;
-/// Backing storage for the TCP SocketSet managed by TcpManager (main loop).
-static mut SOCKET_STORAGE: [SocketStorage; 128] = [SocketStorage::EMPTY; 128];
-/// Separate backing storage for the DNS SocketSet (RESOLVE handler).
-/// Kept isolated so DNS UDP sockets never alias TCP slots in SOCKET_STORAGE.
-static mut DNS_SOCKET_STORAGE: [SocketStorage; 4] = [SocketStorage::EMPTY; 4];
-/// Isolated storage for one-shot UDP_EXCHANGE (NTP etc.).
-static mut UDP_XCHG_SOCKET_STORAGE: [SocketStorage; 2] = [SocketStorage::EMPTY; 2];
+/// All protocols share one set: polling an isolated DNS/NTP set would make
+/// smoltcp answer incoming TCP packets with RST because their sockets are absent.
+/// Reserve extra slots beyond TcpManager's 128-socket limit for temporary sockets.
+static mut SOCKET_STORAGE: [SocketStorage; 132] = [SocketStorage::EMPTY; 132];
 static mut TCP_MANAGER: Option<sunlight_net::TcpManager> = None;
 static mut WAITERS: Option<alloc::vec::Vec<SocketWaiter>> = None;
 const DNS_FALLBACK_SERVERS: [[u8; 4]; 2] = [[208, 67, 222, 222], [208, 67, 220, 220]];
@@ -142,7 +139,7 @@ pub extern "C" fn _start() -> ! {
         mac.0[5]
     ));
 
-    let sockets_storage: &'static mut [SocketStorage; 128] =
+    let sockets_storage: &'static mut [SocketStorage; 132] =
         unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_STORAGE) };
     let mut sockets = SocketSet::new(&mut sockets_storage[..]);
     let lease = sunlight_net::acquire_lease(&mut iface, &mut sockets, &mut device).ok();
@@ -723,12 +720,11 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                             // the kernel frame proxy.
                             match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
                                 (Some(iface), Some(device)) => {
-                                    let mut sockets = SocketSet::new(&mut DNS_SOCKET_STORAGE[..]);
                                     match sunlight_net::dns::upstream::query_a(
                                         hostname,
                                         chain.upstream,
                                         iface,
-                                        &mut sockets,
+                                        sockets,
                                         device,
                                     ) {
                                         Ok((ip, ttl)) => {
@@ -753,11 +749,7 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                                                         hostname, server[0], server[1], server[2], server[3]
                                                     ));
                                                     match sunlight_net::dns::upstream::query_a(
-                                                        hostname,
-                                                        server,
-                                                        iface,
-                                                        &mut sockets,
-                                                        device,
+                                                        hostname, server, iface, sockets, device,
                                                     ) {
                                                         Ok((ip, ttl)) => {
                                                             debug_log(&alloc::format!(
@@ -818,7 +810,7 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
             }
             IpcMsg::with_label(NetOp::RELOAD_HOSTS).word(0, 1)
         }
-        NetOp::UDP_EXCHANGE => handle_udp_exchange(msg),
+        NetOp::UDP_EXCHANGE => handle_udp_exchange(msg, sockets),
         NetOp::PING => {
             // ICMP echo (ping) over the real device.
             // words[0] = packed IPv4, words[1] = count (1..16).
@@ -856,7 +848,7 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
 /// Request payload is in the SHM page (`caps[0]`); the response overwrites it.
 /// Timeouts use the monotonic clock so wall-clock steps cannot stall or rush
 /// the exchange.
-fn handle_udp_exchange(msg: IpcMsg) -> IpcMsg {
+fn handle_udp_exchange(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
     use smoltcp::socket::udp;
     use smoltcp::time::Instant;
     use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint, Ipv4Address};
@@ -898,7 +890,6 @@ fn handle_udp_exchange(msg: IpcMsg) -> IpcMsg {
     let result = unsafe {
         match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
             (Some(iface), Some(device)) => {
-                let mut sockets = SocketSet::new(&mut UDP_XCHG_SOCKET_STORAGE[..]);
                 let (rx_buffer, tx_buffer) = (
                     udp::PacketBuffer::new(&mut RX_META[..], &mut RX_PAYLOAD[..]),
                     udp::PacketBuffer::new(&mut TX_META[..], &mut TX_PAYLOAD[..]),
@@ -931,15 +922,14 @@ fn handle_udp_exchange(msg: IpcMsg) -> IpcMsg {
                         Err(NetStatus::INTERNAL)
                     } else {
                         let deadline = monotonic_millis().saturating_add(timeout_ms);
-                        let mut tick: i64 = 0;
                         let mut out: Result<alloc::vec::Vec<u8>, u64> = Err(NetStatus::TIMEOUT);
                         // Poll a few times per yield-burst so we still respond
                         // quickly, but always yield so interactive services
                         // (tty/shell) are not starved for the full timeout.
                         loop {
                             for _ in 0..4 {
-                                let now = Instant::from_millis(tick);
-                                iface.poll(now, device, &mut sockets);
+                                let now = Instant::from_millis(monotonic_millis() as i64);
+                                iface.poll(now, device, sockets);
                                 let socket = sockets.get_mut::<udp::Socket>(handle);
                                 if socket.can_recv() {
                                     let mut buf = [0u8; 512];
@@ -948,7 +938,6 @@ fn handle_udp_exchange(msg: IpcMsg) -> IpcMsg {
                                         break;
                                     }
                                 }
-                                tick = tick.wrapping_add(1);
                             }
                             if matches!(out, Ok(_)) {
                                 break;

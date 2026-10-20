@@ -33,13 +33,7 @@ fn do_plain_http_fetch(config: &FetchConfig) -> FetchResult<()> {
         .clone()
         .unwrap_or_else(|| url.infer_filename());
 
-    eprintln_fetch(&format!("Resolving {}...", url.host));
-
-    let addr = ipc::dns_resolve(&url.host)?;
-    eprintln_fetch(&format!(
-        "Resolved to {}.{}.{}.{}",
-        addr.octets[0], addr.octets[1], addr.octets[2], addr.octets[3]
-    ));
+    let addr = resolve_destination(config, &url)?;
 
     match config.method {
         HttpMethod::Get => execute_get(config, &url, &addr, &output_name),
@@ -59,13 +53,7 @@ fn do_https_fetch(config: &FetchConfig) -> FetchResult<()> {
         .clone()
         .unwrap_or_else(|| url.infer_filename());
 
-    eprintln_fetch(&format!("Resolving {} (HTTPS)...", url.host));
-
-    let addr = ipc::dns_resolve(&url.host)?;
-    eprintln_fetch(&format!(
-        "Resolved to {}.{}.{}.{}",
-        addr.octets[0], addr.octets[1], addr.octets[2], addr.octets[3]
-    ));
+    let addr = resolve_destination(config, &url)?;
 
     match config.method {
         HttpMethod::Get => execute_get(config, &url, &addr, &output_name),
@@ -73,8 +61,27 @@ fn do_https_fetch(config: &FetchConfig) -> FetchResult<()> {
     }
 }
 
+fn resolve_destination(config: &FetchConfig, url: &ParsedUrl) -> FetchResult<ResolvedAddr> {
+    if let Some(proxy) = config.socks5_proxy {
+        eprintln_fetch(&format!(
+            "Using SOCKS5 {}.{}.{}.{}:{} (proxy resolves {})",
+            proxy.ip[0], proxy.ip[1], proxy.ip[2], proxy.ip[3], proxy.port, url.host
+        ));
+    } else {
+        eprintln_fetch(&format!("Resolving {}...", url.host));
+    }
+    let addr = crate::cli::resolve_address(url, config.socks5_proxy, &config.resolve)?;
+    if config.socks5_proxy.is_none() {
+        eprintln_fetch(&format!(
+            "Resolved to {}.{}.{}.{}",
+            addr.octets[0], addr.octets[1], addr.octets[2], addr.octets[3]
+        ));
+    }
+    Ok(addr)
+}
+
 fn execute_get(
-    _config: &FetchConfig,
+    config: &FetchConfig,
     url: &ParsedUrl,
     addr: &ResolvedAddr,
     output_name: &str,
@@ -103,6 +110,8 @@ fn execute_get(
         addr.clone(),
         request,
         Some(&mut on_event),
+        config.socks5_proxy,
+        &config.resolve,
     )?;
     let response = &pending.response;
 
@@ -187,6 +196,8 @@ fn execute_post(
         addr.clone(),
         request,
         Some(&mut on_event),
+        config.socks5_proxy,
+        &config.resolve,
     )?;
     let status_code = pending.response.status_code;
     let status_text = pending.response.status_text.clone();

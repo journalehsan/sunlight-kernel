@@ -1,6 +1,10 @@
 [package]
 name = "sunlight-tls"
-version = "0.2.5276-alpha.2"
+version = "0.2.5299-alpha.2"
+
+
+
+
 
 
 
@@ -594,6 +598,7 @@ path = "src/main.rs"
 default = ["host"]
 host = []
 sunlightos = [
+    "dep:sunlight-net",
     "dep:sunlight-ipc",
     "dep:sunlight-libc",
     "dep:heapless",
@@ -605,6 +610,7 @@ sunlightos = [
 ]
 
 [dependencies]
+sunlight-net = { path = "../sunlight-net", optional = true }
 sunlight-ipc  = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true }
 heapless      = { version = "0.8", optional = true }

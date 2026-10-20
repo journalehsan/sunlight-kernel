@@ -5,6 +5,7 @@
 //! plaintext with it over IPC + shared memory:
 //!
 //!   TLS_CONNECT(ip, port, sni) -> session id   (opens socket, runs handshake)
+//!   TLS_CONNECT_EX(endpoint, ports, name_len, proxy; SHM name) -> session id
 //!   TLS_SEND(sid, plaintext via shm)           (encrypts + transmits)
 //!   TLS_RECV(sid) -> plaintext via shm + eof   (receives + decrypts)
 //!   TLS_CLOSE(sid)                             (close_notify + socket close)
@@ -126,6 +127,9 @@ mod sunlightos_impl {
     const TLS_CLOSE: u64 = 0x5405;
     const TLS_INSTALL: u64 = 0x5406; // certificatectl: install a CA into kv
     const TLS_LIST: u64 = 0x5407;
+    // Four inline words: endpoint IP, target/proxy ports, hostname length,
+    // proxy flag. caps[0] carries the full hostname in SHM.
+    const TLS_CONNECT_EX: u64 = 0x5408;
     const TLS_REPLY: u64 = 0x54FF;
     const TLS_ERROR: u64 = 0x54EE;
 
@@ -394,6 +398,10 @@ mod sunlightos_impl {
     }
 
     fn net_recv_chunk(socket_id: u64) -> Vec<u8> {
+        net_recv_limited(socket_id, SHM_PAGE, 8_000)
+    }
+
+    fn net_recv_limited(socket_id: u64, limit: usize, timeout_ms: u64) -> Vec<u8> {
         let cap = match net_cap() {
             Some(c) => c,
             None => return Vec::new(),
@@ -406,7 +414,7 @@ mod sunlightos_impl {
             cap,
             IpcMsg::with_label(NET_RECV_SHM)
                 .word(0, socket_id)
-                .word(1, SHM_PAGE as u64)
+                .word(1, limit.min(SHM_PAGE) as u64)
                 .with_cap(0, tok),
         );
         if reply.label != NET_RECV_SHM {
@@ -415,12 +423,12 @@ mod sunlightos_impl {
         }
         if reply.words[1] == NET_STATUS_WOULD_BLOCK {
             let _ = shm_free(tok);
-            if net_wait_ready(socket_id, 8_000, NET_READY_READ) {
-                return net_recv_chunk(socket_id);
+            if net_wait_ready(socket_id, timeout_ms, NET_READY_READ) {
+                return net_recv_limited(socket_id, limit, timeout_ms);
             }
             return Vec::new();
         }
-        let len = (reply.words[0] as usize).min(SHM_PAGE);
+        let len = (reply.words[0] as usize).min(limit).min(SHM_PAGE);
         if len == 0 {
             let _ = shm_free(tok);
             return Vec::new();
@@ -850,7 +858,74 @@ mod sunlightos_impl {
     }
 
     // ── connect entry point ─────────────────────────────────────────────────────
-    fn tls_connect(ip_packed: u64, port: u16, host: &str) -> Result<u64, u64> {
+    struct SocksSocket(u64);
+
+    impl sunlight_net::socks5::Transport for SocksSocket {
+        fn write_all(&mut self, bytes: &[u8]) -> Result<(), sunlight_net::socks5::Error> {
+            if net_send_all(self.0, bytes) {
+                Ok(())
+            } else {
+                Err(sunlight_net::socks5::Error::Io)
+            }
+        }
+        fn read_exact(&mut self, mut bytes: &mut [u8]) -> Result<(), sunlight_net::socks5::Error> {
+            while !bytes.is_empty() {
+                let data = net_recv_limited(self.0, bytes.len(), 20_000);
+                if data.is_empty() {
+                    return Err(sunlight_net::socks5::Error::Io);
+                }
+                let (head, tail) = bytes.split_at_mut(data.len());
+                head.copy_from_slice(&data);
+                bytes = tail;
+            }
+            Ok(())
+        }
+    }
+
+    fn connect_request(
+        msg: &IpcMsg,
+    ) -> Result<(u64, u16, String, Option<sunlight_net::socks5::Proxy>), u64> {
+        let port = msg.words[1] as u16;
+        if port == 0 {
+            return Err(11);
+        }
+        if msg.label == TLS_CONNECT {
+            return Ok((
+                msg.words[0],
+                port,
+                unpack_str(&msg.words, 2, (IPC_REGISTER_WORDS - 2) * 8),
+                None,
+            ));
+        }
+        let len = msg.words[2] as usize;
+        if len == 0 || len > 253 || msg.words[3] > 1 || msg.caps[0] == CapabilityToken::INVALID {
+            return Err(11);
+        }
+        let ptr = shm_map(msg.caps[0]).map_err(|_| 11u64)?;
+        let bytes = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
+        let _ = shm_free(msg.caps[0]);
+        let host = String::from_utf8(bytes).map_err(|_| 11u64)?;
+        let proxy = if msg.words[3] == 1 {
+            let port = (msg.words[1] >> 16) as u16;
+            if port == 0 {
+                return Err(11);
+            }
+            Some(sunlight_net::socks5::Proxy {
+                ip: (msg.words[0] as u32).to_le_bytes(),
+                port,
+            })
+        } else {
+            None
+        };
+        Ok((msg.words[0], port, host, proxy))
+    }
+
+    fn tls_connect(
+        ip_packed: u64,
+        port: u16,
+        host: &str,
+        proxy: Option<sunlight_net::socks5::Proxy>,
+    ) -> Result<u64, u64> {
         let cfg = match unsafe { (*core::ptr::addr_of!(CLIENT_CONFIG)).clone() } {
             Some(c) => c,
             None => return Err(10),
@@ -868,9 +943,18 @@ mod sunlightos_impl {
             Some(s) => s,
             None => return Err(13),
         };
-        if !net_connect(socket_id, ip_packed, port) {
+        if !net_connect(socket_id, ip_packed, proxy.map_or(port, |proxy| proxy.port)) {
             net_close(socket_id);
             return Err(14);
+        }
+        if proxy.is_some() {
+            if let Err(error) =
+                sunlight_net::socks5::connect(&mut SocksSocket(socket_id), host, port)
+            {
+                serial_println!("[SUNLIGHT-TLS] SOCKS CONNECT failed: {:?}", error);
+                net_close(socket_id);
+                return Err(15);
+            }
         }
         let mut incoming: Vec<u8> = Vec::new();
         if let Err(code) = drive_handshake(&mut conn, socket_id, &mut incoming) {
@@ -948,27 +1032,36 @@ mod sunlightos_impl {
             let mut reply = IpcMsg::with_label(TLS_REPLY);
 
             match msg.label {
-                TLS_CONNECT => {
-                    let ip = msg.words[0];
-                    let port = msg.words[1] as u16;
-                    let host = unpack_str(&msg.words, 2, (IPC_REGISTER_WORDS - 2) * 8);
-                    let local = local_time_str();
-                    serial_println!(
-                        "[SUNLIGHT-TLS] connect host={} port={} local={} unix={}",
-                        host,
-                        port,
-                        local,
-                        get_time_utc()
-                    );
-                    match tls_connect(ip, port, &host) {
+                TLS_CONNECT | TLS_CONNECT_EX => {
+                    let result = connect_request(&msg).and_then(|(ip, port, host, proxy)| {
+                        let local = local_time_str();
+                        serial_println!(
+                            "[SUNLIGHT-TLS] connect host={} port={} local={} unix={}",
+                            host,
+                            port,
+                            local,
+                            get_time_utc()
+                        );
+                        let result = tls_connect(ip, port, &host, proxy);
+                        match &result {
+                            Ok(sid) => {
+                                serial_println!("[SUNLIGHT-TLS] hs_OK host={} sid={:#x}", host, sid)
+                            }
+                            Err(code) => serial_println!(
+                                "[SUNLIGHT-TLS] hs_FAIL host={} code={}",
+                                host,
+                                code
+                            ),
+                        }
+                        result
+                    });
+                    match result {
                         Ok(sid) => {
                             reply.words[0] = sid;
-                            serial_println!("[SUNLIGHT-TLS] hs_OK host={} sid={:#x}", host, sid);
                         }
                         Err(code) => {
                             reply.label = TLS_ERROR;
                             reply.words[0] = code;
-                            serial_println!("[SUNLIGHT-TLS] hs_FAIL host={} code={}", host, code);
                         }
                     }
                 }

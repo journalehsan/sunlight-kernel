@@ -1,6 +1,10 @@
 [package]
 name = "sunlight-ipc"
-version = "0.2.5276-alpha.2"
+version = "0.2.5299-alpha.2"
+
+
+
+
 
 
 
@@ -603,3 +607,6 @@ version = "0.2.5276-alpha.2"
 edition = "2021"
 
 [dependencies]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("sunlightos"))'] }

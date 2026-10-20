@@ -7,6 +7,7 @@
 
 use super::wire::{BytePacketBuffer, DnsPacket, QueryType};
 use super::DnsError;
+use core::sync::atomic::{AtomicU16, Ordering};
 use smoltcp::iface::{Interface, SocketHandle, SocketSet};
 use smoltcp::phy::Device;
 use smoltcp::socket::udp;
@@ -15,6 +16,7 @@ use smoltcp::wire::{IpAddress, IpEndpoint, IpListenEndpoint, Ipv4Address};
 
 const DNS_PORT: u16 = 53;
 const LOCAL_PORT: u16 = 53000;
+static NEXT_QUERY_ID: AtomicU16 = AtomicU16::new(0xD05);
 /// Wall-clock budget (seconds) for a single attempt before giving up and
 /// (optionally) retrying once.
 ///
@@ -93,7 +95,9 @@ fn run_query<D: Device>(
     }
 
     // Build the query packet with our hand-written RFC 1035 serializer.
-    let query_id = 0xD05 ^ attempt;
+    // A late response from a previous hostname or retry must not satisfy this
+    // query. The echoed question and source are checked as well as this ID.
+    let query_id = NEXT_QUERY_ID.fetch_add(1, Ordering::Relaxed);
     let mut packet = DnsPacket::query(query_id, hostname, QueryType::A);
     let mut req_buf = BytePacketBuffer::new();
     packet
@@ -115,10 +119,8 @@ fn run_query<D: Device>(
     let deadline = sunlight_ipc::monotonic_millis()
         .checked_add(timeout_ms)
         .ok_or(DnsError::Timeout)?;
-    let mut tick: i64 = 0;
-
     loop {
-        let now = Instant::from_millis(tick);
+        let now = Instant::from_millis(sunlight_ipc::monotonic_millis() as i64);
         iface.poll(now, device, sockets);
 
         let socket = sockets.get_mut::<udp::Socket>(handle);
@@ -128,9 +130,9 @@ fn run_query<D: Device>(
             // waiting for a well-formed reply until the deadline (a single bad
             // datagram must not abort the query before the fallback logic, which
             // keys on `Timeout`, ever gets a chance to run).
-            if let Ok((_n, _meta)) = socket.recv_slice(&mut res_buf.buf) {
+            if let Ok((_n, meta)) = socket.recv_slice(&mut res_buf.buf) {
                 if let Ok(response) = DnsPacket::from_buffer(&mut res_buf) {
-                    if response.header.id == query_id {
+                    if matches_response(&response, meta.endpoint, remote, query_id, hostname) {
                         return match response.first_a() {
                             Some((addr, ttl)) => Ok((addr, ttl)),
                             None => Err(DnsError::NotFound),
@@ -148,6 +150,103 @@ fn run_query<D: Device>(
         // Each poll is a syscall round trip to the kernel's frame proxy;
         // yield so other processes get scheduled while we wait for a reply.
         sunlight_ipc::process_yield();
-        tick = tick.wrapping_add(1);
+    }
+}
+
+fn matches_response(
+    response: &DnsPacket,
+    source: IpEndpoint,
+    server: IpEndpoint,
+    query_id: u16,
+    hostname: &str,
+) -> bool {
+    source == server
+        && response.header.id == query_id
+        && response.header.response
+        && response.header.opcode == 0
+        && !response.header.truncated_message
+        && response.questions.len() == 1
+        && response.questions[0].qtype == QueryType::A
+        && response.questions[0]
+            .name
+            .trim_end_matches('.')
+            .eq_ignore_ascii_case(hostname.trim_end_matches('.'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn server() -> IpEndpoint {
+        IpEndpoint::new(IpAddress::Ipv4(Ipv4Address::new(10, 0, 2, 3)), DNS_PORT)
+    }
+
+    #[test]
+    fn late_ntp_dns_reply_cannot_resolve_https_hostname() {
+        // Previously every first attempt used 0xD05, so a delayed NTP reply
+        // could poison the HTTPS hostname's cache entry with an NTP server IP.
+        let mut response = DnsPacket::query(0xD05, "3.pool.ntp.org", QueryType::A);
+        response.header.response = true;
+        assert!(!matches_response(
+            &response,
+            server(),
+            server(),
+            0xD05,
+            "archlinux.org"
+        ));
+        assert!(!matches_response(
+            &response,
+            server(),
+            server(),
+            0xD06,
+            "3.pool.ntp.org"
+        ));
+    }
+
+    #[test]
+    fn response_requires_expected_source_question_and_flags() {
+        let mut response = DnsPacket::query(42, "ARCHLINUX.ORG", QueryType::A);
+        response.header.response = true;
+        assert!(matches_response(
+            &response,
+            server(),
+            server(),
+            42,
+            "archlinux.org."
+        ));
+        let wrong_source = IpEndpoint::new(server().addr, 123);
+        assert!(!matches_response(
+            &response,
+            wrong_source,
+            server(),
+            42,
+            "archlinux.org"
+        ));
+        response.questions[0].qtype = QueryType::AAAA;
+        assert!(!matches_response(
+            &response,
+            server(),
+            server(),
+            42,
+            "archlinux.org"
+        ));
+        response.questions[0].qtype = QueryType::A;
+        response.header.response = false;
+        assert!(!matches_response(
+            &response,
+            server(),
+            server(),
+            42,
+            "archlinux.org"
+        ));
+        response.header.response = true;
+        response.header.truncated_message = true;
+        assert!(!matches_response(
+            &response,
+            server(),
+            server(),
+            42,
+            "archlinux.org"
+        ));
     }
 }
