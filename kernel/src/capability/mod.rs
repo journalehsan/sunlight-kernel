@@ -266,10 +266,9 @@ struct ShmEntry {
     token: CapabilityToken,
     obj: ShmObject,
     owner_pid: usize,
-    revoked: bool,
-    /// Number of processes that currently have this region mapped.
-    /// Frames are only freed when this reaches zero.
-    map_count: usize,
+    // Counts views, including multiple views in one address space. Retirement
+    // fences admission without discarding backing needed by existing views.
+    lifetime: crate::memory::shared_lifetime::SharedLifetime,
 }
 
 /// Errors from the capability broker.
@@ -463,7 +462,7 @@ impl CapabilityBroker {
         self.shared_regions
             .iter()
             .find(|entry| entry.token == token)
-            .map(|entry| entry.map_count)
+            .map(|entry| entry.lifetime.views())
     }
 
     /// Create a new endpoint, return its id and a send+recv capability to the owner.
@@ -735,8 +734,7 @@ impl CapabilityBroker {
             token,
             obj: ShmObject { frames, size },
             owner_pid,
-            revoked: false,
-            map_count: 0,
+            lifetime: crate::memory::shared_lifetime::SharedLifetime::new(),
         });
         token
     }
@@ -750,12 +748,28 @@ impl CapabilityBroker {
     /// Resolve a (possibly multi-page) shared region capability to its object.
     pub fn resolve_shared_region(&self, token: CapabilityToken) -> Option<&ShmObject> {
         self.shared_regions.iter().find_map(|e| {
-            if e.token == token && !e.revoked {
+            if e.token == token && !e.lifetime.is_retired() {
                 Some(&e.obj)
             } else {
                 None
             }
         })
+    }
+
+    /// Cleanup authority comes from the task's existing mapping record, not
+    /// admission through a still-live token. Never use this to create a view.
+    pub(crate) fn shared_region_for_cleanup(&self, token: CapabilityToken) -> Option<&ShmObject> {
+        self.shared_regions
+            .iter()
+            .find(|entry| entry.token == token)
+            .map(|entry| &entry.obj)
+    }
+
+    pub(crate) fn preflight_shared_mapping(&self, token: CapabilityToken) -> bool {
+        self.shared_regions
+            .iter()
+            .find(|entry| entry.token == token)
+            .is_some_and(|entry| entry.lifetime.preflight_add().is_ok())
     }
 
     /// Validate a shared-page token, distinguishing "never existed" (forged/guessed)
@@ -767,7 +781,7 @@ impl CapabilityBroker {
             .iter()
             .find(|e| e.token == token)
             .ok_or(CapError::NotFound)?;
-        if entry.revoked {
+        if entry.lifetime.is_retired() {
             return Err(CapError::Revoked);
         }
         entry
@@ -781,9 +795,13 @@ impl CapabilityBroker {
     /// Increment the mapping reference count for `token`.
     /// Called each time a process maps the region into its address space.
     pub fn increment_map_count(&mut self, token: CapabilityToken) {
-        if let Some(e) = self.shared_regions.iter_mut().find(|e| e.token == token) {
-            e.map_count += 1;
-        }
+        self.shared_regions
+            .iter_mut()
+            .find(|e| e.token == token)
+            .expect("SHM mapping committed without backing metadata")
+            .lifetime
+            .add()
+            .expect("SHM mapping admission changed under broker lock");
     }
 
     /// Decrement the mapping reference count for `token`.
@@ -793,24 +811,36 @@ impl CapabilityBroker {
         &mut self,
         token: CapabilityToken,
     ) -> Option<alloc::vec::Vec<PhysFrame<Size4KiB>>> {
-        let idx = self.shared_regions.iter().position(|e| e.token == token)?;
-        if self.shared_regions[idx].map_count > 0 {
-            self.shared_regions[idx].map_count -= 1;
-        }
-        if self.shared_regions[idx].map_count == 0 {
+        let idx = self
+            .shared_regions
+            .iter()
+            .position(|e| e.token == token)
+            .expect("SHM release lost backing metadata");
+        if self.shared_regions[idx]
+            .lifetime
+            .release()
+            .expect("SHM mapping count underflow")
+        {
             let entry = self.shared_regions.swap_remove(idx);
             return Some(entry.obj.frames);
         }
         None
     }
 
-    /// Revoke a shared region grant token (forced, e.g. security revocation).
-    /// Does NOT free physical frames — use `decrement_map_count` for normal cleanup.
-    pub fn revoke_shared(&mut self, token: CapabilityToken) {
+    /// Fence new mappings; this is retirement, NOT active PTE revocation.
+    /// Existing views keep the entry and frames pinned until verified unmap.
+    /// Only a zero-view object transfers its backing to the caller here.
+    #[must_use = "unmapped backing must be returned to the PMM by the caller"]
+    pub fn revoke_shared(
+        &mut self,
+        token: CapabilityToken,
+    ) -> Option<alloc::vec::Vec<PhysFrame<Size4KiB>>> {
         if let Some(idx) = self.shared_regions.iter().position(|e| e.token == token) {
-            self.shared_regions.swap_remove(idx);
-            serial_println!("[CAP] Revoked shm-region token {:#x}", token.as_u64());
+            if self.shared_regions[idx].lifetime.retire() {
+                return Some(self.shared_regions.swap_remove(idx).obj.frames);
+            }
         }
+        None
     }
 
     /// Mark all shared region grants owned by `pid` as revoked, without removing
@@ -818,7 +848,7 @@ impl CapabilityBroker {
     pub fn revoke_all_for(&mut self, pid: usize) {
         for entry in self.shared_regions.iter_mut() {
             if entry.owner_pid == pid {
-                entry.revoked = true;
+                entry.lifetime.retire();
             }
         }
     }

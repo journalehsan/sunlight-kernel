@@ -177,6 +177,13 @@ pub fn map_shared_page(
     caps: &mut CapabilityBroker,
     hhdm_offset: VirtAddr,
 ) -> Result<VirtAddr, SharedMemError> {
+    // Check admission and count overflow before installing even one PTE.
+    if caps.resolve_shared_region(token).is_none() {
+        return Err(SharedMemError::InvalidToken);
+    }
+    if !caps.preflight_shared_mapping(token) {
+        return Err(SharedMemError::OutOfMemory);
+    }
     receiver
         .mapped_shared
         .try_reserve(1)
@@ -228,10 +235,15 @@ pub fn free_shared_page(
         .ok_or(SharedMemError::InvalidToken)?;
     {
         let object = caps
-            .resolve_shared_region(token)
-            .ok_or(SharedMemError::InvalidToken)?;
+            .shared_region_for_cleanup(token)
+            .ok_or(SharedMemError::InternalInvariant)?;
         let (_, base_virt, sz) = process.mapped_shared[pos];
-        if sz != object.size || object.frames.len() != sz / PAGE_SIZE {
+        if sz == 0
+            || sz % PAGE_SIZE != 0
+            || sz != object.size
+            || object.frames.len() != sz / PAGE_SIZE
+            || caps.shared_region_map_count(token).unwrap_or(0) == 0
+        {
             return Err(SharedMemError::InternalInvariant);
         }
         for (index, expected_frame) in object.frames.iter().enumerate() {
@@ -270,30 +282,31 @@ pub fn free_shared_page(
         .ok_or(SharedMemError::InternalInvariant)?;
 
     {
-        let (_, base_virt, sz) = process.mapped_shared.remove(pos);
-        let num_pages = if sz == 0 {
-            1
-        } else {
-            (sz + PAGE_SIZE - 1) / PAGE_SIZE
-        };
-        for i in 0..num_pages {
+        let (_, base_virt, sz) = process.mapped_shared[pos];
+        let object = caps
+            .shared_region_for_cleanup(token)
+            .expect("preflighted SHM backing disappeared under broker lock");
+        for (i, expected_frame) in object.frames.iter().enumerate() {
             let v = VirtAddr::new(base_virt.as_u64() + (i * PAGE_SIZE) as u64);
-            unsafe {
-                if let Ok(page) = Page::<Size4KiB>::from_start_address(v) {
-                    if process
-                        .address_space
-                        .unmap_page(page, hhdm_offset)
-                        .is_none()
-                    {
-                        crate::process::address_space::note_rollback_invariant_failure();
-                    }
-                }
-            }
+            let page = Page::<Size4KiB>::from_start_address(v)
+                .expect("preflighted SHM page became unaligned");
+            // unmap_page synchronously acknowledges remote invalidations.
+            // After preflight, mutation cannot fail under the caller's VM /
+            // scheduler lock. Fail-stop on an invariant breach: never publish
+            // released references or let exit reclaim an uncertain mapping.
+            let removed = unsafe { process.address_space.unmap_page(page, hhdm_offset) };
+            assert_eq!(
+                removed,
+                Some(expected_frame.start_address()),
+                "preflighted SHM unmap changed under scheduler lock"
+            );
         }
+        debug_assert_eq!(sz / PAGE_SIZE, object.frames.len());
         process
             .address_space
             .remove_region_exact(expected_region)
-            .map_err(|_| SharedMemError::InternalInvariant)?;
+            .expect("preflighted SHM ledger changed under scheduler lock");
+        process.mapped_shared.remove(pos);
         // Decrement the mapping ref count; the broker returns the frames only
         // when this was the last live mapping, so the PMM is safe to reclaim them.
         if let Some(frames) = caps.decrement_map_count(token) {
@@ -318,44 +331,22 @@ pub fn cleanup_shared_pages(
     pmm: &mut PhysicalMemoryManager,
     caps: &mut CapabilityBroker,
 ) {
-    let hhdm_offset = VirtAddr::new(crate::HHDM_REQ.response().map(|r| r.offset).unwrap_or(0));
-
-    // Unmap all views this process had (owned + received). Decrement the ref
-    // count for each; if this was the last mapping, free the physical frames.
-    let mapped: alloc::vec::Vec<_> = process.mapped_shared.drain(..).collect();
-    for (token, base_virt, sz) in mapped {
-        let num_pages = if sz == 0 {
-            1
-        } else {
-            (sz + PAGE_SIZE - 1) / PAGE_SIZE
-        };
-        for i in 0..num_pages {
-            let v = VirtAddr::new(base_virt.as_u64() + (i * PAGE_SIZE) as u64);
-            unsafe {
-                if let Ok(page) = Page::<Size4KiB>::from_start_address(v) {
-                    let _ = process.address_space.unmap_page(page, hhdm_offset);
-                }
-            }
-        }
-        if let Some(region) = process.address_space.lookup_region(base_virt.as_u64()) {
-            if region.start == base_virt.as_u64()
-                && region.end == base_virt.as_u64() + sz as u64
-                && region.kind == crate::process::region::MappingKind::SharedMemory
-                && region.backing
-                    == crate::process::region::RegionBacking::SharedMemory(token.as_u64())
-            {
-                if process.address_space.remove_region_exact(region).is_err() {
-                    crate::process::address_space::note_rollback_invariant_failure();
-                }
-            }
-        }
-        if let Some(frames) = caps.decrement_map_count(token) {
-            for f in &frames {
-                pmm.free_frame(f.start_address());
-            }
-        }
+    if process.mapped_shared.is_empty() {
+        process.owned_shared.clear();
+        return;
     }
-
-    // Ownership records are now stale (frames freed via ref count above).
+    let hhdm_offset = VirtAddr::new(
+        crate::HHDM_REQ
+            .response()
+            .expect("SHM cleanup requires initialized HHDM")
+            .offset,
+    );
+    // Use the same verified path for explicit free and exit. Do not drain the
+    // tracking vector first: a failed preflight must keep backing pinned, and
+    // the reaper must not proceed to reclaim an uncertain address space.
+    while let Some(&(token, _, _)) = process.mapped_shared.last() {
+        free_shared_page(process, token, pmm, caps, hhdm_offset)
+            .expect("SHM exit cleanup invariant failed; backing remains pinned");
+    }
     process.owned_shared.clear();
 }

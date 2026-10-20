@@ -734,6 +734,7 @@ pub extern "C" fn _start() -> ! {
         not(any(
             feature = "mm2d_munmap_test",
             feature = "mm2e_mprotect_test",
+            feature = "fastlane_f1_audit",
             feature = "swap1_test"
         ))
     ))]
@@ -3329,6 +3330,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         memory::security::run_boot_self_tests(&mut pmm, hhdm_offset);
     }
     crate::sched::run_mm0_address_space_lifecycle_test(hhdm_offset);
+    #[cfg(feature = "fastlane_f1_audit")]
+    {
+        let mut pmm = PMM.lock();
+        memory::shared_lifetime_gate::run(&mut pmm, hhdm_offset);
+    }
     run_termination_path_self_test(hhdm_offset);
     #[cfg(feature = "mm2c_ledger_test")]
     {
@@ -4129,8 +4135,12 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             }
         }
         // Clean up: remove the grant entirely and free the frame.
-        caps.revoke_shared(token);
-        pmm.free_frame(phys);
+        let frames = caps.revoke_shared(token).expect("unmapped sectest backing");
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].start_address(), phys);
+        for frame in frames {
+            pmm.free_frame(frame.start_address());
+        }
     }
 
     serial_println!("[SEC]  Security hardening: PASSED");

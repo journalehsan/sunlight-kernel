@@ -3,6 +3,9 @@ pub mod heap;
 pub mod pmm;
 pub mod security;
 pub mod shared;
+pub mod shared_lifetime;
+#[cfg(feature = "fastlane_f1_audit")]
+pub mod shared_lifetime_gate;
 pub mod swap;
 pub mod swap_slot;
 pub mod tlb;

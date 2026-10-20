@@ -2,6 +2,9 @@
 
 extern crate alloc;
 
+#[path = "memory/shared_lifetime.rs"]
+pub mod shared_lifetime;
+
 #[path = "process/mm2a_plan.rs"]
 pub mod mm2a_plan;
 
