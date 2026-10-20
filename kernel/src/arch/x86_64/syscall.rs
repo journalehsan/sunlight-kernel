@@ -2918,6 +2918,9 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
             process.trusted_wiseowl_console =
                 crate::process::spawn::is_trusted_wiseowl_console_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            process.trusted_lock_service =
+                crate::process::spawn::is_trusted_lock_service_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             process.trusted_control_panel =
                 crate::process::spawn::is_trusted_control_panel_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
@@ -4693,8 +4696,6 @@ fn username_for_uid(uid: u32) -> &'static str {
 /// rdi = pointer to path prefix string (NUL-terminated, <= 63 bytes)
 /// rsi = access bits (read=1, write=2, execute=4)
 fn sys_grant_capability_syscall(frame: &mut SyscallFrame) -> u64 {
-    let caller_pid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
-
     let path_bytes = match read_user_cstr(frame.rdi, 64) {
         Ok(bytes) => bytes,
         Err(error) => return user_memory_failure(error),
@@ -4718,7 +4719,7 @@ fn sys_grant_capability_syscall(frame: &mut SyscallFrame) -> u64 {
         },
     };
 
-    match crate::capability::sys_grant_capability(caller_pid, cap) {
+    match crate::sched::SCHEDULER.lock().issue_vfs_capability(cap) {
         Ok(token) => token.0,
         Err(crate::capability::CapError::InvalidCaller) => u64::MAX,
         Err(crate::capability::CapError::CapabilityStoreFull) => u64::MAX,

@@ -176,6 +176,7 @@ pub fn exec_into_process(
         #[cfg(feature = "cap_issuance_test")]
         let old_grants = broker.recipient_grant_count(process.pid);
         broker.retire_recipient_grants(process.pid);
+        process.withdraw_exec_image_roles();
         process.pending_call = None;
         process.ipc_reply_target = None;
         #[cfg(feature = "cap_issuance_test")]
@@ -184,6 +185,11 @@ pub fn exec_into_process(
             assert_eq!(broker.recipient_grant_count(process.pid), 0);
             crate::serial_println!("[CAP-PR] exec authority withdrawn before VM activation records=32 remaining=0");
         }
+    }
+
+    #[cfg(feature = "cap_issuance_test")]
+    if activate_on_success {
+        crate::capability::gate::assert_exec_authority(process, old_address_space.identity());
     }
 
     if activate_on_success {

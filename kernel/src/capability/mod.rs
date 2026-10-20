@@ -344,7 +344,7 @@ pub static CAP_BROKER: spin::Mutex<CapabilityBroker> = spin::Mutex::new(Capabili
 /// recognizes in `ipc_call` to handle spawn requests directly.
 pub const SPAWN_TOKEN: CapabilityToken = CapabilityToken(0xCAFEBABE_DEADBEEF);
 
-/// PID expected to call `sys_grant_capability`.
+/// Legacy VFS mint slot constraint; never sufficient authorization.
 pub const CAPABILITY_BROKER_PID: u32 = 6;
 
 /// A single-use authorization emitted by UAC after password verification.
@@ -1119,24 +1119,6 @@ impl CapabilityBroker {
 pub const ELEVATED_EXEC_PREFIXES: [&str; 2] = ["/bin", "/usr/bin"];
 /// Number of base execute capabilities minted per elevated session.
 pub const ELEVATED_EXEC_PREFIX_COUNT: usize = ELEVATED_EXEC_PREFIXES.len();
-
-/// Mock kernel entry to enforce trusted-broker minting.
-pub fn sys_grant_capability(
-    caller_pid: usize,
-    cap: VfsCapability,
-) -> Result<CapabilityToken, CapError> {
-    if caller_pid != CAPABILITY_BROKER_PID as usize {
-        serial_println!(
-            "[SEC] Capability mint denied: caller_pid={} is not broker {}",
-            caller_pid,
-            CAPABILITY_BROKER_PID
-        );
-        return Err(CapError::InvalidCaller);
-    }
-
-    let mut broker = CAP_BROKER.lock();
-    broker.grant_vfs_capability(caller_pid, cap)
-}
 
 /// A registered IPC endpoint.
 #[derive(Debug, Clone)]

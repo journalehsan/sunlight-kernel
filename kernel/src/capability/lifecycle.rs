@@ -8,6 +8,29 @@ use crate::sched::Scheduler;
 use sunlight_ipc::accounts::{GrantBinding, GrantScope};
 
 impl Scheduler {
+    /// Legacy VFS minting is a bearer issuance to the current caller, not a
+    /// recipient-targeted grant. Keep the old slot restriction without treating
+    /// that slot as proof of authority. The launch-chain role is withdrawn by
+    /// successful exec. This borrow must span validation and broker insertion.
+    pub(crate) fn issue_vfs_capability(
+        &self,
+        cap: super::VfsCapability,
+    ) -> Result<CapabilityToken, super::CapError> {
+        let issuer = self.current_process();
+        if issuer.pid != super::CAPABILITY_BROKER_PID as usize
+            || !issuer.trusted_auth_broker
+            || issuer.is_exiting()
+            || issuer.foreground.incarnation == 0
+            || issuer.address_space.identity().generation == 0
+        {
+            return Err(super::CapError::InvalidCaller);
+        }
+        #[cfg(test)]
+        super::lifecycle_tests::before_commit();
+        // SCHEDULER -> CAP_BROKER. No IPC or userspace copy under these locks.
+        CAP_BROKER.lock().grant_vfs_capability(issuer.pid, cap)
+    }
+
     fn grant_requester(&self, pid: usize) -> Option<&Process> {
         let issuer = self.current_process();
         if !issuer.trusted_auth_broker || issuer.is_exiting() || issuer.foreground.incarnation == 0

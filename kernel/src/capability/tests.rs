@@ -273,12 +273,3 @@ fn account_and_auth_grants_share_collision_domain_and_remain_single_use() {
     assert_eq!(b.consume_auth_session_grant(auth, 8, 2), None);
     assert_eq!(b.consume_auth_session_grant(auth, 7, 2), None);
 }
-
-#[test]
-fn trusted_vfs_issuer_check_preserves_full_kernel_pid() {
-    let forged_role = (1usize << 32) | CAPABILITY_BROKER_PID as usize;
-    assert_eq!(
-        sys_grant_capability(forged_role, vfs()),
-        Err(CapError::InvalidCaller)
-    );
-}

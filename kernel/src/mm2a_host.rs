@@ -563,3 +563,7 @@ mod process { pub use crate::lifecycle_host::Process; }
 mod sched { pub use crate::lifecycle_host::Scheduler; }
 #[cfg(test)]
 mod ipc { pub use crate::lifecycle_host::reply_target_matches_pending_request; }
+
+#[cfg(test)]
+#[path = "process/exec_authority.rs"]
+mod exec_authority;

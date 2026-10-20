@@ -21,6 +21,9 @@ pub struct Foreground {
 pub struct Process {
     pub pid: usize,
     pub trusted_auth_broker: bool,
+    pub trusted_service_manager: bool,
+    pub trusted_tty_session_service: bool,
+    pub trusted_lock_service: bool,
     pub exiting: bool,
     pub foreground: Foreground,
     pub address_space: AddressSpace,

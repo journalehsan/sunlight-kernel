@@ -19,6 +19,9 @@ fn process(pid: usize) -> Process {
     Process {
         pid,
         trusted_auth_broker: pid == 6,
+        trusted_service_manager: false,
+        trusted_tty_session_service: false,
+        trusted_lock_service: false,
         exiting: false,
         foreground: Foreground {
             incarnation: pid as u64,
@@ -427,4 +430,178 @@ fn auth_publication_vs_exec() {
 #[test]
 fn account_publication_vs_exec() {
     commit_vs_exec(true);
+}
+
+#[test]
+fn exec_withdraws_issuer_image_provenance_after_success_only() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let mut s = table();
+    s.processes[0].trusted_service_manager = true;
+    s.processes[0].trusted_tty_session_service = true;
+    s.processes[0].trusted_lock_service = true;
+    // Failed preparation does not call the commit helper.
+    let before = issue(&s, false).unwrap();
+    assert!(s.processes[0].trusted_auth_broker);
+    let incarnation = s.processes[0].foreground.incarnation;
+    s.processes[0].withdraw_exec_image_roles();
+    s.processes[0].address_space.generation += 1;
+    assert_eq!(s.processes[0].foreground.incarnation, incarnation);
+    assert!(!s.processes[0].trusted_service_manager);
+    assert!(!s.processes[0].trusted_tty_session_service);
+    assert!(!s.processes[0].trusted_lock_service);
+    assert!(issue(&s, false).is_none());
+    assert!(issue(&s, true).is_none());
+    // A committed recipient-owned grant survives issuer image replacement.
+    assert!(CAP_BROKER.lock().token_in_use(before));
+    cleanup(&mut s, 7);
+    assert_eq!(inventory(), 0);
+}
+
+#[test]
+fn exec_during_external_preparation_cancels_stale_publication() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for account in [false, true] {
+        let s = Arc::new(Mutex::new(table()));
+        let prepared = Arc::new(Barrier::new(2));
+        let resume = Arc::new(Barrier::new(2));
+        let worker = {
+            let s = s.clone();
+            let prepared = prepared.clone();
+            let resume = resume.clone();
+            std::thread::spawn(move || {
+                let request_scope = scope();
+                prepared.wait();
+                resume.wait();
+                let s = s.lock().unwrap();
+                if account {
+                    s.account_grant(7, request_scope, None)
+                } else {
+                    s.issue_auth_session_grant(7, 0, 0)
+                }
+            })
+        };
+        prepared.wait();
+        {
+            let mut s = s.lock().unwrap();
+            CAP_BROKER.lock().retire_recipient_grants(7);
+            s.processes[1].pending_call = None;
+            s.processes[1].address_space.generation += 1;
+        }
+        resume.wait();
+        assert!(worker.join().unwrap().is_none());
+        assert_eq!(inventory(), 0);
+    }
+}
+
+fn vfs_cap() -> VfsCapability {
+    let mut allowed_prefix = heapless::String::new();
+    allowed_prefix.push_str("/bin").unwrap();
+    VfsCapability {
+        allowed_prefix,
+        flags: AccessFlags::READ_EXECUTE,
+    }
+}
+
+#[test]
+fn vfs_numeric_slot_is_not_authority() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for fault in 0..6 {
+        let mut s = table();
+        match fault {
+            0 => s.processes[0].trusted_auth_broker = false,
+            1 => s.processes[0].foreground.incarnation = 0,
+            2 => s.processes[0].address_space.generation = 0,
+            3 => s.processes[0].exiting = true,
+            4 => s.processes[0].pid = (1usize << 32) | 6,
+            _ => s.processes[0].pid = 9,
+        }
+        assert_eq!(
+            s.issue_vfs_capability(vfs_cap()),
+            Err(CapError::InvalidCaller)
+        );
+        assert!(CAP_BROKER.lock().vfs_caps.is_empty());
+    }
+}
+
+#[test]
+fn vfs_preparation_exec_exit_and_slot_reuse_fail_closed() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for transition in 0..3 {
+        let mut s = table();
+        let prepared = vfs_cap();
+        let old_incarnation = s.processes[0].foreground.incarnation;
+        match transition {
+            0 => s.processes[0].withdraw_exec_image_roles(),
+            1 => cleanup(&mut s, 6),
+            _ => {
+                s.processes[0] = process(6);
+                s.processes[0].foreground.incarnation = old_incarnation + 1;
+                s.processes[0].trusted_auth_broker = false;
+            }
+        }
+        assert_eq!(
+            s.issue_vfs_capability(prepared),
+            Err(CapError::InvalidCaller)
+        );
+        assert!(CAP_BROKER.lock().vfs_caps.is_empty());
+    }
+}
+
+#[test]
+fn vfs_commit_serializes_role_withdrawal_and_preserves_bearer_policy() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let s = Arc::new(Mutex::new(table()));
+    let validated = Arc::new(Barrier::new(2));
+    let resume = Arc::new(Barrier::new(2));
+    let worker = {
+        let s = s.clone();
+        let validated = validated.clone();
+        let resume = resume.clone();
+        std::thread::spawn(move || {
+            HOOK.with(|hook| {
+                *hook.borrow_mut() = Some(Box::new(move || {
+                    validated.wait();
+                    resume.wait();
+                }))
+            });
+            s.lock().unwrap().issue_vfs_capability(vfs_cap()).unwrap()
+        })
+    };
+    validated.wait();
+    assert!(matches!(
+        s.try_lock(),
+        Err(std::sync::TryLockError::WouldBlock)
+    ));
+    assert!(CAP_BROKER.lock().vfs_caps.is_empty());
+    resume.wait();
+    let token = worker.join().unwrap();
+    let mut s = s.lock().unwrap();
+    assert_eq!(s.processes[0].foreground.incarnation, 6);
+    assert!(s.processes[0].trusted_auth_broker);
+    assert_eq!(
+        CAP_BROKER.lock().resolve_vfs_capability(token).unwrap().1,
+        6
+    );
+    s.processes[0].withdraw_exec_image_roles();
+    assert_eq!(
+        s.issue_vfs_capability(vfs_cap()),
+        Err(CapError::InvalidCaller)
+    );
+    cleanup(&mut s, 6);
+    cleanup(&mut s, 6);
+    // Existing tokens are transferable; issuer death is not bearer revocation.
+    assert!(CAP_BROKER.lock().resolve_vfs_capability(token).is_some());
+}
+
+#[test]
+fn vfs_failed_reservation_or_entropy_has_no_partial_record() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let s = table();
+    CAP_BROKER.lock().test_fail_reservation(true);
+    assert!(s.issue_vfs_capability(vfs_cap()).is_err());
+    assert!(CAP_BROKER.lock().vfs_caps.is_empty());
+    CAP_BROKER.lock().test_fail_reservation(false);
+    CAP_BROKER.lock().test_entropy(&[None]);
+    assert!(s.issue_vfs_capability(vfs_cap()).is_err());
+    assert!(CAP_BROKER.lock().vfs_caps.is_empty());
 }

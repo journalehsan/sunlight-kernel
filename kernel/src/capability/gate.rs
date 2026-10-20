@@ -13,6 +13,37 @@ pub(super) static ACCOUNT_COMMITS: core::sync::atomic::AtomicUsize = core::sync:
 
 const OWNER: usize = 0xF200;
 const READER: usize = OWNER + 1;
+static READER_ENDPOINT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+static EXEC_COMMITS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+
+pub(crate) fn assert_exec_authority(
+    process: &Process,
+    old: crate::process::mm2b_state::AddressSpaceIdentity,
+) {
+    assert_eq!(process.pid, READER);
+    assert_ne!(process.foreground.incarnation, 0);
+    assert_ne!(old.generation, process.address_space.identity().generation);
+    assert!(!process.trusted_auth_broker);
+    assert!(!process.trusted_service_manager);
+    assert!(!process.trusted_lock_service);
+    assert!(!process.trusted_tty_session_service);
+    assert_eq!(process.uid, 0);
+    let caps = super::CAP_BROKER.lock();
+    assert_eq!(caps.recipient_grant_count(READER), 0);
+    let token = super::CapabilityToken(READER_ENDPOINT.load(Ordering::Relaxed));
+    assert_eq!(
+        caps.token_owner(token, CapabilityRights::RECV_ONLY)
+            .map(|(_, owner)| owner),
+        Ok(READER)
+    );
+    let index = EXEC_COMMITS.fetch_add(1, Ordering::Relaxed);
+    if index == 0 {
+        assert_eq!(process.mapped_shared.len(), 1);
+    }
+    crate::serial_println!("[EXEC-R3] authority commit={} pid={} incarnation={} old_generation={} new_generation={} roles=withdrawn endpoint=preserved uid=preserved old_views={}",
+        index + 1, process.pid, process.foreground.incarnation, old.generation,
+        process.address_space.identity().generation, process.mapped_shared.len());
+}
 
 struct State {
     baseline: usize,
@@ -129,6 +160,14 @@ pub fn run(hhdm: VirtAddr) {
     let mut owner = private(OWNER, hhdm);
     owner.trusted_auth_broker = true;
     let mut reader = private(READER, hhdm);
+    if option_env!("SUNLIGHT_CAP_EXEC_PROBE") == Some("1") {
+        // Synthetic launch provenance, isolated from production services.
+        reader.trusted_auth_broker = true;
+        reader.trusted_lock_service = true;
+        reader.trusted_tty_session_service = true;
+        let (_, token) = super::CAP_BROKER.lock().create_endpoint(READER).unwrap();
+        READER_ENDPOINT.store(token.as_u64(), Ordering::Relaxed);
+    }
     let (base, shm) = {
         let mut pmm = crate::PMM.lock();
         let mut caps = super::CAP_BROKER.lock();

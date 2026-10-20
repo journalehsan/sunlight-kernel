@@ -2,6 +2,7 @@ pub mod address_space;
 pub mod elf_loader;
 pub mod env;
 pub mod epoll;
+mod exec_authority;
 pub mod eventfd;
 pub mod fd_table;
 pub mod foreground;

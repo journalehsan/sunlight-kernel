@@ -110,11 +110,48 @@ reader:
     cmpq $0x51a7, (%rax)
     jne failed
     movq $0x51a7, (%rax) /* authorized legacy RW */
+    test %r13, %r13
+    jnz keep_view
     mov %rbx, %rdi
     mov $94, %eax
     syscall
     test %rax, %rax
     jnz failed
+keep_view:
+    test %r13, %r13
+    jz calls_begin
+    /* A published borrower is sufficient: exec must reject even before it
+     * first runs. It cannot be reaped until we explicitly release it. */
+    lea borrower_entry(%rip), %rdi
+    lea borrower_startup(%rip), %rsi
+    lea borrower_release(%rip), %rdx
+    mov $22, %eax
+    syscall
+    cmp $-1, %rax
+    je failed
+    mov %rax, %r12
+    lea exec_path(%rip), %rdi
+    lea exec_argv(%rip), %rsi
+    lea exec_envp(%rip), %rdx
+    mov $31, %eax
+    syscall
+    cmp $-1, %rax
+    jne failed
+    movq $1, borrower_release(%rip)
+borrower_wait:
+    mov %r12, %rdi
+    xor %esi, %esi
+    mov $32, %eax
+    syscall
+    cmp $-2, %rax
+    je borrower_wait
+    test %rax, %rax
+    jnz failed
+    lea borrower_pass(%rip), %rdi
+    mov $borrower_pass_end-borrower_pass, %esi
+    mov $99, %eax
+    syscall
+calls_begin:
     mov $16, %r14d
 reader_call:
     mov %rbp, %rsi
@@ -146,6 +183,13 @@ reader_reply:
     cmp $-1, %rax
     je failed
     jmp success
+
+borrower_entry:
+    cmpq $1, borrower_release(%rip)
+    je success
+    mov $21, %eax
+    syscall
+    jmp borrower_entry
 
 owner:
     mov %rsi, %rbx /* private mapped address */
@@ -236,3 +280,14 @@ exec_envp: .quad exec_env, 0
 .balign 8
 empty_argv: .quad 0
 .section .note.GNU-stack,"",@progbits
+
+.section .rodata
+borrower_pass: .ascii "[EXEC-R3] live borrower rejected exec; borrower exited PASS"
+borrower_pass_end:
+.section .data
+.balign 16
+borrower_release: .skip 8
+.balign 16
+borrower_stack: .skip 8192
+.balign 16
+borrower_startup: .quad borrower_entry, 0
