@@ -1,0 +1,8 @@
+[package]
+name = "sunlight-fastlane-ring"
+version = "0.2.5459-alpha.2"
+
+edition = "2021"
+publish = false
+
+[dependencies]

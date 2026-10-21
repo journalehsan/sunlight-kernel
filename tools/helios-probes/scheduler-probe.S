@@ -5,9 +5,22 @@
 _start:
     movabs $0x123456789abcdef0, %r12
     movq %r12, %xmm0
+    xor %ebp, %ebp
+    cmp $4, %edi
+    jne ordinary
+    inc %ebp
+    jmp once
+ordinary:
+    cmp $2, %edi
+    je exit_ok
+    cmp $3, %edi
+    je once
     test %edi, %edi
     jz spin
     mov $32, %ebx
+    jmp again
+once:
+    mov $1, %ebx
 again:
     mov $21, %eax
     syscall
@@ -16,6 +29,11 @@ again:
     jne failed
     dec %ebx
     jnz again
+exit_ok:
+    test %ebp, %ebp
+    jz self_exit
+    ud2
+self_exit:
     xor %edi, %edi
     mov $20, %eax
     syscall

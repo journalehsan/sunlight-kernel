@@ -111,7 +111,7 @@ fn main() {
 for legacy in [True, False]:
     selector = ((root / 'tools/tests/scheduler_rr_phase_a.rs').read_text()
                 if legacy else function('pick_next_round_robin'))
-    code = fixture + function('stack_is_pinned') + function('stack_is_pinned_remotely') + selector + main + constants
+    code = fixture + function('stack_is_pinned') + function('stack_is_pinned_remotely') + function('wait_for_pin_release') + selector + main + constants
     code += '\nconst MAX_CORES: usize = 2;\nstatic STACK_HANDOFFS: handoff::Handoffs<MAX_CORES> = handoff::Handoffs::new();\n'
     code += f'#[path = "{root / "kernel/src/sched/handoff.rs"}"] mod handoff;\n'
     code += '\nconst LEGACY: bool = ' + str(legacy).lower() + ';\n'

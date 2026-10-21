@@ -1,0 +1,9 @@
+[package]
+name = "sunlight-fastlane-doorbell"
+version = "0.2.5459-alpha.2"
+
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+sunlight-fastlane-ring = { path = "../fastlane-ring" }

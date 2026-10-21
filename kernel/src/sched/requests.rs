@@ -1,22 +1,34 @@
-//! Coalesced, level-triggered scheduling requests. A consumer clears only its
-//! own bit at dispatch entry; requests arriving after that remain pending.
-use core::sync::atomic::{AtomicU64, Ordering};
+//! Coalesced scheduling intent and remote delivery ownership. The target clears
+//! both at dispatch entry in one RMW; requests arriving after remain pending.
+use core::sync::atomic::{AtomicU8, Ordering};
 
-pub struct RescheduleRequests(AtomicU64);
+const REQUESTED: u8 = 1;
+const DELIVERY_OWNED: u8 = 2;
+
+pub struct RescheduleRequests([AtomicU8; 64]);
 
 impl RescheduleRequests {
     pub const fn new() -> Self {
-        Self(AtomicU64::new(0))
+        Self([const { AtomicU8::new(0) }; 64])
     }
     pub fn request(&self, cpu: usize) {
-        self.0.fetch_or(1u64 << cpu, Ordering::Release);
+        self.0[cpu].fetch_or(REQUESTED, Ordering::Release);
+    }
+    /// Claim delivery until the target reaches dispatch entry. A local-only
+    /// request does not own delivery and must not suppress a later remote kick.
+    /// Explicit local handoffs claim this same ownership before publishing a
+    /// self-IPI, so a remote producer can share an already-pending local kick.
+    /// The caller winning this RMW must publish its dispatch notification.
+    pub fn request_delivery(&self, cpu: usize) -> bool {
+        self.0[cpu].fetch_or(REQUESTED | DELIVERY_OWNED, Ordering::AcqRel) & DELIVERY_OWNED == 0
     }
     pub fn pending(&self, cpu: usize) -> bool {
-        self.0.load(Ordering::Acquire) & (1u64 << cpu) != 0
+        self.0[cpu].load(Ordering::Acquire) & REQUESTED != 0
     }
     pub fn take(&self, cpu: usize) -> bool {
-        let bit = 1u64 << cpu;
-        self.0.fetch_and(!bit, Ordering::AcqRel) & bit != 0
+        // One linearization point releases delivery ownership and consumes
+        // intent. A publication after this exchange owns a fresh delivery.
+        self.0[cpu].swap(0, Ordering::AcqRel) & REQUESTED != 0
     }
 }
 
@@ -48,5 +60,50 @@ mod tests {
         assert!(r.pending(1));
         assert!(r.take(1));
         assert!(!r.take(1));
+    }
+
+    #[test]
+    fn local_intent_does_not_own_a_remote_delivery() {
+        let r = RescheduleRequests::new();
+        r.request(1);
+        assert!(r.request_delivery(1));
+        assert!(!r.request_delivery(1));
+        assert!(r.take(1));
+        assert!(r.request_delivery(1));
+    }
+
+    #[test]
+    fn every_supported_target_has_independent_bounded_state() {
+        let r = RescheduleRequests::new();
+        for cpu in 0..64 {
+            assert!(r.request_delivery(cpu));
+            assert!(!r.request_delivery(cpu));
+        }
+        for cpu in 0..64 {
+            assert!(r.take(cpu));
+            assert!(!r.take(cpu));
+        }
+    }
+
+    #[test]
+    fn two_sources_share_delivery_and_post_ack_publication_survives() {
+        use std::sync::{Arc, Barrier};
+        let r = Arc::new(RescheduleRequests::new());
+        let barrier = Arc::new(Barrier::new(2));
+        let producer_r = r.clone();
+        let producer_barrier = barrier.clone();
+        let producer = std::thread::spawn(move || {
+            assert!(producer_r.request_delivery(1));
+            producer_barrier.wait();
+            producer_barrier.wait();
+            assert!(producer_r.request_delivery(1));
+        });
+        barrier.wait();
+        assert!(!r.request_delivery(1));
+        assert!(r.take(1));
+        barrier.wait();
+        producer.join().unwrap();
+        assert!(r.pending(1));
+        assert!(r.take(1));
     }
 }

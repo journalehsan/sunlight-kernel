@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
+    "fastlane-ring",
+    "fastlane-doorbell",
     "kernel",
     "ipc",
     "drivers",

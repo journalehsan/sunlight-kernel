@@ -42,7 +42,7 @@ impl Core {
 static CORE_STATES: [Lock<Core>; 1] = [Lock(Mutex::new(Core::new()))];
 static SCHEDULER_READY: AtomicBool = AtomicBool::new(true);
 static DISPATCH_NOTIFICATION_MASK: AtomicU64 = AtomicU64::new(0);
-static REQUEST: AtomicBool = AtomicBool::new(false);
+static RESCHEDULE_MASK: requests::RescheduleRequests = requests::RescheduleRequests::new();
 static CLOCK: AtomicU64 = AtomicU64::new(1);
 fn now_ns() -> u64 {
     CLOCK.load(Ordering::Relaxed)
@@ -51,10 +51,10 @@ fn current_cpu_id() -> usize {
     0
 }
 fn check_reschedule_on(_: usize) -> bool {
-    REQUEST.swap(false, Ordering::AcqRel)
+    RESCHEDULE_MASK.take(0)
 }
 fn request_reschedule_on(_: usize) {
-    REQUEST.store(true, Ordering::Release);
+    RESCHEDULE_MASK.request(0);
 }
 fn reschedule_bit(cpu: usize) -> u64 {
     1 << cpu
@@ -146,6 +146,9 @@ impl Scheduler {
     fn is_live_on_other_core(&self, i: usize, c: usize) -> bool {
         self.processes[i].owning_core != u8::MAX && self.processes[i].owning_core != c as u8
     }
+    fn wait_for_pin_release(&self, _: usize, _: usize) -> bool {
+        false
+    }
     fn stack_is_pinned_remotely(&self, _: usize, _: usize) -> bool {
         false
     }
@@ -220,7 +223,7 @@ use serial_println;
 fn setup(workers: usize) -> Scheduler {
     *CORE_STATES[0].lock() = Core::new();
     CLOCK.store(1, Ordering::Relaxed);
-    REQUEST.store(false, Ordering::Relaxed);
+    RESCHEDULE_MASK.take(0);
     DISPATCH_NOTIFICATION_MASK.store(0, Ordering::Relaxed);
     let mut s = Scheduler {
         processes: (0..workers)
@@ -307,7 +310,7 @@ fn equal_peer_and_boot_dispatch_do_not_queue_priority_ipis() {
     // The BSP can dispatch during boot; retain the flag but no early IPI.
     s.retain_priority_request(0, 0);
     SCHEDULER_READY.store(true, Ordering::Release);
-    assert!(REQUEST.load(Ordering::Acquire));
+    assert!(RESCHEDULE_MASK.pending(0));
     assert_eq!(DISPATCH_NOTIFICATION_MASK.load(Ordering::Acquire), 0);
 }
 #[test]
@@ -366,7 +369,7 @@ fn another_service_blocking_retains_request_for_already_ready_timer() {
     s.processes[2].state = ProcessState::BlockedOnIpc;
     assert_eq!(dispatch(&mut s, 10_000), 1000);
     assert!(
-        REQUEST.load(Ordering::Acquire),
+        RESCHEDULE_MASK.pending(0),
         "Ready timer lost its request at service block"
     );
     assert_eq!(
@@ -397,7 +400,7 @@ fn idle_dispatch_retains_request_when_fifo_selects_a_lower_priority_peer() {
     s.set_core_current_task(0, None);
     s.processes[2].nice = -5;
     assert_eq!(dispatch(&mut s, 1_000_000), 2000);
-    assert!(REQUEST.load(Ordering::Acquire));
+    assert!(RESCHEDULE_MASK.pending(0));
     assert_eq!(DISPATCH_NOTIFICATION_MASK.load(Ordering::Acquire), 1);
     assert_eq!(DISPATCH_NOTIFICATION_MASK.swap(0, Ordering::AcqRel), 1);
     assert_eq!(s.schedule_tick(0, 2000), 3000);

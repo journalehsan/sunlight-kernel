@@ -33,7 +33,10 @@ fn main() {
                 .success());
         }
     }
-    if env::var_os("CARGO_FEATURE_SCHEDULER_B_TEST").is_some() {
+    if env::var_os("CARGO_FEATURE_SCHEDULER_B_TEST").is_some()
+        || env::var_os("CARGO_FEATURE_REMOTE_WAKE_TEST").is_some()
+        || env::var_os("CARGO_FEATURE_PIN_RELEASE_TEST").is_some()
+    {
         let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
         let input = root.join("tools/helios-probes/scheduler-probe.S");
         let out = PathBuf::from(env::var("OUT_DIR").unwrap());

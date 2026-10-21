@@ -2162,8 +2162,16 @@ fn endpoint_destroy(token: u64) -> u64 {
 /// Syscall: ProcessExit
 /// rdi = exit code
 fn process_exit(code: i32) -> ! {
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    sched::pin_release_test::exited(code);
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    let fixture_pid = sched::SCHEDULER.lock().current_pid();
     let kstack_top = sched::finish_current_process(code, "exit");
-    sched::request_reschedule();
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    sched::pin_release_test::finished();
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    sched::remote_wake_test::exited(fixture_pid, code);
+    sched::request_park_after_sysret();
     sched::flush_dispatch_notifications();
 
     // We currently run on the process's *user* stack (syscall_entry builds
@@ -2176,11 +2184,18 @@ fn process_exit(code: i32) -> ! {
     unsafe {
         core::arch::asm!(
             "mov rsp, {stack}",
-            "mov qword ptr [{handoff}], -1",
+            "xchg qword ptr [{handoff}], rax",
+            "cmp qword ptr [{handoff} + 8], 0",
+            "je 2f",
+            "and rsp, -16",
+            "call {release_wake}",
+            "2:",
             "jmp {idle}",
             stack = in(reg) kstack_top,
             handoff = in(reg) handoff,
+            in("rax") usize::MAX,
             idle = sym crate::sched::core_idle_entry,
+            release_wake = sym crate::sched::pin_release_wake,
             options(noreturn)
         );
     }

@@ -105,6 +105,10 @@ pub fn idle_loop() -> ! {
     loop {
         x86_64::instructions::interrupts::disable();
         enter_idle(cpu);
+        #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+        super::remote_wake_test::idle(cpu);
+        #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+        super::pin_release_test::idle(cpu);
         x86_64::instructions::interrupts::enable_and_hlt();
         x86_64::instructions::interrupts::disable();
         interrupt_entry(cpu);

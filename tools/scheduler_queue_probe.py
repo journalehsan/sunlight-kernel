@@ -21,7 +21,7 @@ def function(name):
 
 fixture = r'''
 #![allow(dead_code)]
-use std::{collections::VecDeque, sync::{Mutex, MutexGuard, atomic::{AtomicBool, AtomicU64, Ordering}}};
+use std::{collections::VecDeque, sync::{Mutex, MutexGuard, atomic::{AtomicBool, AtomicU64}}};
 struct Lock<T>(Mutex<T>);
 impl<T> Lock<T> { fn lock(&self) -> MutexGuard<'_, T> { self.0.lock().unwrap() } }
 struct Core { rr_queue: VecDeque<usize>, run_queue_high: VecDeque<usize>,

@@ -93,8 +93,12 @@ pub mod perf;
 pub(crate) mod quantum;
 mod requests;
 const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
+#[cfg(all(debug_assertions, feature = "pin_release_test"))]
+pub mod pin_release_test;
 #[cfg(feature = "scheduler_b_test")]
 pub mod regression;
+#[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+pub mod remote_wake_test;
 use crate::arch::x86_64::interrupts::now_ns;
 use crate::process::{Process, ProcessState, QueueTier};
 use crate::serial_println;
@@ -265,6 +269,24 @@ pub(crate) extern "C" fn stack_handoff_slot() -> *const AtomicUsize {
     STACK_HANDOFFS.slot(current_cpu_id())
 }
 
+/// Called by every naked epilogue after the physical pin release, on the new
+/// stack with IF clear and no locks held. Converts CPUs that rejected the
+/// just-released task into a fresh coalesced request plus bounded dispatch.
+/// Only reached when `waiters` was non-zero, so an ordinary unpin is free.
+pub(crate) extern "C" fn pin_release_wake() {
+    let mut waiters = STACK_HANDOFFS.take_waiters(current_cpu_id());
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    pin_release_test::released(waiters);
+    while waiters != 0 {
+        let cpu = waiters.trailing_zeros() as usize;
+        waiters &= waiters - 1;
+        if cpu < ONLINE_CORES.load(Ordering::Acquire) {
+            request_reschedule_on(cpu);
+        }
+    }
+    flush_dispatch_notifications();
+}
+
 /// Number of cores that have completed phase-0 init and can receive tasks.
 /// Initialised to 1 (BSP only); updated by init_cores() after SMP bring-up.
 pub static ONLINE_CORES: AtomicUsize = AtomicUsize::new(1);
@@ -281,10 +303,17 @@ pub static ONLINE_CORES: AtomicUsize = AtomicUsize::new(1);
 /// own timer cannot preempt it anyway.
 pub static SCHEDULER_READY: AtomicBool = AtomicBool::new(false);
 
-/// Signal that the BSP has finished boot and seeded the run queues, so AP
-/// cores may begin dispatching tasks on their next timer tick.
+/// Release seeded queues and convert pre-bootstrap remote intent into dispatch
+/// obligations. The caller must flush outside SCHEDULER before entering user
+/// mode/idle; initial remote work must not rely on an AP's periodic timer.
 pub fn mark_scheduler_ready() {
     SCHEDULER_READY.store(true, Ordering::Release);
+    let source = current_cpu_id();
+    for cpu in 0..ONLINE_CORES.load(Ordering::Acquire) {
+        if cpu != source && RESCHEDULE_MASK.pending(cpu) {
+            request_reschedule_on(cpu);
+        }
+    }
 }
 
 const RR_STEAL_BATCH_MAX: usize = 32;
@@ -667,13 +696,6 @@ impl Scheduler {
         {
             return;
         }
-        // The local CPU is already executing the enqueue path (including
-        // transient requeue during a context switch); only a remote idle CPU
-        // needs an interrupt in addition to its published reschedule flag.
-        let notify_idle = notify
-            && self.core_current_task(core_id).is_none()
-            && SCHEDULER_READY.load(Ordering::Acquire)
-            && core_id != current_cpu_id();
         #[cfg(feature = "scheduler_guest_bench")]
         crate::scheduler_bench_diag::service_ready(self.processes[idx].name_str(), now_ns());
         #[cfg(feature = "scheduler_timer_trace")]
@@ -728,9 +750,6 @@ impl Scheduler {
             if notify {
                 request_reschedule_on(core_id);
             }
-            if notify_idle {
-                DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(core_id), Ordering::Release);
-            }
             return;
         }
         let tier = self.processes[idx].get_queue_tier();
@@ -745,9 +764,6 @@ impl Scheduler {
         // a detached consumer on an idle CPU until its next periodic tick.
         if notify {
             request_reschedule_on(core_id);
-        }
-        if notify_idle {
-            DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(core_id), Ordering::Release);
         }
     }
 
@@ -886,6 +902,19 @@ impl Scheduler {
 
     fn stack_is_pinned_remotely(&self, idx: usize, cpu_id: usize) -> bool {
         self.processes[idx].stack_handoff_core as usize != cpu_id && self.stack_is_pinned(idx)
+    }
+
+    /// Register `cpu_id` for the physical release of `idx`'s outgoing stack.
+    /// Atomic-only (safe under SCHEDULER). True: the pin is still held and the
+    /// releasing CPU will request a scheduling pass on `cpu_id` after its
+    /// release; the caller must leave the task queued. False: already
+    /// released, so the caller may dispatch the task now.
+    fn wait_for_pin_release(&self, idx: usize, cpu_id: usize) -> bool {
+        let owner = self.processes[idx].stack_handoff_core as usize;
+        let held = owner < MAX_CORES && STACK_HANDOFFS.wait_release(owner, cpu_id, idx);
+        #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+        pin_release_test::registered(owner, cpu_id, idx, held);
+        held
     }
 
     fn pin_outgoing_stack(&mut self, cpu_id: usize, idx: usize) {
@@ -1359,7 +1388,9 @@ impl Scheduler {
 
                 // Publication may precede the old CPU's RSP pivot. Keep the
                 // entry reachable, but do not restore its stack remotely yet.
-                if self.stack_is_pinned_remotely(idx, thief_id) {
+                if self.stack_is_pinned_remotely(idx, thief_id)
+                    && self.wait_for_pin_release(idx, thief_id)
+                {
                     self.processes[idx].queued_on_core = victim_id as u8;
                     CORE_STATES[victim_id].lock().rr_queue.push_back(idx);
                     continue;
@@ -1544,7 +1575,8 @@ impl Scheduler {
                 self.processes[idx].queued_on_core = u8::MAX;
             }
 
-            if self.stack_is_pinned_remotely(idx, cpu_id) {
+            if self.stack_is_pinned_remotely(idx, cpu_id) && self.wait_for_pin_release(idx, cpu_id)
+            {
                 self.processes[idx].queued_on_core = cpu_id as u8;
                 CORE_STATES[cpu_id].lock().rr_queue.push_back(idx);
                 continue;
@@ -1673,7 +1705,7 @@ impl Scheduler {
             // selected worker makes no blocking syscall. The IRQ handlers
             // flush this coalesced notification after dropping all guards;
             // IF stays clear until the naked epilogue completes IRET.
-            if SCHEDULER_READY.load(Ordering::Acquire) {
+            if SCHEDULER_READY.load(Ordering::Acquire) && RESCHEDULE_MASK.request_delivery(cpu_id) {
                 DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
             }
             #[cfg(feature = "scheduler_timer_trace")]
@@ -3929,6 +3961,10 @@ fn reschedule_bit(cpu_id: usize) -> u64 {
 /// because only the owning core ever clears its own bit.
 pub fn check_reschedule_on(cpu_id: usize) -> bool {
     let requested = RESCHEDULE_MASK.take(cpu_id.min(63));
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    if requested {
+        remote_wake_test::opportunity(cpu_id);
+    }
     #[cfg(feature = "scheduler_perf_diag")]
     if requested {
         perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].rearms, 1);
@@ -3944,11 +3980,23 @@ pub fn peek_reschedule_on(cpu_id: usize) -> bool {
     RESCHEDULE_MASK.pending(cpu_id.min(63))
 }
 
-/// Set the reschedule flag for a specific CPU.
+/// Publish intent; remote callers also claim a coalesced dispatch obligation.
+/// Atomic-only under scheduler/IPC locks. The enclosing IRQ/syscall must flush
+/// after releasing all guards, before returning or entering idle.
 pub fn request_reschedule_on(cpu_id: usize) {
+    assert!(cpu_id < ONLINE_CORES.load(Ordering::Acquire));
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    pin_release_test::requested(cpu_id);
+    let source_cpu = current_cpu_id();
     #[cfg(feature = "scheduler_perf_diag")]
-    perf::add(&perf::CPU[current_cpu_id().min(MAX_CORES - 1)].requests, 1);
-    RESCHEDULE_MASK.request(cpu_id.min(63));
+    perf::add(&perf::CPU[source_cpu.min(MAX_CORES - 1)].requests, 1);
+    if cpu_id != source_cpu && SCHEDULER_READY.load(Ordering::Acquire) {
+        if RESCHEDULE_MASK.request_delivery(cpu_id) {
+            DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+        }
+    } else {
+        RESCHEDULE_MASK.request(cpu_id);
+    }
 }
 
 #[cfg(feature = "scheduler_perf_diag")]
@@ -4007,24 +4055,31 @@ pub(crate) fn diagnostic_dispatch_notifications() -> (u64, u64) {
 /// This is atomic-only and safe under SCHEDULER; dispatch flushes after dropping
 /// all guards. The pending interrupt parks the caller before it can replay the
 /// blocked syscall repeatedly while waiting for the periodic timer.
-fn request_park_after_sysret() {
+pub(crate) fn request_park_after_sysret() {
     let cpu_id = current_cpu_id();
     request_reschedule_on(cpu_id);
-    DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+    if RESCHEDULE_MASK.request_delivery(cpu_id) {
+        DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+    }
 }
 
 /// Flush coalesced dispatch notifications after scheduler/ring locks are gone.
-/// Call with interrupts disabled. There is no ICR spin or blocking retry;
-/// pending reschedule flags and periodic timers remain the fallback.
+/// Call with interrupts disabled and no scheduler/IPC/core locks held.
+/// Each claimed target is delivered within a finite hardware-attempt budget,
+/// or fails diagnostically. No periodic interrupt or later flush is required.
 pub(crate) fn flush_dispatch_notifications() {
     let mut pending = DISPATCH_NOTIFICATION_MASK.swap(0, Ordering::AcqRel);
-    // Every iteration consumes one bit: at most MAX_CORES attempts, no polling.
+    // At most MAX_CORES targets, each with a finite immediate retry budget.
     while pending != 0 {
         let cpu = pending.trailing_zeros() as usize;
         let bit = reschedule_bit(cpu);
         pending &= pending - 1;
+        if cpu >= ONLINE_CORES.load(Ordering::Acquire) {
+            DISPATCH_NOTIFICATION_MASK.fetch_or(bit | pending, Ordering::Release);
+            panic!("remote reschedule target is no longer online: {}", cpu);
+        }
         if unsafe {
-            crate::arch::x86_64::lapic::try_send_fixed_ipi(
+            crate::arch::x86_64::lapic::send_fixed_ipi_bounded(
                 cpu,
                 crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
             )
@@ -4033,10 +4088,15 @@ pub(crate) fn flush_dispatch_notifications() {
                 DISPATCH_NOTIFICATIONS_SENT.fetch_add(1, Ordering::Relaxed);
             }
         } else {
-            DISPATCH_NOTIFICATION_MASK.fetch_or(bit, Ordering::Release);
+            DISPATCH_NOTIFICATION_MASK.fetch_or(bit | pending, Ordering::Release);
             if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
                 DISPATCH_NOTIFICATIONS_BUSY.fetch_add(1, Ordering::Relaxed);
             }
+            panic!(
+                "remote reschedule ICR retry exhausted source={} target={}",
+                current_cpu_id(),
+                cpu
+            );
         }
     }
 }
@@ -4044,14 +4104,8 @@ pub(crate) fn flush_dispatch_notifications() {
 /// Queue a voluntary context switch for the first ring-3 instruction after
 /// SYSRET. Call only with interrupts disabled and no scheduler lock held.
 pub fn request_reschedule_after_sysret() {
-    let cpu_id = current_cpu_id();
-    request_reschedule_on(cpu_id);
-    unsafe {
-        crate::arch::x86_64::lapic::send_fixed_ipi(
-            cpu_id,
-            crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
-        );
-    }
+    request_park_after_sysret();
+    flush_dispatch_notifications();
 }
 
 pub fn note_process_finished(pid: usize, name: &str) {
@@ -4279,6 +4333,7 @@ pub fn enter_first_process() -> ! {
         }
     };
 
+    flush_dispatch_notifications();
     unsafe {
         x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);
         crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(kernel_stack_top);

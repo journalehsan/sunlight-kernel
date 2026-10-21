@@ -248,18 +248,30 @@ extern "x86-interrupt" fn tlb_test_ipi_entry(_stack_frame: InterruptStackFrame) 
 }
 
 fn terminate_current_user_process(reason: &str, code: i32) -> ! {
+    #[cfg(all(debug_assertions, feature = "pin_release_ordering_test"))]
+    crate::sched::pin_release_test::exited(code);
     let kstack_top = crate::sched::finish_current_process(code, reason);
-    crate::sched::request_reschedule();
+    #[cfg(all(debug_assertions, feature = "pin_release_ordering_test"))]
+    crate::sched::pin_release_test::finished();
+    crate::sched::request_park_after_sysret();
+    crate::sched::flush_dispatch_notifications();
 
     let handoff = crate::sched::stack_handoff_slot();
     unsafe {
         core::arch::asm!(
             "mov rsp, {stack}",
-            "mov qword ptr [{handoff}], -1",
+            "xchg qword ptr [{handoff}], rax",
+            "cmp qword ptr [{handoff} + 8], 0",
+            "je 2f",
+            "and rsp, -16",
+            "call {release_wake}",
+            "2:",
             "jmp {idle}",
             stack = in(reg) kstack_top,
             handoff = in(reg) handoff,
+            in("rax") usize::MAX,
             idle = sym crate::sched::core_idle_entry,
+            release_wake = sym crate::sched::pin_release_wake,
             options(noreturn)
         );
     }
@@ -798,8 +810,17 @@ pub unsafe extern "C" fn timer_entry() {
         "mov rsp, rax",
         "1:",
         // This CPU will never access the outgoing stack again. An aligned
-        // x86 store is Release; a remote picker/reaper loads with Acquire.
-        "mov qword ptr [r13], -1",
+        // x86 xchg is a full barrier; a remote picker/reaper loads with
+        // Acquire. CPUs that rejected the pinned task owe a new event.
+        "mov rcx, -1",
+        "xchg qword ptr [r13], rcx",
+        "cmp qword ptr [r13 + 8], 0",
+        "je 2f",
+        "mov rbx, rsp",
+        "and rsp, -16",
+        "call {release_wake}",
+        "mov rsp, rbx",
+        "2:",
         // Pop in the same order as iretq_to_context (r15 first, rax last).
         "pop r15",
         "pop r14",
@@ -818,6 +839,7 @@ pub unsafe extern "C" fn timer_entry() {
         "pop rax",
         "iretq",
         handoff_slot = sym crate::sched::stack_handoff_slot,
+        release_wake = sym crate::sched::pin_release_wake,
     );
 }
 
@@ -859,7 +881,15 @@ pub unsafe extern "C" fn reschedule_entry() {
         "jz 1f",
         "mov rsp, rax",
         "1:",
-        "mov qword ptr [r13], -1",
+        "mov rcx, -1",
+        "xchg qword ptr [r13], rcx",
+        "cmp qword ptr [r13 + 8], 0",
+        "je 2f",
+        "mov rbx, rsp",
+        "and rsp, -16",
+        "call {release_wake}",
+        "mov rsp, rbx",
+        "2:",
         "pop r15",
         "pop r14",
         "pop r13",
@@ -877,11 +907,16 @@ pub unsafe extern "C" fn reschedule_entry() {
         "pop rax",
         "iretq",
         handoff_slot = sym crate::sched::stack_handoff_slot,
+        release_wake = sym crate::sched::pin_release_wake,
     );
 }
 
 #[no_mangle]
 extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::handled();
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    crate::sched::remote_wake_test::handled(crate::sched::current_cpu_id());
     unsafe {
         crate::arch::x86_64::lapic::send_eoi();
     }
@@ -889,9 +924,15 @@ extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
     let cpu_id = crate::sched::current_cpu_id();
     crate::sched::accounting::interrupt_entry(cpu_id);
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    crate::sched::remote_wake_test::on_tick(&mut sched, cpu_id);
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::before_schedule(&mut sched, cpu_id);
     #[cfg(feature = "scheduler_guest_bench")]
     let outgoing = sched.diagnostic_current_pid(cpu_id);
     let result = sched.schedule_tick(cpu_id, saved_rsp);
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::after_schedule(&mut sched, cpu_id, result);
     #[cfg(feature = "scheduler_guest_bench")]
     crate::scheduler_bench_diag::observe(&sched, outgoing, result, 32);
     #[cfg(feature = "scheduler_timer_trace")]
@@ -907,6 +948,8 @@ extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
     crate::sched::flush_dispatch_notifications();
     #[cfg(feature = "scheduler_b_test")]
     crate::sched::regression::handoff_delay();
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::handoff_checkpoint(cpu_id);
     result
 }
 
@@ -933,6 +976,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // point). Calling it once and threading the result through eliminates the
     // 2–3 redundant CPUID executions the old code did per tick per core.
     let cpu_id = crate::sched::current_cpu_id();
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::timer(cpu_id);
     crate::sched::accounting::interrupt_entry(cpu_id);
 
     // Per-core Intel DTS sample (allowlisted models only; ~1 Hz). Each CPU
@@ -999,6 +1044,10 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
             bench_reason |= 1;
         }
         sched.tick(cpu_id, ticks_total);
+        #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+        crate::sched::remote_wake_test::on_tick(&mut sched, cpu_id);
+        #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+        crate::sched::pin_release_test::on_tick(&mut sched, cpu_id);
         #[cfg(feature = "scheduler_guest_bench")]
         if crate::sched::peek_reschedule_on(cpu_id) {
             bench_reason |= 2;
@@ -1121,6 +1170,7 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // If our bit is not set, no context switch is needed; skip Phase 2 entirely
     // and return 0 without contending on the global lock.
     if !crate::sched::peek_reschedule_on(cpu_id) {
+        crate::sched::flush_dispatch_notifications();
         return 0;
     }
 
@@ -1182,6 +1232,7 @@ extern "x86-interrupt" fn keyboard_entry(_stack_frame: InterruptStackFrame) {
     crate::sched::accounting::interrupt_entry_local();
     keyboard::handle_irq1();
     acknowledge_external_irq(1);
+    crate::sched::flush_dispatch_notifications();
 }
 
 // Mouse IRQ12 handler
@@ -1190,4 +1241,5 @@ extern "x86-interrupt" fn mouse_entry(_stack_frame: InterruptStackFrame) {
     use crate::arch::x86_64::mouse;
     mouse::handle_irq12();
     acknowledge_external_irq(12);
+    crate::sched::flush_dispatch_notifications();
 }

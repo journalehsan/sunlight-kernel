@@ -164,18 +164,58 @@ pub unsafe fn send_fixed_ipi(cpu_id: usize, vector: u8) {
 
 /// One nonblocking doorbell attempt. Call with local interrupts disabled so
 /// the two xAPIC ICR writes cannot interleave with another local sender.
-/// A busy ICR leaves the scheduler notification pending for a later flush.
+/// The scheduler's bounded wrapper retries Busy in the same flush.
 pub unsafe fn try_send_fixed_ipi(cpu_id: usize, vector: u8) -> bool {
     assert!(
         cpu_id < crate::sched::MAX_CORES,
         "IPI target is out of range"
     );
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    if crate::sched::remote_wake_test::attempt(cpu_id) {
+        return false;
+    }
     if lapic_read(LAPIC_ICR_LOW) & (1 << 12) != 0 {
+        #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+        crate::sched::remote_wake_test::hardware_busy(cpu_id);
         return false;
     }
     lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
     lapic_write(LAPIC_ICR_LOW, vector as u32);
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    crate::sched::remote_wake_test::accepted(cpu_id);
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::accepted(cpu_id);
     true
+}
+
+#[cfg(all(
+    debug_assertions,
+    any(feature = "remote_wake_test", feature = "pin_release_test")
+))]
+/// Mask only this CPU's timer in the isolated native wake fixture.
+///
+/// # Safety
+/// The local xAPIC must be initialized and interrupts must be disabled.
+pub unsafe fn mask_timer_for_remote_wake_test() {
+    lapic_write(LAPIC_LVT_TIMER, lapic_read(LAPIC_LVT_TIMER) | (1 << 16));
+}
+
+/// Finite immediate continuation for scheduler dispatch, outside all locks.
+/// IF must remain clear across both ICR writes and all attempts. Busy means
+/// the source xAPIC's previous command is still in delivery; other CPUs have
+/// separate ICRs. Success means accepted by this ICR, not target execution.
+///
+/// # Safety
+/// The source xAPIC must be initialized, the target must be online, and local
+/// interrupts must remain disabled. No scheduler, core or IPC guard may be held.
+pub unsafe fn send_fixed_ipi_bounded(cpu_id: usize, vector: u8) -> bool {
+    for _ in 0..4096 {
+        if try_send_fixed_ipi(cpu_id, vector) {
+            return true;
+        }
+        core::hint::spin_loop();
+    }
+    false
 }
 
 /// Send an NMI doorbell to a CPU. MM-2B uses this only to make a published

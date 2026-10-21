@@ -39,7 +39,8 @@ code = fixture.replace('// PRODUCTION_METHODS', '\n'.join(function(n) for n in m
 code += '\n' + constants + '\n' + '\n'.join(function(n) for n in helpers)
 code += '\n' + function('initial_embedded_nice', (root / 'kernel/src/process/spawn.rs').read_text())
 for name, path in [('quantum', 'kernel/src/sched/quantum.rs'),
-                   ('cpu_accounting', 'ipc/src/cpu_accounting.rs')]:
+                   ('cpu_accounting', 'ipc/src/cpu_accounting.rs'),
+                   ('requests', 'kernel/src/sched/requests.rs')]:
     code += f'\n#[path = "{root / path}"] mod {name};\n'
 with tempfile.TemporaryDirectory(prefix='scheduler-service-') as temporary:
     path = Path(temporary)
