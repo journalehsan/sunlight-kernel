@@ -137,6 +137,8 @@ fn propagate_dependency_failure(services: &mut ServiceTable, now: u64) -> bool {
                     })
                 });
             if invalid {
+                #[cfg(feature = "dependency-test")]
+                trace_dependency_failure(services, idx, "propagate");
                 services
                     .get_mut(idx)
                     .unwrap()
@@ -151,6 +153,35 @@ fn propagate_dependency_failure(services: &mut ServiceTable, now: u64) -> bool {
         }
     }
     changed
+}
+
+/// Failure-only diagnostics for the synthetic D3 replay. No production hook,
+/// clock sampling, extra IPC, or change to the lifecycle decision.
+#[cfg(feature = "dependency-test")]
+fn trace_dependency_failure(services: &ServiceTable, idx: usize, checkpoint: &str) {
+    let e = services.get(idx).unwrap();
+    serial_println!("[D3-TRACE] checkpoint={} unit={} phase={:?} generation={} runtime={:?} failure={} holds={}",
+        checkpoint, binary_name_of(&e.unit.exec_start), e.activation.phase,
+        e.activation.generation, e.activation.runtime, e.activation.failure,
+        services.dependencies.count());
+    for dep in e.unit.requires.iter().chain(e.unit.after.iter()) {
+        if let Some(i) = demand_unit(services, dep) {
+            let p = services.get(i).unwrap();
+            let bound = p.activation.runtime.is_some_and(|r| {
+                services
+                    .dependencies
+                    .matches(instance(services, idx), instance(services, i), r)
+            });
+            serial_println!(
+                "[D3-TRACE] provider={} phase={:?} generation={} runtime={:?} bound={}",
+                binary_name_of(&p.unit.exec_start),
+                p.activation.phase,
+                p.activation.generation,
+                p.activation.runtime,
+                bound
+            );
+        }
+    }
 }
 
 /// Validate the complete bounded closure before changing any dependency state.
@@ -330,6 +361,8 @@ impl DemandManager {
                 return wire::error(wire::STALE);
             };
             if !dependencies_ready(services, idx) {
+                #[cfg(feature = "dependency-test")]
+                trace_dependency_failure(services, idx, "ready-rejected");
                 services
                     .get_mut(idx)
                     .unwrap()
@@ -370,6 +403,8 @@ impl DemandManager {
                 || !live(r)
                 || !dependencies_ready(services, idx)
             {
+                #[cfg(feature = "dependency-test")]
+                trace_dependency_failure(services, idx, "resolution-rejected");
                 services
                     .get_mut(idx)
                     .unwrap()
@@ -624,6 +659,8 @@ impl DemandManager {
                 Phase::Ready | Phase::IdleCandidate
             ) && !dependencies_ready(services, w.unit)
             {
+                #[cfg(feature = "dependency-test")]
+                trace_dependency_failure(services, w.unit, "completion-rejected");
                 services
                     .get_mut(w.unit)
                     .unwrap()
@@ -643,6 +680,12 @@ impl DemandManager {
                 }
             };
             if let Some(reply) = reply {
+                #[cfg(feature = "dependency-test")]
+                if reply.label == wire::ERROR {
+                    serial_println!("[D3-TRACE] completion unit={} token={} waiter_generation={} generation={} phase={:?} failure={} reply_code={}",
+                        binary_name_of(&e.unit.exec_start), w.token, w.generation,
+                        e.activation.generation, e.activation.phase, e.activation.failure, reply.words[0]);
+                }
                 let _ = sunlight_ipc::ipc_complete_deferred_reply(w.token, reply);
                 *slot = None;
             }

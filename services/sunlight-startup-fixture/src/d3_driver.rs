@@ -47,7 +47,7 @@ extern "C" fn graph_worker(arg: *mut u8) -> *mut u8 {
         d::ACTIVATE,
         if id % 2 == 0 { "d3-parent" } else { "d3-leaf" },
     );
-    assert_eq!(r.label, d::OK);
+    assert_eq!(r.label, d::OK, "graph worker={} reply={:?}", id, r);
     RESULTS[id].store(r.words[0], Ordering::Release);
     DONE.fetch_add(1, Ordering::Release);
     core::ptr::null_mut()
