@@ -48,11 +48,23 @@ impl<const N: usize> Handoffs<N> {
     /// full barrier and the release is an `xchg` followed by a waiters load).
     /// Returns false if the pin was already released; the caller proceeds.
     pub fn wait_release(&self, owner: usize, waiter: usize, task: usize) -> bool {
-        #[cfg(all(debug_assertions, feature = "pin_release_ordering_test"))]
+        #[cfg(all(
+            debug_assertions,
+            any(
+                feature = "pin_release_ordering_test",
+                feature = "pin_release_r2d_test"
+            )
+        ))]
         super::pin_release_test::ordering_checkpoint(owner, waiter, task, false);
         let bit = 1u64 << waiter;
         self.0[owner].waiters.fetch_or(bit, Ordering::SeqCst);
-        #[cfg(all(debug_assertions, feature = "pin_release_ordering_test"))]
+        #[cfg(all(
+            debug_assertions,
+            any(
+                feature = "pin_release_ordering_test",
+                feature = "pin_release_r2d_test"
+            )
+        ))]
         super::pin_release_test::ordering_checkpoint(owner, waiter, task, true);
         if self.0[owner].pin.load(Ordering::SeqCst) == task {
             true

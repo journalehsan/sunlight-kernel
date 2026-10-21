@@ -174,6 +174,10 @@ pub unsafe fn try_send_fixed_ipi(cpu_id: usize, vector: u8) -> bool {
     if crate::sched::remote_wake_test::attempt(cpu_id) {
         return false;
     }
+    #[cfg(all(debug_assertions, feature = "pin_release_r2d_test"))]
+    if crate::sched::pin_release_test::force_busy_ipi(cpu_id) {
+        return false;
+    }
     if lapic_read(LAPIC_ICR_LOW) & (1 << 12) != 0 {
         #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
         crate::sched::remote_wake_test::hardware_busy(cpu_id);

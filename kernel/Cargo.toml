@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5459-alpha.2"
+version = "0.2.5467-alpha.2"
+
 
 
 
@@ -691,6 +692,9 @@ scheduler_b_test = []
 remote_wake_test = []
 pin_release_test = []
 pin_release_ordering_test = ["pin_release_test"]
+# R2D initial-pin/exit and delayed-dispatch/new-pin native fixtures. Reuses the
+# R2V ELF probe and handoff primitives; never enabled in an ordinary image.
+pin_release_r2d_test = ["pin_release_test"]
 # Fixed-size per-CPU scheduler performance instrumentation; disabled by default.
 scheduler_perf_diag = []
 # Automatically launch the bounded C1.2A guest CPU contention workload.

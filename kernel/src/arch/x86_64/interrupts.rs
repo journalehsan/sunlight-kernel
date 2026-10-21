@@ -248,10 +248,10 @@ extern "x86-interrupt" fn tlb_test_ipi_entry(_stack_frame: InterruptStackFrame) 
 }
 
 fn terminate_current_user_process(reason: &str, code: i32) -> ! {
-    #[cfg(all(debug_assertions, feature = "pin_release_ordering_test"))]
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     crate::sched::pin_release_test::exited(code);
     let kstack_top = crate::sched::finish_current_process(code, reason);
-    #[cfg(all(debug_assertions, feature = "pin_release_ordering_test"))]
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     crate::sched::pin_release_test::finished();
     crate::sched::request_park_after_sysret();
     crate::sched::flush_dispatch_notifications();

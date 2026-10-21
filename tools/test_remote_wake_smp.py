@@ -23,11 +23,17 @@ def main():
                         help='also compile scheduler_perf_diag for functional coverage')
     parser.add_argument('--pin-release', action='store_true')
     parser.add_argument('--pin-ordering', action='store_true')
+    parser.add_argument('--pin-r2d', action='store_true')
     parser.add_argument('--evidence-dir', type=Path,
                         help='retain this run in a separate directory')
     args = parser.parse_args()
     if args.pin_ordering:
         args.pin_release = True
+    if args.pin_r2d:
+        args.pin_release = True
+    feature_name = ('pin_release_r2d_test' if args.pin_r2d else
+                    'pin_release_ordering_test' if args.pin_ordering else
+                    'pin_release_test' if args.pin_release else 'remote_wake_test')
     if any(c < 1 or c > 12 for c in args.cpus) or args.timeout < 1:
         parser.error('CPUs must be 1..12 and timeout must be positive')
     root = Path(__file__).resolve().parents[1]
@@ -39,7 +45,7 @@ def main():
     iso = evidence / 'sunlightos.iso'
     if not args.skip_build:
         with (evidence / 'build.log').open('w') as log:
-            features = ['pin_release_ordering_test' if args.pin_ordering else 'pin_release_test' if args.pin_release else 'remote_wake_test']
+            features = [feature_name]
             if args.perf_diag:
                 features.append('scheduler_perf_diag')
             subprocess.run([
@@ -57,7 +63,7 @@ def main():
         'iso_sha256': hashlib.sha256(iso.read_bytes()).hexdigest(),
         'qemu': subprocess.check_output(['qemu-system-x86_64', '--version'], text=True).splitlines()[0],
         'accelerator': 'tcg', 'cpus': args.cpus,
-        'features': ['pin_release_ordering_test' if args.pin_ordering else 'pin_release_test' if args.pin_release else 'remote_wake_test'] + (['scheduler_perf_diag'] if args.perf_diag else []),
+        'features': [feature_name] + (['scheduler_perf_diag'] if args.perf_diag else []),
         'source_sha256': {path: hashlib.sha256((root / path).read_bytes()).hexdigest()
                           for path in (
                               'kernel/src/sched/mod.rs', 'kernel/src/sched/requests.rs',
@@ -112,7 +118,9 @@ def main():
                       and not timed_out)
             assertion_result = None
             if args.pin_release:
-                if args.pin_ordering:
+                if args.pin_r2d:
+                    from fastlane_f13nr2d_validate import validate_native
+                elif args.pin_ordering:
                     from fastlane_f13nr2c_validate import validate_native
                 else:
                     from fastlane_f13nr2v_validate import validate_native
