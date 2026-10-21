@@ -1354,16 +1354,24 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
             reply.to_registers(frame);
             return 0;
         }
-        let caller_pid = crate::sched::with_scheduler(|sched| sched.current_process().pid);
-        let now_tick = crate::sched::with_scheduler(|sched| sched.global_tick);
+        let sched = crate::sched::SCHEDULER.lock();
+        let caller = sched.current_process();
+        if caller.is_exiting() {
+            return IpcError::Cancelled as u64;
+        }
         let Some((uid, gid)) = crate::capability::CAP_BROKER
             .lock()
-            .consume_auth_session_grant(msg.caps[0], caller_pid, now_tick)
+            .consume_live_auth_grant(
+                msg.caps[0],
+                crate::capability::delivery::RecipientIdentity::of(caller),
+                sched.global_tick,
+            )
         else {
             let reply = IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR);
             reply.to_registers(frame);
             return 0;
         };
+        drop(sched);
         (
             uid,
             gid,
@@ -1384,7 +1392,10 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let caller_identity = crate::sched::Scheduler::supervision_identity(sched.current_process());
     let caller_is_init = sched.supervision.is_bootstrap(caller_identity)
-        && !matches!(sched.current_process().state, ProcessState::Finished | ProcessState::Reaped);
+        && !matches!(
+            sched.current_process().state,
+            ProcessState::Finished | ProcessState::Reaped
+        );
     let caller_is_trusted_manager = sched.active_manager(sched.current_process());
     let reap_watcher = (
         sched.current_process().pid,
@@ -1514,16 +1525,25 @@ fn sys_lock_auth_consume(frame: &mut SyscallFrame) -> u64 {
     let grant = CapabilityToken(frame.rdi);
     let presenter_pid = frame.rsi as usize;
     let sched = crate::sched::SCHEDULER.lock();
-    if !sched.current_process().trusted_lock_service {
+    if !sched.current_process().trusted_lock_service || sched.current_process().is_exiting() {
         return u64::MAX;
     }
     let now_tick = sched.global_tick;
-    drop(sched);
+    let Some(recipient) = sched
+        .processes
+        .iter()
+        .find(|p| p.pid == presenter_pid && !p.is_exiting())
+    else {
+        return u64::MAX;
+    };
+    let recipient = crate::capability::delivery::RecipientIdentity::of(recipient);
     match crate::capability::CAP_BROKER
         .lock()
-        .consume_auth_session_grant(grant, presenter_pid, now_tick)
+        .consume_live_auth_grant(grant, recipient, now_tick)
     {
         Some((uid, gid)) => {
+            #[cfg(feature = "cap_issuance_test")]
+            crate::capability::gate::note_auth_consumption(recipient.pid);
             frame.r8 = gid as u64;
             uid as u64
         }
@@ -1575,14 +1595,21 @@ fn sys_session_auth_consume(frame: &mut SyscallFrame) -> u64 {
     let grant = CapabilityToken(frame.rdi);
     let owner_pid = frame.rsi as usize;
     let sched = crate::sched::SCHEDULER.lock();
-    if !sched.current_process().trusted_session_service {
+    if !sched.current_process().trusted_session_service || sched.current_process().is_exiting() {
         return u64::MAX;
     }
     let now_tick = sched.global_tick;
-    drop(sched);
+    let Some(recipient) = sched
+        .processes
+        .iter()
+        .find(|p| p.pid == owner_pid && !p.is_exiting())
+    else {
+        return u64::MAX;
+    };
+    let recipient = crate::capability::delivery::RecipientIdentity::of(recipient);
     match crate::capability::CAP_BROKER
         .lock()
-        .consume_auth_session_grant(grant, owner_pid, now_tick)
+        .consume_live_auth_grant(grant, recipient, now_tick)
     {
         Some((uid, gid)) => {
             frame.r8 = gid as u64;
@@ -1659,12 +1686,18 @@ fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
         let words = match frame.rsi {
             own::STATUS => {
                 let mut status = sched.supervision.status();
-                if status[0] != own::REAPED && !sched.supervision.manager().is_some_and(|owner| {
-                    sched.processes.iter().any(|p| crate::sched::Scheduler::supervision_identity(p) == owner
-                        && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
-                }) { status[0] = own::EXITING; }
+                if status[0] != own::REAPED
+                    && !sched.supervision.manager().is_some_and(|owner| {
+                        sched.processes.iter().any(|p| {
+                            crate::sched::Scheduler::supervision_identity(p) == owner
+                                && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+                        })
+                    })
+                {
+                    status[0] = own::EXITING;
+                }
                 status
-            },
+            }
             own::ACCOUNT => {
                 let mut live = 0;
                 let mut reaped = 0;
@@ -1802,6 +1835,7 @@ fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
         };
         if !crate::ipc::reply_target_matches_pending_request(
             target_pid,
+            target.foreground.incarnation,
             target.pending_call,
             caller.ipc_reply_target,
         ) {
@@ -1839,8 +1873,9 @@ fn ipc_reply(frame: &mut SyscallFrame) -> u64 {
         .ipc_reply_target
         .map(|target| target.endpoint_id)
         .unwrap_or(0);
+    let mut caps = crate::capability::CAP_BROKER.lock();
     crate::ipc::with_shard(endpoint_id, |bus| {
-        match crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, bus) {
+        match crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, &mut caps, bus) {
             Ok(()) => 0,
             Err(e) => e as u64,
         }
@@ -1865,9 +1900,12 @@ fn ipc_complete_deferred_reply(frame: &mut SyscallFrame) -> u64 {
         Ok(endpoint_id) => endpoint_id,
         Err(error) => return error as u64,
     };
+    let mut caps = crate::capability::CAP_BROKER.lock();
     crate::ipc::with_shard(
         endpoint_id,
-        |bus| match crate::ipc::complete_deferred_reply(server_pid, token, reply, &mut sched, bus) {
+        |bus| match crate::ipc::complete_deferred_reply(
+            server_pid, token, reply, &mut sched, &mut caps, bus,
+        ) {
             Ok(()) => 0,
             Err(error) => error as u64,
         },
@@ -1886,7 +1924,7 @@ fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
     let endpoint_token = CapabilityToken(frame.rsi);
     let reply = IpcMsg::from_registers(frame);
     let mut sched = crate::sched::SCHEDULER.lock();
-    let caps = crate::capability::CAP_BROKER.lock();
+    let mut caps = crate::capability::CAP_BROKER.lock();
     let server_pid = sched.current_process().pid;
     let endpoint_id = match caps.token_owner(endpoint_token, CapabilityRights::RECV_ONLY) {
         Ok((id, owner_pid)) if owner_pid == server_pid => id,
@@ -1901,7 +1939,14 @@ fn ipc_reply_wait(frame: &mut SyscallFrame) -> u64 {
         }
     };
     crate::ipc::with_shard(endpoint_id, |bus| {
-        match crate::ipc::handle_ipc_reply_wait(server_pid, endpoint_id, reply, &mut sched, bus) {
+        match crate::ipc::handle_ipc_reply_wait(
+            server_pid,
+            endpoint_id,
+            reply,
+            &mut sched,
+            &mut caps,
+            bus,
+        ) {
             Ok(next) => {
                 next.to_registers(frame);
                 0
@@ -1991,8 +2036,9 @@ fn ipc_cancel() -> u64 {
 
     let endpoint_id = sched.current_process().ipc_endpoint.unwrap_or(0);
 
+    let mut caps = crate::capability::CAP_BROKER.lock();
     crate::ipc::with_shard(endpoint_id, |bus| {
-        match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus) {
+        match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &mut caps, bus) {
             Ok(()) => 0,
             Err(e) => e as u64,
         }
@@ -3479,15 +3525,21 @@ fn sys_wiseowl_delegate_caller(frame: &mut SyscallFrame) -> u64 {
         crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-no-reply-target");
         return u64::MAX;
     };
-    let Some(caller) = sched.processes.iter().find(|process| {
-        process.pid == reply_target.call.pid
-            && !process.is_exiting()
-    }) else {
+    let Some(caller) = sched
+        .processes
+        .iter()
+        .find(|process| process.pid == reply_target.call.pid && !process.is_exiting())
+    else {
         crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-caller-not-live");
         return u64::MAX;
     };
     if !caller.trusted_wiseowl_console
-        || !crate::ipc::reply_target_matches_pending_request(caller.pid, caller.pending_call, Some(reply_target))
+        || !crate::ipc::reply_target_matches_pending_request(
+            caller.pid,
+            caller.foreground.incarnation,
+            caller.pending_call,
+            Some(reply_target),
+        )
     {
         crate::serial_println!("[WISEOWL-DELEGATION] DIAG kernel-caller-untrusted");
         return u64::MAX;

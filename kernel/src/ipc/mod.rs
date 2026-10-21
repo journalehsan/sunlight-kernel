@@ -794,6 +794,7 @@ fn deliver_reply_to_current_target(
     server_pid: usize,
     reply: IpcMsg,
     sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
     let Some(target) = sched
@@ -805,7 +806,9 @@ fn deliver_reply_to_current_target(
         return Ok(());
     };
 
-    let result = deliver_reply_to_target(target, reply, sched, bus);
+    #[cfg(feature = "cap_issuance_test")]
+    crate::capability::gate::before_delivery(server_pid, target, reply, sched, caps, bus);
+    let result = deliver_reply_to_target(target, reply, sched, caps, bus);
     #[cfg(feature = "scheduler_timer_trace")]
     if result.is_ok() && sched.processes.iter().any(|p| p.pid == target.call.pid && matches!(p.ipc_call_outcome, Some(IpcCallOutcome::ReplyDelivered(g)) if g == target.call.generation)) {
         if let Some(idx) = sched.processes.iter().position(|p| p.pid == server_pid && p.name_str() == "timer_server") {
@@ -815,24 +818,37 @@ fn deliver_reply_to_current_target(
     result
 }
 
-fn deliver_reply_to_target(
+pub(crate) fn deliver_reply_to_target(
     target: IpcReplyTarget,
     reply: IpcMsg,
     sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
     let _ = bus.reply_waiter_remove(target.endpoint_id, target.call);
+    // Abandonment paths below can never adopt this key into a replacement PID.
 
     let Some(client_idx) = sched
         .processes
         .iter()
         .position(|process| process.pid == target.call.pid)
     else {
+        caps.settle_grant_delivery(
+            target.call.pid,
+            target.call.incarnation,
+            target.call.generation,
+            None,
+            &[],
+        );
         LATE_REPLY_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
         return Ok(());
     };
 
     let valid = !sched.processes[client_idx].is_exiting()
+        && sched.processes[client_idx].foreground.incarnation == target.call.incarnation
+        && sched.processes[client_idx]
+            .pending_call
+            .is_some_and(|p| p.endpoint_id == target.endpoint_id)
         && terminal_transition_allowed(
             sched.processes[client_idx]
                 .pending_call
@@ -841,6 +857,13 @@ fn deliver_reply_to_target(
             target.call.generation,
         );
     if !valid {
+        caps.settle_grant_delivery(
+            target.call.pid,
+            target.call.incarnation,
+            target.call.generation,
+            None,
+            &[],
+        );
         LATE_REPLY_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
         return Ok(());
     }
@@ -854,11 +877,21 @@ fn deliver_reply_to_target(
             sched,
             client_idx,
             IpcCallOutcome::DeadlineExpired(target.call.generation),
+            caps,
         );
         DEADLINE_EXPIRED_COUNT.fetch_add(1, Ordering::Relaxed);
         return Ok(());
     }
 
+    caps.settle_grant_delivery(
+        target.call.pid,
+        target.call.incarnation,
+        target.call.generation,
+        Some(crate::capability::delivery::RecipientIdentity::of(
+            &sched.processes[client_idx],
+        )),
+        &[reply.caps[0].0, reply.caps[1].0][..(reply.cap_count as usize).min(2)],
+    );
     sched.processes[client_idx].ipc_reply = Some((target.call.generation, reply));
     trace_pty_event(
         sched,
@@ -873,6 +906,7 @@ fn deliver_reply_to_target(
         sched,
         client_idx,
         IpcCallOutcome::ReplyDelivered(target.call.generation),
+        caps,
     );
     Ok(())
 }
@@ -917,7 +951,12 @@ pub(crate) fn take_terminal_result(
     }
 }
 
-fn finish_call(sched: &mut Scheduler, idx: usize, outcome: IpcCallOutcome) {
+fn finish_call(
+    sched: &mut Scheduler,
+    idx: usize,
+    outcome: IpcCallOutcome,
+    caps: &mut CapabilityBroker,
+) {
     if terminal_transition_allowed(
         sched.processes[idx]
             .pending_call
@@ -931,9 +970,21 @@ fn finish_call(sched: &mut Scheduler, idx: usize, outcome: IpcCallOutcome) {
                 endpoint_id: pending.endpoint_id,
                 call: IpcCallId {
                     pid: sched.processes[idx].pid,
+                    incarnation: sched.processes[idx].foreground.incarnation,
                     generation: pending.generation,
                 },
             });
+        if !matches!(outcome, IpcCallOutcome::ReplyDelivered(_)) {
+            if let Some(target) = target {
+                caps.settle_grant_delivery(
+                    target.call.pid,
+                    target.call.incarnation,
+                    target.call.generation,
+                    None,
+                    &[],
+                );
+            }
+        }
         sched.processes[idx].pending_call = None;
         if !matches!(outcome, IpcCallOutcome::ReplyDelivered(_)) {
             sched.processes[idx].ipc_reply = None;
@@ -968,13 +1019,15 @@ pub(crate) fn terminal_transition_allowed(
 /// SMP wakeup and timeout bookkeeping.
 pub(crate) fn reply_target_matches_pending_request(
     requester_pid: usize,
+    incarnation: u64,
     pending: Option<PendingIpcCall>,
     reply_target: Option<IpcReplyTarget>,
 ) -> bool {
     let (Some(pending), Some(reply_target)) = (pending, reply_target) else {
         return false;
     };
-    reply_target.endpoint_id == pending.endpoint_id
+    reply_target.call.incarnation == incarnation
+        && reply_target.endpoint_id == pending.endpoint_id
         && reply_target.call.pid == requester_pid
         && reply_target.call.generation == pending.generation
 }
@@ -1053,8 +1106,10 @@ pub fn handle_ipc_call(
         }
     };
     // A diagnostic successor can publish its own endpoint, never control survivors.
-    if sched.processes[idx].trusted_service_manager && !sched.active_manager(&sched.processes[idx])
-        && !(target_owner == 1 && msg.label == NAMESERVER_REGISTER) {
+    if sched.processes[idx].trusted_service_manager
+        && !sched.active_manager(&sched.processes[idx])
+        && !(target_owner == 1 && msg.label == NAMESERVER_REGISTER)
+    {
         sched.processes[idx].ipc_next_deadline_tick = None;
         return Err(IpcError::InvalidCapability);
     }
@@ -1076,23 +1131,41 @@ pub fn handle_ipc_call(
     // token. The message payload and caller-supplied badge confer no authority.
     if target_owner != 1
         && msg.label == sunlight_ipc::demand::DISCOVER
-        && sched.processes.iter().any(|p| p.pid == target_owner && p.trusted_service_manager)
-        && !sunlight_ipc::demand::discovery_authorized(sched.processes[idx].service_lookup_restrictions)
+        && sched
+            .processes
+            .iter()
+            .any(|p| p.pid == target_owner && p.trusted_service_manager)
+        && !sunlight_ipc::demand::discovery_authorized(
+            sched.processes[idx].service_lookup_restrictions,
+        )
     {
         sched.processes[idx].ipc_next_deadline_tick = None;
         return Err(IpcError::InvalidCapability);
     }
     if target_owner != 1
-        && (matches!(msg.label, sunlight_ipc::demand::ACTIVATE | sunlight_ipc::demand::LEASE_ACQUIRE
-            | sunlight_ipc::demand::IDLE_ACCOUNT | sunlight_ipc::supervision::RPC_RECORD
-            | sunlight_ipc::supervision::RPC_DETAIL | sunlight_ipc::supervision::RPC_ACCOUNT
-            | sunlight_ipc::supervision::RPC_PATH | sunlight_ipc::supervision::TEST_ARM
-            | sunlight_ipc::supervision::TEST_PROBE | sunlight_ipc::supervision::TEST_CRASH)
-            || matches!(msg.label, 1..=6))
+        && (matches!(
+            msg.label,
+            sunlight_ipc::demand::ACTIVATE
+                | sunlight_ipc::demand::LEASE_ACQUIRE
+                | sunlight_ipc::demand::IDLE_ACCOUNT
+                | sunlight_ipc::supervision::RPC_RECORD
+                | sunlight_ipc::supervision::RPC_DETAIL
+                | sunlight_ipc::supervision::RPC_ACCOUNT
+                | sunlight_ipc::supervision::RPC_PATH
+                | sunlight_ipc::supervision::TEST_ARM
+                | sunlight_ipc::supervision::TEST_PROBE
+                | sunlight_ipc::supervision::TEST_CRASH
+        ) || matches!(msg.label, 1..=6))
         && !sunlight_ipc::demand::activation_words_authorized(
-            sched.processes[idx].service_lookup_restrictions, msg.label, msg.word_count, &msg.words,
+            sched.processes[idx].service_lookup_restrictions,
+            msg.label,
+            msg.word_count,
+            &msg.words,
         )
-        && sched.processes.iter().any(|p| p.pid == target_owner && p.trusted_service_manager)
+        && sched
+            .processes
+            .iter()
+            .any(|p| p.pid == target_owner && p.trusted_service_manager)
     {
         sched.processes[idx].ipc_next_deadline_tick = None;
         return Err(IpcError::InvalidCapability);
@@ -1111,10 +1184,11 @@ pub fn handle_ipc_call(
         }
         let generation = sched.processes[idx]
             .ipc_call_generation
-            .wrapping_add(1)
-            .max(1);
+            .checked_add(1)
+            .ok_or(IpcError::InvalidArgument)?;
         let call = IpcCallId {
             pid: caller_pid,
+            incarnation: sched.processes[idx].foreground.incarnation,
             generation,
         };
         if let Err(error) = bus.enqueue_call(endpoint_id, msg, call) {
@@ -1463,9 +1537,10 @@ pub fn handle_ipc_reply(
     server_pid: usize,
     reply: IpcMsg,
     sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
-    deliver_reply_to_current_target(server_pid, reply, sched, bus)
+    deliver_reply_to_current_target(server_pid, reply, sched, caps, bus)
 }
 
 pub fn defer_current_reply(server_pid: usize, sched: &mut Scheduler) -> Result<u64, IpcError> {
@@ -1532,6 +1607,7 @@ pub fn deferred_reply_is_live(server_pid: usize, token: u64, sched: &Scheduler) 
     };
     sched.processes.iter().any(|process| {
         process.pid == entry.target.call.pid
+            && process.foreground.incarnation == entry.target.call.incarnation
             && !process.is_exiting()
             && process.pending_call.is_some_and(|pending| {
                 pending.endpoint_id == entry.target.endpoint_id
@@ -1545,6 +1621,7 @@ pub fn complete_deferred_reply(
     token: u64,
     reply: IpcMsg,
     sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
     let Some(server_idx) = sched
@@ -1566,7 +1643,7 @@ pub fn complete_deferred_reply(
         .remove(entry_idx)
         .ok_or(IpcError::InvalidArgument)?
         .target;
-    deliver_reply_to_target(target, reply, sched, bus)
+    deliver_reply_to_target(target, reply, sched, caps, bus)
 }
 
 pub fn handle_ipc_reply_wait(
@@ -1574,6 +1651,7 @@ pub fn handle_ipc_reply_wait(
     endpoint_id: u32,
     reply: IpcMsg,
     sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
     bus: &mut IpcBus,
 ) -> Result<IpcMsg, IpcError> {
     let Some(server) = sched.processes.iter().find(|p| p.pid == server_pid) else {
@@ -1604,7 +1682,7 @@ pub fn handle_ipc_reply_wait(
                 sched.effective_runtime_at(idx, sched.now_ns()),
             );
         }
-        deliver_reply_to_current_target(server_pid, reply, sched, bus)?;
+        deliver_reply_to_current_target(server_pid, reply, sched, caps, bus)?;
     }
 
     if let Some(server) = sched.process_mut_by_pid(server_pid) {
@@ -1634,6 +1712,7 @@ pub fn handle_ipc_reply_wait(
 pub fn handle_ipc_cancel(
     caller_pid: usize,
     sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
     let Some(idx) = sched.processes.iter().position(|p| p.pid == caller_pid) else {
@@ -1655,6 +1734,7 @@ pub fn handle_ipc_cancel(
 
     let call = IpcCallId {
         pid: caller_pid,
+        incarnation: sched.processes[idx].foreground.incarnation,
         generation: pending.generation,
     };
     bus.remove_pending_call(pending.endpoint_id, call);
@@ -1666,6 +1746,7 @@ pub fn handle_ipc_cancel(
         sched,
         idx,
         IpcCallOutcome::ExplicitlyCancelled(pending.generation),
+        caps,
     );
     EXPLICIT_CANCEL_COUNT.fetch_add(1, Ordering::Relaxed);
     Ok(())
@@ -1722,13 +1803,20 @@ pub fn expire_deadlines(sched: &mut Scheduler, now_tick: u64) {
 
         let call = IpcCallId {
             pid: sched.processes[idx].pid,
+            incarnation: sched.processes[idx].foreground.incarnation,
             generation,
         };
+        let mut caps = crate::capability::CAP_BROKER.lock();
         with_shard(pending.endpoint_id, |bus| {
             bus.remove_pending_call(pending.endpoint_id, call);
             bus.reply_waiter_remove(pending.endpoint_id, call);
         });
-        finish_call(sched, idx, IpcCallOutcome::DeadlineExpired(generation));
+        finish_call(
+            sched,
+            idx,
+            IpcCallOutcome::DeadlineExpired(generation),
+            &mut caps,
+        );
         #[cfg(feature = "cpu_accounting_diag")]
         {
             let count = &mut sched.processes[idx].wake_audit[3];
@@ -1770,8 +1858,13 @@ pub fn finish_peer_closed_calls(
     calls: impl IntoIterator<Item = IpcCallId>,
     sched: &mut Scheduler,
 ) {
+    let mut caps = crate::capability::CAP_BROKER.lock();
     for call in calls {
-        let Some(idx) = sched.processes.iter().position(|p| p.pid == call.pid) else {
+        let Some(idx) = sched
+            .processes
+            .iter()
+            .position(|p| p.pid == call.pid && p.foreground.incarnation == call.incarnation)
+        else {
             continue;
         };
         if !sched.processes[idx].pending_call.is_some_and(|pending| {
@@ -1779,7 +1872,12 @@ pub fn finish_peer_closed_calls(
         }) {
             continue;
         }
-        finish_call(sched, idx, IpcCallOutcome::PeerClosed(call.generation));
+        finish_call(
+            sched,
+            idx,
+            IpcCallOutcome::PeerClosed(call.generation),
+            &mut caps,
+        );
         PEER_CLOSED_WAKE_COUNT.fetch_add(1, Ordering::Relaxed);
     }
 }
@@ -1794,7 +1892,7 @@ mod tests {
     use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget, PendingIpcCall};
 
     fn call(pid: usize, generation: u64) -> IpcCallId {
-        IpcCallId { pid, generation }
+        IpcCallId { pid, incarnation: 0, generation }
     }
 
     #[test]
@@ -1832,8 +1930,7 @@ mod tests {
             endpoint_id: 13,
             call: call(4, 9),
         };
-        assert!(reply_target_matches_pending_request(
-            4,
+        assert!(reply_target_matches_pending_request(4, 0,
             Some(pending),
             Some(target)
         ));
@@ -1842,17 +1939,15 @@ mod tests {
             endpoint_id: 13,
             call: call(4, 8),
         };
-        assert!(!reply_target_matches_pending_request(
-            4,
+        assert!(!reply_target_matches_pending_request(4, 0,
             Some(pending),
             Some(stale)
         ));
-        assert!(!reply_target_matches_pending_request(
-            5,
+        assert!(!reply_target_matches_pending_request(5, 0,
             Some(pending),
             Some(target)
         ));
-        assert!(!reply_target_matches_pending_request(4, None, Some(target)));
+        assert!(!reply_target_matches_pending_request(4, 0, None, Some(target)));
     }
 
     #[test]

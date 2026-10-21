@@ -160,6 +160,7 @@ pub fn run(hhdm: VirtAddr) {
     let mut owner = private(OWNER, hhdm);
     owner.trusted_auth_broker = true;
     let mut reader = private(READER, hhdm);
+    reader.trusted_lock_service = true;
     if option_env!("SUNLIGHT_CAP_EXEC_PROBE") == Some("1") {
         // Synthetic launch provenance, isolated from production services.
         reader.trusted_auth_broker = true;
@@ -189,8 +190,12 @@ pub fn run(hhdm: VirtAddr) {
         (owner_cap, send)
     };
     owner.set_initial_args(0, base.as_u64(), owner_cap.as_u64(), READER as u64);
-    reader.set_initial_args(2, shm.as_u64(), send.as_u64(),
-        u64::from(option_env!("SUNLIGHT_CAP_EXEC_PROBE") == Some("1")));
+    reader.set_initial_args(
+        2,
+        shm.as_u64(),
+        send.as_u64(),
+        u64::from(option_env!("SUNLIGHT_CAP_EXEC_PROBE") == Some("1")),
+    );
     {
         let mut sched = SCHEDULER.lock();
         sched.add_process_after_reaping(owner);
@@ -239,7 +244,9 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
             assert!(caps.auth_session_grants.is_empty() && caps.account_grants.is_empty());
             // The reader is fully Reaped. Tell the still-live issuer to attempt
             // both syscalls again against that retired recipient.
-            unsafe { (state.signal_address as *mut u64).write_volatile(0xc1ea); }
+            unsafe {
+                (state.signal_address as *mut u64).write_volatile(0xc1ea);
+            }
             state.signalled = true;
         }
     }
@@ -263,10 +270,13 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
             class_frame_count(PhysicalMemoryClass::PageTable),
             state.tables
         );
-        assert_eq!(AUTH_COMMITS.load(Ordering::Relaxed), 16);
-        assert_eq!(ACCOUNT_COMMITS.load(Ordering::Relaxed), 16);
+        assert_eq!(AUTH_COMMITS.load(Ordering::Relaxed), 17);
+        assert_eq!(AUTH_CONSUMES.load(Ordering::Relaxed), 15);
+        assert!(DELIVERY_BOUNDARIES.load(Ordering::Relaxed));
+        crate::serial_println!("[CAP-R41] COMPLETE delivered_auth_consumed=15 stale_incarnation=denied real_call_cancel=retired pending=0 active_auth_account=0 cpus={}", sched.online_cores);
+        assert_eq!(ACCOUNT_COMMITS.load(Ordering::Relaxed), 17);
         assert!(caps.auth_session_grants.is_empty() && caps.account_grants.is_empty());
-        crate::serial_println!("[CAP-PR] lifecycle PASS auth=16 account=16 post_reap_records=0 late_auth=denied late_account=denied cpus={}", sched.online_cores);
+        crate::serial_println!("[CAP-PR] lifecycle PASS auth=17 account=17 post_reap_records=0 late_auth=denied late_account=denied cpus={}", sched.online_cores);
         state.complete = true;
         crate::serial_println!("[CAP-P] native PASS cpus={} workers={} predictions_denied={} issuance_cycles={} free_before={} free_after={} data_delta=0 pt_delta=0 mappings=0 tokens=0 ticks={}", sched.online_cores, state.workers, state.workers * 124, state.workers * 128, state.baseline, free, sched.global_tick);
         unsafe {
@@ -277,4 +287,56 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
         sched.global_tick < 12000,
         "native capability fixture timeout"
     );
+}
+
+static DELIVERY_BOUNDARIES: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static AUTH_CONSUMES: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+pub(crate) fn note_auth_consumption(pid: usize) {
+    if pid == READER {
+        AUTH_CONSUMES.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// Bounded cancellation injection on the isolated fixture's first real reply.
+/// Runs at the existing serialized delivery boundary; no waiting under locks.
+pub(crate) fn before_delivery(
+    server: usize,
+    target: crate::process::IpcReplyTarget,
+    reply: crate::ipc::IpcMsg,
+    sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
+    bus: &mut crate::ipc::IpcBus,
+) {
+    if server != OWNER || DELIVERY_BOUNDARIES.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let recipient = sched
+        .processes
+        .iter()
+        .find(|p| p.pid == target.call.pid)
+        .unwrap();
+    let identity = super::delivery::RecipientIdentity::of(recipient);
+    let before = caps.recipient_grant_count(READER);
+    assert_eq!(before, 2);
+    crate::serial_println!("[CAP-R41] START op=real-auth-account-reply pid={} incarnation={} vm={} request={} pending=2", identity.pid, identity.incarnation, identity.vm_generation, target.call.generation);
+    let mut stale = target;
+    stale.call.incarnation = stale.call.incarnation.checked_add(1).unwrap();
+    crate::ipc::deliver_reply_to_target(stale, reply, sched, caps, bus).unwrap();
+    assert_eq!(caps.recipient_grant_count(READER), before);
+    assert!(sched
+        .processes
+        .iter()
+        .find(|p| p.pid == READER)
+        .unwrap()
+        .pending_call
+        .is_some());
+    crate::ipc::handle_ipc_cancel(READER, sched, caps, bus).unwrap();
+    crate::ipc::handle_ipc_cancel(READER, sched, caps, bus).unwrap();
+    assert_eq!(caps.recipient_grant_count(READER), 0);
+    let recipient = sched.processes.iter().find(|p| p.pid == READER).unwrap();
+    assert!(recipient.pending_call.is_none());
+    assert!(
+        matches!(recipient.ipc_call_outcome, Some(crate::process::IpcCallOutcome::ExplicitlyCancelled(g)) if g == target.call.generation)
+    );
+    crate::serial_println!("[CAP-R41] boundary stale-incarnation=denied real-call-cancel=retired duplicate=stable pending=0");
 }

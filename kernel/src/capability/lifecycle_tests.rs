@@ -1,5 +1,5 @@
 use super::*;
-use crate::lifecycle_host::{AddressSpace, Foreground, Process, Scheduler};
+use crate::lifecycle_host::{reply, AddressSpace, Foreground, Process, Scheduler};
 use alloc::boxed::Box;
 use std::sync::{Arc, Barrier, Mutex};
 use sunlight_ipc::accounts::{GrantScope, Operation};
@@ -30,7 +30,7 @@ fn process(pid: usize) -> Process {
             generation: pid as u64 + 10,
         },
         pending_call: (pid != 6).then_some((pid, 1)),
-        ipc_reply_target: (pid == 6).then_some((7, 1)),
+        ipc_reply_target: (pid == 6).then_some(reply(7, 1, 7)),
     }
 }
 fn table() -> Scheduler {
@@ -126,6 +126,7 @@ fn preparation_exit_issuer_exit_reuse_and_exec() {
         s.processes[1] = process(7);
         s.processes[1].foreground.incarnation += 100;
         s.processes[1].address_space.generation += 100;
+        s.processes[0].ipc_reply_target = Some(reply(7, 1, s.processes[1].foreground.incarnation));
         let token = issue(&s, account).unwrap();
         CAP_BROKER.lock().retire_recipient_grants(7); // successful exec withdrawal
         s.processes[1].address_space.generation += 1;
@@ -161,7 +162,16 @@ fn faults_exhaustion_and_multiple_recipients() {
         assert_eq!(inventory(), 64);
         cleanup(&mut s, 7);
         assert!(!CAP_BROKER.lock().token_in_use(original));
-        s.processes[0].ipc_reply_target = Some((8, 1));
+        s.processes[0].ipc_reply_target = Some(reply(
+            8,
+            1,
+            s.processes
+                .iter()
+                .find(|p| p.pid == 8)
+                .unwrap()
+                .foreground
+                .incarnation,
+        ));
         let other = if account {
             s.account_grant(8, scope(), None)
         } else {
@@ -210,7 +220,18 @@ fn invalid_identity_and_stale_ipc_never_publish() {
                 2 => s.processes[1].foreground.incarnation = 0,
                 3 => s.processes[1].address_space.generation = 0,
                 4 => s.processes[1].pending_call = None,
-                5 => s.processes[0].ipc_reply_target = Some((7, 2)),
+                5 => {
+                    s.processes[0].ipc_reply_target = Some(reply(
+                        7,
+                        2,
+                        s.processes
+                            .iter()
+                            .find(|p| p.pid == 7)
+                            .unwrap()
+                            .foreground
+                            .incarnation,
+                    ))
+                }
                 _ => {
                     s.processes.pop();
                     s.processes.pop();
@@ -296,6 +317,13 @@ fn committed_grants_remain_recipient_owned_after_issuer_exit() {
     let auth = issue(&s, false).unwrap();
     let account = issue(&s, true).unwrap();
     assert_eq!(inventory(), 2);
+    CAP_BROKER.lock().settle_grant_delivery(
+        7,
+        7,
+        1,
+        Some(super::delivery::RecipientIdentity::of(&s.processes[1])),
+        &[auth.0, account.0],
+    );
     cleanup(&mut s, 6);
     // Issuer withdrawal must not silently adopt or reassign these grants.
     // Their existing contract assigns cleanup responsibility to recipient 7.
@@ -346,7 +374,16 @@ fn capacity_failure_then_cleanup_returns_grant_inventory_to_zero() {
         next.pending_call = Some((7, 2));
         s.processes[1] = next;
         assert!(issue(&s, account).is_none()); // stale reply generation
-        s.processes[0].ipc_reply_target = Some((7, 2));
+        s.processes[0].ipc_reply_target = Some(reply(
+            7,
+            2,
+            s.processes
+                .iter()
+                .find(|p| p.pid == 7)
+                .unwrap()
+                .foreground
+                .incarnation,
+        ));
         issue(&s, account).unwrap();
         assert_eq!(inventory(), 1);
         cleanup(&mut s, 7);
@@ -404,7 +441,16 @@ fn commit_vs_exec(account: bool) {
     assert_eq!(inventory(), 0);
     // A fresh new-image request explicitly reauthorizes against the new VM.
     s.processes[1].pending_call = Some((7, 2));
-    s.processes[0].ipc_reply_target = Some((7, 2));
+    s.processes[0].ipc_reply_target = Some(reply(
+        7,
+        2,
+        s.processes
+            .iter()
+            .find(|p| p.pid == 7)
+            .unwrap()
+            .foreground
+            .incarnation,
+    ));
     let fresh = issue(&s, account).unwrap();
     assert_ne!(fresh, token);
     assert_eq!(inventory(), 1);
@@ -412,6 +458,7 @@ fn commit_vs_exec(account: bool) {
         assert_eq!(
             CAP_BROKER.lock().account_grants[0]
                 .1
+                .grant
                 .binding
                 .process_generation,
             old_generation + 1
@@ -604,4 +651,194 @@ fn vfs_failed_reservation_or_entropy_has_no_partial_record() {
     CAP_BROKER.lock().test_entropy(&[None]);
     assert!(s.issue_vfs_capability(vfs_cap()).is_err());
     assert!(CAP_BROKER.lock().vfs_caps.is_empty());
+}
+
+fn delivered_identity(s: &Scheduler) -> super::delivery::RecipientIdentity {
+    super::delivery::RecipientIdentity::of(&s.processes[1])
+}
+fn settle(s: &Scheduler, tokens: &[CapabilityToken], deliver: bool) {
+    CAP_BROKER.lock().settle_grant_delivery(
+        7,
+        s.processes[1].foreground.incarnation,
+        1,
+        deliver.then(|| delivered_identity(s)),
+        &tokens.iter().map(|t| t.0).collect::<std::vec::Vec<_>>(),
+    );
+}
+#[test]
+fn delivery_pending_is_not_usage_eligibility() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let s = table();
+    let auth = issue(&s, false).unwrap();
+    let account = issue(&s, true).unwrap();
+    let b = CAP_BROKER.lock();
+    assert!(!b.auth_session_grants[0]
+        .delivery
+        .unwrap()
+        .usable(delivered_identity(&s)));
+    assert!(!b.account_grants[0].1.delivery.unwrap().delivered);
+    assert_eq!(
+        b.auth_session_grants[0]
+            .delivery
+            .unwrap()
+            .issuer_incarnation,
+        6
+    );
+    drop(b);
+    settle(&s, &[auth, account], true);
+    assert_eq!(
+        CAP_BROKER
+            .lock()
+            .consume_live_auth_grant(auth, delivered_identity(&s), 1),
+        Some((0, 0))
+    );
+    assert!(s.account_grant(7, scope(), Some(account)).is_some());
+    assert_eq!(inventory(), 0);
+}
+#[test]
+fn delivery_failure_cancellation_and_omission_retire_pending_records() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for mode in 0..3 {
+        let s = table();
+        let a = issue(&s, false).unwrap();
+        let b = issue(&s, true).unwrap();
+        let listed = [a];
+        settle(&s, if mode == 2 { &listed[..] } else { &[] }, mode == 2);
+        settle(&s, &[], false); // duplicate cancellation cannot revive/remove delivered authority
+        assert!(!CAP_BROKER.lock().token_in_use(b));
+        assert_eq!(inventory(), usize::from(mode == 2));
+        if mode == 2 {
+            assert_eq!(
+                CAP_BROKER
+                    .lock()
+                    .consume_live_auth_grant(a, delivered_identity(&s), 1),
+                Some((0, 0))
+            );
+        }
+        assert_eq!(inventory(), 0);
+    }
+}
+#[test]
+fn delivery_cleanup_exec_and_vm_mismatch_never_adopt_authority() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for mode in 0..4 {
+        let mut s = table();
+        let a = issue(&s, false).unwrap();
+        let b = issue(&s, true).unwrap();
+        match mode {
+            0 => cleanup(&mut s, 7),
+            1 => {
+                CAP_BROKER.lock().retire_recipient_grants(7);
+                s.processes[1].address_space.generation += 1;
+            }
+            2 => s.processes[1].address_space.generation += 1, // defense even if transition retirement were missed
+            _ => {
+                cleanup(&mut s, 6);
+            }
+        }
+        settle(&s, &[a, b], true);
+        assert_eq!(inventory(), 0);
+        assert!(CAP_BROKER
+            .lock()
+            .consume_live_auth_grant(a, delivered_identity(&s), 1)
+            .is_none());
+    }
+}
+#[test]
+fn stale_incarnation_with_identical_pending_generation_is_rejected() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let mut s = table();
+    let stale = s.processes[0].ipc_reply_target;
+    cleanup(&mut s, 7);
+    s.processes[1] = process(7);
+    s.processes[1].foreground.incarnation += 1;
+    s.processes[0].ipc_reply_target = stale;
+    assert!(issue(&s, false).is_none() && issue(&s, true).is_none());
+    assert_eq!(inventory(), 0);
+}
+#[test]
+fn token_observed_before_delivery_cannot_be_consumed() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let s = table();
+    let t = issue(&s, false).unwrap();
+    assert!(CAP_BROKER
+        .lock()
+        .consume_live_auth_grant(t, delivered_identity(&s), 1)
+        .is_none());
+    settle(&s, &[t], true);
+    assert_eq!(inventory(), 0);
+}
+#[test]
+fn delivered_authority_survives_issuer_exit_but_not_recipient_exec() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let mut s = table();
+    let t = issue(&s, false).unwrap();
+    settle(&s, &[t], true);
+    cleanup(&mut s, 6);
+    assert_eq!(inventory(), 1);
+    CAP_BROKER.lock().retire_recipient_grants(7);
+    s.processes[1].address_space.generation += 1;
+    assert_eq!(inventory(), 0);
+    assert!(CAP_BROKER
+        .lock()
+        .consume_live_auth_grant(t, delivered_identity(&s), 1)
+        .is_none());
+}
+#[test]
+fn stale_delivered_token_cannot_authorize_replacement_incarnation_or_vm() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for vm in [false, true] {
+        let s = table();
+        let t = issue(&s, false).unwrap();
+        settle(&s, &[t], true);
+        let mut replacement = delivered_identity(&s);
+        if vm {
+            replacement.vm_generation += 1;
+        } else {
+            replacement.incarnation += 1;
+        }
+        assert!(CAP_BROKER
+            .lock()
+            .consume_live_auth_grant(t, replacement, 1)
+            .is_none());
+        assert_eq!(inventory(), 0);
+    }
+}
+#[test]
+fn repeated_delivery_cleanup_cycles_have_exact_metadata_inventory() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for cycle in 0..64 {
+        let mut s = table();
+        s.processes[1].foreground.incarnation += cycle;
+        s.processes[0].ipc_reply_target = Some(reply(7, 1, s.processes[1].foreground.incarnation));
+        let a = issue(&s, false).unwrap();
+        let b = issue(&s, true).unwrap();
+        assert_eq!(inventory(), 2);
+        settle(&s, &[a, b], cycle % 2 == 0);
+        cleanup(&mut s, 7);
+        settle(&s, &[a, b], true);
+        cleanup(&mut s, 7);
+        assert_eq!(inventory(), 0);
+    }
+}
+
+#[test]
+fn uac_may_consume_its_own_pending_account_grant_on_the_same_request() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let mut s = table();
+    let t = issue(&s, true).unwrap();
+    assert!(
+        !CAP_BROKER.lock().account_grants[0]
+            .1
+            .delivery
+            .unwrap()
+            .delivered
+    );
+    assert_eq!(s.account_grant(7, scope(), Some(t)), Some(t));
+    assert_eq!(inventory(), 0);
+    let stale = issue(&s, true).unwrap();
+    s.processes[1].pending_call = Some((7, 2));
+    s.processes[0].ipc_reply_target = Some(reply(7, 2, 7));
+    assert!(s.account_grant(7, scope(), Some(stale)).is_none());
+    assert_eq!(inventory(), 0);
 }

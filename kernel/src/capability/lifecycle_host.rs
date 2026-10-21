@@ -18,6 +18,25 @@ impl AddressSpace {
 pub struct Foreground {
     pub incarnation: u64,
 }
+#[derive(Clone, Copy)]
+pub struct HostCall {
+    pub pid: usize,
+    pub incarnation: u64,
+    pub generation: u64,
+}
+#[derive(Clone, Copy)]
+pub struct HostReply {
+    pub call: HostCall,
+}
+pub fn reply(pid: usize, generation: u64, incarnation: u64) -> HostReply {
+    HostReply {
+        call: HostCall {
+            pid,
+            generation,
+            incarnation,
+        },
+    }
+}
 pub struct Process {
     pub pid: usize,
     pub trusted_auth_broker: bool,
@@ -28,7 +47,7 @@ pub struct Process {
     pub foreground: Foreground,
     pub address_space: AddressSpace,
     pub pending_call: Option<(usize, u64)>,
-    pub ipc_reply_target: Option<(usize, u64)>,
+    pub ipc_reply_target: Option<HostReply>,
 }
 impl Process {
     pub fn is_exiting(&self) -> bool {
@@ -46,8 +65,13 @@ impl Scheduler {
 }
 pub fn reply_target_matches_pending_request(
     pid: usize,
+    incarnation: u64,
     pending: Option<(usize, u64)>,
-    reply: Option<(usize, u64)>,
+    reply: Option<HostReply>,
 ) -> bool {
-    pending.is_some() && pending == reply && pending.unwrap().0 == pid
+    reply.is_some_and(|r| {
+        r.call.pid == pid
+            && r.call.incarnation == incarnation
+            && pending == Some((pid, r.call.generation))
+    })
 }

@@ -93,8 +93,9 @@ impl crate::sched::Scheduler {
         self.processes[owner].foreground.cancel = signal;
         let owner_pid = self.processes[owner].pid;
         if let Some(call) = self.processes[owner].pending_call {
+            let mut delivery_caps = crate::capability::CAP_BROKER.lock();
             crate::ipc::with_shard(call.endpoint_id, |bus| {
-                let _ = crate::ipc::handle_ipc_cancel(owner_pid, self, bus);
+                let _ = crate::ipc::handle_ipc_cancel(owner_pid, self, &mut delivery_caps, bus);
             });
         }
         self.wake_for_signal(owner_pid);
@@ -161,8 +162,9 @@ impl crate::sched::Scheduler {
 
             let pid = self.processes[index].pid;
             if let Some(call) = self.processes[index].pending_call {
+                let mut delivery_caps = crate::capability::CAP_BROKER.lock();
                 crate::ipc::with_shard(call.endpoint_id, |bus| {
-                    let _ = crate::ipc::handle_ipc_cancel(pid, self, bus);
+                    let _ = crate::ipc::handle_ipc_cancel(pid, self, &mut delivery_caps, bus);
                 });
             }
             if self.processes[index].foreground.forced_exit.is_none() {

@@ -3290,13 +3290,19 @@ fn run_termination_path_self_test(hhdm_offset: VirtAddr) {
         sched.processes[0].ipc_reply_target = Some(crate::process::IpcReplyTarget {
             endpoint_id: endpoint,
             call: crate::process::IpcCallId {
+                incarnation: 0,
                 pid: 0xBEEF,
                 generation: 1,
             },
         });
-        ok &=
-            crate::ipc::handle_ipc_reply(0xBEEF, crate::ipc::IpcMsg::empty(), &mut sched, &mut bus)
-                .is_ok();
+        ok &= crate::ipc::handle_ipc_reply(
+            0xBEEF,
+            crate::ipc::IpcMsg::empty(),
+            &mut sched,
+            &mut crate::capability::CapabilityBroker::new(),
+            &mut bus,
+        )
+        .is_ok();
         ok &= sched.processes[0].ipc_reply.is_none();
         ok &= sched.processes[0].ipc_call_outcome.is_none();
         ok &= matches!(sched.processes[0].state, ProcessState::Finished);
@@ -3440,6 +3446,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             0,
             msg,
             crate::process::IpcCallId {
+                incarnation: 0,
                 pid: real_caller_pid,
                 generation: 1,
             },
@@ -3468,6 +3475,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             0,
             IpcMsg::with_label(0x4B07),
             crate::process::IpcCallId {
+                incarnation: 0,
                 pid: first_pid,
                 generation: 1,
             },
@@ -3477,6 +3485,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             0,
             IpcMsg::with_label(0x4B07),
             crate::process::IpcCallId {
+                incarnation: 0,
                 pid: second_pid,
                 generation: 1,
             },
@@ -3503,6 +3512,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let target = crate::process::IpcReplyTarget {
             endpoint_id,
             call: crate::process::IpcCallId {
+                incarnation: 0,
                 pid: caller_pid,
                 generation: 1,
             },
@@ -3511,6 +3521,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let mut other_call = Some(crate::process::IpcReplyTarget {
             endpoint_id,
             call: crate::process::IpcCallId {
+                incarnation: 0,
                 pid: 25,
                 generation: 1,
             },
@@ -3536,6 +3547,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                     endpoint,
                     IpcMsg::with_label(i as u64),
                     crate::process::IpcCallId {
+                        incarnation: 0,
                         pid: i + 1,
                         generation: 1,
                     },
@@ -3546,6 +3558,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             endpoint,
             IpcMsg::empty(),
             crate::process::IpcCallId {
+                incarnation: 0,
                 pid: 999,
                 generation: 1,
             },
@@ -3556,6 +3569,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                     endpoint,
                     IpcMsg::empty(),
                     crate::process::IpcCallId {
+                        incarnation: 0,
                         pid: 999,
                         generation: 1,
                     },
@@ -3763,6 +3777,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         ) -> IpcCallId {
             let caller_pid = sched.processes[caller_idx].pid;
             let call = IpcCallId {
+                incarnation: 0,
                 pid: caller_pid,
                 generation,
             };
@@ -3807,10 +3822,21 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         });
         let reply = IpcMsg::with_label(0xCA11);
         let mut local_bus = crate::ipc::IpcBus::new();
-        let reply_committed =
-            crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, &mut local_bus).is_ok();
-        let cancel_after_reply =
-            crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &mut local_bus).is_ok();
+        let reply_committed = crate::ipc::handle_ipc_reply(
+            server_pid,
+            reply,
+            &mut sched,
+            &mut crate::capability::CapabilityBroker::new(),
+            &mut local_bus,
+        )
+        .is_ok();
+        let cancel_after_reply = crate::ipc::handle_ipc_cancel(
+            caller_pid,
+            &mut sched,
+            &mut crate::capability::CapabilityBroker::new(),
+            &mut local_bus,
+        )
+        .is_ok();
         sched.remove_from_ready_queues(caller_idx);
         let reply_survived = matches!(
             crate::ipc::take_terminal_result(&mut sched, caller_idx),
@@ -3843,6 +3869,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             server_pid,
             IpcMsg::with_label(0x1A7E),
             &mut sched,
+            &mut crate::capability::CapabilityBroker::new(),
             &mut local_bus,
         )
         .is_ok()
@@ -3879,11 +3906,24 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                         .map(|call| IpcReplyTarget { endpoint_id, call });
                     let reply = IpcMsg::with_label(generation);
                     let replied = crate::ipc::with_shard(endpoint_id, |bus| {
-                        crate::ipc::handle_ipc_reply(server_pid, reply, &mut sched, bus).is_ok()
+                        crate::ipc::handle_ipc_reply(
+                            server_pid,
+                            reply,
+                            &mut sched,
+                            &mut crate::capability::CapabilityBroker::new(),
+                            bus,
+                        )
+                        .is_ok()
                     });
                     crate::ipc::expire_deadlines(&mut sched, deadline);
                     let cancelled = crate::ipc::with_shard(endpoint_id, |bus| {
-                        crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus).is_ok()
+                        crate::ipc::handle_ipc_cancel(
+                            caller_pid,
+                            &mut sched,
+                            &mut crate::capability::CapabilityBroker::new(),
+                            bus,
+                        )
+                        .is_ok()
                     });
                     smp_stress_ok &= replied
                         && cancelled
@@ -3899,13 +3939,20 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                         .and_then(|message| message.call)
                         .map(|call| IpcReplyTarget { endpoint_id, call });
                     let cancelled = crate::ipc::with_shard(endpoint_id, |bus| {
-                        crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus).is_ok()
+                        crate::ipc::handle_ipc_cancel(
+                            caller_pid,
+                            &mut sched,
+                            &mut crate::capability::CapabilityBroker::new(),
+                            bus,
+                        )
+                        .is_ok()
                     });
                     let late_reply = crate::ipc::with_shard(endpoint_id, |bus| {
                         crate::ipc::handle_ipc_reply(
                             server_pid,
                             IpcMsg::with_label(generation),
                             &mut sched,
+                            &mut crate::capability::CapabilityBroker::new(),
                             bus,
                         )
                         .is_ok()
@@ -3920,7 +3967,13 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                 2 => {
                     crate::ipc::expire_deadlines(&mut sched, deadline);
                     let cancelled = crate::ipc::with_shard(endpoint_id, |bus| {
-                        crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus).is_ok()
+                        crate::ipc::handle_ipc_cancel(
+                            caller_pid,
+                            &mut sched,
+                            &mut crate::capability::CapabilityBroker::new(),
+                            bus,
+                        )
+                        .is_ok()
                     });
                     smp_stress_ok &= cancelled
                         && matches!(
@@ -3960,6 +4013,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                         queue_endpoint,
                         IpcMsg::with_label(queued as u64),
                         IpcCallId {
+                            incarnation: 0,
                             pid: queued + 1,
                             generation,
                         },
@@ -3970,6 +4024,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                 queue_endpoint,
                 IpcMsg::empty(),
                 IpcCallId {
+                    incarnation: 0,
                     pid: 999,
                     generation,
                 },
@@ -3980,6 +4035,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                         queue_endpoint,
                         IpcMsg::empty(),
                         IpcCallId {
+                            incarnation: 0,
                             pid: 999,
                             generation,
                         },
@@ -3998,10 +4054,12 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             queue_bus.remove_endpoint(notification_endpoint);
 
             let stale_generation = IpcCallId {
+                incarnation: 0,
                 pid: caller_pid,
                 generation,
             };
             let next_generation = IpcCallId {
+                incarnation: 0,
                 pid: caller_pid,
                 generation: generation + 1,
             };
@@ -4040,13 +4098,19 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                             token,
                             IpcMsg::with_label(generation),
                             &mut sched,
+                            &mut crate::capability::CapabilityBroker::new(),
                             bus,
                         )
                         .is_ok();
                     }
                     1 => {
-                        deferred_lifecycle_ok &=
-                            crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, bus).is_ok();
+                        deferred_lifecycle_ok &= crate::ipc::handle_ipc_cancel(
+                            caller_pid,
+                            &mut sched,
+                            &mut crate::capability::CapabilityBroker::new(),
+                            bus,
+                        )
+                        .is_ok();
                     }
                     _ => {
                         let calls = bus.remove_endpoint(endpoint);
@@ -4072,6 +4136,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
                         token,
                         IpcMsg::empty(),
                         &mut sched,
+                        &mut crate::capability::CapabilityBroker::new(),
                         bus,
                     )
                     .is_err()

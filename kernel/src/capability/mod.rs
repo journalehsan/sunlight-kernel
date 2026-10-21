@@ -1,4 +1,6 @@
+pub(crate) mod delivery;
 mod lifecycle;
+use delivery::{GrantDelivery, RecipientIdentity};
 #[cfg(test)]
 mod lifecycle_tests;
 use crate::serial_println;
@@ -357,9 +359,15 @@ pub struct AuthSessionGrant {
     pub uid: u32,
     pub gid: u32,
     pub expires_at_tick: u64,
+    delivery: Option<GrantDelivery>,
 }
 
 /// The capability broker manages endpoints and capability tokens.
+struct AccountGrant {
+    grant: sunlight_ipc::accounts::Grant,
+    delivery: Option<GrantDelivery>,
+}
+
 pub struct CapabilityBroker {
     next_endpoint_id: u32,
     endpoints: alloc::vec::Vec<Endpoint>,
@@ -367,7 +375,7 @@ pub struct CapabilityBroker {
     shared_regions: alloc::vec::Vec<ShmEntry>,
     vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
     auth_session_grants: alloc::vec::Vec<AuthSessionGrant>,
-    account_grants: alloc::vec::Vec<(CapabilityToken, sunlight_ipc::accounts::Grant)>,
+    account_grants: alloc::vec::Vec<(CapabilityToken, AccountGrant)>,
     issuance: IssuanceStats,
     // Instance-local injection exists only in host tests and the opt-in native
     // security gate. The global production broker never installs an override.
@@ -495,7 +503,7 @@ impl CapabilityBroker {
         now: u64,
     ) -> Option<CapabilityToken> {
         self.account_grants
-            .retain(|(_, grant)| !grant.used && now < grant.expires);
+            .retain(|(_, grant)| !grant.grant.used && now < grant.grant.expires);
         if self.account_grants.len() >= 64 {
             return None;
         }
@@ -503,18 +511,25 @@ impl CapabilityBroker {
         self.account_grants.try_reserve(1).ok()?;
         let token = self.issue_token(CapabilityToken::TAG_IPC).ok()?;
         #[cfg(all(feature = "cap_issuance_test", target_os = "none"))]
-        assert!(crate::sched::SCHEDULER.try_lock().is_none(), "account commit escaped lifecycle serialization");
+        assert!(
+            crate::sched::SCHEDULER.try_lock().is_none(),
+            "account commit escaped lifecycle serialization"
+        );
         self.account_grants.push((
             token,
-            sunlight_ipc::accounts::Grant {
-                binding,
-                expires: now.saturating_add(500),
-                used: false,
+            AccountGrant {
+                grant: sunlight_ipc::accounts::Grant {
+                    binding,
+                    expires: now.saturating_add(500),
+                    used: false,
+                },
+                delivery: None,
             },
         ));
         Some(token)
     }
 
+    #[cfg(test)]
     pub fn consume_account_grant(
         &mut self,
         token: CapabilityToken,
@@ -525,7 +540,7 @@ impl CapabilityBroker {
             return false;
         };
         let (_, mut grant) = self.account_grants.swap_remove(index);
-        grant.consume(binding, now)
+        grant.delivery.is_none() && grant.grant.consume(binding, now)
     }
 
     fn mint_auth_session_grant(
@@ -542,19 +557,24 @@ impl CapabilityBroker {
         self.auth_session_grants.try_reserve(1).ok()?;
         let token = self.issue_token(CapabilityToken::TAG_IPC).ok()?;
         #[cfg(all(feature = "cap_issuance_test", target_os = "none"))]
-        assert!(crate::sched::SCHEDULER.try_lock().is_none(), "auth commit escaped lifecycle serialization");
+        assert!(
+            crate::sched::SCHEDULER.try_lock().is_none(),
+            "auth commit escaped lifecycle serialization"
+        );
         self.auth_session_grants.push(AuthSessionGrant {
             token,
             owner_pid,
             uid,
             gid,
             expires_at_tick,
+            delivery: None,
         });
         Some(token)
     }
 
     /// Consume a grant exactly once. Expired and mismatched grants are removed
     /// as well, so a credential cannot be replayed after a failed attempt.
+    #[cfg(test)]
     pub fn consume_auth_session_grant(
         &mut self,
         token: CapabilityToken,
@@ -566,10 +586,101 @@ impl CapabilityBroker {
             .iter()
             .position(|grant| grant.token == token)?;
         let grant = self.auth_session_grants.swap_remove(idx);
-        if grant.owner_pid != owner_pid || now_tick > grant.expires_at_tick {
+        if grant.delivery.is_some()
+            || grant.owner_pid != owner_pid
+            || now_tick > grant.expires_at_tick
+        {
             return None;
         }
         Some((grant.uid, grant.gid))
+    }
+
+    pub(crate) fn consume_live_auth_grant(
+        &mut self,
+        token: CapabilityToken,
+        recipient: RecipientIdentity,
+        now: u64,
+    ) -> Option<(u32, u32)> {
+        let idx = self
+            .auth_session_grants
+            .iter()
+            .position(|g| g.token == token)?;
+        let g = self.auth_session_grants.swap_remove(idx);
+        (g.delivery.is_some_and(|d| d.usable(recipient)) && now <= g.expires_at_tick)
+            .then_some((g.uid, g.gid))
+    }
+
+    pub(crate) fn consume_live_account_grant(
+        &mut self,
+        token: CapabilityToken,
+        expected: GrantDelivery,
+        binding: sunlight_ipc::accounts::GrantBinding,
+        now: u64,
+    ) -> bool {
+        let Some(idx) = self.account_grants.iter().position(|(t, _)| *t == token) else {
+            return false;
+        };
+        let (_, mut g) = self.account_grants.swap_remove(idx);
+        g.delivery
+            .is_some_and(|d| d.usable(expected.recipient) || d == expected)
+            && g.grant.consume(binding, now)
+    }
+
+    /// Called with lifecycle and broker serialization. Successful transport
+    /// delivers only listed tokens to this exact VM; omitted pending grants are
+    /// retired too. No user copy or blocking transport runs under this helper.
+    pub(crate) fn settle_grant_delivery(
+        &mut self,
+        pid: usize,
+        incarnation: u64,
+        request: u64,
+        recipient: Option<RecipientIdentity>,
+        tokens: &[u64],
+    ) {
+        fn keep(
+            d: &mut Option<GrantDelivery>,
+            token: CapabilityToken,
+            pid: usize,
+            incarnation: u64,
+            request: u64,
+            recipient: Option<RecipientIdentity>,
+            tokens: &[u64],
+        ) -> bool {
+            let Some(d) = d else {
+                return true;
+            };
+            if d.delivered || !d.matches(pid, incarnation, request) {
+                return true;
+            }
+            if recipient == Some(d.recipient) && tokens.contains(&token.0) {
+                d.delivered = true;
+                true
+            } else {
+                false
+            }
+        }
+        self.auth_session_grants.retain_mut(|g| {
+            keep(
+                &mut g.delivery,
+                g.token,
+                pid,
+                incarnation,
+                request,
+                recipient,
+                tokens,
+            )
+        });
+        self.account_grants.retain_mut(|(t, g)| {
+            keep(
+                &mut g.delivery,
+                *t,
+                pid,
+                incarnation,
+                request,
+                recipient,
+                tokens,
+            )
+        });
     }
 
     pub(crate) fn prepare_shared_region(&mut self) -> Result<PreparedSharedRegion<'_>, CapError> {
@@ -876,18 +987,35 @@ impl CapabilityBroker {
 
     #[cfg(feature = "cap_issuance_test")]
     pub(crate) fn recipient_grant_count(&self, pid: usize) -> usize {
-        self.auth_session_grants.iter().filter(|r| r.owner_pid == pid).count()
-            + self.account_grants.iter().filter(|(_, r)| r.binding.pid == pid as u64).count()
+        self.auth_session_grants
+            .iter()
+            .filter(|r| r.owner_pid == pid)
+            .count()
+            + self
+                .account_grants
+                .iter()
+                .filter(|(_, r)| r.grant.binding.pid == pid as u64)
+                .count()
     }
 
     /// Called under lifecycle serialization on exit and successful VM replacement.
     /// Does not revoke transferable VFS/SHM or endpoint authority.
     pub(crate) fn retire_recipient_grants(&mut self, owner_pid: usize) {
-        crate::delegated_caller::DELEGATED_CALLERS.lock().retire_process(owner_pid);
-        self.auth_session_grants
-            .retain(|grant| grant.owner_pid != owner_pid);
-        self.account_grants
-            .retain(|(_, grant)| grant.binding.pid != owner_pid as u64);
+        crate::delegated_caller::DELEGATED_CALLERS
+            .lock()
+            .retire_process(owner_pid);
+        self.auth_session_grants.retain(|grant| {
+            grant.owner_pid != owner_pid
+                && !grant
+                    .delivery
+                    .is_some_and(|d| !d.delivered && d.issuer_pid == owner_pid)
+        });
+        self.account_grants.retain(|(_, grant)| {
+            grant.grant.binding.pid != owner_pid as u64
+                && !grant
+                    .delivery
+                    .is_some_and(|d| !d.delivered && d.issuer_pid == owner_pid)
+        });
     }
 
     /// Mint a capability token granting access to map a shared physical frame (single-page compat).

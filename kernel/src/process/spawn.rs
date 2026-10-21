@@ -181,9 +181,9 @@ pub fn exec_into_process(
         process.ipc_reply_target = None;
         #[cfg(feature = "cap_issuance_test")]
         if old_grants != 0 {
-            assert_eq!(old_grants, 32);
+            assert_eq!(old_grants, 17);
             assert_eq!(broker.recipient_grant_count(process.pid), 0);
-            crate::serial_println!("[CAP-PR] exec authority withdrawn before VM activation records=32 remaining=0");
+            crate::serial_println!("[CAP-PR] exec authority withdrawn before VM activation records=17 remaining=0");
         }
     }
 

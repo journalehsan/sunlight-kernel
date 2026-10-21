@@ -41,6 +41,7 @@ pub fn new_kernel_stack() -> alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IpcCallId {
     pub pid: usize,
+    pub incarnation: u64,
     pub generation: u64,
 }
 

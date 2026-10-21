@@ -99,7 +99,7 @@ stress:
     jmp success
 
 reader:
-    mov %rcx, %r13 /* optional known-blocked exec diagnostic */
+    mov %rcx, reader_exec(%rip) /* optional exec diagnostic */
     mov %rsi, %rbx /* explicitly delegated SHM */
     mov %rdx, %rbp /* explicitly delegated SEND */
     mov %rsi, %rdi
@@ -110,7 +110,7 @@ reader:
     cmpq $0x51a7, (%rax)
     jne failed
     movq $0x51a7, (%rax) /* authorized legacy RW */
-    test %r13, %r13
+    cmpq $0, reader_exec(%rip)
     jnz keep_view
     mov %rbx, %rdi
     mov $94, %eax
@@ -118,7 +118,7 @@ reader:
     test %rax, %rax
     jnz failed
 keep_view:
-    test %r13, %r13
+    cmpq $0, reader_exec(%rip)
     jz calls_begin
     /* A published borrower is sufficient: exec must reject even before it
      * first runs. It cannot be reaped until we explicitly release it. */
@@ -152,7 +152,7 @@ borrower_wait:
     mov $99, %eax
     syscall
 calls_begin:
-    mov $16, %r14d
+    movq $16, reader_count(%rip)
 reader_call:
     mov %rbp, %rsi
     mov $0x123, %edi
@@ -165,15 +165,30 @@ reader_call:
     syscall
     jmp reader_call
 reader_reply:
+    cmp $9, %rax /* deterministic cancellation of first delivered request */
+    je reader_call
     test %rax, %rax
     jnz failed
     cmp $0x456, %rdi
     jne failed
-    dec %r14d
-    jnz reader_call
     test %r13, %r13
+    jz failed
+    /* The opt-in reader already has the synthetic lock role. Exercise the
+     * real trusted-consumer syscall after reply publication, once per grant. */
+    cmpq $1, reader_count(%rip)
+    je reader_keep_auth
+    mov %r13, %rdi
+    mov $0xf201, %esi
+    mov $135, %eax
+    syscall
+    test %rax, %rax
+    jnz failed
+reader_keep_auth:
+    decq reader_count(%rip)
+    jnz reader_call
+    cmpq $0, reader_exec(%rip)
     jz success
-    /* Exec must withdraw the old image's 32 unconsumed grants before the
+    /* Exec must withdraw the old image's delivered auth and account grants before the
      * replacement exits. The opt-in kernel gate checks that exact boundary. */
     lea exec_path(%rip), %rdi
     lea exec_argv(%rip), %rsi
@@ -195,7 +210,7 @@ owner:
     mov %rsi, %rbx /* private mapped address */
     mov %rdx, %rbp /* private receive token */
     mov %rcx, %r15 /* authorized reader PID */
-    mov $16, %r14d
+    movq $17, owner_count(%rip)
 owner_recv:
     cmpq $0x51a7, (%rbx)
     jne failed
@@ -211,7 +226,7 @@ owner_recv:
     cmp $0x123, %rdi
     jne failed
     /* Mint actual recipient-bound grants while handling the exact pending
-     * request. Leave them outstanding: recipient exit must withdraw all 32. */
+     * request. Deliver both: the reader consumes auth; exec retires the account grant. */
     mov %r15, %rdi
     xor %esi, %esi
     xor %edx, %edx
@@ -219,6 +234,7 @@ owner_recv:
     syscall
     cmp $-1, %rax
     je failed
+    mov %rax, owner_auth(%rip)
     mov %r15, %rdi
     mov $2, %esi /* GroupCreate */
     xor %edx, %edx
@@ -229,11 +245,13 @@ owner_recv:
     syscall
     cmp $-1, %rax
     je failed
+    mov %rax, %r14
+    mov owner_auth(%rip), %r13
     mov $0x456, %edi
-    xor %edx, %edx
+    movabs $0x200000000, %rdx
     mov $2, %eax
     syscall
-    dec %r14d
+    decq owner_count(%rip)
     jnz owner_recv
 owner_wait_reaped:
     cmpq $0xc1ea, (%rbx)
@@ -291,3 +309,10 @@ borrower_release: .skip 8
 borrower_stack: .skip 8192
 .balign 16
 borrower_startup: .quad borrower_entry, 0
+
+.section .data
+.balign 8
+owner_count: .quad 0
+owner_auth: .quad 0
+reader_count: .quad 0
+reader_exec: .quad 0

@@ -4,6 +4,13 @@
 #[path = "../kernel/src/process/foreground.rs"]
 mod foreground;
 
+mod capability {
+    pub struct Broker;
+    pub static CAP_BROKER: Broker = Broker;
+    impl Broker {
+        pub fn lock(&self) {}
+    }
+}
 mod ipc {
     pub fn with_shard(_: u32, f: impl FnOnce(&mut ())) {
         f(&mut ())
@@ -11,6 +18,7 @@ mod ipc {
     pub fn handle_ipc_cancel(
         pid: usize,
         s: &mut crate::sched::Scheduler,
+        _: &mut (),
         _: &mut (),
     ) -> Result<(), ()> {
         s.cancelled_calls.push(pid);
