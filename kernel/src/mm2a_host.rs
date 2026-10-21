@@ -2,6 +2,10 @@
 
 extern crate alloc;
 
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+#[path = "sched/doorbell_state.rs"]
+pub mod doorbell_state;
+
 // Compile the actual broker and conditioner in host security tests. Only
 // hardware-dependent services are stubbed; issuance and authorization are not.
 #[cfg(test)]

@@ -764,6 +764,9 @@ pub extern "C" fn _start() -> ! {
     #[cfg(feature = "scheduler_b_test")]
     crate::sched::regression::run(hhdm_offset);
 
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    crate::sched::doorbell_test::run(hhdm_offset);
+
     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
     crate::sched::remote_wake_test::run(hhdm_offset);
 

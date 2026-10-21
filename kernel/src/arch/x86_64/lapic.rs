@@ -194,7 +194,11 @@ pub unsafe fn try_send_fixed_ipi(cpu_id: usize, vector: u8) -> bool {
 
 #[cfg(all(
     debug_assertions,
-    any(feature = "remote_wake_test", feature = "pin_release_test")
+    any(
+        feature = "remote_wake_test",
+        feature = "pin_release_test",
+        feature = "native_doorbell_test"
+    )
 ))]
 /// Mask only this CPU's timer in the isolated native wake fixture.
 ///

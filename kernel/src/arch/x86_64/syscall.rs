@@ -836,6 +836,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         18 => ipc_try_recv(frame),
         20 => process_exit(frame.rdi as i32),
         21 => process_yield(),
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        0xf1a0 => unsafe { crate::sched::doorbell_fixture_on_kernel_stack(frame) },
         22 => thread_spawn(frame, false),
         #[cfg(feature = "scheduler_guest_bench")]
         0x5342 => crate::scheduler_bench_diag::syscall(frame.rdi, frame.rsi),

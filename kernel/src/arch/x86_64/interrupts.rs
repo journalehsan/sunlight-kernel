@@ -913,6 +913,8 @@ pub unsafe extern "C" fn reschedule_entry() {
 
 #[no_mangle]
 extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    crate::sched::doorbell_test::handled();
     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     crate::sched::pin_release_test::handled();
     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
@@ -931,6 +933,8 @@ extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
     #[cfg(feature = "scheduler_guest_bench")]
     let outgoing = sched.diagnostic_current_pid(cpu_id);
     let result = sched.schedule_tick(cpu_id, saved_rsp);
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    crate::sched::doorbell_test::scheduled(&sched, cpu_id, result);
     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     crate::sched::pin_release_test::after_schedule(&mut sched, cpu_id, result);
     #[cfg(feature = "scheduler_guest_bench")]

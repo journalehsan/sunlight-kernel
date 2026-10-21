@@ -87,6 +87,14 @@
 //! - pick_next_* only returns Ready tasks (or falls back safely).
 
 pub mod accounting;
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+mod doorbell_native;
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+pub(crate) use doorbell_native::on_kernel_stack as doorbell_fixture_on_kernel_stack;
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+pub(crate) mod doorbell_state;
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+pub(crate) mod doorbell_test;
 mod handoff;
 #[cfg(feature = "scheduler_perf_diag")]
 pub mod perf;
@@ -396,6 +404,8 @@ pub static CORE_STATES: [spin::Mutex<CoreState>; MAX_CORES] =
 // ─── Scheduler ───────────────────────────────────────────────────────────────
 
 pub struct Scheduler {
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    pub(crate) doorbells: doorbell_state::Table,
     pub supervision: sunlight_ipc::supervision::Supervisor,
     #[cfg(feature = "cpu_accounting_diag")]
     pub cpu_events: [[u64; 3]; MAX_CORES],
@@ -428,6 +438,8 @@ impl Scheduler {
     }
     pub const fn new() -> Self {
         Self {
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            doorbells: doorbell_state::Table::new(),
             #[cfg(feature = "cpu_accounting_diag")]
             cpu_events: [[0; 3]; MAX_CORES],
             supervision: sunlight_ipc::supervision::Supervisor::new(),
@@ -2498,6 +2510,8 @@ impl Scheduler {
             None => return,
         };
         if self.processes[idx].state == ProcessState::BlockedOnIo {
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            self.doorbell_spurious_wake(idx);
             let ticks_blocked = self
                 .global_tick
                 .saturating_sub(self.processes[idx].block_start_tick);
@@ -2506,6 +2520,10 @@ impl Scheduler {
             }
             self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
             self.processes[idx].state = ProcessState::Ready;
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            if self.processes[idx].doorbell_wait.is_some() {
+                doorbell_test::runnable(idx);
+            }
             self.processes[idx].priority_wake_pending = true;
             self.remove_from_ready_queues(idx);
             if let Some(cpu_id) = self.live_owner_core(idx) {
@@ -2528,6 +2546,8 @@ impl Scheduler {
         let Some(idx) = self.process_index_by_pid(pid) else {
             return;
         };
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        self.doorbell_spurious_wake(idx);
         match self.processes[idx].state {
             ProcessState::BlockedOnIpc
             | ProcessState::BlockedOnTimer
@@ -2588,6 +2608,8 @@ impl Scheduler {
                 continue;
             }
             self.processes[idx].exit_code = 128 + 9;
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            self.doorbell_peer_exit(idx);
             self.processes[idx].state = ProcessState::Finished;
             self.processes[idx].slice_credit = None;
             self.processes[idx].exit_cleanup_pending = true;
@@ -2641,6 +2663,9 @@ impl Scheduler {
             }
             return;
         }
+
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        self.doorbell_peer_exit(idx);
 
         #[cfg(feature = "verbose_diag")]
         serial_println!(
@@ -3071,6 +3096,8 @@ impl Scheduler {
         );
 
         self.cancel_foreground(idx, 1);
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        self.doorbell_peer_exit(idx);
         self.processes[idx].exit_code = code;
         self.processes[idx].state = ProcessState::Finished;
         self.processes[idx].slice_credit = None;
@@ -3138,6 +3165,8 @@ impl Scheduler {
             code
         );
         self.cancel_foreground(idx, 1);
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        self.doorbell_peer_exit(idx);
         self.processes[idx].exit_code = code;
         self.processes[idx].state = ProcessState::Finished;
         self.processes[idx].slice_credit = None;
@@ -3984,6 +4013,8 @@ pub fn peek_reschedule_on(cpu_id: usize) -> bool {
 /// Atomic-only under scheduler/IPC locks. The enclosing IRQ/syscall must flush
 /// after releasing all guards, before returning or entering idle.
 pub fn request_reschedule_on(cpu_id: usize) {
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    doorbell_test::requested(cpu_id);
     assert!(cpu_id < ONLINE_CORES.load(Ordering::Acquire));
     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     pin_release_test::requested(cpu_id);
@@ -4084,6 +4115,8 @@ pub(crate) fn flush_dispatch_notifications() {
                 crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
             )
         } {
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            doorbell_test::sent(cpu);
             if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
                 DISPATCH_NOTIFICATIONS_SENT.fetch_add(1, Ordering::Relaxed);
             }
@@ -4212,6 +4245,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     }
 
     sched.cancel_foreground(cur, 1);
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    sched.doorbell_peer_exit(cur);
     let my_pid = sched.processes[cur].pid;
     let is_linux_worker = sched.processes[cur]
         .linux_tgid

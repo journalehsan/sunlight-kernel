@@ -165,6 +165,13 @@ impl Doorbell {
     pub fn has_waiter(&self) -> bool {
         self.waiter.is_some()
     }
+
+    #[cfg(all(debug_assertions, feature = "fixture"))]
+    pub fn fixture_sequence(&mut self, sequence: u64) {
+        assert!(!self.has_waiter());
+        assert!(self.terminal.is_none());
+        self.sequence = sequence;
+    }
 }
 
 #[cfg(test)]

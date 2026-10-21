@@ -623,6 +623,7 @@ name = "sunlight_kernel_mm2a"
 path = "src/mm2a_host.rs"
 
 [dependencies]
+sunlight-fastlane-doorbell = { path = "../fastlane-doorbell", optional = true }
 x86_64 = { version = "0.15", default-features = false, features = ["instructions", "abi_x86_interrupt"] }
 uart_16550 = "0.3"
 limine = "0.6"
@@ -690,6 +691,7 @@ idle_wakeup_test = []
 # Isolated real ring-3 scheduler lifecycle gate; never enabled by default.
 scheduler_b_test = []
 remote_wake_test = []
+native_doorbell_test = ["dep:sunlight-fastlane-doorbell", "sunlight-fastlane-doorbell/fixture"]
 pin_release_test = []
 pin_release_ordering_test = ["pin_release_test"]
 # R2D initial-pin/exit and delayed-dispatch/new-pin native fixtures. Reuses the

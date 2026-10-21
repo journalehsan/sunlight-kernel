@@ -6,5 +6,8 @@ version = "0.2.5467-alpha.2"
 edition = "2021"
 publish = false
 
+[features]
+fixture = []
+
 [dev-dependencies]
 sunlight-fastlane-ring = { path = "../fastlane-ring" }

@@ -109,6 +109,8 @@ pub fn idle_loop() -> ! {
         super::remote_wake_test::idle(cpu);
         #[cfg(all(debug_assertions, feature = "pin_release_test"))]
         super::pin_release_test::idle(cpu);
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        super::doorbell_test::idle(cpu);
         x86_64::instructions::interrupts::enable_and_hlt();
         x86_64::instructions::interrupts::disable();
         interrupt_entry(cpu);

@@ -189,6 +189,8 @@ pub struct Process {
     pub env: env::EnvMap,
     pub ipc_queue: VecDeque<IpcMsg>,
     pub ipc_endpoint: Option<u32>,
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    pub(crate) doorbell_wait: Option<crate::sched::doorbell_state::Registration>,
     /// A synchronous call has exactly one terminal outcome. The scheduler lock
     /// serializes reply, deadline, cancel, and peer-close transitions; the call
     /// generation rejects stale timer entries and late replies.
@@ -469,6 +471,8 @@ impl Process {
             env: env::EnvMap::new(),
             ipc_queue: VecDeque::new(),
             ipc_endpoint: None,
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            doorbell_wait: None,
             ipc_reply: None,
             pending_call: None,
             ipc_call_outcome: None,
@@ -655,6 +659,8 @@ impl Process {
             env,
             ipc_queue: VecDeque::new(),
             ipc_endpoint: None,
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            doorbell_wait: None,
             ipc_reply: None,
             pending_call: None,
             ipc_call_outcome: None,

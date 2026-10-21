@@ -2977,6 +2977,7 @@ dependencies = [
  "sunlight-block",
  "sunlight-compat-linux",
  "sunlight-elf",
+ "sunlight-fastlane-doorbell",
  "sunlight-fat",
  "sunlight-fs",
  "sunlight-ipc",
