@@ -108,7 +108,7 @@ fn vfs_batch_rollback_preserves_only_preexisting_authority() {
     let existing = b.grant_vfs_capability(1, vfs()).unwrap();
     assert_eq!(b.grant_elevated_vfs(2), Err(CapError::EntropyUnavailable));
     assert_eq!(b.vfs_caps.len(), 1);
-    assert_eq!(b.vfs_caps[0].0, existing);
+    assert_eq!(b.vfs_caps[0].token, existing);
 }
 
 #[test]

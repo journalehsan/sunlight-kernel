@@ -1,5 +1,6 @@
 pub(crate) mod delivery;
 mod lifecycle;
+mod vfs_grants;
 use delivery::{GrantDelivery, RecipientIdentity};
 #[cfg(test)]
 mod lifecycle_tests;
@@ -10,6 +11,8 @@ use x86_64::PhysAddr;
 
 #[cfg(feature = "cap_issuance_test")]
 pub mod gate;
+#[cfg(feature = "production_grant_test")]
+pub mod production_gate;
 
 /// The category a token belongs to, encoded in its high tag bits.
 ///
@@ -368,12 +371,22 @@ struct AccountGrant {
     delivery: Option<GrantDelivery>,
 }
 
+struct VfsGrant {
+    token: CapabilityToken,
+    cap: VfsCapability,
+    owner_pid: usize,
+    // None retains the legacy transferable bearer policy. Bound records are
+    // only accepted through the lifecycle-serialized production VFS operation.
+    delivery: Option<GrantDelivery>,
+    expires: u64,
+}
+
 pub struct CapabilityBroker {
     next_endpoint_id: u32,
     endpoints: alloc::vec::Vec<Endpoint>,
     capabilities: alloc::vec::Vec<(CapabilityToken, u32, CapabilityRights)>,
     shared_regions: alloc::vec::Vec<ShmEntry>,
-    vfs_caps: alloc::vec::Vec<(CapabilityToken, VfsCapability, usize)>,
+    vfs_caps: alloc::vec::Vec<VfsGrant>,
     auth_session_grants: alloc::vec::Vec<AuthSessionGrant>,
     account_grants: alloc::vec::Vec<(CapabilityToken, AccountGrant)>,
     issuance: IssuanceStats,
@@ -450,7 +463,7 @@ impl CapabilityBroker {
     fn token_in_use(&self, token: CapabilityToken) -> bool {
         self.capabilities.iter().any(|(t, _, _)| *t == token)
             || self.shared_regions.iter().any(|entry| entry.token == token)
-            || self.vfs_caps.iter().any(|(t, _, _)| *t == token)
+            || self.vfs_caps.iter().any(|g| g.token == token)
             || self
                 .auth_session_grants
                 .iter()
@@ -674,6 +687,17 @@ impl CapabilityBroker {
             keep(
                 &mut g.delivery,
                 *t,
+                pid,
+                incarnation,
+                request,
+                recipient,
+                tokens,
+            )
+        });
+        self.vfs_caps.retain_mut(|g| {
+            keep(
+                &mut g.delivery,
+                g.token,
                 pid,
                 incarnation,
                 request,
@@ -985,7 +1009,7 @@ impl CapabilityBroker {
         crate::memory::security::revoke_display_authority_for_owner(owner_pid);
     }
 
-    #[cfg(feature = "cap_issuance_test")]
+    #[cfg(any(test, feature = "cap_issuance_test", feature = "production_grant_test"))]
     pub(crate) fn recipient_grant_count(&self, pid: usize) -> usize {
         self.auth_session_grants
             .iter()
@@ -995,6 +1019,11 @@ impl CapabilityBroker {
                 .account_grants
                 .iter()
                 .filter(|(_, r)| r.grant.binding.pid == pid as u64)
+                .count()
+            + self
+                .vfs_caps
+                .iter()
+                .filter(|g| g.delivery.is_some_and(|d| d.recipient.pid == pid))
                 .count()
     }
 
@@ -1015,6 +1044,11 @@ impl CapabilityBroker {
                 && !grant
                     .delivery
                     .is_some_and(|d| !d.delivered && d.issuer_pid == owner_pid)
+        });
+        self.vfs_caps.retain(|g| {
+            !g.delivery.is_some_and(|d| {
+                d.recipient.pid == owner_pid || (!d.delivered && d.issuer_pid == owner_pid)
+            })
         });
     }
 
@@ -1163,7 +1197,13 @@ impl CapabilityBroker {
             .try_reserve(1)
             .map_err(|_| CapError::CapabilityStoreFull)?;
         let token = self.issue_token(CapabilityToken::TAG_VFS)?;
-        self.vfs_caps.push((token, cap, owner_pid));
+        self.vfs_caps.push(VfsGrant {
+            token,
+            cap,
+            owner_pid,
+            delivery: None,
+            expires: u64::MAX,
+        });
         Ok(token)
     }
 
@@ -1173,9 +1213,9 @@ impl CapabilityBroker {
         if !token.is_vfs() {
             return None;
         }
-        self.vfs_caps.iter().find_map(|(t, cap, pid)| {
-            if *t == token {
-                Some((cap.clone(), *pid))
+        self.vfs_caps.iter().find_map(|g| {
+            if g.token == token && g.delivery.is_none() {
+                Some((g.cap.clone(), g.owner_pid))
             } else {
                 None
             }

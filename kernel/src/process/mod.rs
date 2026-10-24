@@ -235,6 +235,7 @@ pub struct Process {
     /// Trust-chain markers used only for the authenticated-session broker.
     pub trusted_service_manager: bool,
     pub trusted_auth_broker: bool,
+    pub trusted_vfs_service: bool,
     /// When set, this process may only resolve nameserver entries that map to
     /// the declared service capability profile.
     pub service_lookup_restrictions: Option<u64>,
@@ -503,6 +504,7 @@ impl Process {
             trusted_control_panel: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
+            trusted_vfs_service: false,
             service_lookup_restrictions: None,
             mmap_next: 0,
             sched_type: 0,           // SCHED_NORMAL
@@ -691,6 +693,7 @@ impl Process {
             trusted_control_panel: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
+            trusted_vfs_service: false,
             service_lookup_restrictions: None,
             mmap_next: 0,
             sched_type: 0,

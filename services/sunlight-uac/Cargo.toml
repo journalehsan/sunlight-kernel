@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-uac"
-version = "0.2.5467-alpha.2"
+version = "0.2.5539-alpha.2"
+
 
 
 
@@ -635,3 +636,11 @@ path = "src/bin/capabilityctl.rs"
 [[bin]]
 name = "runas"
 path = "src/bin/runas.rs"
+
+[features]
+production-grant-test = []
+
+[[bin]]
+name = "grant-probe"
+path = "src/bin/grant_probe.rs"
+required-features = ["production-grant-test"]

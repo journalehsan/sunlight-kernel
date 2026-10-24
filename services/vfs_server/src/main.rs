@@ -313,6 +313,15 @@ fn read_seed_file(vfs: &mut Vfs, path: &str, out: &mut [u8]) -> usize {
 
 fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
     match msg.label {
+        VfsMsg::AUTHORIZE_EXEC => match decoded_path(&msg.words) {
+            Some(path)
+                if msg.cap_count == 1
+                    && sunlight_ipc::vfs_grants::consume(msg.caps[0], path.as_str()) =>
+            {
+                ok_reply().word(1, 1)
+            }
+            _ => error_reply(FsError::PermissionDenied),
+        },
         VfsMsg::OPEN => match decoded_path(&msg.words) {
             Some(pb) => open_path(state, pb.as_str()),
             None => error_reply(FsError::InvalidPath),

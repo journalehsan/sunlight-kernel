@@ -42,9 +42,9 @@ impl Scheduler {
         CAP_BROKER.lock().grant_vfs_capability(issuer.pid, cap)
     }
 
-    fn grant_requester(&self, pid: usize) -> Option<&Process> {
+    fn grant_requester_for_role(&self, pid: usize, trusted_role: bool) -> Option<&Process> {
         let issuer = self.current_process();
-        if !issuer.trusted_auth_broker
+        if !trusted_role
             || issuer.is_exiting()
             || issuer.foreground.incarnation == 0
             || issuer.address_space.identity().generation == 0
@@ -67,6 +67,10 @@ impl Scheduler {
         Some(recipient)
     }
 
+    fn grant_requester(&self, pid: usize) -> Option<&Process> {
+        self.grant_requester_for_role(pid, self.current_process().trusted_auth_broker)
+    }
+
     fn grant_delivery(&self, recipient: &Process) -> Option<GrantDelivery> {
         let issuer = self.current_process();
         Some(GrantDelivery {
@@ -76,6 +80,55 @@ impl Scheduler {
             request: issuer.ipc_reply_target?.call.generation,
             delivered: false,
         })
+    }
+
+    /// No payload recipient: only this service's actual synchronous IPC caller.
+    pub(crate) fn delegate_vfs_grants(
+        &self,
+        proof: CapabilityToken,
+        path: Option<&str>,
+    ) -> Option<heapless::Vec<CapabilityToken, 2>> {
+        let pid = self.current_process().ipc_reply_target?.call.pid;
+        let recipient = self.grant_requester(pid)?;
+        let delivery = self.grant_delivery(recipient)?;
+        #[cfg(test)]
+        super::lifecycle_tests::before_commit();
+        let tokens =
+            CAP_BROKER
+                .lock()
+                .delegate_vfs_grants(proof, delivery, path, self.global_tick)?;
+        #[cfg(feature = "production_grant_test")]
+        super::production_gate::committed(self.current_process(), delivery, &tokens);
+        Some(tokens)
+    }
+
+    pub(crate) fn consume_vfs_grant(&self, token: CapabilityToken, path: &str) -> bool {
+        let issuer = self.current_process();
+        let Some(target) = issuer.ipc_reply_target else {
+            return false;
+        };
+        let Some(recipient) =
+            self.grant_requester_for_role(target.call.pid, issuer.trusted_vfs_service)
+        else {
+            return false;
+        };
+        let identity = RecipientIdentity::of(recipient);
+        let allowed = CAP_BROKER
+            .lock()
+            .consume_vfs_grant(token, identity, path, self.global_tick);
+        #[cfg(feature = "production_grant_test")]
+        super::production_gate::consumed(issuer, identity, allowed);
+        allowed
+    }
+
+    pub(crate) fn cancel_vfs_grant(&self, token: CapabilityToken) {
+        let process = self.current_process();
+        let mut caps = CAP_BROKER.lock();
+        #[cfg(feature = "production_grant_test")]
+        let before = caps.recipient_grant_count(process.pid);
+        caps.cancel_vfs_grant(token, RecipientIdentity::of(process));
+        #[cfg(feature = "production_grant_test")]
+        super::production_gate::owner_cancelled(process.pid, before, &caps);
     }
 
     pub(crate) fn issue_auth_session_grant(

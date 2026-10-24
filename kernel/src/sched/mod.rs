@@ -2897,6 +2897,8 @@ impl Scheduler {
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        #[cfg(feature = "production_grant_test")]
+        crate::capability::production_gate::reaped(&self.processes[idx]);
         if is_native_borrower {
             NATIVE_BORROWERS_REAPED.fetch_add(1, Ordering::Relaxed);
         }

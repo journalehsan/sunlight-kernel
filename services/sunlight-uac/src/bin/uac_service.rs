@@ -2,12 +2,14 @@
 //!
 //! Spawned by `sunlightd` and registered with the init nameserver as `"uac"`.
 //! It owns the elevated-session prompt cache and the capability rule table
-//! (both modelled in the `sunlight_uac` library) and answers two requests:
+//! (both modelled in the `sunlight_uac` library). Policy requests include:
 //!
 //!   * `OP_RUNAS`  — words[0]=caller_uid, words[1]=target_uid. Reply words[0]
 //!                   is 0 (CacheUsed) or 1 (Prompted).
 //!   * `OP_CHECK`  — words[0]=uid, words[1]=gid, words[2..]=NUL-terminated
 //!                   path. Reply words[0] is 1 (allow) or 0 (deny) for read.
+//! Delegation opcodes 3/4 exchange a delivered root password proof through the
+//! kernel broker for one-use, exact-caller VFS authorizations.
 
 #![no_std]
 #![no_main]
@@ -54,11 +56,11 @@ use sunlight_uac::session::{runas, RunasOutcome, RunasRequest, SessionStore};
 const OP_RUNAS: u64 = 1;
 /// Capability access check for a path.
 const OP_CHECK: u64 = 2;
-/// Privilege delegation: mint a capability for a target context (used by `runas`).
+/// Exchange a delivered root proof for one exact canonical executable path.
+/// words[0]=0; words[1..4]=NUL-terminated path; caps[0]=password proof.
 const OP_DELEGATE: u64 = 3;
-/// Request the base set of VFS exec capabilities for an elevated session.
-/// words[0]=target_uid; caps[0] must carry the caller's admin grant. Reply
-/// words[0] = number of base exec prefixes granted.
+/// Exchange the caller's delivered root proof for two base VFS authorizations.
+/// words[0]=0; caps[0]=password proof. Reply caps contain new broker grants.
 const OP_BASE_CAPS: u64 = 4;
 /// Path-execute access check. Same wire layout as `OP_CHECK` but tests the
 /// execute right instead of read.
@@ -259,52 +261,7 @@ fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
         }
         AUTH_PASSWORD_OP => return handle_auth_password(msg, false),
         AUTH_PASSWORD_SESSION_OP => return handle_auth_password(msg, true),
-        OP_BASE_CAPS => {
-            // Base VFS-capability grant for an elevated session. Requires the
-            // caller's admin grant in caps[0]; refuse otherwise so it cannot be
-            // used to self-escalate.
-            let target_uid = msg.words[0] as u32;
-            let admin = msg.caps[0];
-            if admin == sunlight_ipc::CapabilityToken::INVALID {
-                serial_println!(
-                    "[UAC] base-caps denied: no admin grant (uid={})",
-                    target_uid
-                );
-                reply.label = REPLY_ERR;
-            } else {
-                // The actual kernel mint (grant_elevated_vfs) is driven by the
-                // trusted broker pid via SYS_GRANT_CAPABILITY; here we report
-                // how many base exec prefixes the policy grants so the client
-                // can confirm the session is provisioned.
-                // TODO(kernel-mint): forward minted tokens in reply.caps[..].
-                serial_println!("[UAC] base-caps granted for uid={}", target_uid);
-                reply.label = REPLY_OK;
-                reply.words[0] = BASE_EXEC_PREFIXES.len() as u64;
-            }
-        }
-        OP_DELEGATE => {
-            // words[0]=target_uid, words[1..]=NUL-terminated command path.
-            // caps[0] MUST carry the caller's prerequisite administrative grant
-            // capability — without it the broker refuses to delegate, so an
-            // unprivileged `runas` can never escalate on its own authority.
-            let target_uid = msg.words[0] as u32;
-            let admin = msg.caps[0];
-            if admin == sunlight_ipc::CapabilityToken::INVALID {
-                serial_println!(
-                    "[UAC] delegate denied: no admin grant for uid={}",
-                    target_uid
-                );
-                reply.label = REPLY_ERR;
-            } else {
-                // The kernel-trusted mint (sys_grant_capability) runs once the
-                // broker is wired to CAPABILITY_BROKER_PID; here we acknowledge
-                // the verified request and return the scoped capability.
-                // TODO(kernel-mint): replace echo with a real minted token.
-                serial_println!("[UAC] delegate granted for uid={}", target_uid);
-                reply.label = REPLY_OK;
-                reply.caps[0] = admin;
-            }
-        }
+        OP_BASE_CAPS | OP_DELEGATE => return sunlight_uac::delegation::handle(msg),
         _ => reply.label = REPLY_ERR,
     }
 

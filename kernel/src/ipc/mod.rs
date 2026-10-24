@@ -808,7 +808,11 @@ fn deliver_reply_to_current_target(
 
     #[cfg(feature = "cap_issuance_test")]
     crate::capability::gate::before_delivery(server_pid, target, reply, sched, caps, bus);
+    #[cfg(feature = "production_grant_test")]
+    crate::capability::production_gate::before_delivery(target, sched, caps, bus);
     let result = deliver_reply_to_target(target, reply, sched, caps, bus);
+    #[cfg(feature = "production_grant_test")]
+    crate::capability::production_gate::after_delivery(target, caps);
     #[cfg(feature = "scheduler_timer_trace")]
     if result.is_ok() && sched.processes.iter().any(|p| p.pid == target.call.pid && matches!(p.ipc_call_outcome, Some(IpcCallOutcome::ReplyDelivered(g)) if g == target.call.generation)) {
         if let Some(idx) = sched.processes.iter().position(|p| p.pid == server_pid && p.name_str() == "timer_server") {

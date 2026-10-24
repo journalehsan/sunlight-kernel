@@ -1060,6 +1060,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
         crate::sched::regression::on_tick(&mut sched, cpu_id);
         #[cfg(feature = "cap_issuance_test")]
         crate::capability::gate::on_tick(&mut sched, cpu_id);
+        #[cfg(feature = "production_grant_test")]
+        crate::capability::production_gate::on_tick(&mut sched, cpu_id);
 
         // Telemetry and cross-process timer work are BSP-only (CPU 0).
         if cpu_id == 0 {

@@ -777,6 +777,9 @@ pub extern "C" fn _start() -> ! {
     capability::gate::run(hhdm_offset);
 
     // 7b. Security hardening self-test (Bite 4, Task 0)
+    #[cfg(feature = "production_grant_test")]
+    capability::production_gate::run(hhdm_offset);
+
     run_security_hardening_tests(hhdm_offset);
 
     // 7a. ELF loader + spawn endpoint
@@ -900,6 +903,9 @@ pub extern "C" fn _start() -> ! {
             }
 
             vfs.init_context(entry, layout::USER_STACK_TOP);
+            // Only the boot-loaded embedded image may consume delegated VFS
+            // authority for an authenticated IPC requester. Exec withdraws it.
+            vfs.trusted_vfs_service = true;
             // Release PMM before SCHEDULER (canonical order is SCHEDULER→PMM).
             // See the init spawn above for the full deadlock rationale.
             drop(pmm);

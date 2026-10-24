@@ -18,3 +18,4 @@ pub mod capability;
 pub mod session;
 
 pub mod accounts;
+pub mod delegation;

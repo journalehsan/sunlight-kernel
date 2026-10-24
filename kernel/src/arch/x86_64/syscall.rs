@@ -948,6 +948,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         161 => sys_es1371_info(frame),
         162 => sys_io_port_read(frame),
         163 => sys_io_port_write(frame),
+        164 => sys_vfs_grant(frame),
         // Hardware identity + thermal sensors (read-only; gated by process name).
         133 => sys_system_identity(frame),
         134 => sys_thermal_sensors(frame),
@@ -4761,7 +4762,58 @@ fn username_for_uid(uid: u32) -> &'static str {
     }
 }
 
-/// Syscall: GrantCapability (100) — kernel-side VFS capability minting gate.
+/// Syscall 164: exchange/consume exact-caller VFS grants. No recipient PID ABI.
+fn sys_vfs_grant(frame: &mut SyscallFrame) -> u64 {
+    use ::sunlight_ipc::vfs_grants as api;
+    let operation = frame.rdi;
+    let token = CapabilityToken(frame.rsi);
+    let mut bytes = [0u8; 64];
+    let path = if operation == api::MINT_EXACT || operation == api::CONSUME {
+        let length = frame.r8 as usize;
+        if length == 0 || length >= bytes.len() {
+            return u64::MAX;
+        }
+        if let Err(error) = copy_from_user(frame.rdx, &mut bytes[..length]) {
+            return error;
+        }
+        match core::str::from_utf8(&bytes[..length]) {
+            Ok(path) if api::executable_path(path) => Some(path),
+            _ => return u64::MAX,
+        }
+    } else {
+        None
+    };
+    // All copying is complete before taking lifecycle serialization. Trusted
+    // roles and the actual pending IPC caller are resolved only at commit.
+    let sched = crate::sched::SCHEDULER.lock();
+    match operation {
+        api::MINT_EXACT | api::MINT_BASE => {
+            let Some(tokens) = sched.delegate_vfs_grants(token, path) else {
+                return u64::MAX;
+            };
+            let mut reply = IpcMsg::with_label(api::REPLY_OK);
+            for (index, token) in tokens.iter().enumerate() {
+                reply = reply.with_cap(index, *token);
+            }
+            reply.to_registers(frame);
+            0
+        }
+        api::CONSUME => {
+            if sched.consume_vfs_grant(token, path.unwrap()) {
+                0
+            } else {
+                u64::MAX
+            }
+        }
+        api::CANCEL => {
+            sched.cancel_vfs_grant(token);
+            0
+        }
+        _ => u64::MAX,
+    }
+}
+
+/// Syscall: GrantCapability (100) — legacy bearer VFS minting gate.
 /// rdi = pointer to path prefix string (NUL-terminated, <= 63 bytes)
 /// rsi = access bits (read=1, write=2, execute=4)
 fn sys_grant_capability_syscall(frame: &mut SyscallFrame) -> u64 {

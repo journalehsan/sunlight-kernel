@@ -173,17 +173,26 @@ pub fn exec_into_process(
         // own the broker. Withdraw before activation can replace the syscall
         // stack's VM; failed image preparation above preserves old authority.
         let mut broker = crate::capability::CAP_BROKER.lock();
-        #[cfg(feature = "cap_issuance_test")]
+        #[cfg(any(feature = "cap_issuance_test", feature = "production_grant_test"))]
         let old_grants = broker.recipient_grant_count(process.pid);
         broker.retire_recipient_grants(process.pid);
         process.withdraw_exec_image_roles();
         process.pending_call = None;
         process.ipc_reply_target = None;
+        #[cfg(feature = "production_grant_test")]
+        crate::capability::production_gate::exec(
+            process,
+            old_address_space.identity(),
+            old_grants,
+            &mut broker,
+        );
         #[cfg(feature = "cap_issuance_test")]
         if old_grants != 0 {
             assert_eq!(old_grants, 17);
             assert_eq!(broker.recipient_grant_count(process.pid), 0);
-            crate::serial_println!("[CAP-PR] exec authority withdrawn before VM activation records=17 remaining=0");
+            crate::serial_println!(
+                "[CAP-PR] exec authority withdrawn before VM activation records=17 remaining=0"
+            );
         }
     }
 

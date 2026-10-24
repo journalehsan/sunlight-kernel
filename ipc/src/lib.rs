@@ -8,6 +8,7 @@ pub mod pty;
 pub mod session_completion;
 pub mod spawn_env;
 pub mod swap_policy;
+pub mod vfs_grants;
 pub use display_metrics::{
     validate_size, DisplayMetrics, PixelFormat, ScreenBackend, ScreenRect,
     BORDER_W as DISPLAY_BORDER_W, MAX_DIM, MIN_DIM, SAFE_FALLBACK_H, SAFE_FALLBACK_W, SCALE_FP_ONE,
@@ -181,6 +182,8 @@ pub enum SunlightSyscall {
     IoPortRead = 162,
     /// Write a validated device I/O port. Gated to the owning driver.
     IoPortWrite = 163,
+    /// Request-bound UAC/VFS grant exchange, consumption and owner cancellation.
+    VfsGrant = 164,
     /// Paged ReadDir: r10 is the entry offset.
     ReadDirFrom = 148,
     /// Atomic rename that fails if the destination already exists.
@@ -1093,6 +1096,9 @@ pub mod VfsMsg {
     pub const FSTAT: u64 = 14; // Stat an open file handle
     pub const UNLINK: u64 = 15; // Remove a file (path in words[0..3])
     pub const RENAME: u64 = 16; // Rename: src path words[0..3], dst path words[4..7]
+    /// One-use delegated read/execute policy check; path words[0..4), cap[0].
+    /// Does not open a file, spawn a process, or change credentials.
+    pub const AUTHORIZE_EXEC: u64 = 17;
     pub const DATA_SHARED: u64 = 31; // large read reply carries cap in caps[0]
 }
 

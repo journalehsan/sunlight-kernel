@@ -19,6 +19,7 @@ fn process(pid: usize) -> Process {
     Process {
         pid,
         trusted_auth_broker: pid == 6,
+        trusted_vfs_service: false,
         trusted_service_manager: false,
         trusted_tty_session_service: false,
         trusted_lock_service: false,
@@ -842,3 +843,6 @@ fn uac_may_consume_its_own_pending_account_grant_on_the_same_request() {
     assert!(s.account_grant(7, scope(), Some(stale)).is_none());
     assert_eq!(inventory(), 0);
 }
+
+#[path = "production_tests.rs"]
+mod production_tests;
