@@ -3,6 +3,60 @@ use sunlight_ipc::{accounts as api, IpcMsg};
 use sunlight_uac::accounts::{authorize_own_change, parse_snapshot, replacement_shadow};
 use zeroize::Zeroize;
 
+/// No publication: all normal consumption policy/transport checks still run.
+/// This label is dispatched only in an explicitly test-enabled UAC binary.
+#[cfg(feature = "session-race-test")]
+pub(super) fn consume_probe(msg: &IpcMsg) -> IpcMsg {
+    let mut request = *msg;
+    request.label = api::MUTATE_GROUP;
+    match dispatch_group(&request, true) {
+        Ok(None) => IpcMsg::with_label(api::REPLY),
+        _ => IpcMsg::with_label(api::ERROR),
+    }
+}
+
+#[cfg(feature = "session-race-test")]
+static RACE_CONTROL: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+#[cfg(feature = "session-race-test")]
+fn race_checkpoint(scope: api::GrantScope, stage: u64) -> Result<(), api::Error> {
+    let case = scope.target.checked_sub(61000).unwrap_or(0);
+    let selected = matches!(
+        (case, stage),
+        (1 | 3 | 4 | 9, 0) | (2 | 5 | 6, 1) | (7 | 10 | 11, 2) | (8, 3)
+    );
+    if !selected {
+        return Ok(());
+    }
+    sunlight_ipc::debug_log(&alloc::format!(
+        "[SESSION-E3-UAC] checkpoint=policy-rendezvous case={} stage={} pid={} session={} epoch={}",
+        case,
+        stage,
+        sunlight_libc::getpid(),
+        scope.session,
+        scope.session_generation
+    ));
+    let control =
+        sunlight_ipc::CapabilityToken(RACE_CONTROL.load(core::sync::atomic::Ordering::Relaxed));
+    if control == sunlight_ipc::CapabilityToken::INVALID {
+        return Err(api::Error::Unavailable);
+    }
+    let reply = sunlight_ipc::ipc_call_timeout(
+        control,
+        IpcMsg::with_label(0xE301)
+            .word(0, u64::from(case))
+            .word(1, stage)
+            .word(2, scope.session)
+            .word(3, scope.session_generation),
+        5000,
+    )
+    .map_err(|_| api::Error::Unavailable)?;
+    if reply.label != 0xE301 {
+        return Err(api::Error::Unavailable);
+    }
+    Ok(())
+}
+
 pub(super) fn read(path: &[u8]) -> Result<alloc::vec::Vec<u8>, api::Error> {
     let fd = sunlight_libc::open(path).map_err(|_| api::Error::Storage)?;
     let mut bytes = alloc::vec::Vec::new();
@@ -26,6 +80,13 @@ pub(super) fn read(path: &[u8]) -> Result<alloc::vec::Vec<u8>, api::Error> {
     }
     Ok(bytes)
 }
+// E2 restores the broker protocol separately. Account database publication
+// remains unavailable until real session/login and mutation lifecycle evidence
+// covers these handlers. Boot-only development-shadow maintenance is separate.
+fn require_verified_mutation_publication() -> Result<(), api::Error> {
+    Err(api::Error::SessionAuthorityUnavailable)
+}
+
 pub(super) fn publish_shadow(data: &[u8]) -> Result<(), api::Error> {
     publish(b"/etc/.shadow-uac-new", b"/etc/shadow", data, 0o600)
 }
@@ -128,9 +189,9 @@ fn dispatch(msg: &IpcMsg) -> Result<(), api::Error> {
                 session: active.0,
                 session_generation: active.1,
             };
-            let grant =
-                api::broker_grant(msg.badge, scope, None).ok_or(api::Error::BrokerUnavailable)?;
-            api::broker_grant(msg.badge, scope, Some(grant)).ok_or(api::Error::Denied)?;
+            require_verified_mutation_publication()?;
+            let grant = api::try_broker_grant(msg.badge, scope, None)?;
+            api::try_broker_grant(msg.badge, scope, Some(grant))?;
             publish_shadow(replacement.as_bytes())
         })();
         replacement.zeroize();
@@ -146,7 +207,7 @@ fn dispatch(msg: &IpcMsg) -> Result<(), api::Error> {
 }
 pub fn handle(msg: &IpcMsg) -> IpcMsg {
     if matches!(msg.label, api::AUTHORIZE | api::MUTATE_GROUP) {
-        return match dispatch_group(msg) {
+        return match dispatch_group(msg, false) {
             Ok(Some(grant)) => IpcMsg::with_label(api::REPLY).with_cap(0, grant),
             Ok(None) => IpcMsg::with_label(api::REPLY),
             Err(e) => IpcMsg::with_label(api::ERROR).word(0, e as u64),
@@ -163,7 +224,10 @@ pub fn handle(msg: &IpcMsg) -> IpcMsg {
     }
 }
 
-fn dispatch_group(msg: &IpcMsg) -> Result<Option<sunlight_ipc::CapabilityToken>, api::Error> {
+fn dispatch_group(
+    msg: &IpcMsg,
+    consume_only: bool,
+) -> Result<Option<sunlight_ipc::CapabilityToken>, api::Error> {
     use sunlight_uac::accounts::{authorize_admin, group_policy, replacement_groups};
     if msg.word_count != 4 {
         return Err(api::Error::InvalidInput);
@@ -191,7 +255,14 @@ fn dispatch_group(msg: &IpcMsg) -> Result<Option<sunlight_ipc::CapabilityToken>,
     let snapshot = parse_snapshot(&passwd, &groups)?;
     group_policy(&snapshot, op, scope.target, scope.member)?;
     let index = if msg.label == api::AUTHORIZE { 0 } else { 1 };
-    if msg.cap_count != index as u32 + 1 {
+    let expected_caps = index as u32 + 1;
+    #[cfg(feature = "session-race-test")]
+    let expected_caps = if msg.label == api::AUTHORIZE && (61001..=61011).contains(&scope.target) {
+        2
+    } else {
+        expected_caps
+    };
+    if msg.cap_count != expected_caps {
         return Err(api::Error::InvalidInput);
     }
     let ptr = sunlight_ipc::shm_map(msg.caps[index]).map_err(|_| api::Error::InvalidInput)?;
@@ -227,14 +298,42 @@ fn dispatch_group(msg: &IpcMsg) -> Result<Option<sunlight_ipc::CapabilityToken>,
             if api::active_session()? != active {
                 return Err(api::Error::SessionChanged);
             }
-            return api::broker_grant(msg.badge, scope, None)
-                .map(Some)
-                .ok_or(api::Error::BrokerUnavailable);
+            #[cfg(feature = "session-race-test")]
+            if expected_caps == 2 {
+                RACE_CONTROL.store(msg.caps[1].0, core::sync::atomic::Ordering::Relaxed);
+            }
+            #[cfg(feature = "session-race-test")]
+            race_checkpoint(scope, 0)?;
+            let result = api::try_broker_grant(msg.badge, scope, None);
+            #[cfg(feature = "session-race-test")]
+            if result.is_ok() {
+                race_checkpoint(scope, 1)?;
+            }
+            return result.map(Some);
         }
         // The kernel checks operation, target, membership, process generation,
         // session, expiry and one-use state. Never test merely for nonzero.
-        api::broker_grant(msg.badge, scope, Some(msg.caps[0]))
-            .ok_or(api::Error::CapabilityRejected)?;
+        #[cfg(feature = "session-race-test")]
+        if consume_only {
+            race_checkpoint(scope, 2)?;
+            api::try_broker_grant(msg.badge, scope, Some(msg.caps[0]))?;
+            let repeated = api::try_broker_grant(msg.badge, scope, Some(msg.caps[0]));
+            // Concurrent logout can remove the session between the successful
+            // consume and this repeat. Both production denials are valid; the
+            // parser still requires the first consume's authoritative commit.
+            if repeated != Err(api::Error::CapabilityRejected)
+                && !(scope.target == 61010
+                    && repeated == Err(api::Error::SessionAuthorityUnavailable))
+            {
+                return Err(api::Error::BrokerUnavailable);
+            }
+            race_checkpoint(scope, 3)?;
+            return Ok(None);
+        }
+        #[cfg(not(feature = "session-race-test"))]
+        let _ = consume_only;
+        require_verified_mutation_publication()?;
+        api::try_broker_grant(msg.badge, scope, Some(msg.caps[0]))?;
         let mut name = [0u8; 32];
         unsafe {
             core::ptr::copy_nonoverlapping(ptr, name.as_mut_ptr(), 32);
@@ -302,8 +401,9 @@ fn dispatch_profile(msg: &IpcMsg) -> Result<(), api::Error> {
         session: active.0,
         session_generation: active.1,
     };
-    let grant = api::broker_grant(msg.badge, scope, None).ok_or(api::Error::BrokerUnavailable)?;
-    api::broker_grant(msg.badge, scope, Some(grant)).ok_or(api::Error::CapabilityRejected)?;
+    require_verified_mutation_publication()?;
+    let grant = api::try_broker_grant(msg.badge, scope, None)?;
+    api::try_broker_grant(msg.badge, scope, Some(grant))?;
     publish(
         b"/etc/.passwd-uac-new",
         b"/etc/passwd",

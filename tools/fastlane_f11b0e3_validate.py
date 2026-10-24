@@ -1,0 +1,387 @@
+#!/usr/bin/env python3
+"""Authenticated production session evidence; boot alone never certifies races."""
+import argparse
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import time
+
+from fastlane_f11b0e_validate import ROOT, digest, sources
+from fastlane_f11b0c_validate import SERVICE_FLAGS
+from voice_recorder_qmp import Qmp
+
+BASE = ROOT / 'target/fastlane-f11b0e3-evidence'
+BUILD = ROOT / 'target/fastlane-f11b0e3-build'
+ENV = {'CARGO_TARGET_DIR': str(BUILD), 'CARGO_INCREMENTAL': '0', 'CARGO_PROFILE_DEV_DEBUG': '0'}
+CASES = ('N1', 'N2', 'N3M', 'N3R', 'N4', 'N5', 'N6', 'N7R', 'N7C', 'N7OC', 'N7OR')
+
+
+def assess_native(raw, case, cpus, *, identity=None, failure=None):
+    """Raw markers alone cannot certify a native execution or its artifacts."""
+    try:
+        result = _assess_native(raw, case, cpus)
+    except (ValueError, KeyError, TypeError):
+        result = {'classification': 'FORCED_AND_FAILED', 'case': case, 'cpus': cpus,
+                  'errors': ['malformed required marker field'], 'missing_checkpoints': []}
+    result['identity'] = identity
+    if identity is None or not all(identity.get(k) for k in
+            ('iso_matches', 'elf_matches', 'services_match', 'source_matches')):
+        result['errors'].append('missing or mismatched image/source identity')
+        if result['classification'] == 'FORCED_AND_PASSED':
+            result['classification'] = 'FORCED_AND_FAILED'
+    if failure:
+        result['errors'].append('driver failed or timed out: ' + failure['type'])
+        if result['classification'] == 'FORCED_AND_PASSED':
+            result['classification'] = 'FORCED_AND_FAILED'
+    return result
+
+
+def _assess_native(raw, case, cpus):
+    """Fail closed on absent boundaries, identities, ordering or cleanup."""
+    def parse(prefix):
+        result = []
+        for line in raw.splitlines():
+            if line.startswith(prefix):
+                pairs = re.findall(r'(\w+)=(\S+)', line)
+                row = dict(pairs)
+                if len(row) != len(pairs): row['_duplicate_fields'] = '1'
+                result.append(row)
+        return result
+    rows = parse('[SESSION-E3] ')
+    clients = [r for r in parse('[SESSION-E3-CLIENT] ') if r.get('case') == case]
+    uac = parse('[SESSION-E3-UAC] ')
+    errors, missing = [], []
+    def events(kind): return [r for r in rows if r.get('checkpoint') == kind]
+    def client(kind): return [r for r in clients if r.get('checkpoint') == kind]
+    def ordered(a, b): return bool(a and b and int(a[0]['seq']) < int(b[0]['seq']))
+    def require(ok, why):
+        if not ok: errors.append(why)
+    require(not any('_duplicate_fields' in r for r in rows + clients + uac), 'duplicate marker fields')
+    activation = events('account-activated')
+    proofs = events('login-proof-committed')
+    registered = events('registered')
+    minted = events('mint-committed')
+    consumed = events('consume-committed')
+    revoked = [r for r in events('transition-committed') if r.get('result') == '3']
+    retired = events('service-retirement')
+    reject = events('mint-syscall-rejected')
+    inventory = events('inventory')
+    # Authentication evidence must originate in role-checked kernel operations,
+    # and name the same live Account incarnation as policy-accepted issuance.
+    if not (activation and proofs and registered and uac and client('request-start') and client('policy-accepted-rendezvous')):
+        missing.append('authenticated fixture or policy checkpoint missing')
+    if activation and proofs:
+        require(all(proofs[0].get(k) == activation[0].get(k) for k in ('pid','incarnation','vm')), 'login issuer identity differs from activated Account')
+    if proofs: require(proofs[0].get('account') == '1', 'password proof issuer lacks trusted role')
+    if registered:
+        require(registered[0].get('sessiond') == '1' and int(registered[0].get('session','0')) > 0
+                and int(registered[0].get('epoch','0')) > 0, 'registration identity invalid')
+        for r in minted + consumed + revoked + retired + reject:
+            require(all(r.get(k) == registered[0].get(k) for k in ('session','epoch')), 'transition uses a different session identity')
+    expected_case, expected_stage = {'N1':(1,0),'N2':(2,1),'N3M':(3,0),'N3R':(9,0),'N4':(4,0),'N5':(5,1),'N6':(6,1),'N7R':(7,2),'N7C':(8,3),'N7OC':(10,2),'N7OR':(11,2)}[case]
+    policy = [r for r in uac if r.get('case') == str(expected_case) and r.get('stage') == str(expected_stage)]
+    if not policy: missing.append('required production policy boundary missing')
+    if policy and activation and registered:
+        require(policy[0].get('pid') == activation[0].get('pid') and all(policy[0].get(k) == registered[0].get(k) for k in ('session','epoch')), 'policy boundary issuer/session mismatch')
+    cleaned = events('fixture-ipc-cleaned')
+    require(bool(client('controller-ready')), 'controller identity missing')
+    for checkpoint in ('fixture-complete', 'controller-ready'):
+        for c in client(checkpoint):
+            require(any(r.get('pid') == c.get('pid') and r.get('owned_endpoints') == '0'
+                        and r.get('pending_call') == 'none' and r.get('reply_target') == 'none'
+                        and r.get('deferred_targets') == '0'
+                        and r.get('pending_commits') == '0' for r in cleaned), 'fixture references not retired')
+    for r in rows:
+        if 'cpu' in r: require(0 <= int(r['cpu']) < cpus, 'invalid CPU identity')
+    sequences = [int(r['seq']) for r in rows if 'seq' in r]
+    require(sequences == sorted(set(sequences)), 'duplicate or unordered authoritative sequence')
+    require(bool(client('fixture-complete')), 'fixture did not complete')
+    require(not any(m in raw for m in ('PANIC','panicked at','[FAULT]','checkpoint=FAIL')), 'guest failure')
+    require(bool(inventory) and all(inventory[-1].get(k) == '0' for k in
+                ('sessions','receipts','account_grants','pending_account_deliveries')), 'session subset not reconciled')
+    require(len(consumed) <= 1 and len(minted) <= 1, 'duplicate mint or consumption')
+    require(not events('boundary-timeout'), 'controlled boundary timed out')
+    for r in minted + consumed + reject:
+        require(r.get('account') == '1', 'broker issuer lacks authenticated Account role')
+        require(any(all(r.get(k) == a.get(k) for k in ('pid','incarnation','vm'))
+                    and int(a['seq']) < int(r['seq']) for a in activation), 'unexpected broker service incarnation')
+    requesters = events('authenticated-requester')
+    bindings = events('request-binding')
+    if not requesters or not bindings:
+        missing.append('recipient incarnation/VM/call binding missing')
+    for r in requesters:
+        require(r.get('account') == r.get('sessiond') == r.get('tty') == '0', 'client acquired a trusted role')
+        require(bool(client('request-start')) and r.get('pid') == client('request-start')[0].get('pid'), 'requester differs from real client')
+    for b in bindings:
+        require(any(all(b.get(a) == r.get(k) for a,k in
+                       (('recipient','pid'),('recipient_inc','incarnation'),('recipient_vm','vm')))
+                    for r in requesters), 'recipient binding differs from live incarnation')
+        require(b.get('recipient_vm') == b.get('binding_vm') and int(b.get('request_generation','0')) > 0,
+                'VM binding or IPC request generation invalid')
+        require(any(all(b.get(a) == service.get(k) for a,k in
+                        (('issuer','pid'),('issuer_inc','incarnation'),('issuer_vm','vm')))
+                    and int(service['seq']) < int(b['seq']) for service in activation), 'binding issuer is not an activated Account incarnation')
+    if inventory:
+        require(inventory[0].get('sessions') == inventory[0].get('account_grants') == '0', 'initial inventory not observed before session registration')
+    cross_cpu = 'NOT_FORCED'
+    if case in ('N1','N2','N3M','N3R'):
+        require(any(r.get('result') == str(0xC2FE if case in ('N1','N3R') else 0xC2FF)
+                    for r in client('mint-response')), 'final mint outcome missing or wrong')
+        if not revoked or not (minted or reject): missing.append('commit/revocation boundary missing')
+        if case in ('N1','N3R'):
+            require(not minted and ordered(revoked, reject), 'revoke-before-mint-rejection unproven')
+        else:
+            require(len(minted) == 1 and ordered(minted, revoked), 'mint-before-revocation unproven')
+            require(bool(client('post-logout-authority-denied')), 'stale mint and retired consumption not checked')
+        if case.startswith('N3'):
+            ready = events('boundary-ready')
+            grant = [r for r in ready if r.get('result') == '1']
+            revoke = [r for r in ready if r.get('result') == '2']
+            if not grant or not revoke or cpus < 2: missing.append('both native boundary entrants missing')
+            else:
+                require(grant[0].get('cpu') != revoke[0].get('cpu'), 'contenders did not run on separate CPUs')
+                require(grant[0].get('account') == '1' and revoke[0].get('sessiond') == '1', 'contender role mismatch')
+                first = minted or revoked
+                require(ordered(grant, first) and ordered(revoke, first), 'both entrants not ready before first linearization')
+                if not missing and not errors: cross_cpu = 'FORCED_AND_PASSED'
+    elif case in ('N4','N5','N6'):
+        closed = [r for r in events('peer-closed') if client('request-start') and r.get('recipient') == client('request-start')[0].get('pid')]
+        reaped = events('service-ipc-retired')
+        if not retired or len(activation) != 2 or not closed or not reaped or not reject:
+            missing.append('retirement, pending call cancellation, replacement or old-session broker boundary missing')
+        else:
+            old, new = activation
+            require(all(old.get(k) == retired[0].get('account_'+{'pid':'pid','incarnation':'inc','vm':'vm'}[k]) for k in ('pid','incarnation','vm')), 'retired Account differs from original issuer')
+            require(all(old.get(k) != new.get(k) for k in ('pid','incarnation','vm')), 'replacement identity is not distinct')
+            require(new.get('account') == '1', 'replacement lacks independent trusted activation')
+            require(ordered(retired, closed) and ordered(closed, [new]) and ordered(reaped, [new]) and ordered([new], reject), 'lifecycle order unproven')
+            require(all(reject[0].get(k) == new.get(k) for k in ('pid','incarnation','vm')), 'old-session rejection not evaluated by replacement')
+            require(reject[0].get('result') == '11', 'old session denial is not broker SessionAuthorityUnavailable')
+            require(bool(client('old-call-peer-closed')) and bool(client('replacement-old-session-denied')), 'recipient reconciliation missing')
+            require(all(r.get('reply_target') == 'none' and r.get('deferred_targets') == '0' for r in reaped), 'old reply context survived retirement')
+            require(all(reaped[0].get(k) == old.get(k) for k in ('pid','incarnation','vm')), 'retired IPC context belongs to a different service')
+            require(any(r.get('recipient_inc') == q.get('incarnation') and r.get('recipient') == q.get('pid')
+                        and int(r.get('request_generation','0')) > 0 for r in closed for q in requesters), 'cancelled call incarnation/generation mismatch')
+        if case == 'N4': require(not minted, 'old issuance committed before retirement fixture')
+        else:
+            require(len(minted) == 1 and ordered(minted, retired), 'legitimate pending grant before retirement missing')
+            require(any(r.get('pending_account_deliveries') == '1' for r in inventory), 'pending old Account reply not observed')
+    else:
+        rejected = events('consume-syscall-rejected')
+        if not revoked or not events('consume-entry'): missing.append('consume/revocation boundary missing')
+        require(len(minted) == 1, 'legitimate mint missing')
+        if case in ('N7R','N7OR'): require(not consumed and ordered(revoked, rejected), 'logout-before-consume denial unproven')
+        elif case == 'N7OC':
+            require(len(consumed) == 1 and ordered(consumed, revoked) and ordered(consumed, rejected), 'overlapping consume-first order unproven')
+        else:
+            require(len(consumed) == 1 and ordered(consumed, rejected) and ordered(rejected, revoked), 'consume and immediate one-use denial before logout unproven')
+        require(bool(client('second-consume-denied')), 'further consumption not rejected')
+        if case in ('N7OC','N7OR'):
+            ready = events('boundary-ready')
+            consume_ready = [r for r in ready if r.get('result') == '4']
+            revoke_ready = [r for r in ready if r.get('result') == '2']
+            if cpus < 2 or not consume_ready or not revoke_ready:
+                missing.append('overlapping consumption/revocation entrants missing')
+            else:
+                require(consume_ready[0].get('cpu') != revoke_ready[0].get('cpu'), 'consume/revoke contenders share CPU')
+                first = consumed if case == 'N7OC' else revoked
+                require(ordered(consume_ready, first) and ordered(revoke_ready, first), 'consume/revoke entrants not both admitted before linearization')
+                if not missing and not errors: cross_cpu = 'FORCED_AND_PASSED'
+    classification = 'NOT_FORCED' if missing else ('FORCED_AND_FAILED' if errors else 'FORCED_AND_PASSED')
+    return {'classification':classification, 'case':case, 'cpus':cpus, 'errors':errors,
+            'missing_checkpoints':missing, 'markers':rows, 'client_markers':clients, 'uac_markers':uac,
+            'scope':'real Account/sessiond boot-global broker; session subset only',
+            'cross_cpu_contention':cross_cpu,
+            'stale_reply_mechanism':'generation-qualified PeerClosed plus retired executable/reply context' if case == 'N5' else None,
+            'actual_pid_reuse':'NOT_FORCED', 'resource_inventory':inventory[-1] if inventory else None}
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--section', choices=('build', 'normal', 'native', 'checks', 'compatibility'), required=True)
+    parser.add_argument('--compat-section', choices=('production','authority','core','lifecycle','network'))
+    parser.add_argument('--cpus', nargs='+', type=int, choices=(1, 2, 4, 12), default=[2])
+    parser.add_argument('--cases', nargs='+', choices=CASES, default=['N1'])
+    parser.add_argument('--image-manifest', type=Path)
+    parser.add_argument('--timeout', type=int, default=120)
+    parser.add_argument('--memory-mib', type=int, default=2048)
+    parser.add_argument('--evidence-root', type=Path, default=BASE)
+    args = parser.parse_args()
+    base = args.evidence_root.resolve()
+    if args.section == 'compatibility':
+        import sys
+        import fastlane_f11b0e2_validate as replay
+        if not args.compat_section: parser.error('--compat-section required')
+        replay.BASE = base / 'compatibility'
+        replay.BUILD = BUILD
+        replay.ENV = ENV
+        scratch = BUILD / 'tmp'
+        scratch.mkdir(exist_ok=True)
+        replay.tempfile.tempdir = str(scratch)
+        sys.argv = [sys.argv[0], '--section', args.compat_section]
+        replay.main()
+        return
+    out = base / (args.section + '-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
+    out.mkdir(parents=True)
+    summary = {'phase': 'F1.1B-0E3R' if base.name == 'fastlane-f11b0e3r-evidence' else 'F1.1B-0E3', 'source_sha256': sources(), 'checks': [], 'native': [], 'images': {},
+               'gates': {'A': 'VERIFIED NATIVE', 'B': 'PARTIAL', 'session_authority': 'PARTIAL', 'F1.1B-0': 'BLOCKED', 'C': 'BLOCKED'}}
+    def save():
+        (out / 'validation-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    def check(name, cmd, extra=None, timeout=1200):
+        env = {**ENV, **(extra or {})}
+        start = time.monotonic()
+        with (out / (name + '.log')).open('w') as log:
+            log.write(json.dumps({'command': cmd, 'environment': env}) + '\n'); log.flush()
+            try:
+                code = subprocess.run(cmd, cwd=ROOT, env={**os.environ, **env}, stdout=log,
+                                      stderr=subprocess.STDOUT, timeout=timeout).returncode
+            except subprocess.TimeoutExpired:
+                code = 124
+        summary['checks'].append({'name': name, 'command': cmd, 'environment': env, 'exit_code': code,
+                                  'classification': 'PASS' if code == 0 else 'FAIL', 'seconds': time.monotonic()-start,
+                                  'log': str((out / (name+'.log')).relative_to(ROOT))})
+        print(name, summary['checks'][-1]['classification'], flush=True); save()
+        return code == 0
+    try:
+        if args.section in ('build', 'normal'):
+            test = args.section == 'build'
+            service_cmd = ['cargo', 'build', '--locked', '--offline', '--release', '-p', 'sunlight-uac']
+            if test: service_cmd += ['--features', 'session-race-test']
+            if not check('services', service_cmd, {'RUSTFLAGS': SERVICE_FLAGS}): raise SystemExit(1)
+            for name in (('uac_service', 'session-race-probe') if test else ('uac_service',)):
+                shutil.copy2(BUILD / 'x86_64-unknown-none/release' / name, ROOT / 'target/x86_64-unknown-none/release' / name)
+            kernel_cmd = ['cargo', 'build', '--locked', '--offline', '-p', 'sunlight-kernel', '--bin', 'sunlight-kernel']
+            if test: kernel_cmd += ['--features', 'native_session_race_test,key_inject']
+            if not check('kernel', kernel_cmd, {'SUNLIGHT_INJECT_PHASE': 'desktop_login'} if test else None): raise SystemExit(1)
+            built = BUILD / 'x86_64-unknown-none/debug/sunlight-kernel'
+            elf, iso = out / 'kernel.elf', out / 'fixture.iso'
+            if not check('strip', ['objcopy', '--strip-debug', str(built), str(elf)]): raise SystemExit(1)
+            scratch = out / 'iso-build'; scratch.mkdir()
+            shutil.copy2(ROOT / 'limine.conf', scratch / 'limine.conf')
+            if not check('iso', ['bash', 'tools/make_hybrid_iso.sh', str(elf), str(iso), str(ROOT/'target/limine'), str(scratch)]): raise SystemExit(1)
+            payloads = {}
+            raw = built.read_bytes()
+            embedded = out / 'embedded'; embedded.mkdir()
+            for name in ('sunlight-init', 'sunlightd', 'sunlight-tty-server', 'uac_service', 'sunlight-sessiond', 'sunlight-vfs-server') + (('session-race-probe',) if test else ()):
+                p = ROOT / 'target/x86_64-unknown-none/release' / name
+                data = p.read_bytes(); offset = raw.find(data)
+                if offset < 0: raise RuntimeError('current binary not embedded: ' + name)
+                shutil.copy2(p, embedded / name)
+                payloads[name] = {'sha256': digest(p), 'bytes': len(data), 'embedded_offset': offset}
+            if not test and any(marker in raw for marker in (b'[SESSION-E3]', b'[SESSION-E3-UAC]', b'[SESSION-E3-CLIENT]')):
+                raise RuntimeError('test instrumentation present in ordinary image')
+            summary['images']['fixture' if test else 'production'] = {'kernel_sha256': digest(built), 'elf_sha256': digest(elf),
+                'iso_sha256': digest(iso), 'iso': str(iso), 'features': ['native_session_race_test', 'key_inject'] if test else [],
+                'embedded_services': payloads, 'source_sha256': summary['source_sha256']}
+        elif args.section == 'checks':
+            host = ['cargo', 'test', '--locked', '--offline', '--target', 'x86_64-unknown-linux-gnu']
+            check('kernel-host', host + ['-p', 'sunlight-kernel', '--lib', '--', '--test-threads=1'])
+            packages = ['sunlight-ipc', 'sunlight-uac', 'sunlight-sessiond', 'sunlight-fs', 'sunlightd', 'sunlight-audiod', 'sunlight-elf', 'sunlight-fastlane-ring', 'sunlight-fastlane-doorbell']
+            check('services-host', host + sum((['-p', p] for p in packages), []) + ['--lib'])
+            check('sunlightd-runtime', host + ['-p', 'sunlightd', '--bin', 'sunlightd', '--features', 'dependency-test'])
+            check('scheduler-host', ['python3', 'tools/test_scheduler_host.py'])
+            check('parsers', ['python3', '-m', 'unittest', 'discover', '-s', 'tools', '-p', 'test_fastlane_f11b0*.py'])
+            check('strict-clippy', ['cargo', 'clippy', '--locked', '--offline', '--target', 'x86_64-unknown-linux-gnu', '-p', 'sunlight-kernel', '--lib', '--', '-D', 'warnings'])
+            check('media-host', host + ['-p', 'sunlight-media', '--lib'])
+            check('workspace-format', ['cargo', 'fmt', '--all', '--', '--check'])
+            check('diff-check', ['git', 'diff', '--check'])
+            check('miri', ['cargo', 'miri', '--version'])
+        else:
+            if args.image_manifest is None: parser.error('--image-manifest required for native')
+            manifest = json.loads(args.image_manifest.read_text())
+            image = manifest['images']['fixture']; iso = Path(image['iso'])
+            if digest(iso) != image['iso_sha256']: raise RuntimeError('ISO hash mismatch')
+            elf = args.image_manifest.parent / 'kernel.elf'
+            if digest(elf) != image['elf_sha256']: raise RuntimeError('ELF hash mismatch')
+            def services_match():
+                return all(digest(args.image_manifest.parent / 'embedded' / name) == data['sha256']
+                           for name, data in image['embedded_services'].items())
+            if not services_match(): raise RuntimeError('embedded executable archive hash mismatch')
+            summary['images']['fixture'] = image
+            summary['image_manifest'] = str(args.image_manifest)
+            if summary['source_sha256'] != image['source_sha256']:
+                raise RuntimeError('source snapshot differs from image build')
+            for cpu in args.cpus:
+                for case in args.cases:
+                    if cpu == 1 and (case.startswith('N3') or case in ('N7OC','N7OR')):
+                        summary['native'].append({'case':case, 'cpus':cpu, 'classification':'NOT_FORCED', 'reason':'cross-CPU case requires at least two CPUs'})
+                        save()
+                        continue
+                    name = f'{case}-{cpu}cpu'
+                    serial = out / (name+'.serial.log'); serial.touch()
+                    sock = out / (name+'.qmp.sock')
+                    # Linux UNIX socket paths must stay below 108 bytes.
+                    sock = Path('/tmp') / ('e3-' + out.name[-14:] + '-' + name + '.sock')
+                    cmd = ['qemu-system-x86_64', '-accel', 'tcg,thread=multi', '-cpu', 'max', '-smp', str(cpu), '-m', str(args.memory_mib), '-cdrom', str(iso), '-serial', 'file:'+str(serial), '-display', 'none', '-nic', 'none', '-no-reboot', '-no-shutdown', '-device', 'virtio-rng-pci,disable-modern=on', '-qmp', 'unix:'+str(sock)+',server=on,wait=off']
+                    start = time.monotonic(); failure = None; qmp = None
+                    def raw(): return serial.read_text(errors='replace')
+                    def await_marker(marker):
+                        while time.monotonic()-start < args.timeout and proc.poll() is None:
+                            data = raw()
+                            if marker in data: return
+                            if any(m in data for m in ('PANIC', 'panicked at', 'checkpoint=FAIL')): raise RuntimeError('guest failure')
+                            time.sleep(.1)
+                        if proc.poll() is not None:
+                            raise RuntimeError('QEMU exited before checkpoint: ' + marker)
+                        raise TimeoutError('missing checkpoint: ' + marker)
+                    def key(*codes):
+                        for down, ordered in ((True, codes), (False, tuple(reversed(codes)))):
+                            for code in ordered:
+                                qmp.call('input-send-event', {'events': [{'type':'key', 'data': {'down':down, 'key': {'type':'qcode', 'data':code}}}]})
+                            time.sleep(.08)
+                    with (out / (name+'.qemu.log')).open('w') as log:
+                        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
+                        try:
+                            await_marker('[SESSION] switched to F2 GraphicalDesktop')
+                            qmp = Qmp(str(sock)); key('ctrl', 'f1')
+                            await_marker('[SESSION] switched to F1 TTY/Login')
+                            # The existing login keeps the dropdown focused and
+                            # retains its password field. Reverify via TTY mode.
+                            key('spc'); key('ret')
+                            await_marker('[TTY]  Built-in shell ready')
+                            await_marker("sunshell registered as 'sshl'")
+                            for text in ('touch /tmp/session-race-probe\n', '/tmp/session-race-probe '+case+'\n'):
+                                for char in text:
+                                    if char.isupper(): key('shift', char.lower())
+                                    else: key({' ':'spc', '/':'slash', '-':'minus', '\n':'ret'}.get(char, char))
+                                time.sleep(.5)
+                            await_marker('case='+case+' checkpoint=fixture-complete')
+                            await_marker('exit: /tmp/session-race-probe '+case+' -> 0')
+                            markers = [dict(re.findall(r'(\w+)=(\S+)', line)) for line in raw().splitlines() if line.startswith('[SESSION-E3-CLIENT] ') and 'case='+case+' ' in line]
+                            for marker in markers:
+                                if marker.get('checkpoint') in ('fixture-complete','controller-ready'):
+                                    await_marker("[SCHED] process_reaped pid="+marker['pid']+" name='")
+                        except Exception as error:
+                            failure = {'type': type(error).__name__, 'message': str(error)}
+                        finally:
+                            if proc.poll() is None:
+                                proc.terminate()
+                                try: proc.wait(timeout=5)
+                                except subprocess.TimeoutExpired: proc.kill(); proc.wait()
+                            if qmp is not None: qmp.stream.close(); qmp.socket.close()
+                    identity = {'iso_matches': digest(iso) == image['iso_sha256'],
+                                'elf_matches': digest(elf) == image['elf_sha256'],
+                                'services_match': services_match(),
+                                'source_matches': sources() == image['source_sha256'],
+                                'iso_sha256': image['iso_sha256'], 'elf_sha256': image['elf_sha256']}
+                    detail = assess_native(raw(), case, cpu, identity=identity, failure=failure)
+                    summary['native'].append({'name':name, 'case':case, 'cpus':cpu, 'command':cmd,
+                        'exit_code':proc.returncode, 'seconds':time.monotonic()-start, 'failure':failure,
+                        'timeout_classification':'MISSING_CHECKPOINT' if failure and failure['type']=='TimeoutError' else None,
+                        'serial':str(serial.relative_to(ROOT)), 'serial_sha256':digest(serial),
+                        'iso_sha256':digest(iso), 'validator':detail})
+                    print(name, detail['classification'], failure or '', flush=True); save()
+                    if detail['classification'] != 'FORCED_AND_PASSED':
+                        raise RuntimeError('native case failed; stop matrix expansion and inspect preserved attempt')
+    finally:
+        summary['source_sha256_after'] = sources()
+        summary['source_hashes_unchanged'] = summary['source_sha256'] == summary['source_sha256_after']
+        save(); print('Evidence:', out.relative_to(ROOT), flush=True)
+    if not summary['source_hashes_unchanged'] or any(c['exit_code'] for c in summary['checks']) or any(r.get('validator',{}).get('classification') not in (None, 'FORCED_AND_PASSED') for r in summary['native']):
+        raise SystemExit(1)
+
+
+if __name__ == '__main__': main()

@@ -412,6 +412,8 @@ fn send_signal_generation(
     // Forced kill: mark Finished even if the task is live on another core.
     // terminate_process_by_pid is idempotent and IPIs the owner core when needed.
     if matches!(signal, Signal::SIGKILL) {
+        #[cfg(feature = "production_grant_test")]
+        crate::capability::production_gate::before_race_exit(&sched, idx);
         if !sched.terminate_process_by_pid(pid, signal.default_exit_code(), "signal(SIGKILL)") {
             return Err(());
         }
@@ -949,6 +951,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         162 => sys_io_port_read(frame),
         163 => sys_io_port_write(frame),
         164 => sys_vfs_grant(frame),
+        165 => sys_account_session(frame),
         // Hardware identity + thermal sensors (read-only; gated by process name).
         133 => sys_system_identity(frame),
         134 => sys_thermal_sensors(frame),
@@ -1271,6 +1274,8 @@ pub fn validate_ipc_msg(msg: &IpcMsg) -> Result<(), IpcError> {
 fn ipc_call(frame: &mut SyscallFrame) -> u64 {
     let token = CapabilityToken(frame.rsi);
     let msg = IpcMsg::from_registers(frame);
+    #[cfg(feature = "native_session_race_test")]
+    crate::capability::session_race::arm(&msg);
 
     if let Err(e) = validate_ipc_msg(&msg) {
         let mut sched = crate::sched::SCHEDULER.lock();
@@ -1470,6 +1475,17 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
                 }
                 if caller_is_trusted_manager && path == "/sbin/uac_service" {
                     child.trusted_auth_broker = true;
+                    #[cfg(feature = "native_session_race_test")]
+                    {
+                        child.cpu_mask = 1;
+                        crate::capability::session_race::locked_event(
+                            "account-activated",
+                            child,
+                            0,
+                            0,
+                            0,
+                        );
+                    }
                 }
             }
             let child_identity = crate::sched::Scheduler::supervision_identity(
@@ -1650,6 +1666,19 @@ fn sys_validate_session_caller(frame: &mut SyscallFrame) -> u64 {
 /// for the live generation-tagged IPC caller. They are never spawn grants.
 fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
     use ::sunlight_ipc::accounts::{GrantScope, Operation};
+    #[cfg(feature = "native_session_race_test")]
+    crate::capability::session_race::event(
+        if consume {
+            "consume-entry"
+        } else {
+            "mint-entry"
+        },
+        frame.r8,
+        frame.r9,
+        0,
+    );
+    #[cfg(feature = "native_session_race_test")]
+    crate::capability::session_race::boundary(frame.r8, frame.r9, if consume { 4 } else { 1 });
     let Some(operation) = Operation::from_raw(frame.rsi) else {
         return u64::MAX;
     };
@@ -1662,9 +1691,81 @@ fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
         session_generation: frame.r9,
     };
     let sched = crate::sched::SCHEDULER.lock();
-    sched.account_grant(frame.rdi as usize, scope,
-        consume.then_some(CapabilityToken(frame.r10)))
-        .map_or(u64::MAX, |token| if consume { 0 } else { token.0 })
+    match sched.account_grant(
+        frame.rdi as usize,
+        scope,
+        consume.then_some(CapabilityToken(frame.r10)),
+    ) {
+        Ok(token) => {
+            if consume {
+                0
+            } else {
+                token.0
+            }
+        }
+        Err(error) => {
+            #[cfg(feature = "cap_issuance_test")]
+            crate::capability::gate::account_denied(&sched, error);
+            #[cfg(feature = "native_session_race_test")]
+            crate::capability::session_race::locked_event(
+                if consume {
+                    "consume-syscall-rejected"
+                } else {
+                    "mint-syscall-rejected"
+                },
+                sched.current_process(),
+                scope.session,
+                scope.session_generation,
+                error as u64,
+            );
+            IpcMsg::with_label(::sunlight_ipc::accounts::ERROR)
+                .word(0, error as u64)
+                .to_registers(frame);
+            u64::MAX
+        }
+    }
+}
+
+fn sys_account_session(frame: &mut SyscallFrame) -> u64 {
+    use ::sunlight_ipc::account_session::{SessionRef, REGISTER};
+    #[cfg(feature = "native_session_race_test")]
+    crate::capability::session_race::event(
+        "session-entry",
+        if frame.rdi == REGISTER { 0 } else { frame.rsi },
+        if frame.rdi == REGISTER { 0 } else { frame.rdx },
+        frame.rdi,
+    );
+    #[cfg(feature = "native_session_race_test")]
+    if frame.rdi == ::sunlight_ipc::account_session::REVOKE {
+        crate::capability::session_race::boundary(frame.rsi, frame.rdx, 2);
+    }
+    let sched = crate::sched::SCHEDULER.lock();
+    if frame.rdi == REGISTER {
+        match sched.register_account_session(
+            CapabilityToken(frame.rsi),
+            frame.rdx as usize,
+            frame.r8,
+        ) {
+            Ok((reference, uid, gid)) => {
+                frame.r8 = reference.id;
+                frame.r9 = reference.epoch;
+                frame.r10 = gid as u64;
+                uid as u64
+            }
+            Err(_) => u64::MAX,
+        }
+    } else {
+        match sched.transition_account_session(
+            SessionRef {
+                id: frame.rsi,
+                epoch: frame.rdx,
+            },
+            frame.rdi,
+        ) {
+            Ok(()) => 0,
+            Err(_) => u64::MAX,
+        }
+    }
 }
 
 fn sys_session_get_credentials(frame: &mut SyscallFrame) -> u64 {
@@ -2362,7 +2463,9 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
         sched.current_shared_process().fd_table.clone_boxed()
     };
 
-    let new_tid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
+    let Some(new_tid) = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)) else {
+        return u64::MAX;
+    };
 
     let name_len = parent_name.iter().position(|&b| b == 0).unwrap_or(32);
     let name_str = core::str::from_utf8(&parent_name[..name_len]).unwrap_or("thread");
@@ -2568,13 +2671,9 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     // The scheduler lock serializes clone against mmap/munmap and FD mutation.
     // Only the group leader owns the VM and shared resources; it remains live
     // until every borrower is reaped, even if the leader exits first.
-    let tid = sched
-        .processes
-        .iter()
-        .map(|p| p.pid)
-        .max()
-        .unwrap_or(0)
-        .saturating_add(1);
+    let Some(tid) = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)) else {
+        return linux_errno(11);
+    };
     let parent = sched.current_process();
     let mut child = crate::process::Process::new_thread(
         tid,
@@ -3103,7 +3202,9 @@ fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
 /// rdx = stdout fd, r10 = stdin fd, r8 = stderr fd (u64::MAX keeps TTY default)
 /// Returns the child pid, or -1 on error.
 fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
-    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) { return u64::MAX; }
+    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) {
+        return u64::MAX;
+    }
 
     // [LAUNCH-TRACE] Point 1: request received
     let current_cpu = crate::sched::current_cpu_id();
@@ -3277,7 +3378,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     }
 
-    let pid = sched.processes.iter().map(|p| p.pid).max().unwrap_or(0) + 1;
+    let Some(pid) = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)) else {
+        return u64::MAX;
+    };
     let proc_name = crate::process::spawn::name_from_path(path_str);
     let mut child =
         match unsafe { crate::process::Process::try_new(pid, ppid, proc_name, &mut pmm, hhdm) } {
@@ -3290,6 +3393,10 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.cwd = parent_cwd;
     child.capabilities = capabilities;
     child.service_lookup_restrictions = service_lookup_restrictions;
+    #[cfg(feature = "native_session_race_test")]
+    if path_str == "/bin/session-racer" && sched.online_cores > 1 {
+        child.cpu_mask = 2;
+    }
     // Inherit the TTY tab so a shell-spawned app's stdio routes to that tab's
     // kernel rings (foreground input routing).
     // An explicitly numbered shell path creates a sibling TTY tab. Prefer it
@@ -4788,8 +4895,24 @@ fn sys_vfs_grant(frame: &mut SyscallFrame) -> u64 {
     let sched = crate::sched::SCHEDULER.lock();
     match operation {
         api::MINT_EXACT | api::MINT_BASE => {
-            let Some(tokens) = sched.delegate_vfs_grants(token, path) else {
-                return u64::MAX;
+            let tokens = match sched.try_delegate_vfs_grants(token, path) {
+                Ok(tokens) => tokens,
+                Err(error) => {
+                    return match error {
+                        crate::capability::CapError::TokenHistoryFull => {
+                            api::IssuanceError::TokenHistoryFull as u64
+                        }
+                        crate::capability::CapError::CapabilityStoreFull => {
+                            api::IssuanceError::Capacity as u64
+                        }
+                        crate::capability::CapError::InvalidToken
+                        | crate::capability::CapError::InvalidCaller
+                        | crate::capability::CapError::InsufficientRights => {
+                            api::IssuanceError::Denied as u64
+                        }
+                        _ => api::IssuanceError::Unavailable as u64,
+                    }
+                }
             };
             let mut reply = IpcMsg::with_label(api::REPLY_OK);
             for (index, token) in tokens.iter().enumerate() {

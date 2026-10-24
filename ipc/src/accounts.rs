@@ -31,6 +31,8 @@ pub enum Error {
     CapabilityRejected = 8,
     ConcurrentChange = 9,
     BrokerUnavailable = 10,
+    /// The requested broker session or operation authority is unavailable.
+    SessionAuthorityUnavailable = 11,
 }
 impl Error {
     pub fn from_raw(raw: u64) -> Self {
@@ -44,6 +46,7 @@ impl Error {
             8 => Self::CapabilityRejected,
             9 => Self::ConcurrentChange,
             10 => Self::BrokerUnavailable,
+            11 => Self::SessionAuthorityUnavailable,
             _ => Self::Unavailable,
         }
     }
@@ -59,6 +62,9 @@ impl Error {
             Self::CapabilityRejected => "Authorization expired or is no longer valid",
             Self::ConcurrentChange => "Account changed concurrently. Refresh and try again.",
             Self::BrokerUnavailable => "Capability Broker unavailable. No changes were made.",
+            Self::SessionAuthorityUnavailable => {
+                "Account changes are unavailable: session authority is not established."
+            }
         }
     }
 }
@@ -409,12 +415,22 @@ pub fn broker_grant(
     scope: GrantScope,
     consume: Option<CapabilityToken>,
 ) -> Option<CapabilityToken> {
+    try_broker_grant(pid, scope, consume).ok()
+}
+
+/// Preserve the explicit broker failure. Callers must not retry an unavailable
+/// authority or exhausted boot budget in a loop, or fall back to legacy minting.
+pub fn try_broker_grant(
+    pid: u64,
+    scope: GrantScope,
+    consume: Option<CapabilityToken>,
+) -> Result<CapabilityToken, Error> {
     let call = if consume.is_some() {
         crate::SunlightSyscall::ConsumeAccountGrant
     } else {
         crate::SunlightSyscall::MintAccountGrant
     };
-    let (ret, _) = unsafe {
+    let (ret, reply) = unsafe {
         crate::raw_syscall(
             call,
             pid,
@@ -427,9 +443,13 @@ pub fn broker_grant(
         )
     };
     if ret == u64::MAX {
-        None
+        Err(if reply.label == ERROR {
+            Error::from_raw(reply.words[0])
+        } else {
+            Error::BrokerUnavailable
+        })
     } else {
-        Some(CapabilityToken(ret))
+        Ok(CapabilityToken(ret))
     }
 }
 #[cfg(test)]

@@ -39,6 +39,8 @@ pub fn reply(pid: usize, generation: u64, incarnation: u64) -> HostReply {
 }
 pub struct Process {
     pub pid: usize,
+    pub uid: u32,
+    pub trusted_session_service: bool,
     pub trusted_auth_broker: bool,
     pub trusted_vfs_service: bool,
     pub trusted_service_manager: bool,

@@ -18,6 +18,8 @@ pub(super) fn before_commit() {
 fn process(pid: usize) -> Process {
     Process {
         pid,
+        uid: 0,
+        trusted_session_service: false,
         trusted_auth_broker: pid == 6,
         trusted_vfs_service: false,
         trusted_service_manager: false,
@@ -53,7 +55,7 @@ fn scope() -> GrantScope {
 }
 fn issue(s: &Scheduler, account: bool) -> Option<CapabilityToken> {
     if account {
-        s.account_grant(7, scope(), None)
+        s.unchecked_account_grant_for_delivery_test(7, scope(), None)
     } else {
         s.issue_auth_session_grant(7, 0, 0)
     }
@@ -174,7 +176,7 @@ fn faults_exhaustion_and_multiple_recipients() {
                 .incarnation,
         ));
         let other = if account {
-            s.account_grant(8, scope(), None)
+            s.unchecked_account_grant_for_delivery_test(8, scope(), None)
         } else {
             s.issue_auth_session_grant(8, 0, 0)
         }
@@ -296,7 +298,7 @@ fn cleanup_during_synthetic_preparation_rejects_both_grant_types() {
                 resume.wait();
                 let s = s.lock().unwrap();
                 if account {
-                    s.account_grant(7, request_scope, None)
+                    s.unchecked_account_grant_for_delivery_test(7, request_scope, None)
                 } else {
                     s.issue_auth_session_grant(7, 0, 0)
                 }
@@ -522,7 +524,7 @@ fn exec_during_external_preparation_cancels_stale_publication() {
                 resume.wait();
                 let s = s.lock().unwrap();
                 if account {
-                    s.account_grant(7, request_scope, None)
+                    s.unchecked_account_grant_for_delivery_test(7, request_scope, None)
                 } else {
                     s.issue_auth_session_grant(7, 0, 0)
                 }
@@ -693,7 +695,9 @@ fn delivery_pending_is_not_usage_eligibility() {
             .consume_live_auth_grant(auth, delivered_identity(&s), 1),
         Some((0, 0))
     );
-    assert!(s.account_grant(7, scope(), Some(account)).is_some());
+    assert!(s
+        .unchecked_account_grant_for_delivery_test(7, scope(), Some(account))
+        .is_some());
     assert_eq!(inventory(), 0);
 }
 #[test]
@@ -835,12 +839,17 @@ fn uac_may_consume_its_own_pending_account_grant_on_the_same_request() {
             .unwrap()
             .delivered
     );
-    assert_eq!(s.account_grant(7, scope(), Some(t)), Some(t));
+    assert_eq!(
+        s.unchecked_account_grant_for_delivery_test(7, scope(), Some(t)),
+        Some(t)
+    );
     assert_eq!(inventory(), 0);
     let stale = issue(&s, true).unwrap();
     s.processes[1].pending_call = Some((7, 2));
     s.processes[0].ipc_reply_target = Some(reply(7, 2, 7));
-    assert!(s.account_grant(7, scope(), Some(stale)).is_none());
+    assert!(s
+        .unchecked_account_grant_for_delivery_test(7, scope(), Some(stale))
+        .is_none());
     assert_eq!(inventory(), 0);
 }
 

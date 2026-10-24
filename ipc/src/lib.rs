@@ -184,6 +184,8 @@ pub enum SunlightSyscall {
     IoPortWrite = 163,
     /// Request-bound UAC/VFS grant exchange, consumption and owner cancellation.
     VfsGrant = 164,
+    /// Broker-owned Account session registration and lifecycle.
+    AccountSession = 165,
     /// Paged ReadDir: r10 is the entry offset.
     ReadDirFrom = 148,
     /// Atomic rename that fails if the destination already exists.
@@ -6498,6 +6500,7 @@ mod audio_protocol_tests {
 }
 
 pub mod accounts;
+pub mod account_session;
 pub mod demand;
 
 /// Native caller-owned execution lifecycle. IDs are never reused.

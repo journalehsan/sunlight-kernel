@@ -11,6 +11,26 @@ pub const MINT_BASE: u64 = 1;
 pub const CONSUME: u64 = 2;
 pub const CANCEL: u64 = 3;
 
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IssuanceError {
+    Denied = 1,
+    TokenHistoryFull = 2,
+    Capacity = 3,
+    Unavailable = 4,
+}
+
+impl IssuanceError {
+    pub fn from_raw(raw: u64) -> Self {
+        match raw {
+            1 => Self::Denied,
+            2 => Self::TokenHistoryFull,
+            3 => Self::Capacity,
+            _ => Self::Unavailable,
+        }
+    }
+}
+
 /// Reject aliases before applying the directory policy. This protocol accepts
 /// canonical absolute ASCII paths only; it does not perform path resolution.
 pub fn executable_path(path: &str) -> bool {
@@ -28,11 +48,17 @@ pub fn executable_path(path: &str) -> bool {
 /// for one exact-path grant or the two base directory grants. The kernel
 /// resolves the caller from its reply target; no target PID is supplied here.
 pub fn mint(proof: CapabilityToken, path: Option<&str>) -> Option<IpcMsg> {
+    try_mint(proof, path).ok()
+}
+
+/// Capacity exhaustion is distinct from denial. A full boot history requires
+/// lifecycle recovery, not a retry loop; existing grants remain consumable.
+pub fn try_mint(proof: CapabilityToken, path: Option<&str>) -> Result<IpcMsg, IssuanceError> {
     let (operation, pointer, length) = match path {
         Some(path) if executable_path(path) => {
             (MINT_EXACT, path.as_ptr() as u64, path.len() as u64)
         }
-        Some(_) => return None,
+        Some(_) => return Err(IssuanceError::Denied),
         None => (MINT_BASE, 0, 0),
     };
     let (result, reply) = unsafe {
@@ -47,7 +73,11 @@ pub fn mint(proof: CapabilityToken, path: Option<&str>) -> Option<IpcMsg> {
             0,
         )
     };
-    (result == 0).then_some(reply)
+    if result == 0 {
+        Ok(reply)
+    } else {
+        Err(IssuanceError::from_raw(result))
+    }
 }
 
 /// VFS only: consume authority for its current kernel-authenticated caller.

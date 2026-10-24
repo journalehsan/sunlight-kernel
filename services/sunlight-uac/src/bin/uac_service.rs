@@ -213,6 +213,10 @@ fn handle_auth_password(msg: &IpcMsg, issue_session_grant: bool) -> IpcMsg {
 }
 
 fn handle(msg: &IpcMsg, store: &mut Sessions, rules: &Rules) -> IpcMsg {
+    #[cfg(feature = "session-race-test")]
+    if msg.label == 0xE300 {
+        return account_service::consume_probe(msg);
+    }
     let mut reply = IpcMsg::empty();
 
     match msg.label {

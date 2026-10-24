@@ -188,8 +188,8 @@ reader_keep_auth:
     jnz reader_call
     cmpq $0, reader_exec(%rip)
     jz success
-    /* Exec must withdraw the old image's delivered auth and account grants before the
-     * replacement exits. The opt-in kernel gate checks that exact boundary. */
+    /* Exec must withdraw the old image's final delivered auth grant before the
+     * replacement exits. Account grants remain unavailable. */
     lea exec_path(%rip), %rdi
     lea exec_argv(%rip), %rsi
     lea exec_envp(%rip), %rdx
@@ -225,8 +225,8 @@ owner_recv:
     jne failed
     cmp $0x123, %rdi
     jne failed
-    /* Mint actual recipient-bound grants while handling the exact pending
-     * request. Deliver both: the reader consumes auth; exec retires the account grant. */
+    /* Mint an auth proof for this pending caller. Account session authority is
+     * unavailable: its real syscall must explicitly deny even this trusted role. */
     mov %r15, %rdi
     xor %esi, %esi
     xor %edx, %edx
@@ -244,8 +244,23 @@ owner_recv:
     mov $151, %eax
     syscall
     cmp $-1, %rax
-    je failed
-    mov %rax, %r14
+    jne failed
+    cmp $11, %r8 /* SessionAuthorityUnavailable in ERROR.words[0] */
+    jne failed
+    mov %r15, %rdi
+    mov $2, %esi
+    xor %edx, %edx
+    mov $1, %r12d
+    xor %r8d, %r8d
+    xor %r9d, %r9d
+    mov $123, %r10d /* stale/untrusted bearer must not enable consumption */
+    mov $152, %eax
+    syscall
+    cmp $-1, %rax
+    jne failed
+    cmp $11, %r8
+    jne failed
+    xor %r14d, %r14d
     mov owner_auth(%rip), %r13
     mov $0x456, %edi
     movabs $0x200000000, %rdx

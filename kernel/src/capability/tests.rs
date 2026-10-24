@@ -273,3 +273,73 @@ fn account_and_auth_grants_share_collision_domain_and_remain_single_use() {
     assert_eq!(b.consume_auth_session_grant(auth, 8, 2), None);
     assert_eq!(b.consume_auth_session_grant(auth, 7, 2), None);
 }
+
+#[test]
+fn retired_endpoint_token_is_not_reassigned_after_storage_reuse() {
+    let mut b = CapabilityBroker::new();
+    b.test_entropy(&[Some(41)]);
+    let (_, old) = b.create_endpoint(7).unwrap();
+    let capacity = b.capabilities.capacity();
+    b.destroy_endpoint(7, old).unwrap();
+    b.test_entropy(&[Some(41), Some(43)]);
+    let (endpoint, replacement) = b.create_endpoint(8).unwrap();
+    assert_eq!(b.capabilities.capacity(), capacity);
+    assert!(
+        old != replacement,
+        "retired bearer reassigned to unrelated authority"
+    );
+    assert_eq!(
+        b.check(old, CapabilityRights::SEND),
+        Err(CapError::InvalidToken)
+    );
+    assert_eq!(b.check(replacement, CapabilityRights::SEND), Ok(endpoint));
+}
+
+#[test]
+fn retired_candidate_stuck_source_cannot_revive_authority() {
+    let mut b = CapabilityBroker::new();
+    b.test_entropy(&[Some(41)]);
+    let (_, old) = b.create_endpoint(7).unwrap();
+    b.destroy_endpoint(7, old).unwrap();
+    b.test_entropy(&[Some(41); TOKEN_ATTEMPTS]);
+    assert_eq!(b.create_endpoint(8), Err(CapError::TokenCollisionLimit));
+    assert_eq!(b.active_tokens(), 0);
+    assert_eq!(b.token_history.usage().0, 1);
+    assert!(b.check(old, CapabilityRights::SEND).is_err());
+}
+
+#[test]
+fn failed_batch_and_dropped_preparation_burn_token_identity() {
+    let mut b = CapabilityBroker::new();
+    b.test_entropy(&[Some(41), None]);
+    assert_eq!(b.grant_elevated_vfs(7), Err(CapError::EntropyUnavailable));
+    assert_eq!(b.active_tokens(), 0);
+    let burned = CapabilityToken::tagged(41, CapabilityToken::TAG_VFS);
+    b.test_entropy(&[Some(41), Some(43)]);
+    let replacement = b.grant_vfs_capability(8, vfs()).unwrap();
+    assert!(burned != replacement);
+    assert!(b.resolve_vfs_capability(burned).is_none());
+    b.test_entropy(&[Some(45)]);
+    drop(b.prepare_shared_region().unwrap());
+    b.test_entropy(&[Some(45), Some(47)]);
+    let replacement = b.mint_shared_page(PhysAddr::new(0x1000), 8).unwrap();
+    assert!(replacement != CapabilityToken::tagged(45, CapabilityToken::TAG_VFS));
+    assert_eq!(b.token_history.usage().0, 4);
+}
+
+#[test]
+fn history_exhaustion_is_permanent_even_after_all_authority_retires() {
+    let mut b = CapabilityBroker::new();
+    // Fill the actual ledger, not a reduced test-only identifier space.
+    for word in 1..=token_history::MAX_PREPARED_TOKENS as u64 {
+        b.token_history.reserve().unwrap();
+        b.token_history.record(word);
+    }
+    b.test_entropy(&[Some(51)]);
+    assert_eq!(b.create_endpoint(7), Err(CapError::TokenHistoryFull));
+    b.revoke_endpoints_owned_by(7);
+    assert_eq!(b.create_endpoint(7), Err(CapError::TokenHistoryFull));
+    assert_eq!(b.test_words.as_ref().unwrap().len(), 1);
+    assert_eq!(b.next_endpoint_id, 0);
+    assert_eq!(b.active_tokens(), 0);
+}

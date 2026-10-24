@@ -10,6 +10,7 @@ pub(crate) struct GrantDelivery {
     pub recipient: RecipientIdentity,
     pub issuer_pid: usize,
     pub issuer_incarnation: u64,
+    pub issuer_vm_generation: u64,
     pub request: u64,
     pub delivered: bool,
 }

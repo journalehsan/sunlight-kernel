@@ -12,5 +12,6 @@ impl Process {
         self.trusted_service_manager = false;
         self.trusted_tty_session_service = false;
         self.trusted_lock_service = false;
+        self.trusted_session_service = false;
     }
 }

@@ -16,7 +16,8 @@ impl RecipientIdentity {
 }
 use crate::process::Process;
 use crate::sched::Scheduler;
-use sunlight_ipc::accounts::{GrantBinding, GrantScope};
+use sunlight_ipc::accounts::GrantBinding;
+use sunlight_ipc::accounts::GrantScope;
 
 impl Scheduler {
     /// Legacy VFS minting is a bearer issuance to the current caller, not a
@@ -77,20 +78,39 @@ impl Scheduler {
             recipient: RecipientIdentity::of(recipient),
             issuer_pid: issuer.pid,
             issuer_incarnation: issuer.foreground.incarnation,
+            issuer_vm_generation: issuer.address_space.identity().generation,
             request: issuer.ipc_reply_target?.call.generation,
             delivered: false,
         })
     }
 
     /// No payload recipient: only this service's actual synchronous IPC caller.
+    #[cfg(test)]
     pub(crate) fn delegate_vfs_grants(
         &self,
         proof: CapabilityToken,
         path: Option<&str>,
     ) -> Option<heapless::Vec<CapabilityToken, 2>> {
-        let pid = self.current_process().ipc_reply_target?.call.pid;
-        let recipient = self.grant_requester(pid)?;
-        let delivery = self.grant_delivery(recipient)?;
+        self.try_delegate_vfs_grants(proof, path).ok()
+    }
+
+    pub(crate) fn try_delegate_vfs_grants(
+        &self,
+        proof: CapabilityToken,
+        path: Option<&str>,
+    ) -> Result<heapless::Vec<CapabilityToken, 2>, super::CapError> {
+        let pid = self
+            .current_process()
+            .ipc_reply_target
+            .ok_or(super::CapError::InvalidCaller)?
+            .call
+            .pid;
+        let recipient = self
+            .grant_requester(pid)
+            .ok_or(super::CapError::InvalidCaller)?;
+        let delivery = self
+            .grant_delivery(recipient)
+            .ok_or(super::CapError::InvalidCaller)?;
         #[cfg(test)]
         super::lifecycle_tests::before_commit();
         let tokens =
@@ -99,7 +119,7 @@ impl Scheduler {
                 .delegate_vfs_grants(proof, delivery, path, self.global_tick)?;
         #[cfg(feature = "production_grant_test")]
         super::production_gate::committed(self.current_process(), delivery, &tokens);
-        Some(tokens)
+        Ok(tokens)
     }
 
     pub(crate) fn consume_vfs_grant(&self, token: CapabilityToken, path: &str) -> bool {
@@ -153,6 +173,18 @@ impl Scheduler {
         if token.is_some() {
             broker.auth_session_grants.last_mut()?.delivery = Some(delivery);
         }
+        #[cfg(feature = "native_session_race_test")]
+        super::session_race::locked_event(
+            if token.is_some() {
+                "login-proof-committed"
+            } else {
+                "login-proof-rejected"
+            },
+            self.current_process(),
+            0,
+            0,
+            0,
+        );
         #[cfg(feature = "cap_issuance_test")]
         if token.is_some() {
             super::gate::AUTH_COMMITS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
@@ -160,7 +192,222 @@ impl Scheduler {
         token
     }
 
+    /// Authenticate all participants while lifecycle serialization remains held.
+    fn session_participant_live(&self, identity: RecipientIdentity, account: bool) -> bool {
+        self.processes.iter().any(|p| {
+            RecipientIdentity::of(p) == identity
+                && !p.is_exiting()
+                && if account {
+                    p.trusted_auth_broker
+                } else {
+                    p.trusted_session_service
+                }
+        })
+    }
+
+    pub(crate) fn register_account_session(
+        &self,
+        proof: CapabilityToken,
+        pid: usize,
+        deadline: u64,
+    ) -> Result<(sunlight_ipc::account_session::SessionRef, u32, u32), sunlight_ipc::accounts::Error> {
+        use sunlight_ipc::accounts::Error;
+        let owner = self.current_process();
+        let recipient = self
+            .grant_requester_for_role(pid, owner.trusted_session_service)
+            .ok_or(Error::Denied)?;
+        if !recipient.trusted_tty_session_service {
+            return Err(Error::Denied);
+        }
+        let request = self.grant_delivery(recipient).ok_or(Error::Denied)?;
+        let mut broker = CAP_BROKER.lock();
+        #[cfg(feature = "native_session_race_test")]
+        super::session_race::inventory(&broker);
+        // Retry after a successful register is reconciled by the saved call,
+        // even though the proof was consumed. No payload selects an issuer.
+        let issuer = broker
+            .registration_issuer(RecipientIdentity::of(owner), request)
+            .or_else(|| {
+                broker
+                    .auth_session_grants
+                    .iter()
+                    .find(|g| g.token == proof)
+                    .and_then(|g| g.delivery)
+                    .and_then(|d| {
+                        self.processes.iter().find(|p| {
+                            p.pid == d.issuer_pid
+                                && p.foreground.incarnation == d.issuer_incarnation
+                                && p.address_space.identity().generation == d.issuer_vm_generation
+                        })
+                    })
+                    .map(RecipientIdentity::of)
+            })
+            .filter(|i| self.session_participant_live(*i, true))
+            .ok_or(Error::Denied)?;
+        let result = broker.register_account_session(
+            RecipientIdentity::of(owner),
+            issuer,
+            request,
+            proof,
+            self.global_tick,
+            deadline,
+        );
+        #[cfg(feature = "native_session_race_test")]
+        match result {
+            Ok((reference, _, _)) => {
+                super::session_race::locked_event("registered", owner, reference.id, reference.epoch, 0)
+            }
+            Err(error) => {
+                super::session_race::locked_event("registration-rejected", owner, 0, 0, error as u64)
+            }
+        }
+        result
+    }
+
+    pub(crate) fn transition_account_session(
+        &self,
+        reference: sunlight_ipc::account_session::SessionRef,
+        operation: u64,
+    ) -> Result<(), sunlight_ipc::accounts::Error> {
+        use sunlight_ipc::accounts::Error;
+        let owner = self.current_process();
+        if !owner.trusted_session_service
+            || owner.is_exiting()
+            || owner.foreground.incarnation == 0
+            || owner.address_space.identity().generation == 0
+        {
+            return Err(Error::Denied);
+        }
+        let mut broker = CAP_BROKER.lock();
+        if operation == sunlight_ipc::account_session::ACTIVATE {
+            let (_, issuer) = broker
+                .account_session_participants(reference)
+                .ok_or(Error::SessionChanged)?;
+            if !self.session_participant_live(issuer, true) {
+                return Err(Error::SessionChanged);
+            }
+        }
+        #[cfg(feature = "native_session_race_test")]
+        let existed = broker.account_session_participants(reference).is_some();
+        let result = broker.transition_account_session(
+            RecipientIdentity::of(owner),
+            reference,
+            operation,
+            self.global_tick,
+        );
+        #[cfg(feature = "native_session_race_test")]
+        super::session_race::locked_event(
+            if result.is_ok() && existed {
+                "transition-committed"
+            } else if result.is_ok() {
+                "transition-idempotent"
+            } else {
+                "transition-rejected"
+            },
+            owner,
+            reference.id,
+            reference.epoch,
+            operation,
+        );
+        #[cfg(feature = "native_session_race_test")]
+        if result.is_ok() && existed && operation == sunlight_ipc::account_session::REVOKE {
+            super::session_race::committed(reference.id, reference.epoch, 2);
+        }
+        #[cfg(feature = "native_session_race_test")]
+        if operation == sunlight_ipc::account_session::REVOKE {
+            super::session_race::inventory(&broker);
+        }
+        result
+    }
+
     pub(crate) fn account_grant(
+        &self,
+        pid: usize,
+        scope: GrantScope,
+        consume: Option<CapabilityToken>,
+    ) -> Result<CapabilityToken, sunlight_ipc::accounts::Error> {
+        use sunlight_ipc::accounts::Error;
+        let recipient = self.grant_requester(pid).ok_or(Error::Denied)?;
+        let delivery = self.grant_delivery(recipient).ok_or(Error::Denied)?;
+        #[cfg(feature = "native_session_race_test")]
+        super::session_race::locked_event(
+            "authenticated-requester",
+            recipient,
+            scope.session,
+            scope.session_generation,
+            u64::from(recipient.uid),
+        );
+        #[cfg(feature = "native_session_race_test")]
+        crate::serial_println!("[SESSION-E3] seq={} checkpoint=request-binding recipient={} recipient_inc={} recipient_vm={} binding_vm={} issuer={} issuer_inc={} issuer_vm={} request_generation={} session={} epoch={} cpu={}", super::session_race::sequence(), delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, recipient.address_space.identity().generation, delivery.issuer_pid, delivery.issuer_incarnation, delivery.issuer_vm_generation, delivery.request, scope.session, scope.session_generation, crate::sched::current_cpu_id());
+        let reference = sunlight_ipc::account_session::SessionRef {
+            id: scope.session,
+            epoch: scope.session_generation,
+        };
+        let mut broker = CAP_BROKER.lock();
+        #[cfg(feature = "native_session_race_test")]
+        super::session_race::inventory(&broker);
+        let (owner, issuer) = broker
+            .account_session_participants(reference)
+            .ok_or(Error::SessionAuthorityUnavailable)?;
+        if !self.session_participant_live(owner, false) || !self.session_participant_live(issuer, true)
+        {
+            broker.retire_sessions_for(if !self.session_participant_live(owner, false) {
+                owner.pid
+            } else {
+                issuer.pid
+            });
+            return Err(Error::SessionChanged);
+        }
+        let result = broker.commit_account_session_grant(
+            RecipientIdentity::of(self.current_process()),
+            delivery,
+            recipient.uid,
+            GrantBinding {
+                pid: recipient.pid as u64,
+                process_generation: recipient.address_space.identity().generation,
+                scope,
+            },
+            consume,
+            self.global_tick,
+        );
+        #[cfg(feature = "native_session_race_test")]
+        super::session_race::locked_event(
+            match (consume.is_some(), result.is_ok()) {
+                (true, true) => "consume-committed",
+                (true, false) => "consume-rejected",
+                (false, true) => "mint-committed",
+                (false, false) => "mint-rejected",
+            },
+            self.current_process(),
+            reference.id,
+            reference.epoch,
+            result.err().map_or(0, |e| e as u64),
+        );
+        #[cfg(feature = "native_session_race_test")]
+        if let Ok(token) = result {
+            super::session_race::grant(token, reference.id, reference.epoch, consume.is_some());
+        }
+        #[cfg(feature = "native_session_race_test")]
+        super::session_race::inventory(&broker);
+        #[cfg(feature = "native_session_race_test")]
+        super::session_race::committed(
+            reference.id,
+            reference.epoch,
+            if consume.is_some() { 4 } else { 1 },
+        );
+        result
+    }
+
+    #[cfg(test)]
+    pub(super) fn grant_delivery_for_test(&self) -> GrantDelivery {
+        self.grant_delivery(&self.processes[1]).unwrap()
+    }
+
+    /// Historical delivery/retirement mechanics only. This deliberately omits
+    /// session authorization and is absent from every native/production build.
+    /// Tests using it are not evidence of Account issuance authorization.
+    #[cfg(test)]
+    pub(super) fn unchecked_account_grant_for_delivery_test(
         &self,
         pid: usize,
         scope: GrantScope,
@@ -184,11 +431,6 @@ impl Scheduler {
                 let token = broker.mint_account_grant(binding, self.global_tick);
                 if token.is_some() {
                     broker.account_grants.last_mut()?.1.delivery = Some(delivery);
-                }
-                #[cfg(feature = "cap_issuance_test")]
-                if token.is_some() {
-                    super::gate::ACCOUNT_COMMITS
-                        .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
                 }
                 token
             }

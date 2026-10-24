@@ -1,5 +1,9 @@
 pub(crate) mod delivery;
+#[cfg(any(test, feature = "cap_issuance_test"))]
+mod history_boundary;
 mod lifecycle;
+pub(crate) mod sessions;
+mod token_history;
 mod vfs_grants;
 use delivery::{GrantDelivery, RecipientIdentity};
 #[cfg(test)]
@@ -13,6 +17,8 @@ use x86_64::PhysAddr;
 pub mod gate;
 #[cfg(feature = "production_grant_test")]
 pub mod production_gate;
+#[cfg(feature = "native_session_race_test")]
+pub(crate) mod session_race;
 
 /// The category a token belongs to, encoded in its high tag bits.
 ///
@@ -33,7 +39,7 @@ pub enum CapKind {
 /// A capability token: opaque to user-space, meaningful to the kernel.
 ///
 /// The low 62 bits are a fresh payload from the kernel's conditioned entropy
-/// stream, checked against every active broker token; the
+/// stream, checked against every previously prepared broker token this boot; the
 /// top two bits are a *type tag* (`TAG_IPC` / `TAG_VFS`). Type checks are then
 /// a single shift+compare instead of a table walk.
 #[repr(transparent)]
@@ -299,9 +305,11 @@ pub enum CapError {
     EntropyUnavailable,
     TokenCollisionLimit,
     EndpointIdExhausted,
+    /// The boot-lifetime non-reuse ledger is full. Retirement cannot reset it.
+    TokenHistoryFull,
 }
 
-/// Bounded active authority, including all token classes. No history registry.
+/// Bounded active authority, including all token classes.
 const MAX_ACTIVE_TOKENS: usize = 8192;
 const MAX_ENDPOINTS: usize = 4096;
 const TOKEN_ATTEMPTS: usize = 16;
@@ -382,6 +390,9 @@ struct VfsGrant {
 }
 
 pub struct CapabilityBroker {
+    // Not an authority store: never looked up to authorize a caller, never
+    // pruned on retirement. The global broker lives for the entire boot.
+    token_history: token_history::TokenHistory,
     next_endpoint_id: u32,
     endpoints: alloc::vec::Vec<Endpoint>,
     capabilities: alloc::vec::Vec<(CapabilityToken, u32, CapabilityRights)>,
@@ -389,6 +400,7 @@ pub struct CapabilityBroker {
     vfs_caps: alloc::vec::Vec<VfsGrant>,
     auth_session_grants: alloc::vec::Vec<AuthSessionGrant>,
     account_grants: alloc::vec::Vec<(CapabilityToken, AccountGrant)>,
+    sessions: sessions::SessionTable,
     issuance: IssuanceStats,
     // Instance-local injection exists only in host tests and the opt-in native
     // security gate. The global production broker never installs an override.
@@ -417,6 +429,7 @@ pub fn diagnostic_snapshot() -> CapabilityDiagnosticSnapshot {
 impl CapabilityBroker {
     pub const fn new() -> Self {
         Self {
+            token_history: token_history::TokenHistory::new(),
             next_endpoint_id: 0,
             endpoints: alloc::vec::Vec::new(),
             capabilities: alloc::vec::Vec::new(),
@@ -424,6 +437,7 @@ impl CapabilityBroker {
             vfs_caps: alloc::vec::Vec::new(),
             auth_session_grants: alloc::vec::Vec::new(),
             account_grants: alloc::vec::Vec::new(),
+            sessions: sessions::SessionTable::new(),
             issuance: IssuanceStats {
                 prepared: 0,
                 collisions: 0,
@@ -472,6 +486,9 @@ impl CapabilityBroker {
     }
 
     fn issue_token(&mut self, tag: u64) -> Result<CapabilityToken, CapError> {
+        // Reserve retirement metadata before drawing entropy or publishing a
+        // prepared token. Failed batch/SHM preparations burn their identity too.
+        self.token_history.reserve()?;
         for _ in 0..TOKEN_ATTEMPTS {
             #[cfg(any(test, feature = "cap_issuance_test"))]
             let word = match self.test_words.as_mut() {
@@ -488,11 +505,13 @@ impl CapabilityBroker {
             if word & CapabilityToken::PAYLOAD_MASK == 0
                 || word & CapabilityToken::PAYLOAD_MASK
                     == SPAWN_TOKEN.as_u64() & CapabilityToken::PAYLOAD_MASK
+                || self.token_history.contains(token.0)
                 || self.token_in_use(token)
             {
                 self.issuance.collisions = self.issuance.collisions.saturating_add(1);
                 continue;
             }
+            self.token_history.record(token.0);
             self.issuance.prepared = self.issuance.prepared.saturating_add(1);
             return Ok(token);
         }
@@ -1030,6 +1049,7 @@ impl CapabilityBroker {
     /// Called under lifecycle serialization on exit and successful VM replacement.
     /// Does not revoke transferable VFS/SHM or endpoint authority.
     pub(crate) fn retire_recipient_grants(&mut self, owner_pid: usize) {
+        self.retire_sessions_for(owner_pid);
         crate::delegated_caller::DELEGATED_CALLERS
             .lock()
             .retire_process(owner_pid);

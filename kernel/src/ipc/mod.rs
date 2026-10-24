@@ -1882,6 +1882,10 @@ pub fn finish_peer_closed_calls(
             IpcCallOutcome::PeerClosed(call.generation),
             &mut caps,
         );
+        #[cfg(feature = "native_session_race_test")]
+        if sched.processes[idx].name_str() == "session-race-probe" {
+            crate::serial_println!("[SESSION-E3] seq={} checkpoint=peer-closed endpoint={} recipient={} recipient_inc={} request_generation={} pending=0 cpu={}", crate::capability::session_race::sequence(), endpoint_id, call.pid, call.incarnation, call.generation, crate::sched::current_cpu_id());
+        }
         PEER_CLOSED_WAKE_COUNT.fetch_add(1, Ordering::Relaxed);
     }
 }

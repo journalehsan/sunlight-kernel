@@ -1,6 +1,13 @@
 //! Runs the actual production grant methods with synthetic host identities.
 //! Native service execution and remote lifecycle progress are separate gates.
+//! Account cases explicitly use the host-only unchecked delivery helper; they
+//! verify historical metadata mechanics, never current session authorization.
 use super::*;
+
+#[path = "session_authority_tests.rs"]
+mod session_authority_tests;
+#[path = "broker_session_tests.rs"]
+mod broker_session_tests;
 
 fn complete(s: &Scheduler, tokens: &[CapabilityToken], delivered: bool) {
     let target = s.current_process().ipc_reply_target.unwrap().call;
@@ -468,4 +475,194 @@ fn production_two_issuers_share_one_recipient_vm_without_adopting_ownership() {
     assert_eq!(count(), 0);
     cleanup(&mut s, 7);
     assert_eq!(inventory(), 0);
+}
+
+#[test]
+fn production_retired_bearer_replay_after_controlled_vfs_slot_reuse() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    // Exercise real production broker/lifecycle methods. Identity changes here
+    // are host-only; they are explicitly not native PID or service restart proof.
+    for transition in 0..10 {
+        let mut s = table();
+        let root = proof(&mut s, 0);
+        CAP_BROKER.lock().test_entropy(&[Some(41)]);
+        let old = s.delegate_vfs_grants(root, Some("/bin/true")).unwrap()[0];
+        let capacity = CAP_BROKER.lock().vfs_caps.capacity();
+        if transition != 5 {
+            complete(&s, &[old], true);
+        }
+        match transition {
+            0 => {
+                vfs(&mut s);
+                assert!(s.consume_vfs_grant(old, "/bin/true"));
+            }
+            1 => CAP_BROKER
+                .lock()
+                .cancel_vfs_grant(old, delivered_identity(&s)),
+            2 | 6 | 7 | 9 => CAP_BROKER.lock().retire_recipient_grants(7),
+            3 => cleanup(&mut s, 7),
+            4 => {
+                CAP_BROKER.lock().retire_recipient_grants(7);
+                s.processes[1].address_space.generation += 1;
+            }
+            5 => cleanup(&mut s, 6), // issuer-owned pending delivery
+            8 => {
+                s.global_tick = 502;
+                assert!(!CAP_BROKER.lock().consume_vfs_grant(
+                    old,
+                    delivered_identity(&s),
+                    "/bin/true",
+                    s.global_tick
+                ));
+                // Expiry is lazy; a following issuance prunes the expired row.
+            }
+            _ => unreachable!(),
+        }
+        if transition == 6 {
+            s.processes[1] = process(7);
+            s.processes[1].foreground.incarnation += 100;
+        }
+        if transition == 7 {
+            s.processes[1].address_space.generation += 100;
+        }
+        if transition == 9 {
+            // Trusted role is installed explicitly in this host shim; actual
+            // restart provenance must be tested under SunlightD separately.
+            s.processes[0] = process(6);
+            s.processes[0].foreground.incarnation += 100;
+        }
+        s.processes[0].exiting = false;
+        s.processes[1].exiting = false;
+        next_request(&mut s);
+        let recipient = s.processes[1].foreground.incarnation;
+        let request = s.processes[1].pending_call.unwrap().1;
+        s.processes[0].ipc_reply_target = Some(reply(7, request, recipient));
+        CAP_BROKER.lock().test_entropy(&[Some(101)]);
+        let root = proof(&mut s, 0);
+        // The old raw candidate must be rejected even for a different scope.
+        CAP_BROKER.lock().test_entropy(&[Some(41), Some(43)]);
+        let replacement = s.delegate_vfs_grants(root, Some("/bin/new")).unwrap()[0];
+        assert!(old != replacement);
+        assert_eq!(count(), 1);
+        assert_eq!(CAP_BROKER.lock().vfs_caps.capacity(), capacity);
+        complete(&s, &[replacement], true);
+        vfs(&mut s);
+        assert!(!s.consume_vfs_grant(old, "/bin/new"));
+        assert!(!s.consume_vfs_grant(old, "/bin/true"));
+        // Stale cancel and late delivery cannot retire/adopt the replacement.
+        s.cancel_vfs_grant(old);
+        assert_eq!(count(), 1);
+        assert!(s.consume_vfs_grant(replacement, "/bin/new"));
+        assert!(!s.consume_vfs_grant(replacement, "/bin/new"));
+        cleanup(&mut s, 7);
+        cleanup(&mut s, 7);
+        assert_eq!(count(), 0);
+        assert_eq!(inventory(), 0);
+    }
+}
+
+#[test]
+fn production_failed_mint_retry_cannot_reissue_burned_batch_identity() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let mut s = table();
+    let root = proof(&mut s, 0);
+    CAP_BROKER.lock().test_entropy(&[Some(41), None]);
+    assert!(s.delegate_vfs_grants(root, None).is_none());
+    assert_eq!(count(), 0);
+    assert_eq!(inventory(), 1);
+    CAP_BROKER
+        .lock()
+        .test_entropy(&[Some(41), Some(43), Some(45)]);
+    let tokens = s.delegate_vfs_grants(root, None).unwrap();
+    assert!(tokens
+        .iter()
+        .all(|t| *t != CapabilityToken::tagged(41, CapabilityToken::TAG_VFS)));
+    complete(&s, &tokens, true);
+    cleanup(&mut s, 7);
+    assert_eq!(count(), 0);
+    assert_eq!(inventory(), 0);
+}
+
+#[test]
+fn production_auth_account_retirement_cannot_reassign_changed_scope() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for account in [false, true] {
+        for transition in 0..5 {
+            let mut s = table();
+            CAP_BROKER.lock().test_entropy(&[Some(41)]);
+            let old = issue(&s, account).unwrap();
+            if transition != 4 {
+                complete(&s, &[old], true);
+            }
+            match transition {
+                0 => {
+                    if account {
+                        assert!(s
+                            .unchecked_account_grant_for_delivery_test(7, scope(), Some(old))
+                            .is_some());
+                    } else {
+                        assert!(CAP_BROKER
+                            .lock()
+                            .consume_live_auth_grant(old, delivered_identity(&s), 1)
+                            .is_some());
+                    }
+                }
+                1 => complete(&s, &[], false),
+                2 => cleanup(&mut s, 7),
+                3 => {
+                    CAP_BROKER.lock().retire_recipient_grants(7);
+                    s.processes[1].address_space.generation += 100;
+                }
+                4 => cleanup(&mut s, 6),
+                _ => unreachable!(),
+            }
+            // Failed delivery cannot revoke already delivered ownership.
+            if transition == 1 {
+                CAP_BROKER.lock().retire_recipient_grants(7);
+            }
+            assert_eq!(inventory(), 0);
+            s.processes[0].exiting = false;
+            s.processes[1].exiting = false;
+            next_request(&mut s);
+            CAP_BROKER.lock().test_entropy(&[Some(41), Some(43)]);
+            let mut changed = scope();
+            changed.session_generation += 1;
+            changed.target = 1001;
+            let new = if account {
+                s.unchecked_account_grant_for_delivery_test(7, changed, None)
+                    .unwrap()
+            } else {
+                s.issue_auth_session_grant(7, 1001, 1001).unwrap()
+            };
+            assert!(old != new);
+            complete(&s, &[new], true);
+            if account {
+                assert!(s
+                    .unchecked_account_grant_for_delivery_test(7, changed, Some(old))
+                    .is_none());
+                assert!(s
+                    .unchecked_account_grant_for_delivery_test(7, changed, Some(new))
+                    .is_some());
+                assert!(s
+                    .unchecked_account_grant_for_delivery_test(7, changed, Some(new))
+                    .is_none());
+            } else {
+                let mut b = CAP_BROKER.lock();
+                assert!(b
+                    .consume_live_auth_grant(old, delivered_identity(&s), 1)
+                    .is_none());
+                assert_eq!(
+                    b.consume_live_auth_grant(new, delivered_identity(&s), 1),
+                    Some((1001, 1001))
+                );
+                assert!(b
+                    .consume_live_auth_grant(new, delivered_identity(&s), 1)
+                    .is_none());
+            }
+            cleanup(&mut s, 7);
+            cleanup(&mut s, 7);
+            assert_eq!(inventory(), 0);
+            assert_eq!(CAP_BROKER.lock().token_history.usage().0, 2);
+        }
+    }
 }

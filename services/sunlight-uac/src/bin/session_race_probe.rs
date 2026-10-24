@@ -1,0 +1,298 @@
+//! Ordinary client launched by an authenticated shell. No trusted roles or
+//! direct broker access. The controller uses existing session/SunlightD IPC.
+#![no_std]
+#![no_main]
+extern crate alloc;
+use sunlight_ipc::{accounts as api, CapabilityToken, IpcMsg};
+
+#[global_allocator]
+static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
+static mut HEAP: [u8; 256 * 1024] = [0; 256 * 1024];
+
+fn endpoint(name: &str) -> CapabilityToken {
+    sunlight_ipc::nameserver_lookup_timeout(name, 2000).expect("endpoint unavailable")
+}
+fn note(case: &str, checkpoint: &str, result: u64) {
+    use core::fmt::Write;
+    let mut text = heapless::String::<200>::new();
+    let _ = write!(
+        text,
+        "[SESSION-E3-CLIENT] case={} checkpoint={} pid={} uid={} result={}",
+        case,
+        checkpoint,
+        sunlight_libc::getpid(),
+        sunlight_libc::getuid(),
+        result
+    );
+    sunlight_ipc::debug_log(&text);
+}
+fn logout(session: u64, epoch: u64) {
+    logout_on(endpoint(sunlight_ipc::SESSION_ENDPOINT), session, epoch);
+}
+fn logout_on(endpoint: CapabilityToken, session: u64, epoch: u64) {
+    let reply = sunlight_ipc::ipc_call_timeout(
+        endpoint,
+        IpcMsg::with_label(sunlight_ipc::SessionMsg::SESSION_ACTION)
+            .word(0, session)
+            .word(1, epoch)
+            .word(2, sunlight_ipc::SessionAction::Logout as u64),
+        5000,
+    )
+    .expect("logout transport");
+    assert_eq!(
+        reply.label,
+        sunlight_ipc::SessionMsg::REPLY,
+        "logout rejected"
+    );
+}
+fn reap(pid: u64) -> u64 {
+    let start = sunlight_ipc::monotonic_millis();
+    for _ in 0..1_000_000 {
+        if let Some(status) = sunlight_libc::try_waitpid(pid).expect("child status") {
+            return status;
+        }
+        assert!(
+            sunlight_ipc::monotonic_millis().saturating_sub(start) < 10000,
+            "child timeout"
+        );
+        sunlight_ipc::process_yield();
+    }
+    panic!("child wait exhausted")
+}
+fn controller(case: &str, bootstrap: CapabilityToken) -> ! {
+    let ep = sunlight_ipc::endpoint_create();
+    let public = sunlight_ipc::endpoint_bind(ep.0);
+    sunlight_ipc::ipc_call_timeout(
+        bootstrap,
+        IpcMsg::with_label(0xE302).with_cap(0, public),
+        5000,
+    )
+    .expect("controller bootstrap");
+    note(case, "controller-ready", 0);
+    let message = sunlight_ipc::ipc_recv_timeout(ep, 15000).expect("rendezvous not reached");
+    assert_eq!(message.label, 0xE301);
+    note(case, "policy-accepted-rendezvous", message.words[1]);
+    if matches!(message.words[0], 4..=6) {
+        // The manager authenticates the root caller and performs its existing
+        // generation-qualified stop/start lifecycle. No PID-only signal here.
+        let pid = sunlight_libc::spawn(
+            b"/bin/sunlightctl",
+            &[b"sunlightctl", b"restart", b"uac_service"],
+            None,
+        )
+        .expect("authorized lifecycle client spawn");
+        let status = reap(pid);
+        note(case, "manager-restart-response", status as u64);
+        assert_eq!(status, 0);
+        // No attempt to execute or inject an old server reply after retirement.
+    } else {
+        let session_endpoint = endpoint(sunlight_ipc::SESSION_ENDPOINT);
+        if matches!(message.words[0], 3 | 9 | 10 | 11) {
+            sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE301)).expect("release contender");
+        }
+        logout_on(session_endpoint, message.words[2], message.words[3]);
+        note(case, "logout-response", 0);
+        if !matches!(message.words[0], 3 | 9 | 10 | 11) {
+            sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE301)).expect("release UAC");
+        }
+    }
+    sunlight_libc::exit(0)
+}
+fn request(
+    scope: api::GrantScope,
+    label: u64,
+    grant: CapabilityToken,
+    password: bool,
+    control: CapabilityToken,
+) -> Result<IpcMsg, sunlight_ipc::IpcCallError> {
+    let (ptr, shm) = sunlight_ipc::shm_create(api::SHM_BYTES, 0).expect("request memory");
+    unsafe {
+        core::ptr::write_unaligned(ptr.add(256).cast::<u64>(), scope.revision);
+        if password {
+            core::ptr::copy_nonoverlapping(b"root".as_ptr(), ptr, 4);
+        }
+    }
+    let mut msg = IpcMsg::with_label(label)
+        .word(0, scope.session)
+        .word(1, scope.session_generation)
+        .word(2, scope.operation as u64)
+        .word(3, scope.target as u64 | ((scope.member as u64) << 32));
+    msg = if password {
+        if (61001..=61011).contains(&scope.target) {
+            msg.with_cap(0, shm).with_cap(1, control)
+        } else {
+            msg.with_cap(0, shm)
+        }
+    } else {
+        msg.with_cap(0, grant).with_cap(1, shm)
+    };
+    let result = sunlight_ipc::ipc_call_timeout(endpoint("uac"), msg, 12000);
+    unsafe {
+        api::clear_secret(core::slice::from_raw_parts_mut(ptr, api::SECRET_LIMIT));
+    }
+    let _ = sunlight_ipc::shm_free(shm);
+    result
+}
+#[no_mangle]
+pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+    unsafe {
+        ALLOCATOR
+            .lock()
+            .init(core::ptr::addr_of_mut!(HEAP).cast::<u8>(), 256 * 1024);
+    }
+    let mut args = [""; 5];
+    let count = unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 64) };
+    assert!(count >= 2, "case required");
+    let case = args[1];
+    assert_eq!(
+        sunlight_libc::getuid(),
+        0,
+        "requires genuinely authenticated root shell"
+    );
+    if args.get(2) == Some(&"controller") {
+        controller(
+            case,
+            CapabilityToken(args[3].parse().expect("bootstrap handle")),
+        );
+    }
+    let ordinal = match case {
+        "N1" => 1,
+        "N2" => 2,
+        "N3M" => 3,
+        "N3R" => 9,
+        "N4" => 4,
+        "N5" => 5,
+        "N6" => 6,
+        "N7R" => 7,
+        "N7C" => 8,
+        "N7OC" => 10,
+        "N7OR" => 11,
+        _ => panic!("unsupported case"),
+    };
+    let snapshot = api::snapshot().expect("active session snapshot");
+    let scope = api::GrantScope {
+        session: snapshot.session_id,
+        session_generation: snapshot.generation,
+        revision: snapshot.revision,
+        operation: api::Operation::GroupCreate,
+        target: 61000 + ordinal,
+        member: 0,
+    };
+    // Delegate a SEND_ONLY endpoint through the ordinary spawn argument path.
+    // The handle is never logged. No arbitrary service lookup is added.
+    let bootstrap = sunlight_ipc::endpoint_create();
+    let public = sunlight_ipc::endpoint_bind(bootstrap.0);
+    let handle = alloc::format!("{}", public.0);
+    let child = sunlight_libc::spawn(
+        b"/bin/session-racer",
+        &[
+            b"session-race-probe",
+            case.as_bytes(),
+            b"controller",
+            handle.as_bytes(),
+        ],
+        None,
+    )
+    .expect("ordinary controller spawn");
+    let hello = sunlight_ipc::ipc_recv_timeout(bootstrap, 5000).expect("controller handshake");
+    assert_eq!(hello.label, 0xE302);
+    assert_eq!(hello.badge, child);
+    assert_eq!(hello.cap_count, 1);
+    let control = hello.caps[0];
+    sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE302)).expect("bootstrap reply");
+    note(case, "request-start", 0);
+    let result = request(
+        scope,
+        api::AUTHORIZE,
+        CapabilityToken::INVALID,
+        true,
+        control,
+    );
+    if matches!(ordinal, 4..=6) {
+        assert!(matches!(
+            result,
+            Err(sunlight_ipc::IpcCallError::PeerClosed)
+        ));
+        note(case, "old-call-peer-closed", 0);
+        assert_eq!(reap(child), 0);
+        let mut stale = scope;
+        stale.target = 61000;
+        let denied = request(
+            stale,
+            api::AUTHORIZE,
+            CapabilityToken::INVALID,
+            true,
+            control,
+        )
+        .expect("replacement transport");
+        assert_eq!(denied.label, api::ERROR);
+        note(case, "replacement-old-session-denied", denied.words[0]);
+        logout(scope.session, scope.session_generation);
+        note(case, "fixture-complete", 0);
+        sunlight_libc::exit(0);
+    }
+    let reply = result.expect("mint transport");
+    note(case, "mint-response", reply.label);
+    match ordinal {
+        1 | 9 => assert_eq!(reply.label, api::ERROR),
+        2 | 3 => assert_eq!(reply.label, api::REPLY),
+        7 | 8 | 10 | 11 => {
+            assert_eq!(reply.label, api::REPLY);
+            let consumed =
+                request(scope, 0xE300, reply.caps[0], false, control).expect("consume transport");
+            note(case, "consume-response", consumed.label);
+            assert_eq!(
+                consumed.label,
+                if matches!(ordinal, 7 | 11) {
+                    api::ERROR
+                } else {
+                    api::REPLY
+                }
+            );
+            assert_eq!(
+                request(scope, 0xE300, reply.caps[0], false, control)
+                    .expect("second consume transport")
+                    .label,
+                api::ERROR
+            );
+            note(case, "second-consume-denied", 0);
+        }
+        _ => unreachable!(),
+    }
+    assert_eq!(reap(child), 0);
+    if matches!(ordinal, 2 | 3) {
+        let mut stale = scope;
+        stale.target = 61000;
+        assert_eq!(
+            request(
+                stale,
+                api::AUTHORIZE,
+                CapabilityToken::INVALID,
+                true,
+                control
+            )
+            .expect("stale mint transport")
+            .label,
+            api::ERROR
+        );
+        assert_eq!(
+            request(scope, 0xE300, reply.caps[0], false, control)
+                .expect("retired grant transport")
+                .label,
+            api::ERROR
+        );
+        note(case, "post-logout-authority-denied", 0);
+    }
+    note(case, "fixture-complete", 0);
+    sunlight_libc::exit(0)
+}
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    // Source location only: formatted assertion operands could contain tokens.
+    use core::fmt::Write;
+    let mut text = heapless::String::<200>::new();
+    let line = info.location().map_or(0, |location| location.line());
+    let _ = write!(text, "[SESSION-E3-CLIENT] checkpoint=FAIL line={}", line);
+    sunlight_ipc::debug_log(&text);
+    sunlight_libc::exit(1)
+}

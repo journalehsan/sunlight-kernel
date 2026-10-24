@@ -8,8 +8,22 @@ use core::sync::atomic::Ordering;
 use x86_64::VirtAddr;
 
 const ELF: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/capability-probe.elf"));
-pub(super) static AUTH_COMMITS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
-pub(super) static ACCOUNT_COMMITS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+pub(super) static AUTH_COMMITS: core::sync::atomic::AtomicUsize =
+    core::sync::atomic::AtomicUsize::new(0);
+static ACCOUNT_DENIALS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+
+pub(crate) fn account_denied(sched: &Scheduler, error: sunlight_ipc::accounts::Error) {
+    use sunlight_ipc::accounts::Error;
+    assert!(matches!(
+        error,
+        Error::SessionAuthorityUnavailable | Error::Denied
+    ));
+    ACCOUNT_DENIALS.fetch_add(1, Ordering::Relaxed);
+    let issuer = sched.current_process();
+    crate::serial_println!("[SESSION-E] checkpoint=account-denied issuer={} issuer_inc={} vm={} session_epoch=UNESTABLISHED broker=boot-global commit=none error={} cpu={}",
+        issuer.pid, issuer.foreground.incarnation, issuer.address_space.identity().generation,
+        error as u64, crate::sched::current_cpu_id());
+}
 
 const OWNER: usize = 0xF200;
 const READER: usize = OWNER + 1;
@@ -108,6 +122,31 @@ pub fn run(hhdm: VirtAddr) {
     assert!(crate::entropy::is_ready());
     let cpus = ONLINE_CORES.load(Ordering::Acquire);
     issuance_samples();
+    super::history_boundary::run();
+    super::sessions::native_sequential_probe();
+    {
+        // Isolated production broker only; never override global entropy or
+        // install a trusted role on a live process.
+        let mut caps = CapabilityBroker::new();
+        caps.test_entropy(&[Some(41)]);
+        let (_, old) = caps.create_endpoint(1).unwrap();
+        let capacity = caps.capabilities.capacity();
+        caps.destroy_endpoint(1, old).unwrap();
+        caps.test_entropy(&[Some(41), Some(43)]);
+        let (endpoint, new) = caps.create_endpoint(2).unwrap();
+        assert!(old != new);
+        assert_eq!(caps.capabilities.capacity(), capacity);
+        assert_eq!(
+            caps.check(old, CapabilityRights::SEND),
+            Err(CapError::InvalidToken)
+        );
+        assert_eq!(caps.check(new, CapabilityRights::SEND), Ok(endpoint));
+        caps.test_entropy(&[Some(41); 16]);
+        assert_eq!(caps.create_endpoint(3), Err(CapError::TokenCollisionLimit));
+        caps.destroy_endpoint(2, new).unwrap();
+        assert_eq!(caps.active_tokens(), 0);
+        crate::serial_println!("[GRANT-D] retired-token local_broker recycled_storage=observed repeated_candidate=rejected stuck_source=failed_closed old_lookup=denied active=0 scope=isolated_production_broker");
+    }
     {
         let mut pmm = crate::PMM.lock();
         crate::memory::shared_authority_gate::run(&mut pmm, hhdm);
@@ -274,9 +313,9 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
         assert_eq!(AUTH_CONSUMES.load(Ordering::Relaxed), 15);
         assert!(DELIVERY_BOUNDARIES.load(Ordering::Relaxed));
         crate::serial_println!("[CAP-R41] COMPLETE delivered_auth_consumed=15 stale_incarnation=denied real_call_cancel=retired pending=0 active_auth_account=0 cpus={}", sched.online_cores);
-        assert_eq!(ACCOUNT_COMMITS.load(Ordering::Relaxed), 17);
+        assert_eq!(ACCOUNT_DENIALS.load(Ordering::Relaxed), 35);
         assert!(caps.auth_session_grants.is_empty() && caps.account_grants.is_empty());
-        crate::serial_println!("[CAP-PR] lifecycle PASS auth=17 account=17 post_reap_records=0 late_auth=denied late_account=denied cpus={}", sched.online_cores);
+        crate::serial_println!("[CAP-PR] lifecycle PASS auth=17 account=0 account_denied=35 post_reap_records=0 late_auth=denied late_account=denied cpus={}", sched.online_cores);
         state.complete = true;
         crate::serial_println!("[CAP-P] native PASS cpus={} workers={} predictions_denied={} issuance_cycles={} free_before={} free_after={} data_delta=0 pt_delta=0 mappings=0 tokens=0 ticks={}", sched.online_cores, state.workers, state.workers * 124, state.workers * 128, state.baseline, free, sched.global_tick);
         unsafe {
@@ -289,7 +328,8 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
     );
 }
 
-static DELIVERY_BOUNDARIES: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+static DELIVERY_BOUNDARIES: core::sync::atomic::AtomicBool =
+    core::sync::atomic::AtomicBool::new(false);
 static AUTH_CONSUMES: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
 pub(crate) fn note_auth_consumption(pid: usize) {
     if pid == READER {
@@ -317,8 +357,8 @@ pub(crate) fn before_delivery(
         .unwrap();
     let identity = super::delivery::RecipientIdentity::of(recipient);
     let before = caps.recipient_grant_count(READER);
-    assert_eq!(before, 2);
-    crate::serial_println!("[CAP-R41] START op=real-auth-account-reply pid={} incarnation={} vm={} request={} pending=2", identity.pid, identity.incarnation, identity.vm_generation, target.call.generation);
+    assert_eq!(before, 1);
+    crate::serial_println!("[CAP-R41] START op=real-auth-reply-account-denied pid={} incarnation={} vm={} request={} pending=1", identity.pid, identity.incarnation, identity.vm_generation, target.call.generation);
     let mut stale = target;
     stale.call.incarnation = stale.call.incarnation.checked_add(1).unwrap();
     crate::ipc::deliver_reply_to_target(stale, reply, sched, caps, bus).unwrap();

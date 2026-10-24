@@ -11,6 +11,7 @@ pub mod layout;
 pub(crate) mod mm2a_plan;
 pub(crate) mod mm2b_state;
 pub mod mmap;
+pub(crate) mod pid;
 pub mod pipe;
 pub mod region;
 pub mod signal;

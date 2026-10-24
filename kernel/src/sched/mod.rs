@@ -2712,10 +2712,10 @@ impl Scheduler {
                 }
                 #[cfg(feature = "verbose_diag")]
                 serial_println!(
-                    "[SCHED] process_reap_blocked_reason idx={} reason=live_address_space_borrowers count={}",
-                    idx,
-                    borrowers
-                );
+                        "[SCHED] process_reap_blocked_reason idx={} reason=live_address_space_borrowers count={}",
+                        idx,
+                        borrowers
+                    );
                 return;
             }
         }
@@ -2764,10 +2764,8 @@ impl Scheduler {
                 crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
                 self.wake_linux_pipe(handle.pipe_index());
             } else if handle.is_socket() {
-                let (read, write) = crate::process::pipe::socket_close(
-                    handle.socket_index(),
-                    handle.socket_endpoint(),
-                );
+                let (read, write) =
+                    crate::process::pipe::socket_close(handle.socket_index(), handle.socket_endpoint());
                 self.wake_linux_pipe(read);
                 self.wake_linux_pipe(write);
             } else if handle.is_epoll() {
@@ -2854,6 +2852,19 @@ impl Scheduler {
         self.processes[idx].ipc_reply_target = None;
         self.processes[idx].deferred_reply_targets.clear();
         self.processes[idx].next_deferred_reply_token = 0;
+        #[cfg(feature = "native_session_race_test")]
+        if matches!(
+            self.processes[idx].name_str(),
+            "session-race-probe" | "session-racer"
+        ) {
+            let broker = crate::capability::CAP_BROKER.lock();
+            crate::serial_println!("[SESSION-E3] seq={} checkpoint=fixture-ipc-cleaned pid={} incarnation={} vm={} owned_endpoints={} pending_call=none reply_target=none deferred_targets=0 pending_commits=0 snapshot=serialized cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, broker.endpoints_owned_by(pid).len(), current_cpu_id());
+            crate::capability::session_race::inventory(&broker);
+        }
+        #[cfg(feature = "native_session_race_test")]
+        if self.processes[idx].name_str() == "uac_service" {
+            crate::serial_println!("[SESSION-E3] seq={} checkpoint=service-ipc-retired pid={} incarnation={} vm={} reply_target=none deferred_targets=0 pending_call=none cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+        }
         let dead_pid = self.processes[idx].pid;
         for process in &mut self.processes {
             process
@@ -2875,7 +2886,10 @@ impl Scheduler {
 
         // A dead manager cannot retain lifecycle receipts indefinitely.
         for process in &mut self.processes {
-            if process.service_reap_watcher.is_some_and(|(owner, _)| owner == pid) {
+            if process
+                .service_reap_watcher
+                .is_some_and(|(owner, _)| owner == pid)
+            {
                 process.service_reap_watcher = None;
             }
         }
@@ -2888,11 +2902,25 @@ impl Scheduler {
         ];
 
         // Ownership evidence outlives both the old manager and reusable process slots.
-        let identity = sunlight_ipc::supervision::Identity { pid: pid as u64, generation: reaped_generation };
-        let owner_live = self.supervision.manager().is_some_and(|owner| self.processes.iter().any(|p|
-            Self::supervision_identity(p) == owner && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)));
-        self.supervision.reaped(identity, [reclaim.user_frames as u64, reclaim.page_tables as u64,
-            self.processes[idx].service_reap_receipt[3]], owner_live);
+        let identity = sunlight_ipc::supervision::Identity {
+            pid: pid as u64,
+            generation: reaped_generation,
+        };
+        let owner_live = self.supervision.manager().is_some_and(|owner| {
+            self.processes.iter().any(|p| {
+                Self::supervision_identity(p) == owner
+                    && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+            })
+        });
+        self.supervision.reaped(
+            identity,
+            [
+                reclaim.user_frames as u64,
+                reclaim.page_tables as u64,
+                self.processes[idx].service_reap_receipt[3],
+            ],
+            owner_live,
+        );
         self.supervision.manager_reaped(identity);
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
@@ -2906,18 +2934,18 @@ impl Scheduler {
         #[cfg(feature = "scheduler_timer_trace")]
         crate::scheduler_timer_trace::checkpoint(self, 23, pid);
         serial_println!(
-            "[SCHED] process_reaped pid={} name='{}' user_frames={} page_tables={} swap_blocks={} ipc_cleared={}",
-            pid,
-            name,
-            reclaim.user_frames,
-            reclaim.page_tables,
-            reclaim.swap_blocks,
-            ipc_q_len
-        );
+                "[SCHED] process_reaped pid={} name='{}' user_frames={} page_tables={} swap_blocks={} ipc_cleared={}",
+                pid,
+                name,
+                reclaim.user_frames,
+                reclaim.page_tables,
+                reclaim.swap_blocks,
+                ipc_q_len
+            );
         serial_println!(
-            "[SCHED] process_resource_cleanup_summary pid={} frames={} pts={} swap={} ipc_entries_cleared={}",
-            pid, reclaim.user_frames, reclaim.page_tables, reclaim.swap_blocks, ipc_pending_before
-        );
+                "[SCHED] process_resource_cleanup_summary pid={} frames={} pts={} swap={} ipc_entries_cleared={}",
+                pid, reclaim.user_frames, reclaim.page_tables, reclaim.swap_blocks, ipc_pending_before
+            );
         serial_println!(
             "[SCHED] ipc_entries_reaped_for_process pid={} cleared_msgs={}",
             pid,
@@ -2940,15 +2968,15 @@ impl Scheduler {
             // additional diagnostic for every reaped worker.
             if reaped == created {
                 serial_println!(
-                    "[THREAD-LIFECYCLE] created={} finished={} reaped={} borrower_reclaim_skipped={} stale_wake_rejected={} borrower_slots_reused={} max_live={}",
-                    created,
-                    finished,
-                    reaped,
-                    skipped,
-                    stale_wakes,
-                    reused,
-                    max_live
-                );
+                        "[THREAD-LIFECYCLE] created={} finished={} reaped={} borrower_reclaim_skipped={} stale_wake_rejected={} borrower_slots_reused={} max_live={}",
+                        created,
+                        finished,
+                        reaped,
+                        skipped,
+                        stale_wakes,
+                        reused,
+                        max_live
+                    );
             }
         }
     }

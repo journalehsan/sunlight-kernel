@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5539-alpha.2"
+version = "0.2.5587-alpha.2"
+
 
 
 
@@ -678,6 +679,7 @@ fastlane_f11_audit = ["fastlane_f1_audit"]
 # Instance-local issuance fault injection + isolated native authority fixture.
 cap_issuance_test = []
 production_grant_test = []
+native_session_race_test = []
 # Focused SWAP-1 multi-pool pressure/recovery gate.
 swap1_test = ["mm2b_smp_test"]
 # Physical memory accounting Phase 1 native ISO gate.

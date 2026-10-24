@@ -3,7 +3,63 @@
 use sunlight_ipc::{vfs_grants as api, CapabilityToken, IpcMsg};
 
 pub fn handle(msg: &IpcMsg) -> IpcMsg {
-    dispatch(msg, api::mint)
+    #[cfg(all(feature = "production-grant-test", target_os = "none"))]
+    let fixture = (msg.badge == 0xF4F1 || msg.badge == 0xF4F2)
+        && msg.label == api::BASE_CAPS
+        && msg.cap_count == 2;
+    #[cfg(all(feature = "production-grant-test", target_os = "none"))]
+    let control = msg.caps[1];
+    #[cfg(all(feature = "production-grant-test", target_os = "none"))]
+    let normalized = {
+        let mut request = *msg;
+        if fixture {
+            // Only test transport is removed. The real dispatcher/kernel must
+            // still validate the password proof, shape, role and live caller.
+            request.cap_count = 1;
+            request.caps[1] = CapabilityToken::INVALID;
+        }
+        request
+    };
+    #[cfg(all(feature = "production-grant-test", target_os = "none"))]
+    if fixture && msg.badge == 0xF4F1 {
+        race_checkpoint(control, msg.badge, 1, false);
+    }
+    #[cfg(all(feature = "production-grant-test", target_os = "none"))]
+    let reply = dispatch(&normalized, mint_reply);
+    #[cfg(not(all(feature = "production-grant-test", target_os = "none")))]
+    let reply = dispatch(msg, mint_reply);
+    #[cfg(all(feature = "production-grant-test", target_os = "none"))]
+    if fixture {
+        if msg.badge == 0xF4F2 && reply.label == api::REPLY_OK {
+            race_checkpoint(control, msg.badge, 1, true);
+        }
+        race_checkpoint(control, msg.badge, 2, reply.label == api::REPLY_OK);
+    }
+    reply
+}
+
+fn mint_reply(proof: CapabilityToken, path: Option<&str>) -> Option<IpcMsg> {
+    Some(
+        api::try_mint(proof, path)
+            .unwrap_or_else(|error| IpcMsg::with_label(api::REPLY_ERR).word(0, error as u64)),
+    )
+}
+
+/// Opt-in userspace rendezvous at actual production call boundaries. No locks
+/// are held and no authority is manufactured. The second process performs an
+/// ordinary authorized signal syscall while this service is blocked in IPC.
+#[cfg(all(feature = "production-grant-test", target_os = "none"))]
+fn race_checkpoint(endpoint: CapabilityToken, recipient: u64, phase: u64, committed: bool) {
+    let reply = sunlight_ipc::ipc_call_timeout(
+        endpoint,
+        IpcMsg::with_label(0xF11B0D)
+            .word(0, recipient)
+            .word(1, phase)
+            .word(2, u64::from(committed)),
+        10_000,
+    )
+    .expect("bounded race rendezvous");
+    assert_eq!(reply.label, 0xF11B0D);
 }
 
 fn dispatch(

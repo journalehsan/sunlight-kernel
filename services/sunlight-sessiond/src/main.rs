@@ -18,10 +18,9 @@ use sunlight_ipc::{
     nameserver_register, process_is_alive, session_consume_auth_grant, session_query_process,
     validate_session_caller, wiseowl_set_active_session_authority,
     wiseowl_validate_delegated_caller, IpcError, IpcMsg, MezzoMsg, ServiceCapability,
-    SessionAction, SessionComponentRole, SessionComponentState, SessionGeneration, SessionId,
-    SessionKind, SessionMsg, SessionProcessCredentials, SessionState, SpawnMsg, SpawnRequest,
-    SESSION_CALLER_TTY_SERVICE, SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
-    WISEOWL_DELEGATION_PROTOCOL_VERSION,
+    SessionAction, SessionComponentRole, SessionComponentState, SessionKind, SessionMsg,
+    SessionProcessCredentials, SessionState, SpawnMsg, SpawnRequest, SESSION_CALLER_TTY_SERVICE,
+    SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION, WISEOWL_DELEGATION_PROTOCOL_VERSION,
 };
 use sunlight_sessiond::{
     parse_manifest, resolve_session_plan, CatalogBundle, ComponentExitReason, ManifestComponent,
@@ -136,8 +135,6 @@ struct ServiceState {
     manifest: Result<SessionManifest, ManifestParseError>,
     active: Option<ActiveSession>,
     last_closed: Option<SessionRecord>,
-    next_session_id: u64,
-    next_generation: u64,
     next_plan_id: u64,
     stats: SessionStats,
     config_stats: ConfigStats,
@@ -158,8 +155,6 @@ impl ServiceState {
             manifest: load_manifest(),
             active: None,
             last_closed: None,
-            next_session_id: 1,
-            next_generation: 1,
             next_plan_id: 1,
             stats: SessionStats::new(),
             config_stats,
@@ -172,6 +167,38 @@ impl ServiceState {
 
     fn refresh_catalog(&mut self) {
         self.catalog = discover_catalog(&mut self.config_stats);
+    }
+}
+
+// A failed CREATE retires its registration even after an asynchronous service
+// call fails. The reference is nonsecret; Drop performs only a kernel syscall.
+struct PendingAccountSession(Option<sunlight_ipc::account_session::SessionRef>);
+impl Drop for PendingAccountSession {
+    fn drop(&mut self) {
+        if let Some(reference) = self.0 {
+            let _ = sunlight_ipc::account_session::transition(
+                reference,
+                sunlight_ipc::account_session::REVOKE,
+            );
+        }
+    }
+}
+fn account_session_reference(record: &SessionRecord) -> sunlight_ipc::account_session::SessionRef {
+    sunlight_ipc::account_session::SessionRef {
+        id: record.session_id.get(),
+        epoch: record.generation.get(),
+    }
+}
+fn sync_account_session_authority(state: &ServiceState) {
+    use sunlight_ipc::account_session::{transition, ACTIVATE, REVOKE, SUSPEND};
+    if let Some(active) = state.active.as_ref() {
+        let operation = match active.record.state {
+            SessionState::Running | SessionState::Degraded => ACTIVATE,
+            SessionState::Stopping | SessionState::Stopped | SessionState::Failed => REVOKE,
+            _ => SUSPEND,
+        };
+        let _ = transition(account_session_reference(&active.record), operation);
+        // Failure cannot mint authority: Account always checks the broker again.
     }
 }
 
@@ -557,6 +584,11 @@ fn spawn_shell(
 }
 
 fn begin_stop(session: &mut ActiveSession, now: u64) {
+    // Withdraw authority before stopping children or acknowledging logout.
+    let _ = sunlight_ipc::account_session::transition(
+        account_session_reference(&session.record),
+        sunlight_ipc::account_session::REVOKE,
+    );
     session.record.state = SessionState::Stopping;
     session.shell_stop_deadline_ms = now.saturating_add(LOGOUT_GRACE_MS);
     if let Some(frozen) = session.frozen.as_mut() {
@@ -573,6 +605,10 @@ fn begin_stop(session: &mut ActiveSession, now: u64) {
 fn finalize_stop(state: &mut ServiceState) {
     if let Some(active) = state.active.take() {
         let record = active.record;
+        let _ = sunlight_ipc::account_session::transition(
+            account_session_reference(&record),
+            sunlight_ipc::account_session::REVOKE,
+        );
         state.last_closed = Some(record);
         state.stats.sessions_stopped = state.stats.sessions_stopped.saturating_add(1);
         state.stats.logout_completions = state.stats.logout_completions.saturating_add(1);
@@ -799,11 +835,14 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
         write_log("[SESSION-FOUNDATION] CREATE reattach PASS\n");
         return create_reply(&state.active.as_ref().unwrap().record);
     }
-    let Some((uid, gid)) = session_consume_auth_grant(msg.caps[0], msg.badge) else {
-        write_log("[SESSION-FOUNDATION] CREATE fail: auth grant\n");
+    let Some((reference, uid, gid)) =
+        sunlight_ipc::account_session::register(msg.caps[0], msg.badge)
+    else {
+        write_log("[SESSION-FOUNDATION] CREATE fail: broker session registration\n");
         state.stats.login_handoff_failures = state.stats.login_handoff_failures.saturating_add(1);
         return error(SessionMsg::ERR_UNAUTHORIZED);
     };
+    let mut pending_authority = PendingAccountSession(Some(reference));
     if uid != requested_uid || gid != requested_gid {
         write_log("[SESSION-FOUNDATION] CREATE fail: uid/gid mismatch\n");
         state.stats.login_handoff_failures = state.stats.login_handoff_failures.saturating_add(1);
@@ -1011,10 +1050,8 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     // Prove current plan immutability relative to later profile edits.
     config_log("CURRENT_PLAN_IMMUTABLE PASS");
 
-    let session_id = SessionId::new(state.next_session_id).unwrap();
-    state.next_session_id = state.next_session_id.saturating_add(1).max(1);
-    let generation = SessionGeneration::new(state.next_generation).unwrap();
-    state.next_generation = state.next_generation.saturating_add(1).max(1);
+    let session_id = sunlight_ipc::SessionId::new(reference.id).unwrap();
+    let generation = sunlight_ipc::SessionGeneration::new(reference.epoch).unwrap();
     let mut record =
         SessionRecord::new(session_id, generation, uid, gid, kind, now, &manifest_copy);
     let _ = record.transition(SessionState::Preparing);
@@ -1042,6 +1079,7 @@ fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
     state.stats.sessions_created = state.stats.sessions_created.saturating_add(1);
     write_log("[SESSION-FOUNDATION] SESSION_CREATED PASS\n");
     state.active = Some(active);
+    pending_authority.0 = None;
     create_reply(&state.active.as_ref().unwrap().record)
 }
 
@@ -1084,6 +1122,12 @@ fn session_action(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
             let Some(active) = find_session_mut(state, session_id) else {
                 return error(SessionMsg::ERR_STALE);
             };
+            if !sunlight_ipc::account_session::transition(
+                account_session_reference(&active.record),
+                sunlight_ipc::account_session::REVOKE,
+            ) {
+                return error(SessionMsg::ERR_INVALID_STATE);
+            }
             begin_stop(active, monotonic_millis());
             IpcMsg::with_label(SessionMsg::REPLY)
         }
@@ -1532,6 +1576,7 @@ pub extern "C" fn _start() -> ! {
     let mut reply = IpcMsg::empty();
     loop {
         supervise(&mut state);
+        sync_account_session_authority(&state);
         sync_wiseowl_session_authority(&mut state);
         ipc_reply(reply);
         // With no session there are no children, deferred launches, readiness

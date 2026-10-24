@@ -81,6 +81,7 @@ pub enum SpawnError {
     EntropyUnavailable,
     InvalidPath,
     UnsupportedPersonality,
+    PidExhausted,
 }
 
 /// Execute an ELF binary into the current process (re-exec semantics).
@@ -188,10 +189,10 @@ pub fn exec_into_process(
         );
         #[cfg(feature = "cap_issuance_test")]
         if old_grants != 0 {
-            assert_eq!(old_grants, 17);
+            assert_eq!(old_grants, 1);
             assert_eq!(broker.recipient_grant_count(process.pid), 0);
             crate::serial_println!(
-                "[CAP-PR] exec authority withdrawn before VM activation records=17 remaining=0"
+                "[CAP-PR] exec authority withdrawn before VM activation records=1 remaining=0 account=0"
             );
         }
     }
@@ -685,12 +686,8 @@ pub fn spawn_from_path_with_restrictions(
     // len()+1 can alias an existing pid — duplicate pids then break every
     // pid-keyed lookup (wake_pid/waitpid/process_is_alive find the wrong
     // process, leaving the real one blocked forever).
-    let pid = sched
-        .processes
-        .iter()
-        .filter_map(|p| p.pid.checked_add(1))
-        .max()
-        .unwrap_or(1);
+    let pid = super::pid::next_pid(sched.processes.iter().map(|p| p.pid))
+        .ok_or(SpawnError::PidExhausted)?;
     // net_server is no longer spawned at a fixed pid (init launches it after
     // timer_server), so the kernel frame-proxy syscalls (net_tx/net_rx) can no
     // longer gate on pid==5. Give it a stable name here and gate on that.
@@ -728,6 +725,10 @@ pub fn spawn_from_path_with_restrictions(
     process.trusted_pty_service = is_trusted_pty_service_path(path);
     process.trusted_lock_service = is_trusted_lock_service_path(path);
     process.trusted_session_service = is_trusted_session_service_path(path);
+    #[cfg(feature = "native_session_race_test")]
+    if process.trusted_session_service && sched.online_cores > 1 {
+        process.cpu_mask = 2;
+    }
     process.trusted_wiseowl_braind = is_trusted_wiseowl_braind_path(path);
     process.trusted_wiseowl_console = is_trusted_wiseowl_console_path(path);
     process.trusted_control_panel = is_trusted_control_panel_path(path);
@@ -911,6 +912,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/test/exec-r2" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/exec-r2.elf"))),
         "/bin/capabilityctl" | "/usr/bin/capabilityctl" => Ok(crate::CAPABILITYCTL_ELF_BYTES),
         "/bin/runas" | "/usr/bin/runas" => Ok(crate::RUNAS_ELF_BYTES),
+        #[cfg(feature = "native_session_race_test")]
+        "/tmp/session-race-probe" | "/bin/session-racer" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/session-race-probe")),
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
         "/usr/bin/memoryctl" | "/bin/memoryctl" => Ok(crate::MEMORYCTL_ELF_BYTES),
         "/usr/bin/sunlightctl" | "/bin/sunlightctl" => Ok(crate::SUNLIGHTCTL_ELF_BYTES),

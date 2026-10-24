@@ -94,6 +94,11 @@ pub extern "C" fn _start() -> ! {
     }
     assert_eq!(sunlight_libc::getuid(), 1000);
     assert_eq!(sunlight_libc::getgid(), 1000);
+    match sunlight_libc::getpid() {
+        0xF4F0 => race_controller(),
+        0xF4F1 | 0xF4F2 => race_recipient(),
+        _ => {}
+    }
     let uac = endpoint("uac");
     let vfs = endpoint("vfs");
     // A public endpoint token is not an administrative proof, even though it
@@ -136,6 +141,63 @@ pub extern "C" fn _start() -> ! {
     // the retired token against the new VM identity without printing it.
     sunlight_libc::exec(b"/bin/true", &[b"true"]).expect("recipient exec");
     panic!("exec returned");
+}
+
+fn race_recipient() -> ! {
+    let uac = endpoint("uac");
+    // Registration must precede the UAC rendezvous, including on one CPU.
+    let control = endpoint("grant-racer");
+    let auth = sunlight_uac::auth::authenticate_password_for_session(b"root", b"root")
+        .expect("race password verification");
+    let request = IpcMsg::with_label(api::BASE_CAPS)
+        .word(0, 0)
+        .with_cap(0, auth.session_grant)
+        .with_cap(1, control);
+    let _ = sunlight_ipc::ipc_call_timeout(uac, request, 20_000);
+    panic!("race recipient survived forced exit");
+}
+
+fn race_controller() -> ! {
+    let ep = sunlight_ipc::endpoint_create();
+    assert!(sunlight_ipc::nameserver_register("grant-racer", ep));
+    let mut seen = [0u8; 2];
+    for _ in 0..4 {
+        let msg = sunlight_ipc::ipc_recv_timeout(ep, 20_000).expect("bounded race request");
+        assert_eq!(msg.label, 0xF11B0D);
+        assert_eq!(msg.cap_count, 0);
+        let index = match msg.words[0] {
+            0xF4F1 => 0,
+            0xF4F2 => 1,
+            _ => panic!("unexpected race recipient"),
+        };
+        assert_eq!(msg.words[1], u64::from(seen[index]) + 1);
+        assert_eq!(msg.words[2], index as u64);
+        if seen[index] == 0 {
+            assert!(sunlight_ipc::process_is_alive(msg.words[0]));
+            sunlight_libc::kill(msg.words[0], 9).expect("ordinary recipient SIGKILL");
+            assert!(!sunlight_ipc::process_is_alive(msg.words[0]));
+        }
+        seen[index] += 1;
+        if seen[index] == 2 {
+            sunlight_ipc::debug_log(if index == 0 {
+                "[GRANT-D] case=exit-before-commit checkpoint=uac-resumed result=aborted"
+            } else {
+                "[GRANT-D] case=exit-after-commit checkpoint=uac-resumed result=committed"
+            });
+        }
+        sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xF11B0D)).expect("race acknowledgement");
+    }
+    assert_eq!(seen, [2, 2]);
+    // A later synchronous UAC request proves both stale reply attempts have
+    // passed through the real single-threaded service loop before completion.
+    let uac = endpoint("uac");
+    let reply = sunlight_ipc::ipc_call_timeout(uac, IpcMsg::with_label(0xF11B0D), 10_000)
+        .expect("post-race service progress");
+    assert_eq!(reply.label, api::REPLY_ERR);
+    sunlight_ipc::debug_log(
+        "[GRANT-D] driver COMPLETE precommit=aborted postcommit=retired stale_reply=excluded",
+    );
+    sunlight_libc::exit(0)
 }
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {

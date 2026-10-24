@@ -20,6 +20,24 @@ pub const MAX_MANIFEST_NAME: usize = 48;
 pub const MAX_COMPONENT_NAME: usize = 32;
 pub const MAX_APP_ID: usize = 32;
 
+/// Reserve both identity components together. Exhaustion must never saturate
+/// into a repeated identity. Service restarts still require an independently
+/// authenticated process incarnation; these counters alone do not provide it.
+pub fn allocate_session_identity(
+    next_id: &mut u64,
+    next_generation: &mut u64,
+) -> Option<(SessionId, SessionGeneration)> {
+    let identity = (
+        SessionId::new(*next_id)?,
+        SessionGeneration::new(*next_generation)?,
+    );
+    let following_id = next_id.checked_add(1)?;
+    let following_generation = next_generation.checked_add(1)?;
+    *next_id = following_id;
+    *next_generation = following_generation;
+    Some(identity)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ManifestParseError {
     InvalidUtf8,
@@ -427,6 +445,23 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<SessionManifest, ManifestParseErro
 mod tests {
     use super::*;
     use std::format;
+
+    #[test]
+    fn session_identity_exhaustion_is_atomic_and_never_repeats() {
+        for (mut id, mut generation) in [(u64::MAX, 1), (1, u64::MAX), (0, 1), (1, 0)] {
+            let before = (id, generation);
+            assert!(allocate_session_identity(&mut id, &mut generation).is_none());
+            assert!(allocate_session_identity(&mut id, &mut generation).is_none());
+            assert_eq!((id, generation), before);
+        }
+        let (mut id, mut generation) = (u64::MAX - 1, u64::MAX - 1);
+        let reserved = allocate_session_identity(&mut id, &mut generation).unwrap();
+        assert_eq!(
+            (reserved.0.get(), reserved.1.get()),
+            (u64::MAX - 1, u64::MAX - 1)
+        );
+        assert!(allocate_session_identity(&mut id, &mut generation).is_none());
+    }
 
     const VALID: &str = r#"
 format_version = 1

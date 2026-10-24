@@ -2,6 +2,10 @@
 
 extern crate alloc;
 
+#[cfg(test)]
+#[path = "process/pid.rs"]
+mod pid;
+
 #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
 #[path = "sched/doorbell_state.rs"]
 pub mod doorbell_state;
