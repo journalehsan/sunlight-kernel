@@ -368,6 +368,7 @@ impl CapabilityBroker {
     #[cfg(any(
         test,
         feature = "cap_issuance_test",
+        feature = "production_grant_test",
         feature = "native_session_race_test"
     ))]
     pub(crate) fn session_accounting(&self) -> [usize; 8] {

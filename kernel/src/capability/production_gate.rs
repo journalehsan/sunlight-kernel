@@ -38,6 +38,8 @@ const EMPTY: Entry = Entry {
 static ENTRIES: spin::Mutex<[Entry; MAX]> = spin::Mutex::new([EMPTY; MAX]);
 static COMPLETE: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
 static CLIENT_COUNT: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+static PID_CHILDREN_REAPED: core::sync::atomic::AtomicUsize =
+    core::sync::atomic::AtomicUsize::new(0);
 const RACE_DRIVER: usize = 0xF4F0;
 const RACE_PRE: usize = 0xF4F1;
 const RACE_POST: usize = 0xF4F2;
@@ -54,17 +56,39 @@ struct RaceState {
     recipient: Option<RecipientIdentity>,
 }
 
+struct ConsumeRace {
+    identity: Option<RecipientIdentity>,
+    token: CapabilityToken,
+    exec: bool,
+    attempted: bool,
+    reaped: bool,
+}
+const CONSUME_EMPTY: ConsumeRace = ConsumeRace {
+    identity: None,
+    token: CapabilityToken::INVALID,
+    exec: false,
+    attempted: false,
+    reaped: false,
+};
+static CONSUME_RACES: spin::Mutex<[ConsumeRace; 2]> =
+    spin::Mutex::new([CONSUME_EMPTY, CONSUME_EMPTY]);
+
+fn consume_index(pid: usize) -> Option<usize> {
+    pid.checked_sub(RACE_DRIVER + 3).filter(|index| *index < 2)
+}
+
 fn index(pid: usize) -> Option<usize> {
     pid.checked_sub(BASE)
         .filter(|i| *i < CLIENT_COUNT.load(core::sync::atomic::Ordering::Relaxed))
 }
 
 pub fn run(hhdm: VirtAddr) {
+    crate::process::pid::native_boundary();
     let count = crate::sched::ONLINE_CORES
         .load(core::sync::atomic::Ordering::Acquire)
         .min(MAX);
     CLIENT_COUNT.store(count, core::sync::atomic::Ordering::Relaxed);
-    for ordinal in 0..count + 3 {
+    for ordinal in 0..count + 5 {
         let (pid, name, cpu) = if ordinal < count {
             (BASE + ordinal, "grant-probe", ordinal)
         } else {
@@ -102,9 +126,19 @@ pub fn run(hhdm: VirtAddr) {
         count
     );
     accounting("start");
+    super::reconciliation::snapshot(&SCHEDULER.lock(), "start");
 }
 
 pub(super) fn committed(issuer: &Process, delivery: GrantDelivery, tokens: &[CapabilityToken]) {
+    if let Some(index) = consume_index(delivery.recipient.pid) {
+        assert_eq!(tokens.len(), 2);
+        let mut races = CONSUME_RACES.lock();
+        assert!(races[index].identity.is_none());
+        races[index].identity = Some(delivery.recipient);
+        races[index].token = tokens[0];
+        crate::serial_println!("[GRANT-F] lifecycle case={} checkpoint=commit pid={} incarnation={} vm={} issuer={} issuer_inc={} issuer_vm={} request={} fingerprint=boot-local-{} cpu={}", if index == 0 { "exit-consume" } else { "exec-consume" }, delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, issuer.pid, issuer.foreground.incarnation, issuer.address_space.identity().generation, delivery.request, super::reconciliation::fingerprint(tokens[0]), crate::sched::current_cpu_id());
+        return;
+    }
     if delivery.recipient.pid == RACE_PRE || delivery.recipient.pid == RACE_POST {
         assert_eq!(
             delivery.recipient.pid, RACE_POST,
@@ -131,6 +165,15 @@ pub(super) fn committed(issuer: &Process, delivery: GrantDelivery, tokens: &[Cap
     );
     entries[index].minted += tokens.len();
     entries[index].last = tokens[0];
+    crate::serial_println!(
+        "[GRANT-F] commit pid={} incarnation={} vm={} request={} fingerprint=boot-local-{} cpu={}",
+        delivery.recipient.pid,
+        delivery.recipient.incarnation,
+        delivery.recipient.vm_generation,
+        delivery.request,
+        super::reconciliation::fingerprint(tokens[0]),
+        crate::sched::current_cpu_id()
+    );
     crate::serial_println!("[GRANT-C] commit issuer={} issuer_inc={} role=uac recipient={} incarnation={} vm={} request={} batch={} ordinal={} cpu={}",
         issuer.pid, issuer.foreground.incarnation, delivery.recipient.pid, delivery.recipient.incarnation,
         delivery.recipient.vm_generation, delivery.request, tokens.len(), entries[index].commits, crate::sched::current_cpu_id());
@@ -215,12 +258,44 @@ pub(super) fn consumed(issuer: &Process, recipient: RecipientIdentity, allowed: 
         issuer.pid, issuer.foreground.incarnation, recipient.pid, recipient.incarnation, recipient.vm_generation, allowed, crate::sched::current_cpu_id());
 }
 
+pub(super) fn census_after_consume(sched: &Scheduler) {
+    let pid = sched.current_process().ipc_reply_target.map(|t| t.call.pid);
+    if pid.and_then(index).is_some() {
+        super::reconciliation::snapshot(sched, "operation");
+    }
+}
+
 pub(crate) fn exec(
     process: &Process,
     old_vm: crate::process::mm2b_state::AddressSpaceIdentity,
     old_grants: usize,
     caps: &mut CapabilityBroker,
 ) {
+    if let Some(index) = consume_index(process.pid) {
+        assert_eq!(index, 1);
+        let mut races = CONSUME_RACES.lock();
+        let race = &mut races[index];
+        let old = race.identity.expect("committed recipient");
+        assert_eq!(old.pid, process.pid);
+        assert_eq!(old.incarnation, process.foreground.incarnation);
+        assert_eq!(old.vm_generation, old_vm.generation);
+        assert_ne!(
+            old_vm.generation,
+            process.address_space.identity().generation
+        );
+        assert_eq!(old_grants, 2);
+        assert_eq!(caps.recipient_grant_count(process.pid), 0);
+        assert!(!caps.consume_vfs_grant(
+            race.token,
+            RecipientIdentity::of(process),
+            "/bin/true",
+            0
+        ));
+        assert!(!race.exec);
+        race.exec = true;
+        crate::serial_println!("[GRANT-F] lifecycle case=exec-consume checkpoint=exec pid={} incarnation={} old_vm={} new_vm={} retired=2 replay=denied cpu={}", process.pid, process.foreground.incarnation, old_vm.generation, process.address_space.identity().generation, crate::sched::current_cpu_id());
+        return;
+    }
     let Some(index) = index(process.pid) else {
         return;
     };
@@ -259,6 +334,22 @@ pub(super) fn owner_cancelled(pid: usize, before: usize, caps: &CapabilityBroker
 /// Record the real reaper transition before normal process-slot reuse can
 /// overwrite the dead record. Timer sampling cannot reliably observe Reaped.
 pub(crate) fn reaped(process: &Process) {
+    if process.ppid == RACE_DRIVER {
+        assert_eq!(process.exit_code, 0);
+        assert_eq!(process.state, ProcessState::Reaped);
+        PID_CHILDREN_REAPED.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+    }
+    if let Some(index) = consume_index(process.pid) {
+        let mut races = CONSUME_RACES.lock();
+        let race = &mut races[index];
+        assert_eq!(process.state, ProcessState::Reaped);
+        assert_eq!(process.exit_code == 0, index == 1);
+        assert_eq!(race.exec, index == 1);
+        assert!(!race.reaped);
+        race.reaped = true;
+        crate::serial_println!("[GRANT-F] lifecycle case={} checkpoint=reaped pid={} incarnation={} exit={} pending=0 reply=0 deferred=0 cpu={}", if index == 0 { "exit-consume" } else { "exec-consume" }, process.pid, process.foreground.incarnation, process.exit_code, crate::sched::current_cpu_id());
+        return;
+    }
     if (RACE_DRIVER..=RACE_POST).contains(&process.pid) {
         assert_eq!(process.state, ProcessState::Reaped);
         if process.pid == RACE_DRIVER {
@@ -306,6 +397,12 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
     if !entries[..count].iter().all(|e| e.exec && e.reaped) || RACES.lock().reaped != 7 {
         return;
     }
+    if !CONSUME_RACES.lock().iter().all(|r| r.reaped && r.attempted) {
+        return;
+    }
+    if PID_CHILDREN_REAPED.load(Ordering::Relaxed) != 8 {
+        return;
+    }
     {
         let races = RACES.lock();
         assert_eq!(races.commits, 2);
@@ -339,6 +436,7 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
         caps.auth_session_grants.len(), caps.auth_session_grants.capacity());
     drop(caps);
     accounting("final");
+    super::reconciliation::snapshot(sched, "final");
     crate::serial_println!("[GRANT-D] lifecycle COMPLETE precommit_commits=0 postcommit_commits=2 inventory=0 reaped=3 pid_reuse=NOT_FORCED restart=NOT_FORCED");
     COMPLETE.store(true, Ordering::Relaxed);
     crate::serial_println!("[GRANT-C] COMPLETE PASS cpus={} clients={} committed={} delivered={} consumed={} owner_retired={} delivery_retired={} exec_retired={} inventory=0 pending=0 issuer_refs=0 recipient_refs=0 remote_race=NOT_FORCED",
@@ -346,6 +444,31 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
     unsafe {
         x86_64::instructions::port::Port::<u32>::new(0xf4).write(0x10);
     }
+}
+
+/// Entry observation on the real VFS consume syscall. No locks are retained
+/// across a checkpoint: retirement has already won in userspace rendezvous.
+pub(super) fn consumption_attempt(sched: &Scheduler) {
+    let issuer = sched.current_process();
+    let Some(target) = issuer.ipc_reply_target else {
+        return;
+    };
+    let Some(index) = consume_index(target.call.pid) else {
+        return;
+    };
+    assert!(issuer.trusted_vfs_service && !issuer.is_exiting());
+    let recipient = sched.processes.iter().find(|p| p.pid == target.call.pid);
+    let caps = super::CAP_BROKER.lock();
+    let inventory = caps.recipient_grant_count(target.call.pid);
+    assert!(recipient.is_none_or(|p| p.is_exiting()));
+    assert!(inventory <= if index == 0 { 2 } else { 0 });
+    let mut races = CONSUME_RACES.lock();
+    let race = &mut races[index];
+    assert_eq!(target.call.incarnation, race.identity.unwrap().incarnation);
+    assert_eq!(race.exec, index == 1);
+    assert!(!race.attempted);
+    race.attempted = true;
+    crate::serial_println!("[GRANT-F] lifecycle case={} checkpoint=consume-attempt pid={} incarnation={} old_vm={} issuer={} issuer_inc={} issuer_vm={} inventory={} recipient=retiring-or-unpublished cpu={}", if index == 0 { "exit-consume" } else { "exec-consume" }, target.call.pid, target.call.incarnation, race.identity.unwrap().vm_generation, issuer.pid, issuer.foreground.incarnation, issuer.address_space.identity().generation, inventory, crate::sched::current_cpu_id());
 }
 
 /// Observation on the ordinary signal path, immediately before the real

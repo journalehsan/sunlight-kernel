@@ -97,6 +97,7 @@ pub extern "C" fn _start() -> ! {
     match sunlight_libc::getpid() {
         0xF4F0 => race_controller(),
         0xF4F1 | 0xF4F2 => race_recipient(),
+        0xF4F3 | 0xF4F4 => consumption_recipient(),
         _ => {}
     }
     let uac = endpoint("uac");
@@ -161,8 +162,34 @@ fn race_controller() -> ! {
     let ep = sunlight_ipc::endpoint_create();
     assert!(sunlight_ipc::nameserver_register("grant-racer", ep));
     let mut seen = [0u8; 2];
-    for _ in 0..4 {
+    let mut seen_consumers = [false; 2];
+    for _ in 0..6 {
         let msg = sunlight_ipc::ipc_recv_timeout(ep, 20_000).expect("bounded race request");
+        if msg.label == 0xF11B0F {
+            let pid = msg.words[0];
+            let index = if pid == 0xF4F3 {
+                0
+            } else {
+                assert_eq!(pid, 0xF4F4);
+                1
+            };
+            assert!(!seen_consumers[index]);
+            seen_consumers[index] = true;
+            if index == 0 {
+                sunlight_libc::kill(pid, 9).expect("recipient retirement before VFS consume");
+            } else {
+                // The recipient's real IPC deadline cancels its request, then it
+                // execs /bin/true. Hold VFS until that image has exited. The kernel
+                // independently asserts the actual VM change, not just death.
+                let deadline = sunlight_ipc::monotonic_millis() + 10_000;
+                while sunlight_ipc::process_is_alive(pid) {
+                    assert!(sunlight_ipc::monotonic_millis() < deadline);
+                    sunlight_ipc::process_yield();
+                }
+            }
+            sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xF11B0F)).expect("resume VFS");
+            continue;
+        }
         assert_eq!(msg.label, 0xF11B0D);
         assert_eq!(msg.cap_count, 0);
         let index = match msg.words[0] {
@@ -188,16 +215,67 @@ fn race_controller() -> ! {
         sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xF11B0D)).expect("race acknowledgement");
     }
     assert_eq!(seen, [2, 2]);
+    assert_eq!(seen_consumers, [true; 2]);
     // A later synchronous UAC request proves both stale reply attempts have
     // passed through the real single-threaded service loop before completion.
     let uac = endpoint("uac");
     let reply = sunlight_ipc::ipc_call_timeout(uac, IpcMsg::with_label(0xF11B0D), 10_000)
         .expect("post-race service progress");
     assert_eq!(reply.label, api::REPLY_ERR);
+    let vfs = endpoint("vfs");
+    assert!(!authorize(vfs, CapabilityToken::INVALID, b"/bin/true"));
+    sunlight_ipc::debug_log(
+        "[GRANT-F] consumer-progress retired_exit=1 retired_exec=1 stale_reply=excluded PASS",
+    );
     sunlight_ipc::debug_log(
         "[GRANT-D] driver COMPLETE precommit=aborted postcommit=retired stale_reply=excluded",
     );
+    // Observe death independently of waitpid's retained-slot exit receipt.
+    // The kernel's actual reaper marker validates clean exit and full cleanup.
+    let mut previous = 0;
+    for _ in 0..8 {
+        let pid =
+            sunlight_libc::spawn(b"/bin/true", &[b"true"], None).expect("ordinary allocator spawn");
+        assert!(pid > previous);
+        let deadline = sunlight_ipc::monotonic_millis() + 10_000;
+        while sunlight_ipc::process_is_alive(pid) {
+            assert!(sunlight_ipc::monotonic_millis() < deadline);
+            sunlight_ipc::process_yield();
+        }
+        previous = pid;
+    }
+    sunlight_ipc::debug_log("[GRANT-F] pid-contract cycles=8 same_numeric_pid=0 policy=non-reuse scope=ordinary-runtime-spawn PASS");
     sunlight_libc::exit(0)
+}
+
+fn consumption_recipient() -> ! {
+    let uac = endpoint("uac");
+    let vfs = endpoint("vfs");
+    let control = endpoint("grant-racer");
+    let grants = base(uac);
+    assert_eq!(grants.label, api::REPLY_OK);
+    let mut msg = IpcMsg::with_label(VfsMsg::AUTHORIZE_EXEC)
+        .with_cap(0, grants.caps[0])
+        .with_cap(1, control);
+    for (i, byte) in b"/bin/true".iter().enumerate() {
+        msg.words[i / 8] |= (*byte as u64) << (8 * (i % 8));
+    }
+    msg.word_count = 2;
+    if sunlight_libc::getpid() == 0xF4F3 {
+        // This case is terminated by the controller, never by an IPC deadline.
+        // The collector and controller bound failure if SIGKILL is not reached.
+        let _ = sunlight_ipc::ipc_call(vfs, msg);
+        panic!("exit recipient resumed before controller retirement");
+    }
+    let result = sunlight_ipc::ipc_call_timeout(vfs, msg, 1000);
+    assert_eq!(sunlight_libc::getpid(), 0xF4F4, "exit recipient resumed");
+    assert!(
+        matches!(result, Err(sunlight_ipc::IpcCallError::Timeout)),
+        "held request must expire"
+    );
+    sunlight_ipc::debug_log("[GRANT-F] recipient deadline=expired next=exec");
+    sunlight_libc::exec(b"/bin/true", &[b"true"]).expect("exec held old request");
+    panic!("exec returned");
 }
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {

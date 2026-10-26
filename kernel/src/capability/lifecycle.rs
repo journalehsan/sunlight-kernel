@@ -163,6 +163,8 @@ impl Scheduler {
     }
 
     pub(crate) fn consume_vfs_grant(&self, token: CapabilityToken, path: &str) -> bool {
+        #[cfg(feature = "production_grant_test")]
+        super::production_gate::consumption_attempt(self);
         let issuer = self.current_process();
         let Some(target) = issuer.ipc_reply_target else {
             return false;
@@ -178,6 +180,8 @@ impl Scheduler {
             .consume_vfs_grant(token, identity, path, self.global_tick);
         #[cfg(feature = "production_grant_test")]
         super::production_gate::consumed(issuer, identity, allowed);
+        #[cfg(feature = "production_grant_test")]
+        super::production_gate::census_after_consume(self);
         allowed
     }
 

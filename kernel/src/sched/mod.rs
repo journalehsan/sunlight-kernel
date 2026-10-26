@@ -2926,6 +2926,10 @@ impl Scheduler {
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
         #[cfg(feature = "production_grant_test")]
+        if self.processes[idx].ppid == 0xF4F0 {
+            crate::serial_println!("[GRANT-F] pid-reaped pid={} incarnation={} vm={} pending=0 reply=0 deferred=0 stack=0 cpu={}", pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+        }
+        #[cfg(feature = "production_grant_test")]
         crate::capability::production_gate::reaped(&self.processes[idx]);
         if is_native_borrower {
             NATIVE_BORROWERS_REAPED.fetch_add(1, Ordering::Relaxed);

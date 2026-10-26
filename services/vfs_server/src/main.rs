@@ -312,6 +312,40 @@ fn read_seed_file(vfs: &mut Vfs, path: &str, out: &mut [u8]) -> usize {
 // ---------------------------------------------------------------------------
 
 fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
+    #[cfg(feature = "production-grant-test")]
+    let msg = {
+        let mut request = msg;
+        if matches!(request.badge, 0xF4F3 | 0xF4F4)
+            && request.label == VfsMsg::AUTHORIZE_EXEC
+            && request.cap_count == 2
+        {
+            // Only the fixture's transport word is stripped. The real syscall
+            // must authenticate the original caller and reject retired state.
+            let control = request.caps[1];
+            request.cap_count = 1;
+            request.caps[1] = sunlight_ipc::CapabilityToken::INVALID;
+            let ack = sunlight_ipc::ipc_call_timeout(
+                control,
+                IpcMsg::with_label(0xF11B0F).word(0, request.badge),
+                10_000,
+            )
+            .expect("bounded consume lifecycle rendezvous");
+            assert_eq!(ack.label, 0xF11B0F);
+            debug_log("[GRANT-F] consumer-resumed real_vfs=1 boundary=before-consume");
+            let reply = handle_request(state, request);
+            assert!(
+                reply.label != VfsMsg::REPLY || reply.words[0] != 0 || reply.words[1] != 1,
+                "retired requester authorized"
+            );
+            debug_log(if request.badge == 0xF4F3 {
+                "[GRANT-F] consumer-result case=exit-consume allowed=0"
+            } else {
+                "[GRANT-F] consumer-result case=exec-consume allowed=0"
+            });
+            return reply;
+        }
+        request
+    };
     match msg.label {
         VfsMsg::AUTHORIZE_EXEC => match decoded_path(&msg.words) {
             Some(path)

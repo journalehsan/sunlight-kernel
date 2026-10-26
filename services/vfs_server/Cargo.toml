@@ -626,3 +626,7 @@ sunlight-fs = { path = "../../sunlight-fs" }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-fat = { path = "../../sunlight-fat" }
 heapless = "0.8"
+
+[features]
+# Bounded rendezvous on real authorization requests; absent in normal images.
+production-grant-test = []

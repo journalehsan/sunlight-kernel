@@ -3537,6 +3537,11 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     trace.child_created_ns = now_ns();
 
     let idx = sched.add_process_after_reaping(child);
+    #[cfg(feature = "production_grant_test")]
+    if ppid == 0xF4F0 {
+        let process = &sched.processes[idx];
+        crate::serial_println!("[GRANT-F] pid-published parent={} pid={} incarnation={} vm={} roles={} cpu={} allocator=max-retained-plus-one", ppid, process.pid, process.foreground.incarnation, process.address_space.identity().generation, u8::from(process.trusted_auth_broker || process.trusted_vfs_service), current_cpu);
+    }
     // add_process leaves queueing to the caller; without this the child sits
     // Ready but is never picked by the BORE queues.
     sched.enqueue_ready_on_cpu(idx, current_cpu);

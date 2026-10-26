@@ -58,4 +58,64 @@ mod tests {
     fn actual_broker_exact_history_boundary_preserves_live_authority() {
         super::run();
     }
+
+    #[test]
+    fn concurrent_last_slot_issuance_has_one_winner_and_permanent_exhaustion() {
+        use super::*;
+        use std::sync::{Arc, Barrier, Mutex};
+        let mut broker = CapabilityBroker::new();
+        // Real abandoned preparations burn identities without authoritative
+        // grants. No reduced history limit or insertion into authority tables.
+        let mut next = 100u64;
+        while broker.token_history.usage().0 < MAX_PREPARED_TOKENS - 1 {
+            let count = (MAX_PREPARED_TOKENS - 1 - broker.token_history.usage().0).min(256);
+            let mut candidates = [None; 256];
+            for word in &mut candidates[..count] {
+                *word = Some(next);
+                next += 1;
+            }
+            broker.test_entropy(&candidates[..count]);
+            for _ in 0..count {
+                drop(broker.prepare_shared_region().unwrap());
+            }
+        }
+        broker.test_entropy(&[Some(next), Some(next + 1)]);
+        let broker = Arc::new(Mutex::new(broker));
+        let start = Arc::new(Barrier::new(3));
+        let workers: std::vec::Vec<_> = (1..=2)
+            .map(|pid| {
+                let broker = Arc::clone(&broker);
+                let start = Arc::clone(&start);
+                std::thread::spawn(move || {
+                    start.wait();
+                    (pid, broker.lock().unwrap().create_endpoint(pid))
+                })
+            })
+            .collect();
+        start.wait();
+        let results: std::vec::Vec<_> = workers.into_iter().map(|w| w.join().unwrap()).collect();
+        assert_eq!(results.iter().filter(|(_, r)| r.is_ok()).count(), 1);
+        assert_eq!(
+            results
+                .iter()
+                .filter(|(_, r)| *r == Err(CapError::TokenHistoryFull))
+                .count(),
+            1
+        );
+        let mut broker = broker.lock().unwrap();
+        assert_eq!(broker.active_tokens(), 1);
+        assert_eq!(broker.token_history.usage().0, MAX_PREPARED_TOKENS);
+        assert_eq!(broker.test_words.as_ref().unwrap().len(), 1);
+        for (pid, result) in results {
+            if let Ok((_, token)) = result {
+                broker.destroy_endpoint(pid, token).unwrap();
+                assert_eq!(
+                    broker.check(token, CapabilityRights::SEND),
+                    Err(CapError::InvalidToken)
+                );
+            }
+        }
+        assert_eq!(broker.active_tokens(), 0);
+        assert_eq!(broker.create_endpoint(3), Err(CapError::TokenHistoryFull));
+    }
 }

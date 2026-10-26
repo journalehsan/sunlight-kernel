@@ -693,6 +693,38 @@ impl IpcBusShard {
     }
 
     /// Total number of waiter pids across all endpoints in this shard.
+    #[cfg(feature = "production_grant_test")]
+    pub(crate) fn grant_reference_census(&self, sched: &Scheduler) -> [usize; 4] {
+        let valid = |endpoint: u32, call: IpcCallId| {
+            sched.processes.iter().any(|p| {
+                p.pid == call.pid
+                    && p.foreground.incarnation == call.incarnation
+                    && p.pending_call.is_some_and(|c| {
+                        c.endpoint_id == endpoint && c.generation == call.generation
+                    })
+            })
+        };
+        let (mut queued, mut waiters, mut stale, mut capacity) = (0, 0, 0, 0);
+        for (endpoint, queue) in &self.queues {
+            capacity += queue.messages.capacity() * core::mem::size_of::<QueuedMessage>();
+            for message in &queue.messages {
+                if let MessageKind::Ordinary(call) = message.kind {
+                    queued += 1;
+                    stale += usize::from(!valid(*endpoint, call));
+                }
+            }
+        }
+        for (endpoint, calls) in &self.reply_waiters {
+            capacity += calls.capacity() * core::mem::size_of::<IpcCallId>();
+            for call in calls {
+                waiters += 1;
+                stale += usize::from(!valid(*endpoint, *call));
+            }
+        }
+        [queued, waiters, stale, capacity]
+    }
+
+    /// Total number of waiter pids across all endpoints in this shard.
     pub fn total_waiter_count(&self) -> usize {
         let mut n = 0usize;
         for waiters in self.reply_waiters.values() {

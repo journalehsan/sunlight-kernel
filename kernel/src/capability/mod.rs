@@ -17,6 +17,8 @@ use x86_64::PhysAddr;
 pub mod gate;
 #[cfg(feature = "production_grant_test")]
 pub mod production_gate;
+#[cfg(feature = "production_grant_test")]
+mod reconciliation;
 #[cfg(feature = "native_session_race_test")]
 pub(crate) mod session_race;
 
