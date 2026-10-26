@@ -20,6 +20,46 @@ use sunlight_ipc::accounts::GrantBinding;
 use sunlight_ipc::accounts::GrantScope;
 
 impl Scheduler {
+    /// Test-only observation, with the same authenticated request lookup as
+    /// account_grant. This neither reserves metadata nor authorizes a mint.
+    #[cfg(feature = "native_session_race_test")]
+    pub(crate) fn observe_n4_pending(&self, pid: usize, session: u64, epoch: u64) -> bool {
+        let Some(recipient) = self.grant_requester(pid) else {
+            return false;
+        };
+        let Some(delivery) = self.grant_delivery(recipient) else {
+            return false;
+        };
+        let broker = CAP_BROKER.lock();
+        let reference = sunlight_ipc::account_session::SessionRef { id: session, epoch };
+        let Some((owner, issuer)) = broker.account_session_participants(reference) else {
+            return false;
+        };
+        if issuer != RecipientIdentity::of(self.current_process())
+            || !self.session_participant_live(owner, false)
+            || !self.session_participant_live(issuer, true)
+        {
+            return false;
+        }
+        super::session_race::locked_event(
+            "authenticated-requester",
+            recipient,
+            session,
+            epoch,
+            u64::from(recipient.uid),
+        );
+        super::session_race::locked_event(
+            "n4-precommit",
+            self.current_process(),
+            session,
+            epoch,
+            0,
+        );
+        crate::serial_println!("[SESSION-E3] seq={} checkpoint=request-binding recipient={} recipient_inc={} recipient_vm={} binding_vm={} issuer={} issuer_inc={} issuer_vm={} request_generation={} session={} epoch={} cpu={}", super::session_race::sequence(), delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, recipient.address_space.identity().generation, delivery.issuer_pid, delivery.issuer_incarnation, delivery.issuer_vm_generation, delivery.request, session, epoch, crate::sched::current_cpu_id());
+        super::session_race::inventory(&broker);
+        true
+    }
+
     /// Legacy VFS minting is a bearer issuance to the current caller, not a
     /// recipient-targeted grant. Keep the old slot restriction without treating
     /// that slot as proof of authority. The launch-chain role is withdrawn by
@@ -210,7 +250,8 @@ impl Scheduler {
         proof: CapabilityToken,
         pid: usize,
         deadline: u64,
-    ) -> Result<(sunlight_ipc::account_session::SessionRef, u32, u32), sunlight_ipc::accounts::Error> {
+    ) -> Result<(sunlight_ipc::account_session::SessionRef, u32, u32), sunlight_ipc::accounts::Error>
+    {
         use sunlight_ipc::accounts::Error;
         let owner = self.current_process();
         let recipient = self
@@ -254,12 +295,20 @@ impl Scheduler {
         );
         #[cfg(feature = "native_session_race_test")]
         match result {
-            Ok((reference, _, _)) => {
-                super::session_race::locked_event("registered", owner, reference.id, reference.epoch, 0)
-            }
-            Err(error) => {
-                super::session_race::locked_event("registration-rejected", owner, 0, 0, error as u64)
-            }
+            Ok((reference, _, _)) => super::session_race::locked_event(
+                "registered",
+                owner,
+                reference.id,
+                reference.epoch,
+                0,
+            ),
+            Err(error) => super::session_race::locked_event(
+                "registration-rejected",
+                owner,
+                0,
+                0,
+                error as u64,
+            ),
         }
         result
     }
@@ -349,7 +398,8 @@ impl Scheduler {
         let (owner, issuer) = broker
             .account_session_participants(reference)
             .ok_or(Error::SessionAuthorityUnavailable)?;
-        if !self.session_participant_live(owner, false) || !self.session_participant_live(issuer, true)
+        if !self.session_participant_live(owner, false)
+            || !self.session_participant_live(issuer, true)
         {
             broker.retire_sessions_for(if !self.session_participant_live(owner, false) {
                 owner.pid

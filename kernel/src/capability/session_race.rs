@@ -13,6 +13,9 @@ static DONE: AtomicU64 = AtomicU64::new(0);
 static GRANTS: spin::Mutex<[u64; 32]> = spin::Mutex::new([0; 32]);
 static MINTED: AtomicU64 = AtomicU64::new(0);
 static CONSUMED: AtomicU64 = AtomicU64::new(0);
+static N4_SESSION: AtomicU64 = AtomicU64::new(0);
+static N4_EPOCH: AtomicU64 = AtomicU64::new(0);
+static N4_READY: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) fn grant(token: super::CapabilityToken, session: u64, epoch: u64, consume: bool) {
     let mut tokens = GRANTS.lock();
@@ -40,6 +43,15 @@ pub(crate) fn sequence() -> u64 {
 /// Observe the real UAC's existing, policy-accepted timing IPC. This changes
 /// timing only; all broker authorization runs again at its ordinary boundary.
 pub(crate) fn arm(msg: &crate::ipc::message::IpcMsg) {
+    if msg.label == 0xE301 && msg.word_count == 4 && msg.words[..2] == [4, 0] {
+        let sched = crate::sched::SCHEDULER.lock();
+        let p = sched.current_process();
+        if p.trusted_auth_broker && !p.is_exiting() && p.ipc_reply_target.is_some() {
+            N4_EPOCH.store(msg.words[3], Ordering::Relaxed);
+            N4_SESSION.store(msg.words[2], Ordering::Release);
+        }
+        return;
+    }
     if msg.label != 0xE301
         || msg.word_count != 4
         || !matches!((msg.words[0], msg.words[1]), (3 | 9, 0) | (10 | 11, 2))
@@ -77,6 +89,65 @@ pub(crate) fn arm(msg: &crate::ipc::message::IpcMsg) {
         msg.words[3],
         WINNER.load(Ordering::Relaxed),
     );
+}
+
+/// Read-only test observation through DebugLog, absent from ordinary kernels.
+/// The ordinary controller still requests retirement through SunlightD IPC.
+pub(crate) fn n4_query(text: &str) -> Option<u64> {
+    if text != "[SESSION-E3-N4] checkpoint-query" {
+        return None;
+    }
+    let sched = crate::sched::SCHEDULER.lock();
+    let p = sched.current_process();
+    Some(
+        if p.name_str() != "session-racer" || p.uid != 0 || p.is_exiting() {
+            0
+        } else if sched.online_cores == 1 {
+            1
+        } else {
+            N4_READY.load(Ordering::Acquire)
+        },
+    )
+}
+
+/// Pause a genuine grant syscall before lifecycle serialization. Never retain
+/// a guard while waiting. Ring-0 syscall execution cannot be preempted here;
+/// the real manager's pending SIGTERM is observed, then normal dispatch runs.
+/// No signal is injected, consumed or ignored, and no authorization changes.
+pub(crate) fn n4_boundary(pid: usize, session: u64, epoch: u64) {
+    if N4_SESSION.load(Ordering::Acquire) != session
+        || N4_EPOCH.load(Ordering::Relaxed) != epoch
+        || N4_READY.load(Ordering::Relaxed) != 0
+    {
+        return;
+    }
+    {
+        let sched = crate::sched::SCHEDULER.lock();
+        if sched.online_cores < 2 || !sched.observe_n4_pending(pid, session, epoch) {
+            return;
+        }
+        N4_READY.store(2, Ordering::Release);
+    }
+    let start = unsafe { core::arch::x86_64::_rdtsc() };
+    let budget = crate::arch::x86_64::interrupts::tsc_hz().saturating_mul(5);
+    for i in 0..100_000_000u64 {
+        if i % 256 == 0 {
+            let sched = crate::sched::SCHEDULER.lock();
+            let p = sched.current_process();
+            if p.signal_state
+                .is_pending(crate::process::signal::Signal::SIGTERM)
+            {
+                locked_event("n4-stop-pending", p, session, epoch, 15);
+                crate::serial_println!("[SESSION-E3] seq={} checkpoint=n4-execution-held pid={} incarnation={} vm={} session={} epoch={} owning_core={} exiting={} cpu={}", sequence(), p.pid, p.foreground.incarnation, p.address_space.identity().generation, session, epoch, p.owning_core, u8::from(p.is_exiting()), crate::sched::current_cpu_id());
+                return;
+            }
+            if unsafe { core::arch::x86_64::_rdtsc() }.wrapping_sub(start) >= budget {
+                break;
+            }
+        }
+        core::hint::spin_loop();
+    }
+    event("boundary-timeout", session, epoch, 15);
 }
 
 /// Both genuine syscall entrants rendezvous outside SCHEDULER/CAP_BROKER.

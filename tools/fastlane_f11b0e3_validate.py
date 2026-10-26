@@ -18,6 +18,25 @@ BASE = ROOT / 'target/fastlane-f11b0e3-evidence'
 BUILD = ROOT / 'target/fastlane-f11b0e3-build'
 ENV = {'CARGO_TARGET_DIR': str(BUILD), 'CARGO_INCREMENTAL': '0', 'CARGO_PROFILE_DEV_DEBUG': '0'}
 CASES = ('N1', 'N2', 'N3M', 'N3R', 'N4', 'N5', 'N6', 'N7R', 'N7C', 'N7OC', 'N7OR')
+ACCEPTED = ('FORCED_AND_PASSED', 'PREVENTED_BY_PROVEN_PRODUCTION_CONTRACT')
+
+
+def audit_attempt_inventory(recorded, indexed):
+    """An aggregate must retain every raw attempt, including failed N3M runs."""
+    expected = {r['serial']: r for r in recorded if r.get('serial')}
+    actual = {r['serial']: r for r in indexed if r.get('serial')}
+    errors = []
+    if len(actual) != sum(bool(r.get('serial')) for r in indexed):
+        errors.append('duplicate attempt in aggregate')
+    if set(expected) != set(actual):
+        errors.append('attempt omitted or unrecorded attempt added')
+    for serial in set(expected) & set(actual):
+        for key in ('case', 'cpus', 'failure', 'serial_sha256'):
+            if expected[serial].get(key) != actual[serial].get(key):
+                errors.append('attempt metadata changed: ' + serial + ':' + key)
+        if expected[serial].get('validator', {}).get('classification') != actual[serial].get('validator', {}).get('classification'):
+            errors.append('attempt classification changed: ' + serial)
+    return errors
 
 
 def assess_native(raw, case, cpus, *, identity=None, failure=None):
@@ -31,12 +50,11 @@ def assess_native(raw, case, cpus, *, identity=None, failure=None):
     if identity is None or not all(identity.get(k) for k in
             ('iso_matches', 'elf_matches', 'services_match', 'source_matches')):
         result['errors'].append('missing or mismatched image/source identity')
-        if result['classification'] == 'FORCED_AND_PASSED':
+        if result['classification'] in ACCEPTED:
             result['classification'] = 'FORCED_AND_FAILED'
     if failure:
         result['errors'].append('driver failed or timed out: ' + failure['type'])
-        if result['classification'] == 'FORCED_AND_PASSED':
-            result['classification'] = 'FORCED_AND_FAILED'
+        result['classification'] = 'FORCED_AND_FAILED'
     return result
 
 
@@ -103,6 +121,8 @@ def _assess_native(raw, case, cpus):
     require(not any(m in raw for m in ('PANIC','panicked at','[FAULT]','checkpoint=FAIL')), 'guest failure')
     require(bool(inventory) and all(inventory[-1].get(k) == '0' for k in
                 ('sessions','receipts','account_grants','pending_account_deliveries')), 'session subset not reconciled')
+    require(bool(cleaned) and raw.rfind('checkpoint=inventory ') > raw.rfind('checkpoint=fixture-ipc-cleaned '),
+            'terminal inventory after fixture cleanup missing')
     require(len(consumed) <= 1 and len(minted) <= 1, 'duplicate mint or consumption')
     require(not events('boundary-timeout'), 'controlled boundary timed out')
     for r in minted + consumed + reject:
@@ -128,6 +148,7 @@ def _assess_native(raw, case, cpus):
     if inventory:
         require(inventory[0].get('sessions') == inventory[0].get('account_grants') == '0', 'initial inventory not observed before session registration')
     cross_cpu = 'NOT_FORCED'
+    n4_prevented = False
     if case in ('N1','N2','N3M','N3R'):
         require(any(r.get('result') == str(0xC2FE if case in ('N1','N3R') else 0xC2FF)
                     for r in client('mint-response')), 'final mint outcome missing or wrong')
@@ -155,13 +176,14 @@ def _assess_native(raw, case, cpus):
             missing.append('retirement, pending call cancellation, replacement or old-session broker boundary missing')
         else:
             old, new = activation
+            replacement_reject = [r for r in reject if all(r.get(k) == new.get(k) for k in ('pid','incarnation','vm'))]
             require(all(old.get(k) == retired[0].get('account_'+{'pid':'pid','incarnation':'inc','vm':'vm'}[k]) for k in ('pid','incarnation','vm')), 'retired Account differs from original issuer')
             require(all(old.get(k) != new.get(k) for k in ('incarnation','vm')), 'replacement identity is not distinct')
             require(retired[0].get('retiring_pid') == old.get('pid'), 'retirement was not caused by Account lifecycle')
             require(new.get('account') == '1', 'replacement lacks independent trusted activation')
-            require(ordered(retired, closed) and ordered(closed, [new]) and ordered(reaped, [new]) and ordered([new], reject), 'lifecycle order unproven')
-            require(all(reject[0].get(k) == new.get(k) for k in ('pid','incarnation','vm')), 'old-session rejection not evaluated by replacement')
-            require(reject[0].get('result') == '11', 'old session denial is not broker SessionAuthorityUnavailable')
+            require(ordered(retired, closed) and ordered(closed, [new]) and ordered(reaped, [new]) and ordered([new], replacement_reject), 'lifecycle order unproven')
+            require(bool(replacement_reject), 'old-session rejection not evaluated by replacement')
+            require(bool(replacement_reject) and replacement_reject[0].get('result') == '11', 'old session denial is not broker SessionAuthorityUnavailable')
             require(bool(client('old-call-peer-closed')) and bool(client('replacement-old-session-denied')), 'recipient reconciliation missing')
             require(all(r.get('reply_target') == 'none' and r.get('deferred_targets') == '0'
                         and r.get('pending_call') == 'none' for r in reaped), 'old reply context survived retirement')
@@ -169,7 +191,40 @@ def _assess_native(raw, case, cpus):
             require(any(r.get('recipient_inc') == q.get('incarnation') and r.get('recipient') == q.get('pid')
                         and int(r.get('request_generation','0')) > 0 for r in closed for q in requesters), 'cancelled call incarnation/generation mismatch')
         if case == 'N4':
-            require(not minted, 'old issuance committed before retirement fixture')
+            precommit = events('n4-precommit')
+            stop = events('n4-stop-pending')
+            held = events('n4-execution-held')
+            signal = events('n4-manager-signal')
+            if precommit:
+                # This category proves deferred lifecycle, not the requested
+                # row-retirement-before-commit ordering. The live-authority mint
+                # is cancelled without delivery at actual endpoint retirement.
+                require(cpus >= 2 and len(precommit) == len(stop) == len(held) == len(signal) == len(minted) == 1,
+                        'N4 prevention transitions incomplete')
+                for checkpoint in (precommit, stop, held, minted):
+                    require(bool(activation) and all(all(r.get(k) == activation[0].get(k)
+                            for k in ('pid','incarnation','vm'))
+                            and all(r.get(k) == registered[0].get(k) for k in ('session','epoch'))
+                            for r in checkpoint) if registered else False, 'N4 original issuer/session mismatch')
+                require(ordered(precommit, signal) and ordered(signal, stop) and ordered(stop, held)
+                        and ordered(held, minted) and ordered(minted, retired), 'N4 prevention order unproven')
+                require(bool(stop) and stop[0].get('account') == '1' and stop[0].get('result') == '15',
+                        'real pending SIGTERM missing')
+                require(bool(held) and held[0].get('exiting') == '0'
+                        and held[0].get('owning_core') == held[0].get('cpu'), 'old syscall execution ownership missing')
+                require(bool(signal) and signal[0].get('signal') == '15'
+                        and bool(precommit) and signal[0].get('cpu') != precommit[0].get('cpu'),
+                        'actual concurrent manager signal missing')
+                require(bool(activation) and all(all(s.get(a) == activation[0].get(k)
+                        for a,k in (('issuer','pid'),('issuer_inc','incarnation'),('issuer_vm','vm')))
+                        for s in signal), 'manager targeted wrong Account incarnation')
+                require(bool(client('broker-pending-observed')), 'controller did not observe broker entry')
+                require(any(r.get('pending_account_deliveries') == '1' for r in inventory), 'pre-retirement pending grant missing')
+                require(any(all(b.get(k) == c.get(k) for k in ('recipient','recipient_inc','request_generation'))
+                            and ordered(precommit, [b]) and ordered([b], signal)
+                            for b in bindings for c in closed), 'precommit call not cancelled')
+                require(not consumed, 'N4 pending authority was consumed')
+                n4_prevented = True
             # Stage zero is userspace policy acceptance, not a broker entrant.
             # A replacement's denial must never certify a resumed old issuer.
             old_ready = [r for r in events('boundary-ready') if r.get('result') == '1'
@@ -177,7 +232,9 @@ def _assess_native(raw, case, cpus):
                                                 for k in ('pid','incarnation','vm'))]
             old_reject = [r for r in reject if activation and all(r.get(k) == activation[0].get(k)
                                                                   for k in ('pid','incarnation','vm'))]
-            if not old_ready or not old_reject:
+            if precommit:
+                pass
+            elif not old_ready or not old_reject:
                 missing.append('original Account broker precommit entrant and post-retirement rejection missing; userspace cancellation only')
             else:
                 require(ordered(old_ready, retired) and ordered(retired, old_reject), 'old issuer retirement/precommit order unproven')
@@ -214,12 +271,16 @@ def _assess_native(raw, case, cpus):
                 require(ordered(consume_ready, first) and ordered(revoke_ready, first), 'consume/revoke entrants not both admitted before linearization')
                 if not missing and not errors: cross_cpu = 'FORCED_AND_PASSED'
     classification = 'NOT_FORCED' if missing else ('FORCED_AND_FAILED' if errors else 'FORCED_AND_PASSED')
+    if n4_prevented and not errors and not missing:
+        classification = 'PREVENTED_BY_PROVEN_PRODUCTION_CONTRACT'
     return {'classification':classification, 'case':case, 'cpus':cpus, 'errors':errors,
             'missing_checkpoints':missing, 'markers':rows, 'client_markers':clients, 'uac_markers':uac,
             'scope':'real Account/sessiond boot-global broker; session subset only',
             'cross_cpu_contention':cross_cpu,
             'stale_reply_mechanism':'generation-qualified PeerClosed plus retired executable/reply context' if case == 'N5' else None,
             'actual_pid_reuse':'NOT_FORCED',
+            'requested_retirement_before_commit_forced': False if n4_prevented else None,
+            'n4_prevention_mechanism': 'nonpreemptible syscall retains execution ownership; pending SIGTERM is applied after the legitimate commit; endpoint retirement cancels its undelivered grant' if n4_prevented else None,
             'service_numeric_pid_reused':len(activation) == 2 and activation[0].get('pid') == activation[1].get('pid'),
             'resource_inventory':inventory[-1] if inventory else None}
 
@@ -254,6 +315,8 @@ def main():
     parser.add_argument('--evidence-root', type=Path, default=BASE)
     parser.add_argument('--replacement-relogin', action='store_true',
                         help='After N6 use the real TTY login and one-use grant under replacement B')
+    parser.add_argument('--n4-on-ap', action='store_true',
+                        help='Build a separate N4-only test image with initial Account affinity on CPU 1')
     args = parser.parse_args()
     if args.replacement_relogin and args.cases != ['N6']:
         parser.error('--replacement-relogin requires --cases N6')
@@ -273,7 +336,7 @@ def main():
         return
     out = base / (args.section + '-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
     out.mkdir(parents=True)
-    summary = {'phase': 'F1.1B-0E3S' if base.name == 'fastlane-f11b0e3s-evidence' else ('F1.1B-0E3R' if base.name == 'fastlane-f11b0e3r-evidence' else 'F1.1B-0E3'), 'source_sha256': sources(), 'checks': [], 'native': [], 'images': {},
+    summary = {'phase': {'fastlane-f11b0e3s-evidence': 'F1.1B-0E3S', 'fastlane-f11b0e3r-evidence': 'F1.1B-0E3R', 'fastlane-f11b0e3t-evidence': 'F1.1B-0E3T'}.get(base.name, 'F1.1B-0E3'), 'source_sha256': sources(), 'checks': [], 'native': [], 'images': {},
                'gates': {'A': 'VERIFIED NATIVE', 'B': 'PARTIAL', 'session_authority': 'PARTIAL', 'F1.1B-0': 'BLOCKED', 'C': 'BLOCKED'}}
     def save():
         (out / 'validation-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
@@ -308,7 +371,9 @@ def main():
                 shutil.copy2(BUILD / 'x86_64-unknown-none/release' / name, ROOT / 'target/x86_64-unknown-none/release' / name)
             kernel_cmd = ['cargo', 'build', '--locked', '--offline', '-p', 'sunlight-kernel', '--bin', 'sunlight-kernel']
             if test: kernel_cmd += ['--features', 'native_session_race_test,key_inject']
-            if not check('kernel', kernel_cmd, {'SUNLIGHT_INJECT_PHASE': 'desktop_login'} if test else None): raise SystemExit(1)
+            test_environment = {'SUNLIGHT_INJECT_PHASE': 'desktop_login',
+                                'SUNLIGHT_SESSION_N4_AP': '1' if args.n4_on_ap else '0'} if test else {}
+            if not check('kernel', kernel_cmd, test_environment): raise SystemExit(1)
             built = BUILD / 'x86_64-unknown-none/debug/sunlight-kernel'
             elf, iso = out / 'kernel.elf', out / 'fixture.iso'
             if not check('strip', ['objcopy', '--strip-debug', str(built), str(elf)]): raise SystemExit(1)
@@ -328,6 +393,7 @@ def main():
                 raise RuntimeError('test instrumentation present in ordinary image')
             summary['images']['fixture' if test else 'production'] = {'kernel_sha256': digest(built), 'elf_sha256': digest(elf),
                 'iso_sha256': digest(iso), 'iso': str(iso), 'features': ['native_session_race_test', 'key_inject'] if test else [],
+                'test_environment': test_environment,
                 'embedded_services': payloads, 'source_sha256': summary['source_sha256']}
         elif args.section == 'checks':
             host = ['cargo', 'test', '--locked', '--offline', '--target', 'x86_64-unknown-linux-gnu']
@@ -346,6 +412,8 @@ def main():
             if args.image_manifest is None: parser.error('--image-manifest required for native')
             manifest = json.loads(args.image_manifest.read_text())
             image = manifest['images']['fixture']; iso = Path(image['iso'])
+            if image.get('test_environment', {}).get('SUNLIGHT_SESSION_N4_AP') == '1' and args.cases != ['N4']:
+                parser.error('N4 AP-placement image supports only --cases N4; use ordinary fixture for other races')
             if digest(iso) != image['iso_sha256']: raise RuntimeError('ISO hash mismatch')
             elf = args.image_manifest.parent / 'kernel.elf'
             if digest(elf) != image['elf_sha256']: raise RuntimeError('ELF hash mismatch')
@@ -448,13 +516,13 @@ def main():
                         'serial':str(serial.relative_to(ROOT)), 'serial_sha256':digest(serial),
                         'iso_sha256':digest(iso), 'validator':detail})
                     print(name, detail['classification'], failure or '', flush=True); save()
-                    if detail['classification'] != 'FORCED_AND_PASSED':
+                    if detail['classification'] not in ACCEPTED:
                         raise RuntimeError('native case failed; stop matrix expansion and inspect preserved attempt')
     finally:
         summary['source_sha256_after'] = sources()
         summary['source_hashes_unchanged'] = summary['source_sha256'] == summary['source_sha256_after']
         save(); print('Evidence:', out.relative_to(ROOT), flush=True)
-    if not summary['source_hashes_unchanged'] or any(c['exit_code'] for c in summary['checks']) or any(r.get('validator',{}).get('classification') not in (None, 'FORCED_AND_PASSED') for r in summary['native']):
+    if not summary['source_hashes_unchanged'] or any(c['exit_code'] for c in summary['checks']) or any(r.get('validator',{}).get('classification') not in (None, *ACCEPTED) for r in summary['native']):
         raise SystemExit(1)
 
 

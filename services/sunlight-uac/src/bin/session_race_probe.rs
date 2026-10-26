@@ -10,7 +10,55 @@ static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::Loc
 static mut HEAP: [u8; 256 * 1024] = [0; 256 * 1024];
 
 fn endpoint(name: &str) -> CapabilityToken {
-    sunlight_ipc::nameserver_lookup_timeout(name, 2000).expect("endpoint unavailable")
+    // Preserve the original lookup, timeout and failure behavior, but retain
+    // the transport/non-GRANT distinction previously collapsed into None.
+    let start = sunlight_ipc::monotonic_millis();
+    let reply = sunlight_ipc::ipc_call_timeout(
+        sunlight_ipc::get_init_cap(),
+        IpcMsg::with_label(sunlight_ipc::InitMsg::LOOKUP).word(0, sunlight_ipc::name_to_u64(name)),
+        2000,
+    );
+    let elapsed = sunlight_ipc::monotonic_millis().saturating_sub(start);
+    match reply {
+        Ok(reply) if reply.label == sunlight_ipc::InitMsg::GRANT => {
+            sunlight_ipc::debug_log(&alloc::format!(
+                "[SESSION-E3-LOOKUP] name={} outcome=grant elapsed_ms={}",
+                name,
+                elapsed
+            ));
+            CapabilityToken(reply.words[0])
+        }
+        Ok(reply) => {
+            sunlight_ipc::debug_log(&alloc::format!(
+                "[SESSION-E3-LOOKUP] name={} outcome=non-grant label={} status={} elapsed_ms={}",
+                name,
+                reply.label,
+                reply.words[0],
+                elapsed
+            ));
+            panic!("endpoint unavailable")
+        }
+        Err(error) => {
+            sunlight_ipc::debug_log(&alloc::format!(
+                "[SESSION-E3-LOOKUP] name={} outcome=transport error={:?} elapsed_ms={}",
+                name,
+                error,
+                elapsed
+            ));
+            panic!("endpoint unavailable")
+        }
+    }
+}
+
+fn n4_query() -> u64 {
+    let query = "[SESSION-E3-N4] checkpoint-query";
+    unsafe {
+        sunlight_libc::sys::syscall2(
+            sunlight_libc::sys::SYS_DEBUG_LOG,
+            query.as_ptr() as u64,
+            query.len() as u64,
+        )
+    }
 }
 fn note(case: &str, checkpoint: &str, result: u64) {
     use core::fmt::Write;
@@ -73,8 +121,26 @@ fn controller(case: &str, bootstrap: CapabilityToken) -> ! {
     assert_eq!(message.label, 0xE301);
     note(case, "policy-accepted-rendezvous", message.words[1]);
     if matches!(message.words[0], 4..=6) {
+        if message.words[0] == 4 && n4_query() != 1 {
+            sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE301)).expect("release N4 issuer");
+            let start = sunlight_ipc::monotonic_millis();
+            let mut ready = false;
+            for _ in 0..1_000_000 {
+                if n4_query() == 2 {
+                    ready = true;
+                    break;
+                }
+                assert!(
+                    sunlight_ipc::monotonic_millis().saturating_sub(start) < 5000,
+                    "N4 entry timeout"
+                );
+                sunlight_ipc::process_yield();
+            }
+            assert!(ready, "N4 entry exhausted");
+            note(case, "broker-pending-observed", 0);
+        }
         // The manager authenticates the root caller and performs its existing
-        // generation-qualified stop/start lifecycle. No PID-only signal here.
+        // stop/start lifecycle (eager UAC uses its legacy kill branch).
         let pid = sunlight_libc::spawn(
             b"/bin/sunlightctl",
             &[b"sunlightctl", b"restart", b"uac_service"],

@@ -384,7 +384,11 @@ fn send_signal_generation(
     }
 
     let sender = sched.current_process_index().ok_or(())?;
-    if sched.processes[sender].trusted_service_manager && !sched.active_manager(&sched.processes[sender]) { return Err(()); }
+    if sched.processes[sender].trusted_service_manager
+        && !sched.active_manager(&sched.processes[sender])
+    {
+        return Err(());
+    }
 
     if let Some(generation) = generation {
         if !sched.active_manager(&sched.processes[sender])
@@ -423,6 +427,10 @@ fn send_signal_generation(
     // Catchable / cooperative signals: queue and wake blocked tasks so they
     // re-enter a syscall (or timer tick) where Default disposition is applied.
     sched.processes[idx].signal_state.deliver_signal(signal);
+    #[cfg(feature = "native_session_race_test")]
+    if sched.processes[idx].trusted_auth_broker && sched.active_manager(&sched.processes[sender]) {
+        crate::serial_println!("[SESSION-E3] seq={} checkpoint=n4-manager-signal issuer={} issuer_inc={} issuer_vm={} manager={} manager_inc={} manager_vm={} signal={} cpu={}", crate::capability::session_race::sequence(), sched.processes[idx].pid, sched.processes[idx].foreground.incarnation, sched.processes[idx].address_space.identity().generation, sched.processes[sender].pid, sched.processes[sender].foreground.incarnation, sched.processes[sender].address_space.identity().generation, signal as u64, crate::sched::current_cpu_id());
+    }
     sched.wake_for_signal(pid);
     // If the target is running, ensure a timer preemption notices fatal
     // Default disposition without waiting for the next voluntary syscall.
@@ -818,7 +826,11 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
     let linux_special = linux_compat && num >= 1000;
 
     let result = match num {
-        _ if diagnostic_manager && !::sunlight_ipc::supervision::diagnostic_syscall_allowed(num) => u64::MAX,
+        _ if diagnostic_manager
+            && !::sunlight_ipc::supervision::diagnostic_syscall_allowed(num) =>
+        {
+            u64::MAX
+        }
         1 => ipc_call(frame),
         2 => ipc_reply(frame),
         3 => ipc_reply_wait(frame),
@@ -1459,6 +1471,9 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         service_caps,
     ) {
         Ok(pid) => {
+            #[cfg(feature = "native_session_race_test")]
+            let n4_on_ap =
+                option_env!("SUNLIGHT_SESSION_N4_AP") == Some("1") && sched.online_cores > 1;
             if let Some(child) = sched
                 .processes
                 .iter_mut()
@@ -1477,7 +1492,9 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
                     child.trusted_auth_broker = true;
                     #[cfg(feature = "native_session_race_test")]
                     {
-                        child.cpu_mask = 1;
+                        // N4's lock-free syscall barrier must leave the BSP
+                        // available for the ordinary manager/timekeeper path.
+                        child.cpu_mask = if n4_on_ap { 2 } else { 1 };
                         crate::capability::session_race::locked_event(
                             "account-activated",
                             child,
@@ -1536,7 +1553,8 @@ fn sys_mint_auth_session_grant(frame: &mut SyscallFrame) -> u64 {
     let uid = frame.rsi as u32;
     let gid = frame.rdx as u32;
     let sched = crate::sched::SCHEDULER.lock();
-    sched.issue_auth_session_grant(requester_pid, uid, gid)
+    sched
+        .issue_auth_session_grant(requester_pid, uid, gid)
         .map_or(u64::MAX, |token| token.0)
 }
 
@@ -1679,6 +1697,10 @@ fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
     );
     #[cfg(feature = "native_session_race_test")]
     crate::capability::session_race::boundary(frame.r8, frame.r9, if consume { 4 } else { 1 });
+    #[cfg(feature = "native_session_race_test")]
+    if !consume {
+        crate::capability::session_race::n4_boundary(frame.rdi as usize, frame.r8, frame.r9);
+    }
     let Some(operation) = Operation::from_raw(frame.rsi) else {
         return u64::MAX;
     };
@@ -2214,7 +2236,9 @@ fn nameserver_endpoint_validate(token: u64, endpoint_id: u64, generation: u64) -
             p.pid as u64 == endpoint_id
                 && p.address_space.identity().generation == generation
                 && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
-        }) else { return 0; };
+        }) else {
+            return 0;
+        };
         let caps = crate::capability::CAP_BROKER.lock();
         return match caps.token_owner(CapabilityToken(token), CapabilityRights::SEND) {
             Ok((id, owner)) if owner == process.pid => id as u64 + 1,
@@ -2397,7 +2421,9 @@ fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
 /// RDI/RSI of the new thread's initial context so `thread_trampoline`
 /// receives them as normal C arguments.
 fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
-    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) { return u64::MAX; }
+    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) {
+        return u64::MAX;
+    }
 
     let current_cpu = crate::sched::current_cpu_id();
     let trampoline = frame.rdi;
@@ -2525,6 +2551,10 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        #[cfg(feature = "native_session_race_test")]
+        if let Some(observation) = crate::capability::session_race::n4_query(s) {
+            return observation;
+        }
         crate::serial_println!("{}", s);
     } else {
         crate::serial_println!("[SYSCALL] DebugLog: invalid UTF-8");
@@ -2906,7 +2936,9 @@ extern "C" fn enter_exec_image() -> ! {
 }
 
 extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
-    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) { return u64::MAX; }
+    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) {
+        return u64::MAX;
+    }
 
     let path_ptr = frame.rdi;
     let argv_ptr = frame.rsi;
@@ -3395,7 +3427,11 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     child.service_lookup_restrictions = service_lookup_restrictions;
     #[cfg(feature = "native_session_race_test")]
     if path_str == "/bin/session-racer" && sched.online_cores > 1 {
-        child.cpu_mask = 2;
+        child.cpu_mask = if option_env!("SUNLIGHT_SESSION_N4_AP") == Some("1") {
+            1
+        } else {
+            2
+        };
     }
     // Inherit the TTY tab so a shell-spawned app's stdio routes to that tab's
     // kernel rings (foreground input routing).
@@ -9118,9 +9154,7 @@ fn sys_kill(frame: &mut SyscallFrame) -> u64 {
     // Select the extension explicitly: legacy kill(pid, sig) leaves rdx
     // unspecified. Valid legacy signal arguments occupy only the low 32 bits.
     let expected = if frame.rsi & ::sunlight_ipc::demand::KILL_GENERATION_FLAG != 0 {
-        if frame.rdx == 0
-            || !sched::with_scheduler(|s| s.active_manager(s.current_process()))
-        {
+        if frame.rdx == 0 || !sched::with_scheduler(|s| s.active_manager(s.current_process())) {
             return u64::MAX;
         }
         Some(frame.rdx)
