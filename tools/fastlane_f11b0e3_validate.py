@@ -156,20 +156,42 @@ def _assess_native(raw, case, cpus):
         else:
             old, new = activation
             require(all(old.get(k) == retired[0].get('account_'+{'pid':'pid','incarnation':'inc','vm':'vm'}[k]) for k in ('pid','incarnation','vm')), 'retired Account differs from original issuer')
-            require(all(old.get(k) != new.get(k) for k in ('pid','incarnation','vm')), 'replacement identity is not distinct')
+            require(all(old.get(k) != new.get(k) for k in ('incarnation','vm')), 'replacement identity is not distinct')
+            require(retired[0].get('retiring_pid') == old.get('pid'), 'retirement was not caused by Account lifecycle')
             require(new.get('account') == '1', 'replacement lacks independent trusted activation')
             require(ordered(retired, closed) and ordered(closed, [new]) and ordered(reaped, [new]) and ordered([new], reject), 'lifecycle order unproven')
             require(all(reject[0].get(k) == new.get(k) for k in ('pid','incarnation','vm')), 'old-session rejection not evaluated by replacement')
             require(reject[0].get('result') == '11', 'old session denial is not broker SessionAuthorityUnavailable')
             require(bool(client('old-call-peer-closed')) and bool(client('replacement-old-session-denied')), 'recipient reconciliation missing')
-            require(all(r.get('reply_target') == 'none' and r.get('deferred_targets') == '0' for r in reaped), 'old reply context survived retirement')
+            require(all(r.get('reply_target') == 'none' and r.get('deferred_targets') == '0'
+                        and r.get('pending_call') == 'none' for r in reaped), 'old reply context survived retirement')
             require(all(reaped[0].get(k) == old.get(k) for k in ('pid','incarnation','vm')), 'retired IPC context belongs to a different service')
             require(any(r.get('recipient_inc') == q.get('incarnation') and r.get('recipient') == q.get('pid')
                         and int(r.get('request_generation','0')) > 0 for r in closed for q in requesters), 'cancelled call incarnation/generation mismatch')
-        if case == 'N4': require(not minted, 'old issuance committed before retirement fixture')
+        if case == 'N4':
+            require(not minted, 'old issuance committed before retirement fixture')
+            # Stage zero is userspace policy acceptance, not a broker entrant.
+            # A replacement's denial must never certify a resumed old issuer.
+            old_ready = [r for r in events('boundary-ready') if r.get('result') == '1'
+                         and activation and all(r.get(k) == activation[0].get(k)
+                                                for k in ('pid','incarnation','vm'))]
+            old_reject = [r for r in reject if activation and all(r.get(k) == activation[0].get(k)
+                                                                  for k in ('pid','incarnation','vm'))]
+            if not old_ready or not old_reject:
+                missing.append('original Account broker precommit entrant and post-retirement rejection missing; userspace cancellation only')
+            else:
+                require(ordered(old_ready, retired) and ordered(retired, old_reject), 'old issuer retirement/precommit order unproven')
         else:
             require(len(minted) == 1 and ordered(minted, retired), 'legitimate pending grant before retirement missing')
             require(any(r.get('pending_account_deliveries') == '1' for r in inventory), 'pending old Account reply not observed')
+            require(any(all(b.get(a) == activation[0].get(k) for a,k in
+                            (('issuer','pid'),('issuer_inc','incarnation'),('issuer_vm','vm')))
+                        and b.get('recipient') == c.get('recipient')
+                        and b.get('recipient_inc') == c.get('recipient_inc')
+                        and b.get('request_generation') == c.get('request_generation')
+                        and ordered([b], retired) for b in bindings for c in closed)
+                    if len(activation) == 2 and retired else False,
+                    'cancelled pending reply differs from original authorized call')
     else:
         rejected = events('consume-syscall-rejected')
         if not revoked or not events('consume-entry'): missing.append('consume/revocation boundary missing')
@@ -197,7 +219,28 @@ def _assess_native(raw, case, cpus):
             'scope':'real Account/sessiond boot-global broker; session subset only',
             'cross_cpu_contention':cross_cpu,
             'stale_reply_mechanism':'generation-qualified PeerClosed plus retired executable/reply context' if case == 'N5' else None,
-            'actual_pid_reuse':'NOT_FORCED', 'resource_inventory':inventory[-1] if inventory else None}
+            'actual_pid_reuse':'NOT_FORCED',
+            'service_numeric_pid_reused':len(activation) == 2 and activation[0].get('pid') == activation[1].get('pid'),
+            'resource_inventory':inventory[-1] if inventory else None}
+
+
+def assess_replacement(raw, offset, cpus, *, identity=None, failure=None):
+    """Views contain only recorded lines from one guest; never synthesized roles."""
+    prefix, suffix = raw[:offset], raw[offset:]
+    activations = [line for line in prefix.splitlines()
+                   if line.startswith('[SESSION-E3] ') and 'checkpoint=account-activated ' in line]
+    previous = assess_native(prefix, 'N6', cpus, identity=identity, failure=failure)
+    view = (activations[-1] + '\n' if activations else '') + suffix
+    fresh = assess_native(view, 'N7C', cpus, identity=identity, failure=failure)
+    registrations = [dict(re.findall(r'(\w+)=(\S+)', line)) for line in raw.splitlines()
+                     if line.startswith('[SESSION-E3] ') and 'checkpoint=registered ' in line]
+    tuples = [tuple(r.get(k) for k in ('session','epoch')) for r in registrations]
+    distinct = len(tuples) == 2 and tuples[0] != tuples[1]
+    return {'classification':'FORCED_AND_PASSED' if distinct and all(
+                r['classification'] == 'FORCED_AND_PASSED' for r in (previous, fresh)) else 'FORCED_AND_FAILED',
+            'old_session':previous, 'replacement_session':fresh, 'session_tuples':tuples,
+            'nonaliasing':distinct, 'view_character_offset':offset,
+            'activation_line':activations[-1] if activations else None}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -209,7 +252,11 @@ def main():
     parser.add_argument('--timeout', type=int, default=120)
     parser.add_argument('--memory-mib', type=int, default=2048)
     parser.add_argument('--evidence-root', type=Path, default=BASE)
+    parser.add_argument('--replacement-relogin', action='store_true',
+                        help='After N6 use the real TTY login and one-use grant under replacement B')
     args = parser.parse_args()
+    if args.replacement_relogin and args.cases != ['N6']:
+        parser.error('--replacement-relogin requires --cases N6')
     base = args.evidence_root.resolve()
     if args.section == 'compatibility':
         import sys
@@ -226,7 +273,7 @@ def main():
         return
     out = base / (args.section + '-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
     out.mkdir(parents=True)
-    summary = {'phase': 'F1.1B-0E3R' if base.name == 'fastlane-f11b0e3r-evidence' else 'F1.1B-0E3', 'source_sha256': sources(), 'checks': [], 'native': [], 'images': {},
+    summary = {'phase': 'F1.1B-0E3S' if base.name == 'fastlane-f11b0e3s-evidence' else ('F1.1B-0E3R' if base.name == 'fastlane-f11b0e3r-evidence' else 'F1.1B-0E3'), 'source_sha256': sources(), 'checks': [], 'native': [], 'images': {},
                'gates': {'A': 'VERIFIED NATIVE', 'B': 'PARTIAL', 'session_authority': 'PARTIAL', 'F1.1B-0': 'BLOCKED', 'C': 'BLOCKED'}}
     def save():
         (out / 'validation-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
@@ -248,10 +295,16 @@ def main():
     try:
         if args.section in ('build', 'normal'):
             test = args.section == 'build'
-            service_cmd = ['cargo', 'build', '--locked', '--offline', '--release', '-p', 'sunlight-uac']
-            if test: service_cmd += ['--features', 'session-race-test']
-            if not check('services', service_cmd, {'RUSTFLAGS': SERVICE_FLAGS}): raise SystemExit(1)
-            for name in (('uac_service', 'session-race-probe') if test else ('uac_service',)):
+            for package in ('sunlight-init', 'sunlightd', 'sunlight-tty-server', 'sunlight-uac',
+                            'sunlight-sessiond', 'sunlight-vfs-server'):
+                # TTY enables libc's allocator; other services own theirs.
+                # Match tools/build.sh's separate package invocations so Cargo
+                # feature unification cannot install two global allocators.
+                service_cmd = ['cargo', 'build', '--locked', '--offline', '--release', '-p', package]
+                if test and package == 'sunlight-uac': service_cmd += ['--features', 'session-race-test']
+                if not check('service-'+package, service_cmd, {'RUSTFLAGS': SERVICE_FLAGS}): raise SystemExit(1)
+            for name in ('sunlight-init', 'sunlightd', 'sunlight-tty-server', 'uac_service',
+                         'sunlight-sessiond', 'sunlight-vfs-server') + (('session-race-probe',) if test else ()):
                 shutil.copy2(BUILD / 'x86_64-unknown-none/release' / name, ROOT / 'target/x86_64-unknown-none/release' / name)
             kernel_cmd = ['cargo', 'build', '--locked', '--offline', '-p', 'sunlight-kernel', '--bin', 'sunlight-kernel']
             if test: kernel_cmd += ['--features', 'native_session_race_test,key_inject']
@@ -316,12 +369,12 @@ def main():
                     # Linux UNIX socket paths must stay below 108 bytes.
                     sock = Path('/tmp') / ('e3-' + out.name[-14:] + '-' + name + '.sock')
                     cmd = ['qemu-system-x86_64', '-accel', 'tcg,thread=multi', '-cpu', 'max', '-smp', str(cpu), '-m', str(args.memory_mib), '-cdrom', str(iso), '-serial', 'file:'+str(serial), '-display', 'none', '-nic', 'none', '-no-reboot', '-no-shutdown', '-device', 'virtio-rng-pci,disable-modern=on', '-qmp', 'unix:'+str(sock)+',server=on,wait=off']
-                    start = time.monotonic(); failure = None; qmp = None
+                    start = time.monotonic(); failure = None; qmp = None; replacement_offset = None
                     def raw(): return serial.read_text(errors='replace')
-                    def await_marker(marker):
+                    def await_marker(marker, count=1):
                         while time.monotonic()-start < args.timeout and proc.poll() is None:
                             data = raw()
-                            if marker in data: return
+                            if data.count(marker) >= count: return
                             if any(m in data for m in ('PANIC', 'panicked at', 'checkpoint=FAIL')): raise RuntimeError('guest failure')
                             time.sleep(.1)
                         if proc.poll() is not None:
@@ -332,6 +385,18 @@ def main():
                             for code in ordered:
                                 qmp.call('input-send-event', {'events': [{'type':'key', 'data': {'down':down, 'key': {'type':'qcode', 'data':code}}}]})
                             time.sleep(.08)
+                    def type_text(value):
+                        for char in value:
+                            if char.isupper(): key('shift', char.lower())
+                            else: key({' ':'spc', '/':'slash', '-':'minus', '\n':'ret', '\t':'tab'}.get(char, char))
+                    def await_case(selected):
+                        await_marker('case='+selected+' checkpoint=fixture-complete')
+                        await_marker('exit: /tmp/session-race-probe '+selected+' -> 0')
+                        markers = [dict(re.findall(r'(\w+)=(\S+)', line)) for line in raw().splitlines()
+                                   if line.startswith('[SESSION-E3-CLIENT] case='+selected+' ')]
+                        for marker in markers:
+                            if marker.get('checkpoint') in ('fixture-complete','controller-ready'):
+                                await_marker("[SCHED] process_reaped pid="+marker['pid']+" name='")
                     with (out / (name+'.qemu.log')).open('w') as log:
                         proc = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
                         try:
@@ -344,16 +409,20 @@ def main():
                             await_marker('[TTY]  Built-in shell ready')
                             await_marker("sunshell registered as 'sshl'")
                             for text in ('touch /tmp/session-race-probe\n', '/tmp/session-race-probe '+case+'\n'):
-                                for char in text:
-                                    if char.isupper(): key('shift', char.lower())
-                                    else: key({' ':'spc', '/':'slash', '-':'minus', '\n':'ret'}.get(char, char))
+                                type_text(text)
                                 time.sleep(.5)
-                            await_marker('case='+case+' checkpoint=fixture-complete')
-                            await_marker('exit: /tmp/session-race-probe '+case+' -> 0')
-                            markers = [dict(re.findall(r'(\w+)=(\S+)', line)) for line in raw().splitlines() if line.startswith('[SESSION-E3-CLIENT] ') and 'case='+case+' ' in line]
-                            for marker in markers:
-                                if marker.get('checkpoint') in ('fixture-complete','controller-ready'):
-                                    await_marker("[SCHED] process_reaped pid="+marker['pid']+" name='")
+                            await_case(case)
+                            if args.replacement_relogin:
+                                replacement_offset = len(raw())
+                                type_text('exit\n'); time.sleep(.5)
+                                key('ret'); type_text('root'); key('tab'); key('spc'); key('ret')
+                                await_marker('checkpoint=registered ', 2)
+                                await_marker('[SESSION] switched to F2 GraphicalDesktop', 2)
+                                key('ctrl', 'f1')
+                                await_marker('[SESSION] switched to F1 TTY/Login', 2)
+                                key('spc'); key('ret')
+                                await_marker('[TTY]  Built-in shell ready', 2)
+                                type_text('/tmp/session-race-probe N7C\n'); await_case('N7C')
                         except Exception as error:
                             failure = {'type': type(error).__name__, 'message': str(error)}
                         finally:
@@ -367,7 +436,12 @@ def main():
                                 'services_match': services_match(),
                                 'source_matches': sources() == image['source_sha256'],
                                 'iso_sha256': image['iso_sha256'], 'elf_sha256': image['elf_sha256']}
-                    detail = assess_native(raw(), case, cpu, identity=identity, failure=failure)
+                    detail = (assess_replacement(raw(), replacement_offset, cpu, identity=identity, failure=failure)
+                              if args.replacement_relogin and replacement_offset is not None
+                              else assess_native(raw(), case, cpu, identity=identity, failure=failure))
+                    if args.replacement_relogin and replacement_offset is None:
+                        detail['classification'] = 'NOT_FORCED'
+                        detail['missing_checkpoints'].append('replacement login not attempted')
                     summary['native'].append({'name':name, 'case':case, 'cpus':cpu, 'command':cmd,
                         'exit_code':proc.returncode, 'seconds':time.monotonic()-start, 'failure':failure,
                         'timeout_classification':'MISSING_CHECKPOINT' if failure and failure['type']=='TimeoutError' else None,

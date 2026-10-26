@@ -1,7 +1,7 @@
 """Parser counterexamples only; these synthetic strings are not native evidence."""
 import unittest
 import re
-from fastlane_f11b0e3_validate import assess_native as validate
+from fastlane_f11b0e3_validate import assess_native as validate, assess_replacement
 
 IDENTITY = dict(iso_matches=True, elf_matches=True, services_match=True, source_matches=True)
 
@@ -51,7 +51,64 @@ def sample(case='N1'):
     return '\n'.join(lines)
 
 
+def lifecycle_sample(case='N5'):
+    lines = ['[SESSION-E3] checkpoint=inventory sessions=0 receipts=0 account_grants=0 pending_account_deliveries=0 cpu=0',
+             event(1,'account-activated'), event(2,'login-proof-committed'),
+             event(3,'registered',pid=29,account=0,sessiond=1),
+             event(4,'authenticated-requester',pid=39,incarnation=51,vm=87,account=0),
+             event(5,'request-binding',recipient=39,recipient_inc=51,recipient_vm=87,binding_vm=87,
+                   issuer=18,issuer_inc=30,issuer_vm=47,request_generation=4)]
+    if case != 'N4':
+        lines += [event(6,'mint-committed'),
+                  '[SESSION-E3] checkpoint=inventory sessions=1 receipts=1 account_grants=1 pending_account_deliveries=1 cpu=0']
+    lines += [event(7,'service-retirement',account_pid=18,account_inc=30,account_vm=47,retiring_pid=18,cpu=1),
+              event(8,'peer-closed',recipient=39,recipient_inc=51,request_generation=4,cpu=1),
+              event(9,'service-ipc-retired',reply_target='none',deferred_targets=0,pending_call='none',cpu=1),
+              event(10,'account-activated',pid=42,incarnation=54,vm=93,cpu=1),
+              event(11,'mint-syscall-rejected',pid=42,incarnation=54,vm=93,result=11),
+              event(12,'fixture-ipc-cleaned',pid=39,owned_endpoints=0,pending_call='none',reply_target='none',deferred_targets=0,pending_commits=0),
+              event(13,'fixture-ipc-cleaned',pid=40,owned_endpoints=0,pending_call='none',reply_target='none',deferred_targets=0,pending_commits=0),
+              '[SESSION-E3] checkpoint=inventory sessions=0 receipts=0 account_grants=0 pending_account_deliveries=0 cpu=1']
+    for checkpoint,pid in [('request-start',39),('controller-ready',40),('policy-accepted-rendezvous',40),
+                           ('old-call-peer-closed',39),('replacement-old-session-denied',39),('fixture-complete',39)]:
+        lines += [f'[SESSION-E3-CLIENT] case={case} checkpoint={checkpoint} pid={pid} uid=0 result=0']
+    ordinal = {'N4':4,'N5':5,'N6':6}[case]
+    lines += [f'[SESSION-E3-UAC] case={ordinal} stage={0 if case == "N4" else 1} pid=18 session=1 epoch=1']
+    return '\n'.join(lines)
+
+
 class AuthenticatedEvidenceTests(unittest.TestCase):
+    def test_lifecycle_cancellation_requires_actual_old_call_and_retirement(self):
+        raw = lifecycle_sample()
+        self.assertEqual(assess_native(raw,'N5',2)['classification'],'FORCED_AND_PASSED')
+        for bad in (raw.replace('checkpoint=peer-closed','checkpoint=absent'),
+                    raw.replace('checkpoint=service-retirement','checkpoint=absent'),
+                    raw.replace('checkpoint=account-activated','checkpoint=absent'),
+                    raw.replace('pending_account_deliveries=1','pending_account_deliveries=0'),
+                    raw.replace('recipient_inc=51 request_generation=4','recipient_inc=99 request_generation=4'),
+                    raw.replace('retiring_pid=18','retiring_pid=29'),
+                    raw.replace('pending_call=none','pending_call=retained')):
+            self.assertNotEqual(assess_native(bad,'N5',2)['classification'],'FORCED_AND_PASSED')
+
+    def test_policy_pause_and_replacement_denial_do_not_certify_n4(self):
+        result = assess_native(lifecycle_sample('N4'),'N4',2)
+        self.assertEqual(result['classification'],'NOT_FORCED')
+        self.assertTrue(any('original Account broker precommit' in m for m in result['missing_checkpoints']))
+
+    def test_restart_without_new_login_does_not_certify_fresh_session(self):
+        raw = lifecycle_sample('N6')
+        self.assertEqual(assess_native(raw,'N6',2)['classification'],'FORCED_AND_PASSED')
+        result = assess_replacement(raw,len(raw),2,identity=IDENTITY)
+        self.assertNotEqual(result['classification'],'FORCED_AND_PASSED')
+        self.assertFalse(result['nonaliasing'])
+
+    def test_service_pid_reuse_is_observed_separately_from_recipient_gate(self):
+        raw = lifecycle_sample().replace('pid=42 incarnation=54','pid=18 incarnation=54')
+        result = assess_native(raw,'N5',2)
+        self.assertEqual(result['classification'],'FORCED_AND_PASSED')
+        self.assertTrue(result['service_numeric_pid_reused'])
+        self.assertEqual(result['actual_pid_reuse'],'NOT_FORCED')
+
     def test_boot_and_isolated_witness_do_not_certify(self):
         for raw in ('[SunlightOS] boot PASS', '[SESSION-E2] boundary PASS'):
             self.assertEqual(assess_native(raw,'N1',12)['classification'],'NOT_FORCED')
