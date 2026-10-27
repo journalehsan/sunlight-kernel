@@ -74,6 +74,14 @@ impl<const N: usize> SessionStore<N> {
         }
     }
 
+    #[cfg(feature = "production-grant-test")]
+    pub fn diagnostic_inventory(&self, now: Timestamp) -> (usize, usize) {
+        (
+            self.sessions.len(),
+            self.sessions.values().filter(|s| s.is_active(now)).count(),
+        )
+    }
+
     /// Fetch a session by uid.
     pub fn get(&self, uid: u32) -> Option<&UserSession> {
         self.sessions.get(&uid)

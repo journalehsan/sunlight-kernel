@@ -5,6 +5,8 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 struct BumpAllocator;
+#[cfg(feature = "production-grant-test")]
+static BUMP_USED: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
 
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
@@ -18,6 +20,8 @@ unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
             return core::ptr::null_mut();
         }
         NEXT = end;
+        #[cfg(feature = "production-grant-test")]
+        BUMP_USED.store(end, core::sync::atomic::Ordering::Relaxed);
         HEAP.as_mut_ptr().add(aligned)
     }
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {}
@@ -312,6 +316,24 @@ fn read_seed_file(vfs: &mut Vfs, path: &str, out: &mut [u8]) -> usize {
 // ---------------------------------------------------------------------------
 
 fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
+    #[cfg(feature = "production-grant-test")]
+    if msg.badge == 0xF4F0 && msg.label == 0xF11B07 && msg.cap_count == 0 {
+        // This service owns no delegation registry. Report real legacy handle
+        // storage separately; these handles are not authorization grants.
+        let open = state.open_meta.iter().filter(|m| m.len != 0).count();
+        let boot = state
+            .boot
+            .as_ref()
+            .map_or(0, |b| b.handles.iter().filter(|h| h.in_use).count());
+        return IpcMsg::with_label(0xF11B07)
+            .word(0, msg.words[0])
+            .word(1, open as u64)
+            .word(2, boot as u64)
+            .word(
+                3,
+                BUMP_USED.load(core::sync::atomic::Ordering::Relaxed) as u64,
+            );
+    }
     #[cfg(feature = "production-grant-test")]
     let msg = {
         let mut request = msg;

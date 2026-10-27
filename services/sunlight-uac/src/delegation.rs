@@ -4,7 +4,7 @@ use sunlight_ipc::{vfs_grants as api, CapabilityToken, IpcMsg};
 
 pub fn handle(msg: &IpcMsg) -> IpcMsg {
     #[cfg(all(feature = "production-grant-test", target_os = "none"))]
-    let fixture = (msg.badge == 0xF4F1 || msg.badge == 0xF4F2)
+    let fixture = matches!(msg.badge, 0xF4F1 | 0xF4F2 | 0xF4F5)
         && msg.label == api::BASE_CAPS
         && msg.cap_count == 2;
     #[cfg(all(feature = "production-grant-test", target_os = "none"))]
@@ -30,7 +30,7 @@ pub fn handle(msg: &IpcMsg) -> IpcMsg {
     let reply = dispatch(msg, mint_reply);
     #[cfg(all(feature = "production-grant-test", target_os = "none"))]
     if fixture {
-        if msg.badge == 0xF4F2 && reply.label == api::REPLY_OK {
+        if matches!(msg.badge, 0xF4F2 | 0xF4F5) && reply.label == api::REPLY_OK {
             race_checkpoint(control, msg.badge, 1, true);
         }
         race_checkpoint(control, msg.badge, 2, reply.label == api::REPLY_OK);

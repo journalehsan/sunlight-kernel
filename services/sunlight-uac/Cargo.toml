@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-uac"
-version = "0.2.5695-alpha.2"
+version = "0.2.5736-alpha.2"
+
 
 
 
@@ -641,6 +642,7 @@ path = "src/bin/runas.rs"
 
 [features]
 production-grant-test = []
+production-history-test = ["production-grant-test"]
 session-race-test = []
 
 [[bin]]

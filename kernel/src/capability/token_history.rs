@@ -7,7 +7,18 @@ use alloc::vec::Vec;
 // At most 512 KiB of token words (3.125% of the current 16 MiB kernel heap).
 // Exhaustion permanently refuses fresh issuance; existing authority can still
 // be consumed/retired and existing exact-rights derivations can be reused.
+#[cfg(not(any(
+    feature = "grant_history_test",
+    feature = "grant_history_transport_test"
+)))]
 pub(super) const MAX_PREPARED_TOKENS: usize = 65_536;
+// Only capacity changes. Global insertion, entropy, replay and failure paths
+// remain identical; never reset the broker to recover from exhaustion.
+#[cfg(any(
+    feature = "grant_history_test",
+    feature = "grant_history_transport_test"
+))]
+pub(super) const MAX_PREPARED_TOKENS: usize = 1024;
 const RESERVE_CHUNK: usize = 256;
 
 pub(super) struct TokenHistory {

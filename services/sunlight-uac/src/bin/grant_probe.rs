@@ -96,7 +96,7 @@ pub extern "C" fn _start() -> ! {
     assert_eq!(sunlight_libc::getgid(), 1000);
     match sunlight_libc::getpid() {
         0xF4F0 => race_controller(),
-        0xF4F1 | 0xF4F2 => race_recipient(),
+        0xF4F1 | 0xF4F2 | 0xF4F5 => race_recipient(),
         0xF4F3 | 0xF4F4 => consumption_recipient(),
         _ => {}
     }
@@ -128,6 +128,7 @@ pub extern "C" fn _start() -> ! {
         assert_eq!(reply.label, api::REPLY_OK);
         assert!(!authorize(vfs, reply.caps[0], b"/binary/true"));
         assert!(authorize(vfs, reply.caps[0], b"/bin/true"));
+        assert!(api::cancel(reply.caps[0])); // consumption won; cancellation is idempotent
         assert!(!authorize(vfs, reply.caps[0], b"/bin/true"));
         assert!(api::cancel(reply.caps[1]));
         assert!(api::cancel(reply.caps[1]));
@@ -154,6 +155,12 @@ fn race_recipient() -> ! {
         .word(0, 0)
         .with_cap(0, auth.session_grant)
         .with_cap(1, control);
+    if sunlight_libc::getpid() == 0xF4F5 {
+        let result = sunlight_ipc::ipc_call_timeout(uac, request, 1000);
+        assert!(matches!(result, Err(sunlight_ipc::IpcCallError::Timeout)));
+        sunlight_libc::exec(b"/bin/true", &[b"true"]).expect("exec before grant reply");
+        panic!("exec returned");
+    }
     let _ = sunlight_ipc::ipc_call_timeout(uac, request, 20_000);
     panic!("race recipient survived forced exit");
 }
@@ -161,9 +168,9 @@ fn race_recipient() -> ! {
 fn race_controller() -> ! {
     let ep = sunlight_ipc::endpoint_create();
     assert!(sunlight_ipc::nameserver_register("grant-racer", ep));
-    let mut seen = [0u8; 2];
+    let mut seen = [0u8; 3];
     let mut seen_consumers = [false; 2];
-    for _ in 0..6 {
+    for _ in 0..8 {
         let msg = sunlight_ipc::ipc_recv_timeout(ep, 20_000).expect("bounded race request");
         if msg.label == 0xF11B0F {
             let pid = msg.words[0];
@@ -195,17 +202,24 @@ fn race_controller() -> ! {
         let index = match msg.words[0] {
             0xF4F1 => 0,
             0xF4F2 => 1,
+            0xF4F5 => 2,
             _ => panic!("unexpected race recipient"),
         };
         assert_eq!(msg.words[1], u64::from(seen[index]) + 1);
-        assert_eq!(msg.words[2], index as u64);
-        if seen[index] == 0 {
+        assert_eq!(msg.words[2], u64::from(index != 0));
+        if index == 2 && seen[index] == 0 {
+            let deadline = sunlight_ipc::monotonic_millis() + 10_000;
+            while sunlight_ipc::process_is_alive(msg.words[0]) {
+                assert!(sunlight_ipc::monotonic_millis() < deadline);
+                sunlight_ipc::process_yield();
+            }
+        } else if seen[index] == 0 {
             assert!(sunlight_ipc::process_is_alive(msg.words[0]));
             sunlight_libc::kill(msg.words[0], 9).expect("ordinary recipient SIGKILL");
             assert!(!sunlight_ipc::process_is_alive(msg.words[0]));
         }
         seen[index] += 1;
-        if seen[index] == 2 {
+        if index < 2 && seen[index] == 2 {
             sunlight_ipc::debug_log(if index == 0 {
                 "[GRANT-D] case=exit-before-commit checkpoint=uac-resumed result=aborted"
             } else {
@@ -214,7 +228,7 @@ fn race_controller() -> ! {
         }
         sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xF11B0D)).expect("race acknowledgement");
     }
-    assert_eq!(seen, [2, 2]);
+    assert_eq!(seen, [2, 2, 2]);
     assert_eq!(seen_consumers, [true; 2]);
     // A later synchronous UAC request proves both stale reply attempts have
     // passed through the real single-threaded service loop before completion.
@@ -245,6 +259,59 @@ fn race_controller() -> ! {
         previous = pid;
     }
     sunlight_ipc::debug_log("[GRANT-F] pid-contract cycles=8 same_numeric_pid=0 policy=non-reuse scope=ordinary-runtime-spawn PASS");
+    // Establish a bounded fixture-operation boundary. Resident services remain
+    // active; no lock or unrelated task is suspended while draining clients.
+    let deadline = sunlight_ipc::monotonic_millis() + 20_000;
+    for pid in (0xF400..0xF40C).chain(0xF4F1..=0xF4F5) {
+        while sunlight_ipc::process_is_alive(pid) {
+            assert!(sunlight_ipc::monotonic_millis() < deadline);
+            sunlight_ipc::process_yield();
+        }
+    }
+    for epoch in 1..=4 {
+        if epoch > 1 {
+            let grants = base(uac);
+            assert_eq!(grants.label, api::REPLY_OK);
+            assert!(authorize(vfs, grants.caps[0], b"/bin/true"));
+            assert!(api::cancel(grants.caps[0]));
+            assert!(api::cancel(grants.caps[1]));
+            assert!(!authorize(vfs, grants.caps[0], b"/bin/true"));
+        }
+        for service in [uac, vfs] {
+            let ack = sunlight_ipc::ipc_call_timeout(
+                service,
+                IpcMsg::with_label(0xF11B07).word(0, epoch),
+                10_000,
+            )
+            .expect("service drain ack");
+            assert_eq!(ack.label, 0xF11B07);
+            assert_eq!(ack.words[0], epoch);
+        }
+        // Real VFS entry after both service-loop acks causes the existing
+        // serialized kernel census to inspect this exact completed operation set.
+        assert!(!authorize(vfs, CapabilityToken::INVALID, b"/bin/true"));
+    }
+    sunlight_ipc::debug_log("[GRANT-G] cycles COMPLETE epochs=4 real_cycles=3 service_acks=8");
+    #[cfg(feature = "production-history-test")]
+    {
+        let auth = sunlight_uac::auth::authenticate_password_for_session(b"root", b"root")
+            .expect("production exhaustion authentication");
+        let request = IpcMsg::with_label(api::BASE_CAPS)
+            .word(0, 0)
+            .with_cap(0, auth.session_grant);
+        for _ in 0..2 {
+            let reply = ipc_call(uac, request);
+            assert_eq!(reply.label, api::REPLY_ERR);
+            assert_eq!(reply.words[0], api::IssuanceError::TokenHistoryFull as u64);
+            assert_eq!(reply.cap_count, 0);
+            sunlight_ipc::debug_log("[HISTORY-GT] client error=TokenHistoryFull caps=0");
+        }
+        // Retire the still-delivered proof through the ordinary exec lifecycle.
+        sunlight_libc::exec(b"/bin/true", &[b"true"])
+            .expect("exhausted history permits existing lifecycle");
+        panic!("exec returned");
+    }
+    #[cfg(not(feature = "production-history-test"))]
     sunlight_libc::exit(0)
 }
 

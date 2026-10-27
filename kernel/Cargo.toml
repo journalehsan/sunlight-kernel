@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5695-alpha.2"
+version = "0.2.5736-alpha.2"
+
 
 
 
@@ -680,6 +681,9 @@ fastlane_f11_audit = ["fastlane_f1_audit"]
 # Instance-local issuance fault injection + isolated native authority fixture.
 cap_issuance_test = []
 production_grant_test = []
+# Global broker exhaustion after the ordinary production fixture. OFF by default.
+grant_history_test = ["production_grant_test"]
+grant_history_transport_test = ["production_grant_test"]
 native_session_race_test = []
 # Focused SWAP-1 multi-pool pressure/recovery gate.
 swap1_test = ["mm2b_smp_test"]

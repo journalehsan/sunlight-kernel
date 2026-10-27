@@ -153,10 +153,14 @@ impl Scheduler {
             .ok_or(super::CapError::InvalidCaller)?;
         #[cfg(test)]
         super::lifecycle_tests::before_commit();
-        let tokens =
-            CAP_BROKER
-                .lock()
-                .delegate_vfs_grants(proof, delivery, path, self.global_tick)?;
+        let mut broker = CAP_BROKER.lock();
+        #[cfg(feature = "grant_history_transport_test")]
+        super::production_gate::history_transport_prepare(&mut broker, delivery);
+        let result = broker.delegate_vfs_grants(proof, delivery, path, self.global_tick);
+        #[cfg(feature = "grant_history_transport_test")]
+        super::production_gate::history_transport_result(&broker, delivery, proof, &result);
+        drop(broker);
+        let tokens = result?;
         #[cfg(feature = "production_grant_test")]
         super::production_gate::committed(self.current_process(), delivery, &tokens);
         Ok(tokens)
@@ -181,7 +185,7 @@ impl Scheduler {
         #[cfg(feature = "production_grant_test")]
         super::production_gate::consumed(issuer, identity, allowed);
         #[cfg(feature = "production_grant_test")]
-        super::production_gate::census_after_consume(self);
+        super::production_gate::census_after_consume(self, token);
         allowed
     }
 

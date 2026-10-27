@@ -1013,6 +1013,11 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // a keyboard IRQ fires while we hold the lock (keyboard handler also locks).
     x86_64::instructions::interrupts::disable();
 
+    // Global history fixture rendezvous runs without SCHEDULER or a broker
+    // guard retained between ticks. Normal builds contain no hook.
+    #[cfg(feature = "grant_history_test")]
+    crate::capability::production_gate::history::on_tick(cpu_id);
+
     let sched_lock_start = now_ns();
     #[cfg(feature = "scheduler_perf_diag")]
     let sched_lock_clock_valid = crate::sched::perf::observe_clock(cpu_id, sched_lock_start);

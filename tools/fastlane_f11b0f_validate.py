@@ -153,7 +153,11 @@ def assess_f(raw, cpus, identity=None):
             "allocator_wide_leak_freedom": "UNMEASURED"}
 
 
-def main():
+def main(*, base=BASE, phase="F1.1B-0F", kernel_feature="production_grant_test",
+         service_feature="production-grant-test", native_assessor=None, race_assessor=assess_races, terminal="[GRANT-C] COMPLETE PASS", gates=GATES):
+    # Later closure phases reuse this collector, builders and PID census.
+    BASE = base
+    GATES = gates
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--section", choices=("build", "native", "checks", "consolidate"), required=True)
     parser.add_argument("--image-manifest", type=Path)
@@ -171,7 +175,7 @@ def main():
         for record in results:
             recorded = record["result"].get("source_sha256", {})
             record["matches_final_source"] = recorded == current
-        summary = {"phase": "F1.1B-0F", "updated_utc": datetime.now(timezone.utc).isoformat(), "gates": GATES,
+        summary = {"phase": phase, "updated_utc": datetime.now(timezone.utc).isoformat(), "gates": GATES,
                    "attempts": results, "historical_preservation": {"inventoried": len(old), "changed_or_missing": changed},
                    "source_sha256": current, "report_sha256": digest(ROOT / "docs/ipc/fastlane-f11b0f-pid-reuse-global-accounting.md"),
                    "remaining_blockers": ["remaining native lifecycle orderings", "global userspace/broker reference reconciliation and steady-cycle attribution", "token-history global exhaustion/error delivery and restart/lifetime acceptance"],
@@ -182,7 +186,7 @@ def main():
         return
     out = BASE / (args.section + "-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ"))
     out.mkdir(parents=True)
-    summary = {"phase": "F1.1B-0F", "section": args.section, "source_sha256": sources(),
+    summary = {"phase": phase, "section": args.section, "source_sha256": sources(),
                "gates": GATES, "checks": [], "native": [], "images": {}}
     def save():
         (out / "validation-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -202,11 +206,11 @@ def main():
             summary["disk_before"] = subprocess.check_output(["df", "-h", ".", "/tmp"], text=True)
             for package in ("sunlight-init", "sunlightd", "sunlight-tty-server", "sunlight-uac", "sunlight-sessiond", "sunlight-vfs-server"):
                 command = ["cargo", "build", "--locked", "--offline", "--release", "-p", package]
-                if package in ("sunlight-uac", "sunlight-vfs-server"): command += ["--features", "production-grant-test"]
+                if package in ("sunlight-uac", "sunlight-vfs-server"): command += ["--features", service_feature if package == "sunlight-uac" else "production-grant-test"]
                 if not check(package, command, {"RUSTFLAGS": SERVICE_FLAGS}): raise RuntimeError("service build failed")
             for name in ("sunlight-init", "sunlightd", "sunlight-tty-server", "uac_service", "sunlight-sessiond", "sunlight-vfs-server", "grant-probe"):
                 shutil.copy2(BUILD / "x86_64-unknown-none/release" / name, ROOT / "target/x86_64-unknown-none/release" / name)
-            if not check("kernel", ["cargo", "build", "--locked", "--offline", "-p", "sunlight-kernel", "--bin", "sunlight-kernel", "--features", "production_grant_test"]): raise RuntimeError("kernel build failed")
+            if not check("kernel", ["cargo", "build", "--locked", "--offline", "-p", "sunlight-kernel", "--bin", "sunlight-kernel", "--features", kernel_feature]): raise RuntimeError("kernel build failed")
             built = BUILD / "x86_64-unknown-none/debug/sunlight-kernel"
             elf, iso = out / "kernel.elf", out / "fixture.iso"
             if not check("strip", ["objcopy", "--strip-debug", str(built), str(elf)]): raise RuntimeError("strip failed")
@@ -221,7 +225,7 @@ def main():
                 if offset < 0: raise RuntimeError("embedded binary mismatch: " + name)
                 shutil.copy2(source, embedded / name)
                 payloads[name] = {"sha256": digest(source), "offset": offset, "bytes": source.stat().st_size}
-            summary["images"]["fixture"] = {"iso": str(iso.relative_to(ROOT)), "iso_sha256": digest(iso), "elf_sha256": digest(elf), "embedded": payloads}
+            summary["images"]["fixture"] = {"kernel_feature": kernel_feature, "iso": str(iso.relative_to(ROOT)), "iso_sha256": digest(iso), "elf_sha256": digest(elf), "embedded": payloads}
         elif args.section == "checks":
             host = ["cargo", "test", "--locked", "--offline", "--target", "x86_64-unknown-linux-gnu"]
             check("kernel-host", host + ["-p", "sunlight-kernel", "--lib", "--", "--test-threads=1"])
@@ -251,7 +255,7 @@ def main():
                     try:
                         while proc.poll() is None:
                             text = serial.read_text(errors="replace")
-                            if any(m in text for m in ("[GRANT-C] COMPLETE PASS", "PANIC", "[GRANT-C] client FAIL")):
+                            if any(m in text for m in (terminal, "PANIC", "[GRANT-C] client FAIL")):
                                 stop = "terminal-marker"; break
                             if time.monotonic() - start >= args.timeout:
                                 stop = "timeout"; break
@@ -271,7 +275,11 @@ def main():
                 if stop == "timeout":
                     result["errors"].append("collector timeout")
                     result["classification"] = "FORCED_AND_FAILED" if result["lifecycle"] else "NOT_FORCED"
-                summary["native"].append({"cpus": cpu, "command": command, "collector_stop": stop, "serial": str(serial.relative_to(ROOT)), "serial_sha256": digest(serial), "identity": dict(identity), "pid_and_census": result, "delegation": assess_native(raw, cpu), "races": assess_races(raw, cpu)})
+                extra_result = native_assessor(raw, cpu, identity) if native_assessor else None
+                if extra_result and extra_result["errors"]:
+                    result["errors"].extend(extra_result["errors"])
+                    result["classification"] = "FORCED_AND_FAILED"
+                summary["native"].append({"closure": extra_result, "cpus": cpu, "command": command, "collector_stop": stop, "serial": str(serial.relative_to(ROOT)), "serial_sha256": digest(serial), "identity": dict(identity), "pid_and_census": result, "delegation": assess_native(raw, cpu), "races": race_assessor(raw, cpu)})
                 save(); print(cpu, summary["native"][-1]["pid_and_census"]["classification"], flush=True)
                 if any(x in raw for x in ("PANIC", "client FAIL")): break
     finally:

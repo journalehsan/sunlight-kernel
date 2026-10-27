@@ -43,6 +43,10 @@ static PID_CHILDREN_REAPED: core::sync::atomic::AtomicUsize =
 const RACE_DRIVER: usize = 0xF4F0;
 const RACE_PRE: usize = 0xF4F1;
 const RACE_POST: usize = 0xF4F2;
+const RACE_EXEC: usize = 0xF4F5;
+static EXEC_REPLY: spin::Mutex<(Option<RecipientIdentity>, bool, bool, bool)> =
+    spin::Mutex::new((None, false, false, false));
+static SERVICE_EPOCH: spin::Mutex<(usize, u8)> = spin::Mutex::new((0, 0));
 static RACES: spin::Mutex<RaceState> = spin::Mutex::new(RaceState {
     commits: 0,
     exits: 0,
@@ -88,7 +92,7 @@ pub fn run(hhdm: VirtAddr) {
         .load(core::sync::atomic::Ordering::Acquire)
         .min(MAX);
     CLIENT_COUNT.store(count, core::sync::atomic::Ordering::Relaxed);
-    for ordinal in 0..count + 5 {
+    for ordinal in 0..count + 6 {
         let (pid, name, cpu) = if ordinal < count {
             (BASE + ordinal, "grant-probe", ordinal)
         } else {
@@ -130,6 +134,17 @@ pub fn run(hhdm: VirtAddr) {
 }
 
 pub(super) fn committed(issuer: &Process, delivery: GrantDelivery, tokens: &[CapabilityToken]) {
+    if delivery.recipient.pid == RACE_EXEC {
+        assert_eq!(tokens.len(), 2);
+        let mut state = EXEC_REPLY.lock();
+        assert!(state.0.is_none());
+        state.0 = Some(delivery.recipient);
+        crate::serial_println!("[GRANT-G] exec-reply checkpoint=commit pid={} incarnation={} vm={} request={} count=2 cpu={}", delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, delivery.request, crate::sched::current_cpu_id());
+        return;
+    }
+    if delivery.recipient.pid == RACE_DRIVER {
+        crate::serial_println!("[GRANT-G] cycle-commit epoch={} pid={} incarnation={} vm={} request={} count={} cpu={}", SERVICE_EPOCH.lock().0 + 1, delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, delivery.request, tokens.len(), crate::sched::current_cpu_id());
+    }
     if let Some(index) = consume_index(delivery.recipient.pid) {
         assert_eq!(tokens.len(), 2);
         let mut races = CONSUME_RACES.lock();
@@ -216,6 +231,13 @@ pub(crate) fn before_delivery(
 }
 
 pub(crate) fn after_delivery(target: crate::process::IpcReplyTarget, caps: &CapabilityBroker) {
+    if target.call.pid == RACE_EXEC && EXEC_REPLY.lock().1 {
+        assert_eq!(caps.recipient_grant_count(RACE_EXEC), 0);
+        let mut state = EXEC_REPLY.lock();
+        assert!(!state.3);
+        state.3 = true;
+        crate::serial_println!("[GRANT-G] exec-reply checkpoint=late-settlement pid={} incarnation={} request={} inventory=0 cpu={}", target.call.pid, target.call.incarnation, target.call.generation, crate::sched::current_cpu_id());
+    }
     let Some(index) = index(target.call.pid) else {
         return;
     };
@@ -258,8 +280,22 @@ pub(super) fn consumed(issuer: &Process, recipient: RecipientIdentity, allowed: 
         issuer.pid, issuer.foreground.incarnation, recipient.pid, recipient.incarnation, recipient.vm_generation, allowed, crate::sched::current_cpu_id());
 }
 
-pub(super) fn census_after_consume(sched: &Scheduler) {
+pub(super) fn census_after_consume(sched: &Scheduler, token: CapabilityToken) {
     let pid = sched.current_process().ipc_reply_target.map(|t| t.call.pid);
+    if pid == Some(RACE_DRIVER) && token == CapabilityToken::INVALID {
+        let (epoch, ack) = *SERVICE_EPOCH.lock();
+        if ack == 3 {
+            let caps = super::CAP_BROKER.lock();
+            assert_eq!(caps.recipient_grant_count(RACE_DRIVER), 0);
+            assert!((BASE..BASE + MAX)
+                .chain(RACE_PRE..=RACE_EXEC)
+                .all(|pid| caps.recipient_grant_count(pid) == 0));
+            drop(caps);
+            accounting("cycle");
+            crate::serial_println!("[GRANT-G] boundary epoch={} services=uac,vfs scope=completed-fixture-operations sessiond=UNMEASURED fixture_grants=0 cpu={}", epoch, crate::sched::current_cpu_id());
+            super::reconciliation::snapshot(sched, "operation");
+        }
+    }
     if pid.and_then(index).is_some() {
         super::reconciliation::snapshot(sched, "operation");
     }
@@ -271,6 +307,23 @@ pub(crate) fn exec(
     old_grants: usize,
     caps: &mut CapabilityBroker,
 ) {
+    if process.pid == RACE_EXEC {
+        let mut state = EXEC_REPLY.lock();
+        let old = state.0.expect("grant committed before recipient exec");
+        assert_eq!(old.vm_generation, old_vm.generation);
+        assert_eq!(old.incarnation, process.foreground.incarnation);
+        assert_ne!(
+            old_vm.generation,
+            process.address_space.identity().generation
+        );
+        // A blocked recipient cannot exec until its IPC call ends. The real
+        // deadline cancels Pending delivery before userspace resumes for exec.
+        assert_eq!(old_grants, 0);
+        assert_eq!(caps.recipient_grant_count(process.pid), 0);
+        state.1 = true;
+        crate::serial_println!("[GRANT-G] exec-reply checkpoint=exec pid={} incarnation={} old_vm={} new_vm={} retired=2 exec_retired=0 retirement=ipc-cancel-before-exec cpu={}", process.pid, process.foreground.incarnation, old_vm.generation, process.address_space.identity().generation, crate::sched::current_cpu_id());
+        return;
+    }
     if let Some(index) = consume_index(process.pid) {
         assert_eq!(index, 1);
         let mut races = CONSUME_RACES.lock();
@@ -334,6 +387,19 @@ pub(super) fn owner_cancelled(pid: usize, before: usize, caps: &CapabilityBroker
 /// Record the real reaper transition before normal process-slot reuse can
 /// overwrite the dead record. Timer sampling cannot reliably observe Reaped.
 pub(crate) fn reaped(process: &Process) {
+    if process.pid == RACE_EXEC {
+        assert_eq!(process.exit_code, 0);
+        let mut state = EXEC_REPLY.lock();
+        assert!(state.1 && !state.2);
+        state.2 = true;
+        crate::serial_println!(
+            "[GRANT-G] exec-reply checkpoint=reaped pid={} incarnation={} cpu={}",
+            process.pid,
+            process.foreground.incarnation,
+            crate::sched::current_cpu_id()
+        );
+        return;
+    }
     if process.ppid == RACE_DRIVER {
         assert_eq!(process.exit_code, 0);
         assert_eq!(process.state, ProcessState::Reaped);
@@ -393,6 +459,13 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
         return;
     }
     let count = sched.online_cores.min(MAX);
+    if !{
+        let state = EXEC_REPLY.lock();
+        state.1 && state.2 && state.3
+    } || SERVICE_EPOCH.lock().0 != 4
+    {
+        return;
+    }
     let entries = *ENTRIES.lock();
     if !entries[..count].iter().all(|e| e.exec && e.reaped) || RACES.lock().reaped != 7 {
         return;
@@ -441,6 +514,20 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
     COMPLETE.store(true, Ordering::Relaxed);
     crate::serial_println!("[GRANT-C] COMPLETE PASS cpus={} clients={} committed={} delivered={} consumed={} owner_retired={} delivery_retired={} exec_retired={} inventory=0 pending=0 issuer_refs=0 recipient_refs=0 remote_race=NOT_FORCED",
         count, count, count * 11, count * 9, count * 4, count * 3, count * 2, count * 2);
+    #[cfg(feature = "grant_history_test")]
+    history::arm(count);
+    #[cfg(feature = "grant_history_transport_test")]
+    {
+        assert_eq!(TRANSPORT_ATTEMPTS.load(Ordering::Relaxed), 2);
+        let broker = super::CAP_BROKER.lock();
+        assert_eq!(
+            broker.token_history.usage().0,
+            super::token_history::MAX_PREPARED_TOKENS
+        );
+        assert_eq!(broker.recipient_grant_count(RACE_DRIVER), 0);
+        crate::serial_println!("[HISTORY-GT] COMPLETE PASS capacity={} history={} attempts=2 partial=0 proof=exec-retired error_transport=explicit exhaustion=permanent", super::token_history::MAX_PREPARED_TOKENS, broker.token_history.usage().0);
+    }
+    #[cfg(not(feature = "grant_history_test"))]
     unsafe {
         x86_64::instructions::port::Port::<u32>::new(0xf4).write(0x10);
     }
@@ -556,4 +643,105 @@ fn accounting(phase: &str) {
     crate::serial_println!("[GRANT-D] accounting phase={} broker_live={} ipc={} shm={} pending={} delivered={} legacy={} history={} history_capacity={} history_bytes={} history_capacity_bytes={} heap_used={} heap_free={} free_frames={} global_reconciliation=INCOMPLETE",
         phase, caps.active_tokens(), caps.capabilities.len(), caps.shared_regions.len(), pending, delivered, legacy,
         history, history_capacity, history * 8, history_capacity * 8, heap.allocated, heap.free, free_frames);
+}
+
+/// Observe replies at the real role-checked service IPC boundary. Diagnostic
+/// values are service observations, never used for production authorization.
+pub(crate) fn service_ack(
+    sched: &Scheduler,
+    target: crate::process::IpcReplyTarget,
+    reply: crate::ipc::IpcMsg,
+) {
+    if target.call.pid != RACE_DRIVER || reply.label != 0xF11B07 {
+        return;
+    }
+    let server = sched.current_process();
+    let bit = if server.trusted_auth_broker {
+        1
+    } else if server.trusted_vfs_service {
+        2
+    } else {
+        panic!("untrusted census ack")
+    };
+    let epoch = reply.words[0] as usize;
+    let mut state = SERVICE_EPOCH.lock();
+    if bit == 1 {
+        assert_eq!(epoch, state.0 + 1);
+        *state = (epoch, 1);
+    } else {
+        assert_eq!(*state, (epoch, 1));
+        state.1 = 3;
+    }
+    crate::serial_println!("[GRANT-G] service-ack epoch={} service={} pid={} incarnation={} vm={} caller={} caller_inc={} request={} records={} active_or_boot_handles={} heap_used={} boundary=handler-returned cpu={}", epoch, if bit == 1 { "uac" } else { "vfs" }, server.pid, server.foreground.incarnation, server.address_space.identity().generation, target.call.pid, target.call.incarnation, target.call.generation, reply.words[1], reply.words[2], reply.words[3], crate::sched::current_cpu_id());
+}
+
+#[cfg(feature = "grant_history_test")]
+#[path = "global_history_gate.rs"]
+pub(crate) mod history;
+
+#[cfg(feature = "grant_history_transport_test")]
+static TRANSPORT_ATTEMPTS: core::sync::atomic::AtomicUsize =
+    core::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(feature = "grant_history_transport_test")]
+pub(super) fn history_transport_prepare(broker: &mut CapabilityBroker, delivery: GrantDelivery) {
+    if delivery.recipient.pid != RACE_DRIVER || SERVICE_EPOCH.lock().0 != 4 {
+        return;
+    }
+    if TRANSPORT_ATTEMPTS.load(core::sync::atomic::Ordering::Relaxed) == 0 {
+        let baseline = broker.active_tokens();
+        while broker.token_history.usage().0 < super::token_history::MAX_PREPARED_TOKENS - 1 {
+            drop(broker.prepare_shared_region().unwrap());
+        }
+        assert_eq!(broker.active_tokens(), baseline);
+        crate::serial_println!("[HISTORY-GT] prefill history={} capacity={} authority_added=0 entropy=production cpu={}", broker.token_history.usage().0, super::token_history::MAX_PREPARED_TOKENS, crate::sched::current_cpu_id());
+    }
+}
+
+#[cfg(feature = "grant_history_transport_test")]
+pub(super) fn history_transport_result(
+    broker: &CapabilityBroker,
+    delivery: GrantDelivery,
+    proof: CapabilityToken,
+    result: &Result<heapless::Vec<CapabilityToken, 2>, super::CapError>,
+) {
+    if delivery.recipient.pid != RACE_DRIVER || SERVICE_EPOCH.lock().0 != 4 {
+        return;
+    }
+    assert!(matches!(result, Err(super::CapError::TokenHistoryFull)));
+    assert_eq!(
+        broker.token_history.usage().0,
+        super::token_history::MAX_PREPARED_TOKENS
+    );
+    assert_eq!(broker.recipient_grant_count(RACE_DRIVER), 1);
+    assert!(broker
+        .auth_session_grants
+        .iter()
+        .any(|g| g.token == proof && g.delivery.is_some_and(|d| d.usable(delivery.recipient))));
+    assert!(!broker.vfs_caps.iter().any(|g| g
+        .delivery
+        .is_some_and(|d| d.recipient == delivery.recipient)));
+    let attempt = TRANSPORT_ATTEMPTS.fetch_add(1, core::sync::atomic::Ordering::Relaxed) + 1;
+    crate::serial_println!("[HISTORY-GT] rollback attempt={} pid={} incarnation={} vm={} request={} history={} vfs_partial=0 proof=retained error=TokenHistoryFull cpu={}", attempt, delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, delivery.request, broker.token_history.usage().0, crate::sched::current_cpu_id());
+}
+
+/// Observe the actual terminal IPC transition, before the old VM can resume.
+pub(crate) fn pending_cancelled(
+    target: crate::process::IpcReplyTarget,
+    before: usize,
+    broker: &CapabilityBroker,
+    deadline: bool,
+) {
+    if target.call.pid != RACE_EXEC {
+        return;
+    }
+    let state = EXEC_REPLY.lock();
+    if let Some(identity) = state.0 {
+        assert!(!state.1);
+        assert_eq!(target.call.incarnation, identity.incarnation);
+        assert!(deadline);
+        assert_eq!(before, 2);
+        assert_eq!(broker.recipient_grant_count(RACE_EXEC), 0);
+        crate::serial_println!("[GRANT-G] exec-reply checkpoint=cancel pid={} incarnation={} vm={} request={} retired=2 terminal=deadline inventory=0 cpu={}", target.call.pid, target.call.incarnation, identity.vm_generation, target.call.generation, crate::sched::current_cpu_id());
+    }
 }

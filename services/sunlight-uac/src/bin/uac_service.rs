@@ -325,6 +325,21 @@ fn _start() -> ! {
     // its second IPC call).
     let mut msg = ipc_recv(ep);
     loop {
+        #[cfg(feature = "production-grant-test")]
+        let reply = if msg.badge == 0xF4F0 && msg.label == 0xF11B07 && msg.cap_count == 0 {
+            // Prior synchronous handler has returned and reply-and-wait has
+            // settled publication. No delegation/staging registry exists here.
+            let (cached, active) = store.diagnostic_inventory(get_time_utc());
+            let heap = ALLOCATOR.lock();
+            IpcMsg::with_label(0xF11B07)
+                .word(0, msg.words[0])
+                .word(1, cached as u64)
+                .word(2, active as u64)
+                .word(3, heap.used() as u64)
+        } else {
+            handle(&msg, &mut store, &rules)
+        };
+        #[cfg(not(feature = "production-grant-test"))]
         let reply = handle(&msg, &mut store, &rules);
         msg = ipc_reply_and_wait(ep, reply);
     }

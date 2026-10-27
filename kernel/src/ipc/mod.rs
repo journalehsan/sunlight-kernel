@@ -844,7 +844,10 @@ fn deliver_reply_to_current_target(
     crate::capability::production_gate::before_delivery(target, sched, caps, bus);
     let result = deliver_reply_to_target(target, reply, sched, caps, bus);
     #[cfg(feature = "production_grant_test")]
-    crate::capability::production_gate::after_delivery(target, caps);
+    {
+        crate::capability::production_gate::after_delivery(target, caps);
+        crate::capability::production_gate::service_ack(sched, target, reply);
+    }
     #[cfg(feature = "scheduler_timer_trace")]
     if result.is_ok() && sched.processes.iter().any(|p| p.pid == target.call.pid && matches!(p.ipc_call_outcome, Some(IpcCallOutcome::ReplyDelivered(g)) if g == target.call.generation)) {
         if let Some(idx) = sched.processes.iter().position(|p| p.pid == server_pid && p.name_str() == "timer_server") {
@@ -1012,12 +1015,21 @@ fn finish_call(
             });
         if !matches!(outcome, IpcCallOutcome::ReplyDelivered(_)) {
             if let Some(target) = target {
+                #[cfg(feature = "production_grant_test")]
+                let grant_count_before = caps.recipient_grant_count(target.call.pid);
                 caps.settle_grant_delivery(
                     target.call.pid,
                     target.call.incarnation,
                     target.call.generation,
                     None,
                     &[],
+                );
+                #[cfg(feature = "production_grant_test")]
+                crate::capability::production_gate::pending_cancelled(
+                    target,
+                    grant_count_before,
+                    caps,
+                    matches!(outcome, IpcCallOutcome::DeadlineExpired(_)),
                 );
             }
         }

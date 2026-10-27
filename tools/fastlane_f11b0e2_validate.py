@@ -195,10 +195,14 @@ def main():
                 if args.section in ('lifecycle','all'):
                     users('dependency-services',['sunlightd','sunlight-startup-fixture'],'sunlightd/dependency-test,sunlight-startup-fixture/dependency-test')
                     iso=image('dependency','dependency_test',scratch)
-                    if iso: check('d1-d2-d3',['python3','tools/sunlightd_d1_gate.py','--d2','--d3','--iso',str(iso),'--evidence',str(out/'d1-d2-d3'),'--cpus','1','2','4'])
+                    d3_ok = False
+                    if iso: d3_ok = check('d1-d2-d3',['python3','tools/sunlightd_d1_gate.py','--d2','--d3','--iso',str(iso),'--evidence',str(out/'d1-d2-d3'),'--cpus','1','2','4'])
                     users('recovery-services',['sunlight-init','sunlightd','sunlight-startup-fixture'],'sunlight-init/recovery-test,sunlightd/recovery-test,sunlight-startup-fixture/recovery-test')
                     iso=image('recovery','recovery_test',scratch,{'D36R_SCENARIO':'after-ready'})
-                    if iso: check('recovery-blocked',['python3','tools/sunlightd_d1_gate.py','--d2','--d3','--d36r','--d36r-scenario','after-ready','--iso',str(iso),'--evidence',str(out/'recovery'),'--cpus','1','2','4'])
+                    if iso and d3_ok: check('recovery-blocked',['python3','tools/sunlightd_d1_gate.py','--d2','--d3','--d36r','--d36r-scenario','after-ready','--iso',str(iso),'--evidence',str(out/'recovery'),'--cpus','1','2','4'])
+                    if not d3_ok:
+                        summary['native'].append({'name':'RecoveryBlocked', 'classification':'NOT_RUN', 'reason':'D3 prerequisite failed; inspect d1-d2-d3 raw checkpoint and dependency image hashes'})
+                        save()
                     users('restore-ordinary-services')
                 if args.section in ('network','all'):
                     iso=image('resident','fastlane_f1_audit',scratch)
