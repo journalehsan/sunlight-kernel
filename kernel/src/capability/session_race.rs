@@ -43,7 +43,16 @@ pub(crate) fn sequence() -> u64 {
 /// Observe the real UAC's existing, policy-accepted timing IPC. This changes
 /// timing only; all broker authorization runs again at its ordinary boundary.
 pub(crate) fn arm(msg: &crate::ipc::message::IpcMsg) {
-    if msg.label == 0xE301 && msg.word_count == 4 && msg.words[..2] == [4, 0] {
+    if msg.label == 0xE301 && msg.word_count == 4 && matches!(msg.words[0], 4..=6 | 12..=15) {
+        let sched = crate::sched::SCHEDULER.lock();
+        let p = sched.current_process();
+        if p.trusted_auth_broker && !p.is_exiting() && p.ipc_reply_target.is_some() {
+            super::session_h3_trace::arm(msg.words[0], msg.words[2], msg.words[3], p);
+            #[cfg(feature = "native_session_h4_test")]
+            super::session_h4::arm(msg.words[0]);
+        }
+    }
+    if msg.label == 0xE301 && msg.word_count == 4 && matches!(msg.words[0], 4 | 12..=15) && msg.words[1] == 0 {
         let sched = crate::sched::SCHEDULER.lock();
         let p = sched.current_process();
         if p.trusted_auth_broker && !p.is_exiting() && p.ipc_reply_target.is_some() {
@@ -121,12 +130,36 @@ pub(crate) fn n4_boundary(pid: usize, session: u64, epoch: u64) {
     {
         return;
     }
+    #[cfg(feature = "native_session_h4_test")]
+    let mut h4_owner = None;
     {
         let sched = crate::sched::SCHEDULER.lock();
         if sched.online_cores < 2 || !sched.observe_n4_pending(pid, session, epoch) {
             return;
         }
         N4_READY.store(2, Ordering::Release);
+        #[cfg(feature = "native_session_h4_test")]
+        super::session_h3_trace::record(65, sched.current_process().pid as u64, sched.current_process().foreground.incarnation, session, epoch, pid as u64);
+        #[cfg(feature = "native_session_h4_test")]
+        if super::session_h4::grant_boundary(sched.current_process()) {
+            h4_owner = Some((sched.current_process().pid, sched.current_process().foreground.incarnation));
+        }
+    }
+    #[cfg(feature = "native_session_h4_test")]
+    struct Disarm;
+    #[cfg(feature = "native_session_h4_test")]
+    impl Drop for Disarm {
+        fn drop(&mut self) {
+            N4_SESSION.store(0, Ordering::Release);
+            N4_READY.store(3, Ordering::Release);
+        }
+    }
+    #[cfg(feature = "native_session_h4_test")]
+    let _disarm = Disarm;
+    #[cfg(feature = "native_session_h4_test")]
+    if let Some((pid, incarnation)) = h4_owner {
+        super::session_h4::grant_wait(pid as u64, incarnation);
+        return;
     }
     let start = unsafe { core::arch::x86_64::_rdtsc() };
     let budget = crate::arch::x86_64::interrupts::tsc_hz().saturating_mul(5);
@@ -134,8 +167,18 @@ pub(crate) fn n4_boundary(pid: usize, session: u64, epoch: u64) {
         if i % 256 == 0 {
             let sched = crate::sched::SCHEDULER.lock();
             let p = sched.current_process();
+            #[cfg(feature = "native_session_h4_test")]
+            if super::session_h4::wait_for_forced_exit() && p.is_exiting() {
+                super::session_h3_trace::record(66, p.pid as u64, p.foreground.incarnation, session, epoch, p.owning_core as u64);
+                return;
+            }
+            #[cfg(feature = "native_session_h4_test")]
+            let awaiting_kill = super::session_h4::wait_for_forced_exit();
+            #[cfg(not(feature = "native_session_h4_test"))]
+            let awaiting_kill = false;
             if p.signal_state
                 .is_pending(crate::process::signal::Signal::SIGTERM)
+                && !awaiting_kill
             {
                 locked_event("n4-stop-pending", p, session, epoch, 15);
                 crate::serial_println!("[SESSION-E3] seq={} checkpoint=n4-execution-held pid={} incarnation={} vm={} session={} epoch={} owning_core={} exiting={} cpu={}", sequence(), p.pid, p.foreground.incarnation, p.address_space.identity().generation, session, epoch, p.owning_core, u8::from(p.is_exiting()), crate::sched::current_cpu_id());

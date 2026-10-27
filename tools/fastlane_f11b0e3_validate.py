@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 import os
+import secrets
 from pathlib import Path
 import re
 import shutil
@@ -17,7 +18,7 @@ from voice_recorder_qmp import Qmp
 BASE = ROOT / 'target/fastlane-f11b0e3-evidence'
 BUILD = ROOT / 'target/fastlane-f11b0e3-build'
 ENV = {'CARGO_TARGET_DIR': str(BUILD), 'CARGO_INCREMENTAL': '0', 'CARGO_PROFILE_DEV_DEBUG': '0'}
-CASES = ('N1', 'N2', 'N3M', 'N3R', 'N4', 'N5', 'N6', 'N7R', 'N7C', 'N7OC', 'N7OR')
+CASES = ('N1', 'N2', 'N3M', 'N3R', 'N4', 'N5', 'N6', 'N7R', 'N7C', 'N7OC', 'N7OR', 'H4R', 'S1', 'S2', 'S3')
 ACCEPTED = ('FORCED_AND_PASSED', 'PREVENTED_BY_PROVEN_PRODUCTION_CONTRACT')
 
 
@@ -317,7 +318,10 @@ def main():
                         help='After N6 use the real TTY login and one-use grant under replacement B')
     parser.add_argument('--n4-on-ap', action='store_true',
                         help='Build a separate N4-only test image with initial Account affinity on CPU 1')
+    parser.add_argument('--h4', action='store_true', help='Prestarted authorized controller and independent completion protocol')
     args = parser.parse_args()
+    if any(c in ('H4R', 'S1', 'S2', 'S3') for c in args.cases) and not args.h4:
+        parser.error('H4R requires --h4')
     if args.replacement_relogin and args.cases != ['N6']:
         parser.error('--replacement-relogin requires --cases N6')
     base = args.evidence_root.resolve()
@@ -338,6 +342,8 @@ def main():
     out.mkdir(parents=True)
     summary = {'phase': {'fastlane-f11b0e3s-evidence': 'F1.1B-0E3S', 'fastlane-f11b0e3r-evidence': 'F1.1B-0E3R', 'fastlane-f11b0e3t-evidence': 'F1.1B-0E3T'}.get(base.name, 'F1.1B-0E3'), 'source_sha256': sources(), 'checks': [], 'native': [], 'images': {},
                'gates': {'A': 'VERIFIED NATIVE', 'B': 'PARTIAL', 'session_authority': 'PARTIAL', 'F1.1B-0': 'BLOCKED', 'C': 'BLOCKED'}}
+    if args.h4:
+        summary['phase'] = 'F1.1B-0H4'
     def save():
         (out / 'validation-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     def check(name, cmd, extra=None, timeout=1200):
@@ -359,20 +365,21 @@ def main():
         if args.section in ('build', 'normal'):
             test = args.section == 'build'
             for package in ('sunlight-init', 'sunlightd', 'sunlight-tty-server', 'sunlight-uac',
-                            'sunlight-sessiond', 'sunlight-vfs-server'):
+                            'sunlight-sessiond', 'sunlight-vfs-server', 'sunlightctl'):
                 # TTY enables libc's allocator; other services own theirs.
                 # Match tools/build.sh's separate package invocations so Cargo
                 # feature unification cannot install two global allocators.
                 service_cmd = ['cargo', 'build', '--locked', '--offline', '--release', '-p', package]
-                if test and package == 'sunlight-uac': service_cmd += ['--features', 'session-race-test']
+                if test and package == 'sunlight-uac': service_cmd += ['--features', 'session-h4-test' if args.h4 else 'session-race-test']
+                if test and args.h4 and package in ('sunlightctl', 'sunlightd'): service_cmd += ['--features', 'session-h4-test']
                 if not check('service-'+package, service_cmd, {'RUSTFLAGS': SERVICE_FLAGS}): raise SystemExit(1)
             for name in ('sunlight-init', 'sunlightd', 'sunlight-tty-server', 'uac_service',
-                         'sunlight-sessiond', 'sunlight-vfs-server') + (('session-race-probe',) if test else ()):
+                         'sunlight-sessiond', 'sunlight-vfs-server', 'sunlightctl') + (('session-race-probe',) if test else ()):
                 shutil.copy2(BUILD / 'x86_64-unknown-none/release' / name, ROOT / 'target/x86_64-unknown-none/release' / name)
             kernel_cmd = ['cargo', 'build', '--locked', '--offline', '-p', 'sunlight-kernel', '--bin', 'sunlight-kernel']
-            if test: kernel_cmd += ['--features', 'native_session_race_test,key_inject']
+            if test: kernel_cmd += ['--features', 'native_session_h4_test,key_inject' if args.h4 else 'native_session_race_test,key_inject']
             test_environment = {'SUNLIGHT_INJECT_PHASE': 'desktop_login',
-                                'SUNLIGHT_SESSION_N4_AP': '1' if args.n4_on_ap else '0'} if test else {}
+                                'SUNLIGHT_SESSION_N4_AP': '1' if args.n4_on_ap or args.h4 else '0'} if test else {}
             if not check('kernel', kernel_cmd, test_environment): raise SystemExit(1)
             built = BUILD / 'x86_64-unknown-none/debug/sunlight-kernel'
             elf, iso = out / 'kernel.elf', out / 'fixture.iso'
@@ -383,17 +390,19 @@ def main():
             payloads = {}
             raw = built.read_bytes()
             embedded = out / 'embedded'; embedded.mkdir()
-            for name in ('sunlight-init', 'sunlightd', 'sunlight-tty-server', 'uac_service', 'sunlight-sessiond', 'sunlight-vfs-server') + (('session-race-probe',) if test else ()):
+            for name in ('sunlight-init', 'sunlightd', 'sunlight-tty-server', 'uac_service', 'sunlight-sessiond', 'sunlight-vfs-server', 'sunlightctl') + (('session-race-probe',) if test else ()):
                 p = ROOT / 'target/x86_64-unknown-none/release' / name
                 data = p.read_bytes(); offset = raw.find(data)
                 if offset < 0: raise RuntimeError('current binary not embedded: ' + name)
                 shutil.copy2(p, embedded / name)
                 payloads[name] = {'sha256': digest(p), 'bytes': len(data), 'embedded_offset': offset}
-            if not test and any(marker in raw for marker in (b'[SESSION-E3]', b'[SESSION-E3-UAC]', b'[SESSION-E3-CLIENT]')):
+            if not test and any(marker in raw for marker in (b'[SESSION-E3]', b'[SESSION-E3-UAC]', b'[SESSION-E3-CLIENT]', b'[H4-CTL]', b'[H4-MANAGER]', b'[H3-TRACE]')):
                 raise RuntimeError('test instrumentation present in ordinary image')
             summary['images']['fixture' if test else 'production'] = {'kernel_sha256': digest(built), 'elf_sha256': digest(elf),
-                'iso_sha256': digest(iso), 'iso': str(iso), 'features': ['native_session_race_test', 'key_inject'] if test else [],
+                'iso_sha256': digest(iso), 'iso': str(iso), 'features': ['native_session_h4_test' if args.h4 else 'native_session_race_test', 'key_inject'] if test else [],
                 'test_environment': test_environment,
+                'service_features': ({'sunlight-uac': ['session-h4-test'], 'sunlightd': ['session-h4-test'],
+                                      'sunlightctl': ['session-h4-test']} if test and args.h4 else {}),
                 'embedded_services': payloads, 'source_sha256': summary['source_sha256']}
         elif args.section == 'checks':
             host = ['cargo', 'test', '--locked', '--offline', '--target', 'x86_64-unknown-linux-gnu']
@@ -412,7 +421,7 @@ def main():
             if args.image_manifest is None: parser.error('--image-manifest required for native')
             manifest = json.loads(args.image_manifest.read_text())
             image = manifest['images']['fixture']; iso = Path(image['iso'])
-            if image.get('test_environment', {}).get('SUNLIGHT_SESSION_N4_AP') == '1' and args.cases != ['N4']:
+            if image.get('test_environment', {}).get('SUNLIGHT_SESSION_N4_AP') == '1' and args.cases != ['N4'] and not args.h4:
                 parser.error('N4 AP-placement image supports only --cases N4; use ordinary fixture for other races')
             if digest(iso) != image['iso_sha256']: raise RuntimeError('ISO hash mismatch')
             elf = args.image_manifest.parent / 'kernel.elf'
@@ -438,6 +447,7 @@ def main():
                     sock = Path('/tmp') / ('e3-' + out.name[-14:] + '-' + name + '.sock')
                     cmd = ['qemu-system-x86_64', '-accel', 'tcg,thread=multi', '-cpu', 'max', '-smp', str(cpu), '-m', str(args.memory_mib), '-cdrom', str(iso), '-serial', 'file:'+str(serial), '-display', 'none', '-nic', 'none', '-no-reboot', '-no-shutdown', '-device', 'virtio-rng-pci,disable-modern=on', '-qmp', 'unix:'+str(sock)+',server=on,wait=off']
                     start = time.monotonic(); failure = None; qmp = None; replacement_offset = None
+                    fixture_id = str(secrets.randbelow(900000000) + 100000000) if args.h4 else None
                     def raw(): return serial.read_text(errors='replace')
                     def await_marker(marker, count=1):
                         while time.monotonic()-start < args.timeout and proc.poll() is None:
@@ -458,6 +468,15 @@ def main():
                             if char.isupper(): key('shift', char.lower())
                             else: key({' ':'spc', '/':'slash', '-':'minus', '\n':'ret', '\t':'tab'}.get(char, char))
                     def await_case(selected):
+                        if args.h4:
+                            from fastlane_f11b0h4_validate import guest_terminal_errors
+                            while time.monotonic()-start < args.timeout and proc.poll() is None:
+                                errors = guest_terminal_errors(raw(), selected, fixture_id)
+                                if not errors: return
+                                if any(m in raw() for m in ('PANIC', 'panicked at', 'checkpoint=FAIL')):
+                                    raise RuntimeError('guest assertion failed')
+                                time.sleep(.1)
+                            raise TimeoutError('H4 terminal protocol: ' + '; '.join(errors))
                         await_marker('case='+selected+' checkpoint=fixture-complete')
                         await_marker('exit: /tmp/session-race-probe '+selected+' -> 0')
                         markers = [dict(re.findall(r'(\w+)=(\S+)', line)) for line in raw().splitlines()
@@ -476,7 +495,7 @@ def main():
                             key('spc'); key('ret')
                             await_marker('[TTY]  Built-in shell ready')
                             await_marker("sunshell registered as 'sshl'")
-                            for text in ('touch /tmp/session-race-probe\n', '/tmp/session-race-probe '+case+'\n'):
+                            for text in ('touch /tmp/session-race-probe\n', '/tmp/session-race-probe '+case+(' '+fixture_id if args.h4 else '')+'\n'):
                                 type_text(text)
                                 time.sleep(.5)
                             await_case(case)
@@ -504,7 +523,24 @@ def main():
                                 'services_match': services_match(),
                                 'source_matches': sources() == image['source_sha256'],
                                 'iso_sha256': image['iso_sha256'], 'elf_sha256': image['elf_sha256']}
-                    detail = (assess_replacement(raw(), replacement_offset, cpu, identity=identity, failure=failure)
+                    if args.h4:
+                        from fastlane_f11b0h4_validate import assess, host_ack_errors
+                        detail = assess(raw(), case, cpu, fixture_id, identity=identity, failure=failure)
+                        if detail['terminal_protocol'] == 'GUEST_VALIDATED_PENDING_HOST_ACK':
+                            ack = {'fixture': fixture_id, 'case': case, 'cpus': cpu, 'serial_sha256': digest(serial),
+                                   'iso_sha256': digest(iso), 'elf_sha256': digest(elf),
+                                   'security_assertions': 'PASS', 'cleanup': 'PASS', 'identity': identity}
+                            ack_path = out / (name+'.host-ack.json')
+                            ack_path.write_text(json.dumps(ack, indent=2)+'\n')
+                            ack_errors = host_ack_errors(json.loads(ack_path.read_text()), fixture=fixture_id,
+                                case=case, cpus=cpu, serial_sha256=digest(serial), iso_sha256=digest(iso), elf_sha256=digest(elf))
+                            if ack_errors:
+                                raise RuntimeError('; '.join(ack_errors))
+                            detail['terminal_protocol'] = 'PASS'
+                            detail['host_terminal_acknowledged'] = True
+                            detail['host_ack'] = str(ack_path.relative_to(ROOT))
+                    else:
+                        detail = (assess_replacement(raw(), replacement_offset, cpu, identity=identity, failure=failure)
                               if args.replacement_relogin and replacement_offset is not None
                               else assess_native(raw(), case, cpu, identity=identity, failure=failure))
                     if args.replacement_relogin and replacement_offset is None:

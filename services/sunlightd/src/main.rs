@@ -1702,6 +1702,13 @@ fn handle_control_message(
         SunlightdOp::Restart => {
             let unit_name = extract_unit_name(msg);
             if let Some(idx) = services.find_by_name(&unit_name) {
+                #[cfg(feature = "session-h4-test")]
+                if unit_name == "uac_service" || unit_name == "sunlight-sessiond" {
+                    sunlight_ipc::debug_log(&alloc::format!(
+                        "[H4-MANAGER] checkpoint=accepted sender={} target={}",
+                        msg.badge, services.get(idx).and_then(entry_pid).unwrap_or(0)
+                    ));
+                }
                 match stop_service(services, idx, spawn_cap, true) {
                     StopOutcome::Confirmed { pid, restarted } => {
                         if restarted

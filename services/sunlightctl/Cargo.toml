@@ -1,6 +1,7 @@
 [package]
 name = "sunlightctl"
-version = "0.2.5736-alpha.2"
+version = "0.2.5763-alpha.2"
+
 
 
 
@@ -621,6 +622,9 @@ edition = "2021"
 sunlight-ipc = { path = "../../ipc" }
 sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
+
+[features]
+session-h4-test = []
 
 [[bin]]
 name = "sunlightctl"

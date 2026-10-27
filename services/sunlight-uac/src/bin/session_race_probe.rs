@@ -5,6 +5,9 @@
 extern crate alloc;
 use sunlight_ipc::{accounts as api, CapabilityToken, IpcMsg};
 
+#[cfg(feature = "session-h4-test")]
+static FIXTURE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
 #[global_allocator]
 static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
 static mut HEAP: [u8; 256 * 1024] = [0; 256 * 1024];
@@ -72,6 +75,12 @@ fn note(case: &str, checkpoint: &str, result: u64) {
         sunlight_libc::getuid(),
         result
     );
+    #[cfg(feature = "session-h4-test")]
+    let _ = write!(
+        text,
+        " fixture={}",
+        FIXTURE.load(core::sync::atomic::Ordering::Relaxed)
+    );
     sunlight_ipc::debug_log(&text);
 }
 fn logout(session: u64, epoch: u64) {
@@ -110,6 +119,44 @@ fn reap(pid: u64) -> u64 {
 fn controller(case: &str, bootstrap: CapabilityToken) -> ! {
     let ep = sunlight_ipc::endpoint_create();
     let public = sunlight_ipc::endpoint_bind(ep.0);
+    #[cfg(feature = "session-h4-test")]
+    let prepared = if matches!(case, "N4" | "N5" | "N6" | "H4R" | "S1" | "S2" | "S3") {
+        let unit: &[u8] = if case.starts_with('S') {
+            b"sunlight-sessiond"
+        } else {
+            b"uac_service"
+        };
+        let control = sunlight_ipc::endpoint_create();
+        let send = sunlight_ipc::endpoint_bind(control.0);
+        let handle = alloc::format!("{}", send.0);
+        let fixture = alloc::format!("{}", FIXTURE.load(core::sync::atomic::Ordering::Relaxed));
+        let child = sunlight_libc::spawn(
+            b"/bin/sunlightctl",
+            &[
+                b"sunlightctl",
+                b"restart",
+                unit,
+                b"--h4-prepare",
+                handle.as_bytes(),
+                fixture.as_bytes(),
+            ],
+            None,
+        )
+        .expect("prestart authorized sunlightctl");
+        let ready =
+            sunlight_ipc::ipc_recv_timeout(control, 5000).expect("controller prepare timeout");
+        assert_eq!(ready.label, 0xE304);
+        assert_eq!(
+            ready.words[0],
+            FIXTURE.load(core::sync::atomic::Ordering::Relaxed)
+        );
+        assert_eq!(ready.badge, child);
+        assert_eq!(ready.cap_count, 1);
+        sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE304)).expect("ready ack");
+        Some((child, ready.caps[0]))
+    } else {
+        None
+    };
     sunlight_ipc::ipc_call_timeout(
         bootstrap,
         IpcMsg::with_label(0xE302).with_cap(0, public),
@@ -120,8 +167,8 @@ fn controller(case: &str, bootstrap: CapabilityToken) -> ! {
     let message = sunlight_ipc::ipc_recv_timeout(ep, 15000).expect("rendezvous not reached");
     assert_eq!(message.label, 0xE301);
     note(case, "policy-accepted-rendezvous", message.words[1]);
-    if matches!(message.words[0], 4..=6) {
-        if message.words[0] == 4 && n4_query() != 1 {
+    if matches!(message.words[0], 4..=6 | 12..=15) {
+        if matches!(message.words[0], 4 | 12..=15) && n4_query() != 1 {
             sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE301)).expect("release N4 issuer");
             let start = sunlight_ipc::monotonic_millis();
             let mut ready = false;
@@ -141,6 +188,20 @@ fn controller(case: &str, bootstrap: CapabilityToken) -> ! {
         }
         // The manager authenticates the root caller and performs its existing
         // stop/start lifecycle (eager UAC uses its legacy kill branch).
+        #[cfg(feature = "session-h4-test")]
+        let pid = {
+            let (pid, release) = prepared.expect("prepared participant missing");
+            let reply = sunlight_ipc::ipc_call_timeout(
+                release,
+                IpcMsg::with_label(0xE305)
+                    .word(0, FIXTURE.load(core::sync::atomic::Ordering::Relaxed)),
+                2000,
+            )
+            .expect("prepared controller release");
+            assert_eq!(reply.label, 0xE305);
+            pid
+        };
+        #[cfg(not(feature = "session-h4-test"))]
         let pid = sunlight_libc::spawn(
             b"/bin/sunlightctl",
             &[b"sunlightctl", b"restart", b"uac_service"],
@@ -184,7 +245,7 @@ fn request(
         .word(2, scope.operation as u64)
         .word(3, scope.target as u64 | ((scope.member as u64) << 32));
     msg = if password {
-        if (61001..=61011).contains(&scope.target) {
+        if (61001..=61015).contains(&scope.target) {
             msg.with_cap(0, shm).with_cap(1, control)
         } else {
             msg.with_cap(0, shm)
@@ -210,6 +271,17 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let count = unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 64) };
     assert!(count >= 2, "case required");
     let case = args[1];
+    #[cfg(feature = "session-h4-test")]
+    {
+        let index = if args.get(2) == Some(&"controller") {
+            4
+        } else {
+            2
+        };
+        let fixture = args[index].parse::<u64>().expect("fixture ID required");
+        assert_ne!(fixture, 0);
+        FIXTURE.store(fixture, core::sync::atomic::Ordering::Relaxed);
+    }
     assert_eq!(
         sunlight_libc::getuid(),
         0,
@@ -227,6 +299,14 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         "N3M" => 3,
         "N3R" => 9,
         "N4" => 4,
+        #[cfg(feature = "session-h4-test")]
+        "H4R" => 12,
+        #[cfg(feature = "session-h4-test")]
+        "S1" => 13,
+        #[cfg(feature = "session-h4-test")]
+        "S2" => 14,
+        #[cfg(feature = "session-h4-test")]
+        "S3" => 15,
         "N5" => 5,
         "N6" => 6,
         "N7R" => 7,
@@ -249,6 +329,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let bootstrap = sunlight_ipc::endpoint_create();
     let public = sunlight_ipc::endpoint_bind(bootstrap.0);
     let handle = alloc::format!("{}", public.0);
+    #[cfg(feature = "session-h4-test")]
+    let fixture_arg = alloc::format!("{}", FIXTURE.load(core::sync::atomic::Ordering::Relaxed));
+    #[cfg(not(feature = "session-h4-test"))]
+    let fixture_arg = alloc::string::String::new();
     let child = sunlight_libc::spawn(
         b"/bin/session-racer",
         &[
@@ -256,6 +340,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             case.as_bytes(),
             b"controller",
             handle.as_bytes(),
+            fixture_arg.as_bytes(),
         ],
         None,
     )
@@ -274,7 +359,44 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         true,
         control,
     );
-    if matches!(ordinal, 4..=6) {
+    #[cfg(feature = "session-h4-test")]
+    if matches!(ordinal, 13..=15) {
+        note(
+            case,
+            "session-owner-result",
+            result.as_ref().map_or(u64::MAX, |r| r.label),
+        );
+        assert_eq!(reap(child), 0);
+        let owner_reply = result.expect("session owner call transport");
+        assert!(matches!(owner_reply.label, api::ERROR | api::REPLY));
+        if ordinal == 14 {
+            assert_eq!(owner_reply.label, api::ERROR);
+            assert_eq!(
+                owner_reply.words[0],
+                api::Error::SessionAuthorityUnavailable as u64
+            );
+            note(case, "broker-session-denied", owner_reply.words[0]);
+        }
+        let mut stale = scope;
+        stale.target = 61000;
+        let denied = request(
+            stale,
+            api::AUTHORIZE,
+            CapabilityToken::INVALID,
+            true,
+            control,
+        )
+        .expect("post-retirement transport");
+        assert_eq!(denied.label, api::ERROR);
+        assert!(matches!(
+            api::Error::from_raw(denied.words[0]),
+            api::Error::Unavailable | api::Error::SessionChanged
+        ));
+        note(case, "post-session-owner-denied", denied.words[0]);
+        note(case, "fixture-complete", 0);
+        sunlight_libc::exit(0);
+    }
+    if matches!(ordinal, 4..=6 | 12) {
         assert!(matches!(
             result,
             Err(sunlight_ipc::IpcCallError::PeerClosed)

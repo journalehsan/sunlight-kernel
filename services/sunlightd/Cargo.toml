@@ -1,6 +1,7 @@
 [package]
 name = "sunlightd"
-version = "0.2.5736-alpha.2"
+version = "0.2.5763-alpha.2"
+
 
 
 
@@ -630,6 +631,7 @@ document-service = []
 document-service-gate = ["document-service"]
 document-ui-gate = ["document-service"]
 identity-phase-c-test = []
+session-h4-test = []
 demand-test = []
 idle-test = ["demand-test"]
 dependency-test = ["idle-test"]

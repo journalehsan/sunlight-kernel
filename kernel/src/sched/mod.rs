@@ -2629,6 +2629,10 @@ impl Scheduler {
     }
 
     fn close_owned_ipc_endpoints(&mut self, pid: usize) {
+        #[cfg(feature = "native_session_race_test")]
+        if let Some(p) = self.processes.iter().find(|p| p.pid == pid && (p.trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && p.name_str() == "sunlight-sessiond"))) {
+            crate::capability::session_h3_trace::record(10, pid as u64, p.foreground.incarnation, 1, p.address_space.identity().generation, 0);
+        }
         let endpoint_ids = {
             let mut caps = crate::capability::CAP_BROKER.lock();
             let endpoint_ids = caps.endpoints_owned_by(pid);
@@ -2639,6 +2643,10 @@ impl Scheduler {
             crate::arch::x86_64::keyboard::unregister_kbd_endpoint(endpoint_id);
             crate::arch::x86_64::mouse::unregister_mouse_endpoint(endpoint_id);
             let calls = crate::ipc::with_shard(endpoint_id, |bus| bus.remove_endpoint(endpoint_id));
+            #[cfg(feature = "native_session_race_test")]
+            if let Some(p) = self.processes.iter().find(|p| p.pid == pid && (p.trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && p.name_str() == "sunlight-sessiond"))) {
+                crate::capability::session_h3_trace::record(11, pid as u64, p.foreground.incarnation, endpoint_id as u64, 1, calls.len() as u64);
+            }
             crate::ipc::finish_peer_closed_calls(endpoint_id, calls, self);
         }
     }
@@ -2700,6 +2708,10 @@ impl Scheduler {
         self.clear_linux_child_tid(idx);
 
         let pid = self.processes[idx].pid;
+        #[cfg(feature = "native_session_race_test")]
+        if self.processes[idx].trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && self.processes[idx].name_str() == "sunlight-sessiond") {
+            crate::capability::session_h3_trace::record(10, pid as u64, self.processes[idx].foreground.incarnation, 2, self.processes[idx].address_space.identity().generation, 0);
+        }
         let name: alloc::string::String = self.processes[idx].name_str().into();
         let is_native_borrower = self.processes[idx].native_thread;
         #[cfg(feature = "scheduler_timer_trace")]
@@ -2803,6 +2815,10 @@ impl Scheduler {
                 crate::arch::x86_64::mouse::unregister_mouse_endpoint(*endpoint_id);
                 let calls =
                     crate::ipc::with_shard(*endpoint_id, |bus| bus.remove_endpoint(*endpoint_id));
+                #[cfg(feature = "native_session_race_test")]
+                if self.processes[idx].trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && self.processes[idx].name_str() == "sunlight-sessiond") {
+                    crate::capability::session_h3_trace::record(11, pid as u64, self.processes[idx].foreground.incarnation, *endpoint_id as u64, 2, calls.len() as u64);
+                }
                 crate::ipc::finish_peer_closed_calls(*endpoint_id, calls, self);
             }
         }
@@ -2856,6 +2872,7 @@ impl Scheduler {
         if matches!(
             self.processes[idx].name_str(),
             "session-race-probe" | "session-racer"
+        ) || (cfg!(feature = "native_session_h4_test") && self.processes[idx].name_str() == "sunlightctl"
         ) {
             let broker = crate::capability::CAP_BROKER.lock();
             crate::serial_println!("[SESSION-E3] seq={} checkpoint=fixture-ipc-cleaned pid={} incarnation={} vm={} owned_endpoints={} pending_call=none reply_target=none deferred_targets=0 pending_commits=0 snapshot=serialized cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, broker.endpoints_owned_by(pid).len(), current_cpu_id());
@@ -3156,6 +3173,8 @@ impl Scheduler {
             self.wake_pid(parent_pid);
         }
 
+        #[cfg(feature = "native_session_h4_test")]
+        crate::capability::session_h4::forced_exit(&self.processes[idx]);
         // If still live on a core, leave owning_core set so the owner core's
         // schedule_tick deschedules it safely; request a preemption.
         let owning = self.processes[idx].owning_core;
@@ -4225,7 +4244,19 @@ pub fn native_borrower_lifecycle_counts() -> (usize, usize, usize, usize, usize,
 /// from the file manager" symptom.
 pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     serial_println!("[SCHED] process_exit_begin reason={}", reason);
+    #[cfg(feature = "native_session_h4_test")]
+    let h4_exit = crate::capability::session_h4::exit_attempt();
+    #[cfg(feature = "native_session_h4_test")]
+    let mut sched = SCHEDULER.try_lock().unwrap_or_else(|| {
+        if let Some((pid, incarnation)) = h4_exit {
+            crate::capability::session_h3_trace::record(73, pid as u64, incarnation, 1, 0, 0);
+        }
+        SCHEDULER.lock()
+    });
+    #[cfg(not(feature = "native_session_h4_test"))]
     let mut sched = SCHEDULER.lock();
+    #[cfg(feature = "native_session_h4_test")]
+    crate::capability::session_h4::exit_acquired(sched.current_process());
     let cpu_id = current_cpu_id();
     let idle_top = core_idle_stack_top(cpu_id);
     let cur = match sched.process_index_for_cpu(cpu_id) {
@@ -4335,6 +4366,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         sched.wake_pid(parent_pid);
     }
 
+    #[cfg(feature = "native_session_h4_test")]
+    crate::capability::session_h4::exit_releasing(&sched.processes[cur]);
     idle_top
 }
 

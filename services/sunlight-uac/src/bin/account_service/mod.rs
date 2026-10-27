@@ -23,7 +23,7 @@ fn race_checkpoint(scope: api::GrantScope, stage: u64) -> Result<(), api::Error>
     let case = scope.target.checked_sub(61000).unwrap_or(0);
     let selected = matches!(
         (case, stage),
-        (1 | 3 | 4 | 9, 0) | (2 | 5 | 6, 1) | (7 | 10 | 11, 2) | (8, 3)
+        (1 | 3 | 4 | 9 | 12..=15, 0) | (2 | 5 | 6, 1) | (7 | 10 | 11, 2) | (8, 3)
     );
     if !selected {
         return Ok(());
@@ -257,7 +257,7 @@ fn dispatch_group(
     let index = if msg.label == api::AUTHORIZE { 0 } else { 1 };
     let expected_caps = index as u32 + 1;
     #[cfg(feature = "session-race-test")]
-    let expected_caps = if msg.label == api::AUTHORIZE && (61001..=61011).contains(&scope.target) {
+    let expected_caps = if msg.label == api::AUTHORIZE && (61001..=61015).contains(&scope.target) {
         2
     } else {
         expected_caps

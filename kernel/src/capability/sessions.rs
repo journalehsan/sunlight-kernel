@@ -258,6 +258,10 @@ impl CapabilityBroker {
                 self.sessions.owner_retired = self.sessions.owner_retired.saturating_add(1);
                 self.remove_session(index);
                 #[cfg(feature = "native_session_race_test")]
+                super::session_h3_trace::record(20, retired.1.pid as u64, retired.1.incarnation, retired.0.id, retired.0.epoch, pid as u64);
+                #[cfg(feature = "native_session_h4_test")]
+                super::session_h4::retired(pid);
+                #[cfg(feature = "native_session_race_test")]
                 {
                     crate::serial_println!("[SESSION-E3] seq={} checkpoint=service-retirement session={} epoch={} account_pid={} account_inc={} account_vm={} retiring_pid={} cpu={} account_grants={}", super::session_race::sequence(), retired.0.id, retired.0.epoch, retired.1.pid, retired.1.incarnation, retired.1.vm_generation, pid, crate::sched::current_cpu_id(), self.account_grants.len());
                     super::session_race::inventory(self);

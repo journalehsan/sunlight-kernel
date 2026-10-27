@@ -1,0 +1,56 @@
+# F1.1B-0H3: instrumented scheduler and lifecycle investigation
+
+2026-10-28. **INCOMPLETE.** New bounded test-only observations were compiled and executed in native guests, but the requested complete H3 trace, genuine grant/reaper lock contention, peer-close-first security race and acceptance matrix were not completed. Reaper/Endpoint Ordering remains PARTIAL. F1.1B-0 and Gate C remain BLOCKED. The evidence ledger is `target/fastlane-f11b0h3-evidence/validation-summary.json`.
+
+## Baseline and scope
+
+H2's archived N6 image passed the old fixture on 1/2/4/12 CPUs with retirement before peer-close; original H's failed 12-CPU trace recorded peer-close then broker session retirement. H2 source review found that the reaper and Account grant commit use the scheduler lock. H2 had not implemented its requested fixed trace or competing native fixture. G's raw artifacts were unavailable: G findings remain report-derived. N3M's old lookup failure, earlier N4 timeout and historical D3 failures remain unresolved independently. H2 report and summary describe the baseline and the original trace, which was not modified.
+
+## Implementation and authoritative boundaries
+
+`kernel/src/capability/session_h3_trace.rs` adds a 256-slot fixed atomic buffer, compiled only under the existing `native_session_race_test` feature. Each reservation is unique; fields are published by a release store, and snapshot reads use acquire. It does not allocate, wait, print, change authorization or store bearer credentials at a traced transition. The dump happens from the fixture's userspace DebugLog path outside scheduler/broker/IPC guards and includes schema 1, capacity, count, overflow and individual slots. A reservation order is not a general cross-CPU happens-before proof. A concurrent incomplete slot is printed as event 0, which the parser rejects; this is a one-shot snapshot, not an eventual-completeness guarantee. Other existing E3 diagnostics still print under locks; the new buffer does not remove that historical instrumentation behavior.
+
+The buffer arms on a real policy rendezvous after checking the live trusted Account role and reply target. Events: 1 arm (case/session/epoch), 2 grant lock entry attempt, 3 grant lock acquired, 4 grant result accepted, 5 rejected, 10 lifecycle path selected (a=1 self-exit, a=2 resource reap), 11 endpoint queue removal (a=endpoint ID, b=path, c=returned waiter count), 20 session row removed (a=session, b=epoch), 30 matching call terminal PeerClosed (a=endpoint, b=call generation), 40 reply target attempt and 41 accepted or 42 invalid target rejection (a=endpoint, b=call generation). Fields are event-specific and are not all present for every observation. IDs are boot-local; call generation is not endpoint identity. This is **partial instrumentation**: no reaper pre-lock wait/acquire/release markers, individual authorization validation, explicit grant lock release, full endpoint capability invalidation, timeout/missing-recipient reply rejection, sessiond epoch-qualified completion, replacement-authentication or fresh-login event is recorded by H3. N6 arms at its postcommit rendezvous, so it does not capture the old grant commit. The parser is observational only; it rejects missing dumps, overflow, holes, sequence faults, invalid event and missing arm identity, and never returns a security PASS. It is not the requested complete H3 acceptance parser and its two host tests do not cover all requested negative cases.
+
+In `sys_account_grant`, SCHEDULER is acquired before `Scheduler::account_grant`; under that lock the request, issuer role/liveness, exact recipient identity and pending reply binding are checked and CAP_BROKER is taken for live participant/session validation and commitment (`kernel/src/arch/x86_64/syscall.rs:1685`, `kernel/src/capability/lifecycle.rs:86`, `:380`, `kernel/src/capability/sessions.rs:273`). Reap holds SCHEDULER while endpoint queues and peer calls are removed and broker authority retired (`kernel/src/sched/mod.rs:2646`, `:2800`). Self-exit holds SCHEDULER and retires broker authority before removing IPC queues (`:2631`, `:4226`). A finished or cleanup-pending issuer is rejected by `is_exiting`; stored trusted-role flags are not themselves proof that an exiting identity remains authorized. Endpoint IDs are allocated monotonically with checked exhaustion, not reused within a boot (`kernel/src/capability/mod.rs:755`).
+
+`deliver_reply_to_target` is passed scheduler, broker and shard references from the production IPC path; it validates recipient incarnation, pending endpoint, call generation and terminal state, settles grant delivery, and assigns `ipc_reply` before terminating the call (`kernel/src/ipc/mod.rs:860`). Missing recipients, stale targets and deadlines have distinct paths. These source observations and one reply assignment trace do not prove endpoint-close versus publication under contention. Peer call close is not synonymous with broker endpoint record removal or session retirement. Sessiond's `begin_stop`/`finalize_stop` call broker transitions and its latter logs logout, but ignores transition errors; the H3 instrumentation does not provide a session/epoch-qualified cleanup acknowledgement.
+
+## Actual attempts
+
+| Attempt | Image / CPUs | Result and boundary |
+|---|---|---|
+| N4 initial | first H3 image, 2 | **FORCED_AND_FAILED**: authentic precommit reached; bounded rendezvous timed out before manager signal; grant committed before signal; client assertion failed. H3 dump was only requested on success and absent. |
+| N4 diagnostic retry | second H3 image, 2 | **FORCED_AND_FAILED**: same timeout. H3 dump on failure captured legitimate session 1/1 issuer 18/30, grant commit, then a reply assignment to recipient 39/51 endpoint 14 call generation 4. Signal arrived after commit; trace dump occurred before retirement. No reaper contender was observed at its lock boundary. |
+| N4 direct-manager experiment | third H3 image, 2 | **FORCED_AND_FAILED** before contender: `session-racer` was denied SunlightD name lookup (`mask=0x40000`). The temporary test-controller change was removed; authorization was not altered. This is not a production defect. |
+| N6 | final H3 image, 2 | **NOT_FORCED / driver timeout**: real old-session lifecycle and fixture completion marker occurred, but driver did not observe its required TTY `exit ... -> 0` checkpoint; replacement fresh-login stage did not complete. Do not convert guest markers to a fixture PASS. |
+
+The final N6 H3 trace contains 17 published records, no observed overflow or holes. Account A `(20,32,51)` selected self-exit path 1 on CPU 0; session 1/epoch 1 retired (seq 3); endpoint ID 17 queue removal followed (seq 4); the exact recipient `(39,51)` call generation 4 reached PeerClosed (seq 5). The later resource-reap path 2 observation is cleanup of the same process, not evidence that the reap path caused this peer-close. Replacement `(42,54)` attempted the old session and was rejected (seq 9–11); the exact broker error is in the E3 log. Both CPUs appear in the observation stream, but no reaper-versus-grant competition is demonstrated. The final old-session fixture inventory shows zero sessions, receipts, Account grants and pending Account deliveries, with retained metadata capacity; this is a fixture subset, not a global census. Sessiond logged logout without a correlated H3 epoch-completion record. The user-visible exit and fresh login were not proven.
+
+The earlier two N4 attempts placed an authenticated issuer at the real precommit checkpoint, but the existing controller spawned `sunlightctl` afterward and the bounded wait elapsed before signal delivery. The direct controller could not look up the protected manager endpoint. A safe next fixture change is to **prestart an actually authorized `sunlightctl` participant and synchronize its ordinary restart request with the existing precommit checkpoint**, keeping its existing role/capability checks and all waits outside spinlocks. Its handshake must not grant `session-racer` manager access. This has not been implemented, and changing a timeout would not establish the missing race.
+
+## Remaining acceptance gaps
+
+* Grant-wins/retirement-wins with genuine competing reaper-lock entrants: **NOT_FORCED**. N4's signal request, pending signal, process finish and reaper execution are distinct.
+* Peer-close-first observation in H3 and its in-flight authorization/reply proof: **NOT_FORCED**. The original H ordering remains historical observation only; exact original path and full security explanation are inconclusive.
+* Reply P1/P2/P3: **NOT_FORCED**. The observed reply assignment from the failed N4 and later unrelated or replacement-call replies in N6 do not force publication against closure. Missing-recipient/deadline trace branches are uninstrumented.
+* Replacement isolation, sessiond terminal cleanup, unaffected other sessions and fixture-wide resource reconciliation: **PARTIAL/NOT_FORCED**. Global cross-service inventory remains PARTIAL; issuer-retirement/VFS-commit, recipient exec before reply, consume/cancel and related grant races remain unverified.
+* Original N3M shares IPC source, but neither common cause nor independence is established: **SHARED_SUBSYSTEM_UNPROVEN**. The old parser's rigid retirement-before-peer-close predicate remains **INCONCLUSIVE** as an acceptance criterion. No parser relaxation or production security repair was made.
+
+## Verification and provenance
+
+Final H3 image was built with `native_session_race_test,key_inject`, not an archived image. Kernel SHA-256 `43fb23163b244610df483fe95061921efe3b87a0a39636310b3924723e986f5f`, ISO `97eb8d0355bf0bce272bc3145f26f8d3d3bc897216b43580e871e92afb6c1b06`; exact commands, QEMU argv, embedded UAC/Account, sessiond, VFS, SunlightD and test-client hashes, source map and source-before/after checks are in the build and native manifests referenced by the JSON. All 1,290 recorded source file hashes matched after the native execution. The original H serial SHA-256 remains `ae3ec55d9c4f2a4f089b65995e5abc1d38ede6a09222274cd99f7b11d3e70349`.
+
+Host kernel, service, SunlightD runtime, scheduler and parser checks PASS; the fixed buffer's actual implementation was copied into a host harness and its bounded concurrent publication/overflow accounting test passed. This is not native race evidence. Final-source normal kernel and service build PASS, separate from native test image. Strict Clippy, media test and workspace format are **FAIL_CURRENT**, without a matched-baseline diagnosis. Miri is **UNAVAILABLE**. Native scheduler pin-release, Doorbell, D3/RecoveryBlocked, TCP/TLS and N1/N2/N3/N5/N7 were **NOT_RUN**. There is no 1/4/12 CPU H3 native matrix.
+
+| Gate | Decision |
+|---|---|
+| H3 instrumentation | PARTIAL: used natively but missing required observations and complete parser |
+| Scheduler-lock contention | BLOCKED: authentic contenders not both at real boundaries |
+| Reaper/Endpoint Ordering | PARTIAL |
+| Session Authority, Global Authority, Grant Lifecycle, Doorbell B | PARTIAL |
+| Scheduler Gate A | VERIFIED NATIVE, inherited |
+| Token-History | VERIFIED BOUNDED, inherited; 65,536 per boot |
+| F1.1B-0, FastLane Gate C | BLOCKED |
+
+No production authorization logic, Restricted SHM or FastLane API was enabled. No commit or push was made.

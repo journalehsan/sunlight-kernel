@@ -371,6 +371,8 @@ fn send_signal_generation(
 ) -> Result<(), ()> {
     use crate::process::signal::Signal;
 
+    #[cfg(feature = "native_session_h4_test")]
+    crate::capability::session_h4::signal_attempt(pid, signal as u64, generation);
     let mut sched = crate::sched::SCHEDULER.lock();
     let Some(idx) = sched.process_index_by_pid(pid) else {
         return Err(());
@@ -404,6 +406,10 @@ fn send_signal_generation(
         || sched.processes[sender].trusted_display_service;
     if !trusted && !sched.can_signal_foreground(sender, idx) {
         return Err(());
+    }
+    #[cfg(feature = "native_session_h4_test")]
+    if sched.active_manager(&sched.processes[sender]) {
+        crate::capability::session_h4::signal_authorized(&sched.processes[sender], &sched.processes[idx], signal as u64);
     }
 
     // Self-SIGKILL: exit on this core immediately (never returns).
@@ -1487,6 +1493,12 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
                 // executing a binary with the same basename.
                 if caller_is_init && path == "/sbin/sunlightd" {
                     child.trusted_service_manager = true;
+                    #[cfg(feature = "native_session_h4_test")]
+                    { child.cpu_mask = 1; }
+                }
+                #[cfg(feature = "native_session_h4_test")]
+                if caller_is_trusted_manager && path == "/sbin/sunlight-sessiond" {
+                    child.cpu_mask = 1;
                 }
                 if caller_is_trusted_manager && path == "/sbin/uac_service" {
                     child.trusted_auth_broker = true;
@@ -1712,12 +1724,27 @@ fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
         session: frame.r8,
         session_generation: frame.r9,
     };
+    #[cfg(feature = "native_session_race_test")]
+    crate::capability::session_h3_trace::record(2, 0, 0, scope.session, scope.session_generation, u64::from(consume));
+    #[cfg(feature = "native_session_h4_test")]
+    let sched = crate::sched::SCHEDULER.try_lock().unwrap_or_else(|| {
+        crate::capability::session_h3_trace::record(69, 0, 0, scope.session, scope.session_generation, 1);
+        crate::sched::SCHEDULER.lock()
+    });
+    #[cfg(not(feature = "native_session_h4_test"))]
     let sched = crate::sched::SCHEDULER.lock();
-    match sched.account_grant(
+    #[cfg(feature = "native_session_race_test")]
+    crate::capability::session_h3_trace::record(3, sched.current_process().pid as u64, sched.current_process().foreground.incarnation, scope.session, scope.session_generation, u64::from(consume));
+    let result = sched.account_grant(
         frame.rdi as usize,
         scope,
         consume.then_some(CapabilityToken(frame.r10)),
-    ) {
+    );
+    #[cfg(feature = "native_session_race_test")]
+    crate::capability::session_h3_trace::record(if result.is_ok() { 4 } else { 5 }, sched.current_process().pid as u64, sched.current_process().foreground.incarnation, scope.session, scope.session_generation, 0);
+    #[cfg(feature = "native_session_h4_test")]
+    crate::capability::session_h4::grant_done();
+    let value = match result {
         Ok(token) => {
             if consume {
                 0
@@ -1745,7 +1772,10 @@ fn sys_account_grant(frame: &mut SyscallFrame, consume: bool) -> u64 {
                 .to_registers(frame);
             u64::MAX
         }
-    }
+    };
+    #[cfg(feature = "native_session_h4_test")]
+    crate::capability::session_h3_trace::record(6, sched.current_process().pid as u64, sched.current_process().foreground.incarnation, scope.session, scope.session_generation, 0);
+    value
 }
 
 fn sys_account_session(frame: &mut SyscallFrame) -> u64 {
@@ -2551,9 +2581,15 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        #[cfg(feature = "native_session_h4_test")]
+        crate::capability::session_h4::observation(s);
         #[cfg(feature = "native_session_race_test")]
         if let Some(observation) = crate::capability::session_race::n4_query(s) {
             return observation;
+        }
+        #[cfg(feature = "native_session_race_test")]
+        if s.starts_with("[SESSION-E3-CLIENT] ") && (s.contains("checkpoint=fixture-complete") || s.contains("checkpoint=FAIL")) {
+            crate::capability::session_h3_trace::dump();
         }
         crate::serial_println!("{}", s);
     } else {
@@ -3468,6 +3504,10 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     ) {
         Ok(_) => {
             child.nice = crate::process::spawn::initial_embedded_nice(path_str, uid);
+            #[cfg(feature = "native_session_h4_test")]
+            if path_str == "/bin/sunlightctl" || path_str == "/bin/session-racer" {
+                child.cpu_mask = 1;
+            }
             child.trusted_display_service =
                 crate::process::spawn::is_trusted_display_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();

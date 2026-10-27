@@ -21,6 +21,12 @@ pub mod production_gate;
 mod reconciliation;
 #[cfg(feature = "native_session_race_test")]
 pub(crate) mod session_race;
+#[cfg(feature = "native_session_race_test")]
+pub(crate) mod session_h3_trace;
+#[cfg(feature = "native_session_h4_test")]
+pub(crate) mod session_h4;
+#[cfg(feature = "native_session_h4_test")]
+mod session_h4_gate;
 
 /// The category a token belongs to, encoded in its high tag bits.
 ///

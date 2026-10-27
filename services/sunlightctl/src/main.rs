@@ -5,6 +5,9 @@
 
 extern crate alloc;
 
+#[cfg(feature = "session-h4-test")]
+mod h4_state;
+
 struct BumpAllocator;
 
 unsafe impl core::alloc::GlobalAlloc for BumpAllocator {
@@ -378,6 +381,66 @@ fn cmd_restart(cap: CapabilityToken, unit: &str) {
     }
 }
 
+/// Prepare only the ordinary restart command. Route and target are checked by
+/// a real manager Status call before READY. The private endpoint delays command
+/// submission, not manager authorization. Nothing is compiled in normal builds.
+#[cfg(feature = "session-h4-test")]
+fn prepared_restart(cap: CapabilityToken, unit: &str, handle: &str, fixture: &str) {
+    assert!(matches!(unit, "uac_service" | "sunlight-sessiond"));
+    let fixture_id = fixture.parse::<u64>().expect("fixture identity");
+    let mut state = h4_state::Controller::new(fixture_id);
+    let mut status = IpcMsg::with_label(OP_STATUS);
+    pack_unit_name(&mut status, unit);
+    let reply = sunlight_ipc::ipc_call_timeout(cap, status, 2000).expect("manager route");
+    assert_eq!(reply.label, REPLY_OK, "target not resolved");
+    assert_eq!(reply.words[0] & 0xff, u64::from(STATE_RUNNING));
+    assert_ne!(reply.words[1], 0, "target not alive");
+    assert!(state.ready(reply.words[1]));
+    // Prepare the exact same wire request used by cmd_restart.
+    let mut request = IpcMsg::empty();
+    request.label = OP_RESTART;
+    pack_unit_name(&mut request, unit);
+    let ep = sunlight_ipc::endpoint_create();
+    let public = sunlight_ipc::endpoint_bind(ep.0);
+    let bootstrap = CapabilityToken(handle.parse().expect("private bootstrap"));
+    sunlight_ipc::debug_log(&alloc::format!(
+        "[H4-CTL] fixture={} checkpoint=ready pid={} target={} route=status-ok",
+        fixture,
+        sunlight_libc::getpid(),
+        reply.words[1]
+    ));
+    let hello = sunlight_ipc::ipc_call_timeout(
+        bootstrap,
+        IpcMsg::with_label(0xE304)
+            .word(0, fixture_id)
+            .with_cap(0, public),
+        5000,
+    )
+    .expect("ready handshake");
+    assert_eq!(hello.label, 0xE304);
+    let release = sunlight_ipc::ipc_recv_timeout(ep, 15000).expect("release timeout");
+    assert_eq!(release.label, 0xE305);
+    assert!(
+        state.release(release.words[0]),
+        "stale or duplicate release"
+    );
+    sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE305)).expect("release ack");
+    sunlight_ipc::debug_log(&alloc::format!(
+        "[H4-CTL] fixture={} checkpoint=submitted pid={}",
+        fixture,
+        sunlight_libc::getpid()
+    ));
+    let reply = sunlight_ipc::ipc_call_timeout(cap, request, 10000).expect("restart transport");
+    sunlight_ipc::debug_log(&alloc::format!(
+        "[H4-CTL] fixture={} checkpoint=response pid={} label={} detail={}",
+        fixture,
+        sunlight_libc::getpid(),
+        reply.label,
+        reply.words[0]
+    ));
+    assert!(state.finish(reply.label == REPLY_OK), "restart failed");
+}
+
 fn cmd_enable(cap: CapabilityToken, unit: &str, now: bool) {
     if unit.is_empty() {
         println!("ERROR: missing service name");
@@ -502,6 +565,13 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         println!("ERROR: sunlightd not found (is it running?)");
         sunlight_libc::exit(1);
     };
+
+    #[cfg(feature = "session-h4-test")]
+    if cmd == "restart" && args.get(3) == Some(&"--h4-prepare") {
+        assert_eq!(args.len(), 6);
+        prepared_restart(cap, args[2], args[4], args[5]);
+        sunlight_libc::exit(0);
+    }
 
     match cmd {
         "list" => cmd_list(cap),

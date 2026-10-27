@@ -883,6 +883,12 @@ pub(crate) fn deliver_reply_to_target(
         return Ok(());
     };
 
+    #[cfg(feature = "native_session_race_test")]
+    let h3_target = sched.processes[client_idx].name_str() == "session-race-probe";
+    #[cfg(feature = "native_session_race_test")]
+    if h3_target {
+        crate::capability::session_h3_trace::record(40, target.call.pid as u64, target.call.incarnation, target.endpoint_id as u64, target.call.generation, 0);
+    }
     let valid = !sched.processes[client_idx].is_exiting()
         && sched.processes[client_idx].foreground.incarnation == target.call.incarnation
         && sched.processes[client_idx]
@@ -896,6 +902,10 @@ pub(crate) fn deliver_reply_to_target(
             target.call.generation,
         );
     if !valid {
+        #[cfg(feature = "native_session_race_test")]
+        if h3_target {
+            crate::capability::session_h3_trace::record(42, target.call.pid as u64, target.call.incarnation, target.endpoint_id as u64, target.call.generation, 0);
+        }
         caps.settle_grant_delivery(
             target.call.pid,
             target.call.incarnation,
@@ -932,6 +942,10 @@ pub(crate) fn deliver_reply_to_target(
         &[reply.caps[0].0, reply.caps[1].0][..(reply.cap_count as usize).min(2)],
     );
     sched.processes[client_idx].ipc_reply = Some((target.call.generation, reply));
+    #[cfg(feature = "native_session_race_test")]
+    if h3_target {
+        crate::capability::session_h3_trace::record(41, target.call.pid as u64, target.call.incarnation, target.endpoint_id as u64, target.call.generation, 0);
+    }
     trace_pty_event(
         sched,
         client_idx,
@@ -1928,6 +1942,7 @@ pub fn finish_peer_closed_calls(
         );
         #[cfg(feature = "native_session_race_test")]
         if sched.processes[idx].name_str() == "session-race-probe" {
+            crate::capability::session_h3_trace::record(30, call.pid as u64, call.incarnation, endpoint_id as u64, call.generation, 0);
             crate::serial_println!("[SESSION-E3] seq={} checkpoint=peer-closed endpoint={} recipient={} recipient_inc={} request_generation={} pending=0 cpu={}", crate::capability::session_race::sequence(), endpoint_id, call.pid, call.incarnation, call.generation, crate::sched::current_cpu_id());
         }
         PEER_CLOSED_WAKE_COUNT.fetch_add(1, Ordering::Relaxed);
