@@ -41,17 +41,58 @@ fn race_checkpoint(scope: api::GrantScope, stage: u64) -> Result<(), api::Error>
     if control == sunlight_ipc::CapabilityToken::INVALID {
         return Err(api::Error::Unavailable);
     }
-    let reply = sunlight_ipc::ipc_call_timeout(
-        control,
-        IpcMsg::with_label(0xE301)
-            .word(0, u64::from(case))
-            .word(1, stage)
-            .word(2, scope.session)
-            .word(3, scope.session_generation),
-        5000,
-    )
-    .map_err(|_| api::Error::Unavailable)?;
+    let request = IpcMsg::with_label(0xE301)
+        .word(0, u64::from(case))
+        .word(1, stage)
+        .word(2, scope.session)
+        .word(3, scope.session_generation);
+    #[cfg(feature = "session-reap-test")]
+    let userspace = if (case, stage) == (6, 1) {
+        let (ptr, cap) = sunlight_ipc::shm_alloc().map_err(|_| api::Error::Unavailable)?;
+        // Page-aligned shared storage is initialized before delegating its cap.
+        unsafe { &*ptr.cast::<core::sync::atomic::AtomicU64>() }
+            .store(0, core::sync::atomic::Ordering::Relaxed);
+        Some((ptr, cap))
+    } else {
+        None
+    };
+    #[cfg(feature = "session-reap-test")]
+    let request = userspace.map_or(request, |(_, cap)| request.with_cap(0, cap));
+    let reply = sunlight_ipc::ipc_call_timeout(control, request, 5000);
+    #[cfg(feature = "session-reap-test")]
+    if !reply.as_ref().is_ok_and(|r| r.label == 0xE301) {
+        if let Some((_, cap)) = userspace {
+            let _ = sunlight_ipc::shm_free(cap);
+        }
+    }
+    let reply = reply.map_err(|_| api::Error::Unavailable)?;
     if reply.label != 0xE301 {
+        return Err(api::Error::Unavailable);
+    }
+    #[cfg(feature = "session-reply-test")]
+    if (case, stage) == (6, 1) {
+        assert_eq!(reply.cap_count, 1);
+        super::authenticated_reply::account(reply.caps[0]);
+        let done = sunlight_ipc::ipc_call_timeout(control, IpcMsg::with_label(0xE312), 5000)
+            .expect("authenticated reply peer completion");
+        assert_eq!(done.label, 0xE301);
+    }
+    #[cfg(feature = "session-reap-test")]
+    if let Some((ptr, cap)) = userspace {
+        // This publication occurs in ring 3, after the rendezvous syscall has
+        // returned. The controller observes it before submitting normal restart.
+        // Make no further syscall until the bounded loop expires or aborts:
+        // the real timer/fatal-signal path, rather than syscall return, must
+        // terminate this participant. No kernel lock or interrupt state changes.
+        let state = unsafe { &*ptr.cast::<core::sync::atomic::AtomicU64>() };
+        state.store(1, core::sync::atomic::Ordering::Release);
+        for _ in 0..100_000_000u64 {
+            if state.load(core::sync::atomic::Ordering::Acquire) != 1 {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let _ = sunlight_ipc::shm_free(cap);
         return Err(api::Error::Unavailable);
     }
     Ok(())

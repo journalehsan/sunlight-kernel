@@ -1,3 +1,11 @@
+mod deferred_token;
+#[cfg(all(debug_assertions, feature = "authenticated_reply_test"))]
+pub(crate) mod authenticated_reply_test;
+mod reply_identity;
+#[cfg(all(debug_assertions, feature = "ipc_deferred_test"))]
+pub(crate) mod deferred_test;
+#[cfg(all(debug_assertions, feature = "ipc_reply_race_test"))]
+pub(crate) mod reply_race_test;
 pub mod message;
 
 use crate::capability::{CapabilityBroker, CapabilityRights, CapabilityToken};
@@ -1053,6 +1061,10 @@ fn finish_call(
         }
         sched.processes[idx].ipc_deadline = None;
         sched.processes[idx].ipc_call_outcome = Some(outcome);
+        #[cfg(all(debug_assertions, feature = "authenticated_reply_test"))]
+        if let Some(target) = target {
+            authenticated_reply_test::terminal(&sched.processes[idx], target, outcome);
+        }
         // Successful delivery has already consumed the server's exclusive
         // reply target (take for an ordinary reply, remove for a deferred
         // reply). Only externally terminated calls need to search all servers
@@ -1615,17 +1627,25 @@ pub fn defer_current_reply(server_pid: usize, sched: &mut Scheduler) -> Result<u
     };
     let target = sched.processes[server_idx]
         .ipc_reply_target
-        .take()
         .ok_or(IpcError::InvalidArgument)?;
+    // Closure/cancellation can retain the ordinary reply target so that a
+    // server can attempt its ordinary reply. It is no longer publishable.
+    // Validate before allocation or ownership transfer, under SCHEDULER.
+    if sched.processes[server_idx].is_exiting() || !reply_target_is_live(target, sched) {
+        return Err(IpcError::InvalidArgument);
+    }
     if sched.processes[server_idx].deferred_reply_targets.len() >= DEFERRED_REPLY_CAPACITY {
-        sched.processes[server_idx].ipc_reply_target = Some(target);
         return Err(IpcError::QueueFull);
     }
-    let token = sched.processes[server_idx]
-        .next_deferred_reply_token
-        .wrapping_add(1)
-        .max(1)
-        | (1u64 << 63);
+    let token = deferred_token::next_token(sched.processes[server_idx].next_deferred_reply_token)
+        .ok_or(IpcError::QueueFull)?;
+    // Reserve before transferring the exclusive reply target. Exhaustion or
+    // allocation failure must leave ordinary reply/cancellation usable.
+    sched.processes[server_idx]
+        .deferred_reply_targets
+        .try_reserve(1)
+        .map_err(|_| IpcError::QueueFull)?;
+    sched.processes[server_idx].ipc_reply_target = None;
     sched.processes[server_idx].next_deferred_reply_token = token;
     sched.processes[server_idx]
         .deferred_reply_targets
@@ -1656,7 +1676,7 @@ pub fn deferred_reply_is_live(server_pid: usize, token: u64, sched: &Scheduler) 
     let Some(entry) = sched
         .processes
         .iter()
-        .find(|process| process.pid == server_pid)
+        .find(|process| process.pid == server_pid && !process.is_exiting())
         .and_then(|process| {
             process
                 .deferred_reply_targets
@@ -1667,15 +1687,30 @@ pub fn deferred_reply_is_live(server_pid: usize, token: u64, sched: &Scheduler) 
     else {
         return false;
     };
-    sched.processes.iter().any(|process| {
-        process.pid == entry.target.call.pid
-            && process.foreground.incarnation == entry.target.call.incarnation
-            && !process.is_exiting()
-            && process.pending_call.is_some_and(|pending| {
-                pending.endpoint_id == entry.target.endpoint_id
-                    && pending.generation == entry.target.call.generation
-            })
-    })
+    reply_target_is_live(entry.target, sched)
+}
+
+fn reply_target_is_live(target: IpcReplyTarget, sched: &Scheduler) -> bool {
+    use reply_identity::{publication_allowed, ReplyIdentity};
+    let Some(process) = sched.processes.iter().find(|p| p.pid == target.call.pid) else {
+        return false;
+    };
+    publication_allowed(
+        ReplyIdentity {
+            pid: target.call.pid,
+            incarnation: target.call.incarnation,
+            endpoint: target.endpoint_id,
+            generation: target.call.generation,
+        },
+        process.pending_call.map(|pending| ReplyIdentity {
+            pid: process.pid,
+            incarnation: process.foreground.incarnation,
+            endpoint: pending.endpoint_id,
+            generation: pending.generation,
+        }),
+        process.is_exiting(),
+        process.ipc_call_outcome.is_some(),
+    )
 }
 
 pub fn complete_deferred_reply(
@@ -1693,6 +1728,9 @@ pub fn complete_deferred_reply(
     else {
         return Err(IpcError::InvalidArgument);
     };
+    if sched.processes[server_idx].is_exiting() {
+        return Err(IpcError::InvalidArgument);
+    }
     let Some(entry_idx) = sched.processes[server_idx]
         .deferred_reply_targets
         .iter()
@@ -1705,7 +1743,79 @@ pub fn complete_deferred_reply(
         .remove(entry_idx)
         .ok_or(IpcError::InvalidArgument)?
         .target;
+    if !reply_target_is_live(target, sched) {
+        bus.reply_waiter_remove(target.endpoint_id, target.call);
+        caps.settle_grant_delivery(
+            target.call.pid,
+            target.call.incarnation,
+            target.call.generation,
+            None,
+            &[],
+        );
+        return Err(IpcError::InvalidArgument);
+    }
     deliver_reply_to_target(target, reply, sched, caps, bus)
+}
+
+/// Successful exec withdraws the old image's server reply authority. Called
+/// only after image preparation succeeds, still under lifecycle serialization.
+/// Completion counters are deliberately not reset: old handles never alias.
+pub(crate) fn retire_exec_replies(
+    server_pid: usize,
+    ordinary: Option<IpcReplyTarget>,
+    sched: &mut Scheduler,
+) {
+    let Some(server) = sched.processes.iter().position(|p| p.pid == server_pid) else {
+        return;
+    };
+    if let Some(target) = ordinary {
+        cancel_reply_target(&mut sched.processes[server].ipc_reply_target, target);
+    }
+    let deferred = core::mem::take(&mut sched.processes[server].deferred_reply_targets);
+    for target in ordinary
+        .into_iter()
+        .chain(deferred.into_iter().map(|entry| entry.target))
+    {
+        with_shard(target.endpoint_id, |bus| {
+            bus.reply_waiter_remove(target.endpoint_id, target.call);
+        });
+        if !reply_target_is_live(target, sched) {
+            continue;
+        }
+        let caller = sched
+            .processes
+            .iter()
+            .position(|p| p.pid == target.call.pid)
+            .unwrap();
+        let mut caps = crate::capability::CAP_BROKER.lock();
+        finish_call(
+            sched,
+            caller,
+            IpcCallOutcome::PeerClosed(target.call.generation),
+            &mut caps,
+        );
+    }
+}
+
+/// Withdraw a replaced image's outgoing call, without publishing a terminal
+/// result into its replacement image. The snapshot is captured before image
+/// preparation and consumed only on successful exec, under SCHEDULER.
+pub(crate) fn retire_exec_call(target: IpcReplyTarget, sched: &mut Scheduler) {
+    with_shard(target.endpoint_id, |bus| {
+        bus.remove_pending_call(target.endpoint_id, target.call);
+        bus.reply_waiter_remove(target.endpoint_id, target.call);
+    });
+    remove_deferred_target(sched, target);
+    for process in &mut sched.processes {
+        cancel_reply_target(&mut process.ipc_reply_target, target);
+    }
+    crate::capability::CAP_BROKER.lock().settle_grant_delivery(
+        target.call.pid,
+        target.call.incarnation,
+        target.call.generation,
+        None,
+        &[],
+    );
 }
 
 pub fn handle_ipc_reply_wait(

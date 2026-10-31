@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-uac"
-version = "0.2.5763-alpha.2"
+version = "0.2.5765-alpha.2"
+
 
 
 
@@ -646,6 +647,10 @@ production-grant-test = []
 production-history-test = ["production-grant-test"]
 session-race-test = []
 session-h4-test = ["session-race-test"]
+# Native N6 resource-reap trigger, using ordinary shared memory and manager IPC.
+session-reap-test = ["session-h4-test"]
+# Authenticated owner-ordered reply/close and real deferred-reply exec probes.
+session-reply-test = ["session-reap-test"]
 
 [[bin]]
 name = "session-race-probe"

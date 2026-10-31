@@ -32,6 +32,69 @@ def rows(raw, prefix):
             for line in raw.splitlines() if line.startswith(prefix)]
 
 
+def reaper_userspace_errors(raw, fixture):
+    """Additional N6 assertions; the full H4 assessment must pass separately."""
+    errors = []
+    def require(condition, message):
+        if not condition:
+            errors.append(message)
+    try:
+        records = rows(raw, '[H3-TRACE] ')
+        e = lambda n: [r for r in records if r.get('event') == str(n)]
+        arms = e(1)
+        if len(arms) != 1:
+            return ['userspace reaper authenticated arm missing']
+        arm = arms[0]
+        issuer = arm['pid']
+        require(arm['a'] == '6', 'userspace reaper requires N6')
+        ready = rows(raw, '[REAP-TEST] ')
+        require(len(ready) == 1 and ready[0].get('fixture') == fixture
+                and ready[0].get('checkpoint') == 'issuer-userspace-ready'
+                and ready[0].get('issuer') == issuer,
+                'correlated ring-3 readiness missing')
+        observations = rows(raw, '[SESSION-E3] ')
+        commits = [r for r in observations if r.get('checkpoint') == 'mint-committed'
+                   and r.get('pid') == issuer and r.get('incarnation') == arm['inc']]
+        require(len(commits) == 1 and commits[0].get('result') == '0',
+                'genuine committed old grant missing')
+        outcomes = [r for r in e(4) + e(5) if r.get('pid') == issuer]
+        require(len(outcomes) == 1 and outcomes[0]['event'] == '4'
+                and outcomes[0]['inc'] == arm['inc']
+                and int(outcomes[0]['seq']) < int(arm['seq']),
+                'expected one old grant commit before postcommit rendezvous and no later outcome')
+        require(bool(re.search(r'process_mark_finished pid=' + re.escape(issuer)
+                + r" name='uac_service' reason=pending-fatal-signal code=143", raw)),
+                'ordinary timer fatal-SIGTERM path missing')
+        paths = [r for r in e(10) if r['pid'] == issuer and r['inc'] == arm['inc']]
+        require(bool(paths) and all(r['a'] == '2' for r in paths),
+                'old endpoint was not closed through resource reap')
+        retirement = [r for r in e(20) if r['a'] == arm['b'] and r['b'] == arm['c']
+                      and r['c'] == issuer]
+        closes = e(30)
+        removed = [r for r in e(11) if r['pid'] == issuer and r['b'] == '2' and r['c'] == '1']
+        require(len(retirement) == len(closes) == len(removed) == 1,
+                'single pending-call reap/retirement evidence missing')
+        if len(retirement) == len(closes) == len(removed) == 1 and paths:
+            path, close, retire, removal = paths[0], closes[0], retirement[0], removed[0]
+            require(int(path['seq']) < int(removal['seq']) < int(close['seq']) < int(retire['seq'])
+                    and path['cpu'] == removal['cpu'] == close['cpu'] == retire['cpu']
+                    and removal['a'] == close['a'],
+                    'matching same-CPU peer-close-first reap order missing')
+        inventory = [r for r in observations if r.get('checkpoint') == 'inventory']
+        require(any(all(r.get(k) == '1' for k in ('receipts', 'account_grants', 'pending_account_deliveries'))
+                    for r in inventory), 'committed grant was not pending delivery')
+        require(bool(inventory) and inventory[-1].get('observed_mints') == '1'
+                and inventory[-1].get('observed_consumes') == '0',
+                'unexpected grant mint/consume count')
+        clients = rows(raw, '[SESSION-E3-CLIENT] ')
+        cleaned = [r for r in clients if r.get('checkpoint') == 'userspace-readiness-cleaned'
+                   and r.get('fixture') == fixture and r.get('case') == 'N6' and r.get('result') == '0']
+        require(len(cleaned) == 1, 'userspace readiness mapping cleanup missing')
+    except (KeyError, ValueError, IndexError, TypeError):
+        errors.append('malformed userspace reaper evidence')
+    return errors
+
+
 def guest_terminal_errors(raw, case, fixture):
     errors = []
     for line in raw.splitlines():

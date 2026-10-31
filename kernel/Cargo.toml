@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5763-alpha.2"
+version = "0.2.5765-alpha.2"
+
 
 
 
@@ -687,6 +688,11 @@ grant_history_test = ["production_grant_test"]
 grant_history_transport_test = ["production_grant_test"]
 native_session_race_test = []
 native_session_h4_test = ["native_session_race_test"]
+authenticated_reply_test = ["native_session_h4_test"]
+# Opt-in deferred reply generation/lifecycle boot-method regressions.
+ipc_deferred_test = []
+# Concurrent kernel-method fixture. Never authenticates an Account session.
+ipc_reply_race_test = ["ipc_deferred_test"]
 # Focused SWAP-1 multi-pool pressure/recovery gate.
 swap1_test = ["mm2b_smp_test"]
 # Physical memory accounting Phase 1 native ISO gate.

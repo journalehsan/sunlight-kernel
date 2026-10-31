@@ -4168,6 +4168,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             serial_println!("[SEC]  IPC deferred reply lifecycle: UNEXPECTED");
         }
 
+        #[cfg(all(debug_assertions, feature = "ipc_deferred_test"))]
+        crate::ipc::deferred_test::run(&mut sched, caller_idx, server_idx);
+
         sched.processes[caller_idx].pending_call = None;
         sched.processes[caller_idx].state = ProcessState::Ready;
         sched.remove_from_ready_queues(caller_idx);
@@ -4213,6 +4216,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             serial_println!("[SEC]  IPC SMP terminal-state stress: UNEXPECTED");
         }
     }
+
+    #[cfg(all(debug_assertions, feature = "ipc_reply_race_test"))]
+    crate::ipc::reply_race_test::run(hhdm_offset);
 
     // 5. Dead process cap: a shared-page grant owned by an exited process must
     //    report Revoked, not silently resolve to the stale physical frame.

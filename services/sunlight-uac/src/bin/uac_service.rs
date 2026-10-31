@@ -16,6 +16,8 @@
 
 extern crate alloc;
 mod account_service;
+#[cfg(feature = "session-reply-test")]
+mod authenticated_reply;
 
 use linked_list_allocator::LockedHeap;
 use zeroize::Zeroize;

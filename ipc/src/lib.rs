@@ -4666,6 +4666,10 @@ pub fn ipc_reply(reply: IpcMsg) {
 
 /// Retain the current server call and return a generation-scoped completion
 /// token. The caller must later use `ipc_complete_deferred_reply` exactly once.
+/// Tokens belong to the calling server process. Capacity, metadata allocation
+/// failure, or handle exhaustion returns QueueFull and preserves the current
+/// ordinary reply target. Exhausted handles never wrap; ordinary reply remains
+/// available for this call and later calls.
 pub fn ipc_defer_reply() -> Result<u64, IpcError> {
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::IpcDeferReply, 0, 0, 0, 0, 0, 0, 0) };
     if ret <= IpcError::PeerClosed as u64 {

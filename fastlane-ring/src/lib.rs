@@ -1,4 +1,8 @@
-//! Bounded SPSC foundation. See docs/ipc/fastlane-f12-spsc-ring.md.
+//! Bounded cooperative SPSC ring with copying and zero-copy operations.
+//!
+//! Leases borrow the unique role handle until publication or reclamation. They
+//! do not authenticate peers, attach mappings, revoke access or wake tasks. See
+//! docs/ipc/fastlane-f12-spsc-ring.md and fastlane-zero-copy-leases.md.
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -21,6 +25,9 @@ pub const MAGIC: u64 = 0x5355_4e46_4c52_3031;
 pub const VERSION: u32 = 1;
 pub const MAX_CAPACITY: usize = 65536;
 pub const MAX_PAYLOAD: usize = 4096;
+
+mod leases;
+pub use leases::{ReadLease, WriteLease};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayoutError {
@@ -214,73 +221,29 @@ pub struct Consumer<'a, const N: usize, const P: usize> {
 
 impl<const N: usize, const P: usize> Producer<'_, N, P> {
     pub fn try_send(&mut self, bytes: &[u8]) -> Result<(), SendError> {
-        if bytes.len() > P {
-            return Err(SendError::PayloadTooLarge);
-        }
-        let head = self.ring.producer.value.load(Ordering::Relaxed);
-        let tail = self.ring.consumer.value.load(Ordering::Acquire);
-        let used = head.wrapping_sub(tail);
-        if used > N as u64 {
-            return Err(SendError::InvalidChannel);
-        }
-        if used == N as u64 {
-            return Err(SendError::Full);
-        }
-        let slot = self.ring.payload.slots[head as usize & (N - 1)].get();
-        // SAFETY: this free slot is exclusively producer-owned until publication.
-        // Acquire tail observed completion of previous consumer reads before reuse.
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                bytes.as_ptr(),
-                core::ptr::addr_of_mut!((*slot).bytes).cast::<u8>(),
-                bytes.len(),
-            );
-            core::ptr::addr_of_mut!((*slot).len).write(bytes.len() as u32);
-        }
-        self.ring
-            .producer
-            .value
-            .store(head.wrapping_add(1), Ordering::Release);
+        // Every exposed byte is overwritten, so the copying path needs no clear.
+        let mut lease = self.reserve_slot(bytes.len())?;
+        lease.payload_mut().copy_from_slice(bytes);
+        lease.commit();
         Ok(())
     }
 }
 impl<const N: usize, const P: usize> Consumer<'_, N, P> {
     pub fn try_recv(&mut self, out: &mut [u8]) -> Result<usize, RecvError> {
-        let tail = self.ring.consumer.value.load(Ordering::Relaxed);
-        let head = self.ring.producer.value.load(Ordering::Acquire);
-        let used = head.wrapping_sub(tail);
-        if used > N as u64 {
-            return Err(RecvError::InvalidChannel);
-        }
-        if used == 0 {
-            return Err(RecvError::Empty);
-        }
-        let slot = self.ring.payload.slots[tail as usize & (N - 1)].get();
-        // SAFETY: Acquire head observes complete publication; producer cannot reuse
-        // this slot until the Release tail below. Length is checked before copying.
-        let len = unsafe { core::ptr::addr_of!((*slot).len).read() } as usize;
-        if len > P {
-            return Err(RecvError::InvalidFrame);
-        }
+        let lease = self.try_read()?;
+        let len = lease.payload().len();
         if len > out.len() {
             return Err(RecvError::OutputBufferTooSmall);
         }
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                core::ptr::addr_of!((*slot).bytes).cast::<u8>(),
-                out.as_mut_ptr(),
-                len,
-            );
-        }
-        self.ring
-            .consumer
-            .value
-            .store(tail.wrapping_add(1), Ordering::Release);
+        out[..len].copy_from_slice(lease.payload());
+        lease.release();
         Ok(len)
     }
 }
 
 #[cfg(test)]
 extern crate std;
+#[cfg(test)]
+mod lease_tests;
 #[cfg(test)]
 mod tests;

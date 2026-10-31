@@ -233,6 +233,15 @@ fn concurrent_notify_close_serializations() {
 }
 #[test]
 fn ring_conditional_wait_fifo_and_integrity() {
+    exercise_ring_conditional_wait::<false>();
+}
+
+#[test]
+fn zero_copy_ring_conditional_wait_fifo_and_integrity() {
+    exercise_ring_conditional_wait::<true>();
+}
+
+fn exercise_ring_conditional_wait<const LEASES: bool>() {
     use sunlight_fastlane_ring::{RecvError, Ring, SendError};
     let mut ring = Ring::<2, 16>::new(1).unwrap();
     let (mut producer, mut consumer) = ring.split(1).unwrap();
@@ -258,10 +267,24 @@ fn ring_conditional_wait_fifo_and_integrity() {
                     other => panic!("{other:?}"),
                 };
                 loop {
-                    match consumer.try_recv(&mut out) {
-                        Ok(16) => {
-                            let value = u64::from_le_bytes(out[..8].try_into().unwrap());
-                            let check = u64::from_le_bytes(out[8..].try_into().unwrap());
+                    let decode = |bytes: &[u8]| {
+                        assert_eq!(bytes.len(), 16);
+                        (
+                            u64::from_le_bytes(bytes[..8].try_into().unwrap()),
+                            u64::from_le_bytes(bytes[8..].try_into().unwrap()),
+                        )
+                    };
+                    let result = if LEASES {
+                        consumer.try_read().map(|read| {
+                            let decoded = decode(read.payload());
+                            read.release();
+                            decoded
+                        })
+                    } else {
+                        consumer.try_recv(&mut out).map(|len| decode(&out[..len]))
+                    };
+                    match result {
+                        Ok((value, check)) => {
                             assert_eq!(value, expected);
                             assert_eq!(check, !value);
                             expected += 1;
@@ -288,7 +311,17 @@ fn ring_conditional_wait_fifo_and_integrity() {
             payload[..8].copy_from_slice(&value.to_le_bytes());
             payload[8..].copy_from_slice(&(!value).to_le_bytes());
             loop {
-                match producer.try_send(&payload) {
+                let result = if LEASES {
+                    producer.try_reserve(16).map(|mut write| {
+                        // Encode directly into the reserved slot.
+                        write.payload_mut()[..8].copy_from_slice(&value.to_le_bytes());
+                        write.payload_mut()[8..].copy_from_slice(&(!value).to_le_bytes());
+                        write.commit();
+                    })
+                } else {
+                    producer.try_send(&payload)
+                };
+                match result {
                     Ok(()) => break,
                     Err(SendError::Full) => std::thread::yield_now(), // bounded fixture only
                     other => panic!("{other:?}"),

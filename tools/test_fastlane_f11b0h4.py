@@ -1,6 +1,6 @@
 """Synthetic parser negatives; these never count as native execution evidence."""
 import unittest
-from fastlane_f11b0h4_validate import assess, host_ack_errors
+from fastlane_f11b0h4_validate import assess, host_ack_errors, reaper_userspace_errors
 
 IDENTITY = dict.fromkeys(('iso_matches', 'elf_matches', 'services_match', 'source_matches'), True)
 
@@ -82,6 +82,50 @@ class CompletionTests(unittest.TestCase):
             self.assertTrue(host_ack_errors({**ack, key: 'wrong'}, **expected))
         self.assertTrue(host_ack_errors({**ack, 'cleanup': 'NOT_RUN'}, **expected))
         self.assertTrue(host_ack_errors({**ack, 'identity': {}}, **expected))
+
+
+class UserspaceReaperTests(unittest.TestCase):
+    def evidence(self):
+        return '\n'.join([
+            '[REAP-TEST] fixture=123 checkpoint=issuer-userspace-ready issuer=18 observer=40',
+            '[SESSION-E3] checkpoint=mint-committed pid=18 incarnation=30 result=0',
+            '[SESSION-E3] checkpoint=inventory receipts=1 account_grants=1 pending_account_deliveries=1 observed_mints=1 observed_consumes=0',
+            "[SCHED] process_mark_finished pid=18 name='uac_service' reason=pending-fatal-signal code=143",
+            '[H3-TRACE] seq=1 event=4 pid=18 inc=30 cpu=1 a=1 b=1 c=0',
+            '[H3-TRACE] seq=2 event=1 pid=18 inc=30 cpu=1 a=6 b=1 c=1',
+            '[H3-TRACE] seq=3 event=10 pid=18 inc=30 cpu=0 a=2 b=47 c=0',
+            '[H3-TRACE] seq=4 event=11 pid=18 inc=30 cpu=0 a=15 b=2 c=1',
+            '[H3-TRACE] seq=5 event=30 pid=39 inc=51 cpu=0 a=15 b=4 c=0',
+            '[H3-TRACE] seq=6 event=20 pid=18 inc=30 cpu=0 a=1 b=1 c=18',
+            '[SESSION-E3] checkpoint=inventory receipts=0 account_grants=0 pending_account_deliveries=0 observed_mints=1 observed_consumes=0',
+            '[SESSION-E3-CLIENT] case=N6 fixture=123 checkpoint=userspace-readiness-cleaned result=0',
+        ])
+
+    def test_resource_reap_after_committed_grant(self):
+        # This helper checks only the additional mode; it cannot certify the
+        # base fixture, source identity, cleanup or host acknowledgement alone.
+        self.assertFalse(reaper_userspace_errors(self.evidence(), '123'))
+        self.assertTrue(assess(self.evidence(), 'N6', 2, '123', identity=IDENTITY)['errors'])
+
+    def test_reject_missing_security_path_and_readiness_cleanup(self):
+        raw = self.evidence()
+        for marker in ('[REAP-TEST]', 'checkpoint=mint-committed', 'pending-fatal-signal',
+                       'event=4 ', 'event=10', 'event=11', 'event=30', 'event=20',
+                       'checkpoint=userspace-readiness-cleaned'):
+            broken = '\n'.join(line for line in raw.splitlines() if marker not in line)
+            self.assertTrue(reaper_userspace_errors(broken, '123'), marker)
+
+    def test_reject_wrong_case_identity_endpoint_order_and_resource_counts(self):
+        raw = self.evidence()
+        for broken in (raw.replace('issuer=18', 'issuer=19'), raw.replace('fixture=123', 'fixture=122'),
+                       raw.replace('a=6 b=1', 'a=4 b=1'), raw.replace('a=2 b=47', 'a=1 b=47'),
+                       raw.replace('a=15 b=2', 'a=16 b=2'), raw.replace('seq=5 event=30', 'seq=7 event=30'),
+                       raw.replace('seq=1 event=4', 'seq=7 event=4'),
+                       raw + '\n[H3-TRACE] seq=7 event=4 pid=18 inc=30 cpu=1 a=1 b=1 c=0',
+                       raw.replace('observed_mints=1', 'observed_mints=2'),
+                       raw.replace('pending_account_deliveries=1', 'pending_account_deliveries=0'),
+                       raw.replace('event=30 pid=39 inc=51 cpu=0', 'event=30 pid=39 inc=51 cpu=1')):
+            self.assertTrue(reaper_userspace_errors(broken, '123'), broken)
 
 
 if __name__ == '__main__':

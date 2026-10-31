@@ -319,7 +319,15 @@ def main():
     parser.add_argument('--n4-on-ap', action='store_true',
                         help='Build a separate N4-only test image with initial Account affinity on CPU 1')
     parser.add_argument('--h4', action='store_true', help='Prestarted authorized controller and independent completion protocol')
+    parser.add_argument('--reaper-userspace', action='store_true',
+                        help='N6 only: return the committed issuer to a bounded userspace loop before ordinary manager restart')
+    parser.add_argument('--authenticated-reply', action='store_true',
+                        help='N6 userspace-reaper mode with owner-ordered Account replies and real peer exec')
     args = parser.parse_args()
+    if args.authenticated_reply and not args.reaper_userspace:
+        parser.error('--authenticated-reply requires --reaper-userspace')
+    if args.reaper_userspace and (not args.h4 or args.cases != ['N6']):
+        parser.error('--reaper-userspace requires --h4 --cases N6')
     if any(c in ('H4R', 'S1', 'S2', 'S3') for c in args.cases) and not args.h4:
         parser.error('H4R requires --h4')
     if args.replacement_relogin and args.cases != ['N6']:
@@ -344,6 +352,9 @@ def main():
                'gates': {'A': 'VERIFIED NATIVE', 'B': 'PARTIAL', 'session_authority': 'PARTIAL', 'F1.1B-0': 'BLOCKED', 'C': 'BLOCKED'}}
     if args.h4:
         summary['phase'] = 'F1.1B-0H4'
+    summary['revision'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    uac_feature = 'session-reply-test' if args.authenticated_reply else ('session-reap-test' if args.reaper_userspace else ('session-h4-test' if args.h4 else 'session-race-test'))
+    kernel_feature = 'authenticated_reply_test,key_inject' if args.authenticated_reply else ('native_session_h4_test,key_inject' if args.h4 else 'native_session_race_test,key_inject')
     def save():
         (out / 'validation-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     def check(name, cmd, extra=None, timeout=1200):
@@ -370,14 +381,14 @@ def main():
                 # Match tools/build.sh's separate package invocations so Cargo
                 # feature unification cannot install two global allocators.
                 service_cmd = ['cargo', 'build', '--locked', '--offline', '--release', '-p', package]
-                if test and package == 'sunlight-uac': service_cmd += ['--features', 'session-h4-test' if args.h4 else 'session-race-test']
+                if test and package == 'sunlight-uac': service_cmd += ['--features', uac_feature]
                 if test and args.h4 and package in ('sunlightctl', 'sunlightd'): service_cmd += ['--features', 'session-h4-test']
                 if not check('service-'+package, service_cmd, {'RUSTFLAGS': SERVICE_FLAGS}): raise SystemExit(1)
             for name in ('sunlight-init', 'sunlightd', 'sunlight-tty-server', 'uac_service',
                          'sunlight-sessiond', 'sunlight-vfs-server', 'sunlightctl') + (('session-race-probe',) if test else ()):
                 shutil.copy2(BUILD / 'x86_64-unknown-none/release' / name, ROOT / 'target/x86_64-unknown-none/release' / name)
             kernel_cmd = ['cargo', 'build', '--locked', '--offline', '-p', 'sunlight-kernel', '--bin', 'sunlight-kernel']
-            if test: kernel_cmd += ['--features', 'native_session_h4_test,key_inject' if args.h4 else 'native_session_race_test,key_inject']
+            if test: kernel_cmd += ['--features', kernel_feature]
             test_environment = {'SUNLIGHT_INJECT_PHASE': 'desktop_login',
                                 'SUNLIGHT_SESSION_N4_AP': '1' if args.n4_on_ap or args.h4 else '0'} if test else {}
             if not check('kernel', kernel_cmd, test_environment): raise SystemExit(1)
@@ -396,12 +407,12 @@ def main():
                 if offset < 0: raise RuntimeError('current binary not embedded: ' + name)
                 shutil.copy2(p, embedded / name)
                 payloads[name] = {'sha256': digest(p), 'bytes': len(data), 'embedded_offset': offset}
-            if not test and any(marker in raw for marker in (b'[SESSION-E3]', b'[SESSION-E3-UAC]', b'[SESSION-E3-CLIENT]', b'[H4-CTL]', b'[H4-MANAGER]', b'[H3-TRACE]')):
+            if not test and any(marker in raw for marker in (b'[SESSION-E3]', b'[SESSION-E3-UAC]', b'[SESSION-E3-CLIENT]', b'[H4-CTL]', b'[H4-MANAGER]', b'[H3-TRACE]', b'[REAP-TEST]', b'[AUTH-REPLY]', b'[AUTH-KERNEL]', b'[AUTH-TERMINAL]', b'[AUTH-BINDING]', b'[AUTH-OBSERVE]')):
                 raise RuntimeError('test instrumentation present in ordinary image')
             summary['images']['fixture' if test else 'production'] = {'kernel_sha256': digest(built), 'elf_sha256': digest(elf),
-                'iso_sha256': digest(iso), 'iso': str(iso), 'features': ['native_session_h4_test' if args.h4 else 'native_session_race_test', 'key_inject'] if test else [],
+                'iso_sha256': digest(iso), 'iso': str(iso), 'features': kernel_feature.split(',') if test else [],
                 'test_environment': test_environment,
-                'service_features': ({'sunlight-uac': ['session-h4-test'], 'sunlightd': ['session-h4-test'],
+                'service_features': ({'sunlight-uac': [uac_feature], 'sunlightd': ['session-h4-test'],
                                       'sunlightctl': ['session-h4-test']} if test and args.h4 else {}),
                 'embedded_services': payloads, 'source_sha256': summary['source_sha256']}
         elif args.section == 'checks':
@@ -421,6 +432,12 @@ def main():
             if args.image_manifest is None: parser.error('--image-manifest required for native')
             manifest = json.loads(args.image_manifest.read_text())
             image = manifest['images']['fixture']; iso = Path(image['iso'])
+            uac_features = image.get('service_features', {}).get('sunlight-uac', [])
+            reaper_image = any(f in uac_features for f in ('session-reap-test', 'session-reply-test'))
+            if reaper_image != args.reaper_userspace:
+                parser.error('image userspace reaper mode differs from requested fixture')
+            if ('session-reply-test' in uac_features) != args.authenticated_reply:
+                parser.error('image authenticated reply mode differs from requested fixture')
             if image.get('test_environment', {}).get('SUNLIGHT_SESSION_N4_AP') == '1' and args.cases != ['N4'] and not args.h4:
                 parser.error('N4 AP-placement image supports only --cases N4; use ordinary fixture for other races')
             if digest(iso) != image['iso_sha256']: raise RuntimeError('ISO hash mismatch')
@@ -526,6 +543,23 @@ def main():
                     if args.h4:
                         from fastlane_f11b0h4_validate import assess, host_ack_errors
                         detail = assess(raw(), case, cpu, fixture_id, identity=identity, failure=failure)
+                        if args.reaper_userspace:
+                            from fastlane_f11b0h4_validate import reaper_userspace_errors
+                            mode_errors = reaper_userspace_errors(raw(), fixture_id)
+                            detail['userspace_reaper_errors'] = mode_errors
+                            detail['userspace_reaper'] = 'PASS' if not mode_errors else 'FAIL_CURRENT'
+                            if mode_errors:
+                                detail['errors'].extend(mode_errors)
+                                detail['classification'] = 'FORCED_AND_FAILED'
+                                detail['terminal_protocol'] = 'BLOCKED'
+                        if args.authenticated_reply:
+                            from fastlane_authenticated_reply_validate import assess as assess_replies
+                            replies = assess_replies(raw(), cpu)
+                            detail['authenticated_replies'] = replies
+                            if replies['status'] != 'PASS':
+                                detail['errors'].extend(replies['errors'])
+                                detail['classification'] = 'FORCED_AND_FAILED'
+                                detail['terminal_protocol'] = 'BLOCKED'
                         if detail['terminal_protocol'] == 'GUEST_VALIDATED_PENDING_HOST_ACK':
                             ack = {'fixture': fixture_id, 'case': case, 'cpus': cpu, 'serial_sha256': digest(serial),
                                    'iso_sha256': digest(iso), 'elf_sha256': digest(elf),

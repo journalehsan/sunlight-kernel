@@ -2873,7 +2873,7 @@ impl Scheduler {
             self.processes[idx].name_str(),
             "session-race-probe" | "session-racer"
         ) || (cfg!(feature = "native_session_h4_test") && self.processes[idx].name_str() == "sunlightctl"
-        ) {
+        ) || (cfg!(feature = "authenticated_reply_test") && self.processes[idx].name_str() == "reply-peer") {
             let broker = crate::capability::CAP_BROKER.lock();
             crate::serial_println!("[SESSION-E3] seq={} checkpoint=fixture-ipc-cleaned pid={} incarnation={} vm={} owned_endpoints={} pending_call=none reply_target=none deferred_targets=0 pending_commits=0 snapshot=serialized cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, broker.endpoints_owned_by(pid).len(), current_cpu_id());
             crate::capability::session_race::inventory(&broker);

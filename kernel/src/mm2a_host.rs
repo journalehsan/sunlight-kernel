@@ -3,6 +3,18 @@
 extern crate alloc;
 
 #[cfg(test)]
+#[path = "ipc/deferred_token.rs"]
+mod deferred_token;
+
+#[cfg(test)]
+#[path = "ipc/reply_race_gate.rs"]
+mod reply_race_gate;
+
+#[cfg(test)]
+#[path = "ipc/reply_identity.rs"]
+mod reply_identity;
+
+#[cfg(test)]
 #[path = "process/pid.rs"]
 mod pid;
 

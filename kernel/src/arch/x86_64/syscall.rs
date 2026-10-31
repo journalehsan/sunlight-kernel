@@ -2581,6 +2581,8 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        #[cfg(all(debug_assertions, feature = "authenticated_reply_test"))]
+        crate::ipc::authenticated_reply_test::observation(s);
         #[cfg(feature = "native_session_h4_test")]
         crate::capability::session_h4::observation(s);
         #[cfg(feature = "native_session_race_test")]
@@ -3120,6 +3122,18 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         envp_bytes.iter().map(|v| v.as_slice()).collect()
     };
 
+    let retired_server = process.pid;
+    let retired_ordinary = process.ipc_reply_target;
+    let retired_call = process
+        .pending_call
+        .map(|pending| crate::process::IpcReplyTarget {
+            endpoint_id: pending.endpoint_id,
+            call: crate::process::IpcCallId {
+                pid: process.pid,
+                incarnation: process.foreground.incarnation,
+                generation: pending.generation,
+            },
+        });
     match crate::process::spawn::exec_into_process(
         bytes,
         process,
@@ -3156,6 +3170,15 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
                 crate::process::spawn::is_trusted_control_panel_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
+            process.ipc_reply = None;
+            process.ipc_call_outcome = None;
+            process.ipc_deadline = None;
+            process.ipc_next_deadline_tick = None;
+            drop(pmm);
+            crate::ipc::retire_exec_replies(retired_server, retired_ordinary, &mut sched);
+            if let Some(target) = retired_call {
+                crate::ipc::retire_exec_call(target, &mut sched);
+            }
             // The kernel-stack trampoline enters the installed iret context
             // after this function releases its guards and owned temporaries.
             0

@@ -3,6 +3,8 @@
 #![no_std]
 #![no_main]
 extern crate alloc;
+#[cfg(feature = "session-reply-test")]
+mod authenticated_reply;
 use sunlight_ipc::{accounts as api, CapabilityToken, IpcMsg};
 
 #[cfg(feature = "session-h4-test")]
@@ -167,6 +169,47 @@ fn controller(case: &str, bootstrap: CapabilityToken) -> ! {
     let message = sunlight_ipc::ipc_recv_timeout(ep, 15000).expect("rendezvous not reached");
     assert_eq!(message.label, 0xE301);
     note(case, "policy-accepted-rendezvous", message.words[1]);
+    #[cfg(feature = "session-reap-test")]
+    let userspace = if case == "N6" {
+        use core::sync::atomic::{AtomicU64, Ordering};
+        assert_eq!(message.words[1], 1, "committed-grant rendezvous required");
+        assert_eq!(message.cap_count, 1);
+        let cap = message.caps[0];
+        let (ptr, bytes) = sunlight_ipc::shm_map_sized(cap).expect("userspace readiness mapping");
+        assert!(bytes >= core::mem::size_of::<AtomicU64>());
+        let state = unsafe { &*ptr.cast::<AtomicU64>() };
+        #[cfg(feature = "session-reply-test")]
+        authenticated_reply::controller(ep, message.badge);
+        #[cfg(not(feature = "session-reply-test"))]
+        sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE301))
+            .expect("release committed issuer to userspace");
+        let start = sunlight_ipc::monotonic_millis();
+        let mut ready = false;
+        for _ in 0..1_000_000 {
+            if state.load(Ordering::Acquire) == 1 {
+                ready = true;
+                break;
+            }
+            if sunlight_ipc::monotonic_millis().saturating_sub(start) >= 5000 {
+                break;
+            }
+            sunlight_ipc::process_yield();
+        }
+        if !ready {
+            state.store(2, Ordering::Release);
+            let _ = sunlight_ipc::shm_free(cap);
+            panic!("issuer did not return to userspace");
+        }
+        sunlight_ipc::debug_log(&alloc::format!(
+            "[REAP-TEST] fixture={} checkpoint=issuer-userspace-ready issuer={} observer={}",
+            FIXTURE.load(Ordering::Relaxed),
+            message.badge,
+            sunlight_libc::getpid()
+        ));
+        Some(cap)
+    } else {
+        None
+    };
     if matches!(message.words[0], 4..=6 | 12..=15) {
         if matches!(message.words[0], 4 | 12..=15) && n4_query() != 1 {
             sunlight_ipc::ipc_reply_result(IpcMsg::with_label(0xE301)).expect("release N4 issuer");
@@ -211,6 +254,11 @@ fn controller(case: &str, bootstrap: CapabilityToken) -> ! {
         let status = reap(pid);
         note(case, "manager-restart-response", status as u64);
         assert_eq!(status, 0);
+        #[cfg(feature = "session-reap-test")]
+        if let Some(cap) = userspace {
+            sunlight_ipc::shm_free(cap).expect("release readiness mapping after issuer death");
+            note(case, "userspace-readiness-cleaned", 0);
+        }
         // No attempt to execute or inject an old server reply after retirement.
     } else {
         let session_endpoint = endpoint(sunlight_ipc::SESSION_ENDPOINT);
@@ -267,10 +315,14 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             .lock()
             .init(core::ptr::addr_of_mut!(HEAP).cast::<u8>(), 256 * 1024);
     }
-    let mut args = [""; 5];
+    let mut args = [""; 10];
     let count = unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 64) };
     assert!(count >= 2, "case required");
     let case = args[1];
+    #[cfg(feature = "session-reply-test")]
+    if matches!(case, "reply-peer" | "reply-exec") {
+        authenticated_reply::peer(&args[..count]);
+    }
     #[cfg(feature = "session-h4-test")]
     {
         let index = if args.get(2) == Some(&"controller") {
