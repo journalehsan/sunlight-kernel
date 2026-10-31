@@ -1,5 +1,15 @@
 # FastLane security closure: peer-close-first native path
 
+2026-10-31 continuation: [authenticated completion versus actual caller exit](fastlane-authenticated-completion-caller-exit-race.md)
+tracks the separate real ProcessExit syscall contest and per-object retirement.
+Its final validation and preserved regressions are scoped to that milestone;
+production FastLane and the independent security gates remain disabled/unchanged.
+
+2026-10-31 continuation: [authenticated completion/cancellation overlap](fastlane-authenticated-completion-cancellation-race.md)
+records the separate same-operation terminal contest, real owner identities,
+per-object physical retirement and current validation matrix. Its scoped result
+does not enable production FastLane or close the independent gates below.
+
 2026-10-28, Asia/Tehran. Security closure continues before production FastLane
 implementation. **The committed-grant peer-close-first resource-reap path is now
 VERIFIED NATIVE on 2, 4 and 12 CPUs.** This is a scoped proof, not completion of

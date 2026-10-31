@@ -1,5 +1,14 @@
 # Authenticated reply lifecycle and resource closure
 
+2026-10-31 continuation: [authenticated completion versus actual caller exit](fastlane-authenticated-completion-caller-exit-race.md)
+tracks the separate real ProcessExit syscall contest and per-object retirement.
+Its final validation and preserved regressions are scoped to that milestone;
+production FastLane and the independent security gates remain disabled/unchanged.
+
+Continuation: [authenticated Account exec and per-object SHM retirement](fastlane-account-exec-shm-retirement.md)
+adds actual privileged Account exec and correlated physical-release observations.
+The results below remain the original milestone's evidence and classifications.
+
 2026-10-31. **PARTIAL.** Production FastLane, Restricted SHM and public Doorbell
 remain disabled. No commit or push was performed. This milestone extends the
 pending-reply method proof into actual authenticated userspace operations; it

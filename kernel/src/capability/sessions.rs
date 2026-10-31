@@ -275,6 +275,18 @@ impl CapabilityBroker {
         }
     }
 
+    /// A failed delivery must not leave its retry receipt until owner exit.
+    /// Retain committed deliveries and unrelated incarnation/call generations.
+    /// Called after grant settlement under the existing lifecycle/broker locks.
+    pub(super) fn settle_account_receipts(&mut self, pid: usize, incarnation: u64, request: u64) {
+        for session in &mut self.sessions.rows {
+            session.requests.retain(|receipt| {
+                !receipt.delivery.matches(pid, incarnation, request)
+                    || self.account_grants.iter().any(|(token, _)| *token == receipt.token)
+            });
+        }
+    }
+
     /// Authorization, retry receipt, token preparation, insertion and ownership
     /// attachment are one transaction under the caller's broker guard.
     pub(crate) fn commit_account_session_grant(

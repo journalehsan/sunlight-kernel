@@ -16,6 +16,10 @@
 
 extern crate alloc;
 mod account_service;
+#[cfg(feature = "session-account-cancel-test")]
+mod account_cancel;
+#[cfg(any(feature = "session-account-exec-test", feature = "session-account-cancel-test"))]
+mod account_exec;
 #[cfg(feature = "session-reply-test")]
 mod authenticated_reply;
 
@@ -283,6 +287,8 @@ fn _start() -> ! {
     serial_println!("[UAC] Starting uac_service v0.1");
 
     let ep = endpoint_create();
+    #[cfg(any(feature = "session-account-exec-test", feature = "session-account-cancel-test"))]
+    account_service::EXEC_ENDPOINT.store(ep.0, core::sync::atomic::Ordering::Relaxed);
     nameserver_register("uac", ep);
     serial_println!("[UAC] Registered as 'uac'");
     migrate_development_shadow();

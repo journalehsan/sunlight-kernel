@@ -323,7 +323,18 @@ def main():
                         help='N6 only: return the committed issuer to a bounded userspace loop before ordinary manager restart')
     parser.add_argument('--authenticated-reply', action='store_true',
                         help='N6 userspace-reaper mode with owner-ordered Account replies and real peer exec')
+    parser.add_argument('--account-exec', action='store_true', help='Separate actual privileged Account exec and per-object retirement fixture')
+    parser.add_argument('--account-exec-cycles', type=int, choices=(1, 3), default=1, help='Complete authenticated Account exec cycles in the same guest')
+    parser.add_argument('--account-cancel', type=int, choices=range(1,14), help='Authenticated cancellation/caller-exit (1-7) or concurrent completion race (8-10), or actual exit race (11-13)')
     args = parser.parse_args()
+    if args.account_cancel and (not args.h4 or args.cases != ['N6'] or args.account_exec or args.reaper_userspace or args.authenticated_reply):
+        parser.error('--account-cancel requires --h4 --cases N6 and a separate image')
+    if args.account_exec_cycles != 1 and not (args.account_exec or args.account_cancel):
+        parser.error('--account-exec-cycles requires --account-exec')
+    if args.account_exec and args.replacement_relogin:
+        parser.error('Account exec has its own authenticated repetition protocol')
+    if args.account_exec and (not args.h4 or args.cases != ['N6'] or args.reaper_userspace or args.authenticated_reply):
+        parser.error('--account-exec requires --h4 --cases N6 and is separate from reply/reaper modes')
     if args.authenticated_reply and not args.reaper_userspace:
         parser.error('--authenticated-reply requires --reaper-userspace')
     if args.reaper_userspace and (not args.h4 or args.cases != ['N6']):
@@ -353,8 +364,14 @@ def main():
     if args.h4:
         summary['phase'] = 'F1.1B-0H4'
     summary['revision'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-    uac_feature = 'session-reply-test' if args.authenticated_reply else ('session-reap-test' if args.reaper_userspace else ('session-h4-test' if args.h4 else 'session-race-test'))
-    kernel_feature = 'authenticated_reply_test,key_inject' if args.authenticated_reply else ('native_session_h4_test,key_inject' if args.h4 else 'native_session_race_test,key_inject')
+    uac_feature = 'session-account-cancel-test' if args.account_cancel else 'session-account-exec-test' if args.account_exec else 'session-reply-test' if args.authenticated_reply else ('session-reap-test' if args.reaper_userspace else ('session-h4-test' if args.h4 else 'session-race-test'))
+    kernel_feature = 'authenticated_cancel_test,key_inject' if args.account_cancel else 'authenticated_exec_test,key_inject' if args.account_exec else 'authenticated_reply_test,key_inject' if args.authenticated_reply else ('native_session_h4_test,key_inject' if args.h4 else 'native_session_race_test,key_inject')
+    if args.account_cancel and args.account_cancel >= 8:
+        uac_feature = 'session-account-completion-race-test'
+        kernel_feature = 'authenticated_completion_race_test,key_inject'
+    if args.account_cancel and args.account_cancel >= 11:
+        uac_feature = 'session-account-completion-exit-test'
+        kernel_feature = 'authenticated_completion_exit_test,key_inject'
     def save():
         (out / 'validation-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     def check(name, cmd, extra=None, timeout=1200):
@@ -407,7 +424,7 @@ def main():
                 if offset < 0: raise RuntimeError('current binary not embedded: ' + name)
                 shutil.copy2(p, embedded / name)
                 payloads[name] = {'sha256': digest(p), 'bytes': len(data), 'embedded_offset': offset}
-            if not test and any(marker in raw for marker in (b'[SESSION-E3]', b'[SESSION-E3-UAC]', b'[SESSION-E3-CLIENT]', b'[H4-CTL]', b'[H4-MANAGER]', b'[H3-TRACE]', b'[REAP-TEST]', b'[AUTH-REPLY]', b'[AUTH-KERNEL]', b'[AUTH-TERMINAL]', b'[AUTH-BINDING]', b'[AUTH-OBSERVE]')):
+            if not test and any(marker in raw for marker in (b'[SESSION-E3]', b'[SESSION-E3-UAC]', b'[SESSION-E3-CLIENT]', b'[H4-CTL]', b'[H4-MANAGER]', b'[H3-TRACE]', b'[REAP-TEST]', b'[AUTH-REPLY]', b'[AUTH-KERNEL]', b'[AUTH-TERMINAL]', b'[AUTH-BINDING]', b'[AUTH-OBSERVE]', b'[AE-SNAPSHOT]', b'[AE-GRANT]', b'[AE-UNMAP]', b'[AE-TLB]', b'[AE-PMM]', b'[AE-USER]', b'[AE-OBSERVE]', b'[EX-RACE]', b'[EX-OUTCOME]', b'[EX-ARM]', b'[RC-RACE]', b'[RC-OUTCOME]', b'[RC-ARM]', b'[CE-STATE]', b'[CE-USER]', b'[CE-REAP]', b'[CE-OBSERVE]')):
                 raise RuntimeError('test instrumentation present in ordinary image')
             summary['images']['fixture' if test else 'production'] = {'kernel_sha256': digest(built), 'elf_sha256': digest(elf),
                 'iso_sha256': digest(iso), 'iso': str(iso), 'features': kernel_feature.split(',') if test else [],
@@ -434,6 +451,14 @@ def main():
             image = manifest['images']['fixture']; iso = Path(image['iso'])
             uac_features = image.get('service_features', {}).get('sunlight-uac', [])
             reaper_image = any(f in uac_features for f in ('session-reap-test', 'session-reply-test'))
+            if any(f in uac_features for f in ('session-account-cancel-test', 'session-account-completion-race-test', 'session-account-completion-exit-test')) != bool(args.account_cancel):
+                parser.error('image cancellation mode differs from requested fixture')
+            if ('session-account-completion-race-test' in uac_features) != bool(args.account_cancel and 8 <= args.account_cancel <= 10):
+                parser.error('image concurrent race mode differs from requested fixture')
+            if ('session-account-completion-exit-test' in uac_features) != bool(args.account_cancel and args.account_cancel >= 11):
+                parser.error('image exit race mode differs from requested fixture')
+            if ('session-account-exec-test' in uac_features) != args.account_exec:
+                parser.error('image Account exec mode differs from requested fixture')
             if reaper_image != args.reaper_userspace:
                 parser.error('image userspace reaper mode differs from requested fixture')
             if ('session-reply-test' in uac_features) != args.authenticated_reply:
@@ -465,6 +490,7 @@ def main():
                     cmd = ['qemu-system-x86_64', '-accel', 'tcg,thread=multi', '-cpu', 'max', '-smp', str(cpu), '-m', str(args.memory_mib), '-cdrom', str(iso), '-serial', 'file:'+str(serial), '-display', 'none', '-nic', 'none', '-no-reboot', '-no-shutdown', '-device', 'virtio-rng-pci,disable-modern=on', '-qmp', 'unix:'+str(sock)+',server=on,wait=off']
                     start = time.monotonic(); failure = None; qmp = None; replacement_offset = None
                     fixture_id = str(secrets.randbelow(900000000) + 100000000) if args.h4 else None
+                    fixture_ids = [fixture_id] if args.account_exec or args.account_cancel else []
                     def raw(): return serial.read_text(errors='replace')
                     def await_marker(marker, count=1):
                         while time.monotonic()-start < args.timeout and proc.poll() is None:
@@ -485,6 +511,17 @@ def main():
                             if char.isupper(): key('shift', char.lower())
                             else: key({' ':'spc', '/':'slash', '-':'minus', '\n':'ret', '\t':'tab'}.get(char, char))
                     def await_case(selected):
+                        if args.account_exec or args.account_cancel:
+                            while time.monotonic()-start < args.timeout and proc.poll() is None:
+                                if any('checkpoint=fixture-complete ' in line and 'fixture='+fixture_id in line for line in raw().splitlines()): break
+                                if any(m in raw() for m in ('PANIC', 'panicked at', 'checkpoint=FAIL')): raise RuntimeError('guest assertion failed')
+                                time.sleep(.1)
+                            else: raise TimeoutError('Account exec cycle completion missing')
+                            await_marker('exit: /tmp/session-race-probe '+selected+' '+fixture_id+(' '+str(args.account_cancel) if args.account_cancel else '')+' -> 0')
+                            starts = [dict(re.findall(r'(\w+)=(\S+)', line)) for line in raw().splitlines() if line.startswith('[SESSION-E3-CLIENT] case='+selected+' checkpoint=request-start ') and 'fixture='+fixture_id in line]
+                            if len(starts) != 1: raise RuntimeError('missing exact original requester')
+                            await_marker('[SCHED] process_reaped pid='+starts[0]['pid']+' ')
+                            return
                         if args.h4:
                             from fastlane_f11b0h4_validate import guest_terminal_errors
                             while time.monotonic()-start < args.timeout and proc.poll() is None:
@@ -512,10 +549,24 @@ def main():
                             key('spc'); key('ret')
                             await_marker('[TTY]  Built-in shell ready')
                             await_marker("sunshell registered as 'sshl'")
-                            for text in ('touch /tmp/session-race-probe\n', '/tmp/session-race-probe '+case+(' '+fixture_id if args.h4 else '')+'\n'):
+                            for text in ('touch /tmp/session-race-probe\n', '/tmp/session-race-probe '+case+(' '+fixture_id+(' '+str(args.account_cancel) if args.account_cancel else '') if args.h4 else '')+'\n'):
                                 type_text(text)
                                 time.sleep(.5)
                             await_case(case)
+                            if args.account_exec or args.account_cancel:
+                                for cycle in range(1, args.account_exec_cycles):
+                                    type_text('exit\n'); time.sleep(.5)
+                                    key('ret'); type_text('root'); key('tab'); key('spc'); key('ret')
+                                    await_marker('checkpoint=registered ', cycle+1)
+                                    await_marker('[SESSION] switched to F2 GraphicalDesktop', cycle+1)
+                                    key('ctrl', 'f1')
+                                    await_marker('[SESSION] switched to F1 TTY/Login', cycle+1)
+                                    key('spc'); key('ret')
+                                    await_marker('[TTY]  Built-in shell ready', cycle+1)
+                                    fixture_id = str(secrets.randbelow(900000000)+100000000)
+                                    fixture_ids.append(fixture_id)
+                                    type_text('/tmp/session-race-probe '+case+' '+fixture_id+(' '+str(args.account_cancel) if args.account_cancel else '')+'\n')
+                                    await_case(case)
                             if args.replacement_relogin:
                                 replacement_offset = len(raw())
                                 type_text('exit\n'); time.sleep(.5)
@@ -542,7 +593,20 @@ def main():
                                 'iso_sha256': image['iso_sha256'], 'elf_sha256': image['elf_sha256']}
                     if args.h4:
                         from fastlane_f11b0h4_validate import assess, host_ack_errors
-                        detail = assess(raw(), case, cpu, fixture_id, identity=identity, failure=failure)
+                        if args.account_exec or args.account_cancel:
+                            if args.account_cancel:
+                                if args.account_cancel >= 11:
+                                    from fastlane_completion_exit_validate import assess_cycles
+                                elif args.account_cancel >= 8:
+                                    from fastlane_completion_race_validate import assess_cycles
+                                else:
+                                    from fastlane_account_cancel_validate import assess_cycles
+                            else:
+                                from fastlane_account_exec_validate import assess_cycles
+                            fixture_id = fixture_ids[0]
+                            detail = assess_cycles(raw(), cpu, fixture_ids, identity=identity, failure=failure, **({'mode': args.account_cancel} if args.account_cancel else {}))
+                        else:
+                            detail = assess(raw(), case, cpu, fixture_id, identity=identity, failure=failure)
                         if args.reaper_userspace:
                             from fastlane_f11b0h4_validate import reaper_userspace_errors
                             mode_errors = reaper_userspace_errors(raw(), fixture_id)

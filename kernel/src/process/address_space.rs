@@ -1248,6 +1248,8 @@ impl AddressSpace {
         }
         let phys = p1e.addr();
         p1e.set_unused();
+        #[cfg(feature = "authenticated_exec_test")]
+        crate::capability::exec_retirement_trace::tlb(self.identity, page.start_address().as_u64(), "pte-cleared", 0, 0, 0);
         crate::memory::tlb::invalidate_page(self.identity, page.start_address());
         Some(phys)
     }

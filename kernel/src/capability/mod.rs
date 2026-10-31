@@ -1,4 +1,10 @@
+#[cfg(feature = "authenticated_completion_exit_test")]
+pub(crate) mod completion_exit;
 pub(crate) mod delivery;
+#[cfg(feature = "authenticated_completion_race_test")]
+pub(crate) mod completion_race;
+#[cfg(feature = "authenticated_exec_test")]
+pub(crate) mod exec_retirement_trace;
 #[cfg(any(test, feature = "cap_issuance_test"))]
 mod history_boundary;
 mod lifecycle;
@@ -732,6 +738,9 @@ impl CapabilityBroker {
                 tokens,
             )
         });
+        self.settle_account_receipts(pid, incarnation, request);
+        #[cfg(feature = "authenticated_exec_test")]
+        exec_retirement_trace::grant_retired(self);
     }
 
     pub(crate) fn prepare_shared_region(&mut self) -> Result<PreparedSharedRegion<'_>, CapError> {
@@ -1078,6 +1087,8 @@ impl CapabilityBroker {
                 d.recipient.pid == owner_pid || (!d.delivered && d.issuer_pid == owner_pid)
             })
         });
+        #[cfg(feature = "authenticated_exec_test")]
+        exec_retirement_trace::grant_retired(self);
     }
 
     /// Mint a capability token granting access to map a shared physical frame (single-page compat).

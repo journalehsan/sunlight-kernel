@@ -2771,6 +2771,8 @@ impl Scheduler {
         }
 
         let leaked_fds = self.processes[idx].fd_table.take_all_handles();
+        #[cfg(feature = "authenticated_cancel_test")]
+        crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-ready", self.processes[idx].address_space.identity().generation);
         for handle in leaked_fds.into_iter().flatten() {
             if handle.is_pipe() {
                 crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
@@ -2868,6 +2870,8 @@ impl Scheduler {
         self.processes[idx].ipc_reply_target = None;
         self.processes[idx].deferred_reply_targets.clear();
         self.processes[idx].next_deferred_reply_token = 0;
+        #[cfg(feature = "authenticated_cancel_test")]
+        crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-clean", reaped_generation);
         #[cfg(feature = "native_session_race_test")]
         if matches!(
             self.processes[idx].name_str(),
@@ -4244,17 +4248,29 @@ pub fn native_borrower_lifecycle_counts() -> (usize, usize, usize, usize, usize,
 /// from the file manager" symptom.
 pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     serial_println!("[SCHED] process_exit_begin reason={}", reason);
-    #[cfg(feature = "native_session_h4_test")]
+    #[cfg(all(
+        feature = "native_session_h4_test",
+        not(feature = "authenticated_completion_exit_test")
+    ))]
     let h4_exit = crate::capability::session_h4::exit_attempt();
-    #[cfg(feature = "native_session_h4_test")]
+    #[cfg(all(
+        feature = "native_session_h4_test",
+        not(feature = "authenticated_completion_exit_test")
+    ))]
     let mut sched = SCHEDULER.try_lock().unwrap_or_else(|| {
         if let Some((pid, incarnation)) = h4_exit {
             crate::capability::session_h3_trace::record(73, pid as u64, incarnation, 1, 0, 0);
         }
         SCHEDULER.lock()
     });
-    #[cfg(not(feature = "native_session_h4_test"))]
+    #[cfg(not(any(
+        feature = "native_session_h4_test",
+        feature = "authenticated_completion_exit_test"
+    )))]
     let mut sched = SCHEDULER.lock();
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    let (mut sched, exit_selected) =
+        crate::capability::completion_exit::acquire(crate::capability::completion_exit::EXIT, 0);
     #[cfg(feature = "native_session_h4_test")]
     crate::capability::session_h4::exit_acquired(sched.current_process());
     let cpu_id = current_cpu_id();
@@ -4338,6 +4354,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         process.owning_core = u8::MAX;
         process.queued_on_core = u8::MAX;
     }
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    crate::capability::completion_exit::marked(exit_selected, &sched.processes[cur]);
     if is_borrower {
         note_native_borrower_finished();
     }
@@ -4368,6 +4386,13 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
 
     #[cfg(feature = "native_session_h4_test")]
     crate::capability::session_h4::exit_releasing(&sched.processes[cur]);
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    crate::capability::completion_exit::finished(
+        crate::capability::completion_exit::EXIT,
+        exit_selected,
+        &sched,
+        0,
+    );
     idle_top
 }
 

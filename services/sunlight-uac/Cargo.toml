@@ -651,6 +651,11 @@ session-h4-test = ["session-race-test"]
 session-reap-test = ["session-h4-test"]
 # Authenticated owner-ordered reply/close and real deferred-reply exec probes.
 session-reply-test = ["session-reap-test"]
+# Actual privileged Account exec; independent of the manager/reaper fixture.
+session-account-exec-test = ["session-h4-test"]
+session-account-cancel-test = ["session-h4-test"]
+session-account-completion-race-test = ["session-account-cancel-test"]
+session-account-completion-exit-test = ["session-account-cancel-test"]
 
 [[bin]]
 name = "session-race-probe"

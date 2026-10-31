@@ -3,8 +3,12 @@
 #![no_std]
 #![no_main]
 extern crate alloc;
+#[cfg(feature = "session-account-cancel-test")]
+mod account_cancel;
 #[cfg(feature = "session-reply-test")]
 mod authenticated_reply;
+#[cfg(any(feature = "session-account-exec-test", feature = "session-account-cancel-test"))]
+mod account_exec;
 use sunlight_ipc::{accounts as api, CapabilityToken, IpcMsg};
 
 #[cfg(feature = "session-h4-test")]
@@ -119,6 +123,10 @@ fn reap(pid: u64) -> u64 {
     panic!("child wait exhausted")
 }
 fn controller(case: &str, bootstrap: CapabilityToken) -> ! {
+    #[cfg(feature = "session-account-exec-test")]
+    if case == "N6" {
+        account_exec::controller(bootstrap);
+    }
     let ep = sunlight_ipc::endpoint_create();
     let public = sunlight_ipc::endpoint_bind(ep.0);
     #[cfg(feature = "session-h4-test")]
@@ -301,10 +309,32 @@ fn request(
     } else {
         msg.with_cap(0, grant).with_cap(1, shm)
     };
+    #[cfg(feature = "session-account-exec-test")]
+    let worker = (scope.target == 61006).then(|| account_exec::start_worker(ptr));
     let result = sunlight_ipc::ipc_call_timeout(endpoint("uac"), msg, 12000);
     unsafe {
         api::clear_secret(core::slice::from_raw_parts_mut(ptr, api::SECRET_LIMIT));
     }
+    #[cfg(feature = "session-account-exec-test")]
+    {
+        if worker.is_some() {
+            account_exec::prepare_release();
+        }
+        sunlight_ipc::shm_free(shm).expect("release request view");
+        if let Some(worker) = worker {
+            account_exec::finish_worker(worker);
+        }
+        if scope.target == 61006 {
+            assert!(sunlight_ipc::shm_map(shm).is_err(), "retired request SHM accepted");
+            assert!(sunlight_ipc::shm_free(shm).is_err(), "duplicate request free accepted");
+            sunlight_ipc::debug_log(&alloc::format!(
+                "[AE-USER] event=request-release-and-stale-denied pid={}",
+                sunlight_libc::getpid()
+            ));
+            sunlight_ipc::debug_log("[AE-OBSERVE] event=caller-consumed");
+        }
+    }
+    #[cfg(not(feature = "session-account-exec-test"))]
     let _ = sunlight_ipc::shm_free(shm);
     result
 }
@@ -319,6 +349,19 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let count = unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 64) };
     assert!(count >= 2, "case required");
     let case = args[1];
+    #[cfg(feature = "session-account-cancel-test")]
+    {
+        if case == "cancel-caller" {
+            account_cancel::caller(&args[..count]);
+        }
+        if case == "N6" {
+            account_cancel::supervisor(args[3], args[2]);
+        }
+    }
+    #[cfg(feature = "session-account-exec-test")]
+    if case == "account-exec" {
+        account_exec::replacement(&args[..count]);
+    }
     #[cfg(feature = "session-reply-test")]
     if matches!(case, "reply-peer" | "reply-exec") {
         authenticated_reply::peer(&args[..count]);
@@ -454,6 +497,7 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
             Err(sunlight_ipc::IpcCallError::PeerClosed)
         ));
         note(case, "old-call-peer-closed", 0);
+        #[cfg(not(feature = "session-account-exec-test"))]
         assert_eq!(reap(child), 0);
         let mut stale = scope;
         stale.target = 61000;
@@ -467,6 +511,8 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
         .expect("replacement transport");
         assert_eq!(denied.label, api::ERROR);
         note(case, "replacement-old-session-denied", denied.words[0]);
+        #[cfg(feature = "session-account-exec-test")]
+        assert_eq!(reap(child), 0);
         logout(scope.session, scope.session_generation);
         note(case, "fixture-complete", 0);
         sunlight_libc::exit(0);

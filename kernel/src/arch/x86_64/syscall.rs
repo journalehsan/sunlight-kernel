@@ -2050,22 +2050,59 @@ fn ipc_defer_reply() -> u64 {
 fn ipc_complete_deferred_reply(frame: &mut SyscallFrame) -> u64 {
     let token = frame.rsi;
     let reply = IpcMsg::from_registers(frame);
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    let (mut sched, exit_selected) = crate::capability::completion_exit::acquire(
+        crate::capability::completion_exit::COMPLETE,
+        token,
+    );
+    #[cfg(all(
+        feature = "authenticated_completion_race_test",
+        not(feature = "authenticated_completion_exit_test")
+    ))]
+    let (mut sched, race_selected) = crate::capability::completion_race::acquire(
+        crate::capability::completion_race::COMPLETE,
+        token,
+    );
+    #[cfg(not(any(
+        feature = "authenticated_completion_race_test",
+        feature = "authenticated_completion_exit_test"
+    )))]
     let mut sched = crate::sched::SCHEDULER.lock();
     let server_pid = sched.current_process().pid;
-    let endpoint_id = match crate::ipc::deferred_reply_endpoint(server_pid, token, &sched) {
-        Ok(endpoint_id) => endpoint_id,
-        Err(error) => return error as u64,
-    };
-    let mut caps = crate::capability::CAP_BROKER.lock();
-    crate::ipc::with_shard(
-        endpoint_id,
-        |bus| match crate::ipc::complete_deferred_reply(
-            server_pid, token, reply, &mut sched, &mut caps, bus,
-        ) {
-            Ok(()) => 0,
-            Err(error) => error as u64,
-        },
-    )
+    let result = (|| {
+        let endpoint_id = match crate::ipc::deferred_reply_endpoint(server_pid, token, &sched) {
+            Ok(endpoint_id) => endpoint_id,
+            Err(error) => return error as u64,
+        };
+        let mut caps = crate::capability::CAP_BROKER.lock();
+        crate::ipc::with_shard(
+            endpoint_id,
+            |bus| match crate::ipc::complete_deferred_reply(
+                server_pid, token, reply, &mut sched, &mut caps, bus,
+            ) {
+                Ok(()) => 0,
+                Err(error) => error as u64,
+            },
+        )
+    })();
+    #[cfg(all(
+        feature = "authenticated_completion_race_test",
+        not(feature = "authenticated_completion_exit_test")
+    ))]
+    crate::capability::completion_race::finished(
+        crate::capability::completion_race::COMPLETE,
+        race_selected,
+        &sched,
+        result,
+    );
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    crate::capability::completion_exit::finished(
+        crate::capability::completion_exit::COMPLETE,
+        exit_selected,
+        &sched,
+        result,
+    );
+    result
 }
 
 fn ipc_deferred_reply_is_live(token: u64) -> u64 {
@@ -2187,18 +2224,30 @@ fn ipc_notify_wait(_endpoint_token: u64) -> u64 {
 }
 
 fn ipc_cancel() -> u64 {
+    #[cfg(feature = "authenticated_completion_race_test")]
+    let (mut sched, race_selected) =
+        crate::capability::completion_race::acquire(crate::capability::completion_race::CANCEL, 0);
+    #[cfg(not(feature = "authenticated_completion_race_test"))]
     let mut sched = crate::sched::SCHEDULER.lock();
     let caller_pid = sched.current_process().pid;
 
     let endpoint_id = sched.current_process().ipc_endpoint.unwrap_or(0);
 
     let mut caps = crate::capability::CAP_BROKER.lock();
-    crate::ipc::with_shard(endpoint_id, |bus| {
+    let result = crate::ipc::with_shard(endpoint_id, |bus| {
         match crate::ipc::handle_ipc_cancel(caller_pid, &mut sched, &mut caps, bus) {
             Ok(()) => 0,
             Err(e) => e as u64,
         }
-    })
+    });
+    #[cfg(feature = "authenticated_completion_race_test")]
+    crate::capability::completion_race::finished(
+        crate::capability::completion_race::CANCEL,
+        race_selected,
+        &sched,
+        result,
+    );
+    result
 }
 
 fn ipc_set_deadline(absolute_deadline_ms: u64) -> u64 {
@@ -2320,6 +2369,8 @@ fn endpoint_destroy(token: u64) -> u64 {
 /// Syscall: ProcessExit
 /// rdi = exit code
 fn process_exit(code: i32) -> ! {
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    crate::capability::completion_exit::exit_syscall(code);
     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     sched::pin_release_test::exited(code);
     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
@@ -2581,6 +2632,22 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        #[cfg(feature = "authenticated_completion_exit_test")]
+        if let Some(result) = crate::capability::completion_exit::query(s) {
+            return result;
+        }
+        #[cfg(feature = "authenticated_completion_race_test")]
+        if let Some(result) = crate::capability::completion_race::query(s) {
+            return result;
+        }
+        #[cfg(feature = "authenticated_cancel_test")]
+        if let Some(observation) = crate::capability::exec_retirement_trace::cancel_query(s) {
+            return observation;
+        }
+        #[cfg(feature = "authenticated_exec_test")]
+        crate::capability::exec_retirement_trace::observe(s);
+        #[cfg(feature = "authenticated_cancel_test")]
+        crate::capability::exec_retirement_trace::cancel_observe(s);
         #[cfg(all(debug_assertions, feature = "authenticated_reply_test"))]
         crate::ipc::authenticated_reply_test::observation(s);
         #[cfg(feature = "native_session_h4_test")]

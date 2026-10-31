@@ -2,6 +2,8 @@
 use sunlight_ipc::{accounts as api, IpcMsg};
 use sunlight_uac::accounts::{authorize_own_change, parse_snapshot, replacement_shadow};
 use zeroize::Zeroize;
+#[cfg(any(feature = "session-account-exec-test", feature = "session-account-cancel-test"))]
+pub(super) static EXEC_ENDPOINT: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 /// No publication: all normal consumption policy/transport checks still run.
 /// This label is dispatched only in an explicitly test-enabled UAC binary.
@@ -347,7 +349,30 @@ fn dispatch_group(
             race_checkpoint(scope, 0)?;
             let result = api::try_broker_grant(msg.badge, scope, None);
             #[cfg(feature = "session-race-test")]
-            if result.is_ok() {
+            if let Ok(committed_grant) = result {
+                let _ = committed_grant;
+                #[cfg(feature = "session-account-cancel-test")]
+                if scope.target == 61006 {
+                    super::account_cancel::account(
+                        sunlight_ipc::EndpointId(EXEC_ENDPOINT.load(core::sync::atomic::Ordering::Relaxed)),
+                        committed_grant, scope, msg, ptr,
+                    );
+                    return Err(api::Error::Unavailable);
+                }
+                #[cfg(feature = "session-account-exec-test")]
+                if scope.target == 61006 {
+                    super::account_exec::account(
+                        sunlight_ipc::EndpointId(
+                            EXEC_ENDPOINT.load(core::sync::atomic::Ordering::Relaxed),
+                        ),
+                        sunlight_ipc::CapabilityToken(
+                            RACE_CONTROL.load(core::sync::atomic::Ordering::Relaxed),
+                        ),
+                        committed_grant,
+                        scope,
+                        msg.badge,
+                    );
+                }
                 race_checkpoint(scope, 1)?;
             }
             return result.map(Some);

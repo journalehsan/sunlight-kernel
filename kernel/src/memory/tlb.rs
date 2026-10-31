@@ -221,8 +221,12 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
     }
 
     let targets = active & !local_bit;
+    #[cfg(feature = "authenticated_exec_test")]
+    crate::capability::exec_retirement_trace::tlb(identity, kind.mailbox_fields().0, "request", sequence, targets, cpu_id);
     if targets == 0 {
         NO_REMOTE_TARGETS.fetch_add(1, Ordering::Relaxed);
+        #[cfg(feature = "authenticated_exec_test")]
+        crate::capability::exec_retirement_trace::tlb(identity, kind.mailbox_fields().0, "complete", sequence, targets, cpu_id);
         return;
     }
     TARGET_CPUS.fetch_add(targets.count_ones() as u64, Ordering::Relaxed);
@@ -275,6 +279,15 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
         }
         core::hint::spin_loop();
     }
+    #[cfg(feature = "authenticated_exec_test")]
+    {
+        for ack_cpu in 0..MAX_TRACKED_CPUS {
+            if targets & (1u64 << ack_cpu) != 0 {
+                crate::capability::exec_retirement_trace::tlb(identity, start, "ack-observed", sequence, targets, ack_cpu);
+            }
+        }
+        crate::capability::exec_retirement_trace::tlb(identity, start, "complete", sequence, targets, cpu_id);
+    }
 }
 
 fn request_kind(request: MailboxRequest) -> FlushKind {
@@ -306,6 +319,8 @@ pub fn handle_shootdown_ipi() {
         perform_flush(request_kind(request));
         REMOTE_INVALIDATIONS.fetch_add(1, Ordering::Relaxed);
     }
+    #[cfg(feature = "authenticated_exec_test")]
+    crate::capability::exec_retirement_trace::ack_produced(request, current == Some(request.target));
     mailbox.acknowledge(request.sequence);
     ACKNOWLEDGEMENTS.fetch_add(1, Ordering::Relaxed);
 }

@@ -36,6 +36,33 @@ fn reference(scope: GrantScope) -> SessionRef {
 }
 
 #[test]
+fn failed_delivery_retires_only_its_exact_receipt_and_preserves_committed_reply() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for delivered in [false, true] {
+        let (s, scope, _) = active(100);
+        let token = s.account_grant(7, scope, None).unwrap();
+        let delivery = s.grant_delivery_for_test();
+        let mut broker = CAP_BROKER.lock();
+        for (pid, incarnation, generation) in [
+            (8, delivery.recipient.incarnation, delivery.request),
+            (7, delivery.recipient.incarnation + 1, delivery.request),
+            (7, delivery.recipient.incarnation, delivery.request + 1),
+        ] {
+            broker.settle_grant_delivery(pid, incarnation, generation, None, &[]);
+            assert_eq!(broker.session_inventory(), (1, 1, 1));
+        }
+        broker.settle_grant_delivery(
+            7, delivery.recipient.incarnation, delivery.request,
+            delivered.then_some(delivery.recipient), &[token.0],
+        );
+        assert_eq!(broker.session_inventory(), if delivered { (1, 1, 1) } else { (1, 0, 0) });
+        // A late/duplicate failure cannot revoke an already delivered grant.
+        broker.settle_grant_delivery(7, delivery.recipient.incarnation, delivery.request, None, &[]);
+        assert_eq!(broker.session_inventory(), if delivered { (1, 1, 1) } else { (1, 0, 0) });
+    }
+}
+
+#[test]
 fn s1_s3_s8_normal_commit_retry_consumption_and_revocation_policy() {
     let _serial = TEST_LOCK.lock().unwrap();
     let (mut s, scope, owner) = active(100);
@@ -220,7 +247,8 @@ fn s18_entropy_and_delivery_failure_publish_no_authority() {
     complete(&s, &[], false);
     assert!(s.account_grant(7, scope, Some(token)).is_err());
     assert!(s.account_grant(7, scope, None).is_err());
-    assert_eq!(CAP_BROKER.lock().session_inventory(), (1, 1, 0));
+    // Failed transport retires the exact retry receipt along with its grant.
+    assert_eq!(CAP_BROKER.lock().session_inventory(), (1, 0, 0));
 }
 
 #[test]

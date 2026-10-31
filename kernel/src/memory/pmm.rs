@@ -265,6 +265,8 @@ impl PhysicalMemoryManager {
                 class.as_u8()
             );
         }
+        #[cfg(feature = "authenticated_exec_test")]
+        crate::capability::exec_retirement_trace::physical(frame as u64 * FRAME_SIZE as u64, "claim", class.as_u8());
         Some(PhysAddr::new(frame as u64 * FRAME_SIZE as u64))
     }
 
@@ -339,6 +341,8 @@ impl PhysicalMemoryManager {
                 FRAME_OWNER[frame] = PMM_OWNER_FREE;
                 FREE_FRAMES += 1;
             }
+            #[cfg(feature = "authenticated_exec_test")]
+            crate::capability::exec_retirement_trace::physical(addr.as_u64(), "free", PhysicalMemoryClass::Free.as_u8());
             let count = FREE_COUNT.fetch_add(1, Ordering::Relaxed);
             if cfg!(feature = "verbose_diag") && (count % 100 == 0 || count < 10) {
                 crate::serial_println!(

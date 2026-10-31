@@ -689,6 +689,12 @@ grant_history_transport_test = ["production_grant_test"]
 native_session_race_test = []
 native_session_h4_test = ["native_session_race_test"]
 authenticated_reply_test = ["native_session_h4_test"]
+# Observation-only per-object Account exec retirement trace. Debug images only.
+authenticated_exec_test = ["native_session_h4_test"]
+authenticated_cancel_test = ["authenticated_exec_test"]
+# Bounded two-actor syscall coordination; absent from ordinary images.
+authenticated_completion_race_test = ["authenticated_cancel_test"]
+authenticated_completion_exit_test = ["authenticated_cancel_test"]
 # Opt-in deferred reply generation/lifecycle boot-method regressions.
 ipc_deferred_test = []
 # Concurrent kernel-method fixture. Never authenticates an Account session.

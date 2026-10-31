@@ -1061,6 +1061,10 @@ fn finish_call(
         }
         sched.processes[idx].ipc_deadline = None;
         sched.processes[idx].ipc_call_outcome = Some(outcome);
+        #[cfg(feature = "authenticated_exec_test")]
+        if let Some(target) = target {
+            crate::capability::exec_retirement_trace::terminal(target, outcome);
+        }
         #[cfg(all(debug_assertions, feature = "authenticated_reply_test"))]
         if let Some(target) = target {
             authenticated_reply_test::terminal(&sched.processes[idx], target, outcome);
@@ -1690,7 +1694,7 @@ pub fn deferred_reply_is_live(server_pid: usize, token: u64, sched: &Scheduler) 
     reply_target_is_live(entry.target, sched)
 }
 
-fn reply_target_is_live(target: IpcReplyTarget, sched: &Scheduler) -> bool {
+pub(crate) fn reply_target_is_live(target: IpcReplyTarget, sched: &Scheduler) -> bool {
     use reply_identity::{publication_allowed, ReplyIdentity};
     let Some(process) = sched.processes.iter().find(|p| p.pid == target.call.pid) else {
         return false;
