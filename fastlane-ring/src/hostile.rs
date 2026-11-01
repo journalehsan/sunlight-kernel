@@ -1,9 +1,21 @@
-//! M3 representation: three independent pages, private cursors and private leases.
+//! M3.2 representation: three independent pages, private cursors and private leases.
 //!
 //! All observed words are untrusted, including words on read-only mappings.
 //! A receive copies bounded words once; the result may mix hostile writes but
 //! cannot change afterward. No immutable publication or coherent snapshot is
-//! promised. See docs/ipc/fastlane-hostile-memory-representation.md.
+//! promised. See docs/ipc/fastlane-m32-message-integrity.md.
+//!
+//! Three properties are kept distinct and are reported by [`ReadLease::integrity`]:
+//!
+//! 1. Memory safety — a hostile producer/consumer can never cause an out-of-bounds
+//!    Rust access. Provided: no pointer, slice or reference indexes shared memory
+//!    from peer data; every index is derived from validated local geometry.
+//! 2. Snapshot stability — the bytes returned by a receive cannot change after
+//!    delivery. Provided: each receive is a private initialized copy.
+//! 3. Publication integrity — the returned bytes are one coherent committed
+//!    message. **Not provided and not representable**: M2 grants the producer a
+//!    writable alias to the payload frame, so a copy may interleave bytes written
+//!    after commit or during acquisition.
 //!
 //! This module has no native attach, pointers, allocation, waiting or Doorbell.
 //! A future native backend must use audited single-instruction accesses without
@@ -53,6 +65,74 @@ pub enum Error {
     StaleLease,
     Access,
     Closed,
+}
+
+/// Integrity properties of one returned private copy. Fields are private so a
+/// caller cannot forge a stronger guarantee than the representation provides.
+///
+/// `coherent_publication` and `application_authenticated` are constants of the
+/// representation: M2 leaves a producer-writable alias to every published byte,
+/// so neither a coherent committed message nor message authenticity is provided.
+/// A sequence counter, checksum or Acquire load held by a writable producer does
+/// not remove that alias and is deliberately not modelled as a proof here. This
+/// type therefore has no constructor that can set those fields true.
+///
+/// A stronger claim cannot be forged; the fields are private to this module:
+///
+/// ```compile_fail
+/// use sunlight_fastlane_ring::hostile::Integrity;
+/// let forged = Integrity {
+///     memory_safe: true,
+///     snapshot_stable: true,
+///     coherent_publication: true,
+///     application_authenticated: true,
+/// };
+/// assert!(forged.coherent_publication());
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Integrity {
+    memory_safe: bool,
+    snapshot_stable: bool,
+    coherent_publication: bool,
+    application_authenticated: bool,
+}
+
+impl Integrity {
+    /// The only integrity value this representation can produce: bounded access
+    /// is memory safe, the private copy is stable, but bytes may mix hostile
+    /// writes and no authenticity is established. This is **transport** safety
+    /// only; it is not application-level message authenticity.
+    pub const PRIVATE_COPY: Self = Self {
+        memory_safe: true,
+        snapshot_stable: true,
+        coherent_publication: false,
+        application_authenticated: false,
+    };
+
+    /// Always `true` for this representation: peer metadata cannot cause an
+    /// out-of-bounds access in the returned copy.
+    pub const fn memory_safe(self) -> bool {
+        self.memory_safe
+    }
+
+    /// Always `true` for this representation: the returned bytes are a private
+    /// copy that cannot change after delivery.
+    pub const fn snapshot_stable(self) -> bool {
+        self.snapshot_stable
+    }
+
+    /// Always `false` here: the producer retains a writable alias, so the copy
+    /// may interleave bytes written after commit or during acquisition. Callers
+    /// must not treat the result as one coherent committed message.
+    pub const fn coherent_publication(self) -> bool {
+        self.coherent_publication
+    }
+
+    /// Always `false` here: transport integrity is not message authenticity. A
+    /// well-formed hostile message is indistinguishable from an honest one.
+    pub const fn application_authenticated(self) -> bool {
+        self.application_authenticated
+    }
 }
 
 /// Word indices are page-relative and never come from the peer. Implementations
@@ -465,6 +545,11 @@ impl<M: Memory> Drop for WriteLease<'_, M> {
 /// A bounded PRIVATE copy, not a borrowed view of the shared payload. Drop keeps
 /// the frame queued; release advances only the trusted local consumer cursor.
 ///
+/// The returned bytes carry [`Integrity::PRIVATE_COPY`]: memory safe and stable
+/// after return, but never a coherent committed message and never authenticated.
+/// Application code must validate this private copy itself and must not treat it
+/// as one coherent transaction, even when it parses cleanly.
+///
 /// A private payload borrow cannot survive consuming its lease:
 ///
 /// ```compile_fail
@@ -494,6 +579,13 @@ impl<M: Memory> ReadLease<'_, M> {
 
     pub fn payload(&self) -> &[u8] {
         &self.bytes[..self.len]
+    }
+
+    /// Integrity of exactly the bytes returned by [`Self::payload`]. This is the
+    /// only integrity value the representation can produce; there is no path
+    /// that yields coherent publication or application authenticity.
+    pub const fn integrity(&self) -> Integrity {
+        Integrity::PRIVATE_COPY
     }
 
     pub fn release(self) -> Result<(), Error> {

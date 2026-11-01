@@ -575,3 +575,89 @@ fn adversarial_descriptor_corpus_has_bounded_work_and_access() {
         assert!(c.memory.loads.get() <= 6 + PAYLOAD_WORDS);
     }
 }
+
+#[test]
+fn every_receive_reports_the_honest_private_copy_integrity() {
+    // The classification is a constant of the representation, not a peer value.
+    let pages = AtomicPages::new();
+    let (mut p, mut c) = pair(&pages);
+    p.try_send(b"transport").unwrap();
+    let r = c.try_read().unwrap();
+    let integrity = r.integrity();
+    assert_eq!(integrity, Integrity::PRIVATE_COPY);
+    assert!(integrity.memory_safe());
+    assert!(integrity.snapshot_stable());
+    // Publication integrity and authenticity are never claimed by this contract.
+    assert!(!integrity.coherent_publication());
+    assert!(!integrity.application_authenticated());
+    r.release().unwrap();
+}
+
+#[test]
+fn post_commit_mutation_keeps_stability_but_never_claims_coherence() {
+    // A hostile producer rewrites the payload after commit; the private copy is
+    // stable, but the contract still reports no coherent publication.
+    let pages = AtomicPages::new();
+    let (mut p, mut c) = pair(&pages);
+    p.try_send(b"original").unwrap();
+    put(&pages, Region::Payload, 0, u64::from_le_bytes(*b"modified"));
+    let r = c.try_read().unwrap();
+    assert_eq!(r.payload(), b"modified");
+    assert!(r.integrity().snapshot_stable());
+    assert!(!r.integrity().coherent_publication());
+    put(&pages, Region::Payload, 0, 0);
+    assert_eq!(r.payload(), b"modified");
+    r.release().unwrap();
+}
+
+#[test]
+fn mixed_snapshot_is_stable_bounded_and_not_reported_as_coherent() {
+    // Two hostile writes straddle the copy: the first 8 bytes come from the
+    // committed message, the next 8 from a later write. The lease is memory safe
+    // and stable, but the mixed bytes must never be presented as one coherent
+    // committed message: `coherent_publication()` stays false.
+    let pages = AtomicPages::new();
+    let (mut p, _) = pair(&pages);
+    p.try_send(&[0x11; 16]).unwrap();
+    let memory = Mutating {
+        view: pages.view(Role::Consumer),
+        reads: Cell::new(0),
+    };
+    let mut c = Consumer::new(memory, 7).unwrap();
+    let r = c.try_read().unwrap();
+    assert_eq!(&r.payload()[..8], &[0x11; 8]);
+    assert_eq!(&r.payload()[8..], &[0xff; 8]);
+    let integrity = r.integrity();
+    assert!(integrity.memory_safe());
+    assert!(integrity.snapshot_stable());
+    assert!(
+        !integrity.coherent_publication(),
+        "a mixed snapshot must not be reported as a coherent committed message"
+    );
+    r.release().unwrap();
+}
+
+#[test]
+fn producer_exit_and_cancellation_never_upgrade_the_integrity_claim() {
+    // Cancellation before publication exposes nothing; after a receive the
+    // classification is unchanged regardless of local pending state or retire.
+    let pages = AtomicPages::new();
+    let (mut p, mut c) = pair(&pages);
+    let mut w = p.try_reserve(4).unwrap();
+    w.payload_mut().copy_from_slice(b"drop");
+    drop(w);
+    assert!(matches!(c.try_read(), Err(Error::Empty)));
+    p.try_send(b"kept").unwrap();
+    let r = c.try_read().unwrap();
+    assert_eq!(r.integrity(), Integrity::PRIVATE_COPY);
+    mem::forget(r); // a forgotten private read leaves the message queued and Busy
+    assert!(matches!(c.try_read(), Err(Error::Busy)));
+    c.cancel_pending();
+    let r = c.try_read().unwrap();
+    assert!(!r.integrity().coherent_publication());
+    r.release().unwrap();
+    // Producer retirement cannot publish a coherent message either.
+    p.retire();
+    assert!(matches!(p.try_send(b"late"), Err(Error::Closed)));
+    assert!(matches!(c.try_read(), Err(Error::Empty)));
+}

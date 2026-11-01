@@ -40,10 +40,23 @@ fn wait(mut f: impl FnMut() -> bool) {
         if f() {
             return;
         }
-        assert!(
-            crate::timekeeping::monotonic_ms().saturating_sub(start) < 5000,
-            "channel race deadline"
-        );
+        if crate::timekeeping::monotonic_ms().saturating_sub(start) >= 5000 {
+            // Bounded, observation-only deadline witness. It records placement
+            // and arrival state so a coordination stall is distinguishable from
+            // a real channel deadlock. It does not alter any authority result.
+            crate::serial_println!(
+                "[FL-RACE-DEADLINE] entered={} cpus=({},{}) current_cpu={} mode={} held={} contended={} finished={}",
+                ENTERED.load(Acquire),
+                CPUS[0].load(Acquire),
+                CPUS[1].load(Acquire),
+                crate::sched::current_cpu_id(),
+                MODE.load(Relaxed),
+                HELD.load(Relaxed),
+                CONTENDED.load(Relaxed),
+                FINISHED.load(Relaxed),
+            );
+            panic!("channel race deadline");
+        }
         core::hint::spin_loop();
     }
     panic!("channel race exhausted");

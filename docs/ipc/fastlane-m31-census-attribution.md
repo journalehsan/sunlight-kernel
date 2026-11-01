@@ -263,6 +263,68 @@ the immutable per-attempt manifests and serials, `retained-table-2cpu.json`,
 each final `*cpu.ownership.json` and `*cpu.reassessment-v3.json`, and the final
 root artifact index. No existing count gate was changed.
 
+## Repeat native runs on the final traced image
+
+These are separate experiments on `complete-trace/build-20261101T124208.138572Z`
+(its `source_sha256` still equals the tree), not an identity-verified replay of
+M3.0. Evidence is under `repeat-attempts*/` and `repeat-analysis-b/`
+(`summary.json`, per-run assessor JSON, `correlate_all.py`).
+
+| Attempt | 2 CPUs | 4 CPUs | 12 CPUs |
+|---|---|---|---|
+| `repeat-attempts` | ABORTED, no guest result (`ABORTED.txt`) | not run | not run |
+| 1 | **FAIL**, kernel panic before any checkpoint | PASS | PASS |
+| 2 | PASS | PASS | PASS |
+| 3 | PASS | PASS | PASS |
+
+The 2-CPU FAIL (`repeat-attempts-b/native-20261101T154928.904344Z`) is a panic
+at `kernel/src/capability/channel_race.rs:43` ("channel race deadline", the
+existing 5 s spin wait) in the M1 contended race. No census checkpoint was
+reached. Its cause is undiagnosed and it is preserved unchanged. It is unrelated
+to the census differences but is a real M1 liveness observation on 2 CPUs.
+
+All eight guests that reached the census show tables 391 at 100–105 and 383 at
+999, with zero unresolved additions. Seven show SHM 1304 throughout. One 2-CPU
+guest (`native-20261101T155222.526086Z`) shows SHM 1304 at 100–105 and 1305 at
+999. Its extra frame 633307136 is accounted:
+
+| Field | Value |
+|---|---|
+| Claim / SHM create | seq 58107 / 58108, after checkpoint 105 (seq 58106) |
+| Object, owner | 72, Vortex PID 34 incarnation 46, VM 79 |
+| View | one page at `0x3003fe000`, 1 reference, not retired |
+| Peer view | added at 58127, released at 58133 |
+| State at 999 | SHM_PINNED_AT_CHECKPOINT; no later events exist because the dump is taken at 999 |
+
+This is a live page owned by the persistent Vortex VM at the census instant,
+consistent with the request page of a `kv_get_bytes` call in flight. It is an
+accountable owner, not an unowned frame. It does not prove final release,
+because the guest ended before the next event. It also is not the original 4-CPU
+difference (that was +1 at checkpoint 105 on 4 CPUs); it only shows the same
+class of transient service-owned page can appear in a window the strict global
+count does not isolate.
+
+### Page-table cause (VM 79 SHM cursor)
+
+Across every traced serial, VM 79's SHM view end (a proxy for the monotonic bump)
+sits just below `0x300400000`. When that cursor crosses the 2 MiB boundary, a new
+empty P1 table is linked and stays linked, because `free_shared_page` never calls
+`reclaim_empty_tables_for_page` (only `process/mmap.rs` does). The
+table count goes 391 to 392 exactly in the interval where the cursor crosses
+(`final-diagnostic/native-20261101T123846.885522Z`, checkpoint 103) and 4-CPU
+`complete-trace` starts at 392 because the crossing happened before checkpoint
+100. Runs whose cursor stays below the boundary stay flat at 391. This links the
+mechanism to every new +1 table observation and is consistent with the original
+2-CPU and 12-CPU differences, but the original archive is unavailable, so those
+two causes remain **UNRESOLVED** by the strict rule above. Per-cycle accounting
+is identical in all runs: 16 links and 20 retirements per cycle, zero links from
+105 to 999.
+
+Retention is bounded by VM lifetime (final teardown retires the table with
+condition 3) and by the 4 GiB SHM window (at most about 2048 P1 tables per VM,
+derived from the constants and not run to exhaustion). Whether this is an
+acceptable cache or needs repair is still unproved.
+
 ## Next smallest executable milestone
 
 Recover the original M3.0 archive and verify its source/image/service and raw-log
@@ -303,3 +365,113 @@ Only after every original difference has a demonstrated cause, every additional
 frame is owned or retired, all repeated-cycle 2/4/12 native checks and relevant
 security/production regressions pass can M3.1 be COMPLETE. Native payload work
 remains a separate future milestone.
+
+## M3.1B — bounded page-table retention and VM teardown (2026-11-01)
+
+Production FastLane remains disabled; this section adds one opt-in fixture and,
+after the mechanism was demonstrated, one minimal reclaim in the SHM free path.
+No payload transfer, userspace Doorbell, census-threshold change or cleanup
+delay is introduced.
+
+### Mechanism, now directly demonstrated
+
+New opt-in kernel fixture `kernel/src/memory/m31_retention_gate.rs`
+(feature `fastlane_m31_retention_test`, debug-only) drives the ordinary
+`alloc_shared_region` / `free_shared_page` entry points against dedicated owner
+VMs and walks each owner's own lower-half table tree, so every observation is a
+per-frame identity, not an aggregate. It uses no sleeps or wall-clock waits:
+quiescence is the existing synchronous leaf shootdown plus the table walk.
+
+Phase A (controlled 2 MiB crossings) and Phase B (long-lived retention) show the
+pre-repair behaviour on the same tree: each 2 MiB SHM span the monotonic cursor
+crosses links exactly one fresh P1 table (`table-link`), and the ordinary
+`free_shared_page` retires the leaves and backing but left that now-empty P1
+table parent-linked. Nine crossings retained nine empty P1 tables plus the upper
+tables; two same-span allocations shared exactly one P1 table, so the retained
+table is reachable and reusable while the VM lives. This is **unbounded
+address-cursor-driven retention along the 4 GiB SHM window (at most 2048 empty
+P1 tables = 8 MiB of frames per live VM), not deferred reclamation and not an
+unowned leak**: the tables stay reachable through the live root and are only
+released by final VM teardown.
+
+The pre-repair mechanism is reproducible on demand from the same tree with the
+debug-only, default-off evidence feature `fastlane_m31_prerepair` (requires
+`fastlane_m31_retention_test`; never present in production or ordinary images).
+Its serial is retained under `target/fastlane-m31b-evidence/final/prerepair-native-*/`;
+the `phase=setup ... pre_repair=1` record and the per-crossing retained-id lists
+are the file-backed evidence for the accumulation.
+
+Phase C (retention-arm teardown) builds four deliberately retained empty P1
+tables through the ordinary VM map/unmap path, records their exact frame
+identities, then tears the owner down through `reclaim_user_space(free_root)`.
+Every recorded identity and the VM root is `Free` afterwards and
+`reclaim_page_tables` equals the observed reachable tables plus the root exactly
+once; the shared-memory and page-table classes and the free-frame count return
+to their pre-fixture baselines (zero drift).
+
+### Decision and minimal repair
+
+The retention is bounded, but it provides no reuse benefit for the observed
+SHM workload (each crossing needs a fresh P1 anyway) and accumulates across an
+unbounded number of crossings up to the window bound. `mmap`/`munmap` already
+reclaim empty lower tables after the covering shootdown; `free_shared_page` was
+the only missing call. The minimal repair adds exactly that call per retired
+leaf page, **after** `unmap_page` has cleared the leaf and completed its
+synchronous remote invalidation, and only when the table is actually empty.
+Shared tables still used by a surviving mapping are retained by the existing
+`reclaim_empty_tables_for_page` check; ordering is unchanged; no lock is added
+to the hot path beyond the one already held.
+
+After the repair the M3.1B fixture shows zero retained empty P1 tables across
+all eight crossings, the same shared-table reuse while two views are live, and
+zero drift after both VM teardowns. Re-running the M3.1 census fixture on the
+final traced image shows the page-table counter now **flat at 381** across
+checkpoints 100-105 on 2/4/12 CPUs (previously 391->392), and
+`tools/fastlane_census_assess.py` returns `RECONCILED_OBSERVATIONS` with zero
+unresolved additions on all three topologies.
+
+Final source-bound evidence (every `validation-summary.json` records
+`source_sha256` equal to the frozen tree): `target/fastlane-m31b-evidence/sweep/`
+(M3.1B build + native 2/4/12 and the pre-repair `prerepair-build`/
+`prerepair-native` pair), `sweep-m12/` (M1/M2 + census regression 2/4/12),
+`sweep-checks/` (host), `sweep-prod/` (production exclusion). Earlier
+pre-repair mechanism serials and the M1 deadline witnesses are preserved under
+`target/fastlane-m31b-evidence/native-*`, `m1-loop/`, and `m1-diag/`.
+
+### Independent M1 regression (`channel_race.rs`)
+
+The 2-CPU `channel race deadline` panic reproduced on the final source-bound
+image (1 of 4 mapping runs). The observation-only
+`[FL-RACE-DEADLINE]` witness records the live placement state: in every captured
+failure `entered=1 cpus=(1,u64::MAX) mode=2 held=0 contended=0 finished=0`, i.e.
+only one of the two actors reached the rendezvous and the other never entered,
+so `wait()` spins to its 5 s deadline. Because `syscall_entry` runs with
+interrupts disabled (`cli`) and the actor under the scheduler path holds the
+run slot, the waiting actor has no yield point and cannot be replaced. This is a
+**test-coordination / insufficient-progress failure in a debug-only fixture**,
+not a production channel lifecycle race or deadlock: the authority operations
+themselves complete normally in every run including the passing ones, and the
+reference `[FL-AUTH]`/`[FL-OUTCOME]` records are well-formed. It is preserved
+unchanged as an independent regression: the panic text (`channel race deadline`)
+and the 5 s bound are untouched. The original `assert!` at
+`channel_race.rs:43` was expanded in place into a bounded `if` that prints the
+observation witness and then panics; the deadline line is now at
+`channel_race.rs:58`. No bound was raised and no timeout was lengthened to make
+the run pass.
+
+### Status
+
+| Deliverable | Result |
+|---|---|
+| Phase A controlled crossings | COMPLETE |
+| Phase B long-lived retention measurement | COMPLETE |
+| Phase C exact teardown | COMPLETE |
+| Phase D cache-vs-leak decision + minimal repair | COMPLETE |
+| Phase E M1 timeout cause | COMPLETE (coordination stall; not a lifecycle race) |
+| Phase F 2/4/12 validation + production exclusion + host checks | PASS |
+| Original M3.0 archive failures | UNRESOLVED (archive unavailable) |
+
+The original M3.0 image/service/raw-log identities remain unavailable; the
+mechanism now demonstrated is consistent with the original 2-CPU and 12-CPU
+page-table differences, but those historical identities remain **UNRESOLVED**
+under the strict rule. Native payload work remains a separate future milestone.

@@ -3369,6 +3369,11 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let mut pmm = PMM.lock();
         memory::shared_authority_gate::run(&mut pmm, hhdm_offset);
     }
+    #[cfg(all(debug_assertions, feature = "fastlane_m31_retention_test"))]
+    {
+        let mut pmm = PMM.lock();
+        memory::m31_retention_gate::run(&mut pmm, hhdm_offset);
+    }
     run_termination_path_self_test(hhdm_offset);
     #[cfg(feature = "mm2c_ledger_test")]
     {

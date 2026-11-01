@@ -4,6 +4,23 @@
 Production FastLane, production Restricted SHM and public Doorbell remain disabled.
 No commit or push is performed.
 
+## M3.2 message-integrity contract
+
+The [M3.2 integrity report](fastlane-m32-message-integrity.md) fixes the
+hostile-producer contract for the small-message path and keeps three properties
+separate: **memory safety** (provided), **snapshot stability** (provided) and
+**publication integrity** (not provided). A new `Integrity` type in
+`fastlane-ring/src/hostile.rs` reports these with private fields and read-only
+accessors, and has no constructor that can claim coherence or authenticity. The
+only value the representation produces is `Integrity::PRIVATE_COPY`, returned by
+`ReadLease::integrity`. Sequence counters, checksums and Acquire loads are
+explicitly rejected as coherence proofs because M2 leaves the producer a
+writable alias to every published byte. The large-message page-ownership path is
+documented and deferred, not implemented. `fastlane-ring` is a host-only crate
+not linked by the kernel; the M3.1B page-table reclamation repair, M1 authority,
+M2 mapping rights and SHM/TLB ordering are unchanged. No native ring workload or
+userspace Doorbell runs, and production FastLane remains disabled.
+
 ## M3.1 bounded census attribution — PARTIAL
 
 The [M3.1 ownership report](fastlane-m31-census-attribution.md) records the new

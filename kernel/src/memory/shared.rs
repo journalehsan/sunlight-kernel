@@ -332,6 +332,25 @@ pub fn free_shared_page(
                 Some(expected_frame.start_address()),
                 "preflighted SHM unmap changed under scheduler lock"
             );
+            // The leaf shootdown above has completed synchronously, so this
+            // lower table is no longer reachable through any live translation.
+            // Reclaim it only when it became empty, exactly as the munmap path
+            // does; tables shared by any surviving mapping are retained.
+            //
+            // The debug-only `fastlane_m31_prerepair` evidence feature omits
+            // this reclaim so the pre-repair retention mechanism can be
+            // reproduced on demand. It is off by default, requires the M3.1B
+            // fixture feature, and changes no authority or mapping decision.
+            #[cfg(not(all(
+                debug_assertions,
+                feature = "fastlane_m31_retention_test",
+                feature = "fastlane_m31_prerepair"
+            )))]
+            unsafe {
+                process
+                    .address_space
+                    .reclaim_empty_tables_for_page(page, pmm, hhdm_offset);
+            }
         }
         #[cfg(feature = "authenticated_exec_test")]
         crate::capability::exec_retirement_trace::unmap(

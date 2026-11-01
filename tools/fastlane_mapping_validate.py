@@ -45,9 +45,10 @@ def main():
     p.add_argument('--section',choices=('build','native','production','checks'),required=True)
     p.add_argument('--cpus',nargs='+',type=int,choices=(2,4,12),default=[2]);p.add_argument('--image-manifest',type=Path)
     p.add_argument('--census-trace',action='store_true',help='debug-only bounded M3.1 observations; unchanged M1/M2 assessor')
+    p.add_argument('--m31-retention',action='store_true',help='debug-only M3.1B page-table retention/teardown fixture (boot gate)')
     p.add_argument('--evidence-root',type=Path,default=BASE);p.add_argument('--timeout',type=int,default=180)
     args=p.parse_args();out=args.evidence_root.resolve()/(args.section+'-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'));out.mkdir(parents=True)
-    features=['fastlane_mapping_test','key_inject']+(['fastlane_census_trace'] if args.census_trace else [])
+    features=['fastlane_mapping_test','key_inject']+(['fastlane_census_trace'] if args.census_trace else [])+(['fastlane_m31_retention_test'] if args.m31_retention else [])
     summary={'milestone':'M2','status':'RUNNING','revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
              'source_sha256':sources(),'checks':[],'native':[],'production_fastlane':'BLOCKED'}
     def save():(out/'validation-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
@@ -86,6 +87,7 @@ def main():
                 assert (raw.find(b'[FL-RACE]') >= 0)==test, 'race feature isolation mismatch'
                 assert (raw.find(b'[FL-USER]') >= 0)==test, 'userspace feature isolation mismatch'
                 assert (raw.find(b'[FL-CENSUS-TRACE]')>=0)==(test and args.census_trace), 'census trace feature isolation mismatch'
+                assert (raw.find(b'[FL-M31]')>=0)==(test and args.m31_retention), 'm31 retention feature isolation mismatch'
                 for marker in (b'[FL-MAP]',b'[FL-TLB]',b'[FL-FRAME]',b'[FL-M2]',b'[FL-PF]'):
                     assert (raw.find(marker)>=0)==test, ('mapping isolation mismatch',marker)
             summary['image']={'elf':str(elf),'iso':str(iso),'elf_sha256':digest(elf),'iso_sha256':digest(iso),

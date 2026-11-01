@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.5951-alpha.2"
+version = "0.2.6005-alpha.2"
+
 
 
 
@@ -692,6 +693,13 @@ native_session_race_test = []
 fastlane_mapping_test = ["fastlane_channel_test"]
 # Bounded ownership observations only; absent from release and ordinary images.
 fastlane_census_trace = ["fastlane_mapping_test"]
+# Opt-in M3.1B page-table retention / VM teardown fixture. Observation only;
+# absent from release and ordinary images.
+fastlane_m31_retention_test = ["fastlane_census_trace"]
+# Debug-only evidence switch for the M3.1B fixture: omit the SHM empty-table
+# reclaim so the pre-repair retention mechanism is reproducible. Never enabled
+# in production; requires fastlane_m31_retention_test.
+fastlane_m31_prerepair = ["fastlane_m31_retention_test"]
 fastlane_channel_test = ["native_session_race_test"]
 native_session_h4_test = ["native_session_race_test"]
 authenticated_reply_test = ["native_session_h4_test"]
