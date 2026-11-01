@@ -158,6 +158,8 @@ pub fn alloc_shared_region(
         size: actual_size,
     });
     caller.mapped_shared.push((token, virt, actual_size));
+    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    caps.trace_view_add(caller, token, virt.as_u64(), actual_size);
 
     Ok((virt, token))
 }
@@ -217,8 +219,16 @@ pub fn map_shared_page(
     caps.increment_map_count(token);
 
     receiver.mapped_shared.push((token, virt, size));
+    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    caps.trace_view_add(receiver, token, virt.as_u64(), size);
     #[cfg(feature = "authenticated_exec_test")]
-    crate::capability::exec_retirement_trace::unmap(receiver, token, virt.as_u64(), "new-map", caps.shared_region_map_count(token).unwrap_or(0));
+    crate::capability::exec_retirement_trace::unmap(
+        receiver,
+        token,
+        virt.as_u64(),
+        "new-map",
+        caps.shared_region_map_count(token).unwrap_or(0),
+    );
 
     Ok(virt)
 }
@@ -286,9 +296,23 @@ pub fn free_shared_page(
         .ok_or(SharedMemError::InternalInvariant)?;
 
     #[cfg(feature = "authenticated_exec_test")]
-    crate::capability::exec_retirement_trace::unmap(process, token, expected_base.as_u64(), "request", caps.shared_region_map_count(token).unwrap_or(0));
+    crate::capability::exec_retirement_trace::unmap(
+        process,
+        token,
+        expected_base.as_u64(),
+        "request",
+        caps.shared_region_map_count(token).unwrap_or(0),
+    );
     #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
-    crate::capability::channel_mapping::trace_unmap(caps, process, token, expected_base.as_u64(), "request");
+    crate::capability::channel_mapping::trace_unmap(
+        caps,
+        process,
+        token,
+        expected_base.as_u64(),
+        "request",
+    );
+    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    caps.trace_view_unmap(process, token, expected_base.as_u64(), expected_size, 0);
     {
         let (_, base_virt, sz) = process.mapped_shared[pos];
         let object = caps
@@ -310,9 +334,23 @@ pub fn free_shared_page(
             );
         }
         #[cfg(feature = "authenticated_exec_test")]
-        crate::capability::exec_retirement_trace::unmap(process, token, base_virt.as_u64(), "complete", caps.shared_region_map_count(token).unwrap_or(0));
+        crate::capability::exec_retirement_trace::unmap(
+            process,
+            token,
+            base_virt.as_u64(),
+            "complete",
+            caps.shared_region_map_count(token).unwrap_or(0),
+        );
         #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
-        crate::capability::channel_mapping::trace_unmap(caps, process, token, base_virt.as_u64(), "complete");
+        crate::capability::channel_mapping::trace_unmap(
+            caps,
+            process,
+            token,
+            base_virt.as_u64(),
+            "complete",
+        );
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        caps.trace_view_unmap(process, token, base_virt.as_u64(), sz, 1);
         debug_assert_eq!(sz / PAGE_SIZE, object.frames.len());
         process
             .address_space
@@ -323,7 +361,17 @@ pub fn free_shared_page(
         // when this was the last live mapping, so the PMM is safe to reclaim them.
         let released = caps.decrement_map_count(token);
         #[cfg(feature = "authenticated_exec_test")]
-        crate::capability::exec_retirement_trace::unmap(process, token, base_virt.as_u64(), if released.is_some() { "transfer-to-pmm" } else { "retained" }, caps.shared_region_map_count(token).unwrap_or(0));
+        crate::capability::exec_retirement_trace::unmap(
+            process,
+            token,
+            base_virt.as_u64(),
+            if released.is_some() {
+                "transfer-to-pmm"
+            } else {
+                "retained"
+            },
+            caps.shared_region_map_count(token).unwrap_or(0),
+        );
         if let Some(frames) = released {
             for f in &frames {
                 pmm.free_frame(f.start_address());

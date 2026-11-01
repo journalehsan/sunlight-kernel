@@ -1,23 +1,23 @@
+#[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
+pub(crate) mod channel;
+#[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+pub(crate) mod channel_mapping;
+#[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+mod channel_native;
+#[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+pub(crate) mod channel_race;
 #[cfg(feature = "authenticated_completion_exit_test")]
 pub(crate) mod completion_exit;
-pub(crate) mod delivery;
 #[cfg(feature = "authenticated_completion_race_test")]
 pub(crate) mod completion_race;
+pub(crate) mod delivery;
 #[cfg(feature = "authenticated_exec_test")]
 pub(crate) mod exec_retirement_trace;
 #[cfg(any(test, feature = "cap_issuance_test"))]
 mod history_boundary;
 mod lifecycle;
-#[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
-pub(crate) mod channel;
-#[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
-mod channel_native;
-#[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
-pub(crate) mod channel_mapping;
 #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
 pub(crate) mod mapping_trace;
-#[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
-pub(crate) mod channel_race;
 pub(crate) mod sessions;
 mod token_history;
 mod vfs_grants;
@@ -36,13 +36,13 @@ pub mod production_gate;
 #[cfg(feature = "production_grant_test")]
 mod reconciliation;
 #[cfg(feature = "native_session_race_test")]
-pub(crate) mod session_race;
-#[cfg(feature = "native_session_race_test")]
 pub(crate) mod session_h3_trace;
 #[cfg(feature = "native_session_h4_test")]
 pub(crate) mod session_h4;
 #[cfg(feature = "native_session_h4_test")]
 mod session_h4_gate;
+#[cfg(feature = "native_session_race_test")]
+pub(crate) mod session_race;
 
 /// The category a token belongs to, encoded in its high tag bits.
 ///
@@ -313,6 +313,8 @@ pub struct ShmObject {
 
 /// Entry in the shared-region table.
 struct ShmEntry {
+    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    trace_id: u64,
     // Restricted objects are never admitted through legacy bearer APIs.
     restricted: bool,
     token: CapabilityToken,
@@ -321,6 +323,27 @@ struct ShmEntry {
     // Counts views, including multiple views in one address space. Retirement
     // fences admission without discarding backing needed by existing views.
     lifetime: crate::memory::shared_lifetime::SharedLifetime,
+}
+
+#[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+impl ShmEntry {
+    fn trace(&self, kind: u64, checkpoint: u64) {
+        for frame in &self.obj.frames {
+            crate::memory::census_trace::record(
+                kind,
+                [
+                    frame.start_address().as_u64(),
+                    self.trace_id,
+                    self.owner_pid as u64,
+                    self.lifetime.views() as u64,
+                    u64::from(self.lifetime.is_retired()),
+                    u64::from(self.restricted),
+                    checkpoint,
+                    self.obj.frames.len() as u64,
+                ],
+            );
+        }
+    }
 }
 
 /// Errors from the capability broker.
@@ -376,12 +399,20 @@ impl PreparedSharedRegion<'_> {
         assert!(!self.broker.token_in_use(self.token));
         assert!(self.broker.shared_regions.len() < self.broker.shared_regions.capacity());
         self.broker.shared_regions.push(ShmEntry {
+            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            trace_id: crate::memory::census_trace::object_id(),
             restricted: false,
             token: self.token,
             obj: ShmObject { frames, size },
             owner_pid,
             lifetime: crate::memory::shared_lifetime::SharedLifetime::new(),
         });
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        self.broker
+            .shared_regions
+            .last()
+            .unwrap()
+            .trace(crate::memory::census_trace::SHM_CREATE, 0);
         self.token
     }
 }
@@ -506,9 +537,13 @@ impl CapabilityBroker {
 
     fn channel_token_count(&self) -> usize {
         #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
-        { self.channels.token_count() }
+        {
+            self.channels.token_count()
+        }
         #[cfg(not(any(test, all(debug_assertions, feature = "fastlane_channel_test"))))]
-        { 0 }
+        {
+            0
+        }
     }
 
     fn check_capacity(&self, additional: usize) -> Result<(), CapError> {
@@ -1161,7 +1196,9 @@ impl CapabilityBroker {
     }
 
     pub(crate) fn restricted_shared(&self, token: CapabilityToken) -> bool {
-        self.shared_regions.iter().any(|e| e.token == token && e.restricted)
+        self.shared_regions
+            .iter()
+            .any(|e| e.token == token && e.restricted)
     }
 
     /// Cleanup authority comes from the task's existing mapping record, not
@@ -1203,6 +1240,63 @@ impl CapabilityBroker {
             .ok_or(CapError::NotFound)
     }
 
+    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    pub(crate) fn trace_view_add(
+        &self,
+        process: &crate::process::Process,
+        token: CapabilityToken,
+        va: u64,
+        size: usize,
+    ) {
+        let entry = self
+            .shared_regions
+            .iter()
+            .find(|e| e.token == token)
+            .expect("committed SHM");
+        crate::memory::census_trace::record(
+            crate::memory::census_trace::VIEW_ADD,
+            [
+                entry.trace_id,
+                process.pid as u64,
+                process.foreground.incarnation,
+                process.address_space.identity().generation,
+                va,
+                size as u64,
+                0,
+                0,
+            ],
+        );
+    }
+
+    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    pub(crate) fn trace_view_unmap(
+        &self,
+        process: &crate::process::Process,
+        token: CapabilityToken,
+        va: u64,
+        size: usize,
+        complete: u64,
+    ) {
+        let entry = self
+            .shared_regions
+            .iter()
+            .find(|e| e.token == token)
+            .expect("preflighted SHM");
+        crate::memory::census_trace::record(
+            crate::memory::census_trace::UNMAP,
+            [
+                entry.trace_id,
+                process.address_space.identity().generation,
+                process.address_space.identity().pml4_phys,
+                va,
+                size as u64,
+                complete,
+                process.pid as u64,
+                entry.lifetime.views() as u64,
+            ],
+        );
+    }
+
     /// Increment the mapping reference count for `token`.
     /// Called each time a process maps the region into its address space.
     pub fn increment_map_count(&mut self, token: CapabilityToken) {
@@ -1213,6 +1307,12 @@ impl CapabilityBroker {
             .lifetime
             .add()
             .expect("SHM mapping admission changed under broker lock");
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        self.shared_regions
+            .iter()
+            .find(|e| e.token == token)
+            .unwrap()
+            .trace(crate::memory::census_trace::SHM_ADD, 0);
     }
 
     /// Decrement the mapping reference count for `token`.
@@ -1233,8 +1333,12 @@ impl CapabilityBroker {
             .expect("SHM mapping count underflow")
         {
             let entry = self.shared_regions.swap_remove(idx);
+            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            entry.trace(crate::memory::census_trace::SHM_RELEASE, 0);
             return Some(entry.obj.frames);
         }
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        self.shared_regions[idx].trace(crate::memory::census_trace::SHM_RELEASE, 0);
         None
     }
 
@@ -1247,7 +1351,10 @@ impl CapabilityBroker {
         token: CapabilityToken,
     ) -> Option<alloc::vec::Vec<PhysFrame<Size4KiB>>> {
         if let Some(idx) = self.shared_regions.iter().position(|e| e.token == token) {
-            if self.shared_regions[idx].lifetime.retire() {
+            let releasable = self.shared_regions[idx].lifetime.retire();
+            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            self.shared_regions[idx].trace(crate::memory::census_trace::SHM_RETIRE, 0);
+            if releasable {
                 return Some(self.shared_regions.swap_remove(idx).obj.frames);
             }
         }
@@ -1260,6 +1367,8 @@ impl CapabilityBroker {
         for entry in self.shared_regions.iter_mut() {
             if entry.owner_pid == pid {
                 entry.lifetime.retire();
+                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                entry.trace(crate::memory::census_trace::SHM_RETIRE, 0);
             }
         }
     }

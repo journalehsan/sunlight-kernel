@@ -9,6 +9,14 @@ No commit or push is authorized.
 census failures remain unexplained; subsequent passing replays do not discharge
 them. Native regression receipts and the exact blocker are recorded below.
 
+## M3.1 follow-up
+
+[M3.1 bounded ownership attribution](fastlane-m31-census-attribution.md) adds
+opt-in observations at the unchanged checkpoints. The original M3.0 artifact
+archive is unavailable locally; its three reported failures remain unresolved.
+New diagnostic and untraced control attempts use a separate evidence root and
+cannot replace those original observations. Production FastLane remains disabled.
+
 ## Selected contract
 
 `sunlight_fastlane_ring::hostile` is a separate representation from the existing

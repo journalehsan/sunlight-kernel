@@ -128,6 +128,61 @@ impl Scheduler {
         if pending != 0 {
             return (objects as u64, views as u64 | ((pending as u64) << 32));
         }
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        {
+            use crate::memory::census_trace::{self, VIEW};
+            let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("census HHDM").offset);
+            pmm.trace_census(checkpoint);
+            for entry in &caps.shared_regions {
+                entry.trace(census_trace::SHM_LIVE, checkpoint);
+                for row in &caps.channels.rows {
+                    for (region, backing) in row.backing.iter().enumerate() {
+                        if *backing == Some(entry.token) {
+                            census_trace::record(
+                                VIEW,
+                                [
+                                    entry.trace_id,
+                                    row.handle.generation,
+                                    region as u64,
+                                    0,
+                                    0,
+                                    0,
+                                    checkpoint,
+                                    1,
+                                ],
+                            );
+                        }
+                    }
+                }
+            }
+            for p in &self.processes {
+                unsafe {
+                    p.address_space.trace_tables(
+                        checkpoint,
+                        (p.pid, p.foreground.incarnation),
+                        hhdm,
+                    );
+                }
+                for (token, va, size) in &p.mapped_shared {
+                    if let Some(entry) = caps.shared_regions.iter().find(|e| e.token == *token) {
+                        census_trace::record(
+                            VIEW,
+                            [
+                                entry.trace_id,
+                                p.pid as u64,
+                                p.foreground.incarnation,
+                                p.address_space.identity().generation,
+                                va.as_u64(),
+                                *size as u64,
+                                checkpoint,
+                                0,
+                            ],
+                        );
+                    }
+                }
+            }
+            census_trace::checkpoint(checkpoint);
+        }
         crate::serial_println!(
             "[FL-CENSUS] checkpoint={} objects={} views={} frames={} shm={} tables={} free={}",
             checkpoint,
@@ -240,6 +295,8 @@ impl Scheduler {
         };
         caps.increment_map_count(token);
         p.mapped_shared.push((token, va, shared::PAGE_SIZE));
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        caps.trace_view_add(p, token, va.as_u64(), shared::PAGE_SIZE);
         caps.channels.row_mut(h)?.mapped[role][region] = true;
         ACTIVE.store(true, Ordering::Release);
         let frame = caps

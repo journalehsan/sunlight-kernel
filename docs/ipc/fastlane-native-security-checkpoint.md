@@ -4,6 +4,53 @@
 Production FastLane, production Restricted SHM and public Doorbell remain disabled.
 No commit or push is performed.
 
+## M3.1 bounded census attribution — PARTIAL
+
+The [M3.1 ownership report](fastlane-m31-census-attribution.md) records the new
+bounded, debug-only PMM/page-table/SHM/TLB observations. They add no authority,
+payload path or userspace Doorbell, do not alter census thresholds, and retain
+the existing synchronous acknowledgement and final-view release ordering.
+Production remains disabled; ordinary and release builds exclude the recorder.
+The historical M3.0 evidence directory and its source/image/raw-log manifests
+are unavailable in this checkout. References below to retained original M3.0
+attempts describe the historical report, not recovered local artifacts.
+
+The reported 2-CPU +1 table, 4-CPU +1 SHM frame and 12-CPU +1 table remain
+unclassified. No original frame identity can currently be linked to an owner or
+release event. The new guests are separate experiments; later passing global
+counts do not discharge the original failures. The trace's independent verifier
+checks allocation identities, object/view ownership, table retirement conditions
+and real remote acknowledgement completion before release. Overflow, missing
+publication, unmatched owners and unresolved additions fail its diagnostic
+receipt. A linked empty table alone is not proof that retention was necessary.
+
+A new 2-CPU diagnostic attempt **FAILS** the unchanged census: 391 tables at
+100–102, 392 at 103–105. Its extra table is frame 620990464, VM 79, root
+473878528, parent 513253376, VA `0x300400000`. It remains linked and empty at
+999 after SHM object 65's final view, synchronous invalidation and backing-frame
+620986368 release. This accounts for retained VM ownership in that new guest;
+legitimate retention policy, long-term bounds and actual teardown of this
+persistent VM remain unproved. The strict empty-addition assessment remains
+unresolved. No harmless/leak classification is assigned to an original failure.
+
+The final revision-3 trace matrix passes M1/M2 and M3 native word witnesses on
+2/4/12 CPUs, with zero overflow and full allocation/view/table-retirement/TLB
+reconciliation. A separately identified 4-CPU table 606158848 appears before
+checkpoint 100 and remains linked/empty in Vortex VM 79; its retention-policy
+limit also remains visible. Initial observer versions omitted the PMM claim for
+a boot security test's OtherAccounted SHM backing. Their failed reassessments
+are retained; revision 3 observes those transitions without changing primary
+accounting classes or any count threshold.
+
+Kernel/IPC/UAC/scheduler host checks, hostile/cooperative ring tests, and the
+ordinary production image/boot gate pass. Selecting the debug fixture in release
+is rejected by the existing compile guard; its nonzero command receipts remain
+visible. Broader historical native IPC/grant contention, R2D and kernel Doorbell
+suites are not rerun in M3.1. Exact matrices, source/image hashes, failed attempts
+and scope limits are in the M3.1 report and
+`target/fastlane-m31-evidence/validation-summary.json`. Later passes do not
+replace the captured new FAIL or the three original unresolved observations.
+
 ## M3.0 hostile-memory representation update
 
 The [M3 representation report](fastlane-hostile-memory-representation.md) defines

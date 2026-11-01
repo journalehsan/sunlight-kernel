@@ -216,9 +216,28 @@ impl AddressSpace {
         }
 
         let identity = allocate_identity(&NEXT_ADDRESS_SPACE_GENERATION, pml4_phys.as_u64());
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        crate::memory::census_trace::record(
+            crate::memory::census_trace::ROOT,
+            [pml4_phys.as_u64(), identity.generation, 0, 0, 0, 0, 0, 0],
+        );
         let ledger = match Self::allocate_ledger(identity) {
             Ok(handle) => handle,
             Err(error) => {
+                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                crate::memory::census_trace::record(
+                    crate::memory::census_trace::TABLE_RETIRE,
+                    [
+                        pml4_phys.as_u64(),
+                        identity.generation,
+                        identity.pml4_phys,
+                        0,
+                        5,
+                        0,
+                        0,
+                        0,
+                    ],
+                );
                 pmm.free_frame(pml4_phys);
                 return Err(error);
             }
@@ -681,6 +700,23 @@ impl AddressSpace {
             Err(error) => return Err(error),
         };
 
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        if let Some((entry, frame)) = created[0] {
+            crate::memory::census_trace::record(
+                crate::memory::census_trace::TABLE,
+                [
+                    frame.as_u64(),
+                    self.identity.generation,
+                    self.pml4_phys.as_u64(),
+                    (entry as u64 - hhdm_offset.as_u64()) & !4095,
+                    page.start_address().as_u64(),
+                    3,
+                    phys.start_address().as_u64(),
+                    flags.bits(),
+                ],
+            );
+        }
+
         let p3_entry = &mut p3_table[page.p3_index()];
         let p2_table = match Self::create_next_table(p3_entry, pmm, hhdm_offset, &mut created[1]) {
             Ok(table) => table,
@@ -690,6 +726,23 @@ impl AddressSpace {
             }
         };
 
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        if let Some((entry, frame)) = created[1] {
+            crate::memory::census_trace::record(
+                crate::memory::census_trace::TABLE,
+                [
+                    frame.as_u64(),
+                    self.identity.generation,
+                    self.pml4_phys.as_u64(),
+                    (entry as u64 - hhdm_offset.as_u64()) & !4095,
+                    page.start_address().as_u64(),
+                    2,
+                    phys.start_address().as_u64(),
+                    flags.bits(),
+                ],
+            );
+        }
+
         let p2_entry = &mut p2_table[page.p2_index()];
         let p1_table = match Self::create_next_table(p2_entry, pmm, hhdm_offset, &mut created[2]) {
             Ok(table) => table,
@@ -698,6 +751,23 @@ impl AddressSpace {
                 return Err(error);
             }
         };
+
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        if let Some((entry, frame)) = created[2] {
+            crate::memory::census_trace::record(
+                crate::memory::census_trace::TABLE,
+                [
+                    frame.as_u64(),
+                    self.identity.generation,
+                    self.pml4_phys.as_u64(),
+                    (entry as u64 - hhdm_offset.as_u64()) & !4095,
+                    page.start_address().as_u64(),
+                    1,
+                    phys.start_address().as_u64(),
+                    flags.bits(),
+                ],
+            );
+        }
 
         let p1_entry = &mut p1_table[page.p1_index()];
         if !p1_entry.is_unused() {
@@ -1083,14 +1153,56 @@ impl AddressSpace {
 
         let mut reclaimed = 1usize;
         p2e.set_unused();
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        crate::memory::census_trace::record(
+            crate::memory::census_trace::TABLE_RETIRE,
+            [
+                p1_phys.as_u64(),
+                self.identity.generation,
+                self.identity.pml4_phys,
+                page.start_address().as_u64(),
+                1,
+                crate::memory::tlb::active_cpu_mask(self.identity),
+                0,
+                0,
+            ],
+        );
         pmm.free_frame(p1_phys);
         if p2.iter().all(PageTableEntry::is_unused) {
             reclaimed += 1;
             p3e.set_unused();
+            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            crate::memory::census_trace::record(
+                crate::memory::census_trace::TABLE_RETIRE,
+                [
+                    p2_phys.as_u64(),
+                    self.identity.generation,
+                    self.identity.pml4_phys,
+                    page.start_address().as_u64(),
+                    1,
+                    crate::memory::tlb::active_cpu_mask(self.identity),
+                    0,
+                    0,
+                ],
+            );
             pmm.free_frame(p2_phys);
             if p3.iter().all(PageTableEntry::is_unused) {
                 reclaimed += 1;
                 p4e.set_unused();
+                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                crate::memory::census_trace::record(
+                    crate::memory::census_trace::TABLE_RETIRE,
+                    [
+                        p3_phys.as_u64(),
+                        self.identity.generation,
+                        self.identity.pml4_phys,
+                        page.start_address().as_u64(),
+                        1,
+                        crate::memory::tlb::active_cpu_mask(self.identity),
+                        0,
+                        0,
+                    ],
+                );
                 pmm.free_frame(p3_phys);
             }
         }
@@ -1126,7 +1238,13 @@ impl AddressSpace {
         pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<VirtAddr, crate::memory::shared::SharedMemError> {
-        self.map_shared_region_protected(frames, backing, RegionProtection::READ_WRITE, pmm, hhdm_offset)
+        self.map_shared_region_protected(
+            frames,
+            backing,
+            RegionProtection::READ_WRITE,
+            pmm,
+            hhdm_offset,
+        )
     }
 
     /// Kernel-selected permissions. The shared owner-managed ledger forbids
@@ -1139,7 +1257,10 @@ impl AddressSpace {
         pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<VirtAddr, crate::memory::shared::SharedMemError> {
-        if !matches!(protection, RegionProtection::READ_ONLY | RegionProtection::READ_WRITE) {
+        if !matches!(
+            protection,
+            RegionProtection::READ_ONLY | RegionProtection::READ_WRITE
+        ) {
             return Err(crate::memory::shared::SharedMemError::InvalidArgument);
         }
         const PAGE_SIZE: u64 = 4096;
@@ -1264,7 +1385,14 @@ impl AddressSpace {
         let phys = p1e.addr();
         p1e.set_unused();
         #[cfg(feature = "authenticated_exec_test")]
-        crate::capability::exec_retirement_trace::tlb(self.identity, page.start_address().as_u64(), "pte-cleared", 0, 0, 0);
+        crate::capability::exec_retirement_trace::tlb(
+            self.identity,
+            page.start_address().as_u64(),
+            "pte-cleared",
+            0,
+            0,
+            0,
+        );
         crate::memory::tlb::invalidate_page(self.identity, page.start_address());
         Some(phys)
     }
@@ -1308,12 +1436,54 @@ impl AddressSpace {
 
         if p1.iter().all(PageTableEntry::is_unused) {
             p2e.set_unused();
+            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            crate::memory::census_trace::record(
+                crate::memory::census_trace::TABLE_RETIRE,
+                [
+                    p1_phys.as_u64(),
+                    self.identity.generation,
+                    self.identity.pml4_phys,
+                    page.start_address().as_u64(),
+                    2,
+                    crate::memory::tlb::active_cpu_mask(self.identity),
+                    0,
+                    0,
+                ],
+            );
             pmm.free_frame(p1_phys);
             if p2.iter().all(PageTableEntry::is_unused) {
                 p3e.set_unused();
+                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                crate::memory::census_trace::record(
+                    crate::memory::census_trace::TABLE_RETIRE,
+                    [
+                        p2_phys.as_u64(),
+                        self.identity.generation,
+                        self.identity.pml4_phys,
+                        page.start_address().as_u64(),
+                        2,
+                        crate::memory::tlb::active_cpu_mask(self.identity),
+                        0,
+                        0,
+                    ],
+                );
                 pmm.free_frame(p2_phys);
                 if p3.iter().all(PageTableEntry::is_unused) {
                     p4e.set_unused();
+                    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                    crate::memory::census_trace::record(
+                        crate::memory::census_trace::TABLE_RETIRE,
+                        [
+                            p3_phys.as_u64(),
+                            self.identity.generation,
+                            self.identity.pml4_phys,
+                            page.start_address().as_u64(),
+                            2,
+                            crate::memory::tlb::active_cpu_mask(self.identity),
+                            0,
+                            0,
+                        ],
+                    );
                     pmm.free_frame(p3_phys);
                 }
             }
@@ -1401,16 +1571,58 @@ impl AddressSpace {
                     }
 
                     p2e.set_unused();
+                    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                    crate::memory::census_trace::record(
+                        crate::memory::census_trace::TABLE_RETIRE,
+                        [
+                            p1_phys.as_u64(),
+                            self.identity.generation,
+                            self.identity.pml4_phys,
+                            0,
+                            3,
+                            crate::memory::tlb::active_cpu_mask(self.identity),
+                            0,
+                            0,
+                        ],
+                    );
                     pmm.free_frame(p1_phys);
                     stats.page_tables += 1;
                 }
 
                 p3e.set_unused();
+                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                crate::memory::census_trace::record(
+                    crate::memory::census_trace::TABLE_RETIRE,
+                    [
+                        p2_phys.as_u64(),
+                        self.identity.generation,
+                        self.identity.pml4_phys,
+                        0,
+                        3,
+                        crate::memory::tlb::active_cpu_mask(self.identity),
+                        0,
+                        0,
+                    ],
+                );
                 pmm.free_frame(p2_phys);
                 stats.page_tables += 1;
             }
 
             p4e.set_unused();
+            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            crate::memory::census_trace::record(
+                crate::memory::census_trace::TABLE_RETIRE,
+                [
+                    p3_phys.as_u64(),
+                    self.identity.generation,
+                    self.identity.pml4_phys,
+                    0,
+                    3,
+                    crate::memory::tlb::active_cpu_mask(self.identity),
+                    0,
+                    0,
+                ],
+            );
             pmm.free_frame(p3_phys);
             stats.page_tables += 1;
         }
@@ -1418,6 +1630,20 @@ impl AddressSpace {
         if free_root {
             self.destroy_ledger()
                 .expect("address-space ledger teardown failed");
+            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            crate::memory::census_trace::record(
+                crate::memory::census_trace::TABLE_RETIRE,
+                [
+                    self.pml4_phys.as_u64(),
+                    self.identity.generation,
+                    self.identity.pml4_phys,
+                    0,
+                    3,
+                    crate::memory::tlb::active_cpu_mask(self.identity),
+                    0,
+                    0,
+                ],
+            );
             pmm.free_frame(self.pml4_phys);
             stats.page_tables += 1;
             self.pml4_phys = PhysAddr::new(0);
@@ -1425,6 +1651,92 @@ impl AddressSpace {
         }
 
         stats
+    }
+
+    /// Read-only table census under scheduler and PMM locks. Shared kernel
+    /// tables are outside this per-process lower-half walk and remain explicit
+    /// unmatched allocations unless another observer supplies their identity.
+    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    pub(crate) unsafe fn trace_tables(&self, checkpoint: u64, owner: (usize, u64), hhdm: VirtAddr) {
+        if self.is_reclaimed() {
+            return;
+        }
+        use crate::memory::census_trace::{record, TABLE_LIVE};
+        unsafe fn walk(
+            phys: u64,
+            parent: u64,
+            level: u64,
+            base: u64,
+            id: AddressSpaceIdentity,
+            checkpoint: u64,
+            owner: (usize, u64),
+            hhdm: VirtAddr,
+        ) {
+            let table = &*((hhdm + phys).as_ptr::<PageTable>());
+            let occupied = table.iter().filter(|e| !e.is_unused()).count();
+            record(
+                TABLE_LIVE,
+                [
+                    phys,
+                    id.generation,
+                    id.pml4_phys,
+                    parent,
+                    base,
+                    level,
+                    occupied as u64,
+                    checkpoint,
+                ],
+            );
+            if level == 4 {
+                record(
+                    crate::memory::census_trace::ROOT,
+                    [
+                        phys,
+                        id.generation,
+                        owner.0 as u64,
+                        checkpoint,
+                        owner.1,
+                        0,
+                        0,
+                        0,
+                    ],
+                );
+            }
+            if level == 1 {
+                return;
+            }
+            for (index, entry) in table
+                .iter()
+                .enumerate()
+                .take(if level == 4 { 256 } else { 512 })
+            {
+                if !entry.flags().contains(PageTableFlags::PRESENT)
+                    || entry.flags().contains(PageTableFlags::HUGE_PAGE)
+                {
+                    continue;
+                }
+                walk(
+                    entry.addr().as_u64(),
+                    phys,
+                    level - 1,
+                    base | ((index as u64) << (12 + 9 * (level - 1))),
+                    id,
+                    checkpoint,
+                    owner,
+                    hhdm,
+                );
+            }
+        }
+        walk(
+            self.pml4_phys.as_u64(),
+            0,
+            4,
+            0,
+            self.identity,
+            checkpoint,
+            owner,
+            hhdm,
+        );
     }
 
     /// Count the number of present user-space 4 KiB pages mapped in this
@@ -1543,6 +1855,20 @@ impl AddressSpace {
         }
         for item in created.iter_mut().rev() {
             if let Some((_, frame)) = item.take() {
+                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                crate::memory::census_trace::record(
+                    crate::memory::census_trace::TABLE_RETIRE,
+                    [
+                        frame.as_u64(),
+                        identity.generation,
+                        identity.pml4_phys,
+                        page.start_address().as_u64(),
+                        4,
+                        crate::memory::tlb::active_cpu_mask(identity),
+                        0,
+                        0,
+                    ],
+                );
                 pmm.free_frame(frame);
             }
         }

@@ -255,6 +255,14 @@ impl PhysicalMemoryManager {
         FREE_FRAMES -= 1;
         self.scan_cursor = byte_idx;
         accounting::note_alloc(class, 1);
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        super::census_trace::physical(
+            super::census_trace::CLAIM,
+            frame as u64 * FRAME_SIZE as u64,
+            class.as_u8(),
+            owner_pid,
+            class.as_u8(),
+        );
         let count = ALLOC_COUNT.fetch_add(1, Ordering::Relaxed);
         if cfg!(feature = "verbose_diag") && (count % 100 == 0 || count < 10) {
             crate::serial_println!(
@@ -266,7 +274,11 @@ impl PhysicalMemoryManager {
             );
         }
         #[cfg(feature = "authenticated_exec_test")]
-        crate::capability::exec_retirement_trace::physical(frame as u64 * FRAME_SIZE as u64, "claim", class.as_u8());
+        crate::capability::exec_retirement_trace::physical(
+            frame as u64 * FRAME_SIZE as u64,
+            "claim",
+            class.as_u8(),
+        );
         #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
         crate::capability::mapping_trace::physical(frame as u64 * FRAME_SIZE as u64, "claim");
         Some(PhysAddr::new(frame as u64 * FRAME_SIZE as u64))
@@ -320,6 +332,14 @@ impl PhysicalMemoryManager {
                     BITMAP[f / 8] |= 1 << (f % 8);
                     FRAME_OWNER[f] = pack_owner(owner_pid, class);
                     FREE_FRAMES -= 1;
+                    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                    super::census_trace::physical(
+                        super::census_trace::CLAIM,
+                        f as u64 * FRAME_SIZE as u64,
+                        class.as_u8(),
+                        owner_pid,
+                        class.as_u8(),
+                    );
                 }
             }
             accounting::note_alloc(class, count as u64);
@@ -337,6 +357,14 @@ impl PhysicalMemoryManager {
                 let packed = FRAME_OWNER[frame];
                 if packed != PMM_OWNER_FREE {
                     let class = unpack_class(packed);
+                    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                    super::census_trace::physical(
+                        super::census_trace::FREE,
+                        addr.as_u64(),
+                        class.as_u8(),
+                        unpack_pid(packed),
+                        0,
+                    );
                     accounting::note_free(class, 1);
                 }
                 BITMAP[frame / 8] &= !(1 << (frame % 8));
@@ -344,7 +372,11 @@ impl PhysicalMemoryManager {
                 FREE_FRAMES += 1;
             }
             #[cfg(feature = "authenticated_exec_test")]
-            crate::capability::exec_retirement_trace::physical(addr.as_u64(), "free", PhysicalMemoryClass::Free.as_u8());
+            crate::capability::exec_retirement_trace::physical(
+                addr.as_u64(),
+                "free",
+                PhysicalMemoryClass::Free.as_u8(),
+            );
             #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
             crate::capability::mapping_trace::physical(addr.as_u64(), "free");
             let count = FREE_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -375,8 +407,46 @@ impl PhysicalMemoryManager {
             if old == new_class {
                 return;
             }
+            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            super::census_trace::physical(
+                super::census_trace::RECLASS,
+                addr.as_u64(),
+                old.as_u8(),
+                pid,
+                new_class.as_u8(),
+            );
             accounting::note_reclass(old, new_class, 1);
             FRAME_OWNER[frame] = pack_owner(pid, new_class);
+        }
+    }
+
+    /// Caller holds PMM: identities and counters refer to the same boundary.
+    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    pub(crate) fn trace_census(&self, checkpoint: u64) {
+        for frame in 0..MAX_FRAMES {
+            let packed = unsafe { FRAME_OWNER[frame] };
+            if packed == PMM_OWNER_FREE {
+                continue;
+            }
+            let class = unpack_class(packed);
+            if matches!(
+                class,
+                PhysicalMemoryClass::PageTable | PhysicalMemoryClass::SharedMemory
+            ) {
+                super::census_trace::record(
+                    super::census_trace::LIVE,
+                    [
+                        frame as u64 * FRAME_SIZE as u64,
+                        class.as_u8() as u64,
+                        unpack_pid(packed) as u64,
+                        checkpoint,
+                        0,
+                        0,
+                        0,
+                        0,
+                    ],
+                );
+            }
         }
     }
 

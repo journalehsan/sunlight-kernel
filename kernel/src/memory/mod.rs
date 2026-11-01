@@ -1,4 +1,6 @@
 pub mod accounting;
+#[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+pub(crate) mod census_trace;
 pub mod heap;
 pub mod pmm;
 pub mod security;
