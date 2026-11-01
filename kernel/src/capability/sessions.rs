@@ -168,6 +168,12 @@ impl CapabilityBroker {
             .map(|s| s.issuer)
     }
 
+    #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
+    pub(super) fn channel_session_authorized(&self, reference: SessionRef, issuer: RecipientIdentity, uid: u32, now: u64) -> bool {
+        self.sessions.rows.iter().any(|s| s.reference == reference && s.issuer == issuer
+            && s.state == State::Active && now < s.deadline && s.uid == uid && uid == 0)
+    }
+
     pub(crate) fn account_session_participants(
         &self,
         reference: SessionRef,
@@ -225,6 +231,8 @@ impl CapabilityBroker {
     }
 
     fn remove_session_grants(&mut self, reference: SessionRef) {
+        #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
+        self.channels.retire_session(reference);
         self.account_grants.retain(|(_, g)| {
             let scope = g.grant.binding.scope;
             scope.session != reference.id || scope.session_generation != reference.epoch

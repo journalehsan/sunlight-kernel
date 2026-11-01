@@ -5122,3 +5122,8 @@ unsafe fn count_pci_class(target_class: u8) -> u8 {
     }
     count
 }
+
+#[cfg(all(feature = "fastlane_channel_test", not(debug_assertions)))]
+compile_error!("fastlane_channel_test requires a debug experimental image");
+#[cfg(all(feature = "fastlane_channel_test", feature = "native_session_h4_test"))]
+compile_error!("select one authenticated lifecycle fixture per image");

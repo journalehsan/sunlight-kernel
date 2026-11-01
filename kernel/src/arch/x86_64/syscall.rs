@@ -858,6 +858,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         21 => process_yield(),
         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
         0xf1a0 => unsafe { crate::sched::doorbell_fixture_on_kernel_stack(frame) },
+        #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+        0xf1c1 => sys_fastlane_channel(frame),
         22 => thread_spawn(frame, false),
         #[cfg(feature = "scheduler_guest_bench")]
         0x5342 => crate::scheduler_bench_diag::syscall(frame.rdi, frame.rsi),
@@ -1047,6 +1049,9 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
             }
         }
     };
+
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    crate::sched::SCHEDULER.lock().fastlane_mapping_sweep();
 
     let result = if linux_compat && !linux_special {
         sunlight_compat_linux::abi::from_native_result(result)
@@ -2530,6 +2535,8 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     }
 
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+    if sched.fastlane_vm_member() { return u64::MAX; }
 
     // Collect everything we need from the parent in one borrow scope so
     // we can release it before calling clone_boxed (which also borrows sched).
@@ -2793,6 +2800,8 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     else {
         return linux_errno(12);
     };
+    #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+    if sched.fastlane_vm_member() { return linux_errno(11); }
     let current = sched.current_process();
     if !current.is_linux_compat() {
         return linux_errno(38);
@@ -3242,6 +3251,8 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
             process.ipc_deadline = None;
             process.ipc_next_deadline_tick = None;
             drop(pmm);
+            #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+            sched.fastlane_mapping_sweep();
             crate::ipc::retire_exec_replies(retired_server, retired_ordinary, &mut sched);
             if let Some(target) = retired_call {
                 crate::ipc::retire_exec_call(target, &mut sched);
@@ -9853,6 +9864,7 @@ fn sys_shm_free(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let mut pmm = crate::PMM.lock();
     let mut caps = crate::capability::CAP_BROKER.lock();
+    if caps.restricted_shared(token) { return u64::MAX; }
     let process = sched.current_process_mut();
     match crate::memory::shared::free_shared_page(
         process,
@@ -11948,5 +11960,35 @@ fn sys_svga_set_mode(frame: &mut SyscallFrame) -> u64 {
             );
             0
         }
+    }
+}
+
+/// Private debug-only authority experiment. Ordinary images have no selector.
+#[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
+    use crate::capability::{channel::Handle, CapabilityToken};
+    #[allow(unused_mut)]
+    let (mut sched, actor) = crate::capability::channel_race::acquire(frame.rdi, frame.rdx);
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    if frame.rdi == 8 {
+        return match sched.fastlane_map(Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.r10) {
+            Ok((va, size)) => { frame.rsi = va; frame.rdx = size; 0 }
+            Err(e) => { frame.rsi = 0; frame.rdx = 0; e as u64 }
+        };
+    }
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    if frame.rdi == 9 {
+        let (objects, views) = sched.fastlane_mapping_inventory(frame.r10);
+        frame.rsi = objects; frame.rdx = views; return 0;
+    }
+    let result = sched.fastlane_channel(frame.rdi,
+        Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.r10,
+        ::sunlight_ipc::account_session::SessionRef { id: frame.r8, epoch: frame.r9 });
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    sched.fastlane_mapping_sweep();
+    crate::capability::channel_race::finished(actor, result.as_ref().err().map_or(0, |e| *e as u64));
+    match result {
+        Ok((value, generation)) => { frame.rsi = value; frame.rdx = generation; 0 }
+        Err(error) => { frame.rsi = 0; frame.rdx = 0; error as u64 }
     }
 }

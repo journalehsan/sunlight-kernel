@@ -477,3 +477,23 @@ fn dispatch_profile(msg: &IpcMsg) -> Result<(), api::Error> {
         0o644,
     )
 }
+
+/// Explicit narrow experimental policy, independently invoked by each peer.
+/// Only live root in the currently authenticated active root session may
+/// propose/consent. The kernel binds the actual pending caller and issuer.
+#[cfg(feature = "fastlane-channel-test")]
+pub(super) fn channel_authorize(msg: &IpcMsg) -> IpcMsg {
+    use sunlight_ipc::fastlane_authority as fl;
+    let result = (|| {
+        let caller = sunlight_ipc::session_query_process(msg.badge).ok_or(fl::Error::Denied)?;
+        let active = api::active_session().map_err(|_| fl::Error::Denied)?;
+        sunlight_uac::accounts::authorize_admin(caller.uid, active.2).map_err(|_| fl::Error::Denied)?;
+        if msg.words[0] > 1 { return Err(fl::Error::Denied); }
+        fl::call(msg.words[0], fl::Handle { token: msg.words[1], generation: msg.words[2] },
+            msg.words[3], sunlight_ipc::account_session::SessionRef { id: active.0, epoch: active.1 })
+    })();
+    match result {
+        Ok((token,generation)) => IpcMsg::with_label(fl::REPLY).word(0,0).word(1,token).word(2,generation),
+        Err(error) => IpcMsg::with_label(fl::REPLY).word(0,error as u64),
+    }
+}

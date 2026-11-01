@@ -687,6 +687,9 @@ production_grant_test = []
 grant_history_test = ["production_grant_test"]
 grant_history_transport_test = ["production_grant_test"]
 native_session_race_test = []
+# Authority only: debug-only, no mappings, payload or Doorbell API.
+fastlane_mapping_test = ["fastlane_channel_test"]
+fastlane_channel_test = ["native_session_race_test"]
 native_session_h4_test = ["native_session_race_test"]
 authenticated_reply_test = ["native_session_h4_test"]
 # Observation-only per-object Account exec retirement trace. Debug images only.

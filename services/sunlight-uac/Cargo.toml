@@ -646,6 +646,8 @@ path = "src/bin/runas.rs"
 production-grant-test = []
 production-history-test = ["production-grant-test"]
 session-race-test = []
+fastlane-mapping-test = ["fastlane-channel-test"]
+fastlane-channel-test = ["session-race-test", "sunlight-ipc/experimental-fastlane-authority"]
 session-h4-test = ["session-race-test"]
 # Native N6 resource-reap trigger, using ordinary shared memory and manager IPC.
 session-reap-test = ["session-h4-test"]

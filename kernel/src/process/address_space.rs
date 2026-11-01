@@ -1126,6 +1126,22 @@ impl AddressSpace {
         pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
         hhdm_offset: VirtAddr,
     ) -> Result<VirtAddr, crate::memory::shared::SharedMemError> {
+        self.map_shared_region_protected(frames, backing, RegionProtection::READ_WRITE, pmm, hhdm_offset)
+    }
+
+    /// Kernel-selected permissions. The shared owner-managed ledger forbids
+    /// userspace mprotect, replacement and anonymous unmap of these views.
+    pub(crate) unsafe fn map_shared_region_protected(
+        &mut self,
+        frames: &[PhysFrame<Size4KiB>],
+        backing: RegionBacking,
+        protection: RegionProtection,
+        pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<VirtAddr, crate::memory::shared::SharedMemError> {
+        if !matches!(protection, RegionProtection::READ_ONLY | RegionProtection::READ_WRITE) {
+            return Err(crate::memory::shared::SharedMemError::InvalidArgument);
+        }
         const PAGE_SIZE: u64 = 4096;
         let n = frames.len();
         if n == 0 {
@@ -1142,7 +1158,6 @@ impl AddressSpace {
             return Err(crate::memory::shared::SharedMemError::OutOfMemory);
         }
         let base = VirtAddr::new(base_u64);
-        let protection = RegionProtection::READ_WRITE;
         let region = MappingRegion::new(
             base_u64,
             end,

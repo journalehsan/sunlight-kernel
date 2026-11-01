@@ -83,7 +83,7 @@ impl Scheduler {
         CAP_BROKER.lock().grant_vfs_capability(issuer.pid, cap)
     }
 
-    fn grant_requester_for_role(&self, pid: usize, trusted_role: bool) -> Option<&Process> {
+    pub(super) fn grant_requester_for_role(&self, pid: usize, trusted_role: bool) -> Option<&Process> {
         let issuer = self.current_process();
         if !trusted_role
             || issuer.is_exiting()
@@ -112,7 +112,7 @@ impl Scheduler {
         self.grant_requester_for_role(pid, self.current_process().trusted_auth_broker)
     }
 
-    fn grant_delivery(&self, recipient: &Process) -> Option<GrantDelivery> {
+    pub(super) fn grant_delivery(&self, recipient: &Process) -> Option<GrantDelivery> {
         let issuer = self.current_process();
         Some(GrantDelivery {
             recipient: RecipientIdentity::of(recipient),

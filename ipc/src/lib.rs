@@ -6568,3 +6568,6 @@ pub fn foreground_session_counts(session: u64, generation: u64) -> u64 {
         .0
     }
 }
+
+#[cfg(feature = "experimental-fastlane-authority")]
+pub mod fastlane_authority;

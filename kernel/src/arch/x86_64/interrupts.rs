@@ -602,6 +602,12 @@ extern "x86-interrupt" fn page_fault_handler(
     // Not a CoW fault — unrecoverable
     serial_println!("[FAULT] Page Fault at {:#x}: code={:?}", vaddr, error_code);
     if is_user_frame(&_stack_frame) {
+        #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+        {
+            let sched = crate::sched::SCHEDULER.lock();
+            let p = sched.current_process();
+            serial_println!("[FL-PF] pid={} inc={} vm={} va={} error={} cpu={}", p.pid, p.foreground.incarnation, p.address_space.identity().generation, vaddr, error_code.bits(), crate::sched::current_cpu_id());
+        }
         terminate_current_user_process("page-fault", 128 + 11);
     }
     loop {

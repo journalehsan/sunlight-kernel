@@ -8,6 +8,16 @@ pub(crate) mod exec_retirement_trace;
 #[cfg(any(test, feature = "cap_issuance_test"))]
 mod history_boundary;
 mod lifecycle;
+#[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
+pub(crate) mod channel;
+#[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+mod channel_native;
+#[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+pub(crate) mod channel_mapping;
+#[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+pub(crate) mod mapping_trace;
+#[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+pub(crate) mod channel_race;
 pub(crate) mod sessions;
 mod token_history;
 mod vfs_grants;
@@ -48,6 +58,8 @@ pub enum CapKind {
     /// Legacy / special tokens minted before tagging (e.g. shared pages,
     /// `SPAWN_TOKEN`). Treated as type-agnostic.
     Untagged,
+    /// Nondelegable experimental channel object; never an IPC/VFS bearer.
+    FastLane,
 }
 
 /// A capability token: opaque to user-space, meaningful to the kernel.
@@ -74,6 +86,7 @@ impl CapabilityToken {
     pub const TAG_IPC: u64 = 0b01;
     /// Tag value for VFS capabilities.
     pub const TAG_VFS: u64 = 0b10;
+    pub const TAG_FASTLANE: u64 = 0b11;
 
     pub fn as_u64(self) -> u64 {
         self.0
@@ -88,9 +101,15 @@ impl CapabilityToken {
     /// Extract the type tag in `O(1)`.
     #[inline]
     pub const fn kind(self) -> CapKind {
+        // Preserve the pre-tag reserved spawn marker. Issuance excludes its
+        // payload in every class, so it can never be a channel/role identity.
+        if self.0 == SPAWN_TOKEN.0 {
+            return CapKind::Untagged;
+        }
         match (self.0 & Self::TAG_MASK) >> Self::TAG_SHIFT {
             x if x == Self::TAG_IPC => CapKind::Ipc,
             x if x == Self::TAG_VFS => CapKind::Vfs,
+            x if x == Self::TAG_FASTLANE => CapKind::FastLane,
             _ => CapKind::Untagged,
         }
     }
@@ -294,6 +313,8 @@ pub struct ShmObject {
 
 /// Entry in the shared-region table.
 struct ShmEntry {
+    // Restricted objects are never admitted through legacy bearer APIs.
+    restricted: bool,
     token: CapabilityToken,
     obj: ShmObject,
     owner_pid: usize,
@@ -355,6 +376,7 @@ impl PreparedSharedRegion<'_> {
         assert!(!self.broker.token_in_use(self.token));
         assert!(self.broker.shared_regions.len() < self.broker.shared_regions.capacity());
         self.broker.shared_regions.push(ShmEntry {
+            restricted: false,
             token: self.token,
             obj: ShmObject { frames, size },
             owner_pid,
@@ -415,6 +437,8 @@ pub struct CapabilityBroker {
     auth_session_grants: alloc::vec::Vec<AuthSessionGrant>,
     account_grants: alloc::vec::Vec<(CapabilityToken, AccountGrant)>,
     sessions: sessions::SessionTable,
+    #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
+    channels: channel::ChannelTable,
     issuance: IssuanceStats,
     // Instance-local injection exists only in host tests and the opt-in native
     // security gate. The global production broker never installs an override.
@@ -452,6 +476,8 @@ impl CapabilityBroker {
             auth_session_grants: alloc::vec::Vec::new(),
             account_grants: alloc::vec::Vec::new(),
             sessions: sessions::SessionTable::new(),
+            #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
+            channels: channel::ChannelTable::new(),
             issuance: IssuanceStats {
                 prepared: 0,
                 collisions: 0,
@@ -475,6 +501,14 @@ impl CapabilityBroker {
             + self.vfs_caps.len()
             + self.auth_session_grants.len()
             + self.account_grants.len()
+            + self.channel_token_count()
+    }
+
+    fn channel_token_count(&self) -> usize {
+        #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
+        { self.channels.token_count() }
+        #[cfg(not(any(test, all(debug_assertions, feature = "fastlane_channel_test"))))]
+        { 0 }
     }
 
     fn check_capacity(&self, additional: usize) -> Result<(), CapError> {
@@ -1066,6 +1100,8 @@ impl CapabilityBroker {
     /// Called under lifecycle serialization on exit and successful VM replacement.
     /// Does not revoke transferable VFS/SHM or endpoint authority.
     pub(crate) fn retire_recipient_grants(&mut self, owner_pid: usize) {
+        #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
+        self.channels.retire_process(owner_pid);
         self.retire_sessions_for(owner_pid);
         crate::delegated_caller::DELEGATED_CALLERS
             .lock()
@@ -1116,12 +1152,16 @@ impl CapabilityBroker {
     /// Resolve a (possibly multi-page) shared region capability to its object.
     pub fn resolve_shared_region(&self, token: CapabilityToken) -> Option<&ShmObject> {
         self.shared_regions.iter().find_map(|e| {
-            if e.token == token && !e.lifetime.is_retired() {
+            if e.token == token && !e.restricted && !e.lifetime.is_retired() {
                 Some(&e.obj)
             } else {
                 None
             }
         })
+    }
+
+    pub(crate) fn restricted_shared(&self, token: CapabilityToken) -> bool {
+        self.shared_regions.iter().any(|e| e.token == token && e.restricted)
     }
 
     /// Cleanup authority comes from the task's existing mapping record, not
@@ -1149,6 +1189,9 @@ impl CapabilityBroker {
             .iter()
             .find(|e| e.token == token)
             .ok_or(CapError::NotFound)?;
+        if entry.restricted {
+            return Err(CapError::InsufficientRights);
+        }
         if entry.lifetime.is_retired() {
             return Err(CapError::Revoked);
         }

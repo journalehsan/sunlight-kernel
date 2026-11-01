@@ -1170,6 +1170,8 @@ impl Scheduler {
         // Compatibility mirror: all legacy scheduler logic still reads
         // `self.global_tick`, but only the centralized timekeeper advances it.
         self.global_tick = self.global_tick.max(global_tick);
+        #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+        if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID { self.fastlane_mapping_sweep(); }
         if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID {
             crate::ipc::expire_deadlines(self, self.global_tick);
             self.expire_linux_poll_timeouts();
@@ -2829,6 +2831,8 @@ impl Scheduler {
             let mut pmm = crate::PMM.lock();
             let mut caps = crate::capability::CAP_BROKER.lock();
             caps.revoke_endpoints_owned_by(pid);
+            #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+            self.fastlane_drain_mappings(&mut pmm, &mut caps);
             crate::memory::shared::cleanup_shared_pages(
                 &mut self.processes[idx],
                 &mut *pmm,
@@ -4265,9 +4269,12 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     });
     #[cfg(not(any(
         feature = "native_session_h4_test",
-        feature = "authenticated_completion_exit_test"
+        feature = "authenticated_completion_exit_test",
+        feature = "fastlane_channel_test"
     )))]
     let mut sched = SCHEDULER.lock();
+    #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+    let (mut sched, channel_exit_actor) = crate::capability::channel_race::acquire(if reason == "exit" {20} else {0}, 0);
     #[cfg(feature = "authenticated_completion_exit_test")]
     let (mut sched, exit_selected) =
         crate::capability::completion_exit::acquire(crate::capability::completion_exit::EXIT, 0);
@@ -4354,6 +4361,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         process.owning_core = u8::MAX;
         process.queued_on_core = u8::MAX;
     }
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    sched.fastlane_mapping_sweep();
     #[cfg(feature = "authenticated_completion_exit_test")]
     crate::capability::completion_exit::marked(exit_selected, &sched.processes[cur]);
     if is_borrower {
@@ -4393,6 +4402,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         &sched,
         0,
     );
+    #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+    crate::capability::channel_race::finished(channel_exit_actor, 0);
     idle_top
 }
 

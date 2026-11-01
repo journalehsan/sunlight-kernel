@@ -9,6 +9,8 @@ mod account_cancel;
 mod authenticated_reply;
 #[cfg(any(feature = "session-account-exec-test", feature = "session-account-cancel-test"))]
 mod account_exec;
+#[cfg(feature = "fastlane-channel-test")]
+mod channel_fixture;
 use sunlight_ipc::{accounts as api, CapabilityToken, IpcMsg};
 
 #[cfg(feature = "session-h4-test")]
@@ -349,6 +351,15 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let count = unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 64) };
     assert!(count >= 2, "case required");
     let case = args[1];
+    #[cfg(feature = "fastlane-mapping-test")]
+    if case == "FL-M2" { channel_fixture::mapping::supervisor(); }
+    #[cfg(feature = "fastlane-channel-test")]
+    match case {
+        "FL" => channel_fixture::supervisor(),
+        "FL-actor" => channel_fixture::actor(&args[..count]),
+        "FL-replaced" => channel_fixture::replaced(&args[..count]),
+        _ => {}
+    }
     #[cfg(feature = "session-account-cancel-test")]
     {
         if case == "cancel-caller" {

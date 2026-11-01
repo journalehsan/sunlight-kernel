@@ -267,6 +267,8 @@ impl PhysicalMemoryManager {
         }
         #[cfg(feature = "authenticated_exec_test")]
         crate::capability::exec_retirement_trace::physical(frame as u64 * FRAME_SIZE as u64, "claim", class.as_u8());
+        #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+        crate::capability::mapping_trace::physical(frame as u64 * FRAME_SIZE as u64, "claim");
         Some(PhysAddr::new(frame as u64 * FRAME_SIZE as u64))
     }
 
@@ -343,6 +345,8 @@ impl PhysicalMemoryManager {
             }
             #[cfg(feature = "authenticated_exec_test")]
             crate::capability::exec_retirement_trace::physical(addr.as_u64(), "free", PhysicalMemoryClass::Free.as_u8());
+            #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+            crate::capability::mapping_trace::physical(addr.as_u64(), "free");
             let count = FREE_COUNT.fetch_add(1, Ordering::Relaxed);
             if cfg!(feature = "verbose_diag") && (count % 100 == 0 || count < 10) {
                 crate::serial_println!(

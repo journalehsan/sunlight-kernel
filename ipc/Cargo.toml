@@ -623,3 +623,6 @@ edition = "2021"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("sunlightos"))'] }
+
+[features]
+experimental-fastlane-authority = []

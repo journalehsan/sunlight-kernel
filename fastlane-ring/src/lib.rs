@@ -3,6 +3,10 @@
 //! Leases borrow the unique role handle until publication or reclamation. They
 //! do not authenticate peers, attach mappings, revoke access or wake tasks. See
 //! docs/ipc/fastlane-f12-spsc-ring.md and fastlane-zero-copy-leases.md.
+//!
+//! `hostile` is a separate, copying representation for untrusted peer bytes.
+//! The cooperative `Ring` and its reference-based leases must never be attached
+//! to hostile native mappings.
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -28,6 +32,7 @@ pub const MAX_PAYLOAD: usize = 4096;
 
 mod leases;
 pub use leases::{ReadLease, WriteLease};
+pub mod hostile;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayoutError {

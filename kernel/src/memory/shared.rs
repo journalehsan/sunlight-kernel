@@ -287,6 +287,8 @@ pub fn free_shared_page(
 
     #[cfg(feature = "authenticated_exec_test")]
     crate::capability::exec_retirement_trace::unmap(process, token, expected_base.as_u64(), "request", caps.shared_region_map_count(token).unwrap_or(0));
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    crate::capability::channel_mapping::trace_unmap(caps, process, token, expected_base.as_u64(), "request");
     {
         let (_, base_virt, sz) = process.mapped_shared[pos];
         let object = caps
@@ -309,6 +311,8 @@ pub fn free_shared_page(
         }
         #[cfg(feature = "authenticated_exec_test")]
         crate::capability::exec_retirement_trace::unmap(process, token, base_virt.as_u64(), "complete", caps.shared_region_map_count(token).unwrap_or(0));
+        #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+        crate::capability::channel_mapping::trace_unmap(caps, process, token, base_virt.as_u64(), "complete");
         debug_assert_eq!(sz / PAGE_SIZE, object.frames.len());
         process
             .address_space
