@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.6005-alpha.2"
+version = "0.2.6059-alpha.2"
+
 
 
 
@@ -693,6 +694,9 @@ native_session_race_test = []
 fastlane_mapping_test = ["fastlane_channel_test"]
 fastlane_transfer_test = ["fastlane_doorbell_test"]
 fastlane_doorbell_test = ["fastlane_mapping_test", "dep:sunlight-fastlane-doorbell", "sunlight-fastlane-doorbell/fixture"]
+# M5R bounded diagnostics and explicit pre-repair interrupt-state control.
+fastlane_doorbell_trace = ["fastlane_doorbell_test"]
+fastlane_doorbell_if_control = ["fastlane_doorbell_trace"]
 # Bounded ownership observations only; absent from release and ordinary images.
 fastlane_census_trace = ["fastlane_mapping_test"]
 # Opt-in M3.1B page-table retention / VM teardown fixture. Observation only;

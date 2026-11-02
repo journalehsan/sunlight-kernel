@@ -91,6 +91,8 @@ pub mod accounting;
 mod doorbell_native;
 #[cfg(all(debug_assertions, any(feature = "native_doorbell_test", feature = "fastlane_doorbell_test")))]
 mod doorbell_stack;
+#[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+pub(crate) mod bell_trace;
 #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
 pub(crate) use doorbell_stack::on_kernel_stack as fastlane_bell_on_kernel_stack;
 #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
@@ -1798,6 +1800,8 @@ impl Scheduler {
                 #[cfg(feature = "scheduler_perf_diag")]
                 record_perf_dispatch(&self.processes[next], cpu_id);
                 let next_rsp = self.processes[next].context_rsp;
+                #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+                self.trace_bell_process("dispatch-idle", next, next_rsp, cpu_id as u64);
                 let next_stack_top = self.processes[next].kernel_stack_top;
                 let next_fs_base = self.processes[next].fs_base;
                 self.set_core_current_task(cpu_id, Some(next));
@@ -1878,6 +1882,8 @@ impl Scheduler {
         // Save interrupted context.
         unsafe { self.processes[current].fx_state.save() };
         self.processes[current].context_rsp = saved_rsp;
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+        self.trace_bell_process("save", current, saved_rsp, self.processes[current].state as u64);
         self.processes[current].fs_base =
             unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
         #[cfg(feature = "scheduler_timer_trace")]
@@ -1919,6 +1925,8 @@ impl Scheduler {
             #[cfg(feature = "scheduler_perf_diag")]
             record_perf_dispatch(&self.processes[next], cpu_id);
             let next_rsp = self.processes[next].context_rsp;
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+            self.trace_bell_process("dispatch", next, next_rsp, cpu_id as u64);
             let next_stack_top = self.processes[next].kernel_stack_top;
             let next_fs_base = self.processes[next].fs_base;
             let prev = current;

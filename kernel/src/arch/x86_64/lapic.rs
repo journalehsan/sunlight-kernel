@@ -217,9 +217,17 @@ pub unsafe fn mask_timer_for_remote_wake_test() {
 /// The source xAPIC must be initialized, the target must be online, and local
 /// interrupts must remain disabled. No scheduler, core or IPC guard may be held.
 pub unsafe fn send_fixed_ipi_bounded(cpu_id: usize, vector: u8) -> bool {
-    for _ in 0..4096 {
+    for _attempt in 0..4096 {
         if try_send_fixed_ipi(cpu_id, vector) {
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+            if crate::sched::bell_trace::active() {
+                crate::sched::bell_trace::event("icr-sent", 0, 0, 0, 0, cpu_id as u64, _attempt);
+            }
             return true;
+        }
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+        if _attempt == 0 && crate::sched::bell_trace::active() {
+            crate::sched::bell_trace::event("icr-busy", 0, 0, 0, 0, cpu_id as u64, 0);
         }
         core::hint::spin_loop();
     }

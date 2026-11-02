@@ -377,3 +377,15 @@ feature configuration; this is not a successful experimental release build.
 | Overall security and regression readiness | PARTIAL |
 | Production FastLane transfer | BLOCKED / DISABLED |
 | Commit, push, performance optimization | NOT_PERFORMED |
+
+
+## M5R follow-up and evidence availability (2026-11-02)
+
+The subsequent disk exhaustion and `cargo clean` deleted the `target/` evidence
+paths cited above, including both original M4 four-CPU failures. Their historical
+FAIL classifications remain. A demonstrated kernel continuation interrupt-state
+defect is repaired and fresh 2/4/12 validation passes. Exact attribution
+of both historical guests remains open; passing replacements cannot close them.
+New attempts are retained outside Cargo targets. See
+[M5R reconstruction and current decision](fastlane-m5r-native-doorbell-regression.md).
+Production FastLane remains disabled.

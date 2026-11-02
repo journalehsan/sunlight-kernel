@@ -804,8 +804,7 @@ pub unsafe extern "C" fn timer_entry() {
         "call timer_rust",
         // Save return value (new RSP) in r12 (callee-saved, preserved by timer_rust).
         "mov r12, rax",
-        // Set IF=1 in the CPU-pushed RFLAGS on the current stack.
-        // After 15 pushes, CPU RFLAGS is at rsp + 120 + 16 = rsp + 136.
+        // Hardware timer entry preserves the established runnable IF policy.
         "mov rbx, [rsp + 136]",
         "or rbx, 0x200",
         "mov [rsp + 136], rbx",
@@ -879,9 +878,12 @@ pub unsafe extern "C" fn reschedule_entry() {
         "mov rdi, r12",
         "call reschedule_rust",
         "mov r12, rax",
-        "mov rbx, [rsp + 136]",
-        "or rbx, 0x200",
-        "mov [rsp + 136], rbx",
+        // CPL0 Doorbell continuations must retain IF=0 until SYSRET.
+        // Hardware IRQs and initial runnable contexts already carry IF=1.
+        // Opt-in pre-repair control: never admitted to ordinary/release images.
+        ".if {if_control}",
+        "or qword ptr [rsp + 136], 0x200",
+        ".endif",
         "mov rax, r12",
         "test rax, rax",
         "jz 1f",
@@ -914,6 +916,7 @@ pub unsafe extern "C" fn reschedule_entry() {
         "iretq",
         handoff_slot = sym crate::sched::stack_handoff_slot,
         release_wake = sym crate::sched::pin_release_wake,
+        if_control = const cfg!(all(debug_assertions, feature = "fastlane_doorbell_if_control")) as u8,
     );
 }
 
@@ -932,6 +935,16 @@ extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
     let cpu_id = crate::sched::current_cpu_id();
     crate::sched::accounting::interrupt_entry(cpu_id);
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+    if let Some(i) = sched.current_process_index() {
+        // SAFETY: naked entry supplied the live 15-GPR plus CPU frame on
+        // this task's kernel stack; only read the two fixed scalar slots.
+        let (cs, flags) = unsafe {
+            let frame = saved_rsp as *const u64;
+            (frame.add(16).read(), frame.add(17).read())
+        };
+        sched.trace_bell_process("irq-frame", i, cs, flags);
+    }
     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
     crate::sched::remote_wake_test::on_tick(&mut sched, cpu_id);
     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
@@ -1229,9 +1242,9 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
     // intermittent GPF at the `iretq` instruction after long uptime).
     //
     // Interrupts are re-enabled atomically by `iretq` itself: every runnable
-    // context's saved RFLAGS has IF=1 (init_context writes 0x202; preempted
-    // frames are saved with IF set and the asm OR's 0x200 into the outgoing
-    // frame's RFLAGS as well). So leaving IF=0 here is correct and safe.
+    // userspace context has IF=1 (init_context writes 0x202 and hardware
+    // IRQs preserve interrupted flags). Software reschedules may instead save
+    // IF=0 for a CPL0 syscall continuation; that state must be preserved too.
     result
 }
 

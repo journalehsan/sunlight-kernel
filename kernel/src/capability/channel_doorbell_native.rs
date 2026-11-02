@@ -43,6 +43,9 @@ impl Scheduler {
             crate::sched::current_cpu_id(), u8::from(self.processes[i].state == ProcessState::BlockedOnIo),
             outcome.as_ref().err().map_or(0, |e| *e as u64), outcome.unwrap_or(0));
         self.wake_io_pid(who.pid as usize);
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+        self.trace_bell_process("wake-ready", i, self.processes[i].context_rsp,
+            u64::from(self.processes[i].owning_core) | (u64::from(self.processes[i].queued_on_core) << 8));
     }
 
     pub(crate) fn fastlane_bell_sweep(&mut self) {
@@ -232,6 +235,8 @@ impl Scheduler {
             super::bell_race::registered();
             self.processes[i].block_start_tick = self.global_tick;
             self.set_state(i, ProcessState::BlockedOnIo);
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+            self.trace_bell_process("wait-registered", i, observed, self.processes[i].context_rsp);
             crate::serial_println!(
                 "[FL-BELL] event=registered generation={} consumer={} inc={} vm={} cpu={}",
                 h.generation,

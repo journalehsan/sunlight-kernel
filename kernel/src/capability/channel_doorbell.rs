@@ -69,10 +69,16 @@ impl CapabilityBroker {
             );
         }
         let bell = row.bell.as_mut().unwrap();
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+        crate::sched::bell_trace::event("operation", h.generation, who.pid,
+            who.incarnation, who.vm_generation, op, observed);
         match op {
             10 => {
                 let effect = bell.notify(key(h), identity(who)).map_err(error)?;
                 let value = bell.snapshot(key(h), consumer).map_err(error);
+                #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+                crate::sched::bell_trace::event("publish-remove", h.generation, who.pid,
+                    who.incarnation, who.vm_generation, value.unwrap_or(u64::MAX), u64::from(effect.wake.is_some()));
                 // Exhaustion is terminal and MUST still deliver its wake.
                 Ok((value.unwrap_or(u64::MAX), effect.wake))
             }

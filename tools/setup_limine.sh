@@ -13,6 +13,7 @@ LIMINE_BRANCH="${2:-v8.x}"
 FREESTANDING_SHA256="b280df87c6db0f6ca1dd0a48579e694b403cb0fc77cf6df1e2ddbe69a134b405"
 STB_COMMIT="5c205738c191bcb0abc65c4febfa9bd25ff35234"
 STB_SHA256="594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3"
+DTC_COMMIT="2d10aa2afe35527728db30b35ec491ecb6959e5c"
 
 has_hash() {
     [[ -f "$1" ]] && [[ "$(sha256sum "$1" | cut -d' ' -f1)" == "$2" ]]
@@ -62,6 +63,48 @@ seed_bootstrap_files() {
     fi
 }
 
+# Bootstrap otherwise clones the entire DTC history from kernel.org with no
+# deadline. Seed its exact pinned checkout so bootstrap can work locally.
+seed_dtc() {
+    local dtc_dir="$LIMINE_DIR/dtc"
+    local remote
+
+    if [[ "$(<"$LIMINE_DIR/bootstrap")" != *"$DTC_COMMIT"* ]]; then
+        echo "[limine] Bootstrap DTC pin changed; update DTC_COMMIT before building." >&2
+        return 1
+    fi
+    if [[ -d "$dtc_dir/.git" ]] &&
+        git -C "$dtc_dir" cat-file -e "$DTC_COMMIT^{commit}" 2>/dev/null &&
+        git -C "$dtc_dir" rev-parse --verify HEAD >/dev/null 2>&1; then
+        echo "[limine] Reusing cached pinned DTC commit $DTC_COMMIT."
+        return
+    fi
+    if ! command -v timeout >/dev/null 2>&1; then
+        echo "[limine] GNU timeout is required for bounded dependency downloads." >&2
+        return 1
+    fi
+    if [[ ! -d "$dtc_dir/.git" ]]; then
+        if [[ -e "$dtc_dir" ]]; then
+            echo "[limine] Incomplete non-git DTC directory: $dtc_dir; move it aside and retry." >&2
+            return 1
+        fi
+        git init -q "$dtc_dir"
+    fi
+    for remote in https://github.com/dgibson/dtc.git https://git.kernel.org/pub/scm/utils/dtc/dtc.git; do
+        echo "[limine] Fetching pinned DTC from $remote (60-second limit)..."
+        if timeout --kill-after=5s 60s git -C "$dtc_dir" \
+            -c http.lowSpeedLimit=1024 -c http.lowSpeedTime=15 \
+            fetch --depth=1 "$remote" "$DTC_COMMIT" &&
+            git -C "$dtc_dir" cat-file -e "$DTC_COMMIT^{commit}" 2>/dev/null; then
+            git -C "$dtc_dir" checkout --detach "$DTC_COMMIT"
+            return
+        fi
+        echo "[limine] DTC fetch failed or timed out; trying the next mirror." >&2
+    done
+    echo "[limine] Unable to fetch pinned DTC; retry when a mirror is reachable." >&2
+    return 1
+}
+
 if limine_is_ready; then
     echo "[limine] Limine already built (BIOS + UEFI CD artifacts present)."
     exit 0
@@ -84,10 +127,14 @@ else
     echo "[limine] Resuming incomplete Limine setup (or adding missing UEFI CD artifact)..."
 fi
 
+# Bootstrap runs after pushd; dependency paths must stay anchored for callers
+# that supplied a relative Limine directory.
+LIMINE_DIR="$(cd "$LIMINE_DIR" && pwd)"
 seed_bootstrap_files
 
 pushd "$LIMINE_DIR" >/dev/null
 if [[ ! -x ./configure ]]; then
+    seed_dtc
     ./bootstrap
 fi
 # Rebuild with UEFI CD support so hybrid ISO generation matches Limine USAGE.md.

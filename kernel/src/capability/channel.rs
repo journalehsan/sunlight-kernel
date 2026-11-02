@@ -93,6 +93,10 @@ impl Channel {
     }
     pub(super) fn retire(&mut self, reason: Terminal) {
         if self.live() {
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+            crate::sched::bell_trace::event("close", self.handle.generation, self.creator.pid,
+                self.creator.incarnation, self.creator.vm_generation, reason as u64,
+                u64::from(self.bell.as_ref().is_some_and(|b| b.has_waiter())));
             #[cfg(any(test, feature = "fastlane_doorbell_test"))]
             if let Some(bell) = self.bell.as_mut() {
                 self.bell_pending = bell.revoke(super::channel_doorbell::key(self.handle), super::channel_doorbell::identity(self.creator)).expect("bound channel owner").wake;

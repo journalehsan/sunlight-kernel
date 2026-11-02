@@ -34,14 +34,49 @@ pub(crate) unsafe extern "C" fn on_kernel_stack(
         "xor eax, eax",
         "int {vector}",
         "2:",
+        ".if {trace}",
+        "mov rdi, rsp",
+        "pushfq",
+        "pop rsi",
+        "cli",
+        "push rax",
+        "sub rsp, 8",
+        "call {resume}",
+        "add rsp, 8",
+        "pop rax",
+        ".endif",
         "add rsp, 136",
         "pop rsp",
         "ret",
         flush = sym flush,
         stack_top = sym stack_top,
         fixture = sym fixture,
+        resume = sym resume,
+        trace = const cfg!(all(debug_assertions, feature = "fastlane_doorbell_trace")) as u8,
         vector = const crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
     );
+}
+
+extern "C" fn resume(_frame: &crate::arch::x86_64::syscall::SyscallFrame, _flags: u64) {
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+    {
+        let s = super::SCHEDULER.lock();
+        let p = s.current_process();
+        super::bell_trace::event(
+            "resume",
+            _frame.rsi,
+            p.pid,
+            p.foreground.incarnation,
+            p.address_space.identity().generation,
+            _flags,
+            _frame.rcx,
+        );
+        assert_eq!(
+            _flags & 0x200,
+            0,
+            "Doorbell kernel continuation resumed with IF set"
+        );
+    }
 }
 
 extern "C" fn stack_top() -> u64 {

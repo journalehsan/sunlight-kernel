@@ -54,6 +54,7 @@ def main():
     try:
         if args.section in ('build','production'):
             test=args.section=='build'
+            (ROOT/'target/x86_64-unknown-none/release').mkdir(parents=True,exist_ok=True)
             for package,binary in SERVICES.items():
                 cmd=['cargo','build','--locked','--offline','--release','-p',package]
                 if test and package=='sunlight-uac':cmd+=['--features','fastlane-transfer-test']

@@ -38,9 +38,13 @@ def main():
     p.add_argument('--cpus',nargs='+',type=int,choices=(2,4,12),default=[2]);p.add_argument('--image-manifest',type=Path)
     p.add_argument('--census-trace',action='store_true',help='debug-only bounded M3.1 observations; unchanged M1/M2 assessor')
     p.add_argument('--m31-retention',action='store_true',help='debug-only M3.1B page-table retention/teardown fixture (boot gate)')
+    p.add_argument('--if-control',action='store_true',help='pre-repair IF control; implies --doorbell-trace')
+    p.add_argument('--doorbell-trace',action='store_true',help='bounded debug-only M5R continuation and wake observations')
     p.add_argument('--evidence-root',type=Path,default=BASE);p.add_argument('--timeout',type=int,default=180)
     args=p.parse_args();out=args.evidence_root.resolve()/(args.section+'-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'));out.mkdir(parents=True)
     features=['fastlane_doorbell_test','key_inject']+(['fastlane_census_trace'] if args.census_trace else [])+(['fastlane_m31_retention_test'] if args.m31_retention else [])
+    if args.doorbell_trace or args.if_control:features+=['fastlane_doorbell_trace']
+    if args.if_control:features+=['fastlane_doorbell_if_control']
     summary={'milestone':'M4','status':'RUNNING','revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
              'source_sha256':sources(),'checks':[],'native':[],'production_fastlane':'BLOCKED'}
     def save():(out/'validation-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
@@ -54,6 +58,7 @@ def main():
     try:
         if args.section in ('build','production'):
             test=args.section=='build'
+            (ROOT/'target/x86_64-unknown-none/release').mkdir(parents=True,exist_ok=True)
             for package,binary in SERVICES.items():
                 cmd=['cargo','build','--locked','--offline','--release','-p',package]
                 if test and package=='sunlight-uac':cmd+=['--features','fastlane-doorbell-test']

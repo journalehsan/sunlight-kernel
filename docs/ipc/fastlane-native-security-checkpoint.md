@@ -768,3 +768,29 @@ defects merely because an old report uses BLOCKED:
 Security boundaries remain intact. Mandatory A properties are requirements for
 the proposed channel, not waived by calling it experimental. Production remains
 disabled while that channel and the independent B gates are incomplete.
+
+
+## M5R interrupt-state audit update (2026-11-02)
+
+The authenticated M5 single-message backend remains kernel-mediated and debug
+only. M5R introduces no transfer functionality, mapping rights, bearer authority,
+queue capacity or performance work. M1 exact identity/role/lifecycle admission,
+M2 asymmetric NX views, M3 private-copy stability (without coherence/authenticity),
+M4 conditional notification semantics and M5 one-publication admission remain
+unchanged by the correction.
+
+The reschedule epilogue used to force IF on in a suspended CPL0 Doorbell
+continuation. A native diagnostic observed IF set before returning to the private
+userspace syscall stack. The minimal correction preserves saved RFLAGS until
+SYSRET. Diagnostic/control code is opt-in behind experimental features implying
+the existing debug-only release guard. No scheduler selection policy, hot-path
+lock, timeout or lifecycle acceptance threshold is changed. Production marker,
+symbol, release and native regression outcomes must be read from the fresh M5R
+report, not inferred from this source audit.
+
+The disk incident removed original M4/M5 artifacts under `target/`, including
+the two unexplained four-CPU failures. Their attribution and preservation criteria
+therefore remain unsatisfied. See [M5R audit and native matrix](fastlane-m5r-native-doorbell-regression.md).
+M5R remains PARTIAL; production FastLane remains disabled. Historical global
+SHM drift, M1 debug rendezvous timeout and unavailable Miri retain independent
+open/NOT_RUN classifications.
