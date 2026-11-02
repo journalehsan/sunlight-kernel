@@ -1,8 +1,62 @@
 # FastLane native architecture and security checkpoint
 
-2026-11-01, Asia/Tehran. **The first secure native payload channel is NOT READY.**
+2026-11-02, Asia/Tehran. **Production readiness remains BLOCKED.**
 Production FastLane, production Restricted SHM and public Doorbell remain disabled.
 No commit or push is performed.
+
+## M5 first authenticated native transfer
+
+The [M5 report](fastlane-m5-authenticated-transfer.md) records the first gated
+single-message native path. Two independently Account-authenticated userspace
+VMs use actual M2 backing with the unchanged M3.2 private-copy representation
+and authenticated M4 notification. Only descriptor zero and a 256-byte payload
+are admitted. A private per-channel publication/acknowledgement state allows
+one message in the entire channel lifetime; direct shared cursor forgery cannot
+admit another publication. Per-word native admission serializes actual access
+against mapping withdrawal under the existing lifecycle locks. The backend is
+kernel-mediated; no unsafe shared references or performance claim are introduced.
+Private copying, validation and application examination run in the consumer VM.
+
+Memory safety and snapshot stability do not provide coherent publication or
+application authenticity. The producer retains a writable alias. A native
+interleaving deliberately changes payload/metadata between consumer loads and
+returns a stable mixed snapshot with both stronger integrity claims false.
+The M5 report and source-bound aggregate distinguish functional completion from
+overall readiness, retain every failed attempt, and track the exact 2/4/12
+matrix plus per-object retirement. Historical census drift, the M1 debug
+rendezvous timeout and unavailable Miri remain separate. A fresh M4 4-CPU producer-exit run also ends in an
+unexplained instruction-fetch fault at `rip=0` before guest completion; its
+failed attempt remains a distinct blocker even if an identical-image replay
+passes. A newly reproduced
+required regression failure keeps overall readiness PARTIAL even if the final
+M5 transfer matrix passes. Production transfer remains disabled.
+
+Earlier sections below describe their named milestone snapshots. In particular,
+M3.2's historical host-only linkage and absent native transfer statements do not
+describe M5's optional userspace dependency. The kernel still does not link Ring.
+The older proposed milestone numbering in this checkpoint is historical; the
+current M5 task means the first authenticated message transfer, with production
+prerequisites still separate.
+
+## M4 authenticated Doorbell integration
+
+The [M4 report](fastlane-m4-authenticated-doorbell.md) records the opt-in native
+notification adapter bound to M1's existing broker channel, independently
+Account-authenticated userspace actors, scheduler wake/park integration and
+lifecycle accounting. **M4 notification functionality is COMPLETE**: final-source
+authenticated userspace validation passes on 2/4/12 CPUs, with six forced
+cross-CPU race orders, 32 physical parks and 32 collected completions per guest,
+plus confirmed withdrawal for a killed blocked consumer. All 33 broader native
+regression guests, M3.1B repaired/pre-repair control matrices, host checks,
+ordinary production-image exclusion and the supported release build pass.
+Overall regression readiness remains **PARTIAL** because historical failures
+are still unresolved; these new passes do not close them. Production FastLane
+remains disabled and no Ring payload transfer is added. M3.2's memory safety
+and private snapshot stability do not imply coherent publication or application
+authenticity. Historical census failures and the M1 debug rendezvous timeout
+remain open; M4 functionality and overall regression readiness are separate
+decisions. Earlier statements below about absent userspace Doorbell describe
+their historical milestone snapshots, not this new opt-in experiment.
 
 ## M3.2 message-integrity contract
 
@@ -20,6 +74,15 @@ documented and deferred, not implemented. `fastlane-ring` is a host-only crate
 not linked by the kernel; the M3.1B page-table reclamation repair, M1 authority,
 M2 mapping rights and SHM/TLB ordering are unchanged. No native ring workload or
 userspace Doorbell runs, and production FastLane remains disabled.
+
+The November 2 review adds a forced host writer/acquirer interleaving that
+returns bytes which never existed together in shared storage, while correctly
+reporting stability and no coherent publication. It also checks the final slot
+generation before sequence exhaustion and documents `try_recv`'s identical
+contract and possible output modification on release failure. Host injected
+retirement errors are not native exit-during-transfer evidence: that matrix is
+NOT_RUN. Native operation admission, commit/retirement serialization and access
+quiescence before unmap remain required before the first payload experiment.
 
 ## M3.1 bounded census attribution — PARTIAL
 

@@ -3370,6 +3370,7 @@ dependencies = [
  "linked_list_allocator",
  "password-hash",
  "sun-font",
+ "sunlight-fastlane-ring",
  "sunlight-fs",
  "sunlight-ipc",
  "sunlight-libc",

@@ -22,6 +22,8 @@ impl Scheduler {
     /// Expiry, logical death, image replacement, session withdrawal and explicit
     /// revoke all converge here before another view can be admitted.
     pub(crate) fn fastlane_mapping_sweep(&mut self) {
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+        self.fastlane_bell_sweep();
         if !ACTIVE.load(Ordering::Acquire) {
             return;
         }

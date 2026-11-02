@@ -451,6 +451,11 @@ impl<M: Memory> Consumer<M> {
         })
     }
 
+    /// Copy into caller-owned storage with [`Integrity::PRIVATE_COPY`], exactly
+    /// as for [`Self::try_read`]. Success does not establish coherent publication
+    /// or authenticity. Validate only the private output, never the shared page.
+    /// If reclamation fails after copying, output may have changed despite an
+    /// error; the local endpoint is terminal and must not retry publication.
     pub fn try_recv(&mut self, out: &mut [u8]) -> Result<usize, Error> {
         let lease = self.try_read()?;
         let len = lease.payload().len();

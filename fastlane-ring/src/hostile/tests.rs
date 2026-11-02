@@ -1,6 +1,10 @@
 use super::*;
 use core::{cell::Cell, mem};
-use std::{sync::Barrier, thread};
+use std::{
+    sync::{mpsc, Barrier},
+    thread,
+    time::Duration,
+};
 
 fn pair(pages: &AtomicPages) -> (Producer<View<'_>>, Consumer<View<'_>>) {
     (
@@ -635,6 +639,87 @@ fn mixed_snapshot_is_stable_bounded_and_not_reported_as_coherent() {
         "a mixed snapshot must not be reported as a coherent committed message"
     );
     r.release().unwrap();
+}
+
+struct PausedCopy<'a> {
+    view: View<'a>,
+    acquired: mpsc::Sender<()>,
+    mutated: mpsc::Receiver<()>,
+}
+
+impl Memory for PausedCopy<'_> {
+    fn load(&self, region: Region, word: usize) -> Result<u64, Error> {
+        let value = self.view.load(region, word)?;
+        if region == Region::Payload && word == 0 {
+            self.acquired.send(()).unwrap();
+            self.mutated.recv_timeout(Duration::from_secs(5)).unwrap();
+        }
+        Ok(value)
+    }
+
+    fn store(&self, region: Region, word: usize, value: u64) -> Result<(), Error> {
+        self.view.store(region, word, value)
+    }
+}
+
+#[test]
+fn concurrent_copy_can_return_bytes_that_never_existed_together() {
+    let pages = AtomicPages::new();
+    let (mut producer, _) = pair(&pages);
+    producer.try_send(&[0x11; 16]).unwrap();
+    let (acquired, first_word) = mpsc::channel();
+    let (mutated, resume) = mpsc::channel();
+    let mut consumer = Consumer::new(
+        PausedCopy {
+            view: pages.view(Role::Consumer),
+            acquired,
+            mutated: resume,
+        },
+        7,
+    )
+    .unwrap();
+
+    thread::scope(|scope| {
+        let hostile_pages = &pages;
+        let writer = scope.spawn(move || {
+            first_word.recv_timeout(Duration::from_secs(5)).unwrap();
+            put(hostile_pages, Region::Payload, 0, u64::MAX);
+            put(hostile_pages, Region::Payload, 1, u64::MAX);
+            put(hostile_pages, Region::Producer, 4, u64::MAX);
+            put(hostile_pages, Region::Producer, 5, u64::MAX);
+            mutated.send(()).unwrap();
+        });
+        let read = consumer.try_read().unwrap();
+        writer.join().unwrap();
+        let mut expected = [0xff; 16];
+        expected[..8].fill(0x11);
+        assert_eq!(read.payload(), expected);
+        assert!(read.integrity().memory_safe());
+        assert!(read.integrity().snapshot_stable());
+        assert!(!read.integrity().coherent_publication());
+        assert!(!read.integrity().application_authenticated());
+        put(&pages, Region::Payload, 0, 0);
+        put(&pages, Region::Payload, 1, 0);
+        assert_eq!(read.payload(), expected);
+        read.release().unwrap();
+    });
+}
+
+#[test]
+fn slot_generation_is_bounded_by_nonwrapping_sequence() {
+    let last = Identity::new(7, u64::MAX - 1).unwrap();
+    assert_eq!(last.generation, u64::MAX / CAPACITY as u64 + 1);
+    assert_eq!(Identity::new(7, u64::MAX), Err(Error::Exhausted));
+    for generation in [0, last.generation - 1, last.generation + 1, u64::MAX] {
+        assert_eq!(
+            last.validate([7, last.sequence, generation, last.offset() as u64, 0]),
+            Err(Error::Identity)
+        );
+    }
+    assert_eq!(
+        last.validate([7, last.sequence, last.generation, last.offset() as u64, 0]),
+        Ok(0)
+    );
 }
 
 #[test]

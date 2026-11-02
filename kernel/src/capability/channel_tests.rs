@@ -41,6 +41,57 @@ fn pair(b: &mut CapabilityBroker, s: SessionRef) -> Handle {
     b.channel_create(h, id(10), receipt, 2).unwrap();
     h
 }
+
+#[test]
+fn authenticated_bell_roles_ordering_terminal_and_reuse() {
+    let (mut b, s) = setup();
+    for cycle in 0..1000 {
+        let h = pair(&mut b, s);
+        assert_eq!(b.channel_bell(h, id(10), 10, 0), Err(Error::Incomplete));
+        b.channel_attach(h, id(10), 0, 2).unwrap();
+        b.channel_attach(h, id(11), 1, 2).unwrap();
+        for (op, caller) in [(10, id(11)), (11, id(10)), (12, id(10)), (14, id(11))] {
+            assert_eq!(b.channel_bell(h, caller, op, 0), Err(Error::Denied));
+        }
+        for op in [10, 11, 12, 14] {
+            for who in [id(12), RecipientIdentity { incarnation: 999, ..id(10) }, RecipientIdentity { vm_generation: 999, ..id(11) }] {
+                assert_eq!(b.channel_bell(h, who, op, 0), Err(Error::Denied));
+            }
+        }
+        let stale = Handle { generation: h.generation + 1, ..h };
+        assert_eq!(b.channel_bell(stale, id(10), 10, 0), Err(Error::Stale));
+        assert_eq!(b.channel_bell(h, id(10), 10, 0), Ok((1, None)));
+        assert_eq!(b.channel_bell(h, id(11), 12, 0), Err(Error::Changed));
+        b.channel_bell(h, id(11), 12, 1).unwrap();
+        assert_eq!(b.channel_bell(h, id(10), 14, 0), Ok((0, Some(super::super::channel_doorbell::identity(id(11))))));
+        assert_eq!(b.channel_bell(h, id(10), 14, 0), Ok((0, None)));
+        b.channel_bell(h, id(11), 12, 1).unwrap();
+        b.channel_revoke(h, id(10)).unwrap();
+        assert_eq!(b.channel_bell(h, id(11), 12, 1), Err(Error::Terminal));
+        let row = b.channels.row_mut(h).unwrap();
+        assert!(!row.bell.as_ref().unwrap().has_waiter());
+        assert_eq!(row.bell_pending.take(), Some(super::super::channel_doorbell::identity(id(11))));
+        assert_eq!(b.channels.live_count(), 0);
+        assert_eq!(b.channels.rows.len(), 1);
+        assert_eq!(h.generation, cycle + 1);
+    }
+}
+
+#[test]
+fn bell_exhaustion_never_wraps_and_retirement_preserves_wake() {
+    let (mut b, s) = setup();
+    let h = pair(&mut b, s);
+    b.channel_attach(h, id(10), 0, 2).unwrap();
+    b.channel_attach(h, id(11), 1, 2).unwrap();
+    b.channel_bell(h, id(11), 11, 0).unwrap();
+    b.channels.row_mut(h).unwrap().bell.as_mut().unwrap().fixture_sequence(u64::MAX - 1);
+    assert_eq!(b.channel_bell(h, id(10), 10, 0), Ok((u64::MAX, None)));
+    b.channel_bell(h, id(11), 12, u64::MAX).unwrap();
+    assert_eq!(b.channel_bell(h, id(10), 10, 0).unwrap().1, Some(super::super::channel_doorbell::identity(id(11))));
+    assert_eq!(b.channel_bell(h, id(11), 11, 0), Err(Error::Exhausted));
+    assert_eq!(b.channel_bell(h, id(10), 10, 0), Err(Error::Exhausted));
+    assert!(!b.channels.row_mut(h).unwrap().bell.as_ref().unwrap().has_waiter());
+}
 #[test]
 fn independent_roles_are_recipient_bound_and_once_only() {
     let (mut b, s) = setup();

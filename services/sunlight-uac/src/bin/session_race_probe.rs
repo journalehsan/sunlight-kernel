@@ -351,6 +351,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let count = unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 64) };
     assert!(count >= 2, "case required");
     let case = args[1];
+    #[cfg(feature = "fastlane-doorbell-test")]
+    if case == "FL-M4" { channel_fixture::doorbell::supervisor(); }
+    #[cfg(feature = "fastlane-transfer-test")]
+    if case == "FL-M5" { channel_fixture::transfer::supervisor(); }
     #[cfg(feature = "fastlane-mapping-test")]
     if case == "FL-M2" { channel_fixture::mapping::supervisor(); }
     #[cfg(feature = "fastlane-channel-test")]

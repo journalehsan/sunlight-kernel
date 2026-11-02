@@ -1,5 +1,5 @@
-//! Authority only. All native callers hold SCHEDULER -> CAP_BROKER.
-//! No mappings, data, waits, callbacks or new locks. An object handle is never
+//! M1 authority, with separately gated M2 backing and M4 notification state.
+//! All native callers hold SCHEDULER -> CAP_BROKER. An object handle is never
 //! bearer authority: each operation also checks its immutable recipient/role.
 use super::{CapabilityBroker, CapabilityToken, RecipientIdentity};
 use alloc::vec::Vec;
@@ -17,6 +17,12 @@ pub(crate) enum Error {
     Capacity = 5,
     Exhausted = 6,
     Incomplete = 7,
+    #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+    Cancelled = 9,
+    #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+    Changed = 10,
+    #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+    Pending = 11,
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Handle {
@@ -71,6 +77,13 @@ pub(super) struct Channel {
     pub deadline: u64,
     // Kernel-private SHM identities; never exported as bearer grants.
     pub backing: [Option<CapabilityToken>; 3],
+    // M5 single use: 0 writable, 1 published, 2 acknowledged. Never reset.
+    #[cfg(feature = "fastlane_transfer_test")]
+    pub transfer: u8,
+    #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+    pub bell: Option<sunlight_fastlane_doorbell::Doorbell>,
+    #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+    pub bell_pending: Option<sunlight_fastlane_doorbell::Identity>,
     #[cfg(any(test, feature = "fastlane_mapping_test"))]
     pub mapped: [[bool; 3]; 2],
 }
@@ -80,6 +93,10 @@ impl Channel {
     }
     pub(super) fn retire(&mut self, reason: Terminal) {
         if self.live() {
+            #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+            if let Some(bell) = self.bell.as_mut() {
+                self.bell_pending = bell.revoke(super::channel_doorbell::key(self.handle), super::channel_doorbell::identity(self.creator)).expect("bound channel owner").wake;
+            }
             self.terminal = Some(reason);
             self.state = State::Retired;
         }
@@ -177,7 +194,11 @@ impl CapabilityBroker {
         if self.channels.occupied(producer) {
             return Err(Error::Duplicate);
         }
-        let slot = self.channels.rows.iter().position(|r| !r.live() && r.backing.iter().all(Option::is_none));
+        let slot = self.channels.rows.iter().position(|r| {
+            #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+            if r.bell_pending.is_some() { return false; }
+            !r.live() && r.backing.iter().all(Option::is_none)
+        });
         if slot.is_none() && self.channels.rows.len() >= LIMIT {
             return Err(Error::Capacity);
         }
@@ -217,6 +238,12 @@ impl CapabilityBroker {
             terminal: None,
             deadline,
             backing: [None; 3],
+            #[cfg(feature = "fastlane_transfer_test")]
+            transfer: 0,
+            #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+            bell: None,
+            #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+            bell_pending: None,
             #[cfg(any(test, feature = "fastlane_mapping_test"))]
             mapped: [[false; 3]; 2],
         };

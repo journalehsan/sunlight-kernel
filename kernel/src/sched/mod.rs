@@ -89,8 +89,12 @@
 pub mod accounting;
 #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
 mod doorbell_native;
+#[cfg(all(debug_assertions, any(feature = "native_doorbell_test", feature = "fastlane_doorbell_test")))]
+mod doorbell_stack;
+#[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+pub(crate) use doorbell_stack::on_kernel_stack as fastlane_bell_on_kernel_stack;
 #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
-pub(crate) use doorbell_native::on_kernel_stack as doorbell_fixture_on_kernel_stack;
+pub(crate) use doorbell_stack::on_kernel_stack as doorbell_fixture_on_kernel_stack;
 #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
 pub(crate) mod doorbell_state;
 #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
@@ -2514,6 +2518,8 @@ impl Scheduler {
         if self.processes[idx].state == ProcessState::BlockedOnIo {
             #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
             self.doorbell_spurious_wake(idx);
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+            self.fastlane_bell_spurious(idx);
             let ticks_blocked = self
                 .global_tick
                 .saturating_sub(self.processes[idx].block_start_tick);
@@ -2550,6 +2556,8 @@ impl Scheduler {
         };
         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
         self.doorbell_spurious_wake(idx);
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+        self.fastlane_bell_spurious(idx);
         match self.processes[idx].state {
             ProcessState::BlockedOnIpc
             | ProcessState::BlockedOnTimer
@@ -4274,7 +4282,13 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     )))]
     let mut sched = SCHEDULER.lock();
     #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+    #[allow(unused_mut)]
     let (mut sched, channel_exit_actor) = crate::capability::channel_race::acquire(if reason == "exit" {20} else {0}, 0);
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    let (mut sched, bell_exit_actor) = {
+        drop(sched);
+        crate::capability::bell_race::acquire(if reason == "exit" {20} else {0}, 0)
+    };
     #[cfg(feature = "authenticated_completion_exit_test")]
     let (mut sched, exit_selected) =
         crate::capability::completion_exit::acquire(crate::capability::completion_exit::EXIT, 0);
@@ -4404,6 +4418,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     );
     #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
     crate::capability::channel_race::finished(channel_exit_actor, 0);
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    crate::capability::bell_race::finished(bell_exit_actor, 0);
     idle_top
 }
 

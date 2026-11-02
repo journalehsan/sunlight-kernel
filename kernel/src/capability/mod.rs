@@ -1,7 +1,15 @@
 #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
 pub(crate) mod channel;
+#[cfg(any(test, all(debug_assertions, feature = "fastlane_doorbell_test")))]
+pub(crate) mod channel_doorbell;
+#[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+pub(crate) mod channel_doorbell_native;
+#[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+pub(crate) mod bell_race;
 #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
 pub(crate) mod channel_mapping;
+#[cfg(all(debug_assertions, feature = "fastlane_transfer_test"))]
+mod channel_transfer;
 #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
 mod channel_native;
 #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]

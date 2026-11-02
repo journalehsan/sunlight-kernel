@@ -135,7 +135,7 @@ fn map(h: fl::Handle, role: u64, region: u64) -> u64 {
 fn actor_map(a: Actor, h: fl::Handle, role: u64, region: u64) -> u64 {
     expect(a, 8, h, role * 3 + region, 0).words[1]
 }
-fn census(checkpoint: u64) {
+pub(super) fn census(checkpoint: u64) {
     let start = sunlight_ipc::monotonic_millis();
     loop {
         let snapshot = fl::call(9, fl::EMPTY, checkpoint, fl::NO_SESSION).unwrap();

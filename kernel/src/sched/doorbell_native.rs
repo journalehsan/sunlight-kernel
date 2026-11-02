@@ -2,49 +2,6 @@ use super::doorbell_state::{Completion, ConditionalWait, Handle, Outcome, Regist
 use super::{current_cpu_id, request_park_after_sysret, ProcessState, Scheduler};
 use sunlight_fastlane_doorbell::{Error, Identity};
 
-#[unsafe(naked)]
-pub(crate) unsafe extern "C" fn on_kernel_stack(
-    _frame: &mut crate::arch::x86_64::syscall::SyscallFrame,
-) -> u64 {
-    core::arch::naked_asm!(
-        "push rdi",
-        "call {stack_top}",
-        "pop rdi",
-        "mov r11, rsp",
-        "mov rsp, rax",
-        "sub rsp, 256",
-        "and rsp, -16",
-        "push r11",
-        "sub rsp, 136",
-        "mov rsi, rdi",
-        "mov rdi, rsp",
-        "mov ecx, 15",
-        "cld",
-        "rep movsq",
-        "mov rdi, rsp",
-        "call {fixture}",
-        "test rax, rax",
-        "jnz 2f",
-        "cmp qword ptr [rsp + 40], 0",
-        "jne 2f",
-        "int {vector}",
-        "2:",
-        "add rsp, 136",
-        "pop rsp",
-        "ret",
-        stack_top = sym stack_top,
-        fixture = sym fixture,
-        vector = const crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
-    );
-}
-
-extern "C" fn stack_top() -> u64 {
-    super::SCHEDULER.lock().current_process().kernel_stack_top
-}
-
-extern "C" fn fixture(frame: &crate::arch::x86_64::syscall::SyscallFrame) -> u64 {
-    super::doorbell_test::syscall(frame.rdi)
-}
 
 impl Scheduler {
     pub(super) fn doorbell_identity(&self, index: usize) -> Result<Identity, Error> {

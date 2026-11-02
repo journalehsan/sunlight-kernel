@@ -192,6 +192,8 @@ pub struct Process {
     pub ipc_endpoint: Option<u32>,
     #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
     pub(crate) doorbell_wait: Option<crate::sched::doorbell_state::Registration>,
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    pub(crate) fastlane_bell: Option<crate::capability::channel_doorbell_native::Receipt>,
     /// A synchronous call has exactly one terminal outcome. The scheduler lock
     /// serializes reply, deadline, cancel, and peer-close transitions; the call
     /// generation rejects stale timer entries and late replies.
@@ -475,6 +477,8 @@ impl Process {
             ipc_endpoint: None,
             #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
             doorbell_wait: None,
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+            fastlane_bell: None,
             ipc_reply: None,
             pending_call: None,
             ipc_call_outcome: None,
@@ -664,6 +668,8 @@ impl Process {
             ipc_endpoint: None,
             #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
             doorbell_wait: None,
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+            fastlane_bell: None,
             ipc_reply: None,
             pending_call: None,
             ipc_call_outcome: None,

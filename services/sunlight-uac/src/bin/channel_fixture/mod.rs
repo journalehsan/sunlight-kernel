@@ -1,6 +1,10 @@
 //! Authenticated userspace actors using ordinary IPC for coordination.
 #[cfg(feature = "fastlane-mapping-test")]
 pub(super) mod mapping;
+#[cfg(feature = "fastlane-doorbell-test")]
+pub(super) mod doorbell;
+#[cfg(feature = "fastlane-transfer-test")]
+pub(super) mod transfer;
 use sunlight_ipc::{fastlane_authority as fl, CapabilityToken, EndpointId, IpcMsg};
 const HELLO: u64 = 0xF1C110;
 const CMD: u64 = 0xF1C111;
@@ -59,6 +63,8 @@ fn result(r: Result<u64, fl::Error>) -> (u64, u64) {
     }
 }
 pub fn actor(args: &[&str]) -> ! {
+    #[cfg(feature = "fastlane-doorbell-test")]
+    if args.len() > 3 { doorbell::pin(args[3].parse().unwrap()); }
     let parent = CapabilityToken(args[2].parse().unwrap());
     let ep = sunlight_ipc::endpoint_create();
     let send = sunlight_ipc::endpoint_bind(ep.0);
@@ -66,6 +72,8 @@ pub fn actor(args: &[&str]) -> ! {
         sunlight_ipc::ipc_call_timeout(parent, IpcMsg::with_label(HELLO).with_cap(0, send), 5000)
             .unwrap();
     assert_eq!(hello.label, HELLO);
+    #[cfg(feature = "fastlane-transfer-test")]
+    let mut transfer = transfer::Endpoint::new();
     loop {
         let m = sunlight_ipc::ipc_recv_timeout(ep, 10000).expect("actor command");
         assert_eq!(m.label, CMD);
@@ -74,6 +82,20 @@ pub fn actor(args: &[&str]) -> ! {
             generation: m.words[2],
         };
         match m.words[0] {
+            #[cfg(feature = "fastlane-transfer-test")]
+            op @ 60..=69 => transfer.command(op, h, m.words[3], parent),
+            #[cfg(feature = "fastlane-doorbell-test")]
+            op @ 40..=47 => {
+                let (code, value) = result(fl::operate(op - 30, h, m.words[3]));
+                reply(code, value, 0);
+            }
+            #[cfg(feature = "fastlane-doorbell-test")]
+            33 => {
+                reply(0, 0, 0);
+                sunlight_libc::kill(m.words[3], 18).expect("OS-authorized cancellation signal");
+            }
+            #[cfg(feature = "fastlane-doorbell-test")]
+            30 | 32 => doorbell::actor_command(m.words[0], h, m.words[3], parent),
             #[cfg(feature = "fastlane-mapping-test")]
             op @ 20..=25 => mapping::actor_command(op, h, m.words[3]),
             EXIT => {
@@ -168,6 +190,11 @@ pub fn replaced(args: &[&str]) -> ! {
     };
     assert_eq!(fl::operate(3, h, 1), Err(fl::Error::Terminal));
     assert_eq!(fl::operate(2, h, 0), Err(fl::Error::Denied));
+    #[cfg(feature = "fastlane-doorbell-test")]
+    {
+        assert_eq!(fl::operate(11, h, 0), Err(fl::Error::Denied));
+        assert_eq!(fl::doorbell_wait(h, 0), Err(fl::Error::Denied));
+    }
     note("replacement-denied", 0);
     sunlight_libc::exit(0)
 }

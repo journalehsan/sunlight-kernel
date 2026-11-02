@@ -373,7 +373,11 @@ fn send_signal_generation(
 
     #[cfg(feature = "native_session_h4_test")]
     crate::capability::session_h4::signal_attempt(pid, signal as u64, generation);
+    #[cfg(not(all(debug_assertions, feature = "fastlane_doorbell_test")))]
     let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    let (mut sched, bell_signal_actor) = crate::capability::bell_race::acquire(
+        if matches!(signal, Signal::SIGCONT) {98} else {0}, pid as u64);
     let Some(idx) = sched.process_index_by_pid(pid) else {
         return Err(());
     };
@@ -443,6 +447,8 @@ fn send_signal_generation(
     if let Some(cpu) = sched.live_owner_core(idx) {
         crate::sched::request_reschedule_on(cpu);
     }
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    crate::capability::bell_race::finished(bell_signal_actor, 0);
     Ok(())
 }
 
@@ -860,6 +866,19 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         0xf1a0 => unsafe { crate::sched::doorbell_fixture_on_kernel_stack(frame) },
         #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
         0xf1c1 => sys_fastlane_channel(frame),
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+        0xf1c2 => unsafe { crate::sched::fastlane_bell_on_kernel_stack(frame) },
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+        0xf1c3 => {
+            // Fixture placement only; no channel state or role is installed.
+            let mut sched = sched::SCHEDULER.lock();
+            let p = sched.current_process_mut();
+            if frame.rdi <= 1 && p.uid == 0 && matches!(p.name_str(), "session-racer" | "session-race-probe") {
+                p.cpu_mask = 1 << frame.rdi;
+                sched::request_park_after_sysret();
+                0
+            } else { u64::MAX }
+        },
         22 => thread_spawn(frame, false),
         #[cfg(feature = "scheduler_guest_bench")]
         0x5342 => crate::scheduler_bench_diag::syscall(frame.rdi, frame.rsi),
@@ -11967,6 +11986,27 @@ fn sys_svga_set_mode(frame: &mut SyscallFrame) -> u64 {
 #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
 fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
     use crate::capability::{channel::Handle, CapabilityToken};
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    if matches!(frame.rdi, 10 | 11 | 13 | 14 | 15 | 16 | 17) {
+        let (mut sched, actor) = crate::capability::bell_race::acquire(frame.rdi, frame.rdx);
+        let result = sched.fastlane_bell(frame.rdi, Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.r10);
+        crate::capability::bell_race::finished(actor, result.as_ref().err().map_or(0, |e| *e as u64));
+        return match result {
+            Ok(value) => { frame.rsi = value; 0 }
+            Err(e) => { frame.rsi = 0; e as u64 }
+        };
+    }
+    #[cfg(all(debug_assertions, feature = "fastlane_transfer_test"))]
+    if matches!(frame.rdi, 18 | 19) {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        return match sched.fastlane_word(
+            Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx },
+            frame.rdi == 19, frame.r10, frame.r8,
+        ) {
+            Ok(value) => { frame.rsi = value; 0 }
+            Err(e) => { frame.rsi = 0; e as u64 }
+        };
+    }
     #[allow(unused_mut)]
     let (mut sched, actor) = crate::capability::channel_race::acquire(frame.rdi, frame.rdx);
     #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]

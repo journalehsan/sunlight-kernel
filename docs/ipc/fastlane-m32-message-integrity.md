@@ -1,10 +1,14 @@
 # FastLane M3.2 message integrity and hostile-producer contract
 
-2026-11-01, Asia/Tehran. Production FastLane remains disabled. This milestone
+2026-11-02, Asia/Tehran. Production FastLane remains disabled. This milestone
 adds an explicit message-integrity contract and the smallest safe representation
 change that lets a future native transfer be built on top of it. There is no
 native ring attachment, native payload transfer, userspace Doorbell, resizing,
 reconnect or production enablement. No commit or push.
+
+**Overall status: PARTIAL.** Memory safety and snapshot stability are provided
+by the host representation. Coherent publication is explicitly not provided.
+Historical failed native attempts remain failed regardless of later replays.
 
 It preserves the completed M3.1B page-table reclamation repair
 (`free_shared_page` reclaiming an empty lower table after the synchronous leaf
@@ -25,6 +29,10 @@ The private-copy representation therefore gives **transport safety** — bounded
 access and a stable private copy — but **not transport coherence**. The two must
 not be conflated: stability says "the returned bytes will not change under you",
 not "the returned bytes were a single committed transaction".
+
+M1 authenticates channel participants, not a particular payload observation.
+Application parsing of the private copy can reject invalid content but cannot
+recover a coherent publication guarantee from structurally valid mixed bytes.
 
 ## Phase B: path selection
 
@@ -98,7 +106,7 @@ Preserved invariants:
 |---|---|
 | Explicit ownership transitions | Commit via the `WriteLease`; reclamation via the `ReadLease`; Drop publishes/reclaims nothing |
 | Bounded payload sizes | Fixed 16 x 256 page; length checked against `PAYLOAD_BYTES`; `offset + length` checked in `u64` before any conversion |
-| Fallible allocation | No heap allocation; a lease carries a fixed private array. Failure paths are terminal, never a panic or retry |
+| Fallible allocation | No heap allocation; a lease carries a fixed private array. Future native backing allocation retains M2's fallible reservations |
 | Safe slot reuse | Whole reused slot is rewritten from private staging, so no stale or uninitialized byte is exposed beyond `len` |
 | No exposure of uninitialized bytes | Private staging starts zeroed; copies fill complete words; `bytes[len..]` is cleared |
 | No unbounded waiting on hostile state | No spin, lock or retry on peer bytes; one bounded descriptor/cursor observation per operation |
@@ -128,6 +136,32 @@ The mixed-snapshot tests assert `snapshot_stable() == true` **and**
 `coherent_publication() == false`. A stable but mixed snapshot is therefore
 never reported as a coherent committed message. A `compile_fail` doctest proves
 the stronger claim cannot be forged from outside the module.
+
+`concurrent_copy_can_return_bytes_that_never_existed_together` additionally
+forces the actual host writer thread between the consumer's first and second
+payload loads. Shared words change from `(old, old)` through `(new, old)` to
+`(new, new)`, while the receive returns `(old, new)`. Those returned bytes never
+existed together in transport storage. The writer also corrupts length and
+offset after validation; copying still uses the validated local bounds. Further
+writes cannot change the private result, whose coherence claim remains false.
+Test rendezvous use bounded host waits; the representation itself never waits.
+
+`slot_generation_is_bounded_by_nonwrapping_sequence` checks the final possible
+slot generation and rejects neighboring and maximum forged generations. There
+is no independent generation counter to exhaust: generation is
+`sequence / 16 + 1`, so sequence exhaustion occurs before generation overflow.
+
+The cancellation/exit rows above are **host representation controls**: dropped
+or forgotten leases, explicit local retirement, and an injected `Closed` result
+at each backend access. They do not execute process exit or mapping withdrawal
+concurrently with a native payload operation. Native producer exit during
+publication and consumer exit during acquisition remain **NOT_RUN**. The
+existing M1/M2 exit fixtures prove authority/mapping retirement only.
+
+Both receive APIs have the same private-copy contract, including `try_recv`,
+which does not return an `Integrity` value. If that convenience API copies
+successfully but release fails, it returns an error with the output already
+changed; no successful consumption or immutable publication is implied.
 
 ## Phase E: native compatibility and regression
 
@@ -192,6 +226,55 @@ its 5 s deadline. It is **not** a production channel deadlock. Its timeout is
 unchanged and it is not classified as a production deadlock. It is tracked
 separately and no fixture repair is folded into this milestone.
 
+## November 2 review and fresh validation
+
+The starting checkout already contains `Integrity`, `ReadLease::integrity()`
+and the M3.2 report. This review preserves that implementation and adds two
+adversarial tests plus receive API documentation. It changes no kernel code,
+mapping permission, authority check, cooperative lease or timeout.
+
+Fresh host receipt:
+`target/fastlane-m32-evidence/refresh-20261102/host-20261101T210442.818841Z/validation-summary.json`.
+Its UTC timestamp falls on November 2 in Asia/Tehran. It records **PASS** for
+39 library tests, 5 doctests, strict crate Clippy, bare-metal crate checking,
+formatting, 218 parser controls, whitespace and both ASan and TSan (27 hostile
+tests each). Source hashes match before and after. **Miri remains NOT_RUN**:
+the component is unavailable, with its failed availability log retained.
+
+Fresh M1/M2 compatibility receipts are under
+`target/fastlane-m3-evidence/regressions-20261101T210443.991300Z/compatibility-{2,4,12}/`.
+All three pass the unchanged authority/mapping assessor and all six real mapped
+word witnesses. At checkpoints 100-105, global SHM is flat at 1304 and page
+tables at 381; restricted objects/views/frames are zero. These are new attempts,
+not explanations or replacements for the earlier failed 12-CPU receipt.
+
+The full fresh regression receipt is
+`target/fastlane-m3-evidence/regressions-20261101T210443.991300Z/orchestration.json`:
+**PASS**, all 22 commands, no failed suite, executable source hashes equal
+before/after and equal to the current tree. M1/M2 compatibility, IPC/VM/SHM reply
+races, authenticated authority S1/S2, Account exec and exit modes 11/12/13,
+scheduler, R2D pin handoff and kernel-only Doorbell all pass on 2/4/12 CPUs.
+The ordinary image has empty features and no M3 fixture marker; mapping host
+checks and release kernel checking pass. Kernel Doorbell regression is not a
+userspace Doorbell integration or a native FastLane payload result. The original
+failed global-census attempt and the independent M1 rendezvous debt remain open.
+
+Fresh M3.1B receipts under
+`target/fastlane-m32-evidence/refresh-20261102/retention/` are **PASS**:
+`build-20261101T213344.563094Z`, `native-20261101T213413.789255Z` (2 CPUs), and
+`native-20261101T213440.207523Z` (4/12 CPUs). All eight crossings on each topology
+retain zero empty P1 tables, surviving mappings retain their shared tables, and
+the normal and deliberately retained-table teardown arms return all frames and
+tables with zero final free/SHM/page-table drift. Sources and archived image
+hashes match the current executable inputs. The reclamation repair is preserved.
+
+This review's aggregate receipt is
+`target/fastlane-m32-evidence/refresh-20261102/review-summary.json`.
+The host contract and fresh regressions pass within their scopes; the aggregate
+milestone remains **PARTIAL** with the historical failure retained. Coherent
+publication is **NOT PROVIDED**, native payload lifecycle tests are **NOT_RUN**,
+and no production readiness or native transfer completion is claimed.
+
 ## Deliverables
 
 | Deliverable | Result |
@@ -211,6 +294,9 @@ separately and no fixture repair is folded into this milestone.
 - The cooperative `Ring`/`leases.rs` `unsafe` blocks are unchanged and remain a
   separate, documented representation that must never be attached to hostile
   native mappings.
+- The bounded concurrent-copy control uses only host atomic words and private
+  arrays. Its thread rendezvous is test-only and introduces no transport lock,
+  native access, or lifecycle authority.
 - The new type cannot weaken any guarantee: it is monotone toward "less
   claimed", never toward "more claimed".
 - No token, secret, seed or grant material is logged or stored.
@@ -221,7 +307,13 @@ separately and no fixture repair is folded into this milestone.
 
 1. An opt-in, authenticated **copy-only** native backend using the existing M1
    attachments and M2 views, with audited single-instruction raw-word access
-   (no Rust references into peer memory) and enforced mapping lifetime.
+   (no Rust references into peer memory) and enforced mapping lifetime. Actual
+   operation admission and commit/release must serialize against channel
+   retirement; withdrawal must wait for admitted accesses or stop their process
+   before unmapping. A shared terminal flag or this host `Memory` trait cannot
+   provide that lifecycle proof. Bind exactly one local endpoint per attached
+   role to the fresh kernel channel generation; constructors alone authorize
+   nothing, and cursor reset/reconnect is unsupported.
 2. A bounded polling transfer fixture (no Doorbell) exercising the M3.2
    contract on real mappings: hostile mutation, malformed words, peer
    exit/revoke/exec during operations, cancellation and capacity.
@@ -233,3 +325,15 @@ separately and no fixture repair is folded into this milestone.
    lifecycle, verified retirement) before any immutable zero-copy receive.
 5. Userspace Doorbell and production FastLane remain disabled until their own
    authority and lifecycle milestones close.
+
+## M5 integration follow-up
+
+The [M5 native transfer report](fastlane-m5-authenticated-transfer.md) connects
+this unchanged representation to the exact backing of real M2 mappings through
+an opt-in kernel-mediated word backend. Metadata validation and private copying
+execute in the independent authenticated consumer VM. The backend serializes
+each admitted access against physical retirement and admits only one message
+per channel. Native mutation between loads and after private copying preserves
+this report's distinction: memory safety and private snapshot stability are
+provided; coherent publication and application authenticity are not. This
+follow-up does not rewrite any historical host/native result or enable production.

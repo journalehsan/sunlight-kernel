@@ -618,6 +618,7 @@ name = "sunlight_uac"
 path = "src/lib.rs"
 
 [dependencies]
+sunlight-fastlane-ring = { path = "../../fastlane-ring", optional = true }
 sunlight-ui = { path = "../../sunlight-ui", features = ["app"] }
 sun-font = { path = "../../sun-font" }
 sunlight-ipc = { path = "../../ipc" }
@@ -649,6 +650,8 @@ production-grant-test = []
 production-history-test = ["production-grant-test"]
 session-race-test = []
 fastlane-mapping-test = ["fastlane-channel-test"]
+fastlane-transfer-test = ["fastlane-doorbell-test", "dep:sunlight-fastlane-ring"]
+fastlane-doorbell-test = ["fastlane-mapping-test"]
 fastlane-channel-test = ["session-race-test", "sunlight-ipc/experimental-fastlane-authority"]
 session-h4-test = ["session-race-test"]
 # Native N6 resource-reap trigger, using ordinary shared memory and manager IPC.
