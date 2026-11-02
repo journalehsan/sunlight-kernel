@@ -1,3 +1,5 @@
+#[cfg(any(test, all(debug_assertions, feature = "fastlane_repeated_test")))]
+mod channel_repeated;
 #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
 pub(crate) mod channel;
 #[cfg(any(test, all(debug_assertions, feature = "fastlane_doorbell_test")))]

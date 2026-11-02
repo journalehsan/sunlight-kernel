@@ -22,16 +22,11 @@ impl Scheduler {
     ) -> Result<u64, Error> {
         self.fastlane_mapping_sweep();
         let who = RecipientIdentity::of(self.current_process());
-        if !self.channel_vm_exclusive(who) || index >= 3 * 512 {
+        if !self.channel_vm_exclusive(who) || index > 1540 {
             return Err(Error::Denied);
         }
         let region = (index / 512) as usize;
         let word = (index % 512) as usize;
-        // M5 admits only descriptor zero, consumer cursor zero and payload
-        // zero. The M3.2 ring's other slots are deliberately unavailable.
-        if (region == 0 && word > 5) || (region == 1 && word != 0) || (region == 2 && word >= 32) {
-            return Err(Error::Denied);
-        }
         let mut caps = CAP_BROKER.lock();
         let row = caps.channels.row_mut(h)?;
         let role = if row.creator == who {
@@ -47,15 +42,65 @@ impl Scheduler {
         if row.state != State::Attached || !row.mapped[role].iter().all(|v| *v) {
             return Err(Error::Incomplete);
         }
+        #[cfg(feature = "fastlane_repeated_test")]
+        if (1536..=1540).contains(&index) {
+            if !store || row.transfer != 0 {
+                return Err(Error::Denied);
+            }
+            row.repeated.control(role, index, value)?;
+            crate::serial_println!("[FL-REPEAT] event=control generation={} op={} message={} slot_generation={} pid={} inc={} vm={}",
+                h.generation,index,value,value / 16 + 1,who.pid,who.incarnation,who.vm_generation);
+            return Ok(0);
+        }
         if store && (if region == 1 { role != 1 } else { role != 0 }) {
             return Err(Error::Denied);
+        }
+        if index >= 1536 {
+            return Err(Error::Denied);
+        }
+        #[cfg(feature = "fastlane_repeated_test")]
+        let repeated = row.repeated.enabled;
+        #[cfg(not(feature = "fastlane_repeated_test"))]
+        let repeated = false;
+        if !repeated
+            && ((region == 0 && word > 5)
+                || (region == 1 && word != 0)
+                || (region == 2 && word >= 32))
+        {
+            return Err(Error::Denied);
+        }
+        if repeated && ((region == 0 && word > 80) || (region == 1 && word != 0)) {
+            return Err(Error::Denied);
+        }
+        #[cfg(feature = "fastlane_repeated_test")]
+        let mut next_state = row.repeated;
+        #[cfg(feature = "fastlane_repeated_test")]
+        if repeated {
+            if word == 0 && region < 2 {
+                if !store {
+                    return Ok(row.repeated.cursor(region));
+                }
+                next_state.advance(region, value)?;
+            } else {
+                let slot = if region == 0 {
+                    (word - 1) / 5
+                } else {
+                    word / 32
+                };
+                if store && !row.repeated.writable(slot) {
+                    return Err(Error::Capacity);
+                }
+                if !store && role == 1 && !row.repeated.readable(slot) {
+                    return Err(Error::Incomplete);
+                }
+            }
         }
         // The cursor stores are the only admitted ownership transitions. One
         // message, sequence 0 / slot generation 1, for this fresh M1 generation.
         // A hostile direct writer may corrupt bytes but cannot advance this
         // private state, add authority, or cause a second admitted publication.
         let transition = store && word == 0 && region != 2;
-        if transition {
+        if transition && !repeated {
             if value != 1 {
                 return Err(Error::Denied);
             }
@@ -66,7 +111,7 @@ impl Scheduler {
         // Peer-written cursor bytes alone do not admit a message. Even a
         // hostile direct M2 writer must pass the authenticated publication
         // transition before the consumer representation can observe work.
-        if !store && role == 1 && region == 0 && word == 0 && row.transfer == 0 {
+        if !store && role == 1 && region == 0 && word == 0 && row.transfer == 0 && !repeated {
             return Ok(0);
         }
         let token = row.backing[region].ok_or(Error::Incomplete)?;
@@ -108,7 +153,13 @@ impl Scheduler {
                 compiler_fence(Ordering::Acquire);
             }
         }
-        if transition {
+        #[cfg(feature = "fastlane_repeated_test")]
+        if repeated && transition {
+            caps.channels.row_mut(h)?.repeated = next_state;
+            crate::serial_println!("[FL-REPEAT] event={} generation={} message={} slot_generation={} pid={} inc={} vm={}",
+                if region == 0 { "publish" } else { "ack" },h.generation,value-1,(value-1)/16+1,who.pid,who.incarnation,who.vm_generation);
+        }
+        if transition && !repeated {
             caps.channels.row_mut(h)?.transfer = if region == 0 { 1 } else { 2 };
             crate::serial_println!("[FL-TRANSFER] event={} generation={} message=0 slot_generation=1 pid={} inc={} vm={} cpu={}",
                 if region == 0 { "publish" } else { "ack" }, h.generation, who.pid,

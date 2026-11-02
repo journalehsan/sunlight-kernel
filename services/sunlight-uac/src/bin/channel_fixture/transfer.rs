@@ -18,9 +18,9 @@ fn error(e: ring::Error) -> u64 {
         _ => 106,
     }
 }
-struct Native {
-    h: fl::Handle,
-    parent: CapabilityToken,
+pub(super) struct Native {
+    pub(super) h: fl::Handle,
+    pub(super) parent: CapabilityToken,
 }
 impl Memory for Native {
     fn load(&self, r: Region, word: usize) -> Result<u64, ring::Error> {

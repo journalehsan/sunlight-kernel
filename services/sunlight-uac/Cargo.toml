@@ -647,6 +647,7 @@ name = "runas"
 path = "src/bin/runas.rs"
 
 [features]
+fastlane-repeated-test = ["fastlane-transfer-test"]
 production-grant-test = []
 production-history-test = ["production-grant-test"]
 session-race-test = []

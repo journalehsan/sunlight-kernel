@@ -5,6 +5,8 @@ pub(super) mod mapping;
 pub(super) mod doorbell;
 #[cfg(feature = "fastlane-transfer-test")]
 pub(super) mod transfer;
+#[cfg(feature = "fastlane-repeated-test")]
+pub(super) mod repeated;
 use sunlight_ipc::{fastlane_authority as fl, CapabilityToken, EndpointId, IpcMsg};
 const HELLO: u64 = 0xF1C110;
 const CMD: u64 = 0xF1C111;
@@ -74,6 +76,8 @@ pub fn actor(args: &[&str]) -> ! {
     assert_eq!(hello.label, HELLO);
     #[cfg(feature = "fastlane-transfer-test")]
     let mut transfer = transfer::Endpoint::new();
+    #[cfg(feature = "fastlane-repeated-test")]
+    let mut repeated = repeated::Endpoint::new();
     loop {
         let m = sunlight_ipc::ipc_recv_timeout(ep, 10000).expect("actor command");
         assert_eq!(m.label, CMD);
@@ -82,6 +86,8 @@ pub fn actor(args: &[&str]) -> ! {
             generation: m.words[2],
         };
         match m.words[0] {
+            #[cfg(feature = "fastlane-repeated-test")]
+            op @ 70..=79 => repeated.command(op, h, m.words[3], parent),
             #[cfg(feature = "fastlane-transfer-test")]
             op @ 60..=69 => transfer.command(op, h, m.words[3], parent),
             #[cfg(feature = "fastlane-doorbell-test")]

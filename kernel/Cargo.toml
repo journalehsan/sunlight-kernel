@@ -653,6 +653,7 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+fastlane_repeated_test = ["fastlane_transfer_test"]
 demand_test = []
 idle_test = ["demand_test"]
 dependency_test = ["idle_test"]

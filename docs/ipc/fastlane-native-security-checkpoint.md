@@ -794,3 +794,38 @@ therefore remain unsatisfied. See [M5R audit and native matrix](fastlane-m5r-nat
 M5R remains PARTIAL; production FastLane remains disabled. Historical global
 SHM drift, M1 debug rendezvous timeout and unavailable Miri retain independent
 open/NOT_RUN classifications.
+
+## M5.1 repeated-transfer audit update (2026-11-02)
+
+The separately gated `fastlane_repeated_test` experiment extends the mediated
+M5 backend with sixteen fixed admission states and checked private publication/
+acknowledgement cursors. It retains existing exact authenticated role, process,
+VM, session/expiry and restricted-map checks under the existing scheduler/broker
+transaction. No capability issuance, mapping permission, global hot-path lock,
+shared reference, retained native pointer or scheduler/IF source is introduced
+or changed. Existing M5 single-message admission remains available independently.
+
+Private state admits reservation, publication, acquisition, copy-completion and
+acknowledgement in order. Shared cursor writes do not authenticate capacity reuse.
+A stale/duplicate acknowledgement cannot release another slot generation.
+Reservation cancellation publishes nothing. Channel terminal state rejects all
+later transfer controls and accesses, with existing M2 unmap/TLB/free teardown.
+Acquisition/copy-completion are authenticated consumer protocol claims; they do
+not force a malicious consumer to inspect data before discarding its messages.
+
+The producer retains its M2 writable aliases after publication. Native hostile
+mutation tests deliberately exercise this limitation. Memory safety and stable
+private copies are provided; coherent publication and application authenticity
+remain NOT PROVIDED. Successful cooperative byte comparisons do not strengthen
+this contract. There is no direct shared-ring fast path or performance claim.
+
+[The M5.1 report](fastlane-m51-repeated-transfer.md) records the final native
+matrix, failed attempts, exact counts and per-object retirement evidence. M5.1
+functionality is COMPLETE on 2/4/12 CPUs; all 45 accepted final-source native
+guests pass. The original contaminated scheduler FAIL/ABORTED run remains
+retained alongside independently attested corrected images. Security/regression
+readiness remains PARTIAL and production remains DISABLED; ordinary debug
+exclusion, full release and experimental release rejection gates pass.
+Historical M4 failures and census drift remain UNRESOLVED; the M1 coordination
+timeout remains OPEN; original deleted artifacts remain unavailable for exact
+re-audit. Miri remains UNAVAILABLE unless a retained execution proves otherwise.
