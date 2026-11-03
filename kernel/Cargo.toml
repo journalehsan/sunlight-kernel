@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.6059-alpha.2"
+version = "0.2.6151-alpha.2"
+
+
+
 
 
 
@@ -653,6 +656,8 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+fastlane_measurement_test = ["fastlane_shared_ring_test"]
+fastlane_shared_ring_test = ["fastlane_repeated_test"]
 fastlane_repeated_test = ["fastlane_transfer_test"]
 demand_test = []
 idle_test = ["demand_test"]
@@ -708,6 +713,11 @@ fastlane_m31_retention_test = ["fastlane_census_trace"]
 # in production; requires fastlane_m31_retention_test.
 fastlane_m31_prerepair = ["fastlane_m31_retention_test"]
 fastlane_channel_test = ["native_session_race_test"]
+# M5.1R2 bounded controls; never enabled by the normal fixture or production.
+fastlane_coord_diag = ["fastlane_channel_test"]
+fastlane_coord_spin = ["fastlane_coord_diag"]
+fastlane_coord_same_cpu = ["fastlane_coord_diag"]
+
 native_session_h4_test = ["native_session_race_test"]
 authenticated_reply_test = ["native_session_h4_test"]
 # Observation-only per-object Account exec retirement trace. Debug images only.

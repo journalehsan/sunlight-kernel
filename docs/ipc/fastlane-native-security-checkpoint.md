@@ -1,8 +1,46 @@
 # FastLane native architecture and security checkpoint
 
-2026-11-02, Asia/Tehran. **Production readiness remains BLOCKED.**
+2026-11-03, Asia/Tehran. **Production readiness remains BLOCKED.**
 Production FastLane, production Restricted SHM and public Doorbell remain disabled.
 No commit or push is performed.
+
+## M5.1R2 bounded coordination and M5.2 decision
+
+The [M5.1R2 final report](fastlane-m51r2-final-bounded-coordination.md) closes the
+fixed coordination investigation. **A: demonstrated pre-correction entry mechanism
+COMPLETE. B: final coordination repair COMPLETE. C: original historical timeout
+attribution UNRESOLVED.** The original failed image/serial and missing producer
+placement/continuation cannot be recovered from the known evidence and verified
+archive. Artificial same-CPU placement demonstrates a mechanism, not that the
+historical producer had that placement. The unrestricted spin control also
+retains a distinct iteration-bound failure, with its missing final observations
+explicit; it is not assigned a complete global scheduler causal chain.
+
+All 51 final-source regression guests PASS, including three corrected M1
+repetitions per topology and current M4/M5/M5.1, authority, mapping, lifecycle,
+scheduler and remote-wake regressions on 2/4/12 CPUs. Twenty separate diagnostics
+retain seventeen native passes and three native failures. Corrected unpinned
+coordination passes 9/9; impossible same-CPU placement is rejected before waiting.
+All 252 parser controls, established host checks, ordinary production-image
+exclusion, the supported full release build and the debug-only release guard PASS.
+The exact native matrix, source map, image/service identities and original failed
+attempts remain under `.fastlane-evidence/m51r2/`, outside Cargo target.
+
+No production authority, mapping, transfer, reclamation or interrupt-state repair
+implementation changed. New dispatch observations, placement and spin behavior
+require explicit debug fixture features; ordinary and release image audits
+exclude them. No lifecycle guard crosses a corrected wait, real contention and
+both winner orders remain required, and no new global kernel lock is introduced.
+The M3.2 memory-safety/private-snapshot contract still does not provide coherent
+publication or application authenticity.
+
+**Recommend a separately gated experimental M5.2 slice. Production readiness
+remains BLOCKED and FastLane remains DISABLED.** Experimental permission is not
+production enablement. Historical M4 attribution, global SHM census drift,
+previously unavailable Miri and prior D3/N3M/service/global-reconciliation debt
+remain separate; none is erased by new passes. Historical M1 attribution alone
+does not require another diagnostic milestone. Older deferrals below describe
+their milestone snapshots and are superseded by this scoped experimental decision.
 
 ## M5 first authenticated native transfer
 
@@ -829,3 +867,80 @@ exclusion, full release and experimental release rejection gates pass.
 Historical M4 failures and census drift remain UNRESOLVED; the M1 coordination
 timeout remains OPEN; original deleted artifacts remain unavailable for exact
 re-audit. Miri remains UNAVAILABLE unless a retained execution proves otherwise.
+
+
+## M5.2 native shared-ring audit update (2026-11-03)
+
+Experimental M5.2 functionality is COMPLETE for the archived source identity
+`ec10f529dfbd21e627b59e65f8e0cfed8bc2dd20b6530269f38e71f4d205c7f4`.
+All 51 final-source native guests PASS on 2/4/12 CPUs. The direct userspace
+backend uses authenticated M2 mappings and the separate hostile-safe adapter;
+slot reservation/publication, bounded private copying, acknowledgement and reuse
+no longer copy payload through per-word kernel calls. M1 authority, M2 rights,
+M4 notification admission and physical withdrawal/TLB retirement remain required.
+A revoked raw access can terminate its actor with a hardware fault; there are
+no Rust references into shared bytes or retained kernel payload borrows.
+
+Memory safety and stable private snapshots remain PROVIDED. Coherent publication
+and application authenticity remain NOT PROVIDED. The receive loop calls the
+hostile adapter before deciding to wait, preserving rollback detection and checked
+exhaustion. Native tests include rollback disguised as empty and persistent
+terminal rejection after metadata restoration. Twenty-seven channel lifecycles
+per topology retire 81 backing objects and 162 views exactly once, with real
+remote ACKs and no drift across the repeated normal cycles. Only two new bounded
+userspace MOV blocks are unsafe; no kernel unsafe code or global hot-path lock
+is added. The M3.1B repair is preserved in the validated snapshot.
+
+Ordinary debug/full-release exclusion and explicit experimental-release rejection
+PASS. Production remains DISABLED and overall production readiness PARTIAL.
+Historical M1 timeout attribution, M4 failures and census drift remain UNRESOLVED;
+Miri remains UNAVAILABLE / NOT_RUN. The earlier native failures, the pre-final
+M2 remote-flush coverage failure and its separate passing replay, and the
+interrupted intermediate matrix remain retained with their original statuses.
+
+See [M5.2 implementation, exact matrix and unsafe audit](fastlane-m52-native-shared-ring.md).
+The checkout changed after the completed validation, including VM/interrupt code
+and version updates. These later edits are preserved and are **not validated by
+this matrix**; the completion statement is scoped to its archived source map.
+
+## M5.3 measurement instrumentation audit — 2026-11-03
+
+Measurement contracts and limits are in
+[`fastlane-m53-measurement-readiness.md`](fastlane-m53-measurement-readiness.md).
+The exact current-source acceptance matrix, including failures and aborted
+attempts, is preserved separately under `.fastlane-evidence/m53/REPORT.md` and
+`validation-matrix.json`. M5.2 evidence is unchanged.
+
+The new kernel feature `fastlane_measurement_test` inherits the existing
+experimental debug-only shared-ring chain. Its process-private checked counters
+reuse the existing scheduler lock and current-task publication paths. Start/stop
+requires a valid generation-qualified handle, the live channel, caller identity
+and an already activated role. Counters neither grant authority nor affect
+transfer, cancellation or retirement decisions. Kernel/user time splitting and
+measured allocator hooks are unavailable; scheduler runtime deltas remain
+unqualified until their clock is certified. The public monotonic source remains
+the centralized 10 ms BSP clock, with bounded native migration probes and
+extracted-source saturation tests. Raw TSC values are not used for cross-actor
+latency measurements.
+
+The opt-in user feature `fastlane-measurement-test` adds separate actor-local
+counters and a fixed 64-element timestamp buffer. Cooperative long runs exclude
+16 acknowledged warm-up messages from their measured counters. Message logging
+is replaced by post-window compact receipts for these cases. Explicit sample
+drops and overflow flags prevent silent loss. Adversarial paths retain their
+original fault, private-copy and physical-retirement witnesses. Ring geometry,
+shared memory layout, payload algorithm, authority checks and batching are
+unchanged. Source review finds no per-message heap allocation in measurement
+accounting and no new global lock. Added instructions, sampled clock syscalls,
+private footprint, existing diagnostic atomics and changed serial traffic are
+observer effects; zero overhead is not claimed.
+
+The M3.2 classification remains **memory safety: PROVIDED; stable private
+snapshots: PROVIDED; coherent publication: NOT PROVIDED; application
+authenticity: NOT PROVIDED**. Cooperative byte equality strengthens neither
+publication coherence nor authenticity. Production remains **DISABLED** and M6
+comparative benchmarking remains **NOT READY** pending the documented timing,
+workload and observability prerequisites. No comparative performance numbers
+are reported. Historical M1 timeout attribution, M4 failures and SHM census
+drift remain **UNRESOLVED**; Miri remains **NOT_RUN** unless an actual execution
+is recorded in the M5.3 matrix.

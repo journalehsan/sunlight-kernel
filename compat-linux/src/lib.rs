@@ -386,6 +386,15 @@ pub fn translate_syscall(linux_nr: u64) -> i64 {
         SYS_MADVISE => SHIM_MADVISE,
         SYS_RECVFROM => SHIM_RECVFROM,
         SYS_SENDTO => SHIM_SENDTO,
+        SYS_SOCKET => SHIM_SOCKET,
+        SYS_CONNECT => SHIM_CONNECT,
+        SYS_BIND => SHIM_BIND,
+        SYS_LISTEN => SHIM_LISTEN,
+        SYS_ACCEPT => SHIM_ACCEPT,
+        SYS_ACCEPT4 => SHIM_ACCEPT4,
+        SYS_GETSOCKNAME => SHIM_GETSOCKNAME,
+        SYS_GETPEERNAME => SHIM_GETPEERNAME,
+        SYS_SHUTDOWN => SHIM_SHUTDOWN,
         SYS_POLL | SYS_PPOLL => SHIM_POLL,
         SYS_IOCTL => SHIM_IOCTL,
         SYS_EXIT => SUN_PROCESS_EXIT,
@@ -592,6 +601,15 @@ mod tests {
         assert_eq!(translate_syscall(53), -26); // socketpair
         assert_eq!(translate_syscall(45), abi::SHIM_RECVFROM);
         assert_eq!(translate_syscall(44), abi::SHIM_SENDTO);
+        assert_eq!(translate_syscall(41), abi::SHIM_SOCKET);
+        assert_eq!(translate_syscall(42), abi::SHIM_CONNECT);
+        assert_eq!(translate_syscall(49), abi::SHIM_BIND);
+        assert_eq!(translate_syscall(50), abi::SHIM_LISTEN);
+        assert_eq!(translate_syscall(43), abi::SHIM_ACCEPT);
+        assert_eq!(translate_syscall(288), abi::SHIM_ACCEPT4);
+        assert_eq!(translate_syscall(51), abi::SHIM_GETSOCKNAME);
+        assert_eq!(translate_syscall(52), abi::SHIM_GETPEERNAME);
+        assert_eq!(translate_syscall(48), abi::SHIM_SHUTDOWN);
         assert_eq!(translate_syscall(999), -38);
         assert_eq!(translate_syscall(abi::SYS_FUTEX), abi::SHIM_FUTEX);
         assert_eq!(translate_syscall(abi::SYS_UNAME), abi::SHIM_UNAME);

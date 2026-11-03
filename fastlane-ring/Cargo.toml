@@ -1,6 +1,9 @@
 [package]
 name = "sunlight-fastlane-ring"
-version = "0.2.6059-alpha.2"
+version = "0.2.6151-alpha.2"
+
+
+
 
 
 
@@ -14,5 +17,9 @@ version = "0.2.6059-alpha.2"
 
 edition = "2021"
 publish = false
+
+[features]
+# Isolated arithmetic-boundary fixtures; never enables native mapping access.
+fixture = []
 
 [dependencies]

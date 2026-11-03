@@ -81,6 +81,9 @@ impl FileHandle {
     const EPOLL_INDEX_MASK: u32 = 0x00FF_FFFF;
     const EVENTFD_FLAG: u32 = 0x0400_0000;
     const SOCKET_FLAG: u32 = 0x0200_0000;
+    /// AF_UNIX endpoint created by `socket(2)` but not yet connected. Bits
+    /// 0..23 carry the `process::unix_socket` pool index.
+    const UNIX_FLAG: u32 = 0x0100_0000;
     const TTY_TAG_MASK: u32 = 0xF000_0000;
     const TTY_TAB_MASK: u32 = 0x0000_00FF;
 
@@ -174,6 +177,18 @@ impl FileHandle {
     pub fn socket_endpoint(self) -> usize {
         ((self.0 >> 23) & 1) as usize
     }
+
+    pub fn unix_socket(index: u32) -> Self {
+        Self(Self::UNIX_FLAG | (index & 0x00FF_FFFF))
+    }
+
+    pub fn is_unix_socket(self) -> bool {
+        self.0 & 0xFF00_0000 == Self::UNIX_FLAG
+    }
+
+    pub fn unix_socket_index(self) -> u32 {
+        self.0 & 0x00FF_FFFF
+    }
 }
 
 fn retain_socket(handle: FileHandle) {
@@ -197,6 +212,18 @@ fn retain_eventfd(handle: FileHandle) {
 fn release_eventfd(handle: FileHandle) {
     if handle.is_eventfd() {
         super::eventfd::release(handle.eventfd_index());
+    }
+}
+
+fn retain_unix_socket(handle: FileHandle) {
+    if handle.is_unix_socket() {
+        super::unix_socket::retain(handle.unix_socket_index());
+    }
+}
+
+fn release_unix_socket(handle: FileHandle) {
+    if handle.is_unix_socket() {
+        super::unix_socket::release(handle.unix_socket_index());
     }
 }
 
@@ -399,6 +426,7 @@ impl FdTable {
             retain_description(idx);
             retain_socket(handle);
             retain_pipe(handle);
+            retain_unix_socket(handle);
             idx
         } else {
             new_description(flags)
@@ -508,6 +536,12 @@ impl FdTable {
         })
     }
 
+    pub fn contains_unix_socket(&self, idx: u32) -> bool {
+        self.entries.iter().flatten().any(|entry| {
+            entry.handle.is_unix_socket() && entry.handle.unix_socket_index() == idx
+        })
+    }
+
     /// Get a mutable file descriptor
     pub fn get_mut(&mut self, fd: i32) -> Option<&mut FileDescriptor> {
         if fd < 0 || fd >= 256 {
@@ -551,8 +585,10 @@ impl FdTable {
         retain_eventfd(handle);
         retain_socket(handle);
         retain_pipe(handle);
+        retain_unix_socket(handle);
         if let Some(displaced) = self.entries[fd as usize] {
             release_eventfd(displaced.handle);
+            release_unix_socket(displaced.handle);
             release_description(displaced.description);
             if displaced.handle.is_pipe() {
                 super::pipe::pipe_close_end(
@@ -575,6 +611,32 @@ impl FdTable {
             description: new_description(flags),
             release_backend: true,
         });
+        Ok(())
+    }
+
+    /// Swap the backing handle of an open descriptor in place, preserving the
+    /// descriptor's flags and shared open-file description.
+    ///
+    /// The new handle must already own exactly one reference (as allocated by
+    /// `pipe::alloc_socketpair`); this does not retain it. The displaced
+    /// backing object is released exactly once.
+    pub fn replace_handle(
+        &mut self,
+        fd: i32,
+        handle: FileHandle,
+        rights: CapRights,
+    ) -> Result<(), FdError> {
+        let entry = self.get_mut(fd).ok_or(FdError::InvalidFd)?;
+        let displaced = entry.handle;
+        release_eventfd(displaced);
+        release_unix_socket(displaced);
+        if displaced.is_pipe() {
+            super::pipe::pipe_close_end(displaced.pipe_index(), displaced.pipe_is_write());
+        } else if displaced.is_socket() {
+            super::pipe::socket_close(displaced.socket_index(), displaced.socket_endpoint());
+        }
+        entry.handle = handle;
+        entry.rights = rights;
         Ok(())
     }
 
@@ -681,6 +743,7 @@ impl FdTable {
         retain_eventfd(orig.handle);
         retain_socket(orig.handle);
         retain_pipe(orig.handle);
+        retain_unix_socket(orig.handle);
         retain_description(orig.description);
         let mut flags = orig.flags & !O_CLOEXEC;
         if cloexec {
@@ -714,6 +777,7 @@ impl FdTable {
                     retain_eventfd(entry.handle);
                     retain_socket(entry.handle);
                     retain_pipe(entry.handle);
+                    retain_unix_socket(entry.handle);
                     retain_description(entry.description);
                 }
             }

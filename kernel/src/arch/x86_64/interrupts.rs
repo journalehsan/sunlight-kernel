@@ -559,17 +559,23 @@ extern "x86-interrupt" fn page_fault_handler(
     _stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
-    // Diagnostic 1d: log pid/rip/rsp for #PF (before the vaddr read)
-    let pid = crate::sched::try_current_pid();
-    let rip = _stack_frame.instruction_pointer.as_u64();
-    let rsp = _stack_frame.stack_pointer.as_u64();
-    serial_println!(
-        "[FAULT] #14 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
-        pid,
-        rip,
-        rsp,
-        error_code.bits()
-    );
+    // Diagnostic 1d: log pid/rip/rsp for the injected #PF witnesses that the
+    // FastLane mapping assessors correlate with [FL-PF]. Ordinary demand
+    // faults are expected and handled below, so logging every one would flood
+    // the serial console for no diagnostic value.
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    {
+        let pid = crate::sched::try_current_pid();
+        let rip = _stack_frame.instruction_pointer.as_u64();
+        let rsp = _stack_frame.stack_pointer.as_u64();
+        serial_println!(
+            "[FAULT] #14 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+            pid,
+            rip,
+            rsp,
+            error_code.bits()
+        );
+    }
     let vaddr = x86_64::registers::control::Cr2::read_raw();
 
     #[cfg(feature = "cap_issuance_test")]
@@ -587,6 +593,12 @@ extern "x86-interrupt" fn page_fault_handler(
     // Not-present fault: check whether this page was swapped out to ZRAM.
     if !error_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
         && handle_swap_page_fault(vaddr)
+    {
+        return;
+    }
+
+    if !error_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
+        && handle_demand_page_fault(vaddr, &error_code)
     {
         return;
     }
@@ -612,6 +624,60 @@ extern "x86-interrupt" fn page_fault_handler(
     }
     loop {
         x86_64::instructions::hlt();
+    }
+}
+
+/// Allocate the first frame for an absent Linux anonymous mapping page.
+/// Returns true only when this fault was satisfied by demand backing.
+fn handle_demand_page_fault(vaddr: u64, error_code: &PageFaultErrorCode) -> bool {
+    if vaddr >= crate::memory::user::USER_END_EXCLUSIVE {
+        return false;
+    }
+    let Some(hhdm) = crate::HHDM_REQ
+        .response()
+        .map(|response| x86_64::VirtAddr::new(response.offset))
+    else {
+        return false;
+    };
+    let access = if error_code.contains(PageFaultErrorCode::INSTRUCTION_FETCH) {
+        crate::process::mmap::AnonymousAccess::Execute
+    } else if error_code.contains(PageFaultErrorCode::CAUSED_BY_WRITE) {
+        crate::process::mmap::AnonymousAccess::Write
+    } else {
+        crate::process::mmap::AnonymousAccess::Read
+    };
+    let page_address = vaddr & !0xfff;
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let owner_pid = sched.current_memory_owner().pid;
+    let mut reclaim_budget = crate::memory::swap::DirectReclaimBudget::new();
+    crate::memory::swap::maybe_reclaim_for_anonymous_allocation(
+        &mut sched,
+        &mut pmm,
+        hhdm,
+        Some((owner_pid, x86_64::VirtAddr::new(page_address))),
+        &mut reclaim_budget,
+    );
+    match unsafe {
+        crate::process::mmap::fault_in_anonymous_page(
+            sched.current_process(),
+            vaddr,
+            access,
+            &mut pmm,
+            hhdm,
+        )
+    } {
+        Ok(handled) => handled,
+        Err(error) => {
+            crate::serial_println!(
+                "[MM-LAZY] fault failed pid={} addr={:#x} access={:?} error={:?}",
+                sched.current_process().pid,
+                vaddr,
+                access,
+                error
+            );
+            false
+        }
     }
 }
 

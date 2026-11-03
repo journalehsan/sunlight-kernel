@@ -470,14 +470,33 @@ impl Scheduler {
 
     #[inline]
     fn set_core_current_task(&mut self, cpu_id: usize, task: Option<usize>) {
+        #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+        let previous;
         match SCHEDULER_MODE {
             SchedulerMode::RoundRobin => {
-                CORE_STATES[cpu_id].lock().current_task = task;
+                let mut core = CORE_STATES[cpu_id].lock();
+                #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+                { previous = core.current_task; }
+                core.current_task = task;
             }
             SchedulerMode::Bore => {
+                #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+                { previous = self.cores[cpu_id].current_task; }
                 self.cores[cpu_id].current_task = task;
             }
         }
+        #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+        if previous != task {
+            if let Some(next) = task { self.processes[next].measurement.dispatch(); }
+        }
+    }
+
+    #[cfg(all(debug_assertions, feature = "fastlane_shared_ring_test"))]
+    pub(crate) fn fastlane_context_switches(&self) -> u64 {
+        (0..self.online_cores).map(|cpu| match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => CORE_STATES[cpu].lock().context_switches,
+            SchedulerMode::Bore => self.cores[cpu].context_switches,
+        }).sum()
     }
 
     #[inline]
@@ -1799,6 +1818,8 @@ impl Scheduler {
             if let Some(next) = self.pick_next(cpu_id) {
                 #[cfg(feature = "scheduler_perf_diag")]
                 record_perf_dispatch(&self.processes[next], cpu_id);
+                #[cfg(all(debug_assertions, feature = "fastlane_coord_diag"))]
+                crate::capability::channel_race::diagnostic_dispatch(self.processes[next].pid, cpu_id);
                 let next_rsp = self.processes[next].context_rsp;
                 #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
                 self.trace_bell_process("dispatch-idle", next, next_rsp, cpu_id as u64);
@@ -1925,6 +1946,8 @@ impl Scheduler {
             #[cfg(feature = "scheduler_perf_diag")]
             record_perf_dispatch(&self.processes[next], cpu_id);
             let next_rsp = self.processes[next].context_rsp;
+            #[cfg(all(debug_assertions, feature = "fastlane_coord_diag"))]
+            crate::capability::channel_race::diagnostic_dispatch(self.processes[next].pid, cpu_id);
             #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
             self.trace_bell_process("dispatch", next, next_rsp, cpu_id as u64);
             let next_stack_top = self.processes[next].kernel_stack_top;
@@ -2174,6 +2197,8 @@ impl Scheduler {
     }
 
     pub(crate) fn record_wakeup(&mut self, idx: usize, ipc: bool) {
+        #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+        self.processes[idx].measurement.wakeup();
         #[cfg(feature = "cpu_accounting_diag")]
         {
             let audit = &mut self.processes[idx].wake_audit;
@@ -2473,6 +2498,26 @@ impl Scheduler {
                     .fd_table
                     .contains_pipe_ring(ring);
             if poll || ready || native_ready || native_poll {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    /// A `connect(2)` queued a connection for a listening AF_UNIX socket.
+    /// Wake poll/epoll waiters that hold that listener's descriptor.
+    pub fn wake_linux_unix_socket(&mut self, listener: u32) {
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state != ProcessState::BlockedOnTimer {
+                continue;
+            }
+            let waiting_on_poll = self.processes[idx]
+                .linux_state()
+                .is_some_and(|s| s.poll_wake_tick.is_some());
+            if waiting_on_poll
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_unix_socket(listener)
+            {
                 self.wake_linux_poll_index(idx);
             }
         }
@@ -2800,6 +2845,8 @@ impl Scheduler {
                     crate::process::pipe::socket_close(handle.socket_index(), handle.socket_endpoint());
                 self.wake_linux_pipe(read);
                 self.wake_linux_pipe(write);
+            } else if handle.is_unix_socket() {
+                crate::process::unix_socket::release(handle.unix_socket_index());
             } else if handle.is_epoll() {
                 crate::process::epoll::free_instance(handle.epoll_index());
             } else if handle.is_vfs() {
@@ -3800,7 +3847,7 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     }
 
     let free_before = crate::PMM.lock().free_page_count();
-    let mut owner = {
+    let owner = {
         let mut pmm = crate::PMM.lock();
         unsafe { crate::process::Process::new(0xA001, 0, "mm0-owner", &mut pmm, hhdm_offset) }
     };

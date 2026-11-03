@@ -163,6 +163,19 @@ fn validate_pages(
     loop {
         let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(page_address))
             .map_err(|_| UserMemoryError::InvalidAddress)?;
+        if unsafe { process.address_space.lookup_entry(page, hhdm) }.is_none()
+            && process
+                .address_space
+                .lookup_region(page_address)
+                .is_some_and(|region| {
+                    region.kind == crate::process::region::MappingKind::Anonymous
+                        && region
+                            .policy
+                            .contains(crate::process::region::RegionPolicy::DEMAND)
+                })
+        {
+            back_demand_page(process, page_address, access)?;
+        }
         let Some((_, flags)) = (unsafe { process.address_space.lookup_entry(page, hhdm) }) else {
             UNMAPPED_COPY_ATTEMPTS.fetch_add(1, Ordering::Relaxed);
             return Err(UserMemoryError::Unmapped);
@@ -189,6 +202,41 @@ fn validate_pages(
             .ok_or(UserMemoryError::Overflow)?;
     }
     Ok(())
+}
+
+fn back_demand_page(
+    process: &Process,
+    page_address: u64,
+    access: Access,
+) -> Result<(), UserMemoryError> {
+    let hhdm = current_hhdm()?;
+    let mut pmm = crate::PMM.lock();
+    let anonymous_access = match access {
+        Access::Read => crate::process::mmap::AnonymousAccess::Read,
+        Access::Write => crate::process::mmap::AnonymousAccess::Write,
+    };
+    match unsafe {
+        crate::process::mmap::fault_in_anonymous_page(
+            process,
+            page_address,
+            anonymous_access,
+            &mut pmm,
+            hhdm,
+        )
+    } {
+        Ok(_) => Ok(()),
+        Err(crate::process::mmap::MmapError::NoMemory) => {
+            Err(UserMemoryError::AllocationFailed)
+        }
+        Err(crate::process::mmap::MmapError::SwappedUnsupported) => {
+            Err(UserMemoryError::SwappedUnsupported)
+        }
+        Err(crate::process::mmap::MmapError::PermissionDenied) => match access {
+            Access::Write => Err(UserMemoryError::NotWritable),
+            Access::Read => Err(UserMemoryError::NotUserAccessible),
+        },
+        Err(_) => Err(UserMemoryError::Unmapped),
+    }
 }
 
 fn copy_from_process(

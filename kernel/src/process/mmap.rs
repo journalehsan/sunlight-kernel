@@ -226,6 +226,12 @@ pub fn sys_mmap(
     if fd != -1 || offset != 0 {
         return Err(MmapError::InvalidFlags);
     }
+    // PROT_NONE reservations become POSIX thread stacks in common libc
+    // implementations. Those stacks must stay fully present because this
+    // kernel can execute syscall and exception work on the user stack; a
+    // not-present stack page would fault again while delivering the first
+    // fault.
+    let demand_backed = sched.current_process().is_linux_compat() && prot != PROT_NONE;
     map_anonymous_kind(
         addr,
         length,
@@ -234,6 +240,7 @@ pub fn sys_mmap(
         pmm,
         sched,
         MappingKind::Anonymous,
+        demand_backed,
     )
 }
 
@@ -251,6 +258,7 @@ pub fn map_brk(
         pmm,
         sched,
         MappingKind::Brk,
+        false,
     )
 }
 
@@ -262,6 +270,7 @@ fn map_anonymous_kind(
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
     kind: MappingKind,
+    demand_backed: bool,
 ) -> Result<u64, MmapError> {
     let protection = match normalize_protection(prot) {
         Err(MmapError::PermissionDenied) => {
@@ -361,7 +370,7 @@ fn map_anonymous_kind(
         }
     }
 
-    let policy = match kind {
+    let mut policy = match kind {
         MappingKind::Anonymous => RegionPolicy::MAY_UNMAP
             .union(RegionPolicy::MAY_REPLACE)
             .union(RegionPolicy::MAY_CHANGE_PROTECTION)
@@ -371,6 +380,9 @@ fn map_anonymous_kind(
             .union(RegionPolicy::OWNER_MANAGED),
         _ => return Err(MmapError::InternalInvariant),
     };
+    if demand_backed {
+        policy = policy.union(RegionPolicy::DEMAND);
+    }
     let region = MappingRegion::new(
         map_addr,
         map_addr
@@ -404,6 +416,25 @@ fn map_anonymous_kind(
     } else {
         None
     };
+
+    // Hint-less Linux mappings reserve their virtual range now and receive
+    // zeroed frames on first access. Fixed mappings retain the eager path so
+    // replacing a live range always releases its old pages in one transaction.
+    if demand_backed && !fixed {
+        if let Some(reservation) = reservation {
+            if let Err(error) = sched
+                .current_process()
+                .address_space
+                .commit_region(reservation)
+            {
+                return Err(mapping_error(error));
+            }
+        }
+        if let Some(cursor) = deferred_cursor {
+            cursor.commit(&mut sched.current_memory_owner_mut().mmap_next);
+        }
+        return Ok(map_addr);
+    }
 
     let page_count_usize = usize::try_from(page_count).map_err(|_| MmapError::InvalidAddress)?;
     let mut installed: Vec<InstalledAnonymousPage> = Vec::new();
@@ -495,7 +526,7 @@ fn map_anonymous_kind(
                     pmm,
                     hhdm_offset,
                 ) {
-                    Ok(expected) => Some(expected),
+                    Ok(expected) => expected,
                     Err(error) => {
                         pmm.free_frame(frame_addr);
                         rollback_anonymous(&mut installed, pid, pmm, sched, hhdm_offset);
@@ -584,6 +615,91 @@ fn map_anonymous_kind(
     }
 
     Ok(map_addr)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnonymousAccess {
+    Read,
+    Write,
+    Execute,
+}
+
+/// Back one absent page of a demand-mapped Linux anonymous region.
+///
+/// The caller must hold the scheduler lock that serializes address-space
+/// mutation. Returns `Ok(false)` when the address is not part of a demand
+/// backing, allowing the page-fault path to continue to its terminal handler.
+pub unsafe fn fault_in_anonymous_page(
+    process: &crate::process::Process,
+    address: u64,
+    access: AnonymousAccess,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> Result<bool, MmapError> {
+    if address >= crate::memory::user::USER_END_EXCLUSIVE {
+        return Ok(false);
+    }
+    let page_address = address & !0xfff;
+    let Some(region) = process.address_space.lookup_region(page_address) else {
+        return Ok(false);
+    };
+    if region.kind != MappingKind::Anonymous || !region.policy.contains(RegionPolicy::DEMAND) {
+        return Ok(false);
+    }
+    let owner = match region.backing {
+        RegionBacking::AnonymousOwner(owner) => owner as usize,
+        _ => return Err(MmapError::InternalInvariant),
+    };
+    let allowed = match access {
+        AnonymousAccess::Read => region.protection.readable(),
+        AnonymousAccess::Write => region.protection.writable(),
+        AnonymousAccess::Execute => region.protection.executable(),
+    };
+    if region.protection == RegionProtection::NONE || !allowed {
+        return Err(MmapError::PermissionDenied);
+    }
+
+    let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(page_address))
+        .map_err(|_| MmapError::InvalidAddress)?;
+    if let Some((_, flags)) = unsafe { process.address_space.lookup_entry(page, hhdm_offset) } {
+        if flags.contains(PageTableFlags::PRESENT) {
+            return Ok(true);
+        }
+        return Err(MmapError::SwappedUnsupported);
+    }
+
+    let frame_addr = pmm
+        .alloc_frame_owned(owner as u32)
+        .ok_or(MmapError::NoMemory)?;
+    if !crate::memory::security::sanitize_user_frame(frame_addr, hhdm_offset) {
+        pmm.free_frame(frame_addr);
+        return Err(MmapError::NoMemory);
+    }
+    let flags = crate::process::address_space::AddressSpace::protection_to_pte_flags(
+        region.protection,
+    )
+    .map_err(|_| MmapError::PermissionDenied)?;
+    let frame = PhysFrame::from_start_address(frame_addr).map_err(|_| {
+        pmm.free_frame(frame_addr);
+        MmapError::InternalInvariant
+    })?;
+    if let Err(error) = unsafe {
+        process
+            .address_space
+            .map_page(page, frame, flags, pmm, hhdm_offset)
+    } {
+        pmm.free_frame(frame_addr);
+        return match error {
+            MappingError::AlreadyMapped => Ok(true),
+            MappingError::FrameAllocationFailed | MappingError::PageTableAllocationFailed => {
+                Err(MmapError::NoMemory)
+            }
+            MappingError::PermissionRejected => Err(MmapError::PermissionDenied),
+            _ => Err(MmapError::InternalInvariant),
+        };
+    }
+    crate::memory::swap::track_anon(owner, page.start_address(), frame_addr);
+    Ok(true)
 }
 
 fn mapping_error(error: MappingError) -> MmapError {
@@ -688,7 +804,7 @@ fn expected_replaceable_leaf(
     region: MappingRegion,
     pmm: &PhysicalMemoryManager,
     hhdm_offset: VirtAddr,
-) -> Result<ExpectedMapping, MmapError> {
+) -> Result<Option<ExpectedMapping>, MmapError> {
     let owner = match (region.kind, region.policy, region.backing) {
         (
             MappingKind::Anonymous | MappingKind::Brk,
@@ -701,6 +817,9 @@ fn expected_replaceable_leaf(
         .map_err(|_| MmapError::InternalInvariant)?;
     let Some((frame_or_marker, flags)) = (unsafe { address_space.lookup_entry(page, hhdm_offset) })
     else {
+        if region.policy.contains(RegionPolicy::DEMAND) {
+            return Ok(None);
+        }
         return Err(MmapError::InternalInvariant);
     };
     if flags.contains(PageTableFlags::PRESENT) {
@@ -712,10 +831,10 @@ fn expected_replaceable_leaf(
         {
             return Err(MmapError::InternalInvariant);
         }
-        Ok(ExpectedMapping::Present {
+        Ok(Some(ExpectedMapping::Present {
             frame: frame_or_marker,
             flags,
-        })
+        }))
     } else {
         let Some(block_id) = (unsafe { address_space.swapped_block_id(page, hhdm_offset) }) else {
             return Err(MmapError::InternalInvariant);
@@ -723,7 +842,7 @@ fn expected_replaceable_leaf(
         if !crate::memory::zram::block_exists(block_id) {
             return Err(MmapError::InternalInvariant);
         }
-        Ok(ExpectedMapping::Swapped { block_id })
+        Ok(Some(ExpectedMapping::Swapped { block_id }))
     }
 }
 
@@ -775,7 +894,7 @@ pub fn sys_munmap(
             .address_space
             .lookup_region(page_address)
         {
-            expected_anonymous_leaf(
+            let _ = expected_anonymous_leaf(
                 &sched.current_process().address_space,
                 page_address,
                 region,
@@ -808,7 +927,8 @@ pub fn sys_munmap(
                 pmm,
                 hhdm_offset,
             ) {
-                Ok(expected) => expected,
+                Ok(Some(expected)) => expected,
+                Ok(None) => continue,
                 Err(_) => {
                     panic!("MM-2D munmap invariant failure: leaf changed after complete preflight")
                 }
@@ -910,7 +1030,7 @@ fn expected_anonymous_leaf(
     region: MappingRegion,
     pmm: &PhysicalMemoryManager,
     hhdm_offset: VirtAddr,
-) -> Result<ExpectedMapping, MmapError> {
+) -> Result<Option<ExpectedMapping>, MmapError> {
     let owner = match (region.kind, region.policy, region.backing) {
         (
             MappingKind::Anonymous | MappingKind::Brk,
@@ -923,6 +1043,9 @@ fn expected_anonymous_leaf(
         .map_err(|_| MmapError::InternalInvariant)?;
     let Some((frame_or_marker, flags)) = (unsafe { address_space.lookup_entry(page, hhdm_offset) })
     else {
+        if region.policy.contains(RegionPolicy::DEMAND) {
+            return Ok(None);
+        }
         return invariant_rejection();
     };
     if flags.contains(PageTableFlags::PRESENT) {
@@ -941,10 +1064,10 @@ fn expected_anonymous_leaf(
         } else {
             return invariant_rejection();
         }
-        Ok(ExpectedMapping::Present {
+        Ok(Some(ExpectedMapping::Present {
             frame: frame_or_marker,
             flags,
-        })
+        }))
     } else {
         let Some(block_id) = (unsafe { address_space.swapped_block_id(page, hhdm_offset) }) else {
             return invariant_rejection();
@@ -952,7 +1075,7 @@ fn expected_anonymous_leaf(
         if !crate::memory::zram::block_exists(block_id) {
             return invariant_rejection();
         }
-        Ok(ExpectedMapping::Swapped { block_id })
+        Ok(Some(ExpectedMapping::Swapped { block_id }))
     }
 }
 
@@ -1006,6 +1129,7 @@ pub fn sys_mprotect(
     // Resolve full ledger coverage and policy before inspecting a leaf. This
     // walk does not retain the terminal ledger lock.
     let mut covered = addr;
+    let mut ledger_change = false;
     while covered < end {
         let Some(region) = sched.current_process().address_space.lookup_region(covered) else {
             MPROTECT_HOLE_REJECTIONS.fetch_add(1, Ordering::Relaxed);
@@ -1017,6 +1141,7 @@ pub fn sys_mprotect(
             MPROTECT_PROTECTED_REJECTIONS.fetch_add(1, Ordering::Relaxed);
             return Err(MmapError::Protected);
         }
+        ledger_change |= region.protection != protection;
         covered = region.end.min(end);
     }
 
@@ -1071,8 +1196,12 @@ pub fn sys_mprotect(
         Err(_) => return mprotect_invariant_rejection(),
     };
 
-    let changed_pages = pages.iter().filter(|page| page.old != protection).count();
-    if changed_pages == 0 {
+    let changed_pages = pages
+        .iter()
+        .flatten()
+        .filter(|page| page.old != protection)
+        .count();
+    if !ledger_change {
         MPROTECT_NOOPS.fetch_add(1, Ordering::Relaxed);
         return Ok(());
     }
@@ -1081,7 +1210,7 @@ pub fn sys_mprotect(
     let mut transitions = ProtectionTransitions::default();
     for chunk in pages.chunks(MPROTECT_CHUNK_PAGES) {
         let mut chunk_changed = false;
-        for expected in chunk {
+        for expected in chunk.iter().flatten() {
             if expected.old == protection {
                 continue;
             }
@@ -1108,11 +1237,23 @@ pub fn sys_mprotect(
             note_transition(&mut transitions, expected.old, protection);
             chunk_changed = true;
         }
-        if chunk_changed
-            && crate::memory::tlb::invalidate_range(identity, chunk[0].address, chunk.len() as u64)
-                .is_err()
-        {
-            mprotect_invariant_failure("validated chunk was rejected by shootdown");
+        if chunk_changed {
+            let first = chunk
+                .iter()
+                .flatten()
+                .next()
+                .expect("changed chunk has a present page")
+                .address;
+            let last = chunk
+                .iter()
+                .flatten()
+                .last()
+                .expect("changed chunk has a present page")
+                .address;
+            let pages = (last - first) / 4096 + 1;
+            if crate::memory::tlb::invalidate_range(identity, first, pages).is_err() {
+                mprotect_invariant_failure("validated chunk was rejected by shootdown");
+            }
         }
     }
 
@@ -1143,7 +1284,7 @@ fn preflight_protection_leaf(
     region: MappingRegion,
     pmm: &PhysicalMemoryManager,
     hhdm_offset: VirtAddr,
-) -> Result<ProtectionPage, MmapError> {
+) -> Result<Option<ProtectionPage>, MmapError> {
     let owner = match (region.kind, region.policy, region.backing) {
         (MappingKind::Anonymous, policy, RegionBacking::AnonymousOwner(owner))
             if policy.contains(RegionPolicy::MAY_CHANGE_PROTECTION) =>
@@ -1156,6 +1297,9 @@ fn preflight_protection_leaf(
         .map_err(|_| MmapError::InternalInvariant)?;
     let Some((frame_or_marker, flags)) = (unsafe { address_space.lookup_entry(page, hhdm_offset) })
     else {
+        if region.policy.contains(RegionPolicy::DEMAND) {
+            return Ok(None);
+        }
         return mprotect_invariant_rejection();
     };
     if !flags.contains(PageTableFlags::PRESENT) {
@@ -1182,12 +1326,12 @@ fn preflight_protection_leaf(
     if actual != region.protection {
         return mprotect_invariant_rejection();
     }
-    Ok(ProtectionPage {
+    Ok(Some(ProtectionPage {
         address,
         frame: frame_or_marker,
         flags,
         old: actual,
-    })
+    }))
 }
 
 fn note_transition(

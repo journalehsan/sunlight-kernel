@@ -108,8 +108,10 @@ impl Scheduler {
                 5 => broker
                     .channel_status(h, who, self.global_tick)
                     .map(|s| (s, 0)),
-                // Read-only bounded global inventory, available only in fixture images.
+                // Exact-creator, non-authorizing coordination receipt.
+                23 => super::channel_race::observed(&broker, h, who).map(|v| (u64::from(v), 0)),
                 7 => super::channel_race::arm(&broker, h, who, arg).map(|_| (0, 0)),
+                // Read-only bounded global inventory, available only in fixture images.
                 6 => Ok((
                     broker.channels.live_count() as u64,
                     broker.channels.rows.len() as u64,

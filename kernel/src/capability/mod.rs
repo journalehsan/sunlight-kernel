@@ -12,6 +12,8 @@ pub(crate) mod bell_race;
 pub(crate) mod channel_mapping;
 #[cfg(all(debug_assertions, feature = "fastlane_transfer_test"))]
 mod channel_transfer;
+#[cfg(all(debug_assertions, feature = "fastlane_shared_ring_test"))]
+pub(crate) mod channel_shared_ring;
 #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
 mod channel_native;
 #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]

@@ -457,6 +457,8 @@ fn send_signal_generation(
 /// SAFETY: `frame` must point to a valid SyscallFrame on the stack.
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
+    #[cfg(all(debug_assertions, feature = "fastlane_shared_ring_test"))]
+    crate::capability::channel_shared_ring::syscall(frame.rax, frame.rdi);
     let mut num = frame.rax;
     let original_linux_num = num;
     let original_args = [
@@ -521,6 +523,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         diagnostic_manager = sched.current_process().trusted_service_manager
             && !sched.active_manager(sched.current_process());
         linux_compat = sched.current_process().is_linux_compat();
+        #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+        sched.current_process_mut().measurement.syscall(frame.rax, frame.rdi);
         // Native IPC/shared-memory bridge for std userspace engines. A tag
         // selects the native register ABI and bypasses Linux errno conversion;
         // capabilities and existing per-syscall permissions still apply.
@@ -813,12 +817,75 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
                         num = 1045;
                     }
                 }
+                -49 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_SOCKET {
+                        num = 1050; // Linux socket
+                    }
+                }
+                -50 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_CONNECT {
+                        num = 1051; // Linux connect
+                    }
+                }
+                -51 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_BIND {
+                        num = 1052; // Linux bind
+                    }
+                }
+                -52 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_LISTEN {
+                        num = 1053; // Linux listen
+                    }
+                }
+                -53 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_ACCEPT {
+                        num = 1054; // Linux accept
+                    }
+                }
+                -54 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_ACCEPT4 {
+                        num = 1055; // Linux accept4
+                    }
+                }
+                -55 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_GETSOCKNAME {
+                        num = 1056; // Linux getsockname
+                    }
+                }
+                -56 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_GETPEERNAME {
+                        num = 1057; // Linux getpeername
+                    }
+                }
+                -57 => {
+                    if linux_num == sunlight_compat_linux::abi::SYS_SHUTDOWN {
+                        num = 1058; // Linux shutdown
+                    }
+                }
                 -38 => {
-                    crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
+                    crate::serial_println!(
+                        "[HELIOS] Unsupported Linux syscall {} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x}",
+                        linux_num,
+                        original_args[0],
+                        original_args[1],
+                        original_args[2],
+                        original_args[3],
+                        original_args[4],
+                        original_args[5]
+                    );
                     num = 1005; // Linux ENOSYS
                 }
                 _ => {
-                    crate::serial_println!("[HELIOS] Unsupported Linux syscall {}", linux_num);
+                    crate::serial_println!(
+                        "[HELIOS] Unsupported Linux syscall {} args={:#x},{:#x},{:#x},{:#x},{:#x},{:#x}",
+                        linux_num,
+                        original_args[0],
+                        original_args[1],
+                        original_args[2],
+                        original_args[3],
+                        original_args[4],
+                        original_args[5]
+                    );
                     num = 1005;
                 }
             }
@@ -868,13 +935,15 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         0xf1c1 => sys_fastlane_channel(frame),
         #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
         0xf1c2 => unsafe { crate::sched::fastlane_bell_on_kernel_stack(frame) },
-        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+        #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
         0xf1c3 => {
             // Fixture placement only; no channel state or role is installed.
             let mut sched = sched::SCHEDULER.lock();
             let p = sched.current_process_mut();
             if frame.rdi <= 1 && p.uid == 0 && matches!(p.name_str(), "session-racer" | "session-race-probe") {
                 p.cpu_mask = 1 << frame.rdi;
+                #[cfg(feature = "fastlane_coord_diag")]
+                if frame.rdi == 0 { p.cpu_mask = u64::MAX; }
                 sched::request_park_after_sysret();
                 0
             } else { u64::MAX }
@@ -1058,6 +1127,15 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         1047 => sys_linux_ppoll(frame),
         1048 => sys_linux_clock_nanosleep(frame),
         1049 => sys_linux_readv(frame),
+        1050 => sys_linux_socket(frame),
+        1051 => sys_linux_connect(frame),
+        1052 => sys_linux_bind(frame),
+        1053 => sys_linux_listen(frame),
+        1054 => sys_linux_accept(frame, 0),
+        1055 => sys_linux_accept(frame, frame.r10 as u32),
+        1056 => sys_linux_getsockname(frame, false),
+        1057 => sys_linux_getsockname(frame, true),
+        1058 => sys_linux_shutdown(frame),
         99 => debug_log(frame.rdi, frame.rsi),
         _ => {
             crate::serial_println!("[SYSCALL] Unknown syscall {}", num);
@@ -5311,6 +5389,8 @@ fn close_file_handle(handle: crate::process::fd_table::FileHandle) {
         crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
     } else if handle.is_socket() {
         crate::process::pipe::socket_close(handle.socket_index(), handle.socket_endpoint());
+    } else if handle.is_unix_socket() {
+        crate::process::unix_socket::release(handle.unix_socket_index());
     } else if handle.is_epoll() {
         crate::process::epoll::free_instance(handle.epoll_index());
     } else if handle.is_vfs() {
@@ -6765,15 +6845,381 @@ fn sys_linux_pipe2(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
+// AF_UNIX stream constants shared by `socket`, `bind`, `listen`, `connect`,
+// `accept*`, and `socketpair`.
+const AF_UNIX: i32 = 1;
+const SOCK_STREAM_TYPE: u32 = 1;
+const SOCK_NONBLOCK: u32 = 0x0000_0800;
+const SOCK_CLOEXEC: u32 = 0x0008_0000;
+const SOCKADDR_UN_MAX: usize = 110;
+
+/// Bounded trace for the AF_UNIX stream lifecycle, active only under the
+/// existing `yazi-phase1` instrumentation.
+fn unix_trace_budget() -> bool {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+    option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
+        && COUNT.fetch_add(1, Ordering::Relaxed) < 64
+}
+
+/// Read a Linux `sockaddr_un` from user memory and return its pathname bytes.
+/// Abstract-namespace addresses (leading NUL) are rejected as unsupported.
+fn read_unix_sockaddr(ptr: u64, len: u64) -> Result<alloc::vec::Vec<u8>, u64> {
+    let len = len as usize;
+    if ptr == 0 || len < 2 || len > SOCKADDR_UN_MAX {
+        return Err(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let mut wire = [0u8; SOCKADDR_UN_MAX];
+    if crate::memory::user::copy_from_current(ptr, &mut wire[..len]).is_err() {
+        return Err(sunlight_compat_linux::abi::EFAULT as u64);
+    }
+    if u16::from_ne_bytes([wire[0], wire[1]]) != AF_UNIX as u16 {
+        return Err(sunlight_compat_linux::abi::EAFNOSUPPORT as u64);
+    }
+    let raw = &wire[2..len];
+    let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+    if end == 0 {
+        // Unnamed or abstract address: autobind is not implemented.
+        return Err(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    Ok(raw[..end].to_vec())
+}
+
+/// Write a Linux `sockaddr_un` and its length back to user memory. A null
+/// `addr` or `addrlen` is a no-op, matching Linux.
+fn write_unix_sockaddr(ptr: u64, len_ptr: u64, path: Option<&[u8]>) -> Result<(), u64> {
+    if ptr == 0 || len_ptr == 0 {
+        return Ok(());
+    }
+    let mut len_wire = [0u8; 4];
+    if crate::memory::user::copy_from_current(len_ptr, &mut len_wire).is_err() {
+        return Err(sunlight_compat_linux::abi::EFAULT as u64);
+    }
+    let given = u32::from_ne_bytes(len_wire) as usize;
+
+    let mut wire = [0u8; SOCKADDR_UN_MAX];
+    wire[0..2].copy_from_slice(&(AF_UNIX as u16).to_ne_bytes());
+    let mut actual = 2usize;
+    if let Some(path) = path {
+        let n = path.len().min(SOCKADDR_UN_MAX - 3);
+        wire[2..2 + n].copy_from_slice(&path[..n]);
+        actual = 2 + n + 1; // NUL terminator
+    }
+
+    let to_write = given.min(actual);
+    if to_write != 0 {
+        if crate::memory::user::validate_current_write(ptr, to_write).is_err() {
+            return Err(sunlight_compat_linux::abi::EFAULT as u64);
+        }
+        if crate::memory::user::copy_to_current(ptr, &wire[..to_write]).is_err() {
+            return Err(sunlight_compat_linux::abi::EFAULT as u64);
+        }
+    }
+    if crate::memory::user::copy_to_current(len_ptr, &(actual as u32).to_ne_bytes()).is_err() {
+        return Err(sunlight_compat_linux::abi::EFAULT as u64);
+    }
+    Ok(())
+}
+
+fn linux_socket_flags(socket_type: u32) -> Result<u32, u64> {
+    let flags = socket_type & !0xf;
+    if flags & !(SOCK_NONBLOCK | SOCK_CLOEXEC) != 0 {
+        return Err(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    Ok(flags)
+}
+
+/// Linux `socket(domain, type, protocol)`, limited to AF_UNIX SOCK_STREAM.
+fn sys_linux_socket(frame: &mut SyscallFrame) -> u64 {
+    use crate::process::fd_table::{CapRights, FileHandle};
+
+    let domain = frame.rdi as i32;
+    let socket_type = frame.rsi as u32;
+    let protocol = frame.rdx as i32;
+    let base_type = socket_type & 0xf;
+
+    if protocol != 0 {
+        return linux_errno(sunlight_compat_linux::abi::EPROTONOSUPPORT as u64);
+    }
+    if domain != AF_UNIX {
+        return linux_errno(sunlight_compat_linux::abi::EAFNOSUPPORT as u64);
+    }
+    if base_type != SOCK_STREAM_TYPE {
+        return linux_errno(sunlight_compat_linux::abi::ESOCKTNOSUPPORT as u64);
+    }
+    let flags = match linux_socket_flags(socket_type) {
+        Ok(flags) => flags,
+        Err(errno) => return linux_errno(errno),
+    };
+
+    let index = crate::process::unix_socket::create();
+    let rights = CapRights::new(
+        CapRights::READ | CapRights::WRITE | CapRights::CONNECT | CapRights::ACCEPT,
+    );
+    let mut sched = crate::sched::SCHEDULER.lock();
+    match sched
+        .current_shared_process_mut()
+        .fd_table
+        .open(FileHandle::unix_socket(index), rights, flags | 2)
+    {
+        Ok(fd) => {
+            if unix_trace_budget() {
+                crate::serial_println!(
+                    "[HELIOS-UNIX] socket fd={} idx={} type={:#x}",
+                    fd,
+                    index,
+                    socket_type
+                );
+            }
+            fd as u64
+        }
+        Err(_) => {
+            crate::process::unix_socket::release(index);
+            linux_errno(sunlight_compat_linux::abi::EMFILE as u64)
+        }
+    }
+}
+
+fn sys_linux_bind(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let path = match read_unix_sockaddr(frame.rsi, frame.rdx) {
+        Ok(path) => path,
+        Err(errno) => return linux_errno(errno),
+    };
+    let index = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_shared_process().fd_table.get(fd) {
+            Some(entry) if entry.handle.is_unix_socket() => entry.handle.unix_socket_index(),
+            Some(_) => return linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
+            None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+        }
+    };
+    match crate::process::unix_socket::bind(index, path) {
+        Ok(()) => {
+            if unix_trace_budget() {
+                crate::serial_println!("[HELIOS-UNIX] bind fd={} idx={}", fd, index);
+            }
+            0
+        }
+        Err(errno) => linux_errno(errno as u64),
+    }
+}
+
+fn sys_linux_listen(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let backlog = frame.rsi as i32;
+    let index = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_shared_process().fd_table.get(fd) {
+            Some(entry) if entry.handle.is_unix_socket() => entry.handle.unix_socket_index(),
+            Some(_) => return linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
+            None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+        }
+    };
+    match crate::process::unix_socket::listen(index, backlog) {
+        Ok(()) => {
+            if unix_trace_budget() {
+                crate::serial_println!(
+                    "[HELIOS-UNIX] listen fd={} idx={} backlog={}",
+                    fd,
+                    index,
+                    backlog
+                );
+            }
+            0
+        }
+        Err(errno) => linux_errno(errno as u64),
+    }
+}
+
+fn sys_linux_connect(frame: &mut SyscallFrame) -> u64 {
+    use crate::process::fd_table::{CapRights, FileHandle};
+
+    let fd = frame.rdi as i32;
+    let path = match read_unix_sockaddr(frame.rsi, frame.rdx) {
+        Ok(path) => path,
+        Err(errno) => return linux_errno(errno),
+    };
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let handle = match sched.current_shared_process().fd_table.get(fd) {
+        Some(entry) => entry.handle,
+        None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+    };
+    if !handle.is_unix_socket() {
+        // Already-connected or non-Unix descriptors are not connectable here.
+        return linux_errno(if handle.is_socket() {
+            sunlight_compat_linux::abi::EISCONN as u64
+        } else {
+            sunlight_compat_linux::abi::ENOTSOCK as u64
+        });
+    }
+    let index = handle.unix_socket_index();
+    let Some(listener) = crate::process::unix_socket::find_listener(&path) else {
+        if unix_trace_budget() {
+            crate::serial_println!("[HELIOS-UNIX] connect fd={} refused", fd);
+        }
+        return linux_errno(sunlight_compat_linux::abi::ECONNREFUSED as u64);
+    };
+
+    let pair = crate::process::pipe::alloc_socketpair();
+    if !crate::process::unix_socket::enqueue(listener, pair) {
+        crate::process::pipe::socket_close(pair, 0);
+        crate::process::pipe::socket_close(pair, 1);
+        return linux_errno(sunlight_compat_linux::abi::EAGAIN as u64);
+    }
+
+    let rights = CapRights::new(
+        CapRights::READ | CapRights::WRITE | CapRights::CONNECT | CapRights::ACCEPT,
+    );
+    if sched
+        .current_shared_process_mut()
+        .fd_table
+        .replace_handle(fd, FileHandle::socket(pair, 0), rights)
+        .is_err()
+    {
+        if crate::process::unix_socket::withdraw(listener, pair) {
+            crate::process::pipe::socket_close(pair, 1);
+        }
+        crate::process::pipe::socket_close(pair, 0);
+        crate::process::unix_socket::release(index);
+        return linux_errno(sunlight_compat_linux::abi::EBADF as u64);
+    }
+    sched.wake_linux_unix_socket(listener);
+    if unix_trace_budget() {
+        crate::serial_println!(
+            "[HELIOS-UNIX] connect fd={} listener={} pair={}",
+            fd,
+            listener,
+            pair
+        );
+    }
+    0
+}
+
+fn sys_linux_accept(frame: &mut SyscallFrame, flags: u32) -> u64 {
+    use crate::process::fd_table::{CapRights, FileHandle};
+
+    let fd = frame.rdi as i32;
+    let addr_ptr = frame.rsi;
+    let len_ptr = frame.rdx;
+    if flags & !(SOCK_NONBLOCK | SOCK_CLOEXEC) != 0 {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let flags = flags & (SOCK_NONBLOCK | SOCK_CLOEXEC);
+
+    let (index, listener_handle) = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_shared_process().fd_table.get(fd) {
+            Some(entry) if entry.handle.is_unix_socket() => {
+                (entry.handle.unix_socket_index(), entry.handle)
+            }
+            Some(_) => return linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
+            None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+        }
+    };
+    if !crate::process::unix_socket::is_listening(index) {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let Some(pair) = crate::process::unix_socket::dequeue(index) else {
+        return linux_errno(sunlight_compat_linux::abi::EAGAIN as u64);
+    };
+
+    // Accepted clients in this compatibility layer are unnamed.
+    if let Err(errno) = write_unix_sockaddr(addr_ptr, len_ptr, None) {
+        crate::process::pipe::socket_close(pair, 1);
+        return linux_errno(errno);
+    }
+
+    let rights = CapRights::new(
+        CapRights::READ | CapRights::WRITE | CapRights::CONNECT | CapRights::ACCEPT,
+    );
+    let mut sched = crate::sched::SCHEDULER.lock();
+    // Draining the accept queue may clear an edge-triggered readiness edge;
+    // refresh so the next queued connection is reported.
+    crate::process::epoll::refresh_after_io(listener_handle, sched.current_shared_process());
+    let new_fd = match sched
+        .current_shared_process_mut()
+        .fd_table
+        .open(FileHandle::socket(pair, 1), rights, flags | 2)
+    {
+        Ok(fd) => fd,
+        Err(_) => {
+            crate::process::pipe::socket_close(pair, 1);
+            return linux_errno(sunlight_compat_linux::abi::EMFILE as u64);
+        }
+    };
+    if unix_trace_budget() {
+        crate::serial_println!("[HELIOS-UNIX] accept listener={} fd={}", fd, new_fd);
+    }
+    new_fd as u64
+}
+
+fn sys_linux_getsockname(frame: &mut SyscallFrame, peer: bool) -> u64 {
+    let fd = frame.rdi as i32;
+    let addr_ptr = frame.rsi;
+    let len_ptr = frame.rdx;
+    let path = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_shared_process().fd_table.get(fd) {
+            Some(entry) if entry.handle.is_unix_socket() => {
+                if peer {
+                    None
+                } else {
+                    crate::process::unix_socket::path(entry.handle.unix_socket_index())
+                }
+            }
+            Some(entry) if entry.handle.is_socket() => None,
+            Some(_) => return linux_errno(sunlight_compat_linux::abi::ENOTSOCK as u64),
+            None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+        }
+    };
+    match write_unix_sockaddr(addr_ptr, len_ptr, path.as_deref()) {
+        Ok(()) => 0,
+        Err(errno) => linux_errno(errno),
+    }
+}
+
+fn sys_linux_shutdown(frame: &mut SyscallFrame) -> u64 {
+    const SHUT_RD: u64 = 0;
+    const SHUT_WR: u64 = 1;
+    const SHUT_RDWR: u64 = 2;
+
+    let fd = frame.rdi as i32;
+    let how = frame.rsi;
+    if how > SHUT_RDWR {
+        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+    }
+    let handle = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_shared_process().fd_table.get(fd) {
+            Some(entry) => entry.handle,
+            None => return linux_errno(sunlight_compat_linux::abi::EBADF as u64),
+        }
+    };
+    if !handle.is_socket() {
+        return linux_errno(sunlight_compat_linux::abi::ENOTCONN as u64);
+    }
+    let Some((read, write)) =
+        crate::process::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
+    else {
+        return linux_errno(sunlight_compat_linux::abi::ENOTCONN as u64);
+    };
+    if how == SHUT_RD || how == SHUT_RDWR {
+        crate::process::pipe::pipe_close_end(read, false);
+    }
+    if how == SHUT_WR || how == SHUT_RDWR {
+        crate::process::pipe::pipe_close_end(write, true);
+    }
+    0
+}
+
 /// Linux `socketpair(AF_UNIX, SOCK_STREAM | flags, 0, sv)` compatibility.
 ///
 /// Use two pipe rings for the full-duplex Unix stream pair. Socket identity
 /// remains distinct from pipe identity for recvfrom/ENOTSOCK validation.
 fn sys_linux_socketpair(frame: &mut SyscallFrame) -> u64 {
-    const AF_UNIX: i32 = 1;
-    const SOCK_STREAM: u32 = 1;
-    const SOCK_NONBLOCK: u32 = 0x0000_0800;
-    const SOCK_CLOEXEC: u32 = 0x0008_0000;
+    const SOCK_STREAM: u32 = SOCK_STREAM_TYPE;
 
     let domain = frame.rdi as i32;
     let socket_type = frame.rsi as u32;
@@ -8145,6 +8591,9 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
         0
     } else if handle.is_eventfd() {
         // FdTable::take already dropped this descriptor's eventfd reference.
+        0
+    } else if handle.is_unix_socket() {
+        close_file_handle(handle);
         0
     } else if handle.is_epoll() {
         close_file_handle(handle);
@@ -11996,6 +12445,28 @@ fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
             Err(e) => { frame.rsi = 0; e as u64 }
         };
     }
+    #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+    if matches!(frame.rdi, 26 | 27) {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        return match sched.fastlane_measurement(Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.rdi == 26) {
+            Ok(()) => { frame.rsi = 0; 0 }
+            Err(e) => { frame.rsi = 0; e as u64 }
+        };
+    }
+    #[cfg(all(debug_assertions, feature = "fastlane_shared_ring_test"))]
+    if frame.rdi == 25 {
+        crate::sched::SCHEDULER.lock().fastlane_shared_diagnostics();
+        frame.rsi = 0;
+        return 0;
+    }
+    #[cfg(all(debug_assertions, feature = "fastlane_shared_ring_test"))]
+    if frame.rdi == 24 {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        return match sched.fastlane_shared_ring(Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.r10) {
+            Ok(()) => { frame.rsi = 0; 0 }
+            Err(e) => { frame.rsi = 0; e as u64 }
+        };
+    }
     #[cfg(all(debug_assertions, feature = "fastlane_transfer_test"))]
     if matches!(frame.rdi, 18 | 19) {
         let mut sched = crate::sched::SCHEDULER.lock();
@@ -12024,6 +12495,10 @@ fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
     let result = sched.fastlane_channel(frame.rdi,
         Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.r10,
         ::sunlight_ipc::account_session::SessionRef { id: frame.r8, epoch: frame.r9 });
+    #[cfg(feature = "fastlane_coord_diag")]
+    if frame.rdi == 7 && frame.r10 == 2 && result.is_ok() {
+        crate::capability::channel_race::diagnostic_arm(&mut sched);
+    }
     #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
     sched.fastlane_mapping_sweep();
     crate::capability::channel_race::finished(actor, result.as_ref().err().map_or(0, |e| *e as u64));

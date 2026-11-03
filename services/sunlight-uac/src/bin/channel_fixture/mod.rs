@@ -1,12 +1,14 @@
 //! Authenticated userspace actors using ordinary IPC for coordination.
-#[cfg(feature = "fastlane-mapping-test")]
-pub(super) mod mapping;
 #[cfg(feature = "fastlane-doorbell-test")]
 pub(super) mod doorbell;
-#[cfg(feature = "fastlane-transfer-test")]
-pub(super) mod transfer;
+#[cfg(feature = "fastlane-mapping-test")]
+pub(super) mod mapping;
 #[cfg(feature = "fastlane-repeated-test")]
 pub(super) mod repeated;
+#[cfg(feature = "fastlane-transfer-test")]
+pub(super) mod transfer;
+#[cfg(feature = "fastlane-shared-ring-test")]
+pub(super) mod shared_ring;
 use sunlight_ipc::{fastlane_authority as fl, CapabilityToken, EndpointId, IpcMsg};
 const HELLO: u64 = 0xF1C110;
 const CMD: u64 = 0xF1C111;
@@ -18,6 +20,7 @@ const RACE_ATTACH: u64 = 14;
 const RACE_EXIT: u64 = 15;
 const RACE_DONE: u64 = 16;
 const BORROWER: u64 = 17;
+const COORD_RECEIPT: u64 = 18;
 fn note(case: &str, result: u64) {
     sunlight_ipc::debug_log(&alloc::format!(
         "[FL-USER] case={} pid={} result={}",
@@ -66,7 +69,9 @@ fn result(r: Result<u64, fl::Error>) -> (u64, u64) {
 }
 pub fn actor(args: &[&str]) -> ! {
     #[cfg(feature = "fastlane-doorbell-test")]
-    if args.len() > 3 { doorbell::pin(args[3].parse().unwrap()); }
+    if args.len() > 3 {
+        doorbell::pin(args[3].parse().unwrap());
+    }
     let parent = CapabilityToken(args[2].parse().unwrap());
     let ep = sunlight_ipc::endpoint_create();
     let send = sunlight_ipc::endpoint_bind(ep.0);
@@ -78,6 +83,8 @@ pub fn actor(args: &[&str]) -> ! {
     let mut transfer = transfer::Endpoint::new();
     #[cfg(feature = "fastlane-repeated-test")]
     let mut repeated = repeated::Endpoint::new();
+    #[cfg(feature = "fastlane-shared-ring-test")]
+    let mut shared_ring = shared_ring::Endpoint::new();
     loop {
         let m = sunlight_ipc::ipc_recv_timeout(ep, 10000).expect("actor command");
         assert_eq!(m.label, CMD);
@@ -86,6 +93,16 @@ pub fn actor(args: &[&str]) -> ! {
             generation: m.words[2],
         };
         match m.words[0] {
+            // Userspace command numbers are separate from kernel opcodes.
+            // Kernel opcode 23 overlaps the mapping fixture's COLLIDE command.
+            COORD_RECEIPT => {
+                let (code, value) = result(fl::operate(23, h, 0));
+                reply(code, value, 0);
+            }
+            #[cfg(feature = "fastlane-shared-ring-test")]
+            op @ 80..=90 | op @ 92..=95 => shared_ring.command(op - 10, h, m.words[3], parent),
+            #[cfg(feature = "fastlane-shared-ring-test")]
+            91 => { let (code, value) = result(fl::operate(24, h, m.words[3])); reply(code, value, 0); }
             #[cfg(feature = "fastlane-repeated-test")]
             op @ 70..=79 => repeated.command(op, h, m.words[3], parent),
             #[cfg(feature = "fastlane-transfer-test")]
@@ -259,6 +276,9 @@ fn zero() {
     assert_eq!(fl::operate(6, fl::EMPTY, 0), Ok(0));
 }
 pub fn supervisor() -> ! {
+    // The independent session-racer is placed on CPU 1 by the debug image.
+    // Reserve CPU 0 eligibility for this controller before releasing it.
+    assert_eq!(unsafe { sunlight_libc::sys::syscall1(0xf1c3, 0) }, 0);
     assert_eq!(sunlight_libc::getuid(), 0);
     let ep = sunlight_ipc::endpoint_create();
     let public = sunlight_ipc::endpoint_bind(ep.0);
@@ -350,33 +370,56 @@ pub fn supervisor() -> ! {
     // try_lock while the selected winner owns the lifecycle lock. Hooks only
     // coordinate arrival/order; the ordinary authority methods decide results.
     for mode in 1..=4 {
-        let actor = spawn(ep, public);
-        let raced = pair(actor);
-        assert_eq!(fl::operate(7, raced, mode), Ok(0));
-        if mode <= 2 {
-            expect(actor, RACE_ATTACH, raced, 0, 0);
-            assert_eq!(fl::operate(4, raced, 0), Ok(0));
-            let done = sunlight_ipc::ipc_recv_timeout(ep, 5000).unwrap();
-            assert_eq!(done.label, RACE_DONE);
-            assert_eq!(done.badge, actor.pid);
-            assert_eq!(done.words[0], if mode == 1 { 0 } else { 4 });
-            assert_eq!(done.words[1], raced.generation);
-            sunlight_ipc::ipc_reply_result(IpcMsg::with_label(RACE_DONE)).unwrap();
-            stop(actor);
-        } else {
-            expect(actor, RACE_EXIT, raced, 0, 0);
-            assert_eq!(
-                fl::operate(3, raced, 0),
-                if mode == 3 {
-                    Ok(0)
-                } else {
-                    Err(fl::Error::Terminal)
-                }
-            );
-            assert_eq!(super::reap(actor.pid), 0);
+        let mut covered = false;
+        // Natural lock contention is observed, never prolonged by a peer wait
+        // under SCHEDULER. Fresh attempts are bounded; misses are not coverage.
+        for _attempt in 0..16 {
+            let actor = spawn(ep, public);
+            let raced = pair(actor);
+            assert_eq!(fl::operate(7, raced, mode), Ok(0));
+            if mode <= 2 {
+                expect(actor, RACE_ATTACH, raced, 0, 0);
+                assert_eq!(fl::operate(4, raced, 0), Ok(0));
+                let done = sunlight_ipc::ipc_recv_timeout(ep, 5000).unwrap();
+                assert_eq!(done.label, RACE_DONE);
+                assert_eq!(done.badge, actor.pid);
+                assert_eq!(done.words[0], if mode == 1 { 0 } else { 4 });
+                assert_eq!(done.words[1], raced.generation);
+                sunlight_ipc::ipc_reply_result(IpcMsg::with_label(RACE_DONE)).unwrap();
+                stop(actor);
+            } else {
+                expect(actor, RACE_EXIT, raced, 0, 0);
+                assert_eq!(
+                    fl::operate(3, raced, 0),
+                    if mode == 3 {
+                        Ok(0)
+                    } else {
+                        Err(fl::Error::Terminal)
+                    }
+                );
+                assert_eq!(super::reap(actor.pid), 0);
+            }
+            assert_eq!(fl::operate(3, raced, 0), Err(fl::Error::Terminal));
+            zero();
+            if fl::operate(23, raced, 0).expect("exact creator race receipt") == 1 {
+                expect(foreign, COORD_RECEIPT, raced, 0, 1);
+                assert_eq!(
+                    fl::operate(
+                        23,
+                        fl::Handle {
+                            token: raced.token ^ 1,
+                            ..raced
+                        },
+                        0
+                    ),
+                    Err(fl::Error::Denied)
+                );
+                covered = true;
+                break;
+            }
+            note("contention-missed", mode);
         }
-        assert_eq!(fl::operate(3, raced, 0), Err(fl::Error::Terminal));
-        zero();
+        assert!(covered, "M1 contention coverage exhausted");
         note("contended-race", mode);
     }
     // Eight real Account-authorized independent producers exhaust metadata.

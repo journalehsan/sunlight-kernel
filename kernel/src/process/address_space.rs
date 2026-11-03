@@ -473,6 +473,13 @@ impl AddressSpace {
                     continue;
                 };
                 let Some((_frame, flags)) = self.lookup_entry(page, hhdm_offset) else {
+                    if region.kind == crate::process::region::MappingKind::Anonymous
+                        && region
+                            .policy
+                            .contains(crate::process::region::RegionPolicy::DEMAND)
+                    {
+                        continue;
+                    }
                     valid = false;
                     continue;
                 };
@@ -649,7 +656,7 @@ impl AddressSpace {
     /// Map a page in this address space.
     /// SAFETY: `hhdm_offset` must be the correct HHDM base.
     pub unsafe fn map_page(
-        &mut self,
+        &self,
         page: Page<Size4KiB>,
         phys: PhysFrame<Size4KiB>,
         flags: PageTableFlags,
@@ -676,7 +683,7 @@ impl AddressSpace {
     }
 
     unsafe fn map_page_with_leaf_pat(
-        &mut self,
+        &self,
         page: Page<Size4KiB>,
         phys: PhysFrame<Size4KiB>,
         flags: PageTableFlags,

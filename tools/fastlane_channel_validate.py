@@ -54,6 +54,8 @@ def assess(raw,cpus,identity=None,failure=None):
     require(any(r.get('op')=='3' and r.get('result')=='1' for r in auth),'foreign/role rejection missing')
     require(any(r.get('op')=='3' and r.get('result')=='2' for r in auth),'stale handle rejection missing')
     require(any(r.get('op')=='3' and r.get('result')=='4' for r in auth),'terminal rejection missing')
+    require(any(r.get('op')=='23' and r.get('result')=='0' for r in auth),'coordination receipt missing')
+    require(any(r.get('op')=='23' and r.get('result')=='1' for r in auth),'foreign/stale coordination receipt rejection missing')
     for r in auth+races+outcomes+bindings:
         require(r.get('cpu','').isdigit() and 0<=int(r['cpu'])<cpus,'invalid participating CPU')
     require(bool(bindings),'kernel participant bindings missing')
@@ -92,39 +94,60 @@ def assess(raw,cpus,identity=None,failure=None):
     keys=[(r.get('generation'),r.get('role')) for r in attaches]
     require(len(keys)==len(set(keys)),'role attached successfully more than once')
     require(any({role for generation,role in keys if generation==g}=={'0','1'} for g in created),'both valid role attachments absent')
+    race_attempts=[]
     for mode in range(1,5):
-        selected=[r for r in races if r.get('mode')==str(mode)]
-        arms=[r for r in selected if r.get('event')=='armed']
-        require(len(arms)==1,'race arm missing/duplicate '+str(mode))
-        if len(arms)!=1:continue
-        generation=arms[0].get('generation')
-        snaps=[r for r in outcomes if r.get('generation')==generation]
-        require(len(selected)==7 and len(snaps)==2,'race transition count '+str(mode))
-        def one(event,actor=None):
-            found=[r for r in selected if r.get('event')==event and (actor is None or r.get('actor')==str(actor))]
-            require(len(found)==1,'missing/duplicate race '+event+'/'+str(actor))
-            return found[0] if len(found)==1 else {}
-        e1=one('entered',1);e2=one('entered' if mode<=2 else 'exit-syscall',2)
-        held=one('lock-held');contended=one('lock-contended');ends=[one('returned',a) for a in (1,2)]
-        # Six events plus arm: arm, two entries, held, contention, two returns.
-        require(e1.get('cpu')!=e2.get('cpu'),'syscalls did not overlap on separate CPUs')
-        winner=1 if mode%2 else 2
-        require(held.get('actor')==str(winner) and contended.get('actor')==str(3-winner),'wrong/missing real lock contention')
-        if all(r.get('seq','').isdigit() for r in (e1,e2,held,contended,*ends)):
-            require(max(int(e1['seq']),int(e2['seq']))<int(held['seq'])<int(contended['seq'])<min(int(r['seq']) for r in ends),'race invocation/lock ordering')
-            require(int(ends[winner-1]['seq'])<int(ends[2-winner]['seq']),'wrong winning transition')
-        require(ends[0].get('result')==('0' if winner==1 else '4') and ends[1].get('result')=='0','race results mismatch')
-        require(all(r.get('generation')==generation for r in selected),'race mixed generations')
-        last=[r for r in snaps if r.get('actor')==str(3-winner)]
-        require(len(last)==1 and last[0].get('state')=='4' and last[0].get('terminal')==('1' if mode<=2 else '2'),'one terminal outcome missing')
-        require(any(r.get('case')=='contended-race' and r.get('result')==str(mode) for r in users),'userspace race completion missing')
+        modal=[r for r in races if r.get('mode')==str(mode)]
+        arms=[r for r in modal if r.get('event')=='armed']
+        require(1<=len(arms)<=16,'race arm/bound '+str(mode))
+        require(len({r.get('generation') for r in arms})==len(arms),'rearmed generation '+str(mode))
+        require(len(modal)==7*len(arms),'unjoined race events '+str(mode))
+        qualified_count=0
+        for arm_index,arm in enumerate(arms):
+            generation=arm.get('generation')
+            selected=[r for r in modal if r.get('generation')==generation]
+            snaps=[r for r in outcomes if r.get('generation')==generation]
+            require(len(selected)==7 and len(snaps)==2,'race transition count '+str(mode))
+            def one(event,actor=None):
+                found=[r for r in selected if r.get('event')==event and (actor is None or r.get('actor')==str(actor))]
+                require(len(found)==1,'missing/duplicate race '+event+'/'+str(actor))
+                return found[0] if len(found)==1 else {}
+            e1=one('entered',1);e2=one('entered' if mode<=2 else 'exit-syscall',2)
+            held=one('lock-held');ends=[one('returned',actor) for actor in (1,2)]
+            probes=[r for r in selected if r.get('event') in ('lock-contended','lock-missed')]
+            require(len(probes)==1,'missing/duplicate lock probe')
+            probe=probes[0] if len(probes)==1 else {}
+            require(e1.get('cpu')!=e2.get('cpu'),'syscalls did not overlap on separate CPUs')
+            winner=1 if mode%2 else 2
+            require(held.get('actor')==str(winner) and probe.get('actor')==str(3-winner),'wrong/missing real lock contention')
+            qualified=False
+            if all(r.get('seq','').isdigit() for r in (e1,e2,held,probe,*ends)):
+                require(max(int(e1['seq']),int(e2['seq']))<int(held['seq'])<int(probe['seq'])<int(ends[2-winner]['seq']),'race invocation/lock ordering')
+                require(int(ends[winner-1]['seq'])<int(ends[2-winner]['seq']),'wrong winning transition')
+                qualified=probe.get('event')=='lock-contended' and int(probe['seq'])<int(ends[winner-1]['seq'])
+            qualified_count+=int(qualified)
+            if qualified:require(arm_index==len(arms)-1,'attempt after successful coverage')
+            require(ends[0].get('result')==('0' if winner==1 else '4') and ends[1].get('result')=='0','race results mismatch')
+            require(all(r.get('generation')==generation for r in selected),'race mixed generations')
+            # Every independent invocation joins to the immutable exact binding,
+            # including the bounded attempts that missed natural contention.
+            binding=created.get(generation,{})
+            for r in selected:
+                actor=r.get('actor')
+                role='consumer' if (mode<=2 and actor=='1') or (mode>=3 and actor=='2') else 'producer'
+                require(all(r.get(k)==binding.get(v) for k,v in (('pid',role),('inc',role+'_inc'),('vm',role+'_vm'))),'race actor exact binding')
+            last=[r for r in snaps if r.get('actor')==str(3-winner)]
+            require(len(last)==1 and last[0].get('state')=='4' and last[0].get('terminal')==('1' if mode<=2 else '2'),'one terminal outcome missing')
+            race_attempts.append({'mode':mode,'generation':generation,'winner':winner,'qualified':qualified})
+        require(qualified_count==1,'one qualifying concurrent attempt required '+str(mode))
+        require(sum(r.get('case')=='contended-race' and r.get('result')==str(mode) for r in users)==1,'userspace race completion missing/duplicate')
+        require(sum(r.get('case')=='contention-missed' and r.get('result')==str(mode) for r in users)==len(arms)-qualified_count,'missing contention-window miss receipt')
     complete=[r for r in users if r.get('case')=='complete']
     if complete:
         require(re.search(r'\[SCHED\] process_reaped pid='+re.escape(complete[0]['pid'])+r'\b',raw),'supervisor not reaped')
     require('[SYSCALL] exec: path not found: /missing-channel-exec' in raw,'failed exec syscall missing')
     require('exit: /tmp/session-race-probe FL -> 0' in raw,'shell did not collect successful fixture exit')
     return {'status':'FAIL' if errors else 'PASS','errors':errors,'cpus':cpus,'scope':'authority only; no mappings/data/Doorbell',
-            'native_generation_exhaustion':'NOT_FORGED; host boundary only','race_modes':4,
+            'native_generation_exhaustion':'NOT_FORGED; host boundary only','race_modes':4,'race_attempts':race_attempts,
             'participating_cpus':sorted({int(r['cpu']) for r in races if r.get('cpu','').isdigit()})}
 
 def main():
@@ -132,7 +155,15 @@ def main():
     p.add_argument('--section',choices=('build','native','production','checks'),required=True)
     p.add_argument('--cpus',nargs='+',type=int,choices=(2,4,12),default=[2]);p.add_argument('--image-manifest',type=Path)
     p.add_argument('--evidence-root',type=Path,default=BASE);p.add_argument('--timeout',type=int,default=180)
-    args=p.parse_args();out=args.evidence_root.resolve()/(args.section+'-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'));out.mkdir(parents=True)
+    p.add_argument('--coord-control',choices=('spin-unpinned','spin-same','corrected-unpinned','corrected-same'),help='M5.1R2 diagnostic image; native FAILs remain FAILs')
+    args=p.parse_args()
+    if args.coord_control and args.section not in ('build','native'):p.error('controls require build/native')
+    features=['fastlane_channel_test','key_inject']
+    if args.coord_control:
+        features+=['fastlane_coord_diag']
+        if args.coord_control.startswith('spin'):features+=['fastlane_coord_spin']
+        if args.coord_control.endswith('-same'):features+=['fastlane_coord_same_cpu']
+    out=args.evidence_root.resolve()/(args.section+'-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'));out.mkdir(parents=True)
     summary={'milestone':'M1','status':'RUNNING','revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
              'source_sha256':sources(),'checks':[],'native':[],'production_fastlane':'BLOCKED'}
     def save():(out/'validation-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
@@ -153,7 +184,7 @@ def main():
                 shutil.copy2(BUILD/'x86_64-unknown-none/release'/binary,ROOT/'target/x86_64-unknown-none/release'/binary)
             if test:shutil.copy2(BUILD/'x86_64-unknown-none/release/session-race-probe',ROOT/'target/x86_64-unknown-none/release/session-race-probe')
             cmd=['cargo','build','--locked','--offline','-p','sunlight-kernel','--bin','sunlight-kernel']
-            if test:cmd+=['--features','fastlane_channel_test,key_inject']
+            if test:cmd+=['--features',','.join(features)]
             check('kernel',cmd,{'SUNLIGHT_INJECT_PHASE':'desktop_login'} if test else {})
             elf=out/'kernel.elf';iso=out/'fixture.iso'
             check('strip',['objcopy','--strip-debug',str(BUILD/'x86_64-unknown-none/debug/sunlight-kernel'),str(elf)])
@@ -171,7 +202,7 @@ def main():
                 assert (raw.find(b'[FL-RACE]') >= 0)==test, 'race feature isolation mismatch'
                 assert (raw.find(b'[FL-USER]') >= 0)==test, 'userspace feature isolation mismatch'
             summary['image']={'elf':str(elf),'iso':str(iso),'elf_sha256':digest(elf),'iso_sha256':digest(iso),
-                              'features':['fastlane_channel_test','key_inject'] if test else [],'services':payloads}
+                              'features':features if test else [],'services':payloads}
         elif args.section=='checks':
             host=['cargo','test','--locked','--offline','--target','x86_64-unknown-linux-gnu']
             check('kernel-host',host+['-p','sunlight-kernel','--lib','--','--test-threads=1'])
@@ -184,7 +215,7 @@ def main():
             if not args.image_manifest:raise RuntimeError('--image-manifest required')
             manifest=json.loads(args.image_manifest.read_text());image=manifest['image'];summary['image']=image
             assert manifest['status']=='PASS' and manifest['source_sha256']==sources(),'source mismatch'
-            assert image['features']==['fastlane_channel_test','key_inject']
+            assert image['features']==features
             identity={'source':True,'elf':digest(Path(image['elf']))==image['elf_sha256'],'iso':digest(Path(image['iso']))==image['iso_sha256'],
                       'services':all(digest(Path(image['elf']).parent/'embedded'/name)==row['sha256'] for name,row in image['services'].items())}
             assert all(identity.values()),'image mismatch'

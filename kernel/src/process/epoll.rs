@@ -281,6 +281,12 @@ pub fn fd_ready(fd: i32, handle: FileHandle, process: &crate::process::Process) 
     if handle.is_eventfd() {
         return super::eventfd::readiness(handle.eventfd_index());
     }
+    if handle.is_unix_socket() {
+        let idx = handle.unix_socket_index();
+        let readable =
+            super::unix_socket::is_listening(idx) && super::unix_socket::pending_count(idx) > 0;
+        return (readable, false);
+    }
     if handle.is_socket() {
         return super::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
             .map(|(read, write)| {
@@ -325,7 +331,11 @@ fn fd_is_writable(handle: FileHandle) -> bool {
         return true;
     }
     // stdout/stderr placeholders
-    !handle.is_pipe() && !handle.is_vfs() && !handle.is_epoll() && !handle.is_eventfd()
+    !handle.is_pipe()
+        && !handle.is_vfs()
+        && !handle.is_epoll()
+        && !handle.is_eventfd()
+        && !handle.is_unix_socket()
 }
 
 fn pipe_readable(pool_idx: u32) -> bool {

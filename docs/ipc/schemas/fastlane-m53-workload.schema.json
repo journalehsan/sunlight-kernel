@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sunlight:fastlane:m53:workload:v1",
+  "title": "Future M6 workload contract (not a benchmark result)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["transport", "total_counts", "warmup_counts", "measurement_counts", "capacity", "payload_max", "duration_mode"],
+  "properties": {
+    "transport": {"enum": ["conventional-ipc", "kernel-mediated", "shared-ring"]},
+    "total_counts": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer", "minimum": 1, "maximum": 10000}},
+    "warmup_counts": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer", "minimum": 0, "maximum": 16}},
+    "measurement_counts": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer", "minimum": 1, "maximum": 10000}},
+    "capacity": {"const": 16},
+    "payload_max": {"const": 256},
+    "duration_mode": {"const": "fixed-count"}
+  },
+  "$comment": "Semantic validator must enforce equal vector lengths, total=warmup+measurement, and authenticated terminal count joins. Fixed duration requires a new version with a bounded drain/abort policy."
+}

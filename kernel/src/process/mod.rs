@@ -17,6 +17,7 @@ pub mod region;
 pub mod signal;
 pub mod spawn;
 pub mod tty_io;
+pub mod unix_socket;
 
 use crate::ipc::IpcMsg;
 use crate::memory::pmm::PhysicalMemoryManager;
@@ -321,6 +322,8 @@ pub struct Process {
     // === CPU Accounting (for sunlight-top and scheduler) ===
     /// Total CPU runtime consumed by this process, in nanoseconds (monotonic).
     pub cpu_runtime_ns: u64,
+    #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+    pub measurement: crate::capability::channel_shared_ring::ActorCounters,
     /// Bounded D3.8-W diagnostics: Ready publications, IPC-state publications,
     /// receive deadline expirations and call deadline expirations. Per incarnation.
     #[cfg(feature = "cpu_accounting_diag")]
@@ -541,6 +544,8 @@ impl Process {
             aging_boosted_this_pick: false,
             quantum_override: None,
             cpu_runtime_ns: 0,
+            #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+            measurement: crate::capability::channel_shared_ring::ActorCounters::new(),
             #[cfg(feature = "cpu_accounting_diag")]
             wake_audit: [0; 4],
             cpu_charge_since: None,
@@ -732,6 +737,8 @@ impl Process {
             aging_boosted_this_pick: false,
             quantum_override: None,
             cpu_runtime_ns: 0,
+            #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+            measurement: crate::capability::channel_shared_ring::ActorCounters::new(),
             #[cfg(feature = "cpu_accounting_diag")]
             wake_audit: [0; 4],
             cpu_charge_since: None,

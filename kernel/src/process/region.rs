@@ -77,6 +77,10 @@ impl RegionPolicy {
     pub const OWNER_MANAGED: Self = Self(1 << 4);
     /// May be atomically displaced by a user MAP_FIXED request.
     pub const MAY_REPLACE: Self = Self(1 << 5);
+    /// Anonymous pages may be absent until first access. Linux uses this for
+    /// ordinary anonymous mappings, including thread stacks and allocator
+    /// arenas, so reserving virtual address space does not consume RAM.
+    pub const DEMAND: Self = Self(1 << 6);
 
     pub const fn empty() -> Self {
         Self(0)

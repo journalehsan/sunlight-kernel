@@ -80,6 +80,8 @@ pub(super) struct Channel {
     // M5 single use: 0 writable, 1 published, 2 acknowledged. Never reset.
     #[cfg(feature = "fastlane_transfer_test")]
     pub transfer: u8,
+    #[cfg(feature = "fastlane_shared_ring_test")]
+    pub native_ring: [bool; 2],
     #[cfg(any(test, feature = "fastlane_repeated_test"))]
     pub repeated: super::channel_repeated::Repeated,
     #[cfg(any(test, feature = "fastlane_doorbell_test"))]
@@ -246,6 +248,8 @@ impl CapabilityBroker {
             backing: [None; 3],
             #[cfg(feature = "fastlane_transfer_test")]
             transfer: 0,
+            #[cfg(feature = "fastlane_shared_ring_test")]
+            native_ring: [false; 2],
             #[cfg(any(test, feature = "fastlane_repeated_test"))]
             repeated: super::channel_repeated::Repeated::new(),
             #[cfg(any(test, feature = "fastlane_doorbell_test"))]

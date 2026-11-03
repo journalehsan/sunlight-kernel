@@ -331,6 +331,18 @@ pub struct Consumer<M> {
 }
 
 impl<M: Memory> Producer<M> {
+    /// Isolated fixture boundary, never a reconnect/reset operation. The caller
+    /// must supply fresh pages and seed both peer cursors before transfer. This
+    /// authorizes no native role or mapping. Normal construction starts at zero.
+    #[cfg(feature = "fixture")]
+    pub fn fixture_at(memory: M, channel: u64, sequence: u64) -> Result<Self, Error> {
+        let mut endpoint = Self::new(memory, channel)?;
+        Identity::new(channel, sequence)?;
+        endpoint.local.next = sequence;
+        endpoint.local.observed = sequence;
+        Ok(endpoint)
+    }
+
     pub fn new(memory: M, channel: u64) -> Result<Self, Error> {
         Ok(Self {
             memory,
@@ -394,6 +406,18 @@ impl<M: Memory> Producer<M> {
 }
 
 impl<M: Memory> Consumer<M> {
+    /// Isolated fixture boundary, never a reconnect/reset operation. The caller
+    /// must supply fresh pages and seed both peer cursors before transfer. This
+    /// authorizes no native role or mapping. Normal construction starts at zero.
+    #[cfg(feature = "fixture")]
+    pub fn fixture_at(memory: M, channel: u64, sequence: u64) -> Result<Self, Error> {
+        let mut endpoint = Self::new(memory, channel)?;
+        Identity::new(channel, sequence)?;
+        endpoint.local.next = sequence;
+        endpoint.local.observed = sequence;
+        Ok(endpoint)
+    }
+
     pub fn new(memory: M, channel: u64) -> Result<Self, Error> {
         Ok(Self {
             memory,

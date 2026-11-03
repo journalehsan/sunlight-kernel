@@ -25,6 +25,9 @@ desktop session.
   heap telemetry fields (`heap_total_kb`, `heap_used_kb`, `heap_high_water_kb`).
 - **Per-process user memory** — counted via PML4 walks (`count_user_pages`) and
   exposed as `mem_kb` per process in the telemetry page / Tasks Monitor.
+  Hint-less Linux anonymous `mmap` regions are demand-backed: reserved address
+  space costs frames only when a page is first touched. `PROT_NONE`
+  reservations stay fully present because libc uses them for thread stacks.
 - **zram swap** — `zram_orig_kb` / `zram_comp_kb` in telemetry; compressed.
 - **Static buffers (no heap)** — image/MIME icon resolution and several preview
   paths use compile-time-sized static buffers, so they cannot leak.
@@ -103,3 +106,9 @@ recorded so the next budget review has a starting list:
   plateaus well below 64 MiB, the cap could eventually be lowered.
 - sunlight-files preview buffer (4 MiB) is held per instance; multiple open
   windows multiply it.
+- Linux pthread stacks arrive as `mmap(PROT_NONE)` reservations that turn into
+  writable thread stacks after `mprotect`. They stay fully present because
+  `syscall_entry` builds its frame on the user stack, so a not-present stack
+  page would fault again while the kernel is already running on it. Moving
+  syscall entry to the per-thread kernel stack would allow demand backing and
+  save roughly 2 MiB per thread for runtimes that reserve full-size stacks.

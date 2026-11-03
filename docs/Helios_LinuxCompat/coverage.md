@@ -17,7 +17,7 @@ Legend: I = IMPLEMENTED, P = PARTIAL, S = STUB, U = UNSUPPORTED, M = MISSING.
 | 6 | lstat | P | newfstatat + AT_SYMLINK_NOFOLLOW | VFS stat | no symlinks, same as stat | | | |
 | 7 | poll | P | `sys_linux_poll` | TTY/pipe ready | timeout via scheduler | | Y | |
 | 8 | lseek | I | native `sys_lseek` | fd offset + fstat | ESPIPE on non-VFS | runtime | | |
-| 9 | mmap | P | `sys_linux_mmap` | anonymous mmap | PRIVATE\|ANONYMOUS only | tier1 | Y | |
+| 9 | mmap | P | `sys_linux_mmap` | anonymous mmap | PRIVATE\|ANONYMOUS only; hint-less maps demand-backed except `PROT_NONE` stack reservations | tier1 | Y | |
 | 10 | mprotect | I | native | VMM | | | Y | |
 | 11 | munmap | I | native | VMM | | tier1 | Y | |
 | 12 | brk | I | `sys_brk` | process brk region | | tier1 | Y | |
@@ -34,8 +34,16 @@ Legend: I = IMPLEMENTED, P = PARTIAL, S = STUB, U = UNSUPPORTED, M = MISSING.
 | 33 | dup2 | I | native fd_table.dup2 | fd table | | | | |
 | 35 | nanosleep | I | `sys_linux_nanosleep` | timer block | timespec validated | tier1 | | |
 | 39 | getpid | I | native | process.pid | | | Y | |
-| 41 | socket | U | ENOSYS | | out of scope | | | |
+| 41 | socket | P | `sys_linux_socket` | unix_socket pool | AF_UNIX SOCK_STREAM only; other domains/types EAFNOSUPPORT/ESOCKTNOSUPPORT | | Y | |
+| 42 | connect | P | `sys_linux_connect` | pipe-backed socketpair | AF_UNIX pathname peers in-process or kernel-wide; ENOENT path ECONNREFUSED | | Y | |
+| 43 | accept | P | `sys_linux_accept` | pipe-backed socketpair | EAGAIN when queue empty (nonblocking) | | | |
+| 48 | shutdown | P | `sys_linux_shutdown` | pipe ring ends | connected sockets only; ENOTCONN otherwise | | | |
+| 49 | bind | P | `sys_linux_bind` | unix_socket path | EADDRINUSE on duplicate path | | Y | |
+| 50 | listen | P | `sys_linux_listen` | unix_socket path | backlog advisory (cap 128) | | Y | |
+| 51 | getsockname | P | `sys_linux_getsockname` | unix_socket path | unnamed peers return family-only address | | | |
+| 52 | getpeername | P | `sys_linux_getsockname` | unix_socket path | unnamed peers return family-only address | | | |
 | 53 | socketpair | P | pipe self-pipe | kernel pipe | AF_UNIX SOCK_STREAM only | | Y | |
+| 288 | accept4 | P | `sys_linux_accept` | unix_socket + socketpair | SOCK_NONBLOCK/SOCK_CLOEXEC honoured | | | |
 | 56 | clone | U | ENOSYS | | out of scope | | | |
 | 57 | fork | U | ENOSYS | | out of scope | | | |
 | 58 | vfork | U | ENOSYS | | out of scope | | | |

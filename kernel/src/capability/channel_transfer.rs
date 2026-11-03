@@ -36,6 +36,10 @@ impl Scheduler {
         } else {
             return Err(Error::Denied);
         };
+        #[cfg(feature = "fastlane_shared_ring_test")]
+        if row.native_ring.iter().any(|v| *v) {
+            return Err(Error::Denied);
+        }
         if !row.live() {
             return Err(Error::Terminal);
         }

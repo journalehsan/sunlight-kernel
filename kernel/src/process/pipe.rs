@@ -75,23 +75,7 @@ pub fn create_socketpair(
     flags: u32,
 ) -> Result<(i32, i32), PipeError> {
     use crate::process::fd_table::{CapRights, FileHandle};
-    let first = alloc_pipe();
-    let second = alloc_pipe();
-    let index = {
-        let mut pool = SOCKET_PAIRS.lock();
-        let item = SocketPair {
-            incoming: [first, second],
-            refs: [1, 1],
-        };
-        if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
-            *slot = Some(item);
-            idx as u32
-        } else {
-            let idx = pool.len();
-            pool.push(Some(item));
-            idx as u32
-        }
-    };
+    let index = alloc_socketpair();
     let rights = CapRights::new(CapRights::READ | CapRights::WRITE);
     let (a, b) = {
         let table = &mut sched.current_shared_process_mut().fd_table;
@@ -114,6 +98,29 @@ pub fn create_socketpair(
         }
     };
     Ok((a, b))
+}
+
+/// Allocate a full-duplex socketpair's rings without installing descriptors.
+///
+/// Both endpoints start with one owner each; callers that hand an endpoint to
+/// a descriptor or a listener queue must not retain it again, and release it
+/// with `socket_close` when that owner goes away.
+pub fn alloc_socketpair() -> u32 {
+    let first = alloc_pipe();
+    let second = alloc_pipe();
+    let item = SocketPair {
+        incoming: [first, second],
+        refs: [1, 1],
+    };
+    let mut pool = SOCKET_PAIRS.lock();
+    if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {
+        *slot = Some(item);
+        idx as u32
+    } else {
+        let idx = pool.len();
+        pool.push(Some(item));
+        idx as u32
+    }
 }
 
 /// Result type for pipe operations
