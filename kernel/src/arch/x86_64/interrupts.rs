@@ -387,7 +387,7 @@ fn init_pit() {
 
 /// Latch and read current PIT channel 0 countdown value.
 /// Used for early TSC calibration against real hardware timebase.
-fn read_pit_count() -> u16 {
+pub(super) fn read_pit_count() -> u16 {
     unsafe {
         let mut cmd: Port<u8> = Port::new(0x43);
         let mut ch0: Port<u8> = Port::new(0x40);
@@ -449,6 +449,10 @@ pub fn calibrate_tsc_from_pit() {
     let mul = ((1_000_000_000u128 << 32) / (hz as u128)) as u64;
     TSC_TO_NS_MUL.store(mul, Ordering::SeqCst);
     TSC_ORIGIN.store(tsc0, Ordering::SeqCst);
+    // FastLane M5.4: publish the opt-in, per-CPU qualified clock from the same
+    // raw inputs. No-op unless the debug measurement feature is enabled.
+    #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+    super::measurement_clock::init_bsp(dropped, tsc_delta);
     crate::serial_println!(
         "[TIME] PIT calibration mode=2 input_hz={} reload={} start_count={} end_count={} elapsed_counts={} tsc_delta={} tsc_hz={}",
         super::pit::INPUT_HZ,

@@ -40,6 +40,19 @@ unsafe fn store_word(va: u64, value: u64) {
 }
 pub(super) fn actor_command(op: u64, h: fl::Handle, arg: u64) {
     match op {
+        #[cfg(feature = "fastlane-census-hold-test")]
+        26 => {
+            let (_, cap) = sunlight_ipc::shm_create(4096, 0).expect("independent census backing");
+            mark("foreign-shm-held", 0, cap.0);
+            reply(0, cap.0, 0);
+        }
+        #[cfg(feature = "fastlane-census-hold-test")]
+        27 => {
+            sunlight_ipc::shm_free(sunlight_ipc::CapabilityToken(arg))
+                .expect("release independent backing");
+            mark("foreign-shm-released", 0, arg);
+            reply(0, 0, 0);
+        }
         WORD_ACCESS => {
             let va = arg & !7;
             let value = unsafe {
@@ -349,9 +362,40 @@ pub fn supervisor() -> ! {
         assert_eq!(fl::operate(8, h, 0), Err(fl::Error::Stale));
         assert_eq!(fl::operate(4, fresh, 0), Ok(0));
         stop(b);
+        #[cfg(feature = "fastlane-census-hold-test")]
+        let held = if cycle == 0 {
+            Some(expect(foreign, 26, h, 0, 0).words[1])
+        } else {
+            None
+        };
         census(100 + cycle);
+        #[cfg(feature = "fastlane-census-hold-test")]
+        if let Some(cap) = held {
+            expect(foreign, 27, h, cap, 0);
+        }
         mark("lifecycle-cycle", h.generation, cycle);
     }
+    #[cfg(feature = "fastlane-census-leak-test")]
+    {
+        // Safe negative control: keep a normally authorized fixture mapping
+        // alive at its required quiescence checkpoint. No retirement code or
+        // permission is bypassed. An unrelated ordinary-SHM free offsets its
+        // global frame delta but must never discharge this exact obligation.
+        let held = expect(foreign, 26, fl::EMPTY, 0, 0).words[1];
+        let peer = spawn(ep, public);
+        let leaked = pair_victim(peer, 1);
+        let _ = map(leaked, 0, 0);
+        expect(foreign, 27, fl::EMPTY, held, 0);
+        mark("fixture-owned-retained", leaked.generation, peer.pid);
+        census(999);
+        panic!("fixture-owned leak incorrectly accepted");
+    }
+    #[cfg(not(feature = "fastlane-census-leak-test"))]
+    finish(foreign, ep)
+}
+
+#[cfg(not(feature = "fastlane-census-leak-test"))]
+fn finish(foreign: Actor, ep: sunlight_ipc::EndpointId) -> ! {
     stop(foreign);
     assert!(sunlight_ipc::endpoint_destroy(ep));
     census(999);

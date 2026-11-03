@@ -75,6 +75,10 @@ use super::*;
 use sunlight_fastlane_ring::hostile::{self as ring};
 #[cfg(feature = "fastlane-measurement-test")]
 mod measurement;
+#[cfg(feature = "fastlane-benchmark-test")]
+pub(crate) mod benchmark;
+#[cfg(feature = "fastlane-benchmark-test")]
+pub(crate) mod fair_benchmark;
 const DONE: u64 = 0xf1c571;
 fn bytes(seq: u64) -> [u8; 256] {
     core::array::from_fn(|i| (seq.wrapping_mul(17).wrapping_add(i as u64 * 3) % 251) as u8)
@@ -354,6 +358,13 @@ impl Endpoint {
                 measurement::clock_probe(arg);
                 reply(0, self.next, h.generation);
             }
+            #[cfg(feature = "fastlane-measurement-test")]
+            86 => {
+                // arg is the CPU placement to restore after the probe.
+                assert!(arg <= 1);
+                measurement::qualified_clock_probe(arg);
+                reply(0, self.next, h.generation);
+            }
             _ => panic!("shared ring command"),
         }
     }
@@ -525,6 +536,12 @@ pub fn supervisor() -> ! {
             expect(c, 95, h, 1, 0);
             expect(p, 93, h, 0, 0);
             expect(c, 93, h, 0, 0);
+            // M5.4 qualified clock: local probes on CPU 0/1, a rejected
+            // cross-CPU pair, and the deterministic rejection self-check. The
+            // probe restores the fixture's original producer CPU 0 / consumer
+            // CPU 1 placement.
+            expect(p, 96, h, 0, 0);
+            expect(c, 96, h, 1, 0);
         }
         #[cfg(feature = "fastlane-measurement-test")]
         let warmup = if count > 16 { 16 } else { 0 };

@@ -1541,13 +1541,26 @@ impl AddressSpace {
 
                     let p1_phys = p2e.addr();
                     let p1 = &mut *((hhdm_offset + p1_phys.as_u64()).as_mut_ptr::<PageTable>());
+                    // Batch swap retirement before freeing any leaf frame. A
+                    // queue scan per page makes large app exits quadratic and
+                    // holds up dispatch for input and audio on every CPU.
+                    let mut retiring_frames = [0u64; 512];
+                    let mut retiring_count = 0;
+                    for entry in p1.iter() {
+                        if entry.flags().contains(PageTableFlags::PRESENT) {
+                            retiring_frames[retiring_count] = entry.addr().as_u64();
+                            retiring_count += 1;
+                        }
+                    }
+                    let retiring_frames = &mut retiring_frames[..retiring_count];
+                    retiring_frames.sort_unstable();
+                    crate::memory::swap::untrack_frames(retiring_frames);
                     for (p1_idx, p1e) in p1.iter_mut().enumerate() {
                         if p1e.is_unused() {
                             continue;
                         }
                         if p1e.flags().contains(PageTableFlags::PRESENT) {
                             let phys = p1e.addr();
-                            crate::memory::swap::untrack(phys);
                             let virtual_address = ((p4_idx as u64) << 39)
                                 | ((p3_idx as u64) << 30)
                                 | ((p2_idx as u64) << 21)

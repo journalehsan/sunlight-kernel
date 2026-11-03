@@ -85,14 +85,32 @@ pub fn actor(args: &[&str]) -> ! {
     let mut repeated = repeated::Endpoint::new();
     #[cfg(feature = "fastlane-shared-ring-test")]
     let mut shared_ring = shared_ring::Endpoint::new();
+    #[cfg(feature = "fastlane-benchmark-test")]
+    let mut benchmark = shared_ring::benchmark::Consumer::new();
+    #[cfg(feature = "fastlane-benchmark-test")]
+    let mut fair_benchmark = shared_ring::fair_benchmark::Consumer::new();
     loop {
         let m = sunlight_ipc::ipc_recv_timeout(ep, 10000).expect("actor command");
+        #[cfg(feature = "fastlane-benchmark-test")]
+        if shared_ring::benchmark::handles(m.label) {
+            benchmark.request(m);
+            continue;
+        }
+        #[cfg(feature = "fastlane-benchmark-test")]
+        if shared_ring::fair_benchmark::handles(m.label) {
+            fair_benchmark.request(m);
+            continue;
+        }
         assert_eq!(m.label, CMD);
         let h = fl::Handle {
             token: m.words[1],
             generation: m.words[2],
         };
         match m.words[0] {
+            #[cfg(feature = "fastlane-benchmark-test")]
+            100..=103 => benchmark.command(m, parent),
+            #[cfg(feature = "fastlane-benchmark-test")]
+            110..=113 => fair_benchmark.command(m, parent),
             // Userspace command numbers are separate from kernel opcodes.
             // Kernel opcode 23 overlaps the mapping fixture's COLLIDE command.
             COORD_RECEIPT => {
@@ -100,7 +118,7 @@ pub fn actor(args: &[&str]) -> ! {
                 reply(code, value, 0);
             }
             #[cfg(feature = "fastlane-shared-ring-test")]
-            op @ 80..=90 | op @ 92..=95 => shared_ring.command(op - 10, h, m.words[3], parent),
+            op @ 80..=90 | op @ 92..=96 => shared_ring.command(op - 10, h, m.words[3], parent),
             #[cfg(feature = "fastlane-shared-ring-test")]
             91 => { let (code, value) = result(fl::operate(24, h, m.words[3])); reply(code, value, 0); }
             #[cfg(feature = "fastlane-repeated-test")]
@@ -120,7 +138,7 @@ pub fn actor(args: &[&str]) -> ! {
             #[cfg(feature = "fastlane-doorbell-test")]
             30 | 32 => doorbell::actor_command(m.words[0], h, m.words[3], parent),
             #[cfg(feature = "fastlane-mapping-test")]
-            op @ 20..=25 => mapping::actor_command(op, h, m.words[3]),
+            op @ 20..=27 => mapping::actor_command(op, h, m.words[3]),
             EXIT => {
                 reply(0, 0, 0);
                 sunlight_libc::exit(0)

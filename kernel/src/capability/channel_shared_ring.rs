@@ -75,11 +75,13 @@ pub struct ActorCounters {
     generation: u64,
     runtime_start: u64,
     start_ms: u64,
+    cpu_start: usize,
+    wall_start: Option<sunlight_ipc::measurement_clock::Stamp>,
 }
 #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
 impl ActorCounters {
     pub const fn new() -> Self {
-        Self { enabled: false, values: [0; 4], overflow: false, generation: 0, runtime_start: 0, start_ms: 0 }
+        Self { enabled: false, values: [0; 4], overflow: false, generation: 0, runtime_start: 0, start_ms: 0, cpu_start: 0, wall_start: None }
     }
     fn increment(&mut self, index: usize) {
         if !self.enabled { return; }
@@ -115,13 +117,40 @@ impl Scheduler {
         if start {
             if p.measurement.enabled { return Err(Error::Duplicate); }
             p.measurement = ActorCounters { enabled: true, generation: h.generation,
-                runtime_start: runtime, start_ms: ms, ..ActorCounters::new() };
+                runtime_start: runtime, start_ms: ms,
+                cpu_start: crate::sched::current_cpu_id(),
+                wall_start: crate::arch::x86_64::measurement_clock::stamp(),
+                ..ActorCounters::new() };
         } else {
             let m = &mut p.measurement;
             if !m.enabled || m.generation != h.generation { return Err(Error::Incomplete); }
             m.enabled = false;
             let elapsed_runtime = runtime.checked_sub(m.runtime_start);
             crate::serial_println!("[FL-M53-KACTOR] generation={} pid={} inc={} vm={} syscalls={} notifications={} context_switch_ins={} wake_publications={} overflow={} dropped=0 start_ms={} end_ms={} scheduler_runtime_ns={} runtime_delta_valid={} cpu={}", h.generation,who.pid,who.incarnation,who.vm_generation,m.values[0],m.values[1],m.values[2],m.values[3],u8::from(m.overflow),m.start_ms,ms,elapsed_runtime.unwrap_or(0),u8::from(elapsed_runtime.is_some()),crate::sched::current_cpu_id());
+            // M5.4 CPU-time qualification: report the scheduler-charged runtime
+            // together with the *qualified* wall-clock window, whether the actor
+            // migrated, and whether the two reconcile. A missing qualified
+            // window is reported as not-qualified; wall time is never used to
+            // infer CPU utilization.
+            let cpu_stop = crate::sched::current_cpu_id();
+            let wall = m.wall_start.and_then(|start| {
+                let end = crate::arch::x86_64::measurement_clock::stamp()?;
+                sunlight_ipc::measurement_clock::elapsed_ns(&start, &end).ok()
+            });
+            let (wall_ns, wall_valid) = (wall.unwrap_or(0), u8::from(wall.is_some()));
+            let migrated = u8::from(cpu_stop != m.cpu_start);
+            let reconcile = if wall.is_some() && elapsed_runtime.is_some() {
+                match sunlight_ipc::cpu_accounting::reconcile(
+                    &[elapsed_runtime.unwrap_or(0)],
+                    wall.unwrap_or(0),
+                ) {
+                    sunlight_ipc::cpu_accounting::Reconcile::Consistent { .. } => "consistent",
+                    sunlight_ipc::cpu_accounting::Reconcile::Inconsistent { .. } => "inconsistent",
+                }
+            } else {
+                "not-qualified"
+            };
+            crate::serial_println!("[FL-M54-KCPU] generation={} pid={} charged_ns={} charged_valid={} discontinuities={} switches={} wall_ns={} wall_valid={} cpu_start={} cpu_stop={} migrated={} reconcile={} wall_contract=same-cpu-only clock=tsc-qualified", h.generation,who.pid,elapsed_runtime.unwrap_or(0),u8::from(elapsed_runtime.is_some()),u8::from(elapsed_runtime.is_none()),m.values[2],wall_ns,wall_valid,m.cpu_start,cpu_stop,migrated,reconcile);
         }
         Ok(())
     }

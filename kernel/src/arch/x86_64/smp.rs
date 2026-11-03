@@ -333,6 +333,13 @@ unsafe extern "C" fn ap_entry_rust(info: &limine::mp::MpInfo) -> ! {
     lapic::init_lapic();
     lapic::arm_lapic_timer();
 
+    // FastLane M5.4: give this CPU its own measurement-clock origin. The
+    // frequency is shared with the BSP only because the platform advertises an
+    // invariant TSC; timestamps stay CPU-local and are never subtracted across
+    // CPUs. Debug-only feature, no production effect.
+    #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+    super::measurement_clock::publish_cpu();
+
     // ── Step 7: Signal BSP ───────────────────────────────────────────────────
     let seq = AP_ONLINE.fetch_add(1, Ordering::Release) + 1;
     crate::serial_println!(

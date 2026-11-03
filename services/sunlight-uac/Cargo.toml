@@ -650,6 +650,9 @@ name = "runas"
 path = "src/bin/runas.rs"
 
 [features]
+fastlane-benchmark-test = ["fastlane-measurement-test"]
+fastlane-census-leak-test = ["fastlane-census-hold-test"]
+fastlane-census-hold-test = ["fastlane-mapping-test"]
 fastlane-measurement-test = ["fastlane-shared-ring-test"]
 fastlane-shared-ring-test = ["fastlane-repeated-test", "sunlight-fastlane-ring/fixture"]
 fastlane-repeated-test = ["fastlane-transfer-test"]

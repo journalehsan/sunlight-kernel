@@ -1009,6 +1009,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         80 => sys_powerctl(frame.rdi),
         81 => sys_get_time_utc(),
         86 => sys_monotonic_ms(),
+        #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+        167 => sys_measurement_stamp(frame),
         87 => sys_get_entropy(),
         88 => sys_clock_gettime(frame),
         89 => crate::entropy::is_ready() as u64,
@@ -10832,6 +10834,32 @@ fn sys_set_time_utc(frame: &mut SyscallFrame) -> u64 {
 fn sys_monotonic_ms() -> u64 {
     // Legacy coarse monotonic syscall kept intentionally for existing Ring 3 code.
     crate::timekeeping::monotonic_ms()
+}
+
+/// Syscall: MeasurementStamp (167), debug-only FastLane M5.4 clock.
+///
+/// Writes six little-endian u64 words to `frame.rdi`:
+/// `[cpu, calibration_epoch, nanoseconds, tsc_hz, calibration_ppm, flags]`.
+/// Returns `u64::MAX` when the qualified clock is unsupported on this CPU so
+/// callers must classify the metric instead of falling back to a coarse timer.
+#[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+fn sys_measurement_stamp(frame: &mut SyscallFrame) -> u64 {
+    // rsi = 1 requests the bounded frequency-stability re-check first. A failed
+    // re-check invalidates the clock and this call then refuses to stamp.
+    if frame.rsi == 1 {
+        crate::arch::x86_64::measurement_clock::recalibrate();
+    }
+    let Some(words) = crate::arch::x86_64::measurement_clock::stamp_words() else {
+        return u64::MAX;
+    };
+    let mut bytes = [0u8; 56];
+    for (index, word) in words.iter().enumerate() {
+        bytes[index * 8..index * 8 + 8].copy_from_slice(&word.to_ne_bytes());
+    }
+    match copy_to_user(frame.rdi, &bytes) {
+        Ok(()) => 0,
+        Err(error) => error,
+    }
 }
 
 /// Syscall: GetEntropy (87). Returns one conditioned secure u64.

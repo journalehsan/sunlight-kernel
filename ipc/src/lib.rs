@@ -2,6 +2,8 @@
 
 pub mod supervision;
 pub mod cpu_accounting;
+pub mod measurement_clock;
+pub mod resource_ledger;
 pub mod display_metrics;
 pub mod display_modes;
 pub mod pty;
@@ -105,6 +107,10 @@ pub enum SunlightSyscall {
     // NOTE: 50 belongs to sys_mmap in the kernel dispatcher — GetTimeUtc
     // previously sat there and silently invoked mmap.
     GetTimeUtc = 81,
+    /// Debug-only FastLane M5.4 qualified measurement clock stamp. Reserved in
+    /// production layouts; the kernel only answers it under the debug
+    /// `fastlane_measurement_test` feature.
+    MeasurementStamp = 167,
     /// Administrative UTC wall-clock step. Gated to the `timed` service.
     /// Does not move the monotonic clock. rdi = new Unix UTC seconds.
     SetTimeUtc = 97,
@@ -5355,6 +5361,57 @@ pub fn monotonic_millis() -> u64 {
     // SAFETY: MonotonicMs takes no user pointers.
     let (ret, _) = unsafe { raw_syscall(SunlightSyscall::MonotonicMs, 0, 0, 0, 0, 0, 0, 0) };
     ret
+}
+
+/// Debug-only FastLane M5.4 measurement clock stamp.
+///
+/// The kernel answers this only when built with the debug
+/// `fastlane_measurement_test` feature *and* the platform advertised an
+/// invariant TSC. Otherwise it returns `None`; callers must report the clock as
+/// unsupported rather than substitute a coarser source. The returned stamp is
+/// valid for same-CPU subtraction only.
+pub fn measurement_stamp() -> Option<crate::measurement_clock::Stamp> {
+    let words = measurement_stamp_raw()?;
+    Some(crate::measurement_clock::Stamp {
+        cpu: words[0] as u32,
+        epoch: words[1] as u32,
+        ns: words[2],
+        flags: words[5] as u32,
+    })
+}
+
+/// Raw seven-word record behind [`measurement_stamp`]:
+/// `[cpu, epoch, ns, tsc_hz, calibration_ppm, flags, stability_ppm]`.
+pub fn measurement_stamp_raw() -> Option<[u64; 7]> {
+    measurement_stamp_op(0)
+}
+
+/// Run the kernel's bounded frequency-stability re-check and return the stamp.
+/// `None` means the check failed and the clock was invalidated.
+pub fn measurement_clock_recalibrate() -> Option<[u64; 7]> {
+    measurement_stamp_op(1)
+}
+
+fn measurement_stamp_op(op: u64) -> Option<[u64; 7]> {
+    let mut words = [0u64; 7];
+    // SAFETY: MeasurementStamp writes six u64s through the pointer; the buffer
+    // is exactly that size and lives for the duration of the call.
+    let (ret, _) = unsafe {
+        raw_syscall(
+            SunlightSyscall::MeasurementStamp,
+            words.as_mut_ptr() as u64,
+            op,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if ret != 0 {
+        return None;
+    }
+    Some(words)
 }
 
 /// A native poll descriptor. Native callers use the same compact layout as

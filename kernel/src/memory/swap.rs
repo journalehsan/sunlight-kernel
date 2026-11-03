@@ -87,6 +87,17 @@ pub fn untrack(frame: PhysAddr) {
         .retain(|candidate| candidate.frame != frame);
 }
 
+/// Retire a sorted batch of physical frames with one candidate queue scan.
+/// The caller must prevent concurrent use of the retiring address space.
+pub fn untrack_frames(frames: &[u64]) {
+    if frames.is_empty() {
+        return;
+    }
+    CANDIDATES.lock().retain(|candidate| {
+        frames.binary_search(&candidate.frame.as_u64()).is_err()
+    });
+}
+
 /// Retire candidates for a completely unmapped owner range in one scan.
 /// The caller holds the process/VM lock and has completed the TLB shootdown
 /// before releasing any frame in the range.

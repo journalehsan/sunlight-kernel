@@ -33,21 +33,32 @@ def rows(raw,prefix):
 from fastlane_channel_validate import assess as assess_m1
 from fastlane_mapping_assess import assess_mapping
 
-def assess(raw, cpus, identity=None, failure=None):
+def assess(raw, cpus, identity=None, failure=None, census_trace=False, census_hold=False):
     first = raw.split('[FL-M2] case=start',1)[0]
     authority = assess_m1(first,cpus,identity,failure)
     mapping = assess_mapping(raw,cpus)
     errors = authority['errors'] + mapping['errors']
-    return {'status':'FAIL' if errors else 'PASS','errors':errors,'authority':authority,'mapping':mapping}
+    from fastlane_scoped_census import assess_trace, foreign_hold
+    diagnostic=assess_trace(raw,required=census_trace)
+    errors+=diagnostic['errors']
+    hold=foreign_hold(raw) if census_hold else {'status':'NOT_REQUESTED','errors':[]}
+    errors+=hold['errors']
+    return {'status':'FAIL' if errors else 'PASS','errors':errors,'authority':authority,'mapping':mapping,
+            'diagnostic':diagnostic,'foreign_hold':hold}
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--section',choices=('build','native','production','checks'),required=True)
     p.add_argument('--cpus',nargs='+',type=int,choices=(2,4,12),default=[2]);p.add_argument('--image-manifest',type=Path)
-    p.add_argument('--census-trace',action='store_true',help='debug-only bounded M3.1 observations; unchanged M1/M2 assessor')
+    p.add_argument('--census-hold',action='store_true',help='opt-in independent SHM hold across checkpoint 100; requires census trace')
+    p.add_argument('--census-leak',action='store_true',help='safe negative fixture; expected native FAIL; requires hold and trace')
+    p.add_argument('--census-trace',action='store_true',help='debug-only bounded ownership observations; incomplete evidence fails closed')
     p.add_argument('--m31-retention',action='store_true',help='debug-only M3.1B page-table retention/teardown fixture (boot gate)')
     p.add_argument('--evidence-root',type=Path,default=BASE);p.add_argument('--timeout',type=int,default=180)
     args=p.parse_args();out=args.evidence_root.resolve()/(args.section+'-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'));out.mkdir(parents=True)
+    if args.census_hold and not args.census_trace:p.error('--census-hold requires --census-trace')
+    if args.census_leak and not args.census_hold:p.error('--census-leak requires --census-hold --census-trace')
+    service_features=['fastlane-mapping-test']+(['fastlane-census-hold-test'] if args.census_hold else [])+(['fastlane-census-leak-test'] if args.census_leak else [])
     features=['fastlane_mapping_test','key_inject']+(['fastlane_census_trace'] if args.census_trace else [])+(['fastlane_m31_retention_test'] if args.m31_retention else [])
     summary={'milestone':'M2','status':'RUNNING','revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
              'source_sha256':sources(),'checks':[],'native':[],'production_fastlane':'BLOCKED'}
@@ -64,7 +75,7 @@ def main():
             test=args.section=='build'
             for package,binary in SERVICES.items():
                 cmd=['cargo','build','--locked','--offline','--release','-p',package]
-                if test and package=='sunlight-uac':cmd+=['--features','fastlane-mapping-test']
+                if test and package=='sunlight-uac':cmd+=['--features',','.join(service_features)]
                 check(package,cmd,{'RUSTFLAGS':SERVICE_FLAGS})
                 shutil.copy2(BUILD/'x86_64-unknown-none/release'/binary,ROOT/'target/x86_64-unknown-none/release'/binary)
             if test:shutil.copy2(BUILD/'x86_64-unknown-none/release/session-race-probe',ROOT/'target/x86_64-unknown-none/release/session-race-probe')
@@ -87,11 +98,13 @@ def main():
                 assert (raw.find(b'[FL-RACE]') >= 0)==test, 'race feature isolation mismatch'
                 assert (raw.find(b'[FL-USER]') >= 0)==test, 'userspace feature isolation mismatch'
                 assert (raw.find(b'[FL-CENSUS-TRACE]')>=0)==(test and args.census_trace), 'census trace feature isolation mismatch'
+                assert (raw.find(b'foreign-shm-held')>=0)==(test and args.census_hold), 'census hold isolation mismatch'
+                assert (raw.find(b'fixture-owned-retained')>=0)==(test and args.census_leak), 'census leak isolation mismatch'
                 assert (raw.find(b'[FL-M31]')>=0)==(test and args.m31_retention), 'm31 retention feature isolation mismatch'
                 for marker in (b'[FL-MAP]',b'[FL-TLB]',b'[FL-FRAME]',b'[FL-M2]',b'[FL-PF]'):
                     assert (raw.find(marker)>=0)==test, ('mapping isolation mismatch',marker)
             summary['image']={'elf':str(elf),'iso':str(iso),'elf_sha256':digest(elf),'iso_sha256':digest(iso),
-                              'features':features if test else [],'services':payloads}
+                              'features':features if test else [],'service_features':service_features if test else [],'services':payloads}
         elif args.section=='checks':
             host=['cargo','test','--locked','--offline','--target','x86_64-unknown-linux-gnu']
             check('kernel-host',host+['-p','sunlight-kernel','--lib','--','--test-threads=1'])
@@ -105,6 +118,7 @@ def main():
             manifest=json.loads(args.image_manifest.read_text());image=manifest['image'];summary['image']=image
             assert manifest['status']=='PASS' and manifest['source_sha256']==sources(),'source mismatch'
             assert image['features']==features
+            assert image.get('service_features',['fastlane-mapping-test'])==service_features
             identity={'source':True,'elf':digest(Path(image['elf']))==image['elf_sha256'],'iso':digest(Path(image['iso']))==image['iso_sha256'],
                       'services':all(digest(Path(image['elf']).parent/'embedded'/name)==row['sha256'] for name,row in image['services'].items())}
             assert all(identity.values()),'image mismatch'
@@ -156,7 +170,7 @@ def main():
                             try:proc.wait(timeout=5)
                             except subprocess.TimeoutExpired:proc.kill()
                         proc.wait()
-                assessment=assess(raw(),cpus,identity,failure)
+                assessment=assess(raw(),cpus,identity,failure,census_trace=args.census_trace,census_hold=args.census_hold)
                 row={'cpus':cpus,'command':command,'failure':failure,'assessment':assessment,'serial':str(serial),'serial_sha256':digest(serial)}
                 if assessment['status']=='PASS':
                     ack={'cpus':cpus,'serial_sha256':digest(serial),'image':image,'identity':identity,'security_assertions':'PASS','cleanup':'PASS'}

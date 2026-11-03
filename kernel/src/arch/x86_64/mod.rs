@@ -5,6 +5,8 @@ pub mod interrupts;
 pub mod ioapic;
 pub mod keyboard;
 pub mod lapic;
+#[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+pub mod measurement_clock;
 pub mod mouse;
 mod pit;
 pub mod rtc;
